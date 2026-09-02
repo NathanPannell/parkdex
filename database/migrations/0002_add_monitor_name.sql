@@ -1,0 +1,11 @@
+ALTER TABLE monitors ADD COLUMN name TEXT;
+
+UPDATE monitors
+SET name = LEFT(url, 80)
+WHERE name IS NULL;
+
+ALTER TABLE monitors ALTER COLUMN name SET NOT NULL;
+
+ALTER TABLE monitors
+ADD CONSTRAINT monitors_name_not_blank
+CHECK (CHAR_LENGTH(BTRIM(name)) BETWEEN 1 AND 80);

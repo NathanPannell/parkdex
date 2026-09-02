@@ -1,0 +1,35 @@
+# Deployment architecture
+
+## Production
+
+```text
+Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon production
+                         Railway worker ──pooled SQL──> Neon production
+                         API migrations ──direct SQL──> Neon production
+```
+
+GitHub Actions owns production deployment after CI. It stamps both Railway services with the commit SHA, deploys them, waits until `/ready` reports that exact SHA and a readable migration table, then deploys Vercel once with the resulting API URL.
+
+## Pull request N
+
+```text
+Vercel preview ──HTTPS──> Railway API (pr-N) ──pooled SQL──> Neon preview/pr-N
+                          Railway worker (pr-N) ──pooled SQL──> same branch
+                          API migrations ──direct SQL────────> same branch
+```
+
+The workflow creates or reuses deterministic `pr-N` resources. It passes both pooled and direct Neon URLs into Railway before deployment. Vercel Git auto-deployment is disabled, so the workflow creates exactly one frontend preview after the matching API is ready.
+
+On close or merge, GitHub Actions deletes the Railway environment, Neon branch, and recorded Vercel deployment. Neon branches also expire after seven days as a leak backstop. Fork PRs do not deploy because repository secrets are unavailable and the workflow rejects them.
+
+## Credentials and ownership
+
+The local bootstrap identity uses broad credentials only long enough to create one project per provider. It then stores repository automation tokens in GitHub secrets, provider IDs in GitHub variables, and runtime database URLs directly in Railway. Broad bootstrap credentials and database URLs are never committed.
+
+`DATABASE_URL` and `PREVIEW_DATABASE_URL` are pooled runtime connections. `DATABASE_URL_UNPOOLED` and `PREVIEW_DATABASE_URL_UNPOOLED` are direct migration connections. A preview refuses to fall back to production credentials.
+
+## Recovery rules
+
+Re-running a failed workflow is safe because PR names are deterministic and migrations are append-only, checksummed, and advisory-locked. A Railway restart reuses the current image; it is not proof that new code deployed. Trust `/ready` only when its `commit` equals the requested Git SHA.
+
+A browser CORS warning paired with HTTP 500 usually means the API failed before middleware produced a normal response. Inspect Railway API and migration logs first, then verify the preview database variables and direct migration URL.

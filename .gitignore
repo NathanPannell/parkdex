@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+node_modules/
+.next/
+.vercel/
+coverage/
+dist/
+.neon
+
+.vercel
+.env*.local
