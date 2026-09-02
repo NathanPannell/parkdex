@@ -23,7 +23,6 @@ app = FastAPI(title="__APP_NAME__ API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_origin_regex=r"https://[a-zA-Z0-9-]+\.vercel\.app" if settings.is_preview else None,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
