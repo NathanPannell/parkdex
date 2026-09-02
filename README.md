@@ -19,6 +19,7 @@ Requirements: Docker, Python 3.13+, and Node 22+.
 ```bash
 docker compose up -d postgres
 cp .env.example .env.local
+cp frontend/.env.example frontend/.env.local
 python -m venv .venv
 # Activate .venv, then:
 python -m pip install -r backend/requirements-dev.txt
@@ -47,8 +48,10 @@ npm run build
 
 ## Deployment contract
 
-Production deploys run after CI on `main`. PRs from branches in this repository receive one Neon branch, one duplicated Railway environment containing API and worker services, and one Vercel deployment. Closing the PR removes all three preview resources.
+Production deploys run after CI on `main`. PRs authored and run by the GitHub user that bootstrapped the repository receive one Neon branch, one duplicated Railway environment containing API and worker services, and one Vercel deployment. Closing the PR removes all three preview resources. This trusted-actor gate prevents another collaborator's branch from receiving the repository's broad deployment secrets.
 
 Runtime connections are pooled. Migrations use direct Neon URLs because advisory locks and other session behavior must not pass through transaction pooling. Preview readiness waits for the exact Git commit and a readable migrated database, preventing an old restarted Railway container from being mistaken for the new deployment.
+
+After each Vercel deployment, the workflow replaces Railway's CORS allowlist with the exact frontend URL, adds that URL to the matching Neon Auth branch, and redeploys the API. Neon Auth is provisioned and URL-aware; the sample uptime feature does not include sign-in UI or session enforcement.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the lifecycle and recovery rules.

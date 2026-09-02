@@ -8,7 +8,7 @@ Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon prod
                          API migrations ──direct SQL──> Neon production
 ```
 
-GitHub Actions owns production deployment after CI. It stamps both Railway services with the commit SHA, deploys them, waits until `/ready` reports that exact SHA and a readable migration table, then deploys Vercel once with the resulting API URL.
+GitHub Actions owns production deployment after CI. It stamps both Railway services with the commit SHA, deploys them, waits until `/ready` reports that exact SHA and a readable migration table, then deploys Vercel once with the resulting API URL. It writes the actual Vercel production URLs into Railway's exact CORS allowlist and the production Neon Auth trusted domains, then redeploys the API.
 
 ## Pull request N
 
@@ -18,9 +18,9 @@ Vercel preview ──HTTPS──> Railway API (pr-N) ──pooled SQL──> Neo
                           API migrations ──direct SQL────────> same branch
 ```
 
-The workflow creates or reuses deterministic `pr-N` resources. It passes both pooled and direct Neon URLs into Railway before deployment. Vercel Git auto-deployment is disabled, so the workflow creates exactly one frontend preview after the matching API is ready.
+The workflow creates or reuses deterministic `pr-N` resources. It gives the pooled URL to both services and the direct migration URL only to the API. Vercel Git auto-deployment is disabled, so the workflow creates exactly one frontend preview after the matching API is ready. It then writes that exact preview URL into Railway's CORS allowlist and the preview Neon Auth trusted domains before a final API redeploy.
 
-On close or merge, GitHub Actions deletes the Railway environment, Neon branch, and recorded Vercel deployment. Neon branches also expire after seven days as a leak backstop. Fork PRs do not deploy because repository secrets are unavailable and the workflow rejects them.
+On close or merge, GitHub Actions deletes the Railway environment, Neon branch, and recorded Vercel deployment. Neon branches also expire after seven days as a leak backstop. Fork PRs do not deploy. Same-repository previews deploy only when both the PR author and workflow actor match `TRUSTED_PREVIEW_ACTOR`, the GitHub user that ran the bootstrap.
 
 ## Credentials and ownership
 
@@ -32,4 +32,4 @@ The local bootstrap identity uses broad credentials only long enough to create o
 
 Re-running a failed workflow is safe because PR names are deterministic and migrations are append-only, checksummed, and advisory-locked. A Railway restart reuses the current image; it is not proof that new code deployed. Trust `/ready` only when its `commit` equals the requested Git SHA.
 
-A browser CORS warning paired with HTTP 500 usually means the API failed before middleware produced a normal response. Inspect Railway API and migration logs first, then verify the preview database variables and direct migration URL.
+A browser CORS warning paired with HTTP 500 usually means the API failed before middleware produced a normal response. Inspect Railway API and migration logs first, then verify the preview database variables, direct migration URL, and exact `FRONTEND_ORIGINS` value.

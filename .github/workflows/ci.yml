@@ -30,8 +30,8 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
       DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -43,8 +43,8 @@ jobs:
   frontend:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -61,11 +61,14 @@ jobs:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
 
   deploy-production:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.BOOTSTRAP_COMPLETE == 'true'
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     needs: [backend, frontend]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+      NEON_PARENT_BRANCH: ${{ vars.NEON_PARENT_BRANCH }}
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
@@ -76,12 +79,12 @@ jobs:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - name: Install deployment CLIs
-        run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
+        run: npm install --global @railway/cli@5.47.2 neon@4.13.1 vercel@50.1.3
       - name: Stamp and deploy Railway services
         run: |
           printf '%s' "$EXPECTED_COMMIT_SHA" | railway variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
@@ -91,7 +94,35 @@ jobs:
       - name: Wait for the exact migrated API commit
         id: railway
         run: bash scripts/wait-for-railway-api.sh
-      - name: Deploy frontend once
+      - name: Deploy frontend once and resolve its production origin
+        id: vercel
         env:
           API_URL: ${{ steps.railway.outputs.api_url }}
-        run: vercel deploy --prod --yes --cwd frontend --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: |
+          deployment_url="$(vercel deploy --prod --yes --cwd frontend --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
+          production_url=""
+          for _ in $(seq 1 12); do
+            production_url="$(vercel project list --json --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" | jq -r --arg id "$VERCEL_PROJECT_ID" '.projects[] | select(.id == $id) | .latestProductionUrl // empty')"
+            [[ -n "$production_url" ]] && break
+            sleep 5
+          done
+          [[ -n "$production_url" ]] || { echo 'Vercel production URL was not available.' >&2; exit 1; }
+          origins="$(jq -nr --arg deployment "$deployment_url" --arg production "$production_url" '[$deployment, $production] | unique | join(",")')"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "production_url=$production_url" >> "$GITHUB_OUTPUT"
+          echo "origins=$origins" >> "$GITHUB_OUTPUT"
+      - name: Trust the exact frontend origins
+        env:
+          DEPLOYMENT_URL: ${{ steps.vercel.outputs.deployment_url }}
+          FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
+          PRODUCTION_URL: ${{ steps.vercel.outputs.production_url }}
+        run: |
+          printf '%s' "$FRONTEND_ORIGINS" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          for origin in "$DEPLOYMENT_URL" "$PRODUCTION_URL"; do
+            if ! neon neon-auth domain list --project-id "$NEON_PROJECT_ID" --branch "$NEON_PARENT_BRANCH" --output json --no-color | jq -e --arg url "$origin" '.. | scalars | select(. == $url)' >/dev/null; then
+              neon neon-auth domain add "$origin" --project-id "$NEON_PROJECT_ID" --branch "$NEON_PARENT_BRANCH" --no-color
+            fi
+          done
+          railway up --detach --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+      - name: Verify final production API readiness
+        run: bash scripts/wait-for-railway-api.sh

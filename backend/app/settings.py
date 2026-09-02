@@ -1,12 +1,15 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env", "../.env", ".env.local", "../.env.local"),
+        env_file=(PROJECT_ROOT / ".env", PROJECT_ROOT / ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -51,13 +54,17 @@ class Settings(BaseSettings):
 
     @property
     def effective_migration_database_url(self) -> str:
-        """Prefer a direct Neon connection for session-level advisory locks."""
+        """Require a direct Neon connection in every Railway environment."""
         if self.is_preview:
             if not self.preview_database_url_unpooled:
                 raise RuntimeError(
                     "Railway preview migrations require PREVIEW_DATABASE_URL_UNPOOLED."
                 )
             return self.preview_database_url_unpooled
+        if self.railway_environment_name and not self.database_url_unpooled:
+            raise RuntimeError(
+                "Railway production migrations require DATABASE_URL_UNPOOLED."
+            )
         return self.database_url_unpooled or self.effective_database_url
 
     @property

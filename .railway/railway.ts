@@ -16,7 +16,6 @@ export default defineRailway(() => {
     },
     env: {
       DATABASE_URL: preserve(),
-      DATABASE_URL_UNPOOLED: preserve(),
       APP_COMMIT_SHA: preserve(),
     },
     replicas: { "us-west2": 1 },
