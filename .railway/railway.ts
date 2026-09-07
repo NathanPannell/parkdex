@@ -1,7 +1,7 @@
 import { defineRailway, github, preserve, project, service } from "railway/iac";
 
 export default defineRailway(() => {
-  const repository = github("__GITHUB_REPOSITORY__");
+  const repository = github("NathanPannell/every-park");
 
   const worker = service("worker", {
     source: repository,
@@ -44,7 +44,7 @@ export default defineRailway(() => {
     replicas: { "us-west2": 1 },
   });
 
-  return project("__APP_SLUG__", {
+  return project("every-park", {
     resources: [worker, api],
   });
 });

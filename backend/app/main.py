@@ -19,7 +19,7 @@ async def lifespan(_: FastAPI):
 
 
 settings = get_settings()
-app = FastAPI(title="__APP_NAME__ API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Every Park API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,

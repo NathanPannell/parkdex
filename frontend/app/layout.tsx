@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "__APP_NAME__",
+  title: "Every Park",
   description: "A small full-stack application",
 };
 

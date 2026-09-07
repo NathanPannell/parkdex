@@ -1,4 +1,4 @@
-# __APP_NAME__
+# Every Park
 
 A reusable full-stack starter: Next.js on Vercel, FastAPI API and worker on Railway, Neon Postgres, and GitHub Actions-managed production and per-PR environments.
 

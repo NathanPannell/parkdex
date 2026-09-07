@@ -1,5 +1,5 @@
 {
-  "name": "__APP_SLUG__-frontend",
+  "name": "every-park-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
