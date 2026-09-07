@@ -27,7 +27,7 @@ button { color: inherit; }
 ::-webkit-scrollbar-thumb { background: var(--water); border: 2px solid var(--paper); border-radius: 999px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.app-shell, .map-stage { width: 100%; height: 100dvh; min-height: 620px; overflow: hidden; }
+.app-shell, .map-stage { width: 100%; height: 100dvh; min-height: 620px; overflow: clip; }
 .map-stage { position: relative; background: var(--ocean); }
 .map-wrap, .map { position: absolute; inset: 0; }
 .map .maplibregl-canvas { filter: saturate(.92) contrast(1.02); }
