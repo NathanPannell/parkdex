@@ -116,6 +116,20 @@ jobs:
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "production_url=$production_url" >> "$GITHUB_OUTPUT"
           echo "origins=$origins" >> "$GITHUB_OUTPUT"
+      - name: Verify the public frontend and map worker assets
+        env:
+          FRONTEND_URL: ${{ steps.vercel.outputs.production_url }}
+        run: |
+          page="$(mktemp)"
+          for _ in $(seq 1 12); do
+            if curl --fail --silent --show-error "$FRONTEND_URL/" --output "$page"; then
+              break
+            fi
+            sleep 5
+          done
+          grep -q '<title>Every Park' "$page" || { echo 'Production frontend title was not rendered.' >&2; exit 1; }
+          curl --fail --silent --show-error "$FRONTEND_URL/maplibre/maplibre-gl-worker.mjs" --output /dev/null
+          curl --fail --silent --show-error "$FRONTEND_URL/maplibre/maplibre-gl-shared.mjs" --output /dev/null
       - name: Trust the exact frontend origins
         env:
           FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
