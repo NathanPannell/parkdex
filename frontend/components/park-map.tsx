@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
 import {
   boundaryFilter,
@@ -11,10 +11,12 @@ import {
   loadBoundaryIndex,
   pickBoundaryPlace,
   selectedBoundaryFilter,
+  settleBoundaryLoadStatus,
   type BoundaryIndex,
   type BoundaryLoadState,
 } from "@/lib/boundaries";
 import { BOUNDARY_SOURCE_ID, boundaryLayerSpecifications } from "@/lib/boundary-style";
+import { selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
 import type { Place } from "@/lib/places";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
@@ -67,15 +69,38 @@ function fitOverview(map: MapLibreMap, places: Place[], animated: boolean) {
   );
 }
 
-function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean) {
+function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
   const bounds = boundsForPlace(index, placeId);
   if (!bounds) return false;
   map.fitBounds(bounds, {
-    padding: { top: 180, right: 32, bottom: 230, left: 32 },
+    padding,
     maxZoom: 12,
     duration: animated ? 560 : 0,
   });
   return true;
+}
+
+function layoutRect(element: HTMLElement): LayoutRect {
+  const rect = element.getBoundingClientRect();
+  if (!element.offsetParent) return rect;
+  const parent = element.offsetParent.getBoundingClientRect();
+  return {
+    top: parent.top + element.offsetTop,
+    right: parent.left + element.offsetLeft + element.offsetWidth,
+    bottom: parent.top + element.offsetTop + element.offsetHeight,
+    left: parent.left + element.offsetLeft,
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+  };
+}
+
+function measuredSelectionPadding(container: HTMLElement) {
+  const mapRect = container.getBoundingClientRect();
+  const sheet = document.querySelector<HTMLElement>(".place-sheet");
+  const overlayBottom = [".expedition-header", ".search-dock", ".filter-tray"]
+    .map((selector) => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().bottom ?? mapRect.top)
+    .reduce((largest, value) => Math.max(largest, value), mapRect.top);
+  return selectedPlacePadding(mapRect, sheet ? layoutRect(sheet) : null, overlayBottom);
 }
 
 function addBoundaryLayers(map: MapLibreMap) {
@@ -134,6 +159,7 @@ export function ParkMap({
     if (!containerRef.current || mapRef.current) return;
     let disposed = false;
     let loadDeadline: number | undefined;
+    let boundaryLoadDeadline: number | undefined;
     void import("maplibre-gl").then((maplibregl) => {
       if (disposed || !containerRef.current) return;
       maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -165,11 +191,29 @@ export function ParkMap({
         "bottom-right",
       );
       let collectionReady = false;
-      let boundaryReady = false;
+      let boundarySetup = false;
+      let reportedBoundaryStatus: BoundaryLoadState["status"] = "loading";
+      const reportBoundaryStatus = (signal: "ready" | "failed") => {
+        const status = settleBoundaryLoadStatus(reportedBoundaryStatus, signal);
+        if (reportedBoundaryStatus === status) return;
+        reportedBoundaryStatus = status;
+        if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
+        boundaryStateRef.current?.({ status, placeIds: status === "ready" && boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set() });
+      };
+      map.on("sourcedata", (event) => {
+        if (event.sourceId === BOUNDARY_SOURCE && map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("ready");
+      });
+      map.on("error", (event) => {
+        const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
+        if (sourceId === BOUNDARY_SOURCE || event.error?.message.includes(BOUNDARY_DATA_URL)) reportBoundaryStatus("failed");
+      });
       const setupBoundaries = (index: BoundaryIndex) => {
-        if (boundaryReady || !map.getLayer("clusters")) return;
-        boundaryReady = true;
+        if (boundarySetup || !map.getLayer("clusters")) return;
+        boundarySetup = true;
         addBoundaryLayers(map);
+        boundaryLoadDeadline = window.setTimeout(() => {
+          if (!map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("failed");
+        }, 12_000);
         const { places: currentPlaces, visited: currentVisited } = dataRef.current;
         updateBoundaryFilters(map, currentPlaces, selectedRef.current);
         const availableIds = boundaryPlaceIds(index);
@@ -186,8 +230,8 @@ export function ParkMap({
         map.on("mouseenter", "boundary-hit", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "boundary-hit", () => { map.getCanvas().style.cursor = ""; });
         const selected = selectedRef.current;
-        if (selected && currentPlaces.some((place) => place.id === selected)) {
-          fitBoundary(map, index, selected, !reduceMotion);
+        if (selected && currentPlaces.some((place) => place.id === selected) && containerRef.current) {
+          fitBoundary(map, index, selected, !reduceMotion, measuredSelectionPadding(containerRef.current));
         }
       };
       const setupCollection = () => {
@@ -286,16 +330,16 @@ export function ParkMap({
       void loadBoundaryIndex().then((index) => {
         if (disposed) return;
         boundaryDataRef.current = index;
-        boundaryStateRef.current?.({ status: "ready", placeIds: boundaryPlaceIds(index) });
         setupBoundaries(index);
         setBoundaryRevision((revision) => revision + 1);
       }).catch(() => {
-        if (!disposed) boundaryStateRef.current?.({ status: "failed", placeIds: new Set() });
+        if (!disposed) reportBoundaryStatus("failed");
       });
     }).catch(() => setMapFailed(true));
     return () => {
       disposed = true;
       if (loadDeadline) window.clearTimeout(loadDeadline);
+      if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -321,10 +365,31 @@ export function ParkMap({
     if (!selectedId || !mapRef.current) return;
     const place = places.find((candidate) => candidate.id === selectedId);
     if (!place) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    updateBoundaryFilters(mapRef.current, places, selectedId);
-    if (boundaryDataRef.current && fitBoundary(mapRef.current, boundaryDataRef.current, selectedId, !reduceMotion)) return;
-    mapRef.current.easeTo({ center: [place.longitude, place.latitude], zoom: Math.max(mapRef.current.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!container) return;
+    updateBoundaryFilters(map, places, selectedId);
+    let animationFrame = 0;
+    const fitSelected = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const padding = measuredSelectionPadding(container);
+        if (boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, selectedId, !reduceMotion, padding)) return;
+        map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+      });
+    };
+    fitSelected();
+    const resizeObserver = new ResizeObserver(fitSelected);
+    resizeObserver.observe(container);
+    const sheet = document.querySelector<HTMLElement>(".place-sheet");
+    if (sheet) resizeObserver.observe(sheet);
+    window.addEventListener("resize", fitSelected);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", fitSelected);
+    };
   }, [selectedId, places, boundaryRevision]);
 
   return (

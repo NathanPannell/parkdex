@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import booleanValid from '@turf/boolean-valid';
 
+import { osmObjects, validateBoundarySource, validateBoundarySourceCounts } from './boundary-sources.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json'), 'utf8'));
 const boundaryBuffer = fs.readFileSync(path.join(root, 'data', 'boundaries.geojson'));
@@ -49,17 +51,16 @@ for (let featureIndex = 0; featureIndex < boundaries.features.length; featureInd
   const place = placesById.get(id);
   if (!place) throw new Error(`boundary has no canonical place: ${id}`);
   if (name !== place.name || category !== place.category) throw new Error(`${id}: boundary identity differs from canonical place`);
+  validateBoundarySource(place, feature.properties);
   if (featureIndex && boundaries.features[featureIndex - 1].properties.id.localeCompare(id) >= 0) throw new Error('boundaries must be deterministically sorted by id');
   if (!URL.canParse(sourceUrl) || !sourceUrl.startsWith('https://')) throw new Error(`${id}: boundary sourceUrl must be HTTPS`);
   if (!['Polygon', 'MultiPolygon'].includes(feature.geometry?.type)) throw new Error(`${id}: boundary must be Polygon or MultiPolygon`);
   const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
   if (!polygons.length) throw new Error(`${id}: empty geometry`);
-  if (sourceName !== 'OpenStreetMap contributors') {
-    for (const coordinates of polygons) {
-      const valid = booleanValid({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } });
-      if (!valid && !topologyWarningIds.has(id)) throw new Error(`${id}: undocumented polygon topology failure`);
-      if (!valid) confirmedTopologyWarnings.add(id);
-    }
+  for (const coordinates of polygons) {
+    const valid = booleanValid({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } });
+    if (!valid && !topologyWarningIds.has(id)) throw new Error(`${id}: undocumented polygon topology failure`);
+    if (!valid) confirmedTopologyWarnings.add(id);
   }
   partCount += polygons.length;
   for (const polygon of polygons) {
@@ -99,14 +100,17 @@ for (const [id, minimum] of nationalMinimumParts) {
 
 const islandFeatures = boundaries.features.filter((feature) => feature.properties.category === 'island');
 if (islandFeatures.length !== 25) throw new Error(`expected 25 island boundaries, found ${islandFeatures.length}`);
+const expectedIslandObjects = Object.fromEntries([...osmObjects].filter(([id]) => id.startsWith('island-')));
+if (JSON.stringify(audit.islandSourceObjects) !== JSON.stringify(expectedIslandObjects)) throw new Error('boundary audit island source objects differ from reviewed contract');
 for (const feature of islandFeatures) {
-  const expectedObject = audit.islandSourceObjects?.[feature.properties.id];
+  const expectedObject = osmObjects.get(feature.properties.id);
   if (!expectedObject || feature.properties.sourceId !== expectedObject) throw new Error(`${feature.properties.id}: OSM geographic identity does not match the reviewed object`);
   if (!/^R\d+$/.test(feature.properties.sourceId)) throw new Error(`${feature.properties.id}: island must resolve to a reviewed OSM coastline relation`);
 }
 
 if (audit.placeCount !== places.length || audit.featureCount !== boundaries.features.length) throw new Error('boundary audit count mismatch');
 if (audit.missingIds?.length || audit.duplicateIds?.length) throw new Error('boundary audit reports missing or duplicate IDs');
+validateBoundarySourceCounts(boundaries.features, audit.sourceCounts);
 if (audit.sourceTopologyPreserved !== true) throw new Error('boundary audit does not confirm source part/hole preservation');
 for (const id of topologyWarningIds) if (!confirmedTopologyWarnings.has(id)) throw new Error(`${id}: stale topology warning`);
 if (audit.totalParts !== partCount || audit.totalHoles !== holeCount || audit.totalPositions !== positionCount) throw new Error('boundary audit geometry totals mismatch');

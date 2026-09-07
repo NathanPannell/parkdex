@@ -7,6 +7,7 @@ import {
   parseBoundaryIndex,
   pickBoundaryPlace,
   selectedBoundaryFilter,
+  settleBoundaryLoadStatus,
 } from "./boundaries";
 import type { Place } from "./places";
 
@@ -40,6 +41,12 @@ describe("boundary map filters", () => {
       ["!=", ["get", "category"], "island"],
     ]);
     expect(selectedBoundaryFilter("park-b", ["park-a"])).toEqual(["==", ["get", "id"], ""]);
+  });
+
+  it("keeps the first terminal source result when events arrive out of order", () => {
+    expect(settleBoundaryLoadStatus("failed", "ready")).toBe("failed");
+    expect(settleBoundaryLoadStatus("ready", "failed")).toBe("ready");
+    expect(settleBoundaryLoadStatus("loading", "ready")).toBe("ready");
   });
 });
 

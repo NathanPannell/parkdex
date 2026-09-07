@@ -55,6 +55,8 @@ jobs:
         run: node scripts/data-validate.mjs
       - name: Install boundary validation dependencies
         run: npm ci
+      - name: Test reviewed boundary source contract
+        run: npm run boundaries:test
       - name: Validate sourced boundary geometry
         run: node scripts/boundary-validate.mjs
       - run: npm ci

@@ -22,6 +22,11 @@ export type BoundaryLoadState =
   | { status: "loading"; placeIds: ReadonlySet<string> }
   | { status: "ready"; placeIds: ReadonlySet<string> }
   | { status: "failed"; placeIds: ReadonlySet<string> };
+export type BoundaryLoadStatus = BoundaryLoadState["status"];
+
+export function settleBoundaryLoadStatus(current: BoundaryLoadStatus, signal: "ready" | "failed"): BoundaryLoadStatus {
+  return current === "loading" ? signal : current;
+}
 
 let cachedBoundaryRequest: Promise<BoundaryIndex> | null = null;
 

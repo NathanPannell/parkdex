@@ -4,63 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import booleanValid from '@turf/boolean-valid';
 
+import { boundarySources as sources, osmObjects } from './boundary-sources.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data');
 const places = JSON.parse(await fs.readFile(path.join(dataDir, 'places.json'), 'utf8'));
 const placeById = new Map(places.map((place) => [place.id, place]));
 const preservationChecks = [];
 const topologyWarnings = [];
-
-const sources = {
-  bcParks: {
-    name: 'BC Parks / DataBC — TANTALIS protected areas',
-    page: 'https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas',
-    data: 'https://openmaps.gov.bc.ca/geo/pub/WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&outputFormat=json&srsName=EPSG:4326&bbox=48.2,-128.8,51.2,-123.0,urn:ogc:def:crs:EPSG::4326',
-  },
-  crd: {
-    name: 'Capital Regional District — Park GIS layer',
-    page: 'https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3',
-    data: "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3/query?where=Type%3D%27Regional%20Park%27&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
-  },
-  cvrd: {
-    name: 'Cowichan Valley Regional District — Parks GIS layer',
-    page: 'https://maps.cvrd.ca/mapservices/rest/services/Parks/MapServer/2',
-    data: "https://maps.cvrd.ca/mapservices/rest/services/Parks/MapServer/2/query?where=Park_Type%3D%27Regional%20Park%27&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
-  },
-  rdn: {
-    name: 'Regional District of Nanaimo — Regional Parks spatial data',
-    page: 'https://rdn.bc.ca/spatial-data-files',
-    data: 'https://rdn.bc.ca/sites/default/files/RegionalParks_14.kmz',
-  },
-  national: {
-    name: 'Natural Resources Canada — Canada Lands Survey System',
-    page: 'https://open.canada.ca/data/en/dataset/9e1507cd-f25c-4c64-995b-6563bf9d65bd',
-    data: "https://proxyinternet.nrcan-rncan.gc.ca/arcgis/rest/services/CLSS-SATC/CLSS_Administrative_Boundaries/MapServer/1/query?where=adminAreaId%20IN%20(%27PRIM%27%2C%27GULF%27)&outFields=adminAreaId%2CadminAreaNameEng%2CNID&returnGeometry=true&outSR=4326&f=geojson",
-  },
-  osm: {
-    name: 'OpenStreetMap contributors',
-    page: 'https://www.openstreetmap.org/copyright',
-    lookup: 'https://nominatim.openstreetmap.org/lookup',
-  },
-};
-
-// Reviewed OSM coastline objects corresponding to the 25 canonical BCGN island names.
-// Stable object IDs avoid ambiguous name-based geocoding during rebuilds.
-const osmObjects = new Map([
-  ['island-cormorant-island', 'R8357754'], ['island-cortes-island', 'R2143895'],
-  ['island-denman-island', 'R8237801'], ['island-flores-island', 'R2142418'],
-  ['island-gabriola-island', 'R2141945'], ['island-galiano-island', 'R1194085'],
-  ['island-hornby-island', 'R5825282'], ['island-lasqueti-island', 'R2143890'],
-  ['island-malcolm-island', 'R8357750'], ['island-maurelle-island', 'R4153658'],
-  ['island-mayne-island', 'R8332721'], ['island-meares-island', 'R2142331'],
-  ['island-nootka-island', 'R2143304'], ['island-north-pender-island', 'R2140392'],
-  ['island-penelakut-island', 'R5553189'], ['island-quadra-island', 'R2143327'],
-  ['island-read-island', 'R2143965'], ['island-saltspring-island', 'R1019863'],
-  ['island-saturna-island', 'R1725547'], ['island-sonora-island', 'R2143966'],
-  ['island-south-pender-island', 'R8335965'], ['island-thetis-island', 'R5553191'],
-  ['island-valdes-island', 'R8338288'], ['island-vancouver-island', 'R2249770'],
-  ['island-vargas-island', 'R8371770'], ['regional-bere-point-regional-park', 'W449016643'],
-]);
 
 function slugify(value) {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -197,13 +148,11 @@ function makeFeature(place, geometry, source, sourceId) {
   let compacted = compactGeometry(geometry);
   const polygonFeatures = (candidate) => (candidate.type === 'Polygon' ? [candidate.coordinates] : candidate.coordinates)
     .map((coordinates) => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates } }));
-  if (source !== sources.osm) {
-    const sourceValid = polygonFeatures(geometry).every((feature) => booleanValid(feature));
-    if (!polygonFeatures(compacted).every((feature) => booleanValid(feature))) compacted = compactGeometry(geometry, 0);
-    if (!polygonFeatures(compacted).every((feature) => booleanValid(feature))) {
-      if (sourceValid) compacted = geometry;
-      else topologyWarnings.push({ id: place.id, reason: 'Official source polygon fails strict self-intersection topology validation; geometry retained without vertex simplification.' });
-    }
+  const sourceValid = polygonFeatures(geometry).every((feature) => booleanValid(feature));
+  if (!polygonFeatures(compacted).every((feature) => booleanValid(feature))) compacted = compactGeometry(geometry, 0);
+  if (!polygonFeatures(compacted).every((feature) => booleanValid(feature))) {
+    if (sourceValid) compacted = geometry;
+    else topologyWarnings.push({ id: place.id, reason: 'Source polygon fails strict self-intersection topology validation; geometry retained without vertex simplification.' });
   }
   const before = coordinateStats(geometry);
   const after = coordinateStats(compacted);
