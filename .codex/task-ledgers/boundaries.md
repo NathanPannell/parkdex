@@ -43,3 +43,5 @@ PR #2 is open as a draft. Push review fixes, recheck CI and refreshed preview, t
 - Frontend fixes pass 14 tests, lint, typecheck and optimized build. Three source contract mutation tests and full boundary validation pass. Canonical geometry remains unchanged.
 - Forced missing-GeoJSON local browser test showed an honest unavailable message while pins/selection remained usable; asset restored and checksum parity passed.
 - Initial deployed preview showed multipart national and full-island boundaries with no console errors. Checkoff persisted through reload and was undone. Final refreshed-preview browser check remains pending.
+- Refreshed application commit 4775452 passed CI and mobile/desktop deployed-browser checks, including checkoff/reload/undo with no console warnings/errors.
+- Preview refresh exposed Railway watched-path skipping on frontend-only revisions. Preview uploads now include a generated backend marker and deployment message unique to SHA/run/attempt; the source gate requires the matching API and worker deployments to succeed. Independent review confirmed the scoped workflow correction. Final automated run and its browser smoke remain pending.

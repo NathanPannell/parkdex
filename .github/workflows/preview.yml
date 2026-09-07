@@ -85,8 +85,9 @@ jobs:
         run: |
           source_marker=backend/.preview-source-sha
           trap 'rm -f "$source_marker"' EXIT
-          printf '%s' "$EXPECTED_COMMIT_SHA" > "$source_marker"
-          deployment_message="preview-source $EXPECTED_COMMIT_SHA"
+          deployment_message="preview-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
+          printf '%s' "$deployment_message" > "$source_marker"
+          export EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE="$deployment_message"
           railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           bash scripts/wait-for-railway-preview-source.sh
