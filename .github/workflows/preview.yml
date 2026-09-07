@@ -44,6 +44,8 @@ jobs:
           parent_branch: ${{ vars.NEON_PARENT_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
           expires_at: ${{ steps.expiry.outputs.expires_at }}
+          database: app
+          role: app_owner
 
       - uses: actions/setup-node@v6
         with:
