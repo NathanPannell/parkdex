@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-09-07T22:49:02.886Z",
+  "placeCount": 216,
+  "featureCount": 216,
+  "missingIds": [],
+  "duplicateIds": [],
+  "sourceCounts": {
+    "BC Parks / DataBC — TANTALIS protected areas": 136,
+    "Capital Regional District — Park GIS layer": 34,
+    "Cowichan Valley Regional District — Parks GIS layer": 4,
+    "Natural Resources Canada — Canada Lands Survey System": 2,
+    "OpenStreetMap contributors": 26,
+    "Regional District of Nanaimo — Regional Parks spatial data": 14
+  },
+  "geometryCounts": {
+    "Polygon": 152,
+    "MultiPolygon": 64
+  },
+  "totalParts": 447,
+  "totalHoles": 100,
+  "sourceParts": 447,
+  "sourceHoles": 100,
+  "totalPositions": 149993,
+  "payloadBytes": 3354992,
+  "nationalParts": {
+    "national-gulf-islands-national-park-reserve": 80,
+    "national-pacific-rim-national-park-reserve": 20
+  },
+  "islandSourceObjects": {
+    "island-cormorant-island": "R8357754",
+    "island-cortes-island": "R2143895",
+    "island-denman-island": "R8237801",
+    "island-flores-island": "R2142418",
+    "island-gabriola-island": "R2141945",
+    "island-galiano-island": "R1194085",
+    "island-hornby-island": "R5825282",
+    "island-lasqueti-island": "R2143890",
+    "island-malcolm-island": "R8357750",
+    "island-maurelle-island": "R4153658",
+    "island-mayne-island": "R8332721",
+    "island-meares-island": "R2142331",
+    "island-nootka-island": "R2143304",
+    "island-north-pender-island": "R2140392",
+    "island-penelakut-island": "R5553189",
+    "island-quadra-island": "R2143327",
+    "island-read-island": "R2143965",
+    "island-saltspring-island": "R1019863",
+    "island-saturna-island": "R1725547",
+    "island-sonora-island": "R2143966",
+    "island-south-pender-island": "R8335965",
+    "island-thetis-island": "R5553191",
+    "island-valdes-island": "R8338288",
+    "island-vancouver-island": "R2249770",
+    "island-vargas-island": "R8371770"
+  },
+  "sourceTopologyPreserved": true,
+  "topologyWarnings": []
+}

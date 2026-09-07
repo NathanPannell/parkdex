@@ -1,6 +1,6 @@
 # Every Park seed catalogue
 
-`places.json` is a normalized, source-attributed v0 catalogue for Vancouver Island and a curated set of nearby Gulf, Discovery, west-coast, and northern islands. It is a game collection, not a legal-boundary or navigation dataset.
+`places.json` is a normalized, source-attributed v0 catalogue for Vancouver Island and a curated set of nearby Gulf, Discovery, west-coast, and northern islands. It is a game collection, not a survey, ownership, public-access, or navigation dataset.
 
 ## Record contract
 
@@ -24,6 +24,16 @@ Regional coverage is strongest for CRD, RDN, and CVRD. The ACRD official list is
 
 `coverage-audit.json` records counts, extents, polygon-pin containment verification, and every provincial park excluded by the geographic scope. Review it whenever source data changes. The Vancouver Island mask is intentionally paired with a reviewed inclusion allowlist for coastal and nearby-island parks. Region labels use separate explicit island and island-park taxonomies; the rebuild fails when an included offshore park has no named region assignment, so coordinate bands cannot silently relabel it.
 
+## Boundary contract and sources
+
+`boundaries.geojson` contains exactly one Polygon or MultiPolygon feature for every canonical place ID. Feature properties are `id`, `name`, `category`, `sourceName`, `sourceUrl`, and `sourceId`. Multipart parcels and interior holes are retained. Coordinates are WGS84 and are normally simplified to a tolerance of 0.00004 degrees for mobile delivery; the builder falls back to the valid full-precision source geometry if compaction would invalidate a polygon. `boundary-audit.json` records coverage, geometry totals, payload size, reviewed island source objects, and any upstream topology warning.
+
+Provincial and regional boundaries come from the same official DataBC, CRD, CVRD, and RDN layers used by the catalogue builder. Pacific Rim and Gulf Islands use Natural Resources Canada's Canada Lands Survey System legislative boundary service. Those polygons show the legislated reserve extent; they do not determine ownership, permitted access, or safe travel. Bere Point uses its named OpenStreetMap park polygon because RDMW does not publish a geospatial boundary feed.
+
+The 25 island coastlines use individually reviewed, stable OpenStreetMap relation IDs matched to the canonical BC Geographical Names identities. This derived boundary artifact includes data © OpenStreetMap contributors and is available under the Open Database License; applications displaying it must show the OpenStreetMap attribution supplied in each feature. See https://www.openstreetmap.org/copyright.
+
 ## Rebuild
 
 From the repository root, run `node scripts/data-build.mjs`, then `node scripts/data-validate.mjs`. The builder fetches current official DataBC, CRD, CVRD, RDN, and BC Geographical Names data. The RDN KMZ is unpacked in memory, so no third-party source archive is redistributed.
+
+Run `node scripts/boundary-build.mjs` to refresh the boundary artifact from the official GIS services, the federal legislative-boundary service, and the locked OpenStreetMap objects. Run `node scripts/boundary-validate.mjs` for the network-free CI check. It verifies exact catalogue coverage and identity, source attribution, finite closed WGS84 rings, strict topology, multipart national reserves, reviewed island IDs, pin containment where the catalogue contract supports it, part/hole preservation, audit consistency, and the 5 MB raw mobile budget.
