@@ -1,9 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
+import {
+  boundaryFilter,
+  boundaryPlaceIds,
+  boundsForPlace,
+  BOUNDARY_DATA_URL,
+  loadBoundaryIndex,
+  pickBoundaryPlace,
+  selectedBoundaryFilter,
+  settleBoundaryLoadStatus,
+  type BoundaryIndex,
+  type BoundaryLoadState,
+} from "@/lib/boundaries";
+import { BOUNDARY_SOURCE_ID, boundaryLayerSpecifications } from "@/lib/boundary-style";
+import { selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
 import type { Place } from "@/lib/places";
+
+const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
+const BOUNDARY_SELECTED_LAYERS = ["boundary-selected-fill", "boundary-selected-halo", "boundary-selected-line"] as const;
 
 const FIELD_GUIDE_STYLE: StyleSpecification = {
   version: 8,
@@ -52,30 +69,97 @@ function fitOverview(map: MapLibreMap, places: Place[], animated: boolean) {
   );
 }
 
+function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
+  const bounds = boundsForPlace(index, placeId);
+  if (!bounds) return false;
+  map.fitBounds(bounds, {
+    padding,
+    maxZoom: 12,
+    duration: animated ? 560 : 0,
+  });
+  return true;
+}
+
+function layoutRect(element: HTMLElement): LayoutRect {
+  const rect = element.getBoundingClientRect();
+  if (!element.offsetParent) return rect;
+  const parent = element.offsetParent.getBoundingClientRect();
+  return {
+    top: parent.top + element.offsetTop,
+    right: parent.left + element.offsetLeft + element.offsetWidth,
+    bottom: parent.top + element.offsetTop + element.offsetHeight,
+    left: parent.left + element.offsetLeft,
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+  };
+}
+
+function measuredSelectionPadding(container: HTMLElement) {
+  const mapRect = container.getBoundingClientRect();
+  const sheet = document.querySelector<HTMLElement>(".place-sheet");
+  const overlayBottom = [".expedition-header", ".search-dock", ".filter-tray"]
+    .map((selector) => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().bottom ?? mapRect.top)
+    .reduce((largest, value) => Math.max(largest, value), mapRect.top);
+  return selectedPlacePadding(mapRect, sheet ? layoutRect(sheet) : null, overlayBottom);
+}
+
+function addBoundaryLayers(map: MapLibreMap) {
+  map.addSource(BOUNDARY_SOURCE, {
+    type: "geojson",
+    data: BOUNDARY_DATA_URL,
+    promoteId: "id",
+    attribution: "Boundary geometry: sourced map datasets",
+  });
+  const beforeId = "clusters";
+  boundaryLayerSpecifications().forEach((layer) => map.addLayer(layer, beforeId));
+}
+
+function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null) {
+  if (!map.getSource(BOUNDARY_SOURCE)) return;
+  const ids = places.map((place) => place.id);
+  map.setFilter("boundary-island-fill", boundaryFilter(ids, "island"));
+  map.setFilter("boundary-island-line", boundaryFilter(ids, "island"));
+  map.setFilter("boundary-park-fill", boundaryFilter(ids, "park"));
+  map.setFilter("boundary-park-line", boundaryFilter(ids, "park"));
+  map.setFilter("boundary-hit", boundaryFilter(ids));
+  const selected = selectedBoundaryFilter(selectedId, ids);
+  BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, selected));
+}
+
 export function ParkMap({
   places,
   visited,
   selectedId,
   onSelect,
+  onBoundaryLoadState,
 }: {
   places: Place[];
   visited: Set<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onBoundaryLoadState?: (state: BoundaryLoadState) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const dataRef = useRef({ places, visited });
+  const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
+  const boundaryStateRef = useRef(onBoundaryLoadState);
+  const boundaryDataRef = useRef<BoundaryIndex | null>(null);
+  const boundaryVisitedRef = useRef<Set<string>>(new Set());
   const [mapFailed, setMapFailed] = useState(false);
+  const [boundaryRevision, setBoundaryRevision] = useState(0);
 
   useEffect(() => { dataRef.current = { places, visited }; }, [places, visited]);
+  useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { boundaryStateRef.current = onBoundaryLoadState; }, [onBoundaryLoadState]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     let disposed = false;
     let loadDeadline: number | undefined;
+    let boundaryLoadDeadline: number | undefined;
     void import("maplibre-gl").then((maplibregl) => {
       if (disposed || !containerRef.current) return;
       maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -97,10 +181,59 @@ export function ParkMap({
       }, 12_000);
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(
-        new maplibregl.AttributionControl({ compact: true, customAttribution: "Every Park field guide" }),
+        new maplibregl.AttributionControl({
+          compact: true,
+          customAttribution: [
+            "Every Park field guide",
+            '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>',
+          ],
+        }),
         "bottom-right",
       );
       let collectionReady = false;
+      let boundarySetup = false;
+      let reportedBoundaryStatus: BoundaryLoadState["status"] = "loading";
+      const reportBoundaryStatus = (signal: "ready" | "failed") => {
+        const status = settleBoundaryLoadStatus(reportedBoundaryStatus, signal);
+        if (reportedBoundaryStatus === status) return;
+        reportedBoundaryStatus = status;
+        if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
+        boundaryStateRef.current?.({ status, placeIds: status === "ready" && boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set() });
+      };
+      map.on("sourcedata", (event) => {
+        if (event.sourceId === BOUNDARY_SOURCE && map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("ready");
+      });
+      map.on("error", (event) => {
+        const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
+        if (sourceId === BOUNDARY_SOURCE || event.error?.message.includes(BOUNDARY_DATA_URL)) reportBoundaryStatus("failed");
+      });
+      const setupBoundaries = (index: BoundaryIndex) => {
+        if (boundarySetup || !map.getLayer("clusters")) return;
+        boundarySetup = true;
+        addBoundaryLayers(map);
+        boundaryLoadDeadline = window.setTimeout(() => {
+          if (!map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("failed");
+        }, 12_000);
+        const { places: currentPlaces, visited: currentVisited } = dataRef.current;
+        updateBoundaryFilters(map, currentPlaces, selectedRef.current);
+        const availableIds = boundaryPlaceIds(index);
+        currentVisited.forEach((id) => {
+          if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_SOURCE, id }, { visited: true });
+        });
+        boundaryVisitedRef.current = new Set([...currentVisited].filter((id) => availableIds.has(id)));
+        map.on("click", "boundary-hit", (event: MapLayerMouseEvent) => {
+          if (map.queryRenderedFeatures(event.point, { layers: ["clusters", "place-hit-targets"] }).length) return;
+          const features = map.queryRenderedFeatures(event.point, { layers: ["boundary-hit"] });
+          const id = pickBoundaryPlace(features, dataRef.current.places, event.lngLat);
+          if (id) selectRef.current(id);
+        });
+        map.on("mouseenter", "boundary-hit", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "boundary-hit", () => { map.getCanvas().style.cursor = ""; });
+        const selected = selectedRef.current;
+        if (selected && currentPlaces.some((place) => place.id === selected) && containerRef.current) {
+          fitBoundary(map, index, selected, !reduceMotion, measuredSelectionPadding(containerRef.current));
+        }
+      };
       const setupCollection = () => {
         if (collectionReady) return;
         try {
@@ -186,6 +319,7 @@ export function ParkMap({
           map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
         });
         fitOverview(map, currentPlaces, false);
+        if (boundaryDataRef.current) setupBoundaries(boundaryDataRef.current);
         } catch {
           collectionReady = false;
           setMapFailed(true);
@@ -193,10 +327,19 @@ export function ParkMap({
       };
       map.on("style.load", setupCollection);
       window.setTimeout(setupCollection, 0);
+      void loadBoundaryIndex().then((index) => {
+        if (disposed) return;
+        boundaryDataRef.current = index;
+        setupBoundaries(index);
+        setBoundaryRevision((revision) => revision + 1);
+      }).catch(() => {
+        if (!disposed) reportBoundaryStatus("failed");
+      });
     }).catch(() => setMapFailed(true));
     return () => {
       disposed = true;
       if (loadDeadline) window.clearTimeout(loadDeadline);
+      if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -205,15 +348,49 @@ export function ParkMap({
   useEffect(() => {
     const source = mapRef.current?.getSource("places") as GeoJSONSource | undefined;
     source?.setData(collectionData(places, visited));
-  }, [places, visited]);
+    const map = mapRef.current;
+    if (!map?.getSource(BOUNDARY_SOURCE)) return;
+    updateBoundaryFilters(map, places, selectedId);
+    const availableIds = boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set<string>();
+    boundaryVisitedRef.current.forEach((id) => {
+      if (!visited.has(id)) map.setFeatureState({ source: BOUNDARY_SOURCE, id }, { visited: false });
+    });
+    visited.forEach((id) => {
+      if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_SOURCE, id }, { visited: true });
+    });
+    boundaryVisitedRef.current = new Set([...visited].filter((id) => availableIds.has(id)));
+  }, [places, visited, selectedId]);
 
   useEffect(() => {
     if (!selectedId || !mapRef.current) return;
     const place = places.find((candidate) => candidate.id === selectedId);
     if (!place) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    mapRef.current.easeTo({ center: [place.longitude, place.latitude], zoom: Math.max(mapRef.current.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
-  }, [selectedId, places]);
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!container) return;
+    updateBoundaryFilters(map, places, selectedId);
+    let animationFrame = 0;
+    const fitSelected = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const padding = measuredSelectionPadding(container);
+        if (boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, selectedId, !reduceMotion, padding)) return;
+        map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+      });
+    };
+    fitSelected();
+    const resizeObserver = new ResizeObserver(fitSelected);
+    resizeObserver.observe(container);
+    const sheet = document.querySelector<HTMLElement>(".place-sheet");
+    if (sheet) resizeObserver.observe(sheet);
+    window.addEventListener("resize", fitSelected);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", fitSelected);
+    };
+  }, [selectedId, places, boundaryRevision]);
 
   return (
     <div className="map-wrap">

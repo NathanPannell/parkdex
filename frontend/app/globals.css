@@ -101,7 +101,10 @@ button { color: inherit; }
 .place-category { display: flex; align-items: center; gap: 6px; width: fit-content; padding: 6px 9px; border-radius: 999px; background: var(--sun); font-size: 10px; font-weight: 950; letter-spacing: .05em; text-transform: uppercase; }
 .place-sheet h2 { max-width: calc(100% - 36px); margin: 13px 0 6px; font: 750 clamp(27px, 8vw, 38px)/.96 var(--font-display); letter-spacing: -.03em; }
 .place-region { display: flex; align-items: center; gap: 5px; margin: 0; color: var(--water); font-size: 12px; font-weight: 850; }
-.place-description { margin: 14px 0 16px; color: #35564b; font-size: 14px; line-height: 1.5; }
+.boundary-note { display: flex; align-items: center; width: fit-content; gap: 6px; margin: 11px 0 0; padding: 6px 8px; border: 1px dashed #aeb9a6; border-radius: 9px; background: #f0efdf; color: var(--muted); font-size: 10px; font-weight: 850; line-height: 1.25; }
+.boundary-note.available { border-color: #80a150; background: #e7f2c8; color: var(--forest-2); }
+.boundary-note svg { flex: 0 0 auto; }
+.place-description { margin: 12px 0 16px; color: #35564b; font-size: 14px; line-height: 1.5; }
 .sheet-actions { display: flex; align-items: stretch; gap: 8px; }
 .visit-button { position: relative; display: flex; align-items: center; justify-content: center; min-height: 49px; flex: 1; gap: 8px; overflow: visible; padding: 0 15px; border: 0; border-radius: 13px; background: var(--lime); box-shadow: 0 6px 14px rgba(62,103,64,.24); cursor: pointer; font-weight: 950; transition: transform .15s ease, background .2s ease, box-shadow .2s ease; }
 .visit-button:active { transform: translateY(3px) scale(.985); box-shadow: 0 2px 7px rgba(62,103,64,.2); }

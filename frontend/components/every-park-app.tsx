@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowUpRight, Check, Compass, Info, Layers3, ListFilter, Map as MapIcon, MapPin, RotateCcw, Search, Trees, X } from "lucide-react";
+import { ArrowUpRight, Check, Compass, Info, LandPlot, Layers3, ListFilter, Map as MapIcon, MapPin, RotateCcw, Search, Trees, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ParkMap } from "@/components/park-map";
+import type { BoundaryLoadState } from "@/lib/boundaries";
 import { categoryLabels, createCollectionKey, filterPlaces, type Place, type PlaceCategory } from "@/lib/places";
 import { VisitOutbox, type PendingVisit } from "@/lib/visit-outbox";
 
@@ -40,6 +41,7 @@ export function EveryParkApp({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [syncMessage, setSyncMessage] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
+  const [boundaryLoadState, setBoundaryLoadState] = useState<BoundaryLoadState>({ status: "loading", placeIds: new Set() });
   const outboxRef = useRef(new VisitOutbox());
   const visitedRef = useRef(visited);
 
@@ -157,7 +159,7 @@ export function EveryParkApp({ apiBaseUrl }: { apiBaseUrl: string }) {
 
   return <main className="app-shell">
     <section className="map-stage" aria-label="Park explorer">
-      <ParkMap places={filtered} visited={visited} selectedId={selectedId} onSelect={choosePlace} />
+      <ParkMap places={filtered} visited={visited} selectedId={selectedId} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} />
       <header className="expedition-header">
         <div className="brand-mark" aria-hidden="true"><Trees size={22} strokeWidth={2.6} /></div>
         <div className="brand-copy"><h1>Every Park</h1><p>Vancouver Island field guide</p></div>
@@ -198,7 +200,11 @@ export function EveryParkApp({ apiBaseUrl }: { apiBaseUrl: string }) {
       {selected && <article className="place-sheet" aria-live="polite">
         <button className="sheet-close" onClick={() => setSelectedId(null)} aria-label="Close place details"><X size={18} /></button>
         <div className="place-category"><Layers3 size={15} />{categoryLabels[selected.category]}</div>
-        <h2>{selected.name}</h2><p className="place-region"><MapPin size={15} />{selected.region}</p><p className="place-description">{selected.description}</p>
+        <h2>{selected.name}</h2><p className="place-region"><MapPin size={15} />{selected.region}</p>
+        {boundaryLoadState.status === "ready" && boundaryLoadState.placeIds.has(selected.id) && <p className="boundary-note available"><LandPlot size={15} />Published boundary shown · not for navigation</p>}
+        {boundaryLoadState.status === "ready" && !boundaryLoadState.placeIds.has(selected.id) && <p className="boundary-note"><LandPlot size={15} />No sourced boundary is available for this place.</p>}
+        {boundaryLoadState.status === "failed" && <p className="boundary-note"><LandPlot size={15} />Boundary layer unavailable. The place marker still works.</p>}
+        <p className="place-description">{selected.description}</p>
         <div className="sheet-actions"><button className={`visit-button ${visited.has(selected.id) ? "is-visited" : ""}`} onClick={() => void toggleVisit(selected)} aria-pressed={visited.has(selected.id)}>
           <span className="burst" aria-hidden="true"><i /><i /><i /><i /></span>{visited.has(selected.id) ? <><span className="collection-stamp" aria-hidden="true">Collected!</span><RotateCcw size={19} />Visited · undo</> : <><Check size={20} />Mark as visited</>}
         </button><a className="source-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">{selected.sourceName}<ArrowUpRight size={16} /></a></div>

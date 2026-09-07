@@ -1,7 +1,15 @@
 {
+  "scripts": {
+    "boundaries:build": "node scripts/boundary-build.mjs",
+    "boundaries:validate": "node scripts/boundary-validate.mjs",
+    "boundaries:test": "node --test scripts/boundary-sources.test.mjs"
+  },
   "dependencies": {
     "@neon/config": "^1.1.0",
     "@neon/env": "^1.1.6",
     "railway": "^3.11.0"
+  },
+  "devDependencies": {
+    "@turf/boolean-valid": "^7.4.0"
   }
 }
