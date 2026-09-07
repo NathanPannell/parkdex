@@ -31,7 +31,10 @@ Bootstrap the authorized GitHub, Neon, Railway, and Vercel projects; deploy the 
 
 ## Active evidence and next actions
 
-- After app integration reaches main, dispatch/monitor CI for the exact final SHA.
-- Verify production `/ready`, non-empty `/api/places`, scoped visit round-trip and cleanup, and worker catalogue-count heartbeat.
-- Once production passes, run the required one-time preview PR smoke, close the PR in all outcomes, verify Vercel/Railway/Neon preview cleanup, and only then set `PREVIEW_SMOKE_COMPLETE=true`.
-- Local validation: Bash parsed all three deployment scripts and `git diff --check` passed. `actionlint` and `shellcheck` are not installed locally; GitHub CI remains the workflow/runtime validator.
+- Production app commit `42e6fa1` passed CI run `34162369709`. `https://every-park-nu.vercel.app` returned HTTP 200 with the expected title and both MapLibre worker assets; `/ready` reported exact commit `42e6fa1` and five migrations; `/api/places` returned 216 places; visit isolation, required undo, and the exact worker database-read gate passed.
+- Corrected Railway deployment handling now requests a connected-source redeploy after runtime stamps, requires successful API and worker deployment metadata for the expected Git SHA, and redeploys environment-only CORS changes instead of allowing a watched-file skip.
+- Corrected Vercel configuration pins the Next.js framework. CI now requires the public production alias, expected page title, and both MapLibre worker assets to return successfully before production passes.
+- One-time smoke PR `#1` used head `d1b78cd`. Corrected preview run `34162716747` and CI run `34162716750` passed: exact readiness with five migrations, 216-place visit set/read and anonymous/second-key isolation, required undo, and worker log bound to the exact commit with `places=216`.
+- Preview resources were isolated as Neon `preview/pr-1`, Railway `pr-1`, and exactly one Vercel preview. PR `#1` was closed; cleanup run `34162992292` passed; independent checks found zero matching Neon branches, Railway environments, or Vercel deployments, and the former preview URL returned 404. The remote smoke branch was deleted.
+- `PREVIEW_SMOKE_COMPLETE=true` is set and verified. The preview workflow explicitly selects the provisioned Neon database `app` and role `app_owner`; the initial smoke run `34162649910` supplied the regression evidence for the former implicit `neondb` default.
+- Infrastructure success conditions are complete. Local Bash syntax and `git diff --check` passed; GitHub Actions supplied the workflow and provider runtime validation.
