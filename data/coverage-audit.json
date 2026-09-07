@@ -1,0 +1,380 @@
+{
+  "generatedAt": "2026-09-07T20:34:22.475Z",
+  "counts": {
+    "national": 2,
+    "provincial": 138,
+    "regional": 53,
+    "island": 25
+  },
+  "bcParksBroadBboxFeatures": 254,
+  "polygonPinsVerified": 190,
+  "polygonInteriorFallbacks": [
+    {
+      "source": "RDN",
+      "name": "Nanaimo River Regional Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Denman Island Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Broughton Archipelago Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Cape Scott Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Claud Elliott Lake Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Flores Island Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Hathayim Marine Park [a.k.a. Von Donop Marine Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Juan De Fuca Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Koksilah River Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "BC Parks",
+      "name": "Rock Bay Marine Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "CRD",
+      "name": "Kapoor Regional Park",
+      "method": "scanline-interior"
+    },
+    {
+      "source": "CRD",
+      "name": "Witty's Lagoon Regional Park",
+      "method": "scanline-interior"
+    }
+  ],
+  "excludedCvrdRegionalParks": [
+    {
+      "name": "Siddoo Regional Park",
+      "sourceId": "980473",
+      "status": "Undeveloped",
+      "publicAccess": "No"
+    },
+    {
+      "name": "Stocking/Heart Lake Regional Park",
+      "sourceId": "980187",
+      "status": "Undeveloped",
+      "publicAccess": "No"
+    }
+  ],
+  "excludedProvincialParksOutsideMask": [
+    {
+      "name": "ALICE LAKE PARK",
+      "latitude": 49.782062,
+      "longitude": -123.117263
+    },
+    {
+      "name": "ALLISON HARBOUR MARINE PARK",
+      "latitude": 51.051573,
+      "longitude": -127.505225
+    },
+    {
+      "name": "BIG CREEK PARK",
+      "latitude": 51.303828,
+      "longitude": -123.159121
+    },
+    {
+      "name": "BIRKENHEAD LAKE PARK",
+      "latitude": 50.578101,
+      "longitude": -122.741844
+    },
+    {
+      "name": "BISHOP RIVER PARK",
+      "latitude": 50.91407,
+      "longitude": -124.039329
+    },
+    {
+      "name": "BLACKCOMB GLACIER PARK",
+      "latitude": 50.094268,
+      "longitude": -122.872921
+    },
+    {
+      "name": "BRACKENDALE EAGLES PARK",
+      "latitude": 49.760248,
+      "longitude": -123.170754
+    },
+    {
+      "name": "BRANDYWINE FALLS PARK",
+      "latitude": 50.04628,
+      "longitude": -123.116285
+    },
+    {
+      "name": "BRIDGE RIVER DELTA PARK",
+      "latitude": 50.828033,
+      "longitude": -123.203839
+    },
+    {
+      "name": "CALLAGHAN LAKE PARK",
+      "latitude": 50.207122,
+      "longitude": -123.189419
+    },
+    {
+      "name": "CLENDINNING PARK",
+      "latitude": 50.4303,
+      "longitude": -123.734091
+    },
+    {
+      "name": "COPELAND ISLANDS MARINE PARK",
+      "latitude": 50.009215,
+      "longitude": -124.813593
+    },
+    {
+      "name": "CYPRESS PARK",
+      "latitude": 49.386245,
+      "longitude": -123.222983
+    },
+    {
+      "name": "DESOLATION SOUND MARINE PARK",
+      "latitude": 50.101307,
+      "longitude": -124.706672
+    },
+    {
+      "name": "FRANCIS POINT PARK",
+      "latitude": 49.611131,
+      "longitude": -124.057299
+    },
+    {
+      "name": "GARDEN BAY MARINE PARK",
+      "latitude": 49.637811,
+      "longitude": -124.008668
+    },
+    {
+      "name": "GARIBALDI PARK",
+      "latitude": 49.943453,
+      "longitude": -122.751266
+    },
+    {
+      "name": "GWYNETH LAKE PARK",
+      "latitude": 50.789435,
+      "longitude": -122.876939
+    },
+    {
+      "name": "HALKETT BAY MARINE PARK",
+      "latitude": 49.45549,
+      "longitude": -123.325906
+    },
+    {
+      "name": "HARDY ISLAND MARINE PARK",
+      "latitude": 49.728603,
+      "longitude": -124.216169
+    },
+    {
+      "name": "HARMONY ISLANDS MARINE PARK",
+      "latitude": 49.861006,
+      "longitude": -124.013435
+    },
+    {
+      "name": "HOMATHKO ESTUARY PARK",
+      "latitude": 50.932822,
+      "longitude": -124.843283
+    },
+    {
+      "name": "INLAND LAKE PARK",
+      "latitude": 49.953888,
+      "longitude": -124.481342
+    },
+    {
+      "name": "MALASPINA PARK",
+      "latitude": 50.023867,
+      "longitude": -124.756192
+    },
+    {
+      "name": "MOUNT ELPHINSTONE PARK",
+      "latitude": 49.433009,
+      "longitude": -123.611038
+    },
+    {
+      "name": "MOUNT RICHARDSON PARK",
+      "latitude": 49.567653,
+      "longitude": -123.759149
+    },
+    {
+      "name": "MOUNT SEYMOUR PARK",
+      "latitude": 49.39235,
+      "longitude": -122.926213
+    },
+    {
+      "name": "MURRIN PARK",
+      "latitude": 49.645226,
+      "longitude": -123.207492
+    },
+    {
+      "name": "OKEOVER ARM PARK",
+      "latitude": 49.991466,
+      "longitude": -124.714282
+    },
+    {
+      "name": "PINECONE BURKE PARK",
+      "latitude": 49.599222,
+      "longitude": -122.799912
+    },
+    {
+      "name": "PLUMPER COVE MARINE PARK",
+      "latitude": 49.404744,
+      "longitude": -123.468488
+    },
+    {
+      "name": "PORPOISE BAY PARK",
+      "latitude": 49.507996,
+      "longitude": -123.745019
+    },
+    {
+      "name": "PORTEAU COVE PARK",
+      "latitude": 49.556299,
+      "longitude": -123.238283
+    },
+    {
+      "name": "PRINCESS LOUISA MARINE PARK",
+      "latitude": 50.208381,
+      "longitude": -123.775073
+    },
+    {
+      "name": "ROBERTS CREEK PARK",
+      "latitude": 49.44289,
+      "longitude": -123.672367
+    },
+    {
+      "name": "SALTERY BAY PARK",
+      "latitude": 49.780433,
+      "longitude": -124.190971
+    },
+    {
+      "name": "SARGEANT BAY PARK",
+      "latitude": 49.481991,
+      "longitude": -123.867504
+    },
+    {
+      "name": "SAY NUTH KHAW YUM PARK [A.K.A. INDIAN ARM PARK]",
+      "latitude": 49.430578,
+      "longitude": -122.840227
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - HALFWAY BEACH SITE",
+      "latitude": 49.598314,
+      "longitude": -123.820494
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - KUNECHIN POINT SITE",
+      "latitude": 49.630544,
+      "longitude": -123.804513
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - PIPER POINT SITE",
+      "latitude": 49.544442,
+      "longitude": -123.799696
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - SKAIAKOS POINT SITE",
+      "latitude": 49.583683,
+      "longitude": -123.817074
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - THORNHILL SITE",
+      "latitude": 49.655631,
+      "longitude": -123.608809
+    },
+    {
+      "name": "SECHELT INLETS MARINE PARK - TZOONIE NARROWS SITE",
+      "latitude": 49.706039,
+      "longitude": -123.77793
+    },
+    {
+      "name": "SHANNON FALLS PARK",
+      "latitude": 49.665599,
+      "longitude": -123.162179
+    },
+    {
+      "name": "SIMSON PARK",
+      "latitude": 49.482283,
+      "longitude": -123.965281
+    },
+    {
+      "name": "SKOOKUMCHUCK NARROWS PARK",
+      "latitude": 49.740025,
+      "longitude": -123.909993
+    },
+    {
+      "name": "SMUGGLER COVE MARINE PARK",
+      "latitude": 49.515316,
+      "longitude": -123.956861
+    },
+    {
+      "name": "SOUTH CHILCOTIN MOUNTAINS PARK",
+      "latitude": 51.03214,
+      "longitude": -123.058898
+    },
+    {
+      "name": "SOUTH TEXADA ISLAND PARK",
+      "latitude": 49.520028,
+      "longitude": -124.175318
+    },
+    {
+      "name": "SPIPIYUS PARK",
+      "latitude": 49.661304,
+      "longitude": -123.921469
+    },
+    {
+      "name": "STAWAMUS CHIEF PARK",
+      "latitude": 49.686549,
+      "longitude": -123.133695
+    },
+    {
+      "name": "TANTALUS PARK",
+      "latitude": 49.825464,
+      "longitude": -123.289707
+    },
+    {
+      "name": "TEAKERNE ARM PARK",
+      "latitude": 50.202287,
+      "longitude": -124.842957
+    },
+    {
+      "name": "TETRAHEDRON PARK",
+      "latitude": 49.598759,
+      "longitude": -123.584736
+    },
+    {
+      "name": "TS'IL?OS PARK",
+      "latitude": 51.192442,
+      "longitude": -123.97007
+    },
+    {
+      "name": "UPPER LILLOOET PARK",
+      "latitude": 50.670333,
+      "longitude": -123.616284
+    }
+  ],
+  "extents": {
+    "south": 48.339419,
+    "north": 50.838524,
+    "west": -128.646072,
+    "east": -123.047104
+  }
+}

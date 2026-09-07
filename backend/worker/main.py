@@ -1,12 +1,13 @@
+"""Low-overhead companion process retained for the standard Railway topology."""
+
 import logging
 import signal
 import threading
 
-from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
+from psycopg.rows import dict_row
 
 from backend.app.settings import get_settings
-from backend.worker.checker import check_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -17,31 +18,12 @@ def request_stop(*_: object) -> None:
     stop_event.set()
 
 
-def run_checks(pool: ConnectionPool) -> None:
-    settings = get_settings()
+def catalogue_count(pool: ConnectionPool) -> int:
     with pool.connection() as conn:
-        monitors = conn.execute("SELECT id, url FROM monitors ORDER BY created_at").fetchall()
-    logger.info("Checking %d monitor(s)", len(monitors))
-    for monitor in monitors:
-        if stop_event.is_set():
-            return
-        result = check_url(monitor["url"], settings.request_timeout_seconds)
-        with pool.connection() as conn:
-            conn.execute(
-                """
-                UPDATE monitors
-                SET status = %s, http_status = %s, response_time_ms = %s, checked_at = %s
-                WHERE id = %s
-                """,
-                (
-                    result.status,
-                    result.http_status,
-                    result.response_time_ms,
-                    result.checked_at,
-                    monitor["id"],
-                ),
-            )
-            conn.commit()
+        row = conn.execute(
+            "SELECT COUNT(*) AS place_count FROM places WHERE active"
+        ).fetchone()
+    return row["place_count"]
 
 
 def main() -> None:
@@ -52,16 +34,17 @@ def main() -> None:
         settings.effective_database_url,
         kwargs={"row_factory": dict_row},
         min_size=1,
-        max_size=2,
+        max_size=1,
     ) as pool:
         while not stop_event.is_set():
-            try:
-                run_checks(pool)
-            except Exception:
-                logger.exception("Monitor pass failed")
-            stop_event.wait(settings.check_interval_seconds)
+            place_count = catalogue_count(pool)
+            logger.info(
+                "Every Park catalogue ready commit=%s places=%d",
+                settings.app_commit_sha,
+                place_count,
+            )
+            stop_event.wait(max(settings.check_interval_seconds, 300))
 
 
 if __name__ == "__main__":
     main()
-

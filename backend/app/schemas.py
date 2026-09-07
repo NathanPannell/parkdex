@@ -1,31 +1,35 @@
-from datetime import datetime
 from typing import Literal
-from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-
-class MonitorCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    url: AnyHttpUrl = Field(max_length=2048)
-
-    @field_validator("name")
-    @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Name cannot be blank")
-        return normalized
+PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
 
-class Monitor(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
+class Place(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    id: str
     name: str
-    url: str
-    status: Literal["UNKNOWN", "UP", "DOWN"]
-    http_status: int | None
-    response_time_ms: int | None
-    checked_at: datetime | None
-    created_at: datetime
+    category: PlaceCategory
+    latitude: float
+    longitude: float
+    region: str
+    description: str
+    source_url: str = Field(serialization_alias="sourceUrl")
+    source_name: str = Field(serialization_alias="sourceName")
+    source_id: str | None = Field(default=None, serialization_alias="sourceId")
+
+
+class PlaceCollection(BaseModel):
+    places: list[Place]
+    visited_ids: list[str] = Field(serialization_alias="visitedIds")
+    coverage_note: str = Field(serialization_alias="coverageNote")
+
+
+class VisitUpdate(BaseModel):
+    visited: bool
+
+
+class VisitResult(BaseModel):
+    place_id: str = Field(serialization_alias="placeId")
+    visited: bool
+    visited_count: int = Field(serialization_alias="visitedCount")

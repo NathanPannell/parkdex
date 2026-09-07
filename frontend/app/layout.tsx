@@ -1,15 +1,12 @@
-import type { Metadata } from "next";
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/nunito-sans";
+import "maplibre-gl/dist/maplibre-gl.css";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Every Park",
-  description: "A small full-stack application",
-};
+export const metadata: Metadata = { title: "Every Park · Vancouver Island field guide", description: "Collect the parks and major islands of Vancouver Island on a playful interactive map." };
+export const viewport: Viewport = { themeColor: "#173d32", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+  return <html lang="en"><body>{children}</body></html>;
 }
