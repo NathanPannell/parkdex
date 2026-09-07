@@ -48,8 +48,8 @@ const mainIslandMask = [
 ];
 
 const nearbyIslandParks = new Set([
-  'ANDERSON BAY PARK', 'APODACA PARK', 'ARBUTUS GROVE PARK', 'BEAVER POINT PARK', 'BELLHOUSE PARK',
-  'BODEGA RIDGE PARK', 'BOYLE POINT PARK', 'BUCCANEER BAY PARK', 'BURGOYNE BAY PARK',
+  'ANDERSON BAY PARK', 'ARBUTUS GROVE PARK', 'BEAVER POINT PARK', 'BELLHOUSE PARK',
+  'BODEGA RIDGE PARK', 'BOYLE POINT PARK', 'BURGOYNE BAY PARK',
   'COLLINSON POINT PARK', 'CORMORANT CHANNEL MARINE PARK', 'DENMAN ISLAND PARK',
   'DIONISIO POINT PARK', 'DISCOVERY ISLAND MARINE PARK', 'DRUMBEG PARK', 'ECHO BAY MARINE PARK',
   'ELK FALLS PARK', 'FILLONGLEY PARK', 'GABRIOLA SANDS PARK', 'GERALD ISLAND PARK', "GOD'S POCKET MARINE PARK",
@@ -72,6 +72,34 @@ const mainIslandParkNames = new Set([
   'ARBUTUS GROVE PARK', 'ELK FALLS PARK', 'HEMER PARK', 'KIN BEACH PARK', 'KITTY COLEMAN BEACH PARK',
   'LOVELAND BAY PARK', 'MIRACLE BEACH PARK', 'MORDEN COLLIERY HISTORIC PARK', 'MORTON LAKE PARK',
   'PETROGLYPH PARK', 'RATHTREVOR BEACH PARK', 'ROBERTS MEMORIAL PARK', 'ROCK BAY MARINE PARK',
+]);
+
+const parkIslandRegions = new Map([
+  ...[
+    'BEAVER POINT PARK', 'BELLHOUSE PARK', 'BODEGA RIDGE PARK', 'BURGOYNE BAY PARK',
+    'COLLINSON POINT PARK', 'DIONISIO POINT PARK', 'DISCOVERY ISLAND MARINE PARK', 'DRUMBEG PARK',
+    'GABRIOLA SANDS PARK', 'MONTAGUE HARBOUR MARINE PARK', 'MOUNT ERSKINE PARK', 'MOUNT MAXWELL PARK',
+    'PIRATES COVE MARINE PARK', 'RUCKLE PARK', 'SANDWELL PARK', 'SAYSUTSHUN (NEWCASTLE ISLAND MARINE) PARK',
+    'WAKES COVE PARK', 'WALLACE ISLAND MARINE PARK', 'WHALEBOAT ISLAND MARINE PARK',
+  ].map((name) => [name, 'Gulf Islands']),
+  ...[
+    'ANDERSON BAY PARK', 'BOYLE POINT PARK', 'DENMAN ISLAND PARK', 'FILLONGLEY PARK',
+    'GERALD ISLAND PARK', 'HELLIWELL PARK', "JAJI7EM AND KW'ULH MARINE PARK [A.K.A SANDY ISLAND",
+    'JEDEDIAH ISLAND MARINE PARK', 'MOUNT GEOFFREY ESCARPMENT PARK', 'SABINE CHANNEL MARINE PARK',
+    'SQUITTY BAY PARK', 'TRIBUNE BAY PARK',
+  ].map((name) => [name, 'Northern Gulf Islands']),
+  ...[
+    'HATHAYIM MARINE PARK [A.K.A. VON DONOP MARINE PARK', 'MAIN LAKE PARK', 'MANSONS LANDING PARK',
+    'MITLENATCH ISLAND NATURE PARK', 'OCTOPUS ISLANDS MARINE PARK', 'READ ISLAND PARK',
+    'REBECCA SPIT MARINE PARK', 'RENDEZVOUS ISLAND SOUTH PARK', 'ROSCOE BAY PARK',
+    'SMALL INLET MARINE PARK', 'SMELT BAY PARK', 'SURGE NARROWS PARK', 'THURSTON BAY MARINE PARK',
+    'WALSH COVE PARK',
+  ].map((name) => [name, 'Discovery Islands']),
+  ...[
+    'BROUGHTON ARCHIPELAGO PARK', 'CORMORANT CHANNEL MARINE PARK', 'ECHO BAY MARINE PARK',
+    "GOD'S POCKET MARINE PARK", 'LANZ AND COX ISLANDS PARK',
+  ].map((name) => [name, 'Northern Islands']),
+  ...['FLORES ISLAND PARK', 'VARGAS ISLAND PARK'].map((name) => [name, 'West Coast Islands']),
 ]);
 
 const cvrdEligibilityExclusions = new Map([
@@ -188,13 +216,6 @@ function mainIslandRegion(latitude) {
   return 'North Island';
 }
 
-function offshoreRegion(latitude, longitude) {
-  if (longitude < -125) return 'West Coast Islands';
-  if (latitude < 49.5) return 'Gulf Islands';
-  if (latitude < 50.5) return 'Discovery Islands';
-  return 'Northern Islands';
-}
-
 function isTrailName(name) {
   return /\btrail\b/i.test(name);
 }
@@ -263,9 +284,12 @@ async function buildProvincial() {
     const p = feature.properties;
     const name = titleCaseParkName(p.PROTECTED_LANDS_NAME);
     if (point.method !== 'centroid') polygonInteriorFallbacks.push({ source: 'BC Parks', name, method: point.method });
+    const canonicalName = p.PROTECTED_LANDS_NAME.toUpperCase();
+    const offshoreRegion = parkIslandRegions.get(canonicalName);
     const onMainIsland = pointInPolygon([point.longitude, point.latitude], mainIslandMask)
-      || mainIslandParkNames.has(p.PROTECTED_LANDS_NAME.toUpperCase());
-    const region = onMainIsland ? mainIslandRegion(point.latitude) : offshoreRegion(point.latitude, point.longitude);
+      || mainIslandParkNames.has(canonicalName);
+    if (!offshoreRegion && !onMainIsland) throw new Error(`Missing explicit island region for ${name}`);
+    const region = offshoreRegion || mainIslandRegion(point.latitude);
     return {
       id: `provincial-${slugify(name)}`, name, category: 'provincial',
       latitude: round(point.latitude), longitude: round(point.longitude), region,
@@ -428,7 +452,10 @@ function validate(places) {
   for (const excluded of mainlandExclusions) {
     if (places.some((place) => place.name === excluded)) throw new Error(`Mainland scope regression: ${excluded}`);
   }
-  for (const excluded of ['Siddoo Regional Park', 'Stocking/Heart Lake Regional Park', 'Morden Colliery Regional Trail']) {
+  for (const excluded of [
+    'Siddoo Regional Park', 'Stocking/Heart Lake Regional Park', 'Morden Colliery Regional Trail',
+    'Apodaca Park', 'Buccaneer Bay Park',
+  ]) {
     if (places.some((place) => place.name === excluded)) throw new Error(`Ineligible regional feature regression: ${excluded}`);
   }
   if (places.some((place) => place.category === 'regional' && isTrailName(place.name))) {
@@ -439,6 +466,10 @@ function validate(places) {
   }
   for (const name of ['Arbutus Grove Park', 'Hemer Park', 'Morden Colliery Historic Park', 'Petroglyph Park', 'Rathtrevor Beach Park', 'Roberts Memorial Park']) {
     if (!places.some((place) => place.name === name && place.region === 'Central Island')) throw new Error(`Main-island region regression: ${name}`);
+  }
+  for (const [name, region] of parkIslandRegions) {
+    const placeName = titleCaseParkName(name);
+    if (!places.some((place) => place.name === placeName && place.region === region)) throw new Error(`Park island region regression: ${placeName}`);
   }
 }
 

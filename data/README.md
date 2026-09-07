@@ -16,11 +16,13 @@ Coordinates are representative map pins. Provincial and regional pins use the ar
 - Four eligible unique CVRD regional parks. Chemainus River and Spectacle Lake are represented once under their provincial identities; Siddoo and Stocking/Heart Lake are excluded because the official layer marks them undeveloped with no public access.
 - Twenty-five curated, officially named major or commonly visited islands. This is an explicit product collection, not every island or islet.
 
+Bowen Island's Apodaca Park and North Thormanby Island's Buccaneer Bay Park are excluded as Howe Sound/Sunshine Coast features outside the Vancouver Island collection.
+
 ## Known limitations
 
 Regional coverage is strongest for CRD, RDN, and CVRD. The ACRD official list is represented by Mount Arrowsmith Regional Park through the RDN shared-boundary dataset, but China Creek and the linear trail properties lack a clean authoritative representative-point feed. SRD's directory labels its current facilities by types such as nature park, community park, beach access, and trail rather than exposing a stable regional-park set. RDMW's second named regional park, Kwaksistah, has an official site map but no georeferenced location or stable GIS feed, so it is not assigned a guessed pin. Comox Valley established a regional parks service in 2022 and is still working through acquisition planning; its existing rural community parks are outside this regional-only category.
 
-`coverage-audit.json` records counts, extents, polygon-pin containment verification, and every provincial park excluded by the geographic scope. Review it whenever source data changes. The Vancouver Island mask is intentionally paired with a reviewed inclusion allowlist for coastal and nearby-island parks. Region labels use a separate explicit island taxonomy so inclusion exceptions cannot relabel Vancouver Island parks as offshore islands.
+`coverage-audit.json` records counts, extents, polygon-pin containment verification, and every provincial park excluded by the geographic scope. Review it whenever source data changes. The Vancouver Island mask is intentionally paired with a reviewed inclusion allowlist for coastal and nearby-island parks. Region labels use separate explicit island and island-park taxonomies; the rebuild fails when an included offshore park has no named region assignment, so coordinate bands cannot silently relabel it.
 
 ## Rebuild
 

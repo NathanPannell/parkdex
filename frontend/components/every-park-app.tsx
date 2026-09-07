@@ -200,7 +200,7 @@ export function EveryParkApp({ apiBaseUrl }: { apiBaseUrl: string }) {
         <div className="place-category"><Layers3 size={15} />{categoryLabels[selected.category]}</div>
         <h2>{selected.name}</h2><p className="place-region"><MapPin size={15} />{selected.region}</p><p className="place-description">{selected.description}</p>
         <div className="sheet-actions"><button className={`visit-button ${visited.has(selected.id) ? "is-visited" : ""}`} onClick={() => void toggleVisit(selected)} aria-pressed={visited.has(selected.id)}>
-          <span className="burst" aria-hidden="true"><i /><i /><i /><i /></span>{visited.has(selected.id) ? <><RotateCcw size={19} />Visited · undo</> : <><Check size={20} />Mark as visited</>}
+          <span className="burst" aria-hidden="true"><i /><i /><i /><i /></span>{visited.has(selected.id) ? <><span className="collection-stamp" aria-hidden="true">Collected!</span><RotateCcw size={19} />Visited · undo</> : <><Check size={20} />Mark as visited</>}
         </button><a className="source-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">{selected.sourceName}<ArrowUpRight size={16} /></a></div>
       </article>}
 

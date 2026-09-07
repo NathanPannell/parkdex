@@ -40,6 +40,9 @@ const excludedRegionalIds = [
   'regional-morden-colliery-regional-trail',
 ];
 for (const id of excludedRegionalIds) if (ids.has(id)) throw new Error(`ineligible regional feature regression: ${id}`);
+for (const id of ['provincial-apodaca-park', 'provincial-buccaneer-bay-park']) {
+  if (ids.has(id)) throw new Error(`out-of-scope Sunshine Coast feature regression: ${id}`);
+}
 if (places.some((place) => place.category === 'regional' && /\btrail\b/i.test(place.name))) {
   throw new Error('regional trail regression: trail emitted as a park');
 }
@@ -60,6 +63,24 @@ const expectedRegions = new Map([
   ['provincial-rathtrevor-beach-park', 'Central Island'],
   ['provincial-roberts-memorial-park', 'Central Island'],
   ['provincial-sandwell-park', 'Gulf Islands'],
+  ['provincial-burgoyne-bay-park', 'Gulf Islands'],
+  ['provincial-mount-erskine-park', 'Gulf Islands'],
+  ['provincial-mount-maxwell-park', 'Gulf Islands'],
+  ['provincial-denman-island-park', 'Northern Gulf Islands'],
+  ['provincial-fillongley-park', 'Northern Gulf Islands'],
+  ['provincial-helliwell-park', 'Northern Gulf Islands'],
+  ['provincial-tribune-bay-park', 'Northern Gulf Islands'],
+  ['provincial-mount-geoffrey-escarpment-park', 'Northern Gulf Islands'],
+  ['provincial-main-lake-park', 'Discovery Islands'],
+  ['provincial-rebecca-spit-marine-park', 'Discovery Islands'],
+  ['provincial-octopus-islands-marine-park', 'Discovery Islands'],
+  ['provincial-read-island-park', 'Discovery Islands'],
+  ['provincial-thurston-bay-marine-park', 'Discovery Islands'],
+  ['provincial-surge-narrows-park', 'Discovery Islands'],
+  ['provincial-mitlenatch-island-nature-park', 'Discovery Islands'],
+  ['provincial-broughton-archipelago-park', 'Northern Islands'],
+  ['provincial-flores-island-park', 'West Coast Islands'],
+  ['provincial-vargas-island-park', 'West Coast Islands'],
 ]);
 for (const [id, region] of expectedRegions) {
   if (!places.some((place) => place.id === id && place.region === region)) throw new Error(`region regression: ${id} must be ${region}`);

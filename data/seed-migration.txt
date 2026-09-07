@@ -1,1 +1,1 @@
-database/migrations/0004_seed_places.sql
+database/migrations/0005_correct_place_regions.sql

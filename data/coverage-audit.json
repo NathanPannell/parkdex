@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-09-07T20:34:22.475Z",
+  "generatedAt": "2026-09-07T20:45:54.401Z",
   "counts": {
     "national": 2,
-    "provincial": 138,
+    "provincial": 136,
     "regional": 53,
     "island": 25
   },
   "bcParksBroadBboxFeatures": 254,
-  "polygonPinsVerified": 190,
+  "polygonPinsVerified": 188,
   "polygonInteriorFallbacks": [
     {
       "source": "RDN",
@@ -96,6 +96,11 @@
       "longitude": -127.505225
     },
     {
+      "name": "APODACA PARK",
+      "latitude": 49.354121,
+      "longitude": -123.338899
+    },
+    {
       "name": "BIG CREEK PARK",
       "latitude": 51.303828,
       "longitude": -123.159121
@@ -129,6 +134,11 @@
       "name": "BRIDGE RIVER DELTA PARK",
       "latitude": 50.828033,
       "longitude": -123.203839
+    },
+    {
+      "name": "BUCCANEER BAY PARK",
+      "latitude": 49.493102,
+      "longitude": -123.992089
     },
     {
       "name": "CALLAGHAN LAKE PARK",

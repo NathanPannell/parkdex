@@ -1,11 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, StyleSpecification } from "maplibre-gl";
 
 import type { Place } from "@/lib/places";
 
-const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+const FIELD_GUIDE_STYLE: StyleSpecification = {
+  version: 8,
+  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  sources: {
+    shadedRelief: { type: "raster", tiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 6 },
+    openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
+  },
+  layers: [
+    { id: "paper", type: "background", paint: { "background-color": "#f6f0dc" } },
+    { id: "relief", type: "raster", source: "shadedRelief", paint: { "raster-opacity": 0.38, "raster-saturation": -0.45, "raster-contrast": 0.12 } },
+    { id: "wild-land", type: "fill", source: "openmaptiles", "source-layer": "landcover", filter: ["in", ["get", "class"], ["literal", ["wood", "grass", "scrub"]]], paint: { "fill-color": "#c9dfa1", "fill-opacity": 0.78 } },
+    { id: "parks", type: "fill", source: "openmaptiles", "source-layer": "landuse", filter: ["in", ["get", "class"], ["literal", ["park", "national_park", "nature_reserve"]]], paint: { "fill-color": "#a7cf7d", "fill-opacity": 0.82 } },
+    { id: "water", type: "fill", source: "openmaptiles", "source-layer": "water", paint: { "fill-color": "#78cad0", "fill-outline-color": "#2b7a78" } },
+    { id: "waterways", type: "line", source: "openmaptiles", "source-layer": "waterway", paint: { "line-color": "#2b7a78", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.5, 13, 2], "line-opacity": 0.75 } },
+    { id: "boundaries", type: "line", source: "openmaptiles", "source-layer": "boundary", paint: { "line-color": "#6e977c", "line-width": 1, "line-dasharray": [3, 3], "line-opacity": 0.45 } },
+    { id: "roads", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]], paint: { "line-color": "#d2ae72", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.45, 12, 2.5], "line-opacity": 0.78 } },
+    { id: "water-labels", type: "symbol", source: "openmaptiles", "source-layer": "water_name", minzoom: 5, layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Italic"], "text-size": 11 }, paint: { "text-color": "#226c70", "text-halo-color": "#bce4e0", "text-halo-width": 1.5 } },
+    { id: "place-labels", type: "symbol", source: "openmaptiles", "source-layer": "place", layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Bold"], "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 11, 14], "text-padding": 5 }, paint: { "text-color": "#173d32", "text-halo-color": "#f6f0dc", "text-halo-width": 2 } },
+  ],
+};
 
 function collectionData(places: Place[], visited: Set<string>): GeoJSON.FeatureCollection {
   return {
@@ -21,6 +40,16 @@ function collectionData(places: Place[], visited: Set<string>): GeoJSON.FeatureC
       },
     })),
   };
+}
+
+function fitOverview(map: MapLibreMap, places: Place[], animated: boolean) {
+  if (!places.length) return;
+  const longitudes = places.map((place) => place.longitude);
+  const latitudes = places.map((place) => place.latitude);
+  map.fitBounds(
+    [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]],
+    { padding: { top: 180, right: 32, bottom: 96, left: 32 }, maxZoom: 7, duration: animated ? 520 : 0 },
+  );
 }
 
 export function ParkMap({
@@ -49,9 +78,10 @@ export function ParkMap({
     let loadDeadline: number | undefined;
     void import("maplibre-gl").then((maplibregl) => {
       if (disposed || !containerRef.current) return;
+      maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: STYLE_URL,
+        style: FIELD_GUIDE_STYLE,
         center: [-125.25, 49.65],
         zoom: 5.55,
         minZoom: 4.6,
@@ -61,41 +91,22 @@ export function ParkMap({
       mapRef.current = map;
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       loadDeadline = window.setTimeout(() => {
-        if (!map.isStyleLoaded()) setMapFailed(true);
+        if (!map.isStyleLoaded()) {
+          setMapFailed(true);
+        }
       }, 12_000);
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(
         new maplibregl.AttributionControl({ compact: true, customAttribution: "Every Park field guide" }),
         "bottom-right",
       );
-      map.on("load", () => {
+      let collectionReady = false;
+      const setupCollection = () => {
+        if (collectionReady) return;
+        try {
+        collectionReady = true;
         window.clearTimeout(loadDeadline);
         setMapFailed(false);
-        // Repaint the public basemap as a simplified field-guide chart while
-        // retaining its real coastline, roads, labels, and attribution.
-        for (const layer of map.getStyle().layers ?? []) {
-          try {
-            const id = layer.id.toLowerCase();
-            if (layer.type === "background") map.setPaintProperty(layer.id, "background-color", "#f6f0dc");
-            if (layer.type === "fill") {
-              if (id.includes("water") || id.includes("ocean")) map.setPaintProperty(layer.id, "fill-color", "#78cad0");
-              else if (id.includes("park") || id.includes("wood") || id.includes("landcover")) map.setPaintProperty(layer.id, "fill-color", "#b8d691");
-              else map.setPaintProperty(layer.id, "fill-color", "#f6f0dc");
-              map.setPaintProperty(layer.id, "fill-opacity", id.includes("building") ? 0.35 : 0.88);
-            }
-            if (layer.type === "line") {
-              if (id.includes("boundary")) map.setPaintProperty(layer.id, "line-color", "#5d8f77");
-              else if (id.includes("water")) map.setPaintProperty(layer.id, "line-color", "#2b7a78");
-              else map.setPaintProperty(layer.id, "line-color", "#bd9d69");
-              map.setPaintProperty(layer.id, "line-opacity", id.includes("motorway") ? 0.72 : 0.48);
-            }
-            if (layer.type === "symbol") {
-              map.setPaintProperty(layer.id, "text-color", "#173d32");
-              map.setPaintProperty(layer.id, "text-halo-color", "#f6f0dc");
-              map.setPaintProperty(layer.id, "text-halo-width", 1.5);
-            }
-          } catch { /* Some source layers intentionally omit a paint property. */ }
-        }
         const { places: currentPlaces, visited: currentVisited } = dataRef.current;
         map.addSource("places", {
           type: "geojson",
@@ -121,7 +132,7 @@ export function ParkMap({
           type: "symbol",
           source: "places",
           filter: ["has", "point_count"],
-          layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 14 },
+          layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 14 },
           paint: { "text-color": "#173d32" },
         });
         map.addLayer({
@@ -174,7 +185,14 @@ export function ParkMap({
           map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
           map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
         });
-      });
+        fitOverview(map, currentPlaces, false);
+        } catch {
+          collectionReady = false;
+          setMapFailed(true);
+        }
+      };
+      map.on("style.load", setupCollection);
+      window.setTimeout(setupCollection, 0);
     }).catch(() => setMapFailed(true));
     return () => {
       disposed = true;
@@ -200,6 +218,11 @@ export function ParkMap({
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
+      <button className="overview-button" type="button" onClick={() => {
+        const map = mapRef.current;
+        if (!map) return;
+        fitOverview(map, dataRef.current.places, !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      }}>Overview</button>
       {mapFailed && (
         <div className="map-fallback" role="status">
           <strong>The map could not load.</strong>

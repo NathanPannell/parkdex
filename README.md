@@ -2,7 +2,7 @@
 
 Every Park is a mobile-first field guide and collection game for Vancouver Island parks and nearby islands. Explore a clustered interactive map, search or filter the catalogue, open a place card, and check off visits with immediate progress feedback.
 
-The official-source v0 catalogue contains 218 places: 2 national park reserves, 138 provincial parks, 53 regional parks, and 25 curated major or commonly visited islands. Regional coverage is strongest for CRD, RDN, and CVRD; the in-app info panel explains known gaps, and every place card links to its source. Map pins are representative centres rather than entrances or trailheads.
+The official-source v0 catalogue contains 216 places: 2 national park reserves, 136 provincial parks, 53 regional parks, and 25 curated major or commonly visited islands. Regional coverage is strongest for CRD, RDN, and CVRD; the in-app info panel explains known gaps, and every place card links to its source. Map pins are representative centres rather than entrances or trailheads.
 
 The application uses Next.js and MapLibre on Vercel, a FastAPI API and worker on Railway, and Neon Postgres. Database migrations and production or pull-request environments are managed through GitHub Actions.
 
