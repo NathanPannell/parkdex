@@ -81,9 +81,15 @@ jobs:
       - name: Deploy Railway preview services
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          railway up --detach --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway up --detach --yes --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          source_marker=backend/.preview-source-sha
+          trap 'rm -f "$source_marker"' EXIT
+          printf '%s' "$EXPECTED_COMMIT_SHA" > "$source_marker"
+          deployment_message="preview-source $EXPECTED_COMMIT_SHA"
+          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          bash scripts/wait-for-railway-preview-source.sh
 
       - name: Wait for the exact migrated API commit
         id: railway
