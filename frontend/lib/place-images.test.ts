@@ -23,7 +23,7 @@ describe("place image manifest", () => {
 
   it("ships compact assets with traceable, reusable licenses", () => {
     for (const image of Object.values(PLACE_IMAGES)) {
-      const localPath = `${assetDirectory}${image.src.replaceAll("/", "\\")}`;
+      const localPath = resolve(assetDirectory, `.${image.src}`);
       expect(existsSync(localPath), image.src).toBe(true);
       expect(statSync(localPath).size, image.src).toBeLessThan(500_000);
       expect(image.sourceUrl).toMatch(/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/);
