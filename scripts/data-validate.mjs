@@ -24,7 +24,7 @@ for (const place of places) {
 const expected = [
   'national-pacific-rim-national-park-reserve', 'national-gulf-islands-national-park-reserve',
   'provincial-cape-scott-park', 'provincial-strathcona-park', 'provincial-elk-falls-park',
-  'provincial-rathtrevor-beach-park', 'provincial-miracle-beach-park', 'island-vancouver-island',
+  'provincial-rathtrevor-beach-park', 'provincial-miracle-beach-park',
 ];
 for (const id of expected) if (!ids.has(id)) throw new Error(`coverage regression: ${id}`);
 
@@ -38,6 +38,7 @@ const excludedRegionalIds = [
   'regional-siddoo-regional-park',
   'regional-stocking-heart-lake-regional-park',
   'regional-morden-colliery-regional-trail',
+  'regional-bute-island-regional-park',
 ];
 for (const id of excludedRegionalIds) if (ids.has(id)) throw new Error(`ineligible regional feature regression: ${id}`);
 for (const id of ['provincial-apodaca-park', 'provincial-buccaneer-bay-park']) {
@@ -48,7 +49,6 @@ if (places.some((place) => place.category === 'regional' && /\btrail\b/i.test(pl
 }
 
 const expectedRegions = new Map([
-  ['island-vancouver-island', 'Vancouver Island'],
   ['island-flores-island', 'West Coast Islands'],
   ['island-meares-island', 'West Coast Islands'],
   ['island-vargas-island', 'West Coast Islands'],
@@ -78,7 +78,6 @@ const expectedRegions = new Map([
   ['provincial-thurston-bay-marine-park', 'Discovery Islands'],
   ['provincial-surge-narrows-park', 'Discovery Islands'],
   ['provincial-mitlenatch-island-nature-park', 'Discovery Islands'],
-  ['provincial-broughton-archipelago-park', 'Northern Islands'],
   ['provincial-flores-island-park', 'West Coast Islands'],
   ['provincial-vargas-island-park', 'West Coast Islands'],
 ]);

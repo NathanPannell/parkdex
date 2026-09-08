@@ -23,8 +23,14 @@ class Place(BaseModel):
 class PlaceCollection(BaseModel):
     places: list[Place]
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
+    visits: list["Visit"]
     coverage_note: str = Field(serialization_alias="coverageNote")
-    completed_trail_ids: list[str] = Field(serialization_alias="completedTrailIds")
+    completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
+
+
+class Visit(BaseModel):
+    place_id: str = Field(serialization_alias="placeId")
+    visited_at: datetime = Field(serialization_alias="visitedAt")
 
 
 class VisitUpdate(BaseModel):
@@ -35,6 +41,17 @@ class VisitResult(BaseModel):
     place_id: str = Field(serialization_alias="placeId")
     visited: bool
     visited_count: int = Field(serialization_alias="visitedCount")
+    visited_at: datetime | None = Field(default=None, serialization_alias="visitedAt")
+
+
+class TrailUpdate(BaseModel):
+    completed: bool
+
+
+class TrailResult(BaseModel):
+    trail_id: str = Field(serialization_alias="trailId")
+    completed: bool
+    completed_trail_count: int = Field(serialization_alias="completedTrailCount")
 
 
 class Credentials(BaseModel):
@@ -57,27 +74,20 @@ class AuthResult(BaseModel):
     expires_at: datetime = Field(serialization_alias="expiresAt")
     account: Account
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
-    completed_trail_ids: list[str] = Field(serialization_alias="completedTrailIds")
+    visits: list[Visit]
+    completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
 
 
 class AccountState(BaseModel):
     account: Account
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
-    completed_trail_ids: list[str] = Field(serialization_alias="completedTrailIds")
-
-
-class TrailUpdate(BaseModel):
-    completed: bool
-
-
-class TrailResult(BaseModel):
-    trail_id: str = Field(serialization_alias="trailId")
-    completed: bool
-    completed_trail_count: int = Field(serialization_alias="completedTrailCount")
+    visits: list[Visit]
+    completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
 
 
 class GuestImportResult(BaseModel):
     imported_visit_count: int = Field(serialization_alias="importedVisitCount")
-    imported_trail_count: int = Field(serialization_alias="importedTrailCount")
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
-    completed_trail_ids: list[str] = Field(serialization_alias="completedTrailIds")
+    visits: list[Visit]
+    imported_trail_count: int = Field(default=0, serialization_alias="importedTrailCount")
+    completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")

@@ -74,6 +74,20 @@ const mainIslandParkNames = new Set([
   'PETROGLYPH PARK', 'RATHTREVOR BEACH PARK', 'ROBERTS MEMORIAL PARK', 'ROCK BAY MARINE PARK',
 ]);
 
+// Reviewed against the published park polygons and the mapped boundaries for
+// Vancouver Island plus every island in `islandNames`. These parks sit wholly
+// on other offshore islands, so they remain valid source records but are not
+// part of Parkdex's active geographic collection.
+const outOfScopeOffshoreParks = new Set([
+  'ANDERSON BAY PARK', 'BLIGH ISLAND MARINE PARK', 'BROUGHTON ARCHIPELAGO PARK',
+  'CATALA ISLAND MARINE PARK', 'CORMORANT CHANNEL MARINE PARK', 'DISCOVERY ISLAND MARINE PARK',
+  'DIXIE COVE MARINE PARK', 'ECHO BAY MARINE PARK', 'EPPER PASSAGE PARK', 'GERALD ISLAND PARK',
+  "GOD'S POCKET MARINE PARK", "JAJI7EM AND KW'ULH MARINE PARK [A.K.A SANDY ISLAND",
+  'JEDEDIAH ISLAND MARINE PARK', 'LANZ AND COX ISLANDS PARK',
+  'RENDEZVOUS ISLAND SOUTH PARK', 'ROSCOE BAY PARK',
+  'SABINE CHANNEL MARINE PARK', 'WALSH COVE PARK', 'WHALEBOAT ISLAND MARINE PARK',
+]);
+
 const parkIslandRegions = new Map([
   ...[
     'BEAVER POINT PARK', 'BELLHOUSE PARK', 'BODEGA RIDGE PARK', 'BURGOYNE BAY PARK',
@@ -108,7 +122,6 @@ const cvrdEligibilityExclusions = new Map([
 ]);
 
 const curatedIslandRegions = new Map([
-  ['Vancouver Island', 'Vancouver Island'],
   ...['Flores Island', 'Meares Island', 'Nootka Island', 'Vargas Island'].map((name) => [name, 'West Coast Islands']),
   ...['Cortes Island', 'Maurelle Island', 'Quadra Island', 'Read Island', 'Sonora Island'].map((name) => [name, 'Discovery Islands']),
   ...['Cormorant Island', 'Malcolm Island'].map((name) => [name, 'Northern Islands']),
@@ -120,7 +133,7 @@ const curatedIslandRegions = new Map([
 ]);
 
 const islandNames = [
-  'Vancouver Island', 'Saltspring Island', 'Gabriola Island', 'Galiano Island', 'Mayne Island',
+  'Saltspring Island', 'Gabriola Island', 'Galiano Island', 'Mayne Island',
   'Saturna Island', 'North Pender Island', 'South Pender Island', 'Thetis Island',
   'Penelakut Island', 'Valdes Island', 'Denman Island', 'Hornby Island', 'Lasqueti Island',
   'Quadra Island', 'Cortes Island', 'Read Island', 'Sonora Island', 'Maurelle Island',
@@ -275,6 +288,10 @@ async function buildProvincial() {
     .map((feature) => ({ feature, point: geometryRepresentative(feature.geometry) }))
     .filter(({ feature, point }) => {
       const name = feature.properties.PROTECTED_LANDS_NAME;
+      if (outOfScopeOffshoreParks.has(name.toUpperCase())) {
+        excluded.push({ name, latitude: point.latitude, longitude: point.longitude, reason: 'outside-supported-islands' });
+        return false;
+      }
       const keep = pointInPolygon([point.longitude, point.latitude], mainIslandMask) || nearbyIslandParks.has(name.toUpperCase());
       if (!keep) excluded.push({ name, latitude: point.latitude, longitude: point.longitude });
       return keep;
@@ -321,7 +338,7 @@ async function buildCrd() {
 
 async function buildCvrd() {
   const canonicalRegionalParks = new Set([
-    'Bute Island Regional Park', 'Chemainus River Provincial Park', 'Osborne Bay Regional Park',
+    'Chemainus River Provincial Park', 'Osborne Bay Regional Park',
     'Sandy Pool Regional Park', 'Siddoo Regional Park', 'Spectacle Lake Regional Park',
     'Stocking/Heart Lake Regional Park', 'Stoney Hill Regional Park',
   ]);
@@ -468,6 +485,7 @@ function validate(places) {
     if (!places.some((place) => place.name === name && place.region === 'Central Island')) throw new Error(`Main-island region regression: ${name}`);
   }
   for (const [name, region] of parkIslandRegions) {
+    if (outOfScopeOffshoreParks.has(name)) continue;
     const placeName = titleCaseParkName(name);
     if (!places.some((place) => place.name === placeName && place.region === region)) throw new Error(`Park island region regression: ${placeName}`);
   }
@@ -484,6 +502,15 @@ await fs.writeFile(path.join(dataDir, 'coverage-audit.json'), `${JSON.stringify(
   polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length,
   polygonInteriorFallbacks,
   excludedCvrdRegionalParks: [...cvrdEligibilityExclusions].map(([name, evidence]) => ({ name, ...evidence })),
+  scopeRetirements: [
+    { id: 'island-vancouver-island', name: 'Vancouver Island', reason: 'main island is the map focus, not a collectible' },
+    ...[...outOfScopeOffshoreParks].sort().map((name) => ({
+      id: `provincial-${slugify(titleCaseParkName(name))}`,
+      name: titleCaseParkName(name),
+      reason: 'published boundary does not intersect Vancouver Island or a supported major island',
+    })),
+    { id: 'regional-bute-island-regional-park', name: 'Bute Island Regional Park', reason: 'published boundary does not intersect Vancouver Island or a supported major island' },
+  ],
   excludedProvincialParksOutsideMask: provincial.excluded.sort((a, b) => a.name.localeCompare(b.name)),
   extents: { south: Math.min(...places.map((p) => p.latitude)), north: Math.max(...places.map((p) => p.latitude)), west: Math.min(...places.map((p) => p.longitude)), east: Math.max(...places.map((p) => p.longitude)) },
 }, null, 2)}\n`);

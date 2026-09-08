@@ -38,8 +38,9 @@ COVERAGE_NOTE = (
     "Official-source v0: two whole national park reserves, designated provincial parks, "
     "and named regional parks from CRD, RDN, CVRD, and Bere Point. Regional coverage is "
     "strongest in those districts; parks without a clean authoritative point, including "
-    "China Creek and Kwaksistah, are not guessed. The 25 islands are a curated collection, "
-    "not every islet. Pins are representative centres, not entrances or trailheads."
+    "China Creek and Kwaksistah, are not guessed. The 24 nearby islands are a curated "
+    "collection; Vancouver Island frames the map rather than acting as a collectible. "
+    "Pins are representative centres, not entrances or trailheads."
 )
 
 
@@ -71,37 +72,39 @@ def resolve_identity(
     return collection_hash(collection_key, required=required)
 
 
-def progress_for_account(conn: Connection, account_id: str) -> tuple[list[str], list[str]]:
-    visited_ids = [
-        row["place_id"]
+def visits_for_account(conn: Connection, account_id: str) -> list[dict]:
+    return [
+        {"place_id": row["place_id"], "visited_at": row["visited_at"]}
         for row in conn.execute(
             """
-            SELECT account_visits.place_id FROM account_visits
+            SELECT account_visits.place_id, account_visits.visited_at FROM account_visits
             JOIN places ON places.id = account_visits.place_id AND places.active
-            WHERE account_visits.account_id = %s ORDER BY account_visits.place_id
+            WHERE account_visits.account_id = %s ORDER BY account_visits.visited_at, account_visits.place_id
             """,
             (account_id,),
         ).fetchall()
     ]
-    completed_trail_ids = [
-        row["trail_id"]
-        for row in conn.execute(
-            """
-            SELECT trail_id FROM account_trail_completions
-            WHERE account_id = %s ORDER BY trail_id
-            """,
-            (account_id,),
-        ).fetchall()
-    ]
-    return visited_ids, completed_trail_ids
+
+
+def visited_ids(visits: list[dict]) -> list[str]:
+    return [visit["place_id"] for visit in visits]
+
+
+def completed_trails_for_account(conn: Connection, account_id: str) -> list[str]:
+    return [row["trail_id"] for row in conn.execute("SELECT trail_id FROM account_trail_completions WHERE account_id = %s ORDER BY trail_id", (account_id,)).fetchall()]
+
+
+def lock_account_progress(conn: Connection, account_id: str) -> None:
+    conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (account_id,))
 
 
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
-    visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+    visits = visits_for_account(conn, identity.account_id)
     return {
         "account": {"id": identity.account_id, "email": identity.email},
-        "visited_ids": visited_ids,
-        "completed_trail_ids": completed_trail_ids,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
+        "completed_trail_ids": completed_trails_for_account(conn, identity.account_id),
     }
 
 
@@ -113,11 +116,11 @@ async def lifespan(_: FastAPI):
 
 
 settings = get_settings()
-app = FastAPI(title="Every Park API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Collection-Key"],
 )
 
@@ -153,35 +156,28 @@ def list_places(
         FROM places WHERE active ORDER BY name
         """
     ).fetchall()
-    visited_ids: list[str] = []
+    visits: list[dict] = []
     completed_trail_ids: list[str] = []
     if isinstance(identity, AccountIdentity):
-        visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+        visits = visits_for_account(conn, identity.account_id)
+        completed_trail_ids = completed_trails_for_account(conn, identity.account_id)
     elif identity:
-        visited_ids = [
-            row["place_id"]
+        visits = [
+            {"place_id": row["place_id"], "visited_at": row["visited_at"]}
             for row in conn.execute(
                 """
-                SELECT visits.place_id FROM visits
+                SELECT visits.place_id, visits.visited_at FROM visits
                 JOIN places ON places.id = visits.place_id AND places.active
-                WHERE visits.owner_hash = %s ORDER BY visits.place_id
+                WHERE visits.owner_hash = %s ORDER BY visits.visited_at, visits.place_id
                 """,
                 (identity,),
             ).fetchall()
         ]
-        completed_trail_ids = [
-            row["trail_id"]
-            for row in conn.execute(
-                """
-                SELECT trail_id FROM guest_trail_completions
-                WHERE owner_hash = %s ORDER BY trail_id
-                """,
-                (identity,),
-            ).fetchall()
-        ]
+        completed_trail_ids = [row["trail_id"] for row in conn.execute("SELECT trail_id FROM guest_trail_completions WHERE owner_hash = %s ORDER BY trail_id", (identity,)).fetchall()]
     return {
         "places": places,
-        "visited_ids": visited_ids,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
         "completed_trail_ids": completed_trail_ids,
         "coverage_note": COVERAGE_NOTE,
     }
@@ -203,6 +199,7 @@ def update_visit(
     ).fetchone():
         raise HTTPException(status_code=404, detail="Place not found")
     if isinstance(identity, AccountIdentity):
+        lock_account_progress(conn, identity.account_id)
         if payload.visited:
             conn.execute(
                 """
@@ -243,75 +240,43 @@ def update_visit(
             """,
             (identity,),
         ).fetchone()["visited_count"]
+    visited_at = None
+    if payload.visited:
+        if isinstance(identity, AccountIdentity):
+            row = conn.execute(
+                "SELECT visited_at FROM account_visits WHERE account_id = %s AND place_id = %s",
+                (identity.account_id, place_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT visited_at FROM visits WHERE owner_hash = %s AND place_id = %s",
+                (identity, place_id),
+            ).fetchone()
+        visited_at = row["visited_at"]
     conn.commit()
-    return {"place_id": place_id, "visited": payload.visited, "visited_count": count}
+    return {
+        "place_id": place_id,
+        "visited": payload.visited,
+        "visited_count": count,
+        "visited_at": visited_at,
+    }
 
 
 @app.put("/api/trails/{trail_id}", response_model=TrailResult)
-def update_trail(
-    trail_id: str,
-    payload: TrailUpdate,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-    x_collection_key: str | None = Header(default=None),
-):
+def update_trail(trail_id: str, payload: TrailUpdate, conn: Connection = Depends(connection), authorization: str | None = Header(default=None), x_collection_key: str | None = Header(default=None)):
     if trail_id not in TRAIL_IDS:
         raise HTTPException(status_code=404, detail="Trail not found")
     identity = resolve_identity(conn, authorization, x_collection_key, required=True)
     if isinstance(identity, AccountIdentity):
-        if payload.completed:
-            conn.execute(
-                """
-                INSERT INTO account_trail_completions (account_id, trail_id)
-                VALUES (%s, %s) ON CONFLICT DO NOTHING
-                """,
-                (identity.account_id, trail_id),
-            )
-        else:
-            conn.execute(
-                """
-                DELETE FROM account_trail_completions
-                WHERE account_id = %s AND trail_id = %s
-                """,
-                (identity.account_id, trail_id),
-            )
-        count = conn.execute(
-            """
-            SELECT COUNT(*) AS completed_count FROM account_trail_completions
-            WHERE account_id = %s
-            """,
-            (identity.account_id,),
-        ).fetchone()["completed_count"]
+        lock_account_progress(conn, identity.account_id)
+    table, owner, value = ("account_trail_completions", "account_id", identity.account_id) if isinstance(identity, AccountIdentity) else ("guest_trail_completions", "owner_hash", identity)
+    if payload.completed:
+        conn.execute(f"INSERT INTO {table} ({owner}, trail_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (value, trail_id))
     else:
-        if payload.completed:
-            conn.execute(
-                """
-                INSERT INTO guest_trail_completions (owner_hash, trail_id)
-                VALUES (%s, %s) ON CONFLICT DO NOTHING
-                """,
-                (identity, trail_id),
-            )
-        else:
-            conn.execute(
-                """
-                DELETE FROM guest_trail_completions
-                WHERE owner_hash = %s AND trail_id = %s
-                """,
-                (identity, trail_id),
-            )
-        count = conn.execute(
-            """
-            SELECT COUNT(*) AS completed_count FROM guest_trail_completions
-            WHERE owner_hash = %s
-            """,
-            (identity,),
-        ).fetchone()["completed_count"]
+        conn.execute(f"DELETE FROM {table} WHERE {owner} = %s AND trail_id = %s", (value, trail_id))
+    count = conn.execute(f"SELECT COUNT(*) AS count FROM {table} WHERE {owner} = %s", (value,)).fetchone()["count"]
     conn.commit()
-    return {
-        "trail_id": trail_id,
-        "completed": payload.completed,
-        "completed_trail_count": count,
-    }
+    return {"trail_id": trail_id, "completed": payload.completed, "completed_trail_count": count}
 
 
 @app.post("/api/auth/register", response_model=AuthResult, status_code=201)
@@ -336,6 +301,7 @@ def register(payload: Credentials):
         "expires_at": expires_at,
         "account": {"id": str(account["id"]), "email": account["email"]},
         "visited_ids": [],
+        "visits": [],
         "completed_trail_ids": [],
     }
 
@@ -355,13 +321,15 @@ def login(payload: Credentials):
     with contextmanager(connection)() as conn:
         clear_login_failures(conn, email)
         token, expires_at = create_session(conn, str(account["id"]))
-        visited_ids, completed_trail_ids = progress_for_account(conn, str(account["id"]))
+        visits = visits_for_account(conn, str(account["id"]))
+        completed_trail_ids = completed_trails_for_account(conn, str(account["id"]))
         conn.commit()
     return {
         "token": token,
         "expires_at": expires_at,
         "account": {"id": str(account["id"]), "email": account["email"]},
-        "visited_ids": visited_ids,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
         "completed_trail_ids": completed_trail_ids,
     }
 
@@ -388,6 +356,25 @@ def logout(
     return Response(status_code=204)
 
 
+@app.delete("/api/account/progress", status_code=204)
+def reset_account_progress(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    # Serialize the reset with imports and progress writes for this account.
+    lock_account_progress(conn, identity.account_id)
+    conn.execute(
+        "DELETE FROM account_visits WHERE account_id = %s", (identity.account_id,)
+    )
+    conn.execute(
+        "DELETE FROM account_trail_completions WHERE account_id = %s",
+        (identity.account_id,),
+    )
+    conn.commit()
+    return Response(status_code=204)
+
+
 @app.post("/api/account/import-guest", response_model=GuestImportResult)
 def import_guest_progress(
     conn: Connection = Depends(connection),
@@ -396,6 +383,7 @@ def import_guest_progress(
 ):
     identity = require_bearer(conn, authorization)
     owner_hash = collection_hash(x_collection_key, required=True)
+    lock_account_progress(conn, identity.account_id)
     imported_visits = conn.execute(
         """
         INSERT INTO account_visits (account_id, place_id, visited_at)
@@ -412,11 +400,12 @@ def import_guest_progress(
         """,
         (identity.account_id, owner_hash),
     ).rowcount
-    visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+    visits = visits_for_account(conn, identity.account_id)
     conn.commit()
     return {
         "imported_visit_count": imported_visits,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
         "imported_trail_count": imported_trails,
-        "visited_ids": visited_ids,
-        "completed_trail_ids": completed_trail_ids,
+        "completed_trail_ids": completed_trails_for_account(conn, identity.account_id),
     }

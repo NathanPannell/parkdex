@@ -1,5 +1,5 @@
 {
-  "name": "every-park-frontend",
+  "name": "parkdex-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -12,7 +12,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:boundaries": "node scripts/check-boundary-asset.mjs && node scripts/check-display-boundary-asset.mjs",
-    "generate:boundary-display": "node scripts/generate-display-boundaries.mjs",
+    "generate:boundary-display": "node scripts/generate-display-boundaries.mjs && node scripts/generate-map-focus-mask.mjs",
+    "generate:map-focus": "node scripts/generate-map-focus-mask.mjs",
+    "generate:exploration-territories": "node --no-warnings scripts/generate-exploration-territories.mjs",
+    "check:exploration-territories": "node --no-warnings scripts/generate-exploration-territories.mjs --check",
     "check:boundary-display": "node scripts/check-display-boundary-asset.mjs",
     "sync:boundaries": "node scripts/sync-boundary-assets.mjs"
   },

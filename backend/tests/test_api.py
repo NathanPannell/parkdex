@@ -55,11 +55,14 @@ def test_visit_collection_is_persistent_and_isolated() -> None:
             )
             assert repeated.status_code == 200
             assert repeated.json()["visitedCount"] == visit.json()["visitedCount"]
+            assert repeated.json()["visitedAt"] == visit.json()["visitedAt"]
 
             first = client.get("/api/places", headers={"X-Collection-Key": KEY_ONE})
             second = client.get("/api/places", headers={"X-Collection-Key": KEY_TWO})
             assert TEST_PLACE in first.json()["visitedIds"]
+            assert first.json()["visits"] == [{"placeId": TEST_PLACE, "visitedAt": visit.json()["visitedAt"]}]
             assert TEST_PLACE not in second.json()["visitedIds"]
+            assert second.json()["visits"] == []
 
             with psycopg.connect(database_url) as conn:
                 conn.execute("UPDATE places SET active = FALSE WHERE id = %s", (TEST_PLACE,))

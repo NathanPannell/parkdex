@@ -1,37 +1,41 @@
-import polygonClipping from "polygon-clipping";
-import type { MultiPolygon, Pair, Polygon } from "polygon-clipping";
+export type ExplorationCategory = "national" | "island" | "provincial" | "regional";
 
 export type ExplorationPoint = {
   id: string;
   longitude: number;
   latitude: number;
+  category: ExplorationCategory;
 };
 
-export type ExplorationGeometryOptions = {
-  footprintRadiusKm?: number;
-  maxLinkKm?: number;
-  circleSteps?: number;
-  gapPoints?: readonly ExplorationPoint[];
-  gapRadiusKm?: number;
-};
-
-type CoverageProperties = { kind: "estimated-exploration"; visitedCount: number };
+export const EXPLORATION_CATEGORY_WEIGHTS: Readonly<Record<ExplorationCategory, number>> = Object.freeze({
+  national: 4,
+  island: 3,
+  provincial: 2,
+  regional: 1,
+});
 
 const EARTH_RADIUS_KM = 6371.0088;
-const DEFAULT_FOOTPRINT_RADIUS_KM = 4;
-const DEFAULT_MAX_LINK_KM = 24;
-const DEFAULT_CIRCLE_STEPS = 28;
-const DEFAULT_GAP_RADIUS_KM = 0.8;
+export const EXPLORATION_PROJECTION_ORIGIN = Object.freeze({ longitude: -125.5, latitude: 49.6 });
 
 function radians(degrees: number) {
   return degrees * Math.PI / 180;
 }
 
-function degrees(radiansValue: number) {
-  return radiansValue * 180 / Math.PI;
+export function isExplorationPoint(point: ExplorationPoint) {
+  return point.id.length > 0
+    && Number.isFinite(point.longitude)
+    && Number.isFinite(point.latitude)
+    && point.latitude >= -90
+    && point.latitude <= 90
+    && point.longitude >= -180
+    && point.longitude <= 180
+    && Object.hasOwn(EXPLORATION_CATEGORY_WEIGHTS, point.category);
 }
 
-export function distanceKm(a: Pick<ExplorationPoint, "longitude" | "latitude">, b: Pick<ExplorationPoint, "longitude" | "latitude">) {
+export function distanceKm(
+  a: Pick<ExplorationPoint, "longitude" | "latitude">,
+  b: Pick<ExplorationPoint, "longitude" | "latitude">,
+) {
   const latitudeDelta = radians(b.latitude - a.latitude);
   const longitudeDelta = radians(b.longitude - a.longitude);
   const latitudeA = radians(a.latitude);
@@ -41,134 +45,94 @@ export function distanceKm(a: Pick<ExplorationPoint, "longitude" | "latitude">, 
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
-function destination(point: ExplorationPoint, bearingDegrees: number, distance: number): [number, number] {
-  const angularDistance = distance / EARTH_RADIUS_KM;
-  const bearing = radians(bearingDegrees);
-  const latitude = radians(point.latitude);
-  const longitude = radians(point.longitude);
-  const nextLatitude = Math.asin(
-    Math.sin(latitude) * Math.cos(angularDistance)
-      + Math.cos(latitude) * Math.sin(angularDistance) * Math.cos(bearing),
-  );
-  const nextLongitude = longitude + Math.atan2(
-    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latitude),
-    Math.cos(angularDistance) - Math.sin(latitude) * Math.sin(nextLatitude),
-  );
-  return [degrees(nextLongitude), degrees(nextLatitude)];
+export function projectExplorationLocation(location: Pick<ExplorationPoint, "longitude" | "latitude">): [number, number] {
+  const originLatitude = radians(EXPLORATION_PROJECTION_ORIGIN.latitude);
+  return [
+    EARTH_RADIUS_KM * radians(location.longitude - EXPLORATION_PROJECTION_ORIGIN.longitude) * Math.cos(originLatitude),
+    EARTH_RADIUS_KM * radians(location.latitude - EXPLORATION_PROJECTION_ORIGIN.latitude),
+  ];
 }
 
-function footprintCoordinates(point: ExplorationPoint, radiusKm: number, steps: number): Polygon {
-  const ring = Array.from({ length: steps }, (_, index) => destination(point, index * 360 / steps, radiusKm));
-  ring.push(ring[0]);
-  return [ring];
-}
-
-function initialBearing(a: ExplorationPoint, b: ExplorationPoint) {
-  const latitudeA = radians(a.latitude);
-  const latitudeB = radians(b.latitude);
-  const longitudeDelta = radians(b.longitude - a.longitude);
-  return (degrees(Math.atan2(
-    Math.sin(longitudeDelta) * Math.cos(latitudeB),
-    Math.cos(latitudeA) * Math.sin(latitudeB)
-      - Math.sin(latitudeA) * Math.cos(latitudeB) * Math.cos(longitudeDelta),
-  )) + 360) % 360;
-}
-
-function capsuleCoordinates(a: ExplorationPoint, b: ExplorationPoint, radiusKm: number, steps: number): Polygon {
-  const bearing = initialBearing(a, b);
-  const halfSteps = Math.max(6, Math.round(steps / 2));
-  const ring: Pair[] = [];
-  for (let index = 0; index <= halfSteps; index += 1) {
-    ring.push(destination(b, bearing - 90 + index * 180 / halfSteps, radiusKm));
-  }
-  for (let index = 0; index <= halfSteps; index += 1) {
-    ring.push(destination(a, bearing + 90 + index * 180 / halfSteps, radiusKm));
-  }
-  ring.push(ring[0]);
-  return [ring];
-}
-
-type Edge = { a: number; b: number; distance: number };
-
-function boundedMinimumSpanningLinks(points: ExplorationPoint[], maxLinkKm: number) {
-  const edges: Edge[] = [];
-  for (let a = 0; a < points.length; a += 1) {
-    for (let b = a + 1; b < points.length; b += 1) {
-      const distance = distanceKm(points[a], points[b]);
-      if (distance <= maxLinkKm) edges.push({ a, b, distance });
-    }
-  }
-  edges.sort((left, right) => left.distance - right.distance || left.a - right.a || left.b - right.b);
-  const parent = points.map((_, index) => index);
-  const find = (value: number): number => {
-    if (parent[value] !== value) parent[value] = find(parent[value]);
-    return parent[value];
-  };
-  const links: Edge[] = [];
-  edges.forEach((edge) => {
-    const rootA = find(edge.a);
-    const rootB = find(edge.b);
-    if (rootA === rootB) return;
-    parent[rootA] = rootB;
-    links.push(edge);
-  });
-  return links;
+export function unprojectExplorationLocation([x, y]: readonly [number, number]): [number, number] {
+  const originLatitude = radians(EXPLORATION_PROJECTION_ORIGIN.latitude);
+  return [
+    EXPLORATION_PROJECTION_ORIGIN.longitude + (x / (EARTH_RADIUS_KM * Math.cos(originLatitude))) * 180 / Math.PI,
+    EXPLORATION_PROJECTION_ORIGIN.latitude + (y / EARTH_RADIUS_KM) * 180 / Math.PI,
+  ];
 }
 
 /**
- * Builds a display-only estimate of explored territory. Each visit gets a local
- * footprint, and a minimum spanning forest joins nearby visits. The hard link
- * limit prevents distant visits from claiming the unvisited country between them.
+ * Display-only completion score used by the precomputed territory partition.
+ * It approximates influence rather than ground travelled: lower is closer, and
+ * the 4/3/2/1 category weight lets larger collection achievements own more land.
  */
-export function buildExplorationCoverage(
-  input: readonly ExplorationPoint[],
-  options: ExplorationGeometryOptions = {},
-): GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon, CoverageProperties> {
-  const radiusKm = Math.max(0.1, options.footprintRadiusKm ?? DEFAULT_FOOTPRINT_RADIUS_KM);
-  const maxLinkKm = Math.max(0, options.maxLinkKm ?? DEFAULT_MAX_LINK_KM);
-  const circleSteps = Math.max(12, Math.round(options.circleSteps ?? DEFAULT_CIRCLE_STEPS));
-  const validPoints = input.filter((point) => (
-    point.id.length > 0
-    && Number.isFinite(point.longitude)
-    && Number.isFinite(point.latitude)
-    && point.latitude >= -90
-    && point.latitude <= 90
-    && point.longitude >= -180
-    && point.longitude <= 180
-  ));
-  const seenIds = new Set<string>();
-  const seenCoordinates = new Set<string>();
-  const points = validPoints.filter((point) => {
-    const coordinateKey = `${point.longitude.toFixed(7)},${point.latitude.toFixed(7)}`;
-    if (seenIds.has(point.id) || seenCoordinates.has(coordinateKey)) return false;
-    seenIds.add(point.id);
-    seenCoordinates.add(coordinateKey);
-    return true;
-  });
-  if (!points.length) return { type: "FeatureCollection", features: [] };
-  const polygons: Polygon[] = points.map((point) => footprintCoordinates(point, radiusKm, circleSteps));
-  boundedMinimumSpanningLinks(points, maxLinkKm).forEach((edge) => {
-    polygons.push(capsuleCoordinates(points[edge.a], points[edge.b], radiusKm, circleSteps));
-  });
-  let coverage: MultiPolygon = polygonClipping.union(polygons[0], ...polygons.slice(1));
-  const gapRadiusKm = Math.max(0, options.gapRadiusKm ?? DEFAULT_GAP_RADIUS_KM);
-  const nearbyGapPolygons = gapRadiusKm === 0 ? [] : (options.gapPoints ?? [])
-    .filter((gap) => Number.isFinite(gap.longitude) && Number.isFinite(gap.latitude))
-    .filter((gap) => points.some((visitedPoint) => distanceKm(gap, visitedPoint) <= maxLinkKm + radiusKm))
-    .map((gap) => footprintCoordinates(gap, gapRadiusKm, circleSteps));
-  if (nearbyGapPolygons.length) {
-    coverage = polygonClipping.difference(coverage, ...nearbyGapPolygons);
+export function weightedDistanceScore(
+  location: Pick<ExplorationPoint, "longitude" | "latitude">,
+  place: ExplorationPoint,
+) {
+  const [locationX, locationY] = projectExplorationLocation(location);
+  const [placeX, placeY] = projectExplorationLocation(place);
+  return ((locationX - placeX) ** 2 + (locationY - placeY) ** 2)
+    / EXPLORATION_CATEGORY_WEIGHTS[place.category];
+}
+
+export type WeightedTerritoryConstraint =
+  | { kind: "all" | "empty" }
+  | { kind: "half-plane"; x: number; y: number; limit: number }
+  | { kind: "circle"; center: readonly [number, number]; radius: number; keep: "inside" | "outside" };
+
+/** Returns the analytic Apollonius constraint where owner beats competitor. */
+export function weightedTerritoryConstraint(
+  owner: ExplorationPoint,
+  competitor: ExplorationPoint,
+): WeightedTerritoryConstraint {
+  const [ownerX, ownerY] = projectExplorationLocation(owner);
+  const [competitorX, competitorY] = projectExplorationLocation(competitor);
+  const ownerWeight = EXPLORATION_CATEGORY_WEIGHTS[owner.category];
+  const competitorWeight = EXPLORATION_CATEGORY_WEIGHTS[competitor.category];
+  const deltaX = competitorX - ownerX;
+  const deltaY = competitorY - ownerY;
+  if (Math.hypot(deltaX, deltaY) < 1e-9) {
+    if (ownerWeight !== competitorWeight) return { kind: ownerWeight > competitorWeight ? "all" : "empty" };
+    return { kind: owner.id < competitor.id ? "all" : "empty" };
   }
-  if (!coverage.length) return { type: "FeatureCollection", features: [] };
-  const geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon = coverage.length === 1
-    ? { type: "Polygon", coordinates: coverage[0] }
-    : { type: "MultiPolygon", coordinates: coverage };
+  if (ownerWeight === competitorWeight) {
+    return {
+      kind: "half-plane",
+      x: 2 * deltaX,
+      y: 2 * deltaY,
+      limit: competitorX ** 2 + competitorY ** 2 - ownerX ** 2 - ownerY ** 2,
+    };
+  }
+  const denominator = competitorWeight - ownerWeight;
+  const centerX = (competitorWeight * ownerX - ownerWeight * competitorX) / denominator;
+  const centerY = (competitorWeight * ownerY - ownerWeight * competitorY) / denominator;
+  const constant = competitorWeight * (ownerX ** 2 + ownerY ** 2)
+    - ownerWeight * (competitorX ** 2 + competitorY ** 2);
+  const radiusSquared = centerX ** 2 + centerY ** 2 - constant / denominator;
   return {
-    type: "FeatureCollection",
-    features: [{
-      type: "Feature",
-      properties: { kind: "estimated-exploration", visitedCount: points.length },
-      geometry,
-    }],
+    kind: "circle",
+    center: [centerX, centerY],
+    radius: Math.sqrt(Math.max(0, radiusSquared)),
+    keep: denominator > 0 ? "inside" : "outside",
   };
+}
+
+/** Picks a stable owner for a territory sample. Equal scores resolve by id. */
+export function nearestWeightedExplorationPoint(
+  location: Pick<ExplorationPoint, "longitude" | "latitude">,
+  input: readonly ExplorationPoint[],
+) {
+  let winner: ExplorationPoint | undefined;
+  let winnerScore = Number.POSITIVE_INFINITY;
+  for (const point of input) {
+    if (!isExplorationPoint(point)) continue;
+    const score = weightedDistanceScore(location, point);
+    if (score < winnerScore - Number.EPSILON
+      || (Math.abs(score - winnerScore) <= Number.EPSILON && (!winner || point.id < winner.id))) {
+      winner = point;
+      winnerScore = score;
+    }
+  }
+  return winner;
 }

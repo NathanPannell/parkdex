@@ -1,25 +1,74 @@
-import type { LayerSpecification } from "maplibre-gl";
+import type { FilterSpecification, LayerSpecification } from "maplibre-gl";
 
-export const EXPLORATION_SOURCE_ID = "exploration";
+export const EXPLORATION_TERRITORY_SOURCE_ID = "exploration-territories";
+export const EXPLORATION_TERRITORY_DATA_URL = "/data/exploration-territories.v1.geojson";
 export const CURRENT_LOCATION_SOURCE_ID = "current-location";
 
-export function explorationLayerSpecifications(): LayerSpecification[] {
+export function explorationVisitedFilter(visitedIds: readonly string[]): FilterSpecification {
   return [
+    "all",
+    ["==", ["get", "kind"], "estimated-territory"],
+    ["in", ["get", "id"], ["literal", [...new Set(visitedIds)].sort()]],
+  ];
+}
+
+export function explorationBoundaryFilter(visitedIds: readonly string[]): FilterSpecification {
+  const ids = [...new Set(visitedIds)].sort();
+  const ownerAVisited: FilterSpecification = ["in", ["get", "ownerA"], ["literal", ids]];
+  const ownerBVisited: FilterSpecification = ["in", ["get", "ownerB"], ["literal", ids]];
+  return [
+    "all",
+    ["==", ["get", "kind"], "territory-edge"],
+    ["!=", ownerAVisited, ownerBVisited],
+  ];
+}
+
+export function explorationLayerSpecifications(visitedIds: readonly string[] = []): LayerSpecification[] {
+  const visitedFilter = explorationVisitedFilter(visitedIds);
+  const boundaryFilter = explorationBoundaryFilter(visitedIds);
+  return [
+    {
+      id: "exploration-scope-outline",
+      type: "line",
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "exploration-scope"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#173d32",
+        "line-opacity": 0.42,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 11, 2],
+      },
+    },
     {
       id: "exploration-fill",
       type: "fill",
-      source: EXPLORATION_SOURCE_ID,
-      paint: { "fill-color": "#b9ea55", "fill-opacity": 0.2 },
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: visitedFilter,
+      paint: { "fill-color": "#8fd54f", "fill-opacity": 0.62 },
+    },
+    {
+      id: "exploration-edge-glow",
+      type: "line",
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: boundaryFilter,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#b7ed4b",
+        "line-opacity": 0.7,
+        "line-blur": 1.2,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 8, 11, 12],
+      },
     },
     {
       id: "exploration-edge",
       type: "line",
-      source: EXPLORATION_SOURCE_ID,
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: boundaryFilter,
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": "#47745f",
-        "line-opacity": 0.68,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 11, 2.25],
+        "line-color": "#173d32",
+        "line-opacity": 0.94,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3.5, 11, 6],
       },
     },
   ];

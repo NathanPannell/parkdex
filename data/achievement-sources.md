@@ -1,0 +1,10 @@
+# Achievement theme sources
+
+Achievement rules use exact active place IDs, so retired visit records cannot advance them. The wildlife and habitat names are thematic prompts for exploration, not claims that a visitor will see a species.
+
+- **Sea Otter Raft:** Environment and Climate Change Canada's 2022 status report documents reintroduction at Checleset Bay, early range near Nootka Island, and later range expansion past Vargas Island along Vancouver Island's exposed coast: https://www.canada.ca/en/environment-climate-change/services/species-risk-public-registry/cosewic-assessments-status-reports/sea-otter-2022.html
+- **Black Bear Coast:** Parks Canada describes black bears as Vancouver Island's only bear species and explains their use of west-coast trails, beaches, dunes, and seasonal marine food: https://parks.canada.ca/pn-np/bc/pacificrim/nature/faune-wildlife/ecologie-ecology
+- **Red-legged Wetland Hop:** the Province of B.C. identifies shallow wetlands, marshes, bogs, fens, emergent vegetation, and moist forest as northern red-legged frog habitat on Vancouver Island: https://www.env.gov.bc.ca/wld/frpa/iwms/documents/Amphibians/a_redleggedfrog.pdf
+- **Treefrog Pond Hop:** the Province of B.C.'s Vancouver Island and Gulf Islands amphibian guide documents native frog habitat and life history across ponds, wetlands, and surrounding forest: https://www2.gov.bc.ca/assets/gov/environment/plants-animals-and-ecosystems/wildlife-wildlife-habitat/amphibians-reptiles-and-turtles/guide_to_amphibians_of_vancouver_island_gulf_islands.pdf
+- **Camas Rainshadow and Arbutus Rainshadow:** Parks Canada identifies camas meadows and Garry oak communities with southeastern Vancouver Island and the Gulf Islands, and documents camas as a culturally significant plant in restoration work: https://parks.canada.ca/lhn-nhs/bc/fortroddhill/nature/garry and https://parks.canada.ca/pn-np/bc/gulf/nature/restauration-restoration/chene-de-garry-garry-oak
+- **Orca Lookout Loop:** Parks Canada describes the southern Gulf Islands' Salish Sea waters as habitat for orcas and other marine wildlife: https://www.parks.canada.ca/pn-np/bc/gulf

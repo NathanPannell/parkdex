@@ -123,6 +123,25 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
             )
             assert logged_in.status_code == 200
             assert logged_in.json()["visitedIds"] == [TEST_PLACE]
+            assert logged_in.json()["completedTrailIds"] == ["west_coast_trail"]
+
+            assert client.delete("/api/account/progress").status_code == 401
+            reset = client.delete("/api/account/progress", headers=bearer(token))
+            assert reset.status_code == 204
+            assert reset.content == b""
+            reset_state = client.get("/api/auth/me", headers=bearer(token)).json()
+            assert reset_state["visitedIds"] == []
+            assert reset_state["visits"] == []
+            assert reset_state["completedTrailIds"] == []
+            # Resetting one account leaves guest data and other accounts untouched.
+            assert TEST_PLACE in client.get(
+                "/api/places", headers={"X-Collection-Key": GUEST_KEY}
+            ).json()["visitedIds"]
+            assert client.get("/api/auth/me", headers=bearer(second.json()["token"])).json()["visitedIds"] == []
+            # Other live sessions for the same account immediately see the reset.
+            assert client.get(
+                "/api/auth/me", headers=bearer(logged_in.json()["token"])
+            ).json()["visitedIds"] == []
 
             logout = client.post("/api/auth/logout", headers=bearer(token))
             assert logout.status_code == 204
@@ -194,11 +213,13 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             me = client.get("/api/auth/me", headers=first_headers)
             places = client.get("/api/places", headers=first_headers)
             assert me.json()["visitedIds"] == [place_id]
+            assert me.json()["visits"] == [{"placeId": place_id, "visitedAt": checked.json()["visitedAt"]}]
             assert me.json()["completedTrailIds"] == [
                 "juan_de_fuca_trail",
                 "west_coast_trail",
             ]
             assert places.json()["visitedIds"] == me.json()["visitedIds"]
+            assert places.json()["visits"] == me.json()["visits"]
             assert places.json()["completedTrailIds"] == me.json()["completedTrailIds"]
 
             guest = client.get("/api/places", headers={"X-Collection-Key": guest_key})
@@ -206,6 +227,7 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             assert place_id not in guest.json()["visitedIds"]
             assert guest.json()["completedTrailIds"] == []
             assert other.json()["visitedIds"] == []
+            assert other.json()["visits"] == []
             assert other.json()["completedTrailIds"] == []
 
             undone = client.put(

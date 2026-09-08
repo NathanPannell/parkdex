@@ -20,14 +20,18 @@ import {
   settleBoundarySourceReadiness,
   type BoundarySourceKey,
 } from "@/lib/boundary-source-status";
-import { buildExplorationCoverage } from "@/lib/exploration-geometry";
+import { clusterFitForLeaves, fetchClusterLeaves } from "@/lib/cluster-fit";
 import {
   CURRENT_LOCATION_SOURCE_ID,
   currentLocationLayerSpecifications,
-  EXPLORATION_SOURCE_ID,
+  EXPLORATION_TERRITORY_DATA_URL,
+  EXPLORATION_TERRITORY_SOURCE_ID,
   explorationLayerSpecifications,
+  explorationBoundaryFilter,
+  explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
-import { hasUsableCameraViewport, selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
+import { cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
+import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Place } from "@/lib/places";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
@@ -56,6 +60,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   sources: {
     shadedRelief: { type: "raster", tiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 6 },
     openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
+    focusMask: { type: "geojson", data: "/data/vancouver-island-focus-mask.v1.geojson", tolerance: 0 },
   },
   layers: [
     { id: "paper", type: "background", paint: { "background-color": "#f6f0dc" } },
@@ -68,6 +73,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
     { id: "roads", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]], paint: { "line-color": "#d2ae72", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.45, 12, 2.5], "line-opacity": 0.78 } },
     { id: "water-labels", type: "symbol", source: "openmaptiles", "source-layer": "water_name", minzoom: 5, layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Italic"], "text-size": 11 }, paint: { "text-color": "#226c70", "text-halo-color": "#bce4e0", "text-halo-width": 1.5 } },
     { id: "place-labels", type: "symbol", source: "openmaptiles", "source-layer": "place", layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Bold"], "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 11, 14], "text-padding": 5 }, paint: { "text-color": "#173d32", "text-halo-color": "#f6f0dc", "text-halo-width": 2 } },
+    { id: "focus-mask", type: "fill", source: "focusMask", paint: { "fill-color": "#6f7773", "fill-opacity": 0.58 } },
   ],
 };
 
@@ -91,15 +97,6 @@ function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode
   };
 }
 
-function explorationData(places: Place[], visited: Set<string>, mode: ParkMapMode) {
-  if (mode === "discover") return buildExplorationCoverage([]);
-  const geometryPoints = places.map((place) => ({ id: place.id, longitude: place.longitude, latitude: place.latitude }));
-  return buildExplorationCoverage(
-    geometryPoints.filter((place) => visited.has(place.id)),
-    { gapPoints: geometryPoints.filter((place) => !visited.has(place.id)) },
-  );
-}
-
 function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<GeoJSON.Point> {
   if (!location || !Number.isFinite(location.longitude) || !Number.isFinite(location.latitude)) {
     return { type: "FeatureCollection", features: [] };
@@ -120,13 +117,10 @@ function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<G
   };
 }
 
-function fitOverview(map: MapLibreMap, places: Place[], animated: boolean) {
-  if (!places.length) return;
-  const longitudes = places.map((place) => place.longitude);
-  const latitudes = places.map((place) => place.latitude);
+function fitOverview(map: MapLibreMap, animated: boolean) {
   map.fitBounds(
-    [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]],
-    { padding: { top: 180, right: 32, bottom: 96, left: 32 }, maxZoom: 7, duration: animated ? 520 : 0 },
+    VANCOUVER_ISLAND_OVERVIEW_BOUNDS,
+    { padding: measuredCameraPadding(map.getContainer(), false), maxZoom: 7, duration: animated ? 520 : 0 },
   );
 }
 
@@ -156,12 +150,31 @@ function layoutRect(element: HTMLElement): LayoutRect {
 }
 
 function measuredSelectionPadding(container: HTMLElement) {
-  const mapRect = container.getBoundingClientRect();
-  const sheet = document.querySelector<HTMLElement>(".place-sheet");
-  const overlayBottom = [".expedition-header", ".search-dock", ".filter-tray"]
-    .map((selector) => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().bottom ?? mapRect.top)
-    .reduce((largest, value) => Math.max(largest, value), mapRect.top);
-  return selectedPlacePadding(mapRect, sheet ? layoutRect(sheet) : null, overlayBottom);
+  return measuredCameraPadding(container, true);
+}
+
+function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
+  const selectors = [
+    ".expedition-header",
+    ".map-utility",
+    ".map-utility-bar",
+    ".map-mode-switch",
+    ".search-dock",
+    ".filter-tray",
+    ".search-results",
+    ".nearby-strip",
+    ".thumb-nav",
+    ...(includeSheet ? [".place-sheet"] : []),
+  ];
+  const overlays = selectors.flatMap((selector) => {
+    const element = document.querySelector<HTMLElement>(selector);
+    return element && element.offsetParent ? [layoutRect(element)] : [];
+  });
+  return cameraPaddingForOverlays(
+    container.getBoundingClientRect(),
+    overlays,
+    base,
+  );
 }
 
 function addBoundaryLayers(map: MapLibreMap) {
@@ -216,7 +229,9 @@ export function ParkMap({
   const boundaryStateRef = useRef(onBoundaryLoadState);
   const boundaryDataRef = useRef<BoundaryIndex | null>(null);
   const boundaryVisitedRef = useRef<Set<string>>(new Set());
+  const clusterFitRequestRef = useRef(0);
   const [mapFailed, setMapFailed] = useState(false);
+  const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
 
   useEffect(() => { dataRef.current = { places, visited, mode, currentLocation }; }, [places, visited, mode, currentLocation]);
@@ -229,6 +244,8 @@ export function ParkMap({
     let disposed = false;
     let loadDeadline: number | undefined;
     let boundaryLoadDeadline: number | undefined;
+    let resizeFrame = 0;
+    let mapResizeObserver: ResizeObserver | undefined;
     void import("maplibre-gl").then((maplibregl) => {
       if (disposed || !containerRef.current) return;
       maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
@@ -239,6 +256,7 @@ export function ParkMap({
         zoom: 5.55,
         minZoom: 4.6,
         maxZoom: 15,
+        fadeDuration: 0,
         attributionControl: false,
       });
       mapRef.current = map;
@@ -248,17 +266,6 @@ export function ParkMap({
           setMapFailed(true);
         }
       }, 12_000);
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      map.addControl(
-        new maplibregl.AttributionControl({
-          compact: true,
-          customAttribution: [
-            "Every Park field guide",
-            '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>',
-          ],
-        }),
-        "bottom-right",
-      );
       let collectionReady = false;
       let boundarySetup = false;
       let boundarySourceReadiness = initialBoundarySourceReadiness();
@@ -274,11 +281,17 @@ export function ParkMap({
         boundaryStateRef.current?.({ status, placeIds: status === "ready" && boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set() });
       };
       map.on("sourcedata", (event) => {
+        if (event.sourceId === EXPLORATION_TERRITORY_SOURCE_ID && map.isSourceLoaded(EXPLORATION_TERRITORY_SOURCE_ID)) {
+          setExplorationFailed(false);
+        }
         if (event.sourceId === BOUNDARY_SOURCE && map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("canonical", "ready");
         if (event.sourceId === BOUNDARY_DISPLAY_SOURCE_ID && map.isSourceLoaded(BOUNDARY_DISPLAY_SOURCE_ID)) reportBoundaryStatus("display", "ready");
       });
       map.on("error", (event) => {
         const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
+        if (sourceId === EXPLORATION_TERRITORY_SOURCE_ID || event.error?.message.includes(EXPLORATION_TERRITORY_DATA_URL)) {
+          setExplorationFailed(true);
+        }
         if (sourceId === BOUNDARY_SOURCE || event.error?.message.includes(BOUNDARY_DATA_URL)) reportBoundaryStatus("canonical", "failed");
         if (sourceId === BOUNDARY_DISPLAY_SOURCE_ID || event.error?.message.includes(BOUNDARY_DISPLAY_DATA_URL)) reportBoundaryStatus("display", "failed");
       });
@@ -299,7 +312,7 @@ export function ParkMap({
         });
         boundaryVisitedRef.current = new Set([...currentVisited].filter((id) => availableIds.has(id)));
         map.on("click", "boundary-hit", (event: MapLayerMouseEvent) => {
-          if (map.queryRenderedFeatures(event.point, { layers: ["clusters", "place-hit-targets"] }).length) return;
+          if (map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets", "place-hit-targets"] }).length) return;
           const features = map.queryRenderedFeatures(event.point, { layers: ["boundary-hit"] });
           const current = dataRef.current;
           const id = pickBoundaryPlace(features, visiblePlaces(current.places, current.visited, current.mode), event.lngLat);
@@ -324,11 +337,12 @@ export function ParkMap({
           mode: currentMode,
           currentLocation: initialLocation,
         } = dataRef.current;
-        map.addSource(EXPLORATION_SOURCE_ID, {
+        const explorationIds = currentMode === "explored" ? [...currentVisited] : [];
+        map.addSource(EXPLORATION_TERRITORY_SOURCE_ID, {
           type: "geojson",
-          data: explorationData(currentPlaces, currentVisited, currentMode),
+          data: EXPLORATION_TERRITORY_DATA_URL,
         });
-        explorationLayerSpecifications().forEach((layer) => map.addLayer(layer));
+        explorationLayerSpecifications(explorationIds).forEach((layer) => map.addLayer(layer));
         map.addSource("places", {
           type: "geojson",
           data: collectionData(currentPlaces, currentVisited, currentMode),
@@ -336,83 +350,68 @@ export function ParkMap({
           clusterMaxZoom: 10,
           clusterRadius: 52,
         });
-        map.addLayer({
-          id: "clusters",
-          type: "circle",
-          source: "places",
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": ["step", ["get", "point_count"], "#ffd862", 12, "#b9ea55", 35, "#78cad0"],
-            "circle-radius": ["step", ["get", "point_count"], 20, 12, 25, 35, 30],
-            "circle-stroke-color": "#173d32",
-            "circle-stroke-width": 3,
-          },
-        });
+        placeMarkerLayerSpecifications().forEach((layer) => map.addLayer(layer));
         map.addSource(CURRENT_LOCATION_SOURCE_ID, {
           type: "geojson",
           data: locationData(initialLocation),
         });
         currentLocationLayerSpecifications().forEach((layer) => map.addLayer(layer));
-        map.addLayer({
-          id: "cluster-count",
-          type: "symbol",
-          source: "places",
-          filter: ["has", "point_count"],
-          layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 14 },
-          paint: { "text-color": "#173d32" },
-        });
-        map.addLayer({
-          id: "place-hit-targets",
-          type: "circle",
-          source: "places",
-          filter: ["!", ["has", "point_count"]],
-          paint: { "circle-radius": 24, "circle-color": "rgba(0,0,0,0)" },
-        });
-        map.addLayer({
-          id: "place-points",
-          type: "circle",
-          source: "places",
-          filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-color": [
-              "case",
-              ["==", ["get", "visited"], 1],
-              "#b9ea55",
-              ["match", ["get", "category"], "national", "#ffd862", "provincial", "#78cad0", "regional", "#ef755f", "#f6f0dc"],
-            ],
-            "circle-radius": ["case", ["==", ["get", "visited"], 1], 13, 10],
-            "circle-stroke-color": "#173d32",
-            "circle-stroke-width": 3,
-          },
-        });
-        map.addLayer({
-          id: "place-checks",
-          type: "symbol",
-          source: "places",
-          filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "visited"], 1]],
-          layout: { "text-field": "✓", "text-size": 15, "text-font": ["Noto Sans Bold"] },
-          paint: { "text-color": "#173d32" },
-        });
-
-        map.on("click", "clusters", async (event: MapLayerMouseEvent) => {
-          const feature = map.queryRenderedFeatures(event.point, { layers: ["clusters"] })[0];
+        map.on("click", "cluster-hit-targets", async (event: MapLayerMouseEvent) => {
+          const feature = map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets"] })[0];
           const clusterId = Number(feature?.properties?.cluster_id);
-          if (!Number.isFinite(clusterId)) return;
+          const pointCount = Number(feature?.properties?.point_count);
+          if (!Number.isFinite(clusterId) || !Number.isFinite(pointCount) || pointCount < 1) return;
           const source = map.getSource("places") as GeoJSONSource;
-          const zoom = await source.getClusterExpansionZoom(clusterId);
           const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
-          map.easeTo({ center: coordinates, zoom, duration: reduceMotion ? 0 : 420 });
+          const request = ++clusterFitRequestRef.current;
+          const requestIsCurrent = () => request === clusterFitRequestRef.current
+            && mapRef.current === map
+            && map.getSource("places") === source;
+          try {
+            const leaves = await fetchClusterLeaves(source, clusterId, pointCount);
+            if (!requestIsCurrent()) return;
+            const fit = clusterFitForLeaves(leaves);
+            if (!fit) return;
+            const overlayPadding = measuredCameraPadding(map.getContainer(), true);
+            const mapRect = map.getContainer().getBoundingClientRect();
+            const padding = cameraPaddingWithContentMargin(mapRect, overlayPadding);
+            if (!hasUsableCameraViewport(mapRect, padding)) return;
+            if (fit.coincident) {
+              map.easeTo({ center: fit.center, padding, zoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 480 });
+              return;
+            }
+            map.fitBounds(fit.bounds, { padding, maxZoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 560 });
+          } catch {
+            if (!requestIsCurrent()) return;
+            try {
+              const zoom = await source.getClusterExpansionZoom(clusterId);
+              if (requestIsCurrent()) {
+                const mapRect = map.getContainer().getBoundingClientRect();
+                const padding = cameraPaddingWithContentMargin(mapRect, measuredCameraPadding(map.getContainer(), true));
+                map.easeTo({ center: coordinates, padding, zoom, duration: reduceMotion ? 0 : 420 });
+              }
+            } catch {
+              // The source changed while MapLibre was resolving this cluster.
+            }
+          }
         });
         map.on("click", "place-hit-targets", (event: MapLayerMouseEvent) => {
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") selectRef.current(id);
         });
-        ["clusters", "place-hit-targets"].forEach((layer) => {
+        ["cluster-hit-targets", "place-hit-targets"].forEach((layer) => {
           map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
           map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
         });
-        const overviewPlaces = visiblePlaces(currentPlaces, currentVisited, currentMode);
-        fitOverview(map, overviewPlaces.length ? overviewPlaces : currentPlaces, false);
+        fitOverview(map, false);
+        mapResizeObserver = new ResizeObserver(() => {
+          window.cancelAnimationFrame(resizeFrame);
+          resizeFrame = window.requestAnimationFrame(() => {
+            map.resize();
+            if (!selectedRef.current && map.isStyleLoaded()) fitOverview(map, !reduceMotion);
+          });
+        });
+        mapResizeObserver.observe(map.getContainer());
         if (boundaryDataRef.current) setupBoundaries(boundaryDataRef.current);
         } catch {
           collectionReady = false;
@@ -432,6 +431,9 @@ export function ParkMap({
     }).catch(() => setMapFailed(true));
     return () => {
       disposed = true;
+      clusterFitRequestRef.current += 1;
+      window.cancelAnimationFrame(resizeFrame);
+      mapResizeObserver?.disconnect();
       if (loadDeadline) window.clearTimeout(loadDeadline);
       if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
@@ -442,10 +444,14 @@ export function ParkMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    clusterFitRequestRef.current += 1;
     const source = map.getSource("places") as GeoJSONSource | undefined;
     source?.setData(collectionData(places, visited, mode));
-    const explorationSource = map.getSource(EXPLORATION_SOURCE_ID) as GeoJSONSource | undefined;
-    explorationSource?.setData(explorationData(places, visited, mode));
+    const explorationFilter = explorationVisitedFilter(mode === "explored" ? [...visited] : []);
+    const explorationEdgeFilter = explorationBoundaryFilter(mode === "explored" ? [...visited] : []);
+    if (map.getLayer("exploration-fill")) map.setFilter("exploration-fill", explorationFilter);
+    if (map.getLayer("exploration-edge-glow")) map.setFilter("exploration-edge-glow", explorationEdgeFilter);
+    if (map.getLayer("exploration-edge")) map.setFilter("exploration-edge", explorationEdgeFilter);
     if (!map.getSource(BOUNDARY_SOURCE)) return;
     updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId);
     const availableIds = boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set<string>();
@@ -464,6 +470,7 @@ export function ParkMap({
   }, [currentLocation]);
 
   useEffect(() => {
+    clusterFitRequestRef.current += 1;
     if (!selectedId || !mapRef.current) return;
     const place = places.find((candidate) => candidate.id === selectedId);
     if (!place) return;
@@ -500,17 +507,15 @@ export function ParkMap({
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
-      <button className="overview-button" type="button" onClick={() => {
-        const map = mapRef.current;
-        if (!map) return;
-        const current = dataRef.current;
-        const overviewPlaces = visiblePlaces(current.places, current.visited, current.mode);
-        fitOverview(map, overviewPlaces.length ? overviewPlaces : current.places, !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-      }}>Overview</button>
       {mode === "explored" && visited.size > 0 && (
         <div className="exploration-map-key">
           <span className="exploration-map-key__swatch" aria-hidden="true" />
           <span>Estimated explored area from your visits; open gaps mark parks still waiting.</span>
+        </div>
+      )}
+      {mode === "explored" && explorationFailed && (
+        <div className="exploration-status-note" role="status">
+          Completion map unavailable. Visited places are still marked.
         </div>
       )}
       {mapFailed && (

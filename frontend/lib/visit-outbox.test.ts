@@ -37,4 +37,28 @@ describe("VisitOutbox", () => {
     expect(outbox.snapshot()).toEqual({});
     expect(outbox.applyTo([], requestStartedAt)).toEqual(new Set(["park"]));
   });
+
+  it("clears queued intent and waits for an active write before a reset", async () => {
+    const outbox = new VisitOutbox();
+    let release!: () => void;
+    const sent: boolean[] = [];
+    outbox.setDesired("park", true);
+    const draining = outbox.drain("park", (_id, visited) => {
+      sent.push(visited);
+      return new Promise<void>((resolve) => { release = resolve; });
+    });
+    await Promise.resolve();
+    outbox.setDesired("park", false);
+
+    let cleared = false;
+    const clearing = outbox.clearAndWait().then(() => { cleared = true; });
+    await Promise.resolve();
+    expect(cleared).toBe(false);
+    expect(outbox.snapshot()).toEqual({});
+
+    release();
+    await Promise.all([draining, clearing]);
+    expect(sent).toEqual([true]);
+    expect(outbox.applyTo([])).toEqual(new Set());
+  });
 });

@@ -276,18 +276,6 @@
     "sourceId": "28944"
   },
   {
-    "id": "island-vancouver-island",
-    "name": "Vancouver Island",
-    "category": "island",
-    "latitude": 49.633333,
-    "longitude": -125.7,
-    "region": "Vancouver Island",
-    "description": "An officially named island near Vancouver Island. The pin is the official approximate centre of the feature.",
-    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/24321.html",
-    "sourceName": "BC Geographical Names Office",
-    "sourceId": "29624"
-  },
-  {
     "id": "island-vargas-island",
     "name": "Vargas Island",
     "category": "island",
@@ -320,18 +308,6 @@
     "description": "A Parks Canada national park reserve. This single check-off represents the whole reserve; its map pin is a representative location, not an entrance or trailhead.",
     "sourceUrl": "https://parks.canada.ca/pn-np/bc/pacificrim",
     "sourceName": "Parks Canada"
-  },
-  {
-    "id": "provincial-anderson-bay-park",
-    "name": "Anderson Bay Park",
-    "category": "provincial",
-    "latitude": 49.512438,
-    "longitude": -124.13616,
-    "region": "Northern Gulf Islands",
-    "description": "A BC provincial park in the Northern Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "4833"
   },
   {
     "id": "provincial-arbutus-grove-park",
@@ -406,18 +382,6 @@
     "sourceId": "499"
   },
   {
-    "id": "provincial-bligh-island-marine-park",
-    "name": "Bligh Island Marine Park",
-    "category": "provincial",
-    "latitude": 49.633205,
-    "longitude": -126.552632,
-    "region": "Central Island",
-    "description": "A BC provincial park in the Central Island collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "509"
-  },
-  {
     "id": "provincial-bodega-ridge-park",
     "name": "Bodega Ridge Park",
     "category": "provincial",
@@ -440,18 +404,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "522"
-  },
-  {
-    "id": "provincial-broughton-archipelago-park",
-    "name": "Broughton Archipelago Park",
-    "category": "provincial",
-    "latitude": 50.733888,
-    "longitude": -126.66209,
-    "region": "Northern Islands",
-    "description": "A BC provincial park in the Northern Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "531"
   },
   {
     "id": "provincial-burgoyne-bay-park",
@@ -488,18 +440,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "555"
-  },
-  {
-    "id": "provincial-catala-island-marine-park",
-    "name": "Catala Island Marine Park",
-    "category": "provincial",
-    "latitude": 49.835359,
-    "longitude": -127.06009,
-    "region": "North Island",
-    "description": "A BC provincial park in the North Island collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "558"
   },
   {
     "id": "provincial-chemainus-river-park",
@@ -562,18 +502,6 @@
     "sourceId": "5186"
   },
   {
-    "id": "provincial-cormorant-channel-marine-park",
-    "name": "Cormorant Channel Marine Park",
-    "category": "provincial",
-    "latitude": 50.59496,
-    "longitude": -126.798451,
-    "region": "Northern Islands",
-    "description": "A BC provincial park in the Northern Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "600"
-  },
-  {
     "id": "provincial-cowichan-river-park",
     "name": "Cowichan River Park",
     "category": "provincial",
@@ -622,30 +550,6 @@
     "sourceId": "625"
   },
   {
-    "id": "provincial-discovery-island-marine-park",
-    "name": "Discovery Island Marine Park",
-    "category": "provincial",
-    "latitude": 48.424209,
-    "longitude": -123.236955,
-    "region": "Gulf Islands",
-    "description": "A BC provincial park in the Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "626"
-  },
-  {
-    "id": "provincial-dixie-cove-marine-park",
-    "name": "Dixie Cove Marine Park",
-    "category": "provincial",
-    "latitude": 50.050479,
-    "longitude": -127.197732,
-    "region": "North Island",
-    "description": "A BC provincial park in the North Island collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "627"
-  },
-  {
     "id": "provincial-drumbeg-park",
     "name": "Drumbeg Park",
     "category": "provincial",
@@ -656,18 +560,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "633"
-  },
-  {
-    "id": "provincial-echo-bay-marine-park",
-    "name": "Echo Bay Marine Park",
-    "category": "provincial",
-    "latitude": 50.750945,
-    "longitude": -126.494846,
-    "region": "Northern Islands",
-    "description": "A BC provincial park in the Northern Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "646"
   },
   {
     "id": "provincial-elk-falls-park",
@@ -692,18 +584,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "661"
-  },
-  {
-    "id": "provincial-epper-passage-park",
-    "name": "Epper Passage Park",
-    "category": "provincial",
-    "latitude": 49.220374,
-    "longitude": -125.950791,
-    "region": "Central Island",
-    "description": "A BC provincial park in the Central Island collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "662"
   },
   {
     "id": "provincial-eves-park",
@@ -778,18 +658,6 @@
     "sourceId": "688"
   },
   {
-    "id": "provincial-gerald-island-park",
-    "name": "Gerald Island Park",
-    "category": "provincial",
-    "latitude": 49.311437,
-    "longitude": -124.162273,
-    "region": "Northern Gulf Islands",
-    "description": "A BC provincial park in the Northern Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "5419"
-  },
-  {
     "id": "provincial-gibson-marine-park",
     "name": "Gibson Marine Park",
     "category": "provincial",
@@ -800,18 +668,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "693"
-  },
-  {
-    "id": "provincial-god-s-pocket-marine-park",
-    "name": "God's Pocket Marine Park",
-    "category": "provincial",
-    "latitude": 50.838524,
-    "longitude": -127.561732,
-    "region": "Northern Islands",
-    "description": "A BC provincial park in the Northern Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "702"
   },
   {
     "id": "provincial-gold-muchalat-park",
@@ -958,30 +814,6 @@
     "sourceId": "5464"
   },
   {
-    "id": "provincial-jaji7em-and-kw-ulh-marine-park-a-k-a-sandy-island",
-    "name": "Jaji7em And Kw'ulh Marine Park [a.k.a Sandy Island",
-    "category": "provincial",
-    "latitude": 49.618204,
-    "longitude": -124.849926,
-    "region": "Northern Gulf Islands",
-    "description": "A BC provincial park in the Northern Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1027"
-  },
-  {
-    "id": "provincial-jedediah-island-marine-park",
-    "name": "Jedediah Island Marine Park",
-    "category": "provincial",
-    "latitude": 49.499822,
-    "longitude": -124.203887,
-    "region": "Northern Gulf Islands",
-    "description": "A BC provincial park in the Northern Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "771"
-  },
-  {
     "id": "provincial-juan-de-fuca-park",
     "name": "Juan De Fuca Park",
     "category": "provincial",
@@ -1052,18 +884,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "814"
-  },
-  {
-    "id": "provincial-lanz-and-cox-islands-park",
-    "name": "Lanz And Cox Islands Park",
-    "category": "provincial",
-    "latitude": 50.808367,
-    "longitude": -128.646072,
-    "region": "Northern Islands",
-    "description": "A BC provincial park in the Northern Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1039"
   },
   {
     "id": "provincial-lawn-point-park",
@@ -1450,18 +1270,6 @@
     "sourceId": "997"
   },
   {
-    "id": "provincial-rendezvous-island-south-park",
-    "name": "Rendezvous Island South Park",
-    "category": "provincial",
-    "latitude": 50.260791,
-    "longitude": -125.033101,
-    "region": "Discovery Islands",
-    "description": "A BC provincial park in the Discovery Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1000"
-  },
-  {
     "id": "provincial-roberts-memorial-park",
     "name": "Roberts Memorial Park",
     "category": "provincial",
@@ -1484,18 +1292,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "1008"
-  },
-  {
-    "id": "provincial-roscoe-bay-park",
-    "name": "Roscoe Bay Park",
-    "category": "provincial",
-    "latitude": 50.159372,
-    "longitude": -124.773052,
-    "region": "Discovery Islands",
-    "description": "A BC provincial park in the Discovery Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1013"
   },
   {
     "id": "provincial-rosewall-creek-park",
@@ -1532,18 +1328,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "1020"
-  },
-  {
-    "id": "provincial-sabine-channel-marine-park",
-    "name": "Sabine Channel Marine Park",
-    "category": "provincial",
-    "latitude": 49.508122,
-    "longitude": -124.404428,
-    "region": "Northern Gulf Islands",
-    "description": "A BC provincial park in the Northern Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "5017"
   },
   {
     "id": "provincial-sandwell-park",
@@ -1858,18 +1642,6 @@
     "sourceId": "1207"
   },
   {
-    "id": "provincial-walsh-cove-park",
-    "name": "Walsh Cove Park",
-    "category": "provincial",
-    "latitude": 50.267696,
-    "longitude": -124.800926,
-    "region": "Discovery Islands",
-    "description": "A BC provincial park in the Discovery Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1209"
-  },
-  {
     "id": "provincial-west-shawnigan-lake-park",
     "name": "West Shawnigan Lake Park",
     "category": "provincial",
@@ -1892,18 +1664,6 @@
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "1218"
-  },
-  {
-    "id": "provincial-whaleboat-island-marine-park",
-    "name": "Whaleboat Island Marine Park",
-    "category": "provincial",
-    "latitude": 49.07299,
-    "longitude": -123.692884,
-    "region": "Gulf Islands",
-    "description": "A BC provincial park in the Gulf Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
-    "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
-    "sourceId": "1219"
   },
   {
     "id": "provincial-white-ridge-park",
@@ -2030,18 +1790,6 @@
     "description": "A Capital Regional District regional park. The map pin represents the largest official GIS parcel, not an entrance or trailhead.",
     "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
     "sourceName": "Capital Regional District — Park GIS layer"
-  },
-  {
-    "id": "regional-bute-island-regional-park",
-    "name": "Bute Island Regional Park",
-    "category": "regional",
-    "latitude": 48.995405,
-    "longitude": -123.793432,
-    "region": "Cowichan Valley",
-    "description": "A Cowichan Valley Regional District regional park. The pin represents the largest official GIS polygon, not an entrance or trailhead.",
-    "sourceUrl": "https://maps.cvrd.ca/mapservices/rest/services/Parks/MapServer/2",
-    "sourceName": "Cowichan Valley Regional District — Parks GIS layer",
-    "sourceId": "980485"
   },
   {
     "id": "regional-coats-marsh-regional-park",
