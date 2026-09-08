@@ -314,6 +314,7 @@ def login(payload: Credentials):
         clear_login_failures(conn, email)
         token, expires_at = create_session(conn, str(account["id"]))
         visits = visits_for_account(conn, str(account["id"]))
+        completed_trail_ids = completed_trails_for_account(conn, str(account["id"]))
         conn.commit()
     return {
         "token": token,
@@ -321,7 +322,7 @@ def login(payload: Credentials):
         "account": {"id": str(account["id"]), "email": account["email"]},
         "visited_ids": visited_ids(visits),
         "visits": visits,
-        "completed_trail_ids": completed_trails_for_account(conn, str(account["id"])),
+        "completed_trail_ids": completed_trail_ids,
     }
 
 

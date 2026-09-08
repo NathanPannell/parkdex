@@ -123,6 +123,7 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
             )
             assert logged_in.status_code == 200
             assert logged_in.json()["visitedIds"] == [TEST_PLACE]
+            assert logged_in.json()["completedTrailIds"] == ["west_coast_trail"]
 
             logout = client.post("/api/auth/logout", headers=bearer(token))
             assert logout.status_code == 204

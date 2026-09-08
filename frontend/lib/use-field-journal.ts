@@ -537,7 +537,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       const revision = readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0);
       if (accountIdentity.account) noteStorageFailure(writeStored(target, importedGuestKey(accountIdentity.account.id), revision));
       setGuestProgressAvailable(false);
-      setSyncMessage(`Added ${result.importedVisitCount} guest places and ${result.importedTrailCount} trail checkoffs.`);
+      setSyncMessage(`Added ${result.importedVisitCount} guest ${result.importedVisitCount === 1 ? "place" : "places"}.`);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         expireAccount(capturedEpoch);

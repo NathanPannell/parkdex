@@ -154,8 +154,8 @@ jobs:
         env:
           FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
         run: |
-          printf '%s' "$FRONTEND_ORIGINS" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           source scripts/railway-retry.sh
+          railway_retry "$FRONTEND_ORIGINS" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
       - name: Verify final production API readiness
         id: final-railway
@@ -168,7 +168,7 @@ jobs:
           bash scripts/wait-for-worker-catalogue.sh
 
   repair-production-cors:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event_name == 'workflow_dispatch' && inputs.action == 'repair-production-cors'
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.action == 'repair-production-cors'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -187,14 +187,17 @@ jobs:
       - name: Preserve current origins and add Parkdex domains
         id: production
         run: |
+          source scripts/railway-retry.sh
           variables="$(railway variable list --json --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID")"
           current_origins="$(jq -er '.FRONTEND_ORIGINS' <<<"$variables")"
           expected_commit="$(jq -er '.APP_COMMIT_SHA' <<<"$variables")"
           updated_origins="$(jq -nr --arg existing "$current_origins" '$existing | split(",") + ["https://parkdex.app", "https://www.parkdex.app"] | map(select(length > 0)) | unique | join(",")')"
-          printf '%s' "$updated_origins" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" >/dev/null
+          railway_retry "$updated_origins" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           echo "expected_commit=$expected_commit" >> "$GITHUB_OUTPUT"
       - name: Redeploy the current production API image
-        run: railway redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+        run: |
+          source scripts/railway-retry.sh
+          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
       - name: Wait for unchanged production source readiness
         id: railway
         env:
@@ -299,6 +302,7 @@ jobs:
           STAGING_DATABASE_URL_UNPOOLED: ${{ steps.neon.outputs.db_url }}
           EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
         run: |
+          source scripts/railway-retry.sh
           railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_BASE_ENVIRONMENT_ID"
           if railway environment list --json | jq -e --arg name "$RAILWAY_ENVIRONMENT" '.. | objects | select(.name? == $name)' >/dev/null; then
             echo "Railway staging environment already exists; updating it in place."
@@ -312,11 +316,11 @@ jobs:
           fi
 
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            printf '%s' "$STAGING_DATABASE_URL" | railway variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-            printf '%s' "$EXPECTED_COMMIT_SHA" | railway variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           done
-          printf '%s' "$STAGING_DATABASE_URL_UNPOOLED" | railway variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          printf 'https://%s' "$STAGING_DOMAIN" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
 
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
             railway service source disconnect --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" >/dev/null
@@ -360,8 +364,9 @@ jobs:
         env:
           FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
         run: |
-          printf '%s' "$FRONTEND_ORIGINS" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          source scripts/railway-retry.sh
+          railway_retry "$FRONTEND_ORIGINS" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
 
       - name: Verify final staging API readiness
         id: final-railway
