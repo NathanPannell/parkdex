@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 import { achievements, JUAN_DE_FUCA_PARK_ID, newlyEarnedAchievementIds } from "./achievements";
 import type { Place } from "./places";
-import catalogue from "../../data/places.json";
 
 const park = (id: string, category: Place["category"]): Place => ({ id, name: id, category, latitude: 0, longitude: 0, region: "Gulf Islands", description: "", sourceName: "x", sourceUrl: "https://example.com" });
 
@@ -19,7 +21,7 @@ describe("achievements", () => {
   });
 
   it("keeps every exact-place challenge satisfiable by the active catalogue", () => {
-    const activePlaces = catalogue as Place[];
+    const activePlaces = JSON.parse(readFileSync(resolve(process.cwd(), "../data/places.json"), "utf8")) as Place[];
     const badges = achievements({ places: activePlaces, visited: new Set(activePlaces.map((item) => item.id)) });
     expect(badges.every((badge) => badge.earned)).toBe(true);
   });

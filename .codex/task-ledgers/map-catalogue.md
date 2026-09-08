@@ -12,7 +12,8 @@ Decisions and evidence:
 
 Completed:
 - Added instant marker label placement, 60px+ invisible place targets, larger cluster targets, the shared category palette, and uniform yellow clusters.
-- Added an explicit Vancouver Island startup extent, bounded panning, and a valid inverse focus mask with clear supported-island and excursion-park cutouts.
+- Added an explicit Vancouver Island startup extent and a world-scale inverse focus mask with clear supported-island and excursion-park cutouts; the camera remains free to fit the whole island on portrait screens.
+- Made source attribution start compact at bottom left while preserving its accessible native toggle and source links.
 - Retired 21 catalogue records through migration 0007; missing IDs become inactive and their visit rows remain intact.
 - Replaced generic category medals with exact-place wildlife and habitat challenges, documented primary-source themes, and made all counts ignore retired visits.
 - Targeted frontend tests pass (marker style, camera fit, focus mask, achievements); data, seed, and canonical boundary validation pass.
