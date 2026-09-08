@@ -1,16 +1,39 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 import hashlib
 import re
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
+from psycopg.errors import UniqueViolation
 
+from backend.app.auth import (
+    DUMMY_PASSWORD_HASH,
+    AccountIdentity,
+    authenticate_bearer,
+    clear_login_failures,
+    create_session,
+    hash_password,
+    reserve_login_attempt,
+    require_bearer,
+    verify_password,
+)
 from backend.app.db import close_pool, connection, open_pool
-from backend.app.schemas import PlaceCollection, VisitResult, VisitUpdate
+from backend.app.schemas import (
+    AccountState,
+    AuthResult,
+    Credentials,
+    GuestImportResult,
+    PlaceCollection,
+    TrailResult,
+    TrailUpdate,
+    VisitResult,
+    VisitUpdate,
+)
 from backend.app.settings import get_settings
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
+TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
 COVERAGE_NOTE = (
     "Official-source v0: two whole national park reserves, designated provincial parks, "
     "and named regional parks from CRD, RDN, CVRD, and Bere Point. Regional coverage is "
@@ -30,6 +53,58 @@ def collection_hash(raw_key: str | None, *, required: bool = False) -> str | Non
     return hashlib.sha256(raw_key.encode("ascii")).hexdigest()
 
 
+def resolve_identity(
+    conn: Connection,
+    authorization: str | None,
+    collection_key: str | None,
+    *,
+    required: bool = False,
+) -> AccountIdentity | str | None:
+    if authorization is not None and collection_key is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Send either Authorization or X-Collection-Key, not both",
+        )
+    account = authenticate_bearer(conn, authorization)
+    if account is not None:
+        return account
+    return collection_hash(collection_key, required=required)
+
+
+def progress_for_account(conn: Connection, account_id: str) -> tuple[list[str], list[str]]:
+    visited_ids = [
+        row["place_id"]
+        for row in conn.execute(
+            """
+            SELECT account_visits.place_id FROM account_visits
+            JOIN places ON places.id = account_visits.place_id AND places.active
+            WHERE account_visits.account_id = %s ORDER BY account_visits.place_id
+            """,
+            (account_id,),
+        ).fetchall()
+    ]
+    completed_trail_ids = [
+        row["trail_id"]
+        for row in conn.execute(
+            """
+            SELECT trail_id FROM account_trail_completions
+            WHERE account_id = %s ORDER BY trail_id
+            """,
+            (account_id,),
+        ).fetchall()
+    ]
+    return visited_ids, completed_trail_ids
+
+
+def account_state(conn: Connection, identity: AccountIdentity) -> dict:
+    visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+    return {
+        "account": {"id": identity.account_id, "email": identity.email},
+        "visited_ids": visited_ids,
+        "completed_trail_ids": completed_trail_ids,
+    }
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     open_pool()
@@ -42,8 +117,8 @@ app = FastAPI(title="Every Park API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_methods=["GET", "PUT", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Collection-Key"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Collection-Key"],
 )
 
 
@@ -67,9 +142,10 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
 @app.get("/api/places", response_model=PlaceCollection)
 def list_places(
     conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
     x_collection_key: str | None = Header(default=None),
 ):
-    owner_hash = collection_hash(x_collection_key)
+    identity = resolve_identity(conn, authorization, x_collection_key)
     places = conn.execute(
         """
         SELECT id, name, category, latitude, longitude, region, description,
@@ -78,7 +154,10 @@ def list_places(
         """
     ).fetchall()
     visited_ids: list[str] = []
-    if owner_hash:
+    completed_trail_ids: list[str] = []
+    if isinstance(identity, AccountIdentity):
+        visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+    elif identity:
         visited_ids = [
             row["place_id"]
             for row in conn.execute(
@@ -87,10 +166,25 @@ def list_places(
                 JOIN places ON places.id = visits.place_id AND places.active
                 WHERE visits.owner_hash = %s ORDER BY visits.place_id
                 """,
-                (owner_hash,),
+                (identity,),
             ).fetchall()
         ]
-    return {"places": places, "visited_ids": visited_ids, "coverage_note": COVERAGE_NOTE}
+        completed_trail_ids = [
+            row["trail_id"]
+            for row in conn.execute(
+                """
+                SELECT trail_id FROM guest_trail_completions
+                WHERE owner_hash = %s ORDER BY trail_id
+                """,
+                (identity,),
+            ).fetchall()
+        ]
+    return {
+        "places": places,
+        "visited_ids": visited_ids,
+        "completed_trail_ids": completed_trail_ids,
+        "coverage_note": COVERAGE_NOTE,
+    }
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
@@ -98,30 +192,231 @@ def update_visit(
     place_id: str,
     payload: VisitUpdate,
     conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
     x_collection_key: str | None = Header(default=None),
 ):
-    owner_hash = collection_hash(x_collection_key, required=True)
+    identity = resolve_identity(
+        conn, authorization, x_collection_key, required=True
+    )
     if not conn.execute(
         "SELECT 1 FROM places WHERE id = %s AND active", (place_id,)
     ).fetchone():
         raise HTTPException(status_code=404, detail="Place not found")
-    if payload.visited:
-        conn.execute(
-            "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            (owner_hash, place_id),
-        )
+    if isinstance(identity, AccountIdentity):
+        if payload.visited:
+            conn.execute(
+                """
+                INSERT INTO account_visits (account_id, place_id)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """,
+                (identity.account_id, place_id),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM account_visits WHERE account_id = %s AND place_id = %s",
+                (identity.account_id, place_id),
+            )
+        count = conn.execute(
+            """
+            SELECT COUNT(*) AS visited_count FROM account_visits
+            JOIN places ON places.id = account_visits.place_id AND places.active
+            WHERE account_visits.account_id = %s
+            """,
+            (identity.account_id,),
+        ).fetchone()["visited_count"]
     else:
-        conn.execute(
-            "DELETE FROM visits WHERE owner_hash = %s AND place_id = %s",
-            (owner_hash, place_id),
-        )
-    count = conn.execute(
-        """
-        SELECT COUNT(*) AS visited_count FROM visits
-        JOIN places ON places.id = visits.place_id AND places.active
-        WHERE visits.owner_hash = %s
-        """,
-        (owner_hash,),
-    ).fetchone()["visited_count"]
+        if payload.visited:
+            conn.execute(
+                "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (identity, place_id),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM visits WHERE owner_hash = %s AND place_id = %s",
+                (identity, place_id),
+            )
+        count = conn.execute(
+            """
+            SELECT COUNT(*) AS visited_count FROM visits
+            JOIN places ON places.id = visits.place_id AND places.active
+            WHERE visits.owner_hash = %s
+            """,
+            (identity,),
+        ).fetchone()["visited_count"]
     conn.commit()
     return {"place_id": place_id, "visited": payload.visited, "visited_count": count}
+
+
+@app.put("/api/trails/{trail_id}", response_model=TrailResult)
+def update_trail(
+    trail_id: str,
+    payload: TrailUpdate,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    if trail_id not in TRAIL_IDS:
+        raise HTTPException(status_code=404, detail="Trail not found")
+    identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    if isinstance(identity, AccountIdentity):
+        if payload.completed:
+            conn.execute(
+                """
+                INSERT INTO account_trail_completions (account_id, trail_id)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """,
+                (identity.account_id, trail_id),
+            )
+        else:
+            conn.execute(
+                """
+                DELETE FROM account_trail_completions
+                WHERE account_id = %s AND trail_id = %s
+                """,
+                (identity.account_id, trail_id),
+            )
+        count = conn.execute(
+            """
+            SELECT COUNT(*) AS completed_count FROM account_trail_completions
+            WHERE account_id = %s
+            """,
+            (identity.account_id,),
+        ).fetchone()["completed_count"]
+    else:
+        if payload.completed:
+            conn.execute(
+                """
+                INSERT INTO guest_trail_completions (owner_hash, trail_id)
+                VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """,
+                (identity, trail_id),
+            )
+        else:
+            conn.execute(
+                """
+                DELETE FROM guest_trail_completions
+                WHERE owner_hash = %s AND trail_id = %s
+                """,
+                (identity, trail_id),
+            )
+        count = conn.execute(
+            """
+            SELECT COUNT(*) AS completed_count FROM guest_trail_completions
+            WHERE owner_hash = %s
+            """,
+            (identity,),
+        ).fetchone()["completed_count"]
+    conn.commit()
+    return {
+        "trail_id": trail_id,
+        "completed": payload.completed,
+        "completed_trail_count": count,
+    }
+
+
+@app.post("/api/auth/register", response_model=AuthResult, status_code=201)
+def register(payload: Credentials):
+    password_hash = hash_password(payload.password)
+    with contextmanager(connection)() as conn:
+        try:
+            account = conn.execute(
+                """
+                INSERT INTO accounts (email, password_hash) VALUES (%s, %s)
+                RETURNING id, email
+                """,
+                (str(payload.email), password_hash),
+            ).fetchone()
+        except UniqueViolation:
+            conn.rollback()
+            raise HTTPException(status_code=409, detail="An account with this email already exists")
+        token, expires_at = create_session(conn, str(account["id"]))
+        conn.commit()
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "account": {"id": str(account["id"]), "email": account["email"]},
+        "visited_ids": [],
+        "completed_trail_ids": [],
+    }
+
+
+@app.post("/api/auth/login", response_model=AuthResult)
+def login(payload: Credentials):
+    email = str(payload.email)
+    with contextmanager(connection)() as conn:
+        reserve_login_attempt(conn, email)
+        account = conn.execute(
+            "SELECT id, email, password_hash FROM accounts WHERE email = %s", (email,)
+        ).fetchone()
+        conn.commit()
+    password_hash = account["password_hash"] if account else DUMMY_PASSWORD_HASH
+    if not verify_password(password_hash, payload.password) or account is None:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    with contextmanager(connection)() as conn:
+        clear_login_failures(conn, email)
+        token, expires_at = create_session(conn, str(account["id"]))
+        visited_ids, completed_trail_ids = progress_for_account(conn, str(account["id"]))
+        conn.commit()
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "account": {"id": str(account["id"]), "email": account["email"]},
+        "visited_ids": visited_ids,
+        "completed_trail_ids": completed_trail_ids,
+    }
+
+
+@app.get("/api/auth/me", response_model=AccountState)
+def me(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    return account_state(conn, require_bearer(conn, authorization))
+
+
+@app.post("/api/auth/logout", status_code=204)
+def logout(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    conn.execute(
+        "UPDATE account_sessions SET revoked_at = NOW() WHERE token_hash = %s",
+        (identity.session_hash,),
+    )
+    conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/account/import-guest", response_model=GuestImportResult)
+def import_guest_progress(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    owner_hash = collection_hash(x_collection_key, required=True)
+    imported_visits = conn.execute(
+        """
+        INSERT INTO account_visits (account_id, place_id, visited_at)
+        SELECT %s, place_id, visited_at FROM visits WHERE owner_hash = %s
+        ON CONFLICT DO NOTHING
+        """,
+        (identity.account_id, owner_hash),
+    ).rowcount
+    imported_trails = conn.execute(
+        """
+        INSERT INTO account_trail_completions (account_id, trail_id, completed_at)
+        SELECT %s, trail_id, completed_at FROM guest_trail_completions WHERE owner_hash = %s
+        ON CONFLICT DO NOTHING
+        """,
+        (identity.account_id, owner_hash),
+    ).rowcount
+    visited_ids, completed_trail_ids = progress_for_account(conn, identity.account_id)
+    conn.commit()
+    return {
+        "imported_visit_count": imported_visits,
+        "imported_trail_count": imported_trails,
+        "visited_ids": visited_ids,
+        "completed_trail_ids": completed_trail_ids,
+    }

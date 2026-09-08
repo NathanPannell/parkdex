@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check:boundaries": "node scripts/check-boundary-asset.mjs",
+    "check:boundaries": "node scripts/check-boundary-asset.mjs && node scripts/check-display-boundary-asset.mjs",
+    "generate:boundary-display": "node scripts/generate-display-boundaries.mjs",
+    "check:boundary-display": "node scripts/check-display-boundary-asset.mjs",
     "sync:boundaries": "node scripts/sync-boundary-assets.mjs"
   },
   "dependencies": {
@@ -20,16 +22,22 @@
     "lucide-react": "^1.42.0",
     "maplibre-gl": "^6.7.0",
     "next": "16.3.4",
+    "polygon-clipping": "^0.15.7",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@turf/boolean-valid": "^7.4.0",
+    "@turf/buffer": "^7.4.0",
+    "@turf/simplify": "^7.4.0",
     "@types/node": "22.18.1",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "eslint": "9.39.2",
     "eslint-config-next": "16.3.4",
+    "jsdom": "^29.1.1",
     "typescript": "5.9.2",
     "vitest": "^3.2.4"
   }

@@ -1,0 +1,3 @@
+# Keep generated geographic asset checksums stable across Windows and Linux.
+*.geojson text eol=lf
+frontend/public/data/boundaries*.json text eol=lf
