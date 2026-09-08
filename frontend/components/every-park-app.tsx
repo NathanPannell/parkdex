@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowUpRight, Award, Check, ChevronDown, Compass, Info, LandPlot, ListFilter, LocateFixed, LogIn, LogOut, Map as MapIcon, MapPin, RotateCcw, Search, Trees, UserRound, X } from "lucide-react";
+import { ArrowUpRight, Award, Check, ChevronDown, Compass, LandPlot, ListFilter, LocateFixed, LogIn, LogOut, Map as MapIcon, MapPin, RotateCcw, Search, Trees, UserRound, X } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ParkMap } from "@/components/park-map";
 import type { Account } from "@/lib/account";
-import { achievements, TRAILS } from "@/lib/achievements";
+import { achievements, newlyEarnedAchievementIds, type Achievement } from "@/lib/achievements";
 import badgeImages from "@/lib/badge-images.json";
 import type { BoundaryLoadState } from "@/lib/boundaries";
 import { authorityForPlace, collectionFilter, groupByAuthority, type VisitFilter } from "@/lib/collection";
@@ -16,166 +16,108 @@ import { useFieldJournal } from "@/lib/use-field-journal";
 const categories = Object.keys(categoryLabels) as PlaceCategory[];
 type View = "map" | "collection" | "badges" | "account";
 type BadgeImage = { src: string; alt: string; creator: string; license: string; licenseUrl: string; sourceUrl: string; species: string };
+type ShelfItem = { id: string; name: string; image?: string; date?: string };
 const imageMap = badgeImages as Record<string, BadgeImage>;
+const formatDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(date) : "Date unavailable"; };
+function useDialogFocus(onClose: () => void) {
+  const ref = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const node = ref.current;
+    const focusable = () => [...(node?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled])') ?? [])];
+    focusable()[0]?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
+      if (event.key !== "Tab") return;
+      const items = focusable(); if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, []);
+  return ref;
+}
 
-export function EveryParkApp({ apiBaseUrl }: { apiBaseUrl: string }) {
+export function ParkdexApp({ apiBaseUrl }: { apiBaseUrl: string }) {
   const journal = useFieldJournal({ apiBaseUrl });
-  const { places, visited, completedTrails, coverageNote, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, toggleVisit, toggleTrail, retrySync, authenticate: completeAuth, logout: signOut, importGuest } = journal;
-  const [selectedId, setSelectedId] = useState<string | null>(null); const [search, setSearch] = useState("");
-  const [activeCategories, setActiveCategories] = useState<Set<PlaceCategory>>(new Set()); const [activeAuthorities, setActiveAuthorities] = useState<Set<string>>(new Set());
-  const [visitFilter, setVisitFilter] = useState<VisitFilter>("all"); const [view, setView] = useState<View>("map"); const [mapMode, setMapMode] = useState<"explored" | "discover">("explored");
-  const [location, setLocation] = useState<(Coordinates & { accuracyMeters?: number | null; heading?: number | null }) | null>(null); const [locationStatus, setLocationStatus] = useState<"idle" | "locating" | "ready" | "denied" | "unavailable">("idle");
-  const [showFilters, setShowFilters] = useState(false);
+  const { places, visited, visitTimestamps, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, toggleVisit, retrySync, authenticate: completeAuth, logout: signOut, importGuest } = journal;
+  const [selectedId, setSelectedId] = useState<string | null>(null), [search, setSearch] = useState("");
+  const [activeCategories, setActiveCategories] = useState<Set<PlaceCategory>>(new Set()), [activeAuthorities, setActiveAuthorities] = useState<Set<string>>(new Set());
+  const [visitFilter, setVisitFilter] = useState<VisitFilter>("all"), [view, setView] = useState<View>("map"), [mapMode, setMapMode] = useState<"explored" | "discover">("explored");
+  const [location, setLocation] = useState<(Coordinates & { accuracyMeters?: number | null; heading?: number | null }) | null>(null), [locationStatus, setLocationStatus] = useState<"idle" | "locating" | "ready" | "denied" | "unavailable">("idle");
+  const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const [boundaryLoadState, setBoundaryLoadState] = useState<BoundaryLoadState>({ status: "loading", placeIds: new Set() });
-
   const authorities = useMemo(() => [...new Set(places.map(authorityForPlace))].sort(), [places]);
   const filtered = useMemo(() => collectionFilter(places, search, activeCategories, activeAuthorities, visitFilter, visited), [places, search, activeCategories, activeAuthorities, visitFilter, visited]);
   const groups = useMemo(() => groupByAuthority(filtered), [filtered]);
-  const badgeList = useMemo(() => achievements({ places, visited, completedTrails }), [places, visited, completedTrails]);
-  const earnedBadges = badgeList.filter((badge) => badge.earned).length;
-  const selected = places.find((place) => place.id === selectedId) ?? null;
-  const progress = places.length ? Math.round((visited.size / places.length) * 100) : 0;
+  const badgeList = useMemo(() => achievements({ places, visited, visitTimestamps }), [places, visited, visitTimestamps]);
+  const earnedBadges = badgeList.filter((badge) => badge.earned).length, selected = places.find((place) => place.id === selectedId) ?? null;
+  const progress = places.length ? Math.round(visited.size / places.length * 100) : 0;
   const nearby = useMemo(() => location ? nearestUnseenParks(places, visited, location) : [], [location, places, visited]);
+
   function requestLocation() {
-    if (!navigator.geolocation) { setLocationStatus("unavailable"); return; }
-    setLocationStatus("locating"); setMapMode("discover"); setView("map");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => { setLocation({ latitude: coords.latitude, longitude: coords.longitude, accuracyMeters: coords.accuracy, heading: coords.heading }); setLocationStatus("ready"); },
-      (error) => setLocationStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    );
+    if (!navigator.geolocation) { setLocationStatus("unavailable"); setShowNearby(true); return; }
+    setLocationStatus("locating"); setShowNearby(true); setMapMode("discover"); setView("map"); setSelectedId(null); setShowFilters(false);
+    navigator.geolocation.getCurrentPosition(({ coords }) => { setLocation({ latitude: coords.latitude, longitude: coords.longitude, accuracyMeters: coords.accuracy, heading: coords.heading }); setLocationStatus("ready"); }, (error) => setLocationStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"), { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
   function resetFilters() { setSearch(""); setActiveCategories(new Set()); setActiveAuthorities(new Set()); setVisitFilter("all"); }
-  function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) {
-    setter((current) => {
-      const next = new Set(current);
-      if (next.has(value)) next.delete(value); else next.add(value);
-      return next;
-    });
+  function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) { setter((current) => { const next = new Set(current); if (next.has(value)) next.delete(value); else next.add(value); return next; }); }
+  const choosePlace = useCallback((id: string) => { setMapMode((current) => modeForSelection(current, visited, id)); setSelectedId(id); setView("map"); setShowNearby(false); setShowFilters(false); }, [visited]);
+  function navigate(next: View) { setSelectedId(null); setShowNearby(false); setShowFilters(false); setView((current) => ((next === "collection" || next === "badges") && current === next ? "map" : next)); }
+  function toggleSelected(place: Place) {
+    if (transitionBusy || loading) return;
+    if (!visited.has(place.id)) {
+      const nextVisited = new Set(visited).add(place.id), nextTimestamps = { ...visitTimestamps, [place.id]: new Date().toISOString() };
+      const nextBadges = achievements({ places, visited: nextVisited, visitTimestamps: nextTimestamps });
+      const earnedIds = new Set(newlyEarnedAchievementIds(badgeList, nextBadges));
+      setCelebrationBadges(nextBadges.filter((badge) => earnedIds.has(badge.id)));
+    }
+    void toggleVisit(place);
   }
-  const choosePlace = useCallback((id: string) => {
-    setMapMode((current) => modeForSelection(current, visited, id));
-    setSelectedId(id);
-    setView("map");
-  }, [visited]);
-  return <main className="app-shell"><section className={`map-stage view-${view}`} aria-label="Park explorer">
+
+  return <main className="app-shell"><section className={`map-stage view-${view}`} aria-label="Parkdex explorer">
     <ParkMap places={mapMode === "explored" ? places : filtered} visited={visited} selectedId={selectedId} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} mode={mapMode} currentLocation={location} />
-    <header className="expedition-header"><div className="brand-mark"><Trees size={22} /></div><div className="brand-copy"><h1>Every Park</h1><p>Vancouver Island field guide</p></div><div className="progress-badge" aria-label={`${visited.size} of ${places.length} places visited`}><strong>{visited.size}</strong><span>/{places.length || "—"}</span></div><div className="progress-track"><span style={{ transform: `scaleX(${progress / 100})` }} /></div></header>
-    {view === "map" && <>
-      <div className="map-mode-switch">
-        <button className={mapMode === "explored" ? "active" : ""} onClick={() => setMapMode("explored")}><Trees size={16} />My map</button>
-        <button className={mapMode === "discover" ? "active" : ""} onClick={() => setMapMode("discover")}><Compass size={16} />Find places</button>
-        <button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={17} className={locationStatus === "locating" ? "spin" : ""} /></button>
-      </div>
+    <header className="expedition-header"><div className="brand-mark"><Trees size={22} /></div><div className="brand-copy"><h1>Parkdex</h1><p>Vancouver Island field guide</p></div><div className="progress-badge" aria-label={`${visited.size} of ${places.length} places visited`}><strong>{visited.size}</strong><span>/{places.length || "—"}</span></div><div className="progress-track"><span style={{ transform: `scaleX(${progress / 100})` }} /></div></header>
+    {view === "map" && <><div className="map-mode-switch"><button className={mapMode === "explored" ? "active" : ""} onClick={() => { setMapMode("explored"); setShowNearby(false); }}><Trees size={16} />My map</button><button className={mapMode === "discover" ? "active" : ""} onClick={() => setMapMode("discover")}><Compass size={16} />Find places</button><button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={17} className={locationStatus === "locating" ? "spin" : ""} /></button></div>
       {mapMode === "explored" && visited.size === 0 && <div className="first-adventure"><strong>Your next adventure starts here.</strong><span>Find a place, then mark it visited to begin your map.</span><button onClick={() => setMapMode("discover")}><Compass size={17} />Find your first place</button></div>}
       {mapMode === "discover" && <div className="search-dock"><Search size={18} /><input aria-label="Search places" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find a park or region" />{search && <button className="icon-button" onClick={() => setSearch("")} aria-label="Clear search"><X size={17} /></button>}<button className={`filter-button ${showFilters ? "active" : ""}`} onClick={() => setShowFilters((current) => !current)}><ListFilter size={17} /><span>Filter</span></button></div>}
-      {mapMode === "discover" && locationStatus === "ready" && nearby.length > 0 && <section className="nearby-strip"><div><strong>Near you</strong><span>Straight-line distance</span></div>{nearby.map(({ place, distanceKm }) => <button key={place.id} onClick={() => choosePlace(place.id)}><span>{place.name}</span><b>{formatDistance(distanceKm)}</b></button>)}</section>}
-      {locationStatus === "denied" && <p className="location-note">Location is blocked. Allow it in browser settings to see nearby parks.</p>}
-      {locationStatus === "unavailable" && <p className="location-note">Your location is unavailable right now. Search the map instead.</p>}
+      {showNearby && <NearbyDialog status={locationStatus} nearby={nearby} onClose={() => setShowNearby(false)} choosePlace={choosePlace} />}
     </>}
-    {view !== "map" && <section className="feature-panel">{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={search} setSearch={setSearch} selectedCategories={activeCategories} authorities={activeAuthorities} allAuthorities={authorities} visitFilter={visitFilter} setVisitFilter={setVisitFilter} toggleCategory={(value) => toggleSet(setActiveCategories, value)} toggleAuthority={(value) => toggleSet(setActiveAuthorities, value)} resetFilters={resetFilters} choosePlace={choosePlace} coverageNote={coverageNote} />}{view === "badges" && <BadgesView badges={badgeList} earned={earnedBadges} trails={completedTrails} toggleTrail={toggleTrail} disabled={transitionBusy} />}{view === "account" && <AccountView account={account} authenticated={authenticated} loading={loading} busy={transitionBusy} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onImport={importGuest} onLogout={signOut} visitedCount={visited.size} badgeCount={earnedBadges} />}</section>}
-    {showFilters && view === "map" && <div className="filter-tray">{categories.map((category) => <button key={category} className={activeCategories.has(category) ? "selected" : ""} onClick={() => toggleSet(setActiveCategories, category)}>{categoryLabels[category]}</button>)}<button className="clear-filter" onClick={resetFilters}>Clear</button></div>}
+    {view !== "map" && <section className="feature-panel">{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={search} setSearch={setSearch} selectedCategories={activeCategories} authorities={activeAuthorities} allAuthorities={authorities} visitFilter={visitFilter} setVisitFilter={setVisitFilter} toggleCategory={(value) => toggleSet(setActiveCategories, value)} toggleAuthority={(value) => toggleSet(setActiveAuthorities, value)} resetFilters={resetFilters} choosePlace={choosePlace} />}{view === "badges" && <BadgesView badges={badgeList} earned={earnedBadges} />}{view === "account" && <AccountView account={account} authenticated={authenticated} loading={loading} busy={transitionBusy} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onImport={importGuest} onLogout={signOut} badges={badgeList} places={places.filter((place) => visited.has(place.id))} visitTimestamps={visitTimestamps} />}</section>}
+    {showFilters && view === "map" && <div className="filter-tray"><div className="filter-tray-heading"><strong>Filter places</strong><button onClick={() => { resetFilters(); setShowFilters(false); }} aria-label="Close and reset filters"><X size={19} /></button></div>{categories.map((category) => <button key={category} className={activeCategories.has(category) ? "selected" : ""} onClick={() => toggleSet(setActiveCategories, category)}>{categoryLabels[category]}</button>)}</div>}
     {loadError && <p className="connection-note">{loadError}</p>}{syncMessage && <p className="sync-note">{syncMessage}{syncMessage.includes("waiting") && <button onClick={() => void retrySync()}>Retry</button>}</p>}{storageUnavailable && <p className="storage-note">Private storage is blocked; guest progress lasts for this tab.</p>}
-    {selected && <article className="place-sheet">
-      <button className="sheet-close" onClick={() => setSelectedId(null)} aria-label="Close place details"><X size={18} /></button>
-      <div className="place-category">{categoryLabels[selected.category]}</div>
-      <h2>{selected.name}</h2>
-      <p className="place-region"><MapPin size={15} />{selected.region} · {authorityForPlace(selected)}</p>
-      {boundaryLoadState.status === "ready" && <p className={`boundary-note ${boundaryLoadState.placeIds.has(selected.id) ? "available" : ""}`}><LandPlot size={15} />{boundaryLoadState.placeIds.has(selected.id) ? "Published boundary · softened for display · not for navigation" : "No sourced boundary is available."}</p>}
-      <p className="place-description">{selected.description}</p>
-      <div className="sheet-actions">
-        <button disabled={transitionBusy} className={`visit-button ${visited.has(selected.id) ? "is-visited" : ""}`} onClick={() => void toggleVisit(selected)}>{visited.has(selected.id) ? <><RotateCcw size={19} />Visited · undo</> : <><Check size={20} />Mark as visited</>}</button>
-        <a className="source-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">Source<ArrowUpRight size={16} /></a>
-      </div>
-    </article>}
-    <nav className="thumb-nav"><Nav active={view === "map"} click={() => setView("map")} icon={<MapIcon size={20} />} label="Map" /><Nav active={view === "collection"} click={() => setView("collection")} icon={<Trees size={20} />} label="Places" count={visited.size} /><Nav active={view === "badges"} click={() => setView("badges")} icon={<Award size={20} />} label="Badges" count={earnedBadges} /><Nav active={view === "account"} click={() => setView("account")} icon={<UserRound size={20} />} label="Account" /></nav>
+    {selected && <article className="place-sheet"><button className="sheet-close" onClick={() => setSelectedId(null)} aria-label="Close place details"><X size={18} /></button><div className="place-category">{categoryLabels[selected.category]}</div><h2>{selected.name}</h2><p className="place-region"><MapPin size={15} />{selected.region} · {authorityForPlace(selected)}</p>{boundaryLoadState.status === "ready" && <p className={`boundary-note ${boundaryLoadState.placeIds.has(selected.id) ? "available" : ""}`}><LandPlot size={15} />{boundaryLoadState.placeIds.has(selected.id) ? "Published boundary · softened for display · not for navigation" : "No sourced boundary is available."}</p>}<p className="place-description">{selected.description}</p><div className="sheet-actions"><button disabled={transitionBusy} className={`visit-button ${visited.has(selected.id) ? "is-visited" : ""}`} onClick={() => toggleSelected(selected)}>{visited.has(selected.id) ? <><RotateCcw size={19} />Visited · undo</> : <><Check size={20} />Mark as visited</>}</button><a className="source-link" href={selected.sourceUrl} target="_blank" rel="noreferrer">Source<ArrowUpRight size={16} /></a></div></article>}
+    <nav className="thumb-nav"><Nav active={view === "map"} click={() => navigate("map")} icon={<MapIcon size={20} />} label="Map" /><Nav active={view === "collection"} click={() => navigate("collection")} icon={<Trees size={20} />} label="Places" count={visited.size} /><Nav active={view === "badges"} click={() => navigate("badges")} icon={<Award size={20} />} label="Badges" count={earnedBadges} /><Nav active={view === "account"} click={() => navigate("account")} icon={<UserRound size={20} />} label="Account" /></nav>
+    {celebrationBadges[0] && <BadgeCelebration key={celebrationBadges[0].id} badge={celebrationBadges[0]} onClaim={() => setCelebrationBadges((current) => current.slice(1))} />}
   </section></main>;
 }
 
-function Nav({ active, click, icon, label, count }: { active: boolean; click: () => void; icon: React.ReactNode; label: string; count?: number }) { return <button className={active ? "active" : ""} onClick={click}>{icon}<span>{label}</span>{count !== undefined && <b>{count}</b>}</button>; }
+function Nav({ active, click, icon, label, count }: { active: boolean; click: () => void; icon: React.ReactNode; label: string; count?: number }) { return <button className={active ? "active" : ""} onClick={click} aria-label={active && (label === "Places" || label === "Badges") ? `Close ${label} and return to map` : label}>{icon}<span>{label}</span>{count !== undefined && <b>{count}</b>}</button>; }
+function NearbyDialog({ status, nearby, onClose, choosePlace }: { status: "idle" | "locating" | "ready" | "denied" | "unavailable"; nearby: ReturnType<typeof nearestUnseenParks>; onClose: () => void; choosePlace: (id: string) => void }) { const ref = useDialogFocus(onClose); const message = status === "locating" ? "Finding your location…" : status === "denied" ? "Location is blocked. Allow it in browser settings, then try again." : status === "unavailable" ? "Your location is unavailable right now. Search the map instead." : nearby.length === 0 ? "No unvisited parks are nearby." : "Straight-line distance from your location"; return <section ref={ref} className="nearby-modal" role="dialog" aria-modal="true" aria-labelledby="nearby-title"><button className="modal-close" onClick={onClose} aria-label="Close nearby places"><X size={20} /></button><div><h2 id="nearby-title">Near you</h2><p>{message}</p></div>{status === "ready" && <div className="nearby-list">{nearby.map(({ place, distanceKm }, index) => <button key={place.id} onClick={() => choosePlace(place.id)}><span><b>{String(index + 1).padStart(2, "0")}</b><strong>{place.name}</strong></span><em>{formatDistance(distanceKm)}</em></button>)}</div>}</section>; }
+function JuicyProgress({ value, total, label }: { value: number; total: number; label: string }) { return <div className="juicy-progress"><div><strong>{label}</strong><span>{value} / {total}</span></div><div className="juicy-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={value}><span style={{ width: `${total ? value / total * 100 : 0}%` }}><i /></span></div></div>; }
 
-function CollectionView({ groups, places, visited, search, setSearch, selectedCategories, authorities, allAuthorities, visitFilter, setVisitFilter, toggleCategory, toggleAuthority, resetFilters, choosePlace, coverageNote }: { groups: ReturnType<typeof groupByAuthority>; places: Place[]; visited: Set<string>; search: string; setSearch: (v: string) => void; selectedCategories: Set<PlaceCategory>; authorities: Set<string>; allAuthorities: string[]; visitFilter: VisitFilter; setVisitFilter: (v: VisitFilter) => void; toggleCategory: (v: PlaceCategory) => void; toggleAuthority: (v: string) => void; resetFilters: () => void; choosePlace: (id: string) => void; coverageNote: string }) {
-  const visibleCount = groups.reduce((count, group) => count + group.places.length, 0);
-  return <>
-    <div className="panel-heading">
-      <div><h2>Your field guide</h2><p>{visibleCount} of {places.length} places</p></div>
-      {coverageNote && <details><summary aria-label="About collection coverage"><Info size={18} /></summary><p>{coverageNote}</p></details>}
-    </div>
-    <div className="panel-search"><Search size={17} /><input aria-label="Search collection" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, region or authority" /></div>
-    <div className="filter-block"><span>Show</span><div className="segmented">
-      {(["all", "unseen", "visited"] as VisitFilter[]).map((value) => <button key={value} className={visitFilter === value ? "active" : ""} onClick={() => setVisitFilter(value)}>{value}</button>)}
-    </div></div>
-    <div className="chip-row">{categories.map((category) => <button key={category} className={selectedCategories.has(category) ? "active" : ""} onClick={() => toggleCategory(category)}>{categoryLabels[category]}</button>)}</div>
-    <details className="authority-filter"><summary>Administrators <span>{authorities.size || "All"}</span></summary><div className="chip-row">
-      {allAuthorities.map((authority) => <button key={authority} className={authorities.has(authority) ? "active" : ""} onClick={() => toggleAuthority(authority)}>{authority}</button>)}
-    </div></details>
-    {groups.length === 0 ? <div className="empty-state"><Compass size={30} /><strong>No places match.</strong><button onClick={resetFilters}>Clear filters</button></div> : <div className="authority-list">
-      {groups.map((group) => <details key={group.authority} open={Boolean(search) || group.places.length <= 4}>
-        <summary><span>{group.authority}</span><b>{group.places.filter((place) => visited.has(place.id)).length}/{group.places.length}</b><ChevronDown size={17} /></summary>
-        <div>{group.places.map((place) => <button className="place-row" key={place.id} onClick={() => choosePlace(place.id)}>
-          <span className={`specimen-number ${visited.has(place.id) ? "caught" : ""}`}>{visited.has(place.id) ? <Check size={16} /> : <MapPin size={15} />}</span>
-          <span className="place-row-copy"><strong>{place.name}</strong><small>{categoryLabels[place.category]} · {place.region}</small></span>
-        </button>)}</div>
-      </details>)}
-    </div>}
-  </>;
+function CollectionView({ groups, places, visited, search, setSearch, selectedCategories, authorities, allAuthorities, visitFilter, setVisitFilter, toggleCategory, toggleAuthority, resetFilters, choosePlace }: { groups: ReturnType<typeof groupByAuthority>; places: Place[]; visited: Set<string>; search: string; setSearch: (v: string) => void; selectedCategories: Set<PlaceCategory>; authorities: Set<string>; allAuthorities: string[]; visitFilter: VisitFilter; setVisitFilter: (v: VisitFilter) => void; toggleCategory: (v: PlaceCategory) => void; toggleAuthority: (v: string) => void; resetFilters: () => void; choosePlace: (id: string) => void }) {
+  return <><div className="panel-heading"><div><h2>Your places</h2><p>Every visit fills in your Parkdex.</p></div></div><JuicyProgress value={visited.size} total={places.length} label="Places visited" /><div className="panel-search"><Search size={17} /><input aria-label="Search collection" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, region or authority" /></div><div className="filter-block"><span>Show</span><div className="segmented">{(["all", "unseen", "visited"] as VisitFilter[]).map((value) => <button key={value} className={visitFilter === value ? "active" : ""} onClick={() => setVisitFilter(value)}>{value}</button>)}</div></div><div className="chip-row">{categories.map((category) => <button key={category} className={selectedCategories.has(category) ? "active" : ""} onClick={() => toggleCategory(category)}>{categoryLabels[category]}</button>)}</div><details className="authority-filter"><summary>Administrators <span>{authorities.size || "All"}</span></summary><div className="chip-row">{allAuthorities.map((authority) => <button key={authority} className={authorities.has(authority) ? "active" : ""} onClick={() => toggleAuthority(authority)}>{authority}</button>)}</div></details>{groups.length === 0 ? <div className="empty-state"><Compass size={30} /><strong>No places match.</strong><button onClick={resetFilters}>Clear filters</button></div> : <div className="authority-list">{groups.map((group) => <details key={group.authority} open={Boolean(search) || group.places.length <= 4}><summary><span>{group.authority}</span><b>{group.places.filter((place) => visited.has(place.id)).length}/{group.places.length}</b><ChevronDown size={17} /></summary><div>{group.places.map((place) => <button className="place-row" key={place.id} onClick={() => choosePlace(place.id)}><span className={`specimen-number ${visited.has(place.id) ? "caught" : ""}`}>{visited.has(place.id) ? <Check size={16} /> : <MapPin size={15} />}</span><span className="place-row-copy"><strong>{place.name}</strong><small>{categoryLabels[place.category]} · {place.region}</small></span></button>)}</div></details>)}</div>}</>;
 }
 
-function BadgesView({ badges, earned, trails, toggleTrail, disabled }: { badges: ReturnType<typeof achievements>; earned: number; trails: Set<string>; toggleTrail: (id: string) => Promise<void>; disabled: boolean }) {
-  return <>
-    <div className="panel-heading"><div><h2>Field medals</h2><p>{earned} of {badges.length} earned</p></div><Award size={28} /></div>
-    <section className="trail-checks">
-      <h3>Coastal trail log</h3>
-      <p>Each trail is a separate completion. Finish both to earn the Banana Slug Medal.</p>
-      {TRAILS.map((trail) => <div className="trail-row" key={trail.id}>
-        <button disabled={disabled} className={trails.has(trail.id) ? "complete" : ""} onClick={() => void toggleTrail(trail.id)}>
-          <span>{trails.has(trail.id) && <Check size={18} />}</span><strong>{trail.name}</strong><small>{trails.has(trail.id) ? "Completed · undo" : "Mark complete"}</small>
-        </button>
-        <a href={trail.id === "west_coast_trail" ? "https://www.parks.canada.ca/pn-np/bc/pacificrim/activ/sco-wct" : "https://bcparks.ca/juan-de-fuca-park/"} target="_blank" rel="noreferrer" aria-label={`${trail.name} official information`}><ArrowUpRight size={17} /></a>
-      </div>)}
-    </section>
-    <div className="badge-grid">{badges.map((badge) => {
-      const image = imageMap[badge.species];
-      return <article key={badge.id} className={`achievement ${badge.earned ? "earned" : "locked"}`}>
-        <div className={`badge-photo ${badge.species}`}>{image ? <Image src={image.src} alt={image.alt} width={90} height={90} /> : <Award size={28} />}</div>
-        <div><h3>{badge.name}</h3><p>{badge.description}</p><div className="badge-progress"><span style={{ width: `${badge.current / badge.target * 100}%` }} /></div><strong>{badge.earned ? "Earned" : `${badge.current} / ${badge.target}`}</strong>
-          {image && <details className="image-credit"><summary>Cropped photo credit</summary><p><a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a></p></details>}
-        </div>
-      </article>;
-    })}</div>
-  </>;
-}
+function BadgesView({ badges, earned }: { badges: Achievement[]; earned: number }) { const [selectedBadge, setSelectedBadge] = useState<Achievement | null>(null); return <><div className="panel-heading"><div><h2>Your badges</h2><p>A living field guide of what you have discovered.</p></div><Award size={28} /></div><JuicyProgress value={earned} total={badges.length} label="Badges earned" /><div className="badge-grid">{badges.map((badge) => { const image = imageMap[badge.species]; return <button key={badge.id} className={`achievement ${badge.earned ? "earned" : "locked"}`} onClick={() => setSelectedBadge(badge)}><div className={`badge-photo ${badge.species}`}>{image ? <Image src={image.src} alt="" width={90} height={90} /> : <Award size={28} />}</div><div><h3>{badge.name}</h3><p>{badge.description}</p><div className="badge-progress"><span style={{ width: `${badge.current / badge.target * 100}%` }} /></div><strong>{badge.earned ? `Earned · ${formatDate(badge.earnedAt)}` : `${badge.current} / ${badge.target}`}</strong></div></button>; })}</div>{selectedBadge && <BadgeDetail badge={selectedBadge} onClose={() => setSelectedBadge(null)} />}</>; }
+function BadgeDetail({ badge, onClose }: { badge: Achievement; onClose: () => void }) { const ref = useDialogFocus(onClose), image = imageMap[badge.species]; return <div ref={ref as React.RefObject<HTMLDivElement>} className="badge-detail-backdrop" role="dialog" aria-modal="true" aria-labelledby="badge-detail-title" onClick={onClose}><article className="badge-detail" onClick={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose} aria-label="Close badge details"><X size={22} /></button>{image ? <div className="badge-detail-image" aria-busy="true"><span>Loading badge artwork…</span><Image src={image.src} alt={image.alt} fill priority sizes="(max-width: 699px) 100vw, 62vw" onLoad={(event) => event.currentTarget.parentElement?.setAttribute("aria-busy", "false")} /></div> : <Award size={80} />}<div className="badge-detail-copy"><p>{badge.earned ? `Earned ${formatDate(badge.earnedAt)}` : `${badge.current} of ${badge.target} complete`}</p><h2 id="badge-detail-title">{badge.name}</h2><p>{badge.description}</p>{image && <p className="badge-credit">Photo: <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a></p>}</div></article></div>; }
 
-function AccountView({ account, authenticated, loading, busy, guestProgressAvailable, onAuth, onImport, onLogout, visitedCount, badgeCount }: { account: Account | null; authenticated: boolean; loading: boolean; busy: boolean; guestProgressAvailable: boolean; onAuth: (m: "login" | "register", e: string, p: string) => Promise<void>; onImport: () => Promise<void>; onLogout: () => Promise<void>; visitedCount: number; badgeCount: number }) {
-  const [mode, setMode] = useState<"login" | "register">("register");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [formBusy, setFormBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setFormBusy(true);
-    setError("");
-    try { await onAuth(mode, email, password); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Could not continue."); }
-    finally { setFormBusy(false); }
-  }
+function AccountView({ account, authenticated, loading, busy, guestProgressAvailable, onAuth, onImport, onLogout, badges, places, visitTimestamps }: { account: Account | null; authenticated: boolean; loading: boolean; busy: boolean; guestProgressAvailable: boolean; onAuth: (m: "login" | "register", e: string, p: string) => Promise<void>; onImport: () => Promise<void>; onLogout: () => Promise<void>; badges: Achievement[]; places: Place[]; visitTimestamps: Record<string, string> }) {
+  const [mode, setMode] = useState<"login" | "register">("register"), [email, setEmail] = useState(""), [password, setPassword] = useState(""), [formBusy, setFormBusy] = useState(false), [error, setError] = useState(""), [expanded, setExpanded] = useState<"badges" | "places" | null>(null);
+  const earned = badges.filter((badge) => badge.earned);
+  async function submit(event: React.FormEvent) { event.preventDefault(); setFormBusy(true); setError(""); try { await onAuth(mode, email, password); } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not continue."); } finally { setFormBusy(false); } }
   if (loading) return <div className="account-card"><p>Checking your field journal…</p></div>;
-  if (authenticated) return <>
-    <div className="panel-heading"><div><h2>Your account</h2><p>{account?.email ?? "Signed in · account details will refresh online"}</p></div><UserRound size={28} /></div>
-    <div className="account-stats"><div><strong>{visitedCount}</strong><span>Places visited</span></div><div><strong>{badgeCount}</strong><span>Badges earned</span></div></div>
-    {guestProgressAvailable && <div className="import-card"><strong>Guest progress found on this device</strong><p>Add it to this account? This optional step keeps shared-device collections separate.</p><button disabled={busy} onClick={() => void onImport()}>{busy ? "Working…" : "Add guest progress"}</button></div>}
-    <button disabled={busy} className="secondary-action" onClick={() => void onLogout()}><LogOut size={18} />{busy ? "Signing out…" : "Sign out"}</button>
-  </>;
-  return <>
-    <div className="panel-heading"><div><h2>Keep your field journal</h2><p>Save visits, trail completions and badges to your account.</p></div><LogIn size={28} /></div>
-    <div className="auth-switch"><button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Create account</button><button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Log in</button></div>
-    <form className="auth-form" onSubmit={submit}>
-      <label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-      <label>Password<input type="password" minLength={8} maxLength={128} autoComplete={mode === "register" ? "new-password" : "current-password"} required value={password} onChange={(event) => setPassword(event.target.value)} /><small>8–128 characters</small></label>
-      {error && <p role="alert">{error}</p>}
-      <button disabled={formBusy || busy}>{formBusy || busy ? "Saving…" : mode === "register" ? "Create account" : "Log in"}</button>
-    </form>
-  </>;
+  if (authenticated) return <><div className="panel-heading"><div><h2>Your account</h2><p>{account?.email ?? "Signed in · account details will refresh online"}</p></div><UserRound size={28} /></div><AccountShelf title="Badges" count={earned.length} items={earned.slice(0, 4).map((badge) => ({ id: badge.id, name: badge.name, image: imageMap[badge.species]?.src, date: badge.earnedAt }))} onSeeAll={() => setExpanded("badges")} /><AccountShelf title="Places" count={places.length} items={places.slice(0, 4).map((place) => ({ id: place.id, name: place.name, date: visitTimestamps[place.id] }))} onSeeAll={() => setExpanded("places")} />{guestProgressAvailable && <div className="import-card"><strong>Guest progress found on this device</strong><p>Add it to this account? This optional step keeps shared-device collections separate.</p><button disabled={busy} onClick={() => void onImport()}>{busy ? "Working…" : "Add guest progress"}</button></div>}<button disabled={busy} className="secondary-action" onClick={() => void onLogout()}><LogOut size={18} />{busy ? "Signing out…" : "Sign out"}</button>{expanded && <CollectionModal title={expanded === "badges" ? "All badges" : "All places"} items={expanded === "badges" ? earned.map((badge) => ({ id: badge.id, name: badge.name, image: imageMap[badge.species]?.src, date: badge.earnedAt })) : places.map((place) => ({ id: place.id, name: place.name, date: visitTimestamps[place.id] }))} onClose={() => setExpanded(null)} />}</>;
+  return <><div className="panel-heading"><div><h2>Keep your field journal</h2><p>Save visits and badges to your account.</p></div><LogIn size={28} /></div><div className="auth-switch"><button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Create account</button><button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Log in</button></div><form className="auth-form" onSubmit={submit}><label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<input type="password" minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} required value={password} onChange={(event) => setPassword(event.target.value)} /><small>At least 8 characters.</small></label>{error && <p role="alert">{error}</p>}<button disabled={formBusy}>{formBusy ? "Working…" : mode === "login" ? "Log in" : "Create account"}</button></form></>;
 }
+function AccountShelf({ title, count, items, onSeeAll }: { title: string; count: number; items: ShelfItem[]; onSeeAll: () => void }) { return <section className="account-shelf"><header><h3>{title}</h3><span>{count}</span></header>{items.length ? <div className="shelf-row">{items.map((item) => <div key={item.id}>{item.image ? <Image src={item.image} alt="" width={54} height={54} /> : <span><MapPin size={20} /></span>}<strong>{item.name}</strong><time dateTime={item.date}>{formatDate(item.date)}</time></div>)}</div> : <p className="shelf-empty">Your first {title.toLowerCase()} will appear here.</p>}<button onClick={onSeeAll} disabled={!count}>See all</button></section>; }
+function CollectionModal({ title, items, onClose }: { title: string; items: ShelfItem[]; onClose: () => void }) { const ref = useDialogFocus(onClose); return <div ref={ref as React.RefObject<HTMLDivElement>} className="collection-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="collection-modal-title" onClick={onClose}><section className="collection-modal" onClick={(event) => event.stopPropagation()}><header><h2 id="collection-modal-title">{title}</h2><button onClick={onClose} aria-label={`Close ${title}`}><X size={21} /></button></header><div>{items.map((item) => <article key={item.id}>{item.image ? <Image src={item.image} alt="" width={48} height={48} /> : <span><MapPin size={20} /></span>}<div><strong>{item.name}</strong><time dateTime={item.date}>{formatDate(item.date)}</time></div></article>)}</div></section></div>; }
+
+const confetti = ["tree", "mushroom", "bear", "leaf", "tree", "leaf", "mushroom", "bear", "leaf", "tree", "mushroom", "leaf"] as const;
+function ConfettiIcon({ kind }: { kind: typeof confetti[number] }) { if (kind === "tree") return <svg viewBox="0 0 32 40"><path d="M16 2 4 20h7L3 31h26l-8-11h7L16 2Z" fill="currentColor"/><path d="M13 30h6v9h-6z" fill="#7c4b2d"/></svg>; if (kind === "mushroom") return <svg viewBox="0 0 36 36"><path d="M3 18a15 15 0 0 1 30 0H3Z" fill="currentColor"/><path d="M14 17h8l3 16H11l3-16Z" fill="#fff5d7"/><circle cx="13" cy="10" r="2" fill="#fff5d7"/><circle cx="23" cy="8" r="2" fill="#fff5d7"/></svg>; if (kind === "bear") return <svg viewBox="0 0 40 36"><circle cx="9" cy="9" r="6" fill="currentColor"/><circle cx="31" cy="9" r="6" fill="currentColor"/><path d="M6 20C6 7 34 7 34 20c0 10-7 14-14 14S6 30 6 20Z" fill="currentColor"/><ellipse cx="20" cy="25" rx="6" ry="5" fill="#f6f0dc"/><circle cx="14" cy="19" r="2" fill="#173d32"/><circle cx="26" cy="19" r="2" fill="#173d32"/></svg>; return <svg viewBox="0 0 30 38"><path d="M26 2C8 4 2 15 7 31 21 29 29 20 26 2Z" fill="currentColor"/><path d="M5 36C10 24 16 16 24 8" fill="none" stroke="#173d32" strokeWidth="2"/></svg>; }
+function BadgeCelebration({ badge, onClaim }: { badge: Achievement; onClaim: () => void }) { const ref = useDialogFocus(onClaim), image = imageMap[badge.species]; return <div ref={ref as React.RefObject<HTMLDivElement>} className="celebration" role="dialog" aria-modal="true" aria-labelledby="celebration-title"><div className="confetti" aria-hidden="true">{confetti.map((kind, index) => <i key={`${kind}-${index}`} style={{ "--i": index } as CSSProperties}><ConfettiIcon kind={kind} /></i>)}</div><div className="celebration-copy"><p>New discovery!</p><div className="celebration-badge">{image ? <Image src={image.src} alt="" width={190} height={190} priority /> : <Award size={90} />}</div><h2 id="celebration-title">{badge.name}</h2><p>{badge.description}</p><button onClick={onClaim}><Check size={21} />Claim my badge</button></div></div>; }

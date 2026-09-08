@@ -51,6 +51,22 @@ afterEach(() => {
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("records a server visit timestamp immediately and clears it when undone", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith(`/api/visits/${PLACE.id}`)) {
+        const visited = JSON.parse(String(init?.body)).visited;
+        return json({ placeId: PLACE.id, visited, visitedCount: visited ? 1 : 0, visitedAt: visited ? "2026-09-08T12:00:00Z" : null });
+      }
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(result.current.visitTimestamps).toEqual({ [PLACE.id]: "2026-09-08T12:00:00Z" });
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(result.current.visitTimestamps).toEqual({});
+  });
+
   it("keeps the legacy raw guest key and reloads a raw bearer token without quotes", async () => {
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "raw-token");
     window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({

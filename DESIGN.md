@@ -1,4 +1,4 @@
-# Every Park Design
+# Parkdex Design
 
 ## Direction
 
@@ -10,7 +10,7 @@ The map owns the screen. A compact expedition header floats above it with collec
 
 ## Signature interaction
 
-Checking a place presses a tactile lime control, sends a short radial burst around its marker, and converts the marker into a crowned check badge while the progress strip advances. Undo uses the same control and never hides the consequence.
+Checking a place presses a tactile lime control and converts the marker into a crowned check badge while the progress strip advances. A newly earned badge fills the screen with a burst of crisp forest flora and fauna before the visitor claims it. Undo uses the same control and never hides the consequence.
 
 ## System
 

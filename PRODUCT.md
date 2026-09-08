@@ -1,4 +1,4 @@
-# Every Park
+# Parkdex
 
 <!-- impeccable:product-schema 1 -->
 
@@ -16,7 +16,7 @@ People exploring Vancouver Island, often outdoors on a phone, who want a satisfy
 
 ## Product Purpose
 
-Every Park turns reliable place data into a collectible field guide. Success means a visitor can discover a place, understand why it belongs in the collection, mark it visited, and see progress persist.
+Parkdex turns reliable place data into a collectible field guide. Success means a visitor can discover a place, understand why it belongs in the collection, mark it visited, and see progress persist.
 
 ## Positioning
 
@@ -36,7 +36,7 @@ The primary session is one-handed mobile use while planning or travelling. Conne
 
 ## Brand Commitments
 
-The product name is Every Park. Its voice is concise, encouraging, outdoorsy, and factual. The interface should feel like a playful Pokedex and a premium Pacific Northwest field guide.
+The product name is Parkdex and its domain is `parkdex.app`. Its voice is concise, encouraging, outdoorsy, and factual. The interface should feel like a playful Pokédex and a premium Pacific Northwest field guide.
 
 ## Evidence on Hand
 

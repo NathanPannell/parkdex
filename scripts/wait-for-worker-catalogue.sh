@@ -12,7 +12,7 @@ for _ in $(seq 1 30); do
     --environment "$RAILWAY_ENVIRONMENT" \
     --service "$RAILWAY_WORKER_SERVICE_ID" \
     --lines 200 2>/dev/null || true)"
-  matching_logs="$(grep -F "Every Park catalogue ready commit=${EXPECTED_COMMIT_SHA} places=" <<<"$logs" || true)"
+  matching_logs="$(grep -E "(Every Park|Parkdex) catalogue ready commit=${EXPECTED_COMMIT_SHA} places=" <<<"$logs" || true)"
   if grep -Eq 'places=[1-9][0-9]*($|[^0-9])' <<<"$matching_logs"; then
     echo 'Worker catalogue database read verified.'
     exit 0

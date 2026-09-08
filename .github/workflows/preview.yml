@@ -61,6 +61,7 @@ jobs:
           PREVIEW_DATABASE_URL_UNPOOLED: ${{ steps.neon.outputs.db_url }}
           EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          source scripts/railway-retry.sh
           railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_BASE_ENVIRONMENT_ID"
           if railway environment list --json | jq -e --arg name "$PREVIEW_ENVIRONMENT" '.. | objects | select(.name? == $name)' >/dev/null; then
             echo "Railway environment already exists; updating it in place."
@@ -73,10 +74,10 @@ jobs:
           fi
 
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            printf '%s' "$PREVIEW_DATABASE_URL" | railway variable set PREVIEW_DATABASE_URL --stdin --skip-deploys --service "$service" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-            printf '%s' "$EXPECTED_COMMIT_SHA" | railway variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$PREVIEW_DATABASE_URL" variable set PREVIEW_DATABASE_URL --stdin --skip-deploys --service "$service" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           done
-          printf '%s' "$PREVIEW_DATABASE_URL_UNPOOLED" | railway variable set PREVIEW_DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$PREVIEW_DATABASE_URL_UNPOOLED" variable set PREVIEW_DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
 
       - name: Deploy Railway preview services
         env:
@@ -120,8 +121,9 @@ jobs:
           PREVIEW_URL: ${{ steps.vercel.outputs.preview_url }}
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
         run: |
-          printf '%s' "$PREVIEW_URL" | railway variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          source scripts/railway-retry.sh
+          railway_retry "$PREVIEW_URL" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
 
       - name: Verify final preview API readiness
         id: final-railway
@@ -173,6 +175,11 @@ jobs:
           node-version: 22
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
+
+      - name: Refuse cleanup outside the PR namespace
+        run: |
+          [[ "$PREVIEW_ENVIRONMENT" == "pr-${{ github.event.pull_request.number }}" ]]
+          [[ "$NEON_BRANCH" == "preview/pr-${{ github.event.pull_request.number }}" ]]
 
       - name: Find recorded Vercel deployment
         id: vercel

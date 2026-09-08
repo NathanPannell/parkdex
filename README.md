@@ -1,6 +1,6 @@
-# Every Park
+# Parkdex
 
-Every Park is a mobile-first field guide and collection game for Vancouver Island parks and nearby islands. Explore a clustered interactive map, search or filter the catalogue, open a place card, and check off visits with immediate progress feedback.
+Parkdex is a mobile-first field guide and collection game for Vancouver Island parks and nearby islands. Explore a clustered interactive map, search or filter the catalogue, open a place card, and check off visits with immediate progress feedback.
 
 The official-source v0 catalogue contains 216 places: 2 national park reserves, 136 provincial parks, 53 regional parks, and 25 curated major or commonly visited islands. Regional coverage is strongest for CRD, RDN, and CVRD; the in-app info panel explains known gaps, and every place card links to its source. Map pins are representative centres rather than entrances or trailheads.
 
@@ -62,11 +62,13 @@ Increase the migration number on later refreshes. Never edit an applied migratio
 
 ## Deployment contract
 
-Production deploys run after CI on `main`: migrations apply to Neon, the API and catalogue worker deploy to Railway, and the mobile frontend deploys to Vercel. `/health` proves process liveness; `/ready` must report `ready`, the exact Git commit, and readable migrations before the workflow advances.
+Production deploys run after CI on `main`: migrations apply to Neon, the API and catalogue worker deploy to Railway, and the mobile frontend deploys to Vercel at `parkdex.app`. Manual production deployment is accepted only from `main`. `/health` proves process liveness; `/ready` must report `ready`, the exact Git commit, and readable migrations before the workflow advances.
+
+Pushes to `staging` deploy to the persistent Neon `staging` branch, Railway `staging` environment, and Vercel alias `staging.parkdex.app`. A manual CI run from a reviewed feature ref can deploy that ref to the same staging resources before merge; later pushes to `staging` replace it with the branch source. Staging resources have no pull-request expiry and are excluded from preview cleanup.
 
 Runtime connections are pooled. Migrations use the direct Neon URL because advisory locks and other session behavior must not pass through transaction pooling. Railway receives the exact Vercel deployment and production origins for CORS after each frontend deploy.
 
-Same-repository pull requests from the trusted bootstrap actor receive one isolated Neon branch, one Railway `pr-N` environment with API and worker services, and one Vercel preview. Closing the pull request removes all three preview resources. Preview readiness also checks the exact commit and readable migrations so a restarted stale container cannot pass.
+Same-repository pull requests from the trusted bootstrap actor receive one isolated Neon branch, one Railway `pr-N` environment with API and worker services, and one Vercel preview. Closing the pull request removes only those namespaced preview resources. Preview readiness also checks the exact commit and readable migrations so a restarted stale container cannot pass.
 
 Production smoke verifies a non-empty place catalogue, then uses a generated collection key to mark one place visited, confirms anonymous and second-key isolation, resets it, and verifies the cleanup read. Collection keys are sent only in `X-Collection-Key`; they are never stored in the repository or deployment logs. Worker verification requires a positive catalogue database read logged by the exact deployed commit.
 
