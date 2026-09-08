@@ -27,7 +27,7 @@ import {
   EXPLORATION_SOURCE_ID,
   explorationLayerSpecifications,
 } from "@/lib/exploration-map-style";
-import { selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
+import { hasUsableCameraViewport, selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
 import type { Place } from "@/lib/places";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
@@ -475,8 +475,11 @@ export function ParkMap({
     const fitSelected = () => {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(() => {
+        map.resize();
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const padding = measuredSelectionPadding(container);
+        const mapRect = container.getBoundingClientRect();
+        if (!hasUsableCameraViewport(mapRect, padding)) return;
         if (boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, selectedId, !reduceMotion, padding)) return;
         map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
       });

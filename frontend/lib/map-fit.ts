@@ -1,6 +1,15 @@
 export type LayoutRect = { top: number; right: number; bottom: number; left: number; width: number; height: number };
 export type CameraPadding = { top: number; right: number; bottom: number; left: number };
 
+export function hasUsableCameraViewport(
+  map: Pick<LayoutRect, "width" | "height">,
+  padding: CameraPadding,
+  minimumVisibleSize = 64,
+) {
+  return map.width - padding.left - padding.right >= minimumVisibleSize
+    && map.height - padding.top - padding.bottom >= minimumVisibleSize;
+}
+
 export function selectedPlacePadding(
   map: LayoutRect,
   sheet: LayoutRect | null,

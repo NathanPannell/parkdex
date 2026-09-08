@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { selectedPlacePadding, type LayoutRect } from "./map-fit";
+import { hasUsableCameraViewport, selectedPlacePadding, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -28,5 +28,11 @@ describe("selected boundary camera padding", () => {
       bottom: 32,
       left: 592,
     });
+  });
+
+  it("rejects stale desktop padding against a phone canvas during a responsive resize", () => {
+    const desktopPadding = selectedPlacePadding(rect(0, 0, 1280, 900), rect(24, 520, 550, 350), 142);
+    expect(hasUsableCameraViewport(rect(0, 0, 390, 844), desktopPadding)).toBe(false);
+    expect(hasUsableCameraViewport(rect(0, 0, 1280, 900), desktopPadding)).toBe(true);
   });
 });

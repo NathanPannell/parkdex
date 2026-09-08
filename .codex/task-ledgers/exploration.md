@@ -44,3 +44,10 @@ Agree shared API/map contracts; implement; run checks; independent review; PR/pr
 - Backend: 20 tests pass, including direct authenticated visit/trail persistence and identity isolation. Final throttle uses short atomic reservations, releasing pooled connections before password hashing; readiness remains responsive under concurrent login checks. This supersedes the advisory-lock approach above.
 - Browser: guest visit earns first badge; both explicit trail completions earn Banana Slug; registration and optional import restore one visit and two trail checkoffs. Initial mobile/desktop visual fixes incorporated.
 - Next: publish branch/PR, wait isolated preview checks, verify deployed browser journeys.
+
+## Isolated preview verification
+- PR #3: https://github.com/NathanPannell/every-park/pull/3. Initial head c03363b passed CI and preview deployment; preview readiness reports exact head and six migrations.
+- Deployed browser verified search, visited/category filters and empty state, guest visit, explicit two-trail medal/undo, registration, guest import, reload, sign-out/login, and photo delivery. Desktop and 390x844 mobile layouts inspected; no failed photo loads or runtime errors.
+- Real device location did not resolve in the browser automation environment; distance ranking and pointer behavior are covered by focused tests, but live GPS recommendations remain unverified.
+- Browser resizing revealed a map camera/canvas timing warning. Map worker confirmed a resize race, owns minimal synchronous resize-before-fit correction and focused check; final preview recheck follows.
+- Independent quality review: no remaining material findings before this browser-only resize race; backend20/frontend50 tests independently rerun green.

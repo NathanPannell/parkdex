@@ -20,3 +20,8 @@ Evidence:
 - The combined canonical boundary check is awaiting regeneration of the pre-existing stale canonical fit index; the new display-asset check passes independently.
 
 Next: integrated desktop/mobile browser review after the frontend adds the exploration legend styles and finishes app wiring.
+
+Resize follow-up:
+
+- A deployed phone-to-desktop check exposed a transient MapLibre fit warning. The padding math remained valid for each final layout, but the selection callback could measure desktop DOM padding while MapLibre still held the phone-size canvas transform.
+- Selection fitting now synchronizes the map canvas with `map.resize()` and rejects padding that leaves less than 64 px of usable canvas before calling the camera. A focused regression test covers desktop padding against stale phone dimensions.
