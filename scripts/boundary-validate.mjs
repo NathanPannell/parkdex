@@ -99,8 +99,10 @@ for (const [id, minimum] of nationalMinimumParts) {
 }
 
 const islandFeatures = boundaries.features.filter((feature) => feature.properties.category === 'island');
-if (islandFeatures.length !== 25) throw new Error(`expected 25 island boundaries, found ${islandFeatures.length}`);
 const expectedIslandObjects = Object.fromEntries([...osmObjects].filter(([id]) => id.startsWith('island-')));
+if (islandFeatures.length !== Object.keys(expectedIslandObjects).length) {
+  throw new Error(`expected ${Object.keys(expectedIslandObjects).length} island boundaries, found ${islandFeatures.length}`);
+}
 if (JSON.stringify(audit.islandSourceObjects) !== JSON.stringify(expectedIslandObjects)) throw new Error('boundary audit island source objects differ from reviewed contract');
 for (const feature of islandFeatures) {
   const expectedObject = osmObjects.get(feature.properties.id);

@@ -38,8 +38,9 @@ COVERAGE_NOTE = (
     "Official-source v0: two whole national park reserves, designated provincial parks, "
     "and named regional parks from CRD, RDN, CVRD, and Bere Point. Regional coverage is "
     "strongest in those districts; parks without a clean authoritative point, including "
-    "China Creek and Kwaksistah, are not guessed. The 25 islands are a curated collection, "
-    "not every islet. Pins are representative centres, not entrances or trailheads."
+    "China Creek and Kwaksistah, are not guessed. The 24 nearby islands are a curated "
+    "collection; Vancouver Island frames the map rather than acting as a collectible. "
+    "Pins are representative centres, not entrances or trailheads."
 )
 
 
@@ -93,6 +94,10 @@ def completed_trails_for_account(conn: Connection, account_id: str) -> list[str]
     return [row["trail_id"] for row in conn.execute("SELECT trail_id FROM account_trail_completions WHERE account_id = %s ORDER BY trail_id", (account_id,)).fetchall()]
 
 
+def lock_account_progress(conn: Connection, account_id: str) -> None:
+    conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (account_id,))
+
+
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     visits = visits_for_account(conn, identity.account_id)
     return {
@@ -115,7 +120,7 @@ app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Collection-Key"],
 )
 
@@ -194,6 +199,7 @@ def update_visit(
     ).fetchone():
         raise HTTPException(status_code=404, detail="Place not found")
     if isinstance(identity, AccountIdentity):
+        lock_account_progress(conn, identity.account_id)
         if payload.visited:
             conn.execute(
                 """
@@ -261,6 +267,8 @@ def update_trail(trail_id: str, payload: TrailUpdate, conn: Connection = Depends
     if trail_id not in TRAIL_IDS:
         raise HTTPException(status_code=404, detail="Trail not found")
     identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    if isinstance(identity, AccountIdentity):
+        lock_account_progress(conn, identity.account_id)
     table, owner, value = ("account_trail_completions", "account_id", identity.account_id) if isinstance(identity, AccountIdentity) else ("guest_trail_completions", "owner_hash", identity)
     if payload.completed:
         conn.execute(f"INSERT INTO {table} ({owner}, trail_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (value, trail_id))
@@ -348,6 +356,25 @@ def logout(
     return Response(status_code=204)
 
 
+@app.delete("/api/account/progress", status_code=204)
+def reset_account_progress(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    # Serialize the reset with imports and progress writes for this account.
+    lock_account_progress(conn, identity.account_id)
+    conn.execute(
+        "DELETE FROM account_visits WHERE account_id = %s", (identity.account_id,)
+    )
+    conn.execute(
+        "DELETE FROM account_trail_completions WHERE account_id = %s",
+        (identity.account_id,),
+    )
+    conn.commit()
+    return Response(status_code=204)
+
+
 @app.post("/api/account/import-guest", response_model=GuestImportResult)
 def import_guest_progress(
     conn: Connection = Depends(connection),
@@ -356,6 +383,7 @@ def import_guest_progress(
 ):
     identity = require_bearer(conn, authorization)
     owner_hash = collection_hash(x_collection_key, required=True)
+    lock_account_progress(conn, identity.account_id)
     imported_visits = conn.execute(
         """
         INSERT INTO account_visits (account_id, place_id, visited_at)

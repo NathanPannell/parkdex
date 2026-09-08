@@ -45,7 +45,7 @@ export const osmObjects = new Map([
   ['island-read-island', 'R2143965'], ['island-saltspring-island', 'R1019863'],
   ['island-saturna-island', 'R1725547'], ['island-sonora-island', 'R2143966'],
   ['island-south-pender-island', 'R8335965'], ['island-thetis-island', 'R5553191'],
-  ['island-valdes-island', 'R8338288'], ['island-vancouver-island', 'R2249770'],
+  ['island-valdes-island', 'R8338288'],
   ['island-vargas-island', 'R8371770'], ['regional-bere-point-regional-park', 'W449016643'],
 ]);
 
@@ -92,11 +92,11 @@ const crdSourceIds = new Map([
 ]);
 
 export const expectedSourceCounts = Object.freeze({
-  [boundarySources.bcParks.name]: 136,
+  [boundarySources.bcParks.name]: 117,
   [boundarySources.crd.name]: 34,
-  [boundarySources.cvrd.name]: 4,
+  [boundarySources.cvrd.name]: 3,
   [boundarySources.national.name]: 2,
-  [boundarySources.osm.name]: 26,
+  [boundarySources.osm.name]: 25,
   [boundarySources.rdn.name]: 14,
 });
 

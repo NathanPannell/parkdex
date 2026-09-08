@@ -57,6 +57,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -70,10 +72,18 @@ jobs:
         run: npm run boundaries:test
       - name: Validate sourced boundary geometry
         run: node scripts/boundary-validate.mjs
+      - name: Test release metadata stamping
+        run: node --test scripts/release-metadata.test.mjs
+      - name: Resolve build metadata
+        id: release
+        run: node scripts/release-metadata.mjs "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
       - run: npm ci
         working-directory: frontend
       - name: Verify published boundary asset matches reviewed geometry
         run: node scripts/check-boundary-asset.mjs
+        working-directory: frontend
+      - name: Verify weighted exploration territories match the catalogue
+        run: npm run check:exploration-territories
         working-directory: frontend
       - run: npm run lint
         working-directory: frontend
@@ -85,6 +95,9 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          NEXT_PUBLIC_RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          NEXT_PUBLIC_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
+          NEXT_PUBLIC_COMMIT_DATE: ${{ steps.release.outputs.commit_date }}
 
   deploy-production:
     if: vars.BOOTSTRAP_COMPLETE == 'true' && github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.action == 'deploy-production') || github.event_name == 'push')
@@ -103,9 +116,14 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - name: Resolve release metadata
+        id: release
+        run: node scripts/release-metadata.mjs "$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
       - name: Stamp and deploy Railway services
@@ -124,7 +142,13 @@ jobs:
         env:
           API_URL: ${{ steps.railway.outputs.api_url }}
         run: |
-          deployment_url="$(vercel deploy --prod --yes --cwd frontend --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
+          deployment_url="$(vercel deploy --prod --yes --cwd frontend \
+            --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" \
+            --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" \
+            --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" \
+            --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" \
+            --meta githubCommitSha="$EXPECTED_COMMIT_SHA" \
+            --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
           production_url=""
           for _ in $(seq 1 12); do
             production_url="$(vercel project list --json --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" | jq -r --arg id "$VERCEL_PROJECT_ID" '.projects[] | select(.id == $id) | .latestProductionUrl // empty')"
@@ -254,6 +278,8 @@ jobs:
       STAGING_DOMAIN: staging.parkdex.app
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Resolve the exact staging source
         id: source
@@ -292,6 +318,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+
+      - name: Resolve release metadata
+        id: release
+        run: node scripts/release-metadata.mjs "${{ steps.source.outputs.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
@@ -353,6 +383,9 @@ jobs:
         run: |
           deployment_url="$(vercel deploy --yes --target preview --cwd frontend \
             --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" \
+            --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" \
+            --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" \
+            --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" \
             --meta githubCommitSha="$EXPECTED_COMMIT_SHA" \
             --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
           vercel alias set "$deployment_url" "$STAGING_DOMAIN" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"

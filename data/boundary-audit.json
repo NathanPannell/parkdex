@@ -1,27 +1,27 @@
 {
-  "generatedAt": "2026-09-07T22:49:02.886Z",
-  "placeCount": 216,
-  "featureCount": 216,
+  "generatedAt": "2026-09-08T05:58:38.509Z",
+  "placeCount": 195,
+  "featureCount": 195,
   "missingIds": [],
   "duplicateIds": [],
   "sourceCounts": {
-    "BC Parks / DataBC — TANTALIS protected areas": 136,
+    "BC Parks / DataBC — TANTALIS protected areas": 117,
     "Capital Regional District — Park GIS layer": 34,
-    "Cowichan Valley Regional District — Parks GIS layer": 4,
+    "Cowichan Valley Regional District — Parks GIS layer": 3,
     "Natural Resources Canada — Canada Lands Survey System": 2,
-    "OpenStreetMap contributors": 26,
+    "OpenStreetMap contributors": 25,
     "Regional District of Nanaimo — Regional Parks spatial data": 14
   },
   "geometryCounts": {
-    "Polygon": 152,
-    "MultiPolygon": 64
+    "Polygon": 135,
+    "MultiPolygon": 60
   },
-  "totalParts": 447,
-  "totalHoles": 100,
-  "sourceParts": 447,
-  "sourceHoles": 100,
-  "totalPositions": 149993,
-  "payloadBytes": 3354992,
+  "totalParts": 419,
+  "totalHoles": 96,
+  "sourceParts": 419,
+  "sourceHoles": 96,
+  "totalPositions": 68004,
+  "payloadBytes": 1561976,
   "nationalParts": {
     "national-gulf-islands-national-park-reserve": 80,
     "national-pacific-rim-national-park-reserve": 20
@@ -50,7 +50,6 @@
     "island-south-pender-island": "R8335965",
     "island-thetis-island": "R5553191",
     "island-valdes-island": "R8338288",
-    "island-vancouver-island": "R2249770",
     "island-vargas-island": "R8371770"
   },
   "sourceTopologyPreserved": true,

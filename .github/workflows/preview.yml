@@ -30,6 +30,9 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Set Neon safety expiration
         id: expiry
@@ -50,6 +53,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+
+      - name: Resolve preview metadata
+        id: release
+        run: node scripts/release-metadata.mjs "${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
@@ -110,6 +117,9 @@ jobs:
         run: |
           preview_url="$(vercel deploy --yes --target preview --cwd frontend \
             --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" \
+            --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" \
+            --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" \
+            --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" \
             --meta githubCommitSha="$HEAD_SHA" \
             --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
           deployment_id="$(vercel inspect "$preview_url" --json --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" | jq -r '.id')"
@@ -186,12 +196,16 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            const marker = '<!-- full-stack-preview -->';
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo,
               issue_number: context.issue.number,
             });
-            const body = comments.find(comment => comment.body?.includes('<!-- full-stack-preview -->'))?.body || '';
-            const match = body.match(/Vercel deployment: `([^`]+)`/);
+            const body = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' &&
+              comment.body?.startsWith(`${marker}\n`)
+            )?.body || '';
+            const match = body.match(/^Vercel deployment: `(dpl_[A-Za-z0-9]+)`$/m);
             core.setOutput('deployment_id', match?.[1] || '');
 
       - name: Delete Railway preview environment
@@ -214,5 +228,6 @@ jobs:
         if: steps.vercel.outputs.deployment_id != ''
         continue-on-error: true
         env:
+          DEPLOYMENT_ID: ${{ steps.vercel.outputs.deployment_id }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel remove "${{ steps.vercel.outputs.deployment_id }}" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel remove "$DEPLOYMENT_ID" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
