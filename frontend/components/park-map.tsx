@@ -248,12 +248,11 @@ export function ParkMap({
           setMapFailed(true);
         }
       }, 12_000);
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(
         new maplibregl.AttributionControl({
           compact: true,
           customAttribution: [
-            "Every Park field guide",
+            "Parkdex field guide",
             '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>',
           ],
         }),
@@ -500,13 +499,6 @@ export function ParkMap({
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
-      <button className="overview-button" type="button" onClick={() => {
-        const map = mapRef.current;
-        if (!map) return;
-        const current = dataRef.current;
-        const overviewPlaces = visiblePlaces(current.places, current.visited, current.mode);
-        fitOverview(map, overviewPlaces.length ? overviewPlaces : current.places, !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-      }}>Overview</button>
       {mode === "explored" && visited.size > 0 && (
         <div className="exploration-map-key">
           <span className="exploration-map-key__swatch" aria-hidden="true" />

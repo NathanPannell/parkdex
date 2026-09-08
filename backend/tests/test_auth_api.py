@@ -194,11 +194,13 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             me = client.get("/api/auth/me", headers=first_headers)
             places = client.get("/api/places", headers=first_headers)
             assert me.json()["visitedIds"] == [place_id]
+            assert me.json()["visits"] == [{"placeId": place_id, "visitedAt": checked.json()["visitedAt"]}]
             assert me.json()["completedTrailIds"] == [
                 "juan_de_fuca_trail",
                 "west_coast_trail",
             ]
             assert places.json()["visitedIds"] == me.json()["visitedIds"]
+            assert places.json()["visits"] == me.json()["visits"]
             assert places.json()["completedTrailIds"] == me.json()["completedTrailIds"]
 
             guest = client.get("/api/places", headers={"X-Collection-Key": guest_key})
@@ -206,6 +208,7 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             assert place_id not in guest.json()["visitedIds"]
             assert guest.json()["completedTrailIds"] == []
             assert other.json()["visitedIds"] == []
+            assert other.json()["visits"] == []
             assert other.json()["completedTrailIds"] == []
 
             undone = client.put(

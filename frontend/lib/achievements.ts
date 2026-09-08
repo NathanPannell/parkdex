@@ -1,14 +1,11 @@
 import type { Place, PlaceCategory } from "@/lib/places";
 
-export const TRAILS = [
-  { id: "west_coast_trail", name: "West Coast Trail" },
-  { id: "juan_de_fuca_trail", name: "Juan de Fuca Trail" },
-] as const;
+export const JUAN_DE_FUCA_PARK_ID = "provincial-juan-de-fuca-park";
 
 type AchievementContext = {
   places: Place[];
   visited: ReadonlySet<string>;
-  completedTrails: ReadonlySet<string>;
+  visitTimestamps?: Readonly<Record<string, string>>;
 };
 
 export type Achievement = {
@@ -19,6 +16,7 @@ export type Achievement = {
   current: number;
   target: number;
   earned: boolean;
+  earnedAt?: string;
 };
 
 type Definition = Omit<Achievement, "current" | "target" | "earned"> & {
@@ -33,7 +31,7 @@ const regionCount = (needle: string) => ({ places, visited }: AchievementContext
   places.filter((place) => visited.has(place.id) && place.region.toLocaleLowerCase().includes(needle)).length;
 
 const definitions: Definition[] = [
-  { id: "banana-slug-medal", name: "Banana Slug Medal", species: "banana-slug", description: "Complete both the West Coast Trail and Juan de Fuca Trail.", target: 2, count: ({ completedTrails }) => TRAILS.filter((trail) => completedTrails.has(trail.id)).length },
+  { id: "banana-slug-medal", name: "Banana Slug Medal", species: "banana-slug", description: "Visit Juan de Fuca Park.", target: 1, count: ({ visited }) => visited.has(JUAN_DE_FUCA_PARK_ID) ? 1 : 0 },
   { id: "black-bear-pair", name: "Black Bear Double", species: "black-bear", description: "Visit both national park reserves.", target: 2, count: ({ visited }) => ["national-gulf-islands-national-park-reserve", "national-pacific-rim-national-park-reserve"].filter((id) => visited.has(id)).length },
   { id: "sea-otter-islander", name: "Sea Otter Islander", species: "sea-otter", description: "Visit 5 major islands.", target: 5, count: categoryCount("island") },
   { id: "orca-four-realms", name: "Orca Four Realms", species: "orca", description: "Visit a national, provincial, regional park and a major island.", target: 4, count: ({ places, visited }) => new Set(places.filter((place) => visited.has(place.id)).map((place) => place.category)).size },
@@ -60,6 +58,25 @@ const definitions: Definition[] = [
 export function achievements(context: AchievementContext): Achievement[] {
   return definitions.map(({ count, target, ...definition }) => {
     const current = Math.min(count(context), target);
-    return { ...definition, current, target, earned: current >= target };
+    const earned = current >= target;
+    const chronology = [...context.visited]
+      .map((id) => ({ id, timestamp: context.visitTimestamps?.[id] }))
+      .filter((entry): entry is { id: string; timestamp: string } => Boolean(entry.timestamp))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const seen = new Set<string>();
+    let earnedAt: string | undefined;
+    for (const entry of chronology) {
+      seen.add(entry.id);
+      if (count({ ...context, visited: seen }) >= target) {
+        earnedAt = entry.timestamp;
+        break;
+      }
+    }
+    return { ...definition, current, target, earned, ...(earnedAt ? { earnedAt } : {}) };
   });
+}
+
+export function newlyEarnedAchievementIds(previous: readonly Achievement[], next: readonly Achievement[]): string[] {
+  const previouslyEarned = new Set(previous.filter((badge) => badge.earned).map((badge) => badge.id));
+  return next.filter((badge) => badge.earned && !previouslyEarned.has(badge.id)).map((badge) => badge.id);
 }

@@ -1,9 +1,11 @@
 export type Account = { id: string; email: string };
+export type Visit = { placeId: string; visitedAt: string };
 export type AccountSession = {
   token: string;
   expiresAt: string;
   account: Account;
   visitedIds: string[];
+  visits: Visit[];
   completedTrailIds: string[];
 };
 
@@ -42,7 +44,7 @@ export async function logout(apiBaseUrl: string, token: string): Promise<void> {
 }
 
 export async function importGuestProgress(apiBaseUrl: string, token: string, collectionKey: string) {
-  return parseResponse<{ importedVisitCount: number; importedTrailCount: number; visitedIds: string[]; completedTrailIds: string[] }>(
+  return parseResponse<{ importedVisitCount: number; importedTrailCount: number; visitedIds: string[]; visits: Visit[]; completedTrailIds: string[] }>(
     await fetch(`${apiBaseUrl}/api/account/import-guest`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "X-Collection-Key": collectionKey } }),
   );
 }

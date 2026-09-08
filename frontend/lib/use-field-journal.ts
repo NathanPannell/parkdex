@@ -10,6 +10,7 @@ import {
   loadAccount,
   logout as logoutAccount,
   type Account,
+  type Visit,
 } from "./account";
 import {
   IdentityEpoch,
@@ -35,6 +36,7 @@ type CataloguePayload = {
   places: Place[];
   visitedIds: string[];
   completedTrailIds?: string[];
+  visits?: Visit[];
   coverageNote: string;
 };
 
@@ -42,12 +44,14 @@ type AccountSnapshot = {
   account: Account;
   visitedIds: string[];
   completedTrailIds: string[];
+  visitTimestamps?: Record<string, string>;
 };
 
 export type FieldJournal = {
   places: Place[];
   visited: Set<string>;
   completedTrails: Set<string>;
+  visitTimestamps: Record<string, string>;
   coverageNote: string;
   account: Account | null;
   authenticated: boolean;
@@ -75,6 +79,10 @@ const BLOCKED_STORAGE = {
   removeItem: () => { throw new Error("Browser storage unavailable"); },
 };
 
+function timestampsFor(visits: Visit[] | undefined): Record<string, string> {
+  return Object.fromEntries((visits ?? []).map((visit) => [visit.placeId, visit.visitedAt]));
+}
+
 async function responseError(response: Response, fallback: string): Promise<ApiError> {
   let message = fallback;
   try { message = (await response.json() as { detail?: string }).detail ?? fallback; } catch { /* fallback */ }
@@ -85,6 +93,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const [places, setPlaces] = useState<Place[]>([]);
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [completedTrails, setCompletedTrails] = useState<Set<string>>(new Set());
+  const [visitTimestamps, setVisitTimestamps] = useState<Record<string, string>>({});
   const [coverageNote, setCoverageNote] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -100,6 +109,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const identityRef = useRef<Identity>({ kind: "guest", collectionKey: "" });
   const visitedRef = useRef(visited);
   const trailsRef = useRef(completedTrails);
+  const visitTimestampsRef = useRef(visitTimestamps);
   const guestVisitOutboxRef = useRef(new VisitOutbox());
   const guestTrailOutboxRef = useRef(new VisitOutbox());
   const accountVisitOutboxRef = useRef(new VisitOutbox());
@@ -115,17 +125,20 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     return getBrowserStorage() ?? BLOCKED_STORAGE;
   }, []);
 
-  const updateProgress = useCallback((nextVisited: Set<string>, nextTrails: Set<string>) => {
+  const updateProgress = useCallback((nextVisited: Set<string>, nextTrails: Set<string>, nextVisitTimestamps = visitTimestampsRef.current) => {
     visitedRef.current = nextVisited;
     trailsRef.current = nextTrails;
+    visitTimestampsRef.current = nextVisitTimestamps;
     setVisited(nextVisited);
     setCompletedTrails(nextTrails);
+    setVisitTimestamps(nextVisitTimestamps);
   }, []);
 
   const persistGuest = useCallback(() => {
     const target = storage();
     if (identityRef.current.kind === "guest") {
       noteStorageFailure(writeStored(target, JOURNAL_STORAGE.guestVisited, [...visitedRef.current]));
+      noteStorageFailure(writeStored(target, JOURNAL_STORAGE.guestVisitTimestamps, visitTimestampsRef.current));
       noteStorageFailure(writeStored(target, JOURNAL_STORAGE.guestTrails, [...trailsRef.current]));
     }
     noteStorageFailure(writeStored(target, JOURNAL_STORAGE.guestVisitPending, guestVisitOutboxRef.current.snapshot()));
@@ -140,6 +153,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       account: identity.account,
       visitedIds: [...visitedRef.current],
       completedTrailIds: [...trailsRef.current],
+      visitTimestamps: visitTimestampsRef.current,
     } satisfies AccountSnapshot));
     noteStorageFailure(writeStored(target, accountPendingKey(identity.account.id, "visits"), accountVisitOutboxRef.current.snapshot()));
     noteStorageFailure(writeStored(target, accountPendingKey(identity.account.id, "trails"), accountTrailOutboxRef.current.snapshot()));
@@ -188,7 +202,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setAccount(null);
     const guestVisited = guestVisitOutboxRef.current.applyTo(readStored<string[]>(target, JOURNAL_STORAGE.guestVisited, []));
     const guestTrails = guestTrailOutboxRef.current.applyTo(readStored<string[]>(target, JOURNAL_STORAGE.guestTrails, []));
-    updateProgress(guestVisited, guestTrails);
+    updateProgress(guestVisited, guestTrails, readStored<Record<string, string>>(target, JOURNAL_STORAGE.guestVisitTimestamps, {}));
     setGuestProgressAvailable(guestHasProgress());
     if (message) setSyncMessage(message);
   }, [guestHasProgress, noteStorageFailure, storage, updateProgress]);
@@ -219,7 +233,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       if (identity.kind === "account" && error.status === 401) expireAccount(capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, expireAccount]);
+    if (kind !== "visits" || !epochRef.current.isCurrent(capturedEpoch) || visitedRef.current.has(id) !== enabled) return;
+    const result = await response.json() as { visitedAt?: string | null };
+    const nextTimestamps = { ...visitTimestampsRef.current };
+    if (enabled && result.visitedAt) nextTimestamps[id] = result.visitedAt;
+    if (!enabled) delete nextTimestamps[id];
+    updateProgress(new Set(visitedRef.current), new Set(trailsRef.current), nextTimestamps);
+  }, [apiBaseUrl, expireAccount, updateProgress]);
 
   const persistOutbox = useCallback((identity: Identity) => {
     if (identity.kind === "guest") {
@@ -282,6 +302,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
     const guestVisited = guestVisitOutboxRef.current.applyTo(readStored<string[]>(target, JOURNAL_STORAGE.guestVisited, []));
     const guestTrails = guestTrailOutboxRef.current.applyTo(readStored<string[]>(target, JOURNAL_STORAGE.guestTrails, []));
+    const guestVisitTimestamps = readStored<Record<string, string>>(target, JOURNAL_STORAGE.guestVisitTimestamps, {});
     const cachedPlaces = readStored<Place[]>(target, JOURNAL_STORAGE.places, []);
 
     let savedToken = "";
@@ -289,15 +310,18 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const cachedAccount = readStored<AccountSnapshot | null>(target, JOURNAL_STORAGE.accountSnapshot, null);
     let initialVisited = guestVisited;
     let initialTrails = guestTrails;
+    let initialVisitTimestamps = guestVisitTimestamps;
     if (savedToken) {
       identityRef.current = { kind: "account", token: savedToken, account: cachedAccount?.account ?? null };
       if (cachedAccount) {
         hydrateAccountOutboxes(cachedAccount.account.id);
         initialVisited = accountVisitOutboxRef.current.applyTo(cachedAccount.visitedIds);
         initialTrails = accountTrailOutboxRef.current.applyTo(cachedAccount.completedTrailIds);
+        initialVisitTimestamps = cachedAccount.visitTimestamps ?? {};
       } else {
         initialVisited = new Set();
         initialTrails = new Set();
+        initialVisitTimestamps = {};
       }
     } else {
       identityRef.current = { kind: "guest", collectionKey };
@@ -307,7 +331,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       if (cachedPlaces.length) setPlaces(cachedPlaces);
       setAuthenticated(Boolean(savedToken));
       setAccount(savedToken ? cachedAccount?.account ?? null : null);
-      updateProgress(initialVisited, initialTrails);
+      updateProgress(initialVisited, initialTrails, initialVisitTimestamps);
       setGuestProgressAvailable(guestHasProgress() && (!cachedAccount || !guestWasImportedBy(cachedAccount.account.id)));
       if (!initialStorageAvailable) setStorageUnavailable(true);
       if (!apiBaseUrl) {
@@ -328,6 +352,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           updateProgress(
             accountVisitOutboxRef.current.applyTo(session.visitedIds),
             accountTrailOutboxRef.current.applyTo(session.completedTrailIds),
+            timestampsFor(session.visits),
           );
           persistAccount();
         } catch (error) {
@@ -359,7 +384,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         const nextTrails = trailBox.applyTo(payload.completedTrailIds ?? [], trailCheckpoint);
         setPlaces(payload.places);
         setCoverageNote(payload.coverageNote);
-        updateProgress(nextVisited, nextTrails);
+        updateProgress(nextVisited, nextTrails, timestampsFor(payload.visits));
         noteStorageFailure(writeStored(target, JOURNAL_STORAGE.places, payload.places));
         if (identity.kind === "guest") persistGuest(); else persistAccount();
         setLoadError("");
@@ -452,6 +477,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       updateProgress(
         accountVisitOutboxRef.current.applyTo(session.visitedIds),
         accountTrailOutboxRef.current.applyTo(session.completedTrailIds),
+        timestampsFor(session.visits),
       );
       persistAccount();
       setGuestProgressAvailable(guestHasProgress() && !guestWasImportedBy(session.account.id));
@@ -506,7 +532,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       await drainIdentity(guestIdentity, capturedEpoch);
       const result = await importGuestProgress(apiBaseUrl, accountIdentity.token, collectionKey);
       if (!epochRef.current.isCurrent(capturedEpoch)) return;
-      updateProgress(new Set(result.visitedIds), new Set(result.completedTrailIds));
+      updateProgress(new Set(result.visitedIds), new Set(result.completedTrailIds), timestampsFor(result.visits));
       persistAccount();
       const revision = readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0);
       if (accountIdentity.account) noteStorageFailure(writeStored(target, importedGuestKey(accountIdentity.account.id), revision));
@@ -528,6 +554,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     places,
     visited,
     completedTrails,
+    visitTimestamps,
     coverageNote,
     account,
     authenticated,

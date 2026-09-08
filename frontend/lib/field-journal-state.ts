@@ -6,6 +6,7 @@ export const JOURNAL_STORAGE = {
   collectionKey: "every-park:collection-key:v1",
   places: "every-park:places:v1",
   guestVisited: "every-park:visited:v1",
+  guestVisitTimestamps: "every-park:visit-timestamps:v1",
   guestTrails: "every-park:trails:v1",
   guestVisitPending: "every-park:pending:v1",
   guestTrailPending: "every-park:trail-pending:v1",
