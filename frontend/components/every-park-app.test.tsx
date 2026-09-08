@@ -19,6 +19,16 @@ vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadSt
 afterEach(() => { cleanup(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); });
 
 describe("Parkdex navigation", () => {
+  it("keeps map modes, location, and search in one utility toolbar", () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    const toolbar = screen.getByRole("toolbar", { name: "Map utilities" });
+    expect(toolbar.querySelectorAll("button")).toHaveLength(4);
+    expect(toolbar.contains(screen.getByRole("button", { name: "My map" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Find places" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Show my current location" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Search places" }))).toBe(true);
+  });
+
   it("toggles active Places and Badges tabs back to the full map", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
@@ -88,6 +98,16 @@ describe("Parkdex navigation", () => {
     journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     render(<ParkdexApp apiBaseUrl="" />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("uses varied tree, mushroom, and bear confetti without leaves", () => {
+    const { container } = render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Find places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark as visited" }));
+    const pieces = [...container.querySelectorAll<HTMLElement>("[data-confetti-kind]")];
+    expect(new Set(pieces.map((piece) => piece.dataset.confettiKind))).toEqual(new Set(["tree", "mushroom", "bear"]));
+    expect(new Set(pieces.map((piece) => piece.style.getPropertyValue("--x"))).size).toBe(pieces.length);
   });
 
   it("keeps signed-out navigation focused on the map and account", () => {

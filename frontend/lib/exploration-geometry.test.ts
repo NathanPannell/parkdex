@@ -1,75 +1,138 @@
+import { readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+
+import booleanValid from "@turf/boolean-valid";
 import { describe, expect, it } from "vitest";
 
-import { buildExplorationCoverage, distanceKm, type ExplorationPoint } from "./exploration-geometry";
+import {
+  distanceKm,
+  EXPLORATION_CATEGORY_WEIGHTS,
+  nearestWeightedExplorationPoint,
+  type ExplorationPoint,
+  weightedDistanceScore,
+  weightedTerritoryConstraint,
+} from "./exploration-geometry";
 
-const point = (id: string, longitude: number, latitude = 49): ExplorationPoint => ({ id, longitude, latitude });
-const polygons = (coverage: ReturnType<typeof buildExplorationCoverage>): GeoJSON.Position[][][] => {
-  const geometry = coverage.features[0]?.geometry;
-  if (!geometry) return [];
-  return geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+type TerritoryAsset = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon, {
+  id?: string;
+  category?: string;
+  weight?: number;
+  kind: "exploration-scope" | "estimated-territory";
+}> & {
+  metadata: {
+    activePlaceCount: number;
+    territoryCount: number;
+    categoryWeights: typeof EXPLORATION_CATEGORY_WEIGHTS;
+  };
 };
 
-describe("exploration coverage", () => {
-  it("handles zero and one visit with a closed, rounded footprint", () => {
-    expect(buildExplorationCoverage([]).features).toEqual([]);
-    const coverage = buildExplorationCoverage([point("solo", -124)], { circleSteps: 16 });
-    expect(coverage.features).toHaveLength(1);
-    expect(coverage.features[0].properties).toEqual({ kind: "estimated-exploration", visitedCount: 1 });
-    const outerRing = polygons(coverage)[0][0];
-    expect(outerRing[0]).toEqual(outerRing.at(-1));
-    expect(outerRing.length).toBeGreaterThanOrEqual(17);
+const point = (
+  id: string,
+  longitude: number,
+  latitude = 49,
+  category: ExplorationPoint["category"] = "regional",
+): ExplorationPoint => ({ id, longitude, latitude, category });
+
+function catalogue() {
+  return JSON.parse(readFileSync(resolve(process.cwd(), "../data/places.json"), "utf8")) as ExplorationPoint[];
+}
+
+function territoryAsset() {
+  return JSON.parse(readFileSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson"), "utf8")) as TerritoryAsset;
+}
+
+function ringContains([x, y]: readonly [number, number], ring: GeoJSON.Position[]) {
+  let inside = false;
+  for (let current = 0, previous = ring.length - 1; current < ring.length; previous = current, current += 1) {
+    const [currentX, currentY] = ring[current];
+    const [previousX, previousY] = ring[previous];
+    if ((currentY > y) !== (previousY > y)
+      && x < (previousX - currentX) * (y - currentY) / (previousY - currentY) + currentX) inside = !inside;
+  }
+  return inside;
+}
+
+function geometryContains(location: readonly [number, number], geometry: GeoJSON.MultiPolygon) {
+  return geometry.coordinates.some((polygon) => (
+    ringContains(location, polygon[0]) && !polygon.slice(1).some((hole) => ringContains(location, hole))
+  ));
+}
+
+describe("weighted exploration territory", () => {
+  it("uses the explicit national, island, provincial, regional influence order", () => {
+    expect(EXPLORATION_CATEGORY_WEIGHTS).toEqual({ national: 4, island: 3, provincial: 2, regional: 1 });
+    const location = point("query", -124);
+    const sameLocation = (["national", "island", "provincial", "regional"] as const)
+      .map((category) => point(category, -123.9, 49, category));
+    expect(sameLocation.map((place) => weightedDistanceScore(location, place)))
+      .toEqual([...sameLocation.map((place) => weightedDistanceScore(location, place))].sort((a, b) => a - b));
+    expect(nearestWeightedExplorationPoint(location, sameLocation)?.id).toBe("national");
   });
 
-  it("joins two nearby visits into one shape and keeps distant visits disconnected", () => {
-    const near = buildExplorationCoverage([point("a", -124), point("b", -123.8)]);
-    const far = buildExplorationCoverage([point("a", -125), point("b", -123)]);
-    expect(polygons(near)).toHaveLength(1);
-    expect(polygons(far)).toHaveLength(2);
+  it("lets weight expand an accomplishment without defeating a substantially nearer gap", () => {
+    const location = point("query", -124);
+    const regional = point("regional", -123.86, 49, "regional");
+    const nationalWithinInfluence = point("national", -123.74, 49, "national");
+    const nationalTooFar = point("national", -123.68, 49, "national");
+    expect(nearestWeightedExplorationPoint(location, [regional, nationalWithinInfluence])?.id).toBe("national");
+    expect(nearestWeightedExplorationPoint(location, [regional, nationalTooFar])?.id).toBe("regional");
   });
 
-  it("honors a caller's strict link limit", () => {
-    const places = [point("a", -124), point("b", -123.8)];
-    expect(polygons(buildExplorationCoverage(places, { maxLinkKm: 0 }))).toHaveLength(2);
+  it("resolves coincident representatives by weight, then stable id", () => {
+    const location = point("query", -124);
+    expect(nearestWeightedExplorationPoint(location, [
+      point("regional", -123.9, 49, "regional"),
+      point("national", -123.9, 49, "national"),
+    ])?.id).toBe("national");
+    expect(nearestWeightedExplorationPoint(location, [
+      point("z-place", -123.9),
+      point("a-place", -123.9),
+    ])?.id).toBe("a-place");
   });
 
-  it("uses one unioned feature without overlapping feature seams", () => {
-    const coverage = buildExplorationCoverage(
-      [point("a", -124), point("b", -123.9), point("c", -123.8)],
-      { maxLinkKm: 50 },
-    );
-    expect(coverage.features).toHaveLength(1);
-    expect(polygons(coverage)).toHaveLength(1);
+  it("builds complementary straight or curved pair constraints", () => {
+    const regional = point("regional", -124, 49, "regional");
+    const national = point("national", -123.8, 49, "national");
+    expect(weightedTerritoryConstraint(regional, national)).toMatchObject({ kind: "circle", keep: "inside" });
+    expect(weightedTerritoryConstraint(national, regional)).toMatchObject({ kind: "circle", keep: "outside" });
+    expect(weightedTerritoryConstraint(regional, point("peer", -123.8))).toMatchObject({ kind: "half-plane" });
   });
 
-  it("deduplicates repeated ids and identical coordinates", () => {
-    const coverage = buildExplorationCoverage([
-      point("same", -124),
-      point("same", -123.9),
-      point("duplicate-position", -124),
-    ]);
-    expect(coverage.features[0].properties.visitedCount).toBe(1);
-    expect(polygons(coverage)).toHaveLength(1);
+  it("gives every active catalogue representative its own deterministic nearest score", () => {
+    const places = catalogue();
+    expect(places).toHaveLength(195);
+    places.forEach((place) => expect(nearestWeightedExplorationPoint(place, places)?.id).toBe(place.id));
   });
 
-  it("cuts a small target gap around an explicit unseen place inside explored coverage", () => {
-    const coverage = buildExplorationCoverage(
-      [point("west", -124.1), point("east", -123.9)],
-      { gapPoints: [point("unseen", -124)], gapRadiusKm: 1 },
-    );
-    expect(polygons(coverage)[0].length).toBeGreaterThan(1);
-  });
+  it("ships one valid, land-clipped territory for every active place and covers the full scope", () => {
+    const places = catalogue();
+    const asset = territoryAsset();
+    const scope = asset.features.find((feature) => feature.properties.kind === "exploration-scope");
+    const territories = asset.features.filter((feature) => feature.properties.kind === "estimated-territory");
+    expect(scope).toBeDefined();
+    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(2_000_000);
+    expect(asset.metadata).toMatchObject({
+      activePlaceCount: 195,
+      territoryCount: 195,
+      categoryWeights: EXPLORATION_CATEGORY_WEIGHTS,
+    });
+    expect(new Set(territories.map((feature) => feature.properties.id)))
+      .toEqual(new Set(places.map((place) => place.id)));
+    territories.forEach((feature) => expect(booleanValid(feature)).toBe(true));
 
-  it("rejects invalid coordinates and emits finite, bounded rings", () => {
-    const coverage = buildExplorationCoverage([
-      point("valid", -124),
-      point("invalid", Number.NaN),
-      point("polar", 0, 95),
-    ], { footprintRadiusKm: 4, circleSteps: 16 });
-    expect(coverage.features[0].properties.visitedCount).toBe(1);
-    const coordinates = polygons(coverage)[0][0];
-    expect(coordinates.flat().every(Number.isFinite)).toBe(true);
-    expect(Math.max(...coordinates.map(([longitude]) => Math.abs(longitude + 124)))).toBeLessThan(0.1);
-  });
+    // A deterministic land sample catches both offshore fill and gaps/overlaps
+    // without running an unstable 195-way polygon boolean in the test process.
+    let landSamples = 0;
+    for (let latitude = 48.31; latitude <= 50.88; latitude += 0.04) {
+      for (let longitude = -128.44; longitude <= -123.04; longitude += 0.04) {
+        const location = [longitude + 0.013, latitude + 0.017] as const;
+        if (!geometryContains(location, scope!.geometry)) continue;
+        landSamples += 1;
+        expect(territories.filter((feature) => geometryContains(location, feature.geometry))).toHaveLength(1);
+      }
+    }
+    expect(landSamples).toBeGreaterThan(1_500);
+  }, 20_000);
 
   it("calculates Vancouver Island scale distances", () => {
     expect(distanceKm(point("a", -123.3656, 48.4284), point("b", -123.9401, 49.1659))).toBeCloseTo(92.4, 0);

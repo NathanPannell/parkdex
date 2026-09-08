@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
+import { cameraPaddingForOverlays, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -39,5 +39,29 @@ describe("selected boundary camera padding", () => {
     const desktopPadding = selectedPlacePadding(rect(0, 0, 1280, 900), rect(24, 520, 550, 350), 142);
     expect(hasUsableCameraViewport(rect(0, 0, 390, 844), desktopPadding)).toBe(false);
     expect(hasUsableCameraViewport(rect(0, 0, 1280, 900), desktopPadding)).toBe(true);
+  });
+
+  it("keeps cluster content between the header, utility bar, and mobile navigation", () => {
+    expect(cameraPaddingForOverlays(rect(0, 0, 390, 844), [
+      rect(8, 8, 374, 62),
+      rect(10, 690, 370, 58),
+      rect(14, 762, 362, 70),
+    ])).toEqual({ top: 82, right: 24, bottom: 172, left: 24 });
+  });
+
+  it("reserves a side sheet on a wide map without treating it as a bottom sheet", () => {
+    expect(cameraPaddingForOverlays(rect(0, 0, 1200, 900), [rect(760, 160, 420, 700)])).toEqual({
+      top: 28,
+      right: 458,
+      bottom: 32,
+      left: 24,
+    });
+  });
+
+  it("keeps a usable camera window when temporary overlays meet from both edges", () => {
+    const map = rect(0, 0, 390, 620);
+    const padding = cameraPaddingForOverlays(map, [rect(0, 0, 390, 280), rect(0, 300, 390, 320)]);
+    expect(hasUsableCameraViewport(map, padding, 96)).toBe(true);
+    expect(padding.top + padding.bottom).toBeCloseTo(524);
   });
 });

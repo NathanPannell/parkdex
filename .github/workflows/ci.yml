@@ -82,6 +82,9 @@ jobs:
       - name: Verify published boundary asset matches reviewed geometry
         run: node scripts/check-boundary-asset.mjs
         working-directory: frontend
+      - name: Verify weighted exploration territories match the catalogue
+        run: npm run check:exploration-territories
+        working-directory: frontend
       - run: npm run lint
         working-directory: frontend
       - run: npm run typecheck

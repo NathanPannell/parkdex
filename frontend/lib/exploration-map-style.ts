@@ -1,26 +1,38 @@
-import type { LayerSpecification } from "maplibre-gl";
+import type { FilterSpecification, LayerSpecification } from "maplibre-gl";
 
-export const EXPLORATION_SOURCE_ID = "exploration";
+export const EXPLORATION_TERRITORY_SOURCE_ID = "exploration-territories";
+export const EXPLORATION_TERRITORY_DATA_URL = "/data/exploration-territories.v1.geojson";
 export const CURRENT_LOCATION_SOURCE_ID = "current-location";
 
-export function explorationLayerSpecifications(): LayerSpecification[] {
+export function explorationVisitedFilter(visitedIds: readonly string[]): FilterSpecification {
   return [
+    "all",
+    ["==", ["get", "kind"], "estimated-territory"],
+    ["in", ["get", "id"], ["literal", [...new Set(visitedIds)].sort()]],
+  ];
+}
+
+export function explorationLayerSpecifications(visitedIds: readonly string[] = []): LayerSpecification[] {
+  const visitedFilter = explorationVisitedFilter(visitedIds);
+  return [
+    {
+      id: "exploration-scope-outline",
+      type: "line",
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "exploration-scope"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#173d32",
+        "line-opacity": 0.72,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.25, 11, 2.5],
+      },
+    },
     {
       id: "exploration-fill",
       type: "fill",
-      source: EXPLORATION_SOURCE_ID,
-      paint: { "fill-color": "#b9ea55", "fill-opacity": 0.2 },
-    },
-    {
-      id: "exploration-edge",
-      type: "line",
-      source: EXPLORATION_SOURCE_ID,
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: {
-        "line-color": "#47745f",
-        "line-opacity": 0.68,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 11, 2.25],
-      },
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: visitedFilter,
+      paint: { "fill-color": "#8fd54f", "fill-opacity": 0.62 },
     },
   ];
 }
