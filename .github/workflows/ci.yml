@@ -126,14 +126,21 @@ jobs:
         run: node scripts/release-metadata.mjs "$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
-      - name: Stamp and deploy Railway services
+      - name: Stamp and deploy exact Railway source
         run: |
           source scripts/railway-retry.sh
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
           railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry '' redeploy --yes --from-source --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry '' redeploy --yes --from-source --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          bash scripts/wait-for-railway-source.sh
+          source_marker=backend/.production-source-sha
+          trap 'rm -f "$source_marker"' EXIT
+          deployment_message="production-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
+          printf '%s' "$deployment_message" > "$source_marker"
+          export PREVIEW_ENVIRONMENT="$RAILWAY_ENVIRONMENT"
+          export EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE="$deployment_message"
+          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+          bash scripts/wait-for-railway-preview-source.sh
       - name: Wait for the exact migrated API commit
         id: railway
         run: bash scripts/wait-for-railway-api.sh
