@@ -124,14 +124,6 @@ function fitOverview(map: MapLibreMap, animated: boolean) {
   );
 }
 
-function collapseAttribution(container: HTMLElement) {
-  const expanded = container.querySelector<HTMLElement>(".maplibregl-ctrl-attrib.maplibregl-compact-show");
-  const toggle = expanded?.querySelector<HTMLElement>(".maplibregl-ctrl-attrib-button");
-  if (!toggle) return false;
-  toggle.click();
-  return true;
-}
-
 function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
   const bounds = boundsForPlace(index, placeId);
   if (!bounds) return false;
@@ -274,18 +266,6 @@ export function ParkMap({
           setMapFailed(true);
         }
       }, 12_000);
-      map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
-      const attribution = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
-      const attributionSlot = document.getElementById("map-attribution-slot");
-      if (attribution && attributionSlot) attributionSlot.replaceChildren(attribution);
-      let attributionInitiallyCollapsed = false;
-      const collapseMapAttribution = () => {
-        if (attributionInitiallyCollapsed) return;
-        attributionInitiallyCollapsed = collapseAttribution(attributionSlot ?? map.getContainer());
-      };
-      map.on("styledata", collapseMapAttribution);
-      map.on("sourcedata", collapseMapAttribution);
-      window.queueMicrotask(collapseMapAttribution);
       let collectionReady = false;
       let boundarySetup = false;
       let boundarySourceReadiness = initialBoundarySourceReadiness();

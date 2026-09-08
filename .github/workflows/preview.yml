@@ -196,12 +196,16 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            const marker = '<!-- full-stack-preview -->';
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo,
               issue_number: context.issue.number,
             });
-            const body = comments.find(comment => comment.body?.includes('<!-- full-stack-preview -->'))?.body || '';
-            const match = body.match(/Vercel deployment: `([^`]+)`/);
+            const body = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' &&
+              comment.body?.startsWith(`${marker}\n`)
+            )?.body || '';
+            const match = body.match(/^Vercel deployment: `(dpl_[A-Za-z0-9]+)`$/m);
             core.setOutput('deployment_id', match?.[1] || '');
 
       - name: Delete Railway preview environment
@@ -224,5 +228,6 @@ jobs:
         if: steps.vercel.outputs.deployment_id != ''
         continue-on-error: true
         env:
+          DEPLOYMENT_ID: ${{ steps.vercel.outputs.deployment_id }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel remove "${{ steps.vercel.outputs.deployment_id }}" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+        run: vercel remove "$DEPLOYMENT_ID" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"

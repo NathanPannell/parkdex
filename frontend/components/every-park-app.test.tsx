@@ -187,6 +187,26 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
   });
 
+  it("keeps credits on the signed-out account and removes map-header attribution", () => {
+    const { container } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(container.querySelector("#map-attribution-slot")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Credits" }));
+    expect(screen.getByRole("dialog", { name: "Credits" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /OpenFreeMap/ }).getAttribute("href")).toBe("https://openfreemap.org/");
+    expect(screen.getByRole("link", { name: /OpenMapTiles/ }).getAttribute("href")).toBe("https://openmaptiles.org/");
+    expect(screen.getByRole("link", { name: /OpenStreetMap contributors/ }).getAttribute("href")).toBe("https://www.openstreetmap.org/copyright");
+  });
+
+  it("renders nearby places with the same category row treatment as Places", () => {
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 49, longitude: -124, accuracy: 5, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) }, timestamp: Date.now(), toJSON: () => ({}) }) } });
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    const row = screen.getByRole("button", { name: /Forest Park/ });
+    expect(row.classList.contains("place-row")).toBe(true);
+    expect(row.classList.contains("category-provincial")).toBe(true);
+  });
+
   it("opens account shelf and modal entries at map and badge destinations", () => {
     journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test" }; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Account" }));
