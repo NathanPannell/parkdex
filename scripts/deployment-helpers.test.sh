@@ -63,6 +63,7 @@ if MOCK_RAILWAY_STATUS=SUCCESS bash "$repo/scripts/verify-railway-deployments.sh
 fi
 
 export VERCEL_TOKEN=test VERCEL_ORG_ID=org
+export VERIFY_DELAYS=0
 export MOCK_PAGE_SHA=abcdef0123456789012345678901234567890123
 export MOCK_FRONTEND_SHA="$MOCK_PAGE_SHA" MOCK_READY_STATE=READY
 bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_FRONTEND_SHA"

@@ -6,12 +6,6 @@ expected_sha="${2:?expected commit SHA is required}"
 page="$(mktemp)"
 trap 'rm -f "$page"' EXIT
 
-if [[ -n "${VERCEL_TOKEN:-}" ]]; then
-  inspection="$(vercel inspect "$url" --json --token "$VERCEL_TOKEN" --scope "${VERCEL_ORG_ID:?VERCEL_ORG_ID is required}")"
-  [[ "$(jq -r '.readyState // empty' <<<"$inspection")" == READY ]]
-  [[ "$(jq -r '.meta.githubCommitSha // empty' <<<"$inspection")" == "$expected_sha" ]]
-fi
-
 fetch() {
   if [[ "$url" == "https://staging.parkdex.app" && -n "${VERCEL_TOKEN:-}" ]]; then
     vercel curl / --deployment "$url" --cwd frontend --token "$VERCEL_TOKEN" \
@@ -22,9 +16,15 @@ fetch() {
   fi
 }
 
-for delay in 0 2 4 8 12; do
+for delay in ${VERIFY_DELAYS:-0 2 4 8 12}; do
   (( delay == 0 )) || sleep "$delay"
-  if fetch && grep -Fq "${expected_sha:0:7}" "$page"; then
+  exact_release=true
+  if [[ -n "${VERCEL_TOKEN:-}" ]]; then
+    inspection="$(vercel inspect "$url" --json --token "$VERCEL_TOKEN" --scope "${VERCEL_ORG_ID:?VERCEL_ORG_ID is required}" 2>/dev/null || true)"
+    [[ "$(jq -r '.readyState // empty' <<<"$inspection" 2>/dev/null)" == READY ]] || exact_release=false
+    [[ "$(jq -r '.meta.githubCommitSha // empty' <<<"$inspection" 2>/dev/null)" == "$expected_sha" ]] || exact_release=false
+  fi
+  if [[ "$exact_release" == true ]] && fetch && grep -Fq "${expected_sha:0:7}" "$page"; then
     grep -q '<title>Parkdex' "$page"
     if [[ "$url" == "https://staging.parkdex.app" && -n "${VERCEL_TOKEN:-}" ]]; then
       for asset in maplibre-gl-worker.mjs maplibre-gl-shared.mjs; do
