@@ -529,7 +529,7 @@ button { color: inherit; }
 .collection-progress li b { color: white; font-variant-numeric: tabular-nums; }
 
 .feature-collection { overflow: hidden; padding-bottom: 12px; }
-.collection-view { display: grid; grid-template-rows: minmax(0,1fr) 50px; height: 100%; gap: 10px; }
+.collection-view { display: grid; min-width: 0; grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 50px; height: 100%; gap: 10px; }
 .collection-scroll { min-height: 0; overflow-y: auto; padding: 0 2px 10px; overscroll-behavior: contain; }
 .collection-search-dock { display: flex; align-items: center; justify-self: end; width: 48px; min-height: 48px; gap: 5px; padding: 4px; border-radius: 14px; background: var(--forest); box-shadow: 0 8px 22px rgba(16,48,40,.25); }
 .collection-view.search-open .collection-search-dock { justify-self: stretch; width: 100%; background: var(--paper-bright); }
