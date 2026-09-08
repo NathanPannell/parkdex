@@ -204,13 +204,28 @@ jobs:
         env:
           API_URL: ${{ steps.railway.outputs.api_url }}
         run: |
+          verify_cors() {
+            local method="$1" origin="$2" headers
+            for _ in $(seq 1 30); do
+              headers="$(mktemp)"
+              if [[ "$method" == GET ]]; then
+                curl --fail --silent --show-error --dump-header "$headers" --output /dev/null \
+                  --header "Origin: $origin" "$API_URL/api/places" || true
+              else
+                curl --fail --silent --show-error --request OPTIONS --dump-header "$headers" --output /dev/null \
+                  --header "Origin: $origin" --header 'Access-Control-Request-Method: GET' "$API_URL/api/places" || true
+              fi
+              if tr -d '\r' < "$headers" | grep -Fqix "access-control-allow-origin: $origin"; then
+                return 0
+              fi
+              sleep 5
+            done
+            return 1
+          }
+
           for origin in https://parkdex.app https://www.parkdex.app; do
-            headers="$(mktemp)"
-            curl --fail --silent --show-error --dump-header "$headers" --output /dev/null --header "Origin: $origin" "$API_URL/api/places"
-            grep -Eqi "^access-control-allow-origin: ${origin//./\\.}\r?$" "$headers"
-            curl --fail --silent --show-error --request OPTIONS --dump-header "$headers" --output /dev/null \
-              --header "Origin: $origin" --header 'Access-Control-Request-Method: GET' "$API_URL/api/places"
-            grep -Eqi "^access-control-allow-origin: ${origin//./\\.}\r?$" "$headers"
+            verify_cors GET "$origin"
+            verify_cors OPTIONS "$origin"
           done
 
   deploy-staging:
