@@ -69,6 +69,28 @@ export function hasUsableCameraViewport(
     && map.height - padding.top - padding.bottom >= minimumVisibleSize;
 }
 
+/**
+ * Keeps fitted content inside the middle portion of the map space that remains
+ * after headers, sheets, and controls have been reserved.
+ */
+export function cameraPaddingWithContentMargin(
+  map: Pick<LayoutRect, "width" | "height">,
+  padding: CameraPadding,
+  marginFraction = 1 / 6,
+): CameraPadding {
+  const fraction = Math.max(0, Math.min(0.4, marginFraction));
+  const usableWidth = Math.max(0, map.width - padding.left - padding.right);
+  const usableHeight = Math.max(0, map.height - padding.top - padding.bottom);
+  const horizontalMargin = usableWidth * fraction;
+  const verticalMargin = usableHeight * fraction;
+  return {
+    top: padding.top + verticalMargin,
+    right: padding.right + horizontalMargin,
+    bottom: padding.bottom + verticalMargin,
+    left: padding.left + horizontalMargin,
+  };
+}
+
 export function selectedPlacePadding(
   map: LayoutRect,
   sheet: LayoutRect | null,

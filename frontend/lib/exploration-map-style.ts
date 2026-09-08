@@ -12,8 +12,20 @@ export function explorationVisitedFilter(visitedIds: readonly string[]): FilterS
   ];
 }
 
+export function explorationBoundaryFilter(visitedIds: readonly string[]): FilterSpecification {
+  const ids = [...new Set(visitedIds)].sort();
+  const ownerAVisited: FilterSpecification = ["in", ["get", "ownerA"], ["literal", ids]];
+  const ownerBVisited: FilterSpecification = ["in", ["get", "ownerB"], ["literal", ids]];
+  return [
+    "all",
+    ["==", ["get", "kind"], "territory-edge"],
+    ["!=", ownerAVisited, ownerBVisited],
+  ];
+}
+
 export function explorationLayerSpecifications(visitedIds: readonly string[] = []): LayerSpecification[] {
   const visitedFilter = explorationVisitedFilter(visitedIds);
+  const boundaryFilter = explorationBoundaryFilter(visitedIds);
   return [
     {
       id: "exploration-scope-outline",
@@ -23,8 +35,8 @@ export function explorationLayerSpecifications(visitedIds: readonly string[] = [
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#173d32",
-        "line-opacity": 0.72,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.25, 11, 2.5],
+        "line-opacity": 0.42,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1, 11, 2],
       },
     },
     {
@@ -33,6 +45,31 @@ export function explorationLayerSpecifications(visitedIds: readonly string[] = [
       source: EXPLORATION_TERRITORY_SOURCE_ID,
       filter: visitedFilter,
       paint: { "fill-color": "#8fd54f", "fill-opacity": 0.62 },
+    },
+    {
+      id: "exploration-edge-glow",
+      type: "line",
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: boundaryFilter,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#b7ed4b",
+        "line-opacity": 0.7,
+        "line-blur": 1.2,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 8, 11, 12],
+      },
+    },
+    {
+      id: "exploration-edge",
+      type: "line",
+      source: EXPLORATION_TERRITORY_SOURCE_ID,
+      filter: boundaryFilter,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#173d32",
+        "line-opacity": 0.94,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3.5, 11, 6],
+      },
     },
   ];
 }

@@ -2,6 +2,7 @@ import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import booleanValid from "@turf/boolean-valid";
+import { featureFilter } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,16 +13,24 @@ import {
   weightedDistanceScore,
   weightedTerritoryConstraint,
 } from "./exploration-geometry";
+import { explorationBoundaryFilter } from "./exploration-map-style";
 
-type TerritoryAsset = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon, {
+type TerritoryProperties = {
   id?: string;
   category?: string;
   weight?: number;
-  kind: "exploration-scope" | "estimated-territory";
-}> & {
+  ownerA?: string;
+  ownerB?: string | null;
+  kind: "exploration-scope" | "estimated-territory" | "territory-edge";
+};
+type TerritoryAsset = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon | GeoJSON.MultiLineString, TerritoryProperties> & {
   metadata: {
     activePlaceCount: number;
     territoryCount: number;
+    edgeFeatureCount: number;
+    edgeSegmentCount: number;
+    coastEdgeSegmentCount: number;
+    interiorEdgeSegmentCount: number;
     categoryWeights: typeof EXPLORATION_CATEGORY_WEIGHTS;
   };
 };
@@ -39,6 +48,11 @@ function catalogue() {
 
 function territoryAsset() {
   return JSON.parse(readFileSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson"), "utf8")) as TerritoryAsset;
+}
+
+function boundaryFilterMatches(visitedIds: string[], ownerA: string, ownerB: string | null) {
+  const compiled = featureFilter(explorationBoundaryFilter(visitedIds), "layers.test.filter").filter;
+  return compiled({ zoom: 5 }, { properties: { kind: "territory-edge", ownerA, ownerB } } as never);
 }
 
 function ringContains([x, y]: readonly [number, number], ring: GeoJSON.Position[]) {
@@ -107,10 +121,14 @@ describe("weighted exploration territory", () => {
   it("ships one valid, land-clipped territory for every active place and covers the full scope", () => {
     const places = catalogue();
     const asset = territoryAsset();
-    const scope = asset.features.find((feature) => feature.properties.kind === "exploration-scope");
-    const territories = asset.features.filter((feature) => feature.properties.kind === "estimated-territory");
+    const scope = asset.features.find((feature): feature is GeoJSON.Feature<GeoJSON.MultiPolygon, TerritoryProperties> => (
+      feature.properties.kind === "exploration-scope" && feature.geometry.type === "MultiPolygon"
+    ));
+    const territories = asset.features.filter((feature): feature is GeoJSON.Feature<GeoJSON.MultiPolygon, TerritoryProperties> => (
+      feature.properties.kind === "estimated-territory" && feature.geometry.type === "MultiPolygon"
+    ));
     expect(scope).toBeDefined();
-    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(2_000_000);
+    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(3_000_000);
     expect(asset.metadata).toMatchObject({
       activePlaceCount: 195,
       territoryCount: 195,
@@ -133,6 +151,36 @@ describe("weighted exploration territory", () => {
     }
     expect(landSamples).toBeGreaterThan(1_500);
   }, 20_000);
+
+  it("ships a rounded display-edge topology with no shared seam between visited neighbors", () => {
+    const places = catalogue();
+    const asset = territoryAsset();
+    const edges = asset.features.filter((feature): feature is GeoJSON.Feature<GeoJSON.MultiLineString, TerritoryProperties> => (
+      feature.properties.kind === "territory-edge" && feature.geometry.type === "MultiLineString"
+    ));
+    expect(edges).toHaveLength(asset.metadata.edgeFeatureCount);
+    expect(asset.metadata.coastEdgeSegmentCount + asset.metadata.interiorEdgeSegmentCount)
+      .toBe(asset.metadata.edgeSegmentCount);
+    expect(edges.length).toBeGreaterThan(places.length);
+    expect(edges.some((edge) => edge.properties.ownerB === null)).toBe(true);
+
+    const allIds = places.map((place) => place.id);
+    edges.forEach((edge) => {
+      const { ownerA, ownerB } = edge.properties;
+      expect(ownerA).toBeTruthy();
+      expect(boundaryFilterMatches([], ownerA!, ownerB ?? null)).toBe(false);
+      expect(boundaryFilterMatches(allIds, ownerA!, ownerB ?? null)).toBe(ownerB === null);
+    });
+
+    const shared = edges.find((edge) => edge.properties.ownerB != null)!;
+    const first = shared.properties.ownerA!;
+    const second = shared.properties.ownerB!;
+    expect(boundaryFilterMatches([first], first, second)).toBe(true);
+    expect(boundaryFilterMatches([first, second], first, second)).toBe(false);
+
+    const represented = new Set(edges.flatMap((edge) => [edge.properties.ownerA, edge.properties.ownerB].filter(Boolean)));
+    expect(represented).toEqual(new Set(allIds));
+  });
 
   it("calculates Vancouver Island scale distances", () => {
     expect(distanceKm(point("a", -123.3656, 48.4284), point("b", -123.9401, 49.1659))).toBeCloseTo(92.4, 0);

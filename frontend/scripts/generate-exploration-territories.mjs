@@ -6,6 +6,7 @@ import {
   EXPLORATION_CATEGORY_WEIGHTS,
   projectExplorationLocation,
   unprojectExplorationLocation,
+  weightedDistanceScore,
   weightedTerritoryConstraint,
 } from "../lib/exploration-geometry.ts";
 
@@ -181,6 +182,162 @@ const features = places.map((place) => {
   };
 }).filter(Boolean);
 
+const coordinateKey = ([longitude, latitude]) => `${longitude.toFixed(6)},${latitude.toFixed(6)}`;
+const segmentKey = (start, end) => {
+  const startKey = coordinateKey(start);
+  const endKey = coordinateKey(end);
+  return startKey < endKey ? `${startKey}|${endKey}` : `${endKey}|${startKey}`;
+};
+
+function segmentsForGeometry(geometry) {
+  const segments = [];
+  for (const polygon of geometry.coordinates) {
+    for (const ring of polygon) {
+      for (let index = 1; index < ring.length; index += 1) {
+        segments.push([ring[index - 1], ring[index]]);
+      }
+    }
+  }
+  return segments;
+}
+
+// Clipping splits coastline segments wherever a territory reaches shore. A
+// small grid keeps the coast lookup linear instead of comparing every edge to
+// the full island outline.
+const COAST_GRID_SIZE = 0.02;
+const coastGrid = new Map();
+const coastSegments = segmentsForGeometry({ type: "MultiPolygon", coordinates: land });
+const gridKey = (x, y) => `${x},${y}`;
+for (const segment of coastSegments) {
+  const [start, end] = segment;
+  const minX = Math.floor(Math.min(start[0], end[0]) / COAST_GRID_SIZE);
+  const maxX = Math.floor(Math.max(start[0], end[0]) / COAST_GRID_SIZE);
+  const minY = Math.floor(Math.min(start[1], end[1]) / COAST_GRID_SIZE);
+  const maxY = Math.floor(Math.max(start[1], end[1]) / COAST_GRID_SIZE);
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      const key = gridKey(x, y);
+      const bucket = coastGrid.get(key) ?? [];
+      bucket.push(segment);
+      coastGrid.set(key, bucket);
+    }
+  }
+}
+
+function pointOnSegment(point, [start, end]) {
+  const deltaX = end[0] - start[0];
+  const deltaY = end[1] - start[1];
+  const lengthSquared = deltaX ** 2 + deltaY ** 2;
+  if (lengthSquared < 1e-18) return false;
+  const cross = Math.abs((point[0] - start[0]) * deltaY - (point[1] - start[1]) * deltaX);
+  if (cross > 2e-6 * Math.sqrt(lengthSquared)) return false;
+  const projection = (point[0] - start[0]) * deltaX + (point[1] - start[1]) * deltaY;
+  return projection >= -2e-8 && projection <= lengthSquared + 2e-8;
+}
+
+function isCoastSegment([start, end]) {
+  const midpoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+  const cellX = Math.floor(midpoint[0] / COAST_GRID_SIZE);
+  const cellY = Math.floor(midpoint[1] / COAST_GRID_SIZE);
+  const candidates = [];
+  for (let x = cellX - 1; x <= cellX + 1; x += 1) {
+    for (let y = cellY - 1; y <= cellY + 1; y += 1) candidates.push(...(coastGrid.get(gridKey(x, y)) ?? []));
+  }
+  return candidates.some((candidate) => pointOnSegment(start, candidate) && pointOnSegment(end, candidate));
+}
+
+const uniqueSegments = new Map();
+for (const feature of features) {
+  for (const coordinates of segmentsForGeometry(feature.geometry)) {
+    const key = segmentKey(...coordinates);
+    const entry = uniqueSegments.get(key) ?? { coordinates, owners: new Set() };
+    entry.owners.add(feature.properties.id);
+    uniqueSegments.set(key, entry);
+  }
+}
+
+function neighborAcrossSegment(ownerId, [start, end]) {
+  const midpoint = {
+    longitude: (start[0] + end[0]) / 2,
+    latitude: (start[1] + end[1]) / 2,
+  };
+  let neighbor = null;
+  let neighborScore = Number.POSITIVE_INFINITY;
+  for (const candidate of places) {
+    if (candidate.id === ownerId) continue;
+    const score = weightedDistanceScore(midpoint, candidate);
+    if (score < neighborScore || (score === neighborScore && candidate.id < neighbor.id)) {
+      neighbor = candidate;
+      neighborScore = score;
+    }
+  }
+  return neighbor?.id ?? null;
+}
+
+const edgeGroups = new Map();
+let coastEdgeSegmentCount = 0;
+let interiorEdgeSegmentCount = 0;
+for (const entry of uniqueSegments.values()) {
+  const owners = [...entry.owners].sort();
+  let ownerB = owners[1] ?? null;
+  const coastSegment = !ownerB && isCoastSegment(entry.coordinates);
+  if (coastSegment) {
+    coastEdgeSegmentCount += 1;
+  } else {
+    interiorEdgeSegmentCount += 1;
+  }
+  if (!ownerB && !coastSegment) {
+    ownerB = neighborAcrossSegment(owners[0], entry.coordinates);
+    if (!ownerB) throw new Error(`No neighboring territory found for ${owners[0]}`);
+  }
+  const pair = [owners[0], ownerB].filter(Boolean).sort();
+  const ownerA = pair[0];
+  ownerB = pair[1] ?? null;
+  const key = `${ownerA}|${ownerB ?? ""}`;
+  const group = edgeGroups.get(key) ?? { ownerA, ownerB, segments: [] };
+  group.segments.push(entry.coordinates);
+  edgeGroups.set(key, group);
+}
+
+function chainSegments(segments) {
+  const byEndpoint = new Map();
+  segments.forEach((segment, index) => segment.forEach((coordinate) => {
+    const key = coordinateKey(coordinate);
+    const indexes = byEndpoint.get(key) ?? [];
+    indexes.push(index);
+    byEndpoint.set(key, indexes);
+  }));
+  const unused = new Set(segments.map((_, index) => index));
+  const lines = [];
+  const extend = (line, atStart) => {
+    while (true) {
+      const endpoint = atStart ? line[0] : line.at(-1);
+      const nextIndex = (byEndpoint.get(coordinateKey(endpoint)) ?? []).find((index) => unused.has(index));
+      if (nextIndex == null) return;
+      unused.delete(nextIndex);
+      const next = segments[nextIndex];
+      const other = coordinateKey(next[0]) === coordinateKey(endpoint) ? next[1] : next[0];
+      if (atStart) line.unshift(other);
+      else line.push(other);
+    }
+  };
+  while (unused.size) {
+    const index = unused.values().next().value;
+    unused.delete(index);
+    const line = [...segments[index]];
+    extend(line, false);
+    extend(line, true);
+    lines.push(line);
+  }
+  return lines;
+}
+
+const edgeFeatures = [...edgeGroups.values()].map(({ ownerA, ownerB, segments }) => ({
+  type: "Feature",
+  properties: { kind: "territory-edge", ownerA, ownerB },
+  geometry: { type: "MultiLineString", coordinates: chainSegments(segments) },
+}));
+
 const asset = {
   type: "FeatureCollection",
   metadata: {
@@ -190,13 +347,17 @@ const asset = {
     circleSteps: CIRCLE_STEPS,
     activePlaceCount: places.length,
     territoryCount: features.length,
+    edgeFeatureCount: edgeFeatures.length,
+    edgeSegmentCount: uniqueSegments.size,
+    coastEdgeSegmentCount,
+    interiorEdgeSegmentCount,
     note: "Display-only completion estimate; it does not represent land travelled, access, or ownership.",
   },
   features: [{
     type: "Feature",
     properties: { kind: "exploration-scope" },
     geometry: { type: "MultiPolygon", coordinates: land },
-  }, ...features],
+  }, ...features, ...edgeFeatures],
 };
 const serialized = `${JSON.stringify(asset)}\n`;
 

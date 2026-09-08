@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cameraPaddingForOverlays, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
+import { cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -42,11 +42,28 @@ describe("selected boundary camera padding", () => {
   });
 
   it("keeps cluster content between the header, utility bar, and mobile navigation", () => {
-    expect(cameraPaddingForOverlays(rect(0, 0, 390, 844), [
+    const map = rect(0, 0, 390, 844);
+    const overlayPadding = cameraPaddingForOverlays(map, [
       rect(8, 8, 374, 62),
       rect(10, 690, 370, 58),
       rect(14, 762, 362, 70),
-    ])).toEqual({ top: 82, right: 24, bottom: 172, left: 24 });
+    ]);
+    expect(overlayPadding).toEqual({ top: 82, right: 24, bottom: 172, left: 24 });
+    expect(cameraPaddingWithContentMargin(map, overlayPadding)).toEqual({
+      top: 180.33333333333331,
+      right: 81,
+      bottom: 270.3333333333333,
+      left: 81,
+    });
+  });
+
+  it("uses the center two-thirds of unobstructed map space for fitted clusters", () => {
+    expect(cameraPaddingWithContentMargin(rect(0, 0, 600, 900), {
+      top: 150,
+      right: 30,
+      bottom: 150,
+      left: 30,
+    })).toEqual({ top: 250, right: 120, bottom: 250, left: 120 });
   });
 
   it("reserves a side sheet on a wide map without treating it as a bottom sheet", () => {

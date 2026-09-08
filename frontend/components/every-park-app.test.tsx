@@ -164,4 +164,42 @@ describe("Parkdex navigation", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Rathtrevor" } });
     expect(screen.getByRole("button", { name: /Rathtrevor Beach Park/ })).toBeTruthy();
   });
+
+  it("keeps collection search in a bottom dock and exposes mixed category progress", () => {
+    journal.authenticated = true; journal.visited = new Set([place.id, national.id]);
+    render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Places" }));
+    expect(screen.getByRole("progressbar", { name: "2 of 3 places collected" }).getAttribute("aria-valuenow")).toBe("2");
+    const progress = screen.getByLabelText("Collection progress");
+    expect(progress.querySelector("li.category-provincial")?.textContent).toContain("1/2");
+    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search collection" }), { target: { value: "Pacific" } });
+    expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close collection search" }));
+    expect(screen.queryByRole("textbox", { name: "Search collection" })).toBeNull();
+  });
+
+  it("groups badges into collected and uncollected sections", () => {
+    journal.authenticated = true; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
+    render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Badges" }));
+    expect(screen.getByRole("heading", { name: "Collected" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Still out there" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /River Otter Rookie/ }));
+    expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
+  });
+
+  it("opens account shelf and modal entries at map and badge destinations", () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test" }; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
+    render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Forest Park" }));
+    expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "See all" })[0]);
+    expect(screen.getByRole("button", { name: "Close All badges" }).classList.contains("collection-modal-close")).toBe(true);
+    fireEvent.click(screen.getAllByRole("button", { name: "Open River Otter Rookie" }).find((element) => element.classList.contains("collection-modal-row"))!);
+    expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close badge details" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "See all" })[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Open Forest Park" }).find((element) => element.classList.contains("collection-modal-row"))!);
+    expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
+  });
 });

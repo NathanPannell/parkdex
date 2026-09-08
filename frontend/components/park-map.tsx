@@ -27,9 +27,10 @@ import {
   EXPLORATION_TERRITORY_DATA_URL,
   EXPLORATION_TERRITORY_SOURCE_ID,
   explorationLayerSpecifications,
+  explorationBoundaryFilter,
   explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
-import { cameraPaddingForOverlays, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
+import { cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Place } from "@/lib/places";
 
@@ -274,13 +275,17 @@ export function ParkMap({
         }
       }, 12_000);
       map.addControl(new maplibregl.AttributionControl({ compact: true }), "top-right");
+      const attribution = map.getContainer().querySelector<HTMLElement>(".maplibregl-ctrl-attrib");
+      const attributionSlot = document.getElementById("map-attribution-slot");
+      if (attribution && attributionSlot) attributionSlot.replaceChildren(attribution);
       let attributionInitiallyCollapsed = false;
       const collapseMapAttribution = () => {
         if (attributionInitiallyCollapsed) return;
-        attributionInitiallyCollapsed = collapseAttribution(map.getContainer());
+        attributionInitiallyCollapsed = collapseAttribution(attributionSlot ?? map.getContainer());
       };
       map.on("styledata", collapseMapAttribution);
       map.on("sourcedata", collapseMapAttribution);
+      window.queueMicrotask(collapseMapAttribution);
       let collectionReady = false;
       let boundarySetup = false;
       let boundarySourceReadiness = initialBoundarySourceReadiness();
@@ -387,8 +392,10 @@ export function ParkMap({
             if (!requestIsCurrent()) return;
             const fit = clusterFitForLeaves(leaves);
             if (!fit) return;
-            const padding = measuredCameraPadding(map.getContainer(), true);
-            if (!hasUsableCameraViewport(map.getContainer().getBoundingClientRect(), padding)) return;
+            const overlayPadding = measuredCameraPadding(map.getContainer(), true);
+            const mapRect = map.getContainer().getBoundingClientRect();
+            const padding = cameraPaddingWithContentMargin(mapRect, overlayPadding);
+            if (!hasUsableCameraViewport(mapRect, padding)) return;
             if (fit.coincident) {
               map.easeTo({ center: fit.center, padding, zoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 480 });
               return;
@@ -398,7 +405,11 @@ export function ParkMap({
             if (!requestIsCurrent()) return;
             try {
               const zoom = await source.getClusterExpansionZoom(clusterId);
-              if (requestIsCurrent()) map.easeTo({ center: coordinates, zoom, duration: reduceMotion ? 0 : 420 });
+              if (requestIsCurrent()) {
+                const mapRect = map.getContainer().getBoundingClientRect();
+                const padding = cameraPaddingWithContentMargin(mapRect, measuredCameraPadding(map.getContainer(), true));
+                map.easeTo({ center: coordinates, padding, zoom, duration: reduceMotion ? 0 : 420 });
+              }
             } catch {
               // The source changed while MapLibre was resolving this cluster.
             }
@@ -457,7 +468,10 @@ export function ParkMap({
     const source = map.getSource("places") as GeoJSONSource | undefined;
     source?.setData(collectionData(places, visited, mode));
     const explorationFilter = explorationVisitedFilter(mode === "explored" ? [...visited] : []);
+    const explorationEdgeFilter = explorationBoundaryFilter(mode === "explored" ? [...visited] : []);
     if (map.getLayer("exploration-fill")) map.setFilter("exploration-fill", explorationFilter);
+    if (map.getLayer("exploration-edge-glow")) map.setFilter("exploration-edge-glow", explorationEdgeFilter);
+    if (map.getLayer("exploration-edge")) map.setFilter("exploration-edge", explorationEdgeFilter);
     if (!map.getSource(BOUNDARY_SOURCE)) return;
     updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId);
     const availableIds = boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set<string>();
