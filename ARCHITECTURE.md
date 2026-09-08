@@ -20,7 +20,7 @@ staging.parkdex.app ──HTTPS──> Railway API (staging) ──pooled SQL─
                               API migrations ─────────direct SQL──> Neon staging
 ```
 
-The Neon branch and Railway environment are long-lived and separate from production. The Neon branch has no expiration and its compute does not auto-suspend. Pushes to `staging` deploy that exact commit automatically. A manual CI run from a reviewed feature ref can provide the initial feature deployment; the next push to `staging` replaces it normally. CI checks and deployment always use the same checked-out ref.
+The Neon branch and Railway environment are long-lived and separate from production. The Neon branch has no expiration; its compute scales to zero after five idle minutes to control cost. Pushes to `staging` deploy that exact commit automatically. A manual CI run from a reviewed feature ref can provide the initial feature deployment; the next push to `staging` replaces it normally. CI checks and deployment always use the same checked-out ref.
 
 The workflow disconnects inherited Railway Git sources so a `main` push cannot auto-deploy to staging. It uploads the checked-out source to both Railway services, waits for the exact deployment marker and `/ready` commit, then creates a Vercel preview deployment and moves the stable `staging.parkdex.app` alias to it. Railway trusts only that alias and the current generated staging deployment URL.
 

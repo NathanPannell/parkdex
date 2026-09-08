@@ -266,7 +266,33 @@ jobs:
           api_key: ${{ secrets.NEON_API_KEY }}
           database: app
           role: app_owner
-          suspend_timeout: 0
+          suspend_timeout: 300
+
+      - name: Keep the staging branch persistent with normal scale to zero
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_BRANCH_ID: ${{ steps.neon.outputs.branch_id }}
+        run: |
+          branch="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/branches/$NEON_BRANCH_ID")"
+          jq -e '.branch.expires_at == null' <<<"$branch" >/dev/null
+
+          endpoints="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints")"
+          endpoint_id="$(jq -er --arg branch "$NEON_BRANCH_ID" '.endpoints[] | select(.branch_id == $branch and .type == "read_write") | .id' <<<"$endpoints" | head -n 1)"
+          curl --fail --silent --show-error --output /dev/null --request PATCH \
+            --header "Authorization: Bearer $NEON_API_KEY" \
+            --header 'Content-Type: application/json' \
+            --data '{"endpoint":{"suspend_timeout_seconds":300}}' \
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints/$endpoint_id"
+          updated_endpoint="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints/$endpoint_id")"
+          jq -e '.endpoint.suspend_timeout_seconds == 300' <<<"$updated_endpoint" >/dev/null
+          echo "Neon staging branch: $NEON_BRANCH_ID"
+          echo "Neon staging endpoint: $endpoint_id"
 
       - uses: actions/setup-node@v6
         with:
