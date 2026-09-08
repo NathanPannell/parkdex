@@ -1,0 +1,38 @@
+# Mobile island experience
+
+Goal: Deliver the requested mobile Parkdex refinements, geographic/badge curation, account reset and CI release metadata as a PR from latest staging into staging. User manually promotes releases to production.
+
+Branch: feat/mobile-island-experience; base origin/staging b0a4119. Worktree C:/repo/every-tree/parkdex-mobile. GitHub old name every-park redirects to NathanPannell/parkdex.
+
+Active ownership:
+- mobile_design: app UI, CSS, app tests; mobile search/list/cards/celebration/account UI.
+- map_catalogue: map behavior, geography/catalogue/badges, related source evidence and tests.
+- account_release: reset API/state, release CI metadata, workflow instructions/tests.
+- root: coordination, integration, independent quality review, CI and real preview browser verification, PR.
+
+Decisions: preserve existing field-guide identity and progress compatibility; use isolated preview for browser checks; do not merge or deploy production. No user preference questions needed.
+
+Completed: inspected workspace and existing workflow; fetched staging and created clean separate worktree; read Impeccable and loaded design context.
+
+Next: integrate worker outputs, run required checks, independent quality review, open PR into staging and verify its deployed preview.
+
+Verification plan:
+- Frontend lint/typecheck/unit tests/build; root boundary/data integrity scripts.
+- Backend tests against isolated local Docker Postgres on port 55437 (account_release owns execution).
+- Independent quality review after builder checks; remediate material findings.
+- PR CI, full-stack preview and migrated API smoke.
+- Real browser phone 390x844 (plus narrow phone/desktop as warranted): guest dock/header/search, category filters/color consistency, map clusters and off-circle taps, source/collection links; isolated account progress/celebration/collection/account confirmation; inspect console and network evidence.
+
+Baseline browser: staging phone has 216 places, header progress, guest Places/Badges nav, expanded attribution, large empty-state card and mainland-dominated framing. CUA browser initialized with a temporary 390x844 viewport; restore at completion.
+
+Local services: Docker project parkdex-mobile-pr, isolated postgres port 55437. No existing developer checkout edits touched.
+
+Milestone: account_release completed secure reset + outbox coordination + deterministic CI metadata. Backend 20/20; owned frontend 15/15; release helper 2/2; workflow YAML parsed. Local API running port 8107, frontend port3107.
+
+Local browser findings: guest dock correct; source and authority links work; named search result -> place -> visit -> high-contrast ongoing celebration -> claim -> crisp distinct badge detail verified with synthetic local account. Corrected during design pass: tiny header subtitle, no named guest search results, collapsed linked collections, misleading first-region labels. Reset confirmation cancel works, but mobile dock covered buttons; assigned z-index fix to mobile_design. No real account reset performed.
+
+Geography: initial pure intersection audit would retire24 parks; root required review of notable nearby destinations before removal to avoid overly narrow curated-island interpretation. Final scope pending map_catalogue.
+
+Final local verification: full frontend lint/typecheck/production build pass; 74/74 frontend tests; 20/20 backend tests after applying0007;195-place source/canonical/display/seed integrity passes; release helper2/2. Independent quality review findings fixed with regression tests (hidden filters, explicit celebration claiming, source fallback, updated badge tests). Browser exposed and fixed mobile camera maxBounds clipping and inverse mask seam; final390x844 shows full VI/yellow clusters with gray surrounding map and reachable bottom-left attribution. Outside-circle cluster tap expands successfully. Desktop1280x800 Places layout inspected. Reset confirm/cancel checked390x844 and320x740.
+
+Remaining: commit/push and create PR into staging; wait CI/preview, inspect deployed browser runtime/network and representative flows, update final evidence.

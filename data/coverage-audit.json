@@ -2,12 +2,12 @@
   "generatedAt": "2026-09-07T20:45:54.401Z",
   "counts": {
     "national": 2,
-    "provincial": 136,
-    "regional": 53,
-    "island": 25
+    "provincial": 117,
+    "regional": 52,
+    "island": 24
   },
   "bcParksBroadBboxFeatures": 254,
-  "polygonPinsVerified": 188,
+  "polygonPinsVerified": 168,
   "polygonInteriorFallbacks": [
     {
       "source": "RDN",
@@ -17,11 +17,6 @@
     {
       "source": "BC Parks",
       "name": "Denman Island Park",
-      "method": "scanline-interior"
-    },
-    {
-      "source": "BC Parks",
-      "name": "Broughton Archipelago Park",
       "method": "scanline-interior"
     },
     {
@@ -386,5 +381,112 @@
     "north": 50.838524,
     "west": -128.646072,
     "east": -123.047104
-  }
+  },
+  "scopeRetirements": [
+    {
+      "id": "island-vancouver-island",
+      "name": "Vancouver Island",
+      "reason": "main island is the map focus, not a collectible"
+    },
+    {
+      "id": "provincial-anderson-bay-park",
+      "name": "Anderson Bay Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-bligh-island-marine-park",
+      "name": "Bligh Island Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-broughton-archipelago-park",
+      "name": "Broughton Archipelago Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-catala-island-marine-park",
+      "name": "Catala Island Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-cormorant-channel-marine-park",
+      "name": "Cormorant Channel Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-discovery-island-marine-park",
+      "name": "Discovery Island Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-dixie-cove-marine-park",
+      "name": "Dixie Cove Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-echo-bay-marine-park",
+      "name": "Echo Bay Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-epper-passage-park",
+      "name": "Epper Passage Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-gerald-island-park",
+      "name": "Gerald Island Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-god-s-pocket-marine-park",
+      "name": "God's Pocket Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-jaji7em-and-kw-ulh-marine-park-a-k-a-sandy-island",
+      "name": "Jaji7em And Kw'ulh Marine Park [a.k.a Sandy Island",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-jedediah-island-marine-park",
+      "name": "Jedediah Island Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-lanz-and-cox-islands-park",
+      "name": "Lanz And Cox Islands Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-rendezvous-island-south-park",
+      "name": "Rendezvous Island South Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-roscoe-bay-park",
+      "name": "Roscoe Bay Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-sabine-channel-marine-park",
+      "name": "Sabine Channel Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-walsh-cove-park",
+      "name": "Walsh Cove Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "provincial-whaleboat-island-marine-park",
+      "name": "Whaleboat Island Marine Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    },
+    {
+      "id": "regional-bute-island-regional-park",
+      "name": "Bute Island Regional Park",
+      "reason": "published boundary does not intersect Vancouver Island or a supported major island"
+    }
+  ]
 }

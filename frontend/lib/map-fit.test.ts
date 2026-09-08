@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasUsableCameraViewport, selectedPlacePadding, type LayoutRect } from "./map-fit";
+import { hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -12,6 +12,11 @@ const rect = (left: number, top: number, width: number, height: number): LayoutR
 });
 
 describe("selected boundary camera padding", () => {
+  it("frames Vancouver Island with phone-safe overlay padding", () => {
+    expect(VANCOUVER_ISLAND_OVERVIEW_BOUNDS).toEqual([[-128.52, 48.25], [-123, 50.92]]);
+    expect(overviewPadding(390)).toEqual({ top: 156, right: 12, bottom: 112, left: 12 });
+  });
+
   it("reserves the visible map above a full-width mobile sheet", () => {
     expect(selectedPlacePadding(rect(0, 0, 390, 844), rect(12, 409, 366, 353), 142)).toEqual({
       top: 154,

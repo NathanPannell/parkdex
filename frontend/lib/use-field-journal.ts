@@ -9,6 +9,7 @@ import {
   importGuestProgress,
   loadAccount,
   logout as logoutAccount,
+  resetAccountProgress,
   type Account,
   type Visit,
 } from "./account";
@@ -67,6 +68,7 @@ export type FieldJournal = {
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
+  resetProgress: () => Promise<void>;
 };
 
 function hasEntries(outbox: VisitOutbox) {
@@ -550,6 +552,42 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
   }, [apiBaseUrl, drainIdentity, expireAccount, noteStorageFailure, persistAccount, storage, updateProgress]);
 
+  const resetProgress = useCallback(async () => {
+    const identity = identityRef.current;
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    if (identity.kind !== "account" || !identity.account) throw new Error("Sign in before resetting progress.");
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    const capturedEpoch = epochRef.current.advance();
+    const visitPending = accountVisitOutboxRef.current.snapshot();
+    const trailPending = accountTrailOutboxRef.current.snapshot();
+    try {
+      await Promise.all([
+        accountVisitOutboxRef.current.clearAndWait(),
+        accountTrailOutboxRef.current.clearAndWait(),
+      ]);
+      persistAccountOutboxes(identity.account.id);
+      await resetAccountProgress(apiBaseUrl, identity.token);
+      if (!epochRef.current.isCurrent(capturedEpoch)) return;
+      updateProgress(new Set(), new Set(), {});
+      persistAccount();
+      setSyncMessage("Your progress has been reset.");
+    } catch (error) {
+      accountVisitOutboxRef.current.hydrate(visitPending);
+      accountTrailOutboxRef.current.hydrate(trailPending);
+      persistAccountOutboxes(identity.account.id);
+      if (error instanceof ApiError && error.status === 401) {
+        expireAccount(capturedEpoch);
+      } else {
+        setSyncMessage(error instanceof Error ? error.message : "Could not reset your progress. Please try again.");
+      }
+      throw error;
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [apiBaseUrl, expireAccount, persistAccount, persistAccountOutboxes, updateProgress]);
+
   return {
     places,
     visited,
@@ -570,5 +608,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     authenticate,
     logout,
     importGuest,
+    resetProgress,
   };
 }

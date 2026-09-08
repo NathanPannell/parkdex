@@ -38,6 +38,12 @@ export class VisitOutbox {
   snapshot(): Record<string, PendingVisit> { return { ...this.entries }; }
   hasPending(): boolean { return Object.keys(this.entries).length > 0; }
 
+  async clearAndWait(): Promise<void> {
+    this.entries = {};
+    this.latestIntent = {};
+    await Promise.allSettled([...this.active.values()]);
+  }
+
   drain(id: string, send: (id: string, visited: boolean) => Promise<void>): Promise<void> {
     const existing = this.active.get(id);
     if (existing) return existing;

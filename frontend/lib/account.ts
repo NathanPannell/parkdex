@@ -48,3 +48,15 @@ export async function importGuestProgress(apiBaseUrl: string, token: string, col
     await fetch(`${apiBaseUrl}/api/account/import-guest`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "X-Collection-Key": collectionKey } }),
   );
 }
+
+export async function resetAccountProgress(apiBaseUrl: string, token: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/account/progress`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    let message = "Could not reset your progress. Please try again.";
+    try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* use friendly fallback */ }
+    throw new ApiError(message, response.status);
+  }
+}

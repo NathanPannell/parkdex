@@ -13,10 +13,12 @@ Coordinates are representative map pins. Provincial and regional pins use the ar
 - Two whole national park reserves: Pacific Rim and Gulf Islands. Their internal units are not separate check-offs.
 - Provincial parks from the current DataBC TANTALIS WFS. Ecological reserves and protected areas whose designation is not `PROVINCIAL PARK` are excluded.
 - Named regional parks from the CRD and RDN official GIS sources, plus Bere Point Regional Park from its RDMW page and the matching official BC Geographical Names point. Features named as trails, including Morden Colliery Regional Trail, are excluded from this parks-only collection.
-- Four eligible unique CVRD regional parks. Chemainus River and Spectacle Lake are represented once under their provincial identities; Siddoo and Stocking/Heart Lake are excluded because the official layer marks them undeveloped with no public access.
-- Twenty-five curated, officially named major or commonly visited islands. This is an explicit product collection, not every island or islet.
+- Three eligible unique CVRD regional parks. Chemainus River and Spectacle Lake are represented once under their provincial identities; Bute Island is outside the supported-island footprint; Siddoo and Stocking/Heart Lake are excluded because the official layer marks them undeveloped with no public access.
+- Twenty-four curated, officially named major or commonly visited islands. Vancouver Island supplies the collection's geographic frame and is not itself a check-off.
 
 Bowen Island's Apodaca Park and North Thormanby Island's Buccaneer Bay Park are excluded as Howe Sound/Sunshine Coast features outside the Vancouver Island collection.
+
+The geographic review compares each published park boundary with Vancouver Island and the 24 supported-island coastlines. Parks wholly on other offshore islands are retired from the active catalogue; the full list and reason are recorded in `coverage-audit.json`. Four familiar Vancouver Island day-trip destinations—Mitlenatch Island, Pirates Cove, Saysutshun/Newcastle Island, and Wallace Island—remain intentional park-level exceptions. Their published park footprints are also cut out of the map's gray focus mask.
 
 ## Known limitations
 
@@ -30,7 +32,7 @@ Regional coverage is strongest for CRD, RDN, and CVRD. The ACRD official list is
 
 Provincial and regional boundaries come from the same official DataBC, CRD, CVRD, and RDN layers used by the catalogue builder. Pacific Rim and Gulf Islands use Natural Resources Canada's Canada Lands Survey System legislative boundary service. Those polygons show the legislated reserve extent; they do not determine ownership, permitted access, or safe travel. Bere Point uses its named OpenStreetMap park polygon because RDMW does not publish a geospatial boundary feed.
 
-The 25 island coastlines use individually reviewed, stable OpenStreetMap relation IDs matched to the canonical BC Geographical Names identities. This derived boundary artifact includes data © OpenStreetMap contributors and is available under the Open Database License; applications displaying it must show the OpenStreetMap attribution supplied in each feature. See https://www.openstreetmap.org/copyright.
+The 24 collectible island coastlines use individually reviewed, stable OpenStreetMap relation IDs matched to the canonical BC Geographical Names identities. A simplified Vancouver Island coastline is retained separately for the non-interactive map focus mask. These derived artifacts include data © OpenStreetMap contributors and are available under the Open Database License; applications displaying them must show OpenStreetMap attribution. See https://www.openstreetmap.org/copyright.
 
 ## Rebuild
 

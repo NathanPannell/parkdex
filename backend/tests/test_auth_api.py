@@ -125,6 +125,24 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
             assert logged_in.json()["visitedIds"] == [TEST_PLACE]
             assert logged_in.json()["completedTrailIds"] == ["west_coast_trail"]
 
+            assert client.delete("/api/account/progress").status_code == 401
+            reset = client.delete("/api/account/progress", headers=bearer(token))
+            assert reset.status_code == 204
+            assert reset.content == b""
+            reset_state = client.get("/api/auth/me", headers=bearer(token)).json()
+            assert reset_state["visitedIds"] == []
+            assert reset_state["visits"] == []
+            assert reset_state["completedTrailIds"] == []
+            # Resetting one account leaves guest data and other accounts untouched.
+            assert TEST_PLACE in client.get(
+                "/api/places", headers={"X-Collection-Key": GUEST_KEY}
+            ).json()["visitedIds"]
+            assert client.get("/api/auth/me", headers=bearer(second.json()["token"])).json()["visitedIds"] == []
+            # Other live sessions for the same account immediately see the reset.
+            assert client.get(
+                "/api/auth/me", headers=bearer(logged_in.json()["token"])
+            ).json()["visitedIds"] == []
+
             logout = client.post("/api/auth/logout", headers=bearer(token))
             assert logout.status_code == 204
             assert client.get("/api/auth/me", headers=bearer(token)).status_code == 401

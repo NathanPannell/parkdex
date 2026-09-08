@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { achievements, JUAN_DE_FUCA_PARK_ID, newlyEarnedAchievementIds } from "./achievements";
 import type { Place } from "./places";
+import catalogue from "../../data/places.json";
 
 const park = (id: string, category: Place["category"]): Place => ({ id, name: id, category, latitude: 0, longitude: 0, region: "Gulf Islands", description: "", sourceName: "x", sourceUrl: "https://example.com" });
 
@@ -11,17 +12,22 @@ describe("achievements", () => {
     expect(achievements({ places, visited: new Set() }).length).toBeGreaterThanOrEqual(20);
   });
 
-  it("earns Banana Slug Medal solely for visiting Juan de Fuca Park", () => {
-    const withoutPark = achievements({ places, visited: new Set() }).find((badge) => badge.name === "Banana Slug Medal");
-    const withPark = achievements({ places, visited: new Set([JUAN_DE_FUCA_PARK_ID]), visitTimestamps: { [JUAN_DE_FUCA_PARK_ID]: "2026-09-08T10:00:00Z" } }).find((badge) => badge.name === "Banana Slug Medal");
-    expect(withoutPark?.earned).toBe(false);
-    expect(withPark).toMatchObject({ earned: true, earnedAt: "2026-09-08T10:00:00Z" });
+  it("earns Banana Slug Rainwalk only after its three rain-forest parks", () => {
+    const rainParks = [park(JUAN_DE_FUCA_PARK_ID, "provincial"), park("provincial-carmanah-walbran-park", "provincial"), park("provincial-macmillan-park", "provincial")];
+    const badge = achievements({ places: rainParks, visited: new Set(rainParks.map((item) => item.id)), visitTimestamps: Object.fromEntries(rainParks.map((item, index) => [item.id, `2026-09-0${index + 1}T10:00:00Z`])) }).find((item) => item.id === "banana-slug-medal");
+    expect(badge).toMatchObject({ earned: true, current: 3, target: 3, earnedAt: "2026-09-03T10:00:00Z" });
   });
 
-  it("recognizes both national parks and all four place categories", () => {
-    const badges = achievements({ places, visited: new Set(places.map((item) => item.id)) });
-    expect(badges.find((badge) => badge.id === "black-bear-pair")?.earned).toBe(true);
-    expect(badges.find((badge) => badge.id === "orca-four-realms")?.earned).toBe(true);
+  it("keeps every exact-place challenge satisfiable by the active catalogue", () => {
+    const activePlaces = catalogue as Place[];
+    const badges = achievements({ places: activePlaces, visited: new Set(activePlaces.map((item) => item.id)) });
+    expect(badges.every((badge) => badge.earned)).toBe(true);
+  });
+
+  it("does not let retired visit ids advance total or place-set achievements", () => {
+    const badges = achievements({ places: [park("active", "regional")], visited: new Set(["active", "retired", "provincial-cape-scott-park", "provincial-strathcona-park"]) });
+    expect(badges.find((badge) => badge.id === "harbour-seal-five")?.current).toBe(1);
+    expect(badges.find((badge) => badge.id === "black-bear-coast")?.current).toBe(0);
   });
 
   it("reports only achievements newly earned after the prior state", () => {

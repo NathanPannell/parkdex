@@ -5,24 +5,27 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ParkdexApp } from "./every-park-app";
 
 const place = { id: "provincial-juan-de-fuca-park", name: "Forest Park", category: "provincial" as const, latitude: 49, longitude: -124, region: "South Island", description: "A forest park.", sourceUrl: "https://example.test", sourceName: "BC Parks" };
+const rathtrevor = { id: "provincial-rathtrevor-beach-park", name: "Rathtrevor Beach Park", category: "provincial" as const, latitude: 49.31, longitude: -124.27, region: "Central Island", description: "A beach park.", sourceUrl: "https://example.test/rathtrevor", sourceName: "BC Parks" };
+const national = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national" as const, latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const journal = {
-  places: [place], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
-  account: null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
+  places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
+  account: null as { id: string; email: string } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
-  authenticate: vi.fn(), logout: vi.fn(), importGuest: vi.fn(),
+  authenticate: vi.fn(), logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
 };
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect }: { onSelect: (id: string) => void }) => <button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button> }));
-afterEach(() => { cleanup(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.toggleVisit.mockClear(); });
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadState }: { onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></> }));
+afterEach(() => { cleanup(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); });
 
 describe("Parkdex navigation", () => {
   it("toggles active Places and Badges tabs back to the full map", () => {
+    journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Places" }));
-    expect(screen.getByRole("heading", { name: "Your places" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Places" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close Places and return to map" }));
-    expect(screen.queryByRole("heading", { name: "Your places" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Places" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Badges" }));
     expect(screen.getByRole("heading", { name: "Your badges" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close Badges and return to map" }));
@@ -30,6 +33,7 @@ describe("Parkdex navigation", () => {
   });
 
   it("clears a place popup when opening another bottom tab", () => {
+    journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
@@ -38,6 +42,7 @@ describe("Parkdex navigation", () => {
   });
 
   it("closes modal surfaces with Escape", () => {
+    journal.authenticated = true;
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Find places" }));
@@ -46,10 +51,10 @@ describe("Parkdex navigation", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Near you" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Badges" }));
-    fireEvent.click(screen.getByRole("button", { name: /Banana Slug Medal/ }));
-    expect(screen.getByRole("dialog", { name: "Banana Slug Medal" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Banana Slug Rainwalk/ }));
+    expect(screen.getByRole("dialog", { name: "Banana Slug Rainwalk" })).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Banana Slug Medal" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Banana Slug Rainwalk" })).toBeNull();
   });
 
   it("dismisses Near you after a delayed location timeout", () => {
@@ -65,13 +70,13 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("dialog", { name: "Near you" })).toBeNull();
   });
 
-  it("claims each badge from a multi-award visit in order and focuses the next claim", async () => {
+  it("claims the first-visit badge and keeps Escape from claiming it", async () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Find places" }));
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     fireEvent.click(screen.getByRole("button", { name: "Mark as visited" }));
-    expect(screen.getByRole("dialog", { name: "Banana Slug Medal" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Claim my badge" }));
+    expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Claim my badge" })));
     fireEvent.click(screen.getByRole("button", { name: "Claim my badge" }));
@@ -83,5 +88,60 @@ describe("Parkdex navigation", () => {
     journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     render(<ParkdexApp apiBaseUrl="" />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps signed-out navigation focused on the map and account", () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.queryByRole("button", { name: "Places" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Badges" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Map" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Account" })).toBeTruthy();
+  });
+
+  it("links place categories, collections, and published boundaries from the place card", () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    expect(screen.getByRole("button", { name: /Provincial/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /BC Parks/ })).toBeTruthy();
+  });
+
+  it("keeps the official place source available when boundary geometry fails", () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Fail boundary load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    expect(screen.getByText("Boundary display unavailable.")).toBeTruthy();
+    const source = screen.getByRole("link", { name: "Place source" });
+    expect(source.getAttribute("href")).toBe(place.sourceUrl);
+  });
+
+  it("confirms account progress reset, supports cancel, and clears queued celebrations", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Find places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark as visited" }));
+    expect(screen.getByRole("dialog", { name: "River Otter Rookie" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
+    expect(screen.getByRole("dialog", { name: "Reset all progress?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Keep my progress" }));
+    expect(journal.resetProgress).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
+    await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("clears collection restrictions when opening global map search", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Places" }));
+    fireEvent.click(screen.getByRole("button", { name: "National" }));
+    expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Rathtrevor" } });
+    expect(screen.getByRole("button", { name: /Rathtrevor Beach Park/ })).toBeTruthy();
   });
 });

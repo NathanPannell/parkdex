@@ -227,6 +227,47 @@ describe("useFieldJournal identity and progress races", () => {
     expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toEqual({});
   });
 
+  it("waits for an account write, then resets remote and cached progress without resurrection", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: ["west_coast_trail"] }));
+    const accountWrite = deferred<Response>();
+    let resetStarted = false;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) return accountWrite.promise;
+      if (path.endsWith("/api/account/progress")) {
+        resetStarted = true;
+        expect(init?.method).toBe("DELETE");
+        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer account-token");
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: ["west_coast_trail"] });
+      return json(catalogue([], ["west_coast_trail"]));
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.completedTrails).toEqual(new Set(["west_coast_trail"]));
+
+    let pendingToggle!: Promise<void>;
+    act(() => { pendingToggle = result.current.toggleVisit(PLACE.id); });
+    let resetting!: Promise<void>;
+    act(() => { resetting = result.current.resetProgress(); });
+    await Promise.resolve();
+    expect(resetStarted).toBe(false);
+
+    await act(async () => {
+      accountWrite.resolve(await json({ placeId: PLACE.id, visited: true, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z" }));
+      await pendingToggle;
+      await resetting;
+    });
+    expect(resetStarted).toBe(true);
+    expect(result.current.visited).toEqual(new Set());
+    expect(result.current.completedTrails).toEqual(new Set());
+    expect(result.current.visitTimestamps).toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}")).toMatchObject({ visitedIds: [], completedTrailIds: [], visitTimestamps: {} });
+  });
+
   it("retains cached account identity offline but clears it after an explicit 401", async () => {
     const snapshot = JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");

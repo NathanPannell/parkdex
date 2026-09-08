@@ -1,6 +1,17 @@
 export type LayoutRect = { top: number; right: number; bottom: number; left: number; width: number; height: number };
 export type CameraPadding = { top: number; right: number; bottom: number; left: number };
 
+export const VANCOUVER_ISLAND_OVERVIEW_BOUNDS: [[number, number], [number, number]] = [
+  [-128.52, 48.25],
+  [-123.0, 50.92],
+];
+
+export function overviewPadding(viewportWidth: number): CameraPadding {
+  return viewportWidth < 640
+    ? { top: 156, right: 12, bottom: 112, left: 12 }
+    : { top: 180, right: 32, bottom: 96, left: 32 };
+}
+
 export function hasUsableCameraViewport(
   map: Pick<LayoutRect, "width" | "height">,
   padding: CameraPadding,

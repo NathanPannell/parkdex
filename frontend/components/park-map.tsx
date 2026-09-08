@@ -27,7 +27,8 @@ import {
   EXPLORATION_SOURCE_ID,
   explorationLayerSpecifications,
 } from "@/lib/exploration-map-style";
-import { hasUsableCameraViewport, selectedPlacePadding, type LayoutRect } from "@/lib/map-fit";
+import { hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "@/lib/map-fit";
+import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Place } from "@/lib/places";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
@@ -56,6 +57,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   sources: {
     shadedRelief: { type: "raster", tiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 6 },
     openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
+    focusMask: { type: "geojson", data: "/data/vancouver-island-focus-mask.v1.geojson", tolerance: 0 },
   },
   layers: [
     { id: "paper", type: "background", paint: { "background-color": "#f6f0dc" } },
@@ -68,6 +70,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
     { id: "roads", type: "line", source: "openmaptiles", "source-layer": "transportation", filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary"]]], paint: { "line-color": "#d2ae72", "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.45, 12, 2.5], "line-opacity": 0.78 } },
     { id: "water-labels", type: "symbol", source: "openmaptiles", "source-layer": "water_name", minzoom: 5, layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Italic"], "text-size": 11 }, paint: { "text-color": "#226c70", "text-halo-color": "#bce4e0", "text-halo-width": 1.5 } },
     { id: "place-labels", type: "symbol", source: "openmaptiles", "source-layer": "place", layout: { "text-field": ["coalesce", ["get", "name:latin"], ["get", "name"]], "text-font": ["Noto Sans Bold"], "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 11, 14], "text-padding": 5 }, paint: { "text-color": "#173d32", "text-halo-color": "#f6f0dc", "text-halo-width": 2 } },
+    { id: "focus-mask", type: "fill", source: "focusMask", paint: { "fill-color": "#6f7773", "fill-opacity": 0.58 } },
   ],
 };
 
@@ -120,14 +123,19 @@ function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<G
   };
 }
 
-function fitOverview(map: MapLibreMap, places: Place[], animated: boolean) {
-  if (!places.length) return;
-  const longitudes = places.map((place) => place.longitude);
-  const latitudes = places.map((place) => place.latitude);
+function fitOverview(map: MapLibreMap, animated: boolean) {
   map.fitBounds(
-    [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]],
-    { padding: { top: 180, right: 32, bottom: 96, left: 32 }, maxZoom: 7, duration: animated ? 520 : 0 },
+    VANCOUVER_ISLAND_OVERVIEW_BOUNDS,
+    { padding: overviewPadding(map.getContainer().clientWidth), maxZoom: 7, duration: animated ? 520 : 0 },
   );
+}
+
+function collapseAttribution(container: HTMLElement) {
+  const expanded = container.querySelector<HTMLElement>(".maplibregl-ctrl-attrib.maplibregl-compact-show");
+  const toggle = expanded?.querySelector<HTMLElement>(".maplibregl-ctrl-attrib-button");
+  if (!toggle) return false;
+  toggle.click();
+  return true;
 }
 
 function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
@@ -239,6 +247,7 @@ export function ParkMap({
         zoom: 5.55,
         minZoom: 4.6,
         maxZoom: 15,
+        fadeDuration: 0,
         attributionControl: false,
       });
       mapRef.current = map;
@@ -248,16 +257,14 @@ export function ParkMap({
           setMapFailed(true);
         }
       }, 12_000);
-      map.addControl(
-        new maplibregl.AttributionControl({
-          compact: true,
-          customAttribution: [
-            "Parkdex field guide",
-            '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>',
-          ],
-        }),
-        "bottom-right",
-      );
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+      let attributionInitiallyCollapsed = false;
+      const collapseMapAttribution = () => {
+        if (attributionInitiallyCollapsed) return;
+        attributionInitiallyCollapsed = collapseAttribution(map.getContainer());
+      };
+      map.on("styledata", collapseMapAttribution);
+      map.on("sourcedata", collapseMapAttribution);
       let collectionReady = false;
       let boundarySetup = false;
       let boundarySourceReadiness = initialBoundarySourceReadiness();
@@ -298,7 +305,7 @@ export function ParkMap({
         });
         boundaryVisitedRef.current = new Set([...currentVisited].filter((id) => availableIds.has(id)));
         map.on("click", "boundary-hit", (event: MapLayerMouseEvent) => {
-          if (map.queryRenderedFeatures(event.point, { layers: ["clusters", "place-hit-targets"] }).length) return;
+          if (map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets", "place-hit-targets"] }).length) return;
           const features = map.queryRenderedFeatures(event.point, { layers: ["boundary-hit"] });
           const current = dataRef.current;
           const id = pickBoundaryPlace(features, visiblePlaces(current.places, current.visited, current.mode), event.lngLat);
@@ -335,66 +342,14 @@ export function ParkMap({
           clusterMaxZoom: 10,
           clusterRadius: 52,
         });
-        map.addLayer({
-          id: "clusters",
-          type: "circle",
-          source: "places",
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": ["step", ["get", "point_count"], "#ffd862", 12, "#b9ea55", 35, "#78cad0"],
-            "circle-radius": ["step", ["get", "point_count"], 20, 12, 25, 35, 30],
-            "circle-stroke-color": "#173d32",
-            "circle-stroke-width": 3,
-          },
-        });
+        placeMarkerLayerSpecifications().forEach((layer) => map.addLayer(layer));
         map.addSource(CURRENT_LOCATION_SOURCE_ID, {
           type: "geojson",
           data: locationData(initialLocation),
         });
         currentLocationLayerSpecifications().forEach((layer) => map.addLayer(layer));
-        map.addLayer({
-          id: "cluster-count",
-          type: "symbol",
-          source: "places",
-          filter: ["has", "point_count"],
-          layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 14 },
-          paint: { "text-color": "#173d32" },
-        });
-        map.addLayer({
-          id: "place-hit-targets",
-          type: "circle",
-          source: "places",
-          filter: ["!", ["has", "point_count"]],
-          paint: { "circle-radius": 24, "circle-color": "rgba(0,0,0,0)" },
-        });
-        map.addLayer({
-          id: "place-points",
-          type: "circle",
-          source: "places",
-          filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-color": [
-              "case",
-              ["==", ["get", "visited"], 1],
-              "#b9ea55",
-              ["match", ["get", "category"], "national", "#ffd862", "provincial", "#78cad0", "regional", "#ef755f", "#f6f0dc"],
-            ],
-            "circle-radius": ["case", ["==", ["get", "visited"], 1], 13, 10],
-            "circle-stroke-color": "#173d32",
-            "circle-stroke-width": 3,
-          },
-        });
-        map.addLayer({
-          id: "place-checks",
-          type: "symbol",
-          source: "places",
-          filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "visited"], 1]],
-          layout: { "text-field": "✓", "text-size": 15, "text-font": ["Noto Sans Bold"] },
-          paint: { "text-color": "#173d32" },
-        });
-
-        map.on("click", "clusters", async (event: MapLayerMouseEvent) => {
-          const feature = map.queryRenderedFeatures(event.point, { layers: ["clusters"] })[0];
+        map.on("click", "cluster-hit-targets", async (event: MapLayerMouseEvent) => {
+          const feature = map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets"] })[0];
           const clusterId = Number(feature?.properties?.cluster_id);
           if (!Number.isFinite(clusterId)) return;
           const source = map.getSource("places") as GeoJSONSource;
@@ -406,12 +361,11 @@ export function ParkMap({
           const id = event.features?.[0]?.properties?.id;
           if (typeof id === "string") selectRef.current(id);
         });
-        ["clusters", "place-hit-targets"].forEach((layer) => {
+        ["cluster-hit-targets", "place-hit-targets"].forEach((layer) => {
           map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
           map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
         });
-        const overviewPlaces = visiblePlaces(currentPlaces, currentVisited, currentMode);
-        fitOverview(map, overviewPlaces.length ? overviewPlaces : currentPlaces, false);
+        fitOverview(map, false);
         if (boundaryDataRef.current) setupBoundaries(boundaryDataRef.current);
         } catch {
           collectionReady = false;
