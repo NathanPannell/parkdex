@@ -87,7 +87,7 @@ jobs:
           railway_retry "$PREVIEW_DATABASE_URL_UNPOOLED" variable set PREVIEW_DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           # Preview copies must not send account mail or use production OAuth credentials.
           for key in SMTP_HOST SMTP_USERNAME SMTP_PASSWORD GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
-            railway_retry '' variable set "$key" --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry '' variable set "${key}=" --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$PREVIEW_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
           done
 
       - name: Deploy Railway preview services
