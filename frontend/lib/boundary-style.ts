@@ -3,14 +3,28 @@ import type { LayerSpecification } from "maplibre-gl";
 import { boundaryFilter, selectedBoundaryFilter } from "./boundaries";
 
 export const BOUNDARY_SOURCE_ID = "park-boundaries";
+export const BOUNDARY_DISPLAY_SOURCE_ID = "park-boundaries-display";
 
-export function boundaryLayerSpecifications(): LayerSpecification[] {
+export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID): LayerSpecification[] {
   const unfiltered = boundaryFilter([]);
   return [
     {
+      id: "boundary-island-buffer",
+      type: "line",
+      source: displaySource,
+      filter: unfiltered,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#ffd862",
+        "line-opacity": 0.18,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.4, 10, 5.5, 14, 8],
+        "line-blur": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 14, 1.2],
+      },
+    },
+    {
       id: "boundary-island-fill",
       type: "fill",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: unfiltered,
       paint: {
         "fill-color": "#ffd862",
@@ -20,8 +34,9 @@ export function boundaryLayerSpecifications(): LayerSpecification[] {
     {
       id: "boundary-island-line",
       type: "line",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: unfiltered,
+      layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#9b641f",
         "line-opacity": ["case", ["boolean", ["feature-state", "visited"], false], 0.78, 0.52],
@@ -30,9 +45,22 @@ export function boundaryLayerSpecifications(): LayerSpecification[] {
       },
     },
     {
+      id: "boundary-park-buffer",
+      type: "line",
+      source: displaySource,
+      filter: unfiltered,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
+        "line-opacity": 0.2,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.6, 10, 5.8, 14, 8.5],
+        "line-blur": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 14, 1.2],
+      },
+    },
+    {
       id: "boundary-park-fill",
       type: "fill",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: unfiltered,
       paint: {
         "fill-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
@@ -42,8 +70,9 @@ export function boundaryLayerSpecifications(): LayerSpecification[] {
     {
       id: "boundary-park-line",
       type: "line",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: unfiltered,
+      layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#173d32",
         "line-opacity": ["case", ["boolean", ["feature-state", "visited"], false], 0.88, 0.62],
@@ -54,22 +83,24 @@ export function boundaryLayerSpecifications(): LayerSpecification[] {
     {
       id: "boundary-selected-fill",
       type: "fill",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: selectedBoundaryFilter(null, []),
       paint: { "fill-color": "#ffd862", "fill-opacity": 0.3 },
     },
     {
       id: "boundary-selected-halo",
       type: "line",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: selectedBoundaryFilter(null, []),
+      layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#fffaf0", "line-opacity": 0.95, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 6] },
     },
     {
       id: "boundary-selected-line",
       type: "line",
-      source: BOUNDARY_SOURCE_ID,
+      source: displaySource,
       filter: selectedBoundaryFilter(null, []),
+      layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": ["case", ["==", ["get", "category"], "island"], "#9b641f", "#173d32"],
         "line-opacity": 1,
