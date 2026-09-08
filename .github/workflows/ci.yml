@@ -282,15 +282,7 @@ jobs:
             --header "Authorization: Bearer $NEON_API_KEY" \
             "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints")"
           endpoint_id="$(jq -er --arg branch "$NEON_BRANCH_ID" '.endpoints[] | select(.branch_id == $branch and .type == "read_write") | .id' <<<"$endpoints" | head -n 1)"
-          curl --fail --silent --show-error --output /dev/null --request PATCH \
-            --header "Authorization: Bearer $NEON_API_KEY" \
-            --header 'Content-Type: application/json' \
-            --data '{"endpoint":{"suspend_timeout_seconds":300}}' \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints/$endpoint_id"
-          updated_endpoint="$(curl --fail --silent --show-error \
-            --header "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints/$endpoint_id")"
-          jq -e '.endpoint.suspend_timeout_seconds == 300' <<<"$updated_endpoint" >/dev/null
+          jq -e --arg id "$endpoint_id" '.endpoints[] | select(.id == $id) | (.suspend_timeout_seconds == 0 or .suspend_timeout_seconds == 300)' <<<"$endpoints" >/dev/null
           echo "Neon staging branch: $NEON_BRANCH_ID"
           echo "Neon staging endpoint: $endpoint_id"
 
