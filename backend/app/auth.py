@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import secrets
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ LOGIN_WINDOW = timedelta(minutes=15)
 LOGIN_FAILURE_LIMIT = 5
 LOGIN_BLOCK_TIME = timedelta(minutes=15)
 TOKEN_PATTERN_LENGTH = 43
+ACTION_TOKEN_LIFETIME = timedelta(hours=1)
 
 password_hasher = PasswordHasher(
     time_cost=2,
@@ -31,6 +33,7 @@ class AccountIdentity:
     account_id: str
     email: str
     session_hash: str
+    email_verified: bool
 
 
 def sha256_hex(value: str) -> str:
@@ -72,7 +75,7 @@ def authenticate_bearer(conn: Connection, authorization: str | None) -> AccountI
     token_hash = sha256_hex(token)
     row = conn.execute(
         """
-        SELECT accounts.id, accounts.email
+        SELECT accounts.id, accounts.email, accounts.email_verified_at IS NOT NULL AS email_verified
         FROM account_sessions
         JOIN accounts ON accounts.id = account_sessions.account_id
         WHERE account_sessions.token_hash = %s
@@ -83,7 +86,7 @@ def authenticate_bearer(conn: Connection, authorization: str | None) -> AccountI
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    return AccountIdentity(str(row["id"]), row["email"], token_hash)
+    return AccountIdentity(str(row["id"]), row["email"], token_hash, row["email_verified"])
 
 
 def require_bearer(conn: Connection, authorization: str | None) -> AccountIdentity:
@@ -168,3 +171,78 @@ def reserve_login_attempt(conn: Connection, email: str) -> None:
 
 def clear_login_failures(conn: Connection, email: str) -> None:
     conn.execute("DELETE FROM auth_login_attempts WHERE scope_hash = %s", (login_scope(email),))
+
+
+def create_action_token(conn: Connection, account_id: str, purpose: str) -> tuple[str, datetime]:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + ACTION_TOKEN_LIFETIME
+    # Account-first locking keeps issuance, consumption, and OAuth takeover ordered.
+    if conn.execute("SELECT 1 FROM accounts WHERE id = %s FOR UPDATE", (account_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    conn.execute(
+        "UPDATE account_action_tokens SET used_at = NOW() WHERE account_id = %s AND purpose = %s AND used_at IS NULL",
+        (account_id, purpose),
+    )
+    conn.execute(
+        "INSERT INTO account_action_tokens (token_hash, account_id, purpose, expires_at) VALUES (%s, %s, %s, %s)",
+        (sha256_hex(token), account_id, purpose, expires_at),
+    )
+    return token, expires_at
+
+
+def consume_action_token(conn: Connection, token: str, purpose: str):
+    token_hash = sha256_hex(token)
+    candidate = conn.execute(
+        "SELECT account_id FROM account_action_tokens WHERE token_hash = %s AND purpose = %s",
+        (token_hash, purpose),
+    ).fetchone()
+    if candidate is None:
+        return None
+    if conn.execute(
+        "SELECT 1 FROM accounts WHERE id = %s FOR UPDATE", (candidate["account_id"],)
+    ).fetchone() is None:
+        return None
+    return conn.execute(
+        """
+        UPDATE account_action_tokens SET used_at = NOW()
+        WHERE token_hash = %s AND purpose = %s AND used_at IS NULL AND expires_at > NOW()
+        RETURNING account_id
+        """,
+        (token_hash, purpose),
+    ).fetchone()
+
+
+def reserve_rate_limit(conn: Connection, action: str, scope: str, limit: int, window: timedelta) -> None:
+    now = datetime.now(timezone.utc)
+    window_start = now - window
+    row = conn.execute(
+        """
+        INSERT INTO auth_rate_limits (action, scope_hash, attempt_count, window_started_at)
+        VALUES (%s, %s, 1, %s)
+        ON CONFLICT (action, scope_hash) DO UPDATE SET
+          attempt_count = CASE WHEN auth_rate_limits.window_started_at < %s THEN 1 ELSE auth_rate_limits.attempt_count + 1 END,
+          window_started_at = CASE WHEN auth_rate_limits.window_started_at < %s THEN %s ELSE auth_rate_limits.window_started_at END
+        WHERE auth_rate_limits.window_started_at < %s OR auth_rate_limits.attempt_count < %s
+        RETURNING window_started_at
+        """,
+        (action, sha256_hex(scope), now, window_start, window_start, now, window_start, limit),
+    ).fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO auth_security_events (event_type, scope_hash, outcome) VALUES (%s, %s, 'throttled')",
+            (f"{action}_rate_limit", sha256_hex(scope)),
+        )
+        conn.commit()
+        raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
+
+
+def record_security_event(conn: Connection, event_type: str, scope: str | None, outcome: str) -> None:
+    conn.execute(
+        "INSERT INTO auth_security_events (event_type, scope_hash, outcome) VALUES (%s, %s, %s)",
+        (event_type, sha256_hex(scope) if scope else None, outcome),
+    )
+
+
+def pkce_challenge(code_verifier: str) -> str:
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")

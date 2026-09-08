@@ -6,11 +6,16 @@ import {
   ACCOUNT_TOKEN_KEY,
   ApiError,
   authenticate as authenticateAccount,
+  changePassword as changeAccountPassword,
+  completeGoogleAuthorization,
+  confirmEmailVerification as confirmAccountEmailVerification,
   importGuestProgress,
   loadAccount,
   logout as logoutAccount,
+  requestEmailVerification as requestAccountEmailVerification,
   resetAccountProgress,
   type Account,
+  type AccountSession,
   type Visit,
 } from "./account";
 import {
@@ -66,6 +71,10 @@ export type FieldJournal = {
   toggleTrail: (trailId: string) => Promise<void>;
   retrySync: () => Promise<void>;
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
+  authenticateWithGoogle: (code: string, state: string, codeVerifier: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  requestEmailVerification: () => Promise<void>;
+  confirmEmailVerification: (verificationToken: string) => Promise<void>;
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
   resetProgress: () => Promise<void>;
@@ -457,6 +466,30 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const toggleTrail = useCallback((trailId: string) => toggle("trails", trailId), [toggle]);
 
+  const adoptAccountSession = useCallback(async (session: AccountSession, capturedEpoch: number) => {
+    hydrateAccountOutboxes(session.account.id);
+    const identity: Identity = { kind: "account", token: session.token, account: session.account };
+    identityRef.current = identity;
+    noteStorageFailure(writeRawStored(storage(), ACCOUNT_TOKEN_KEY, session.token));
+    setAuthenticated(true);
+    setAccount(session.account);
+    updateProgress(
+      accountVisitOutboxRef.current.applyTo(session.visitedIds),
+      accountTrailOutboxRef.current.applyTo(session.completedTrailIds),
+      timestampsFor(session.visits),
+    );
+    persistAccount();
+    setGuestProgressAvailable(guestHasProgress() && !guestWasImportedBy(session.account.id));
+    setSyncMessage("");
+    try {
+      await drainIdentity(identity, capturedEpoch);
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) {
+        setSyncMessage("Your account checkoffs are saved on this device and waiting to sync.");
+      }
+    }
+  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, storage, updateProgress]);
+
   const authenticate = useCallback(async (mode: "login" | "register", email: string, password: string) => {
     if (transitionRef.current) return;
     transitionRef.current = true;
@@ -470,32 +503,66 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         setSyncMessage(error instanceof Error ? error.message : "Could not sign in.");
         throw error;
       }
-      hydrateAccountOutboxes(session.account.id);
-      const identity: Identity = { kind: "account", token: session.token, account: session.account };
-      identityRef.current = identity;
-      noteStorageFailure(writeRawStored(storage(), ACCOUNT_TOKEN_KEY, session.token));
-      setAuthenticated(true);
-      setAccount(session.account);
-      updateProgress(
-        accountVisitOutboxRef.current.applyTo(session.visitedIds),
-        accountTrailOutboxRef.current.applyTo(session.completedTrailIds),
-        timestampsFor(session.visits),
-      );
-      persistAccount();
-      setGuestProgressAvailable(guestHasProgress() && !guestWasImportedBy(session.account.id));
-      setSyncMessage("");
-      try {
-        await drainIdentity(identity, capturedEpoch);
-      } catch (error) {
-        if (!(error instanceof ApiError && error.status === 401)) {
-          setSyncMessage("Your account checkoffs are saved on this device and waiting to sync.");
-        }
-      }
+      await adoptAccountSession(session, capturedEpoch);
     } finally {
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [apiBaseUrl, drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, storage, updateProgress]);
+  }, [adoptAccountSession, apiBaseUrl]);
+
+  const authenticateWithGoogle = useCallback(async (code: string, state: string, codeVerifier: string) => {
+    if (transitionRef.current) return;
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    const capturedEpoch = epochRef.current.advance();
+    try {
+      const session = await completeGoogleAuthorization(apiBaseUrl, code, state, codeVerifier);
+      await adoptAccountSession(session, capturedEpoch);
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [adoptAccountSession, apiBaseUrl]);
+
+  const requestEmailVerification = useCallback(async () => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account") throw new Error("Sign in to verify your email.");
+    await requestAccountEmailVerification(apiBaseUrl, identity.token);
+  }, [apiBaseUrl]);
+
+  const confirmEmailVerification = useCallback(async (verificationToken: string) => {
+    const capturedIdentity = identityRef.current;
+    const capturedEpoch = epochRef.current.capture();
+    await confirmAccountEmailVerification(apiBaseUrl, verificationToken);
+    if (capturedIdentity.kind !== "account" || !capturedIdentity.account) return;
+    let refreshed;
+    try {
+      refreshed = await loadAccount(apiBaseUrl, capturedIdentity.token);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) expireAccount(capturedEpoch);
+      return;
+    }
+    const currentIdentity = identityRef.current;
+    if (!epochRef.current.isCurrent(capturedEpoch) || currentIdentity.kind !== "account" || currentIdentity.account?.id !== capturedIdentity.account.id) return;
+    identityRef.current = { ...currentIdentity, account: refreshed.account };
+    setAccount(refreshed.account);
+    persistAccount();
+  }, [apiBaseUrl, expireAccount, persistAccount]);
+
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const identity = identityRef.current;
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    if (identity.kind !== "account") throw new Error("Sign in before changing your password.");
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    try {
+      await changeAccountPassword(apiBaseUrl, identity.token, currentPassword, newPassword);
+      switchToGuest("Password changed. Sign in again on this device.");
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [apiBaseUrl, switchToGuest]);
 
   const logout = useCallback(async () => {
     if (transitionRef.current || identityRef.current.kind !== "account") return;
@@ -588,6 +655,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
   }, [apiBaseUrl, expireAccount, persistAccount, persistAccountOutboxes, updateProgress]);
 
+  useEffect(() => {
+    if (syncMessage !== "Your progress has been reset.") return;
+    const timeout = window.setTimeout(() => setSyncMessage(""), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [syncMessage]);
+
   return {
     places,
     visited,
@@ -606,6 +679,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     toggleTrail,
     retrySync,
     authenticate,
+    authenticateWithGoogle,
+    changePassword,
+    requestEmailVerification,
+    confirmEmailVerification,
     logout,
     importGuest,
     resetProgress,

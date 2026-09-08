@@ -9,14 +9,15 @@ const rathtrevor = { id: "provincial-rathtrevor-beach-park", name: "Rathtrevor B
 const national = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national" as const, latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const journal = {
   places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
-  account: null as { id: string; email: string } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
+  account: null as { id: string; email: string; emailVerified?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
-  authenticate: vi.fn(), logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
+  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), changePassword: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
+  logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
 };
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadState }: { onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></> }));
-afterEach(() => { cleanup(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
 
 describe("Parkdex navigation", () => {
   it("keeps map modes, location, and search in one utility toolbar", () => {
@@ -175,6 +176,89 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Rathtrevor" } });
     expect(screen.getByRole("button", { name: /Rathtrevor Beach Park/ })).toBeTruthy();
+  });
+
+  it("preserves active map filters when the tray closes and while opening a Places result", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter places" }));
+    fireEvent.click(screen.getByRole("button", { name: "National" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close filters" }));
+    expect(screen.getByRole("button", { name: "Filter places, 1 active" }).classList.contains("active")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Provincial" }));
+    fireEvent.click(screen.getByRole("button", { name: /Rathtrevor Beach Park/ }));
+    const filterButton = screen.getByRole("button", { name: "Filter places, 1 active" });
+    expect(filterButton.classList.contains("active")).toBe(true);
+    fireEvent.click(filterButton);
+    expect(screen.getByRole("button", { name: "National" }).classList.contains("selected")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getByRole("button", { name: "Filter places" }).classList.contains("active")).toBe(false);
+  });
+
+  it("does not apply Places filters to an unfiltered map", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Places" }));
+    fireEvent.click(screen.getByRole("button", { name: "National" }));
+    fireEvent.click(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    expect(screen.getByRole("button", { name: "Filter places" }).classList.contains("active")).toBe(false);
+  });
+
+  it("consumes a reset token from the fragment before submitting it securely", async () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true };
+    window.history.replaceState({}, "", "/#resetToken=secret-token");
+    const fetchMock = vi.fn((url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      void init;
+      return String(url).endsWith("/api/auth/config")
+        ? Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))
+        : Promise.resolve(new Response(null, { status: 204 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    expect(await screen.findByRole("heading", { name: "Choose a new password" })).toBeTruthy();
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a long secure password" } });
+    fireEvent.change(screen.getByLabelText(/^Confirm new password/), { target: { value: "a long secure password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("https://api.example.test/api/auth/password-reset/confirm", expect.anything()));
+    const resetCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/password-reset/confirm"));
+    expect(JSON.parse(String(resetCall?.[1]?.body))).toMatchObject({ token: "secret-token" });
+    expect(journal.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a retryable Google cancellation and clears callback state", async () => {
+    window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "verifier");
+    window.history.replaceState({}, "", "/?error=access_denied&state=oauth-state");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in was cancelled. You can try again.");
+    expect(window.location.search).toBe("");
+    expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
+  });
+
+  it("completes Google PKCE sign-in and clears one-use callback values", async () => {
+    window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "verifier");
+    window.history.replaceState({}, "", "/?code=google-code&state=oauth-state");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    await waitFor(() => expect(journal.authenticateWithGoogle).toHaveBeenCalledWith("google-code", "oauth-state", "verifier"));
+    expect(window.location.search).toBe("");
+    expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
+    expect(await screen.findByText("Signed in with Google.")).toBeTruthy();
+  });
+
+  it("confirms an email token from the fragment and removes it immediately", async () => {
+    window.history.replaceState({}, "", "/#verificationToken=verify-me");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    await waitFor(() => expect(journal.confirmEmailVerification).toHaveBeenCalledWith("verify-me"));
+    expect(window.location.hash).toBe("");
+    expect(await screen.findByText("Email verified. Your field journal is ready.")).toBeTruthy();
   });
 
   it("keeps collection search in a bottom dock and exposes mixed category progress", () => {
