@@ -80,6 +80,18 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("dialog", { name: "Near you" })).toBeNull();
   });
 
+  it("dismisses Near you while the browser location request is still pending", () => {
+    let failLocation: PositionErrorCallback = () => undefined;
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => { failLocation = failure; } } });
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    expect(screen.getByText("Finding your location…")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close nearby places" }));
+    expect(screen.queryByRole("dialog", { name: "Near you" })).toBeNull();
+    act(() => failLocation({ code: 3, message: "Timed out", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
+    expect(screen.queryByRole("dialog", { name: "Near you" })).toBeNull();
+  });
+
   it("claims the first-visit badge and keeps Escape from claiming it", async () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Find places" }));
