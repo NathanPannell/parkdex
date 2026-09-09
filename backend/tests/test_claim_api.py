@@ -269,6 +269,22 @@ def test_reimport_respects_latest_guest_or_account_photo_mutation():
             assert client.delete(f"/api/visits/{place_id}/photo", headers=guest_headers()).status_code == 204
             assert client.post("/api/account/import-guest", headers=second_import_headers).status_code == 200
             assert client.get(f"/api/visits/{place_id}/photo", headers=second_headers).status_code == 404
+
+            # An account upload also permanently takes ownership of the photo
+            # slot for this imported lineage.
+            assert client.put(
+                f"/api/visits/{place_id}/photo",
+                headers=second_headers,
+                files={"photo": ("account-owned.png", png_photo("orange"), "image/png")},
+            ).status_code == 200
+            account_owned = client.get(f"/api/visits/{place_id}/photo", headers=second_headers).content
+            assert client.put(
+                f"/api/visits/{place_id}/photo",
+                headers=guest_headers(),
+                files={"photo": ("newer-guest.png", png_photo("purple"), "image/png")},
+            ).status_code == 200
+            assert client.post("/api/account/import-guest", headers=second_import_headers).status_code == 200
+            assert client.get(f"/api/visits/{place_id}/photo", headers=second_headers).content == account_owned
     finally:
         cleanup()
         with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
