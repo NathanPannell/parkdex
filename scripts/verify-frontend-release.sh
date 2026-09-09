@@ -11,7 +11,7 @@ page="$(mktemp)"
 trap 'rm -f "$page"' EXIT
 
 fetch() {
-  vercel curl / --deployment "$url" --cwd frontend --token "$VERCEL_TOKEN" \
+  vercel curl / --deployment "$deployment_url" --cwd frontend --token "$VERCEL_TOKEN" \
     --scope "$VERCEL_ORG_ID" -- --fail --silent --show-error --output "$page"
 }
 
@@ -21,17 +21,20 @@ for delay in ${VERIFY_DELAYS:-0 2 4 8 12}; do
   if inspection="$(curl --fail --silent --show-error --max-time 15 \
     --header "Authorization: Bearer $VERCEL_TOKEN" \
     "https://api.vercel.com/v13/deployments/${url#https://}?teamId=$VERCEL_ORG_ID" \
-    | jq -c '{readyState, sha: .meta.githubCommitSha, projectId}')"; then
+    | jq -c '{readyState, sha: .meta.githubCommitSha, projectId, url}')"; then
+    deployment_host="$(jq -r '.url // empty' <<<"$inspection")"
     if [[ "$(jq -r '.readyState // empty' <<<"$inspection")" == READY ]] && \
        [[ "$(jq -r '.sha // empty' <<<"$inspection")" == "$expected_sha" ]] && \
-       [[ "$(jq -r '.projectId // empty' <<<"$inspection")" == "$VERCEL_PROJECT_ID" ]]; then
+       [[ "$(jq -r '.projectId // empty' <<<"$inspection")" == "$VERCEL_PROJECT_ID" ]] && \
+       [[ "$deployment_host" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$ ]]; then
+      deployment_url="https://$deployment_host"
       exact_release=true
     fi
   fi
-  if [[ "$exact_release" == true ]] && fetch && grep -Fq "${expected_sha:0:7}" "$page"; then
+  if [[ "$exact_release" == true ]] && fetch; then
     grep -q '<title>Parkdex' "$page"
     for asset in maplibre-gl-worker.mjs maplibre-gl-shared.mjs; do
-      vercel curl "/maplibre/$asset" --deployment "$url" --cwd frontend \
+      vercel curl "/maplibre/$asset" --deployment "$deployment_url" --cwd frontend \
         --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" \
         -- --fail --silent --show-error --output /dev/null
     done
