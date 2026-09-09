@@ -19,9 +19,9 @@ vi.mock("@capacitor/preferences", () => ({ Preferences: {
   remove: vi.fn(async ({ key }: { key: string }) => { mocks.preferenceValues.delete(key); }),
 } }));
 
-import { NATIVE_OAUTH_CALLBACK_EVENT, openNativeGoogleAuthorization, parseNativeOAuthCallback, startNativeOAuthBridge } from "@/lib/native-oauth";
+import { NATIVE_OAUTH_CALLBACK_EVENT, NATIVE_OAUTH_CALLBACK_READY_EVENT, openNativeGoogleAuthorization, parseNativeOAuthCallback, startNativeOAuthBridge } from "@/lib/native-oauth";
 
-const authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&state=expected-state";
+const authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&redirect_uri=https%3A%2F%2Fstaging.parkdex.app%2Fauth%2Fgoogle%2Fcallback&response_type=code&code_challenge_method=S256&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=expected-state";
 const callbackUrl = "https://staging.parkdex.app/auth/google/callback?code=authorization-code&state=expected-state";
 
 describe("native OAuth bridge", () => {
@@ -51,6 +51,7 @@ describe("native OAuth bridge", () => {
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
     await expect(openNativeGoogleAuthorization("https://example.test/auth?state=expected-state")).rejects.toThrow("unrecognized");
+    await expect(openNativeGoogleAuthorization("https://accounts.google.com/o/oauth2/v2/auth?state=expected-state")).rejects.toThrow("unrecognized");
   });
 
   it("dispatches a matching callback once and consumes the pending state", async () => {
@@ -58,6 +59,7 @@ describe("native OAuth bridge", () => {
     let callback: unknown;
     window.addEventListener(NATIVE_OAUTH_CALLBACK_EVENT, (event) => { callback = (event as CustomEvent).detail; });
     await startNativeOAuthBridge();
+    window.dispatchEvent(new Event(NATIVE_OAUTH_CALLBACK_READY_EVENT));
     const handler = mocks.addListener.mock.calls[0][1];
     handler({ url: callbackUrl });
     await vi.waitFor(() => expect(callback).toEqual({ code: "authorization-code", state: "expected-state" }));
@@ -73,6 +75,7 @@ describe("native OAuth bridge", () => {
     let dispatched = false;
     window.addEventListener(NATIVE_OAUTH_CALLBACK_EVENT, () => { dispatched = true; });
     await startNativeOAuthBridge();
+    window.dispatchEvent(new Event(NATIVE_OAUTH_CALLBACK_READY_EVENT));
     const handler = mocks.addListener.mock.calls[0][1];
     handler({ url: "https://staging.parkdex.app/auth/google/callback?code=authorization-code&state=other-state" });
     await Promise.resolve();
@@ -81,12 +84,16 @@ describe("native OAuth bridge", () => {
     expect(mocks.preferenceValues.get("parkdex:native-oauth-state:v1")).toBe("expected-state");
   });
 
-  it("processes a matching cold-start URL only when it belongs to the pending session", async () => {
+  it("queues a matching cold-start URL until the shared auth listener is ready", async () => {
     await openNativeGoogleAuthorization(authorizationUrl);
     mocks.getLaunchUrl.mockResolvedValue({ url: callbackUrl });
     let callback: unknown;
     window.addEventListener(NATIVE_OAUTH_CALLBACK_EVENT, (event) => { callback = (event as CustomEvent).detail; });
     await startNativeOAuthBridge();
+    expect(callback).toBeUndefined();
+    expect(mocks.browserClose).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event(NATIVE_OAUTH_CALLBACK_READY_EVENT));
+    await vi.waitFor(() => expect(callback).toEqual({ code: "authorization-code", state: "expected-state" }));
     expect(callback).toEqual({ code: "authorization-code", state: "expected-state" });
     expect(mocks.browserClose).toHaveBeenCalledTimes(1);
   });
