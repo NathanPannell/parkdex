@@ -6,6 +6,8 @@ Parkdex is a field guide and collection game for Vancouver Island parks and near
 
 [Open Parkdex](https://parkdex.app)
 
+Deploy staging or promote it to production with an explicit workflow run. See [Manual deployments](docs/deployments.md) for the commands and safeguards.
+
 ## A growing record of where you've been
 
 Browse national park reserves, provincial parks, regional parks, and a curated collection of nearby islands. Search by name or region, find unvisited parks near you, and follow each place's source link for more detail.

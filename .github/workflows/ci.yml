@@ -1,18 +1,14 @@
-name: CI
+name: CI and manual deployment
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: Deployment action for a manual run
+        description: What should this run do?
         required: true
         default: none
         type: choice
-        options:
-          - none
-          - deploy-staging
-          - deploy-production
-          - repair-production-cors
+        options: [none, deploy-staging, promote-production]
   push:
     branches: [main, staging]
   pull_request:
@@ -22,21 +18,16 @@ permissions:
 
 jobs:
   backend:
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'none'
     runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
-        env:
-          POSTGRES_DB: app
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - 5432:5432
+        env: { POSTGRES_DB: app, POSTGRES_PASSWORD: postgres, POSTGRES_USER: postgres }
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres -d app"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 15
+          --health-interval 2s --health-timeout 3s --health-retries 15
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
       DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/app
@@ -47,305 +38,182 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
-      - name: Verify SQL seed mirrors the reviewed catalogue
-        run: python scripts/build_seed_migration.py --check
+      - run: python scripts/build_seed_migration.py --check
       - run: python -m pip install -r backend/requirements-dev.txt
       - run: python -m backend.app.migrate
       - run: python -m pytest backend/tests
 
   frontend:
+    if: github.event_name != 'workflow_dispatch' || inputs.action == 'none'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Validate catalogue seed integrity
-        run: node scripts/data-validate.mjs
-      - name: Install boundary validation dependencies
-        run: npm ci
-      - name: Test reviewed boundary source contract
-        run: npm run boundaries:test
-      - name: Validate sourced boundary geometry
-        run: node scripts/boundary-validate.mjs
-      - name: Test release metadata stamping
-        run: node --test scripts/release-metadata.test.mjs
+      - run: npm ci
+      - name: Validate repository data
+        run: |
+          node scripts/data-validate.mjs
+          npm run boundaries:test
+          node scripts/boundary-validate.mjs
+          node --test scripts/release-metadata.test.mjs
+          node --test scripts/deployment-workflows.test.mjs
+          bash scripts/deployment-helpers.test.sh
       - name: Resolve build metadata
         id: release
         run: node scripts/release-metadata.mjs "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
       - run: npm ci
         working-directory: frontend
-      - name: Verify published boundary asset matches reviewed geometry
-        run: node scripts/check-boundary-asset.mjs
-        working-directory: frontend
-      - name: Verify weighted exploration territories match the catalogue
-        run: npm run check:exploration-territories
-        working-directory: frontend
-      - run: npm run lint
-        working-directory: frontend
-      - run: npm run typecheck
-        working-directory: frontend
-      - run: npm test
-        working-directory: frontend
-      - run: npm run build
+      - name: Test and build frontend
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
           NEXT_PUBLIC_RELEASE_VERSION: ${{ steps.release.outputs.version }}
           NEXT_PUBLIC_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
           NEXT_PUBLIC_COMMIT_DATE: ${{ steps.release.outputs.commit_date }}
+        run: |
+          node scripts/check-boundary-asset.mjs
+          npm run check:exploration-territories
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
 
-  deploy-production:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.action == 'deploy-production') || github.event_name == 'push')
-    needs: [backend, frontend]
+  resolve-release:
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event_name == 'workflow_dispatch' && (inputs.action == 'deploy-staging' || inputs.action == 'promote-production') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Pin the latest staging commit
+        id: source
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/staging" --jq '.object.sha')"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  test-release:
+    needs: resolve-release
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_DB: app, POSTGRES_PASSWORD: postgres, POSTGRES_USER: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 2s --health-timeout 3s --health-retries 15
     env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-      RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
-      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
-      RAILWAY_ENVIRONMENT: production
-      EXPECTED_COMMIT_SHA: ${{ github.sha }}
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/app
     steps:
       - uses: actions/checkout@v6
+        with: { ref: "${{ needs.resolve-release.outputs.sha }}", fetch-depth: 0 }
+      - uses: actions/setup-python@v6
         with:
-          fetch-depth: 0
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - name: Resolve release metadata
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Test backend
+        run: |
+          python scripts/build_seed_migration.py --check
+          python -m pip install -r backend/requirements-dev.txt
+          python -m backend.app.migrate
+          python -m pytest backend/tests
+      - run: npm ci
+      - name: Validate repository data
+        run: |
+          node scripts/data-validate.mjs
+          npm run boundaries:test
+          node scripts/boundary-validate.mjs
+          node --test scripts/release-metadata.test.mjs
+          node --test scripts/deployment-workflows.test.mjs
+          bash scripts/deployment-helpers.test.sh
+      - name: Resolve build metadata
         id: release
-        run: node scripts/release-metadata.mjs "$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
-      - name: Install deployment CLIs
-        run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
-      - name: Stamp and deploy exact Railway source
-        run: |
-          source scripts/railway-retry.sh
-          [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
-          railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          source_marker=backend/.production-source-sha
-          trap 'rm -f "$source_marker"' EXIT
-          deployment_message="production-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
-          printf '%s' "$deployment_message" > "$source_marker"
-          export PREVIEW_ENVIRONMENT="$RAILWAY_ENVIRONMENT"
-          export EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE="$deployment_message"
-          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          bash scripts/wait-for-railway-preview-source.sh
-      - name: Wait for the exact migrated API commit
-        id: railway
-        run: bash scripts/wait-for-railway-api.sh
-      - name: Deploy frontend once and resolve its production origin
-        id: vercel
+        run: node scripts/release-metadata.mjs "${{ needs.resolve-release.outputs.sha }}" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+        working-directory: frontend
+      - name: Test and build frontend
+        working-directory: frontend
         env:
-          API_URL: ${{ steps.railway.outputs.api_url }}
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          NEXT_PUBLIC_RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          NEXT_PUBLIC_COMMIT_SHA: ${{ steps.release.outputs.commit_sha }}
+          NEXT_PUBLIC_COMMIT_DATE: ${{ steps.release.outputs.commit_date }}
         run: |
-          deployment_url="$(vercel deploy --prod --yes --cwd frontend \
-            --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" \
-            --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" \
-            --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" \
-            --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" \
-            --meta githubCommitSha="$EXPECTED_COMMIT_SHA" \
-            --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
-          production_url=""
-          for _ in $(seq 1 12); do
-            production_url="$(vercel project list --json --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" | jq -r --arg id "$VERCEL_PROJECT_ID" '.projects[] | select(.id == $id) | .latestProductionUrl // empty')"
-            [[ -n "$production_url" ]] && break
-            sleep 5
-          done
-          [[ -n "$production_url" ]] || { echo 'Vercel production URL was not available.' >&2; exit 1; }
-          origins="$(jq -nr --arg deployment "$deployment_url" --arg production "$production_url" '[$deployment, $production, "https://parkdex.app", "https://www.parkdex.app"] | unique | join(",")')"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "production_url=$production_url" >> "$GITHUB_OUTPUT"
-          echo "origins=$origins" >> "$GITHUB_OUTPUT"
-      - name: Verify the public frontend and map worker assets
-        env:
-          FRONTEND_URL: ${{ steps.vercel.outputs.production_url }}
-        run: |
-          page="$(mktemp)"
-          for _ in $(seq 1 12); do
-            if curl --fail --silent --show-error "$FRONTEND_URL/" --output "$page"; then
-              break
-            fi
-            sleep 5
-          done
-          grep -q '<title>Parkdex' "$page" || { echo 'Production frontend title was not rendered.' >&2; exit 1; }
-          curl --fail --silent --show-error "$FRONTEND_URL/maplibre/maplibre-gl-worker.mjs" --output /dev/null
-          curl --fail --silent --show-error "$FRONTEND_URL/maplibre/maplibre-gl-shared.mjs" --output /dev/null
-      - name: Trust the exact frontend origins
-        env:
-          FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
-        run: |
-          source scripts/railway-retry.sh
-          railway_retry "$FRONTEND_ORIGINS" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-      - name: Verify final production API readiness
-        id: final-railway
-        run: bash scripts/wait-for-railway-api.sh
-      - name: Verify catalogue state and worker database read
-        env:
-          API_URL: ${{ steps.final-railway.outputs.api_url }}
-        run: |
-          bash scripts/smoke-catalogue.sh
-          bash scripts/wait-for-worker-catalogue.sh
-
-  repair-production-cors:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.action == 'repair-production-cors'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-      RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
-      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
-      RAILWAY_ENVIRONMENT: production
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli@5.47.2
-      - name: Preserve current origins and add Parkdex domains
-        id: production
-        run: |
-          source scripts/railway-retry.sh
-          variables="$(railway variable list --json --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID")"
-          current_origins="$(jq -er '.FRONTEND_ORIGINS' <<<"$variables")"
-          expected_commit="$(jq -er '.APP_COMMIT_SHA' <<<"$variables")"
-          updated_origins="$(jq -nr --arg existing "$current_origins" '$existing | split(",") + ["https://parkdex.app", "https://www.parkdex.app"] | map(select(length > 0)) | unique | join(",")')"
-          railway_retry "$updated_origins" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-          echo "expected_commit=$expected_commit" >> "$GITHUB_OUTPUT"
-      - name: Redeploy the current production API image
-        run: |
-          source scripts/railway-retry.sh
-          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-      - name: Wait for unchanged production source readiness
-        id: railway
-        env:
-          EXPECTED_COMMIT_SHA: ${{ steps.production.outputs.expected_commit }}
-        run: bash scripts/wait-for-railway-api.sh
-      - name: Verify production CORS responses
-        env:
-          API_URL: ${{ steps.railway.outputs.api_url }}
-        run: |
-          verify_cors() {
-            local method="$1" origin="$2" headers
-            for _ in $(seq 1 30); do
-              headers="$(mktemp)"
-              if [[ "$method" == GET ]]; then
-                curl --fail --silent --show-error --dump-header "$headers" --output /dev/null \
-                  --header "Origin: $origin" "$API_URL/api/places" || true
-              else
-                curl --fail --silent --show-error --request OPTIONS --dump-header "$headers" --output /dev/null \
-                  --header "Origin: $origin" --header 'Access-Control-Request-Method: GET' "$API_URL/api/places" || true
-              fi
-              if tr -d '\r' < "$headers" | grep -Fqix "access-control-allow-origin: $origin"; then
-                return 0
-              fi
-              sleep 5
-            done
-            return 1
-          }
-
-          for origin in https://parkdex.app https://www.parkdex.app; do
-            verify_cors GET "$origin"
-            verify_cors OPTIONS "$origin"
-          done
+          node scripts/check-boundary-asset.mjs
+          npm run check:exploration-territories
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
 
   deploy-staging:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/staging') || (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy-staging'))
-    needs: [backend, frontend]
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && inputs.action == 'deploy-staging'
+    needs: [resolve-release, test-release]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    concurrency:
-      group: deploy-staging
-      cancel-in-progress: true
+    concurrency: { group: release-staging, cancel-in-progress: false }
+    environment: { name: staging, url: "https://staging.parkdex.app" }
     env:
-      NEON_BRANCH: staging
+      EXPECTED_COMMIT_SHA: ${{ needs.resolve-release.outputs.sha }}
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_BASE_ENVIRONMENT_ID: ${{ vars.RAILWAY_BASE_ENVIRONMENT_ID }}
       RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
       RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
       RAILWAY_ENVIRONMENT: staging
-      PREVIEW_ENVIRONMENT: staging
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       STAGING_DOMAIN: staging.parkdex.app
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Resolve the exact staging source
-        id: source
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
+        with: { ref: "${{ env.EXPECTED_COMMIT_SHA }}", fetch-depth: 0 }
+      - name: Refuse a stale staging release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/staging" --jq '.object.sha')" = "$EXPECTED_COMMIT_SHA"
       - name: Create or reuse persistent Neon staging branch
         id: neon
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
-          branch_name: ${{ env.NEON_BRANCH }}
+          branch_name: staging
           parent_branch: ${{ vars.NEON_PARENT_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
           database: app
           role: app_owner
           suspend_timeout: 300
-
-      - name: Keep the staging branch persistent with normal scale to zero
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          NEON_BRANCH_ID: ${{ steps.neon.outputs.branch_id }}
-        run: |
-          branch="$(curl --fail --silent --show-error \
-            --header "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/branches/$NEON_BRANCH_ID")"
-          jq -e '.branch.expires_at == null' <<<"$branch" >/dev/null
-
-          endpoints="$(curl --fail --silent --show-error \
-            --header "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/endpoints")"
-          endpoint_id="$(jq -er --arg branch "$NEON_BRANCH_ID" '.endpoints[] | select(.branch_id == $branch and .type == "read_write") | .id' <<<"$endpoints" | head -n 1)"
-          jq -e --arg id "$endpoint_id" '.endpoints[] | select(.id == $id) | (.suspend_timeout_seconds == 0 or .suspend_timeout_seconds == 300)' <<<"$endpoints" >/dev/null
-          echo "Neon staging branch: $NEON_BRANCH_ID"
-          echo "Neon staging endpoint: $endpoint_id"
-
       - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
+        with: { node-version: 22 }
       - name: Resolve release metadata
         id: release
-        run: node scripts/release-metadata.mjs "${{ steps.source.outputs.sha }}" >> "$GITHUB_OUTPUT"
-
+        run: node scripts/release-metadata.mjs "$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
       - name: Install deployment CLIs
         run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
-
-      - name: Create or update persistent Railway staging environment
+      - name: Configure persistent Railway staging
         env:
           STAGING_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
           STAGING_DATABASE_URL_UNPOOLED: ${{ steps.neon.outputs.db_url }}
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
+          STAGING_GOOGLE_CLIENT_ID: ${{ vars.STAGING_GOOGLE_CLIENT_ID }}
+          STAGING_GOOGLE_CLIENT_SECRET: ${{ secrets.STAGING_GOOGLE_CLIENT_SECRET }}
         run: |
           source scripts/railway-retry.sh
+          : "${STAGING_GOOGLE_CLIENT_ID:?STAGING_GOOGLE_CLIENT_ID is required}"
+          : "${STAGING_GOOGLE_CLIENT_SECRET:?STAGING_GOOGLE_CLIENT_SECRET is required}"
           railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_BASE_ENVIRONMENT_ID"
-          if railway environment list --json | jq -e --arg name "$RAILWAY_ENVIRONMENT" '.. | objects | select(.name? == $name)' >/dev/null; then
-            echo "Railway staging environment already exists; updating it in place."
-          else
+          if ! railway environment list --json | jq -e --arg name "$RAILWAY_ENVIRONMENT" '.. | objects | select(.name? == $name)' >/dev/null; then
             railway environment new "$RAILWAY_ENVIRONMENT" \
               --copy "$RAILWAY_BASE_ENVIRONMENT_ID" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL" \
@@ -353,103 +221,129 @@ jobs:
               --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN" \
               --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL"
           fi
-
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID"
+            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID"
+            railway service source disconnect --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID" >/dev/null
           done
-          railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-
-          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            railway service source disconnect --service "$service" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" >/dev/null
-          done
-
-      - name: Deploy exact staging source to Railway
-        env:
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
+          railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+      - name: Deploy Railway services and wait on provider events
         run: |
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
           source_marker=backend/.staging-source-sha
           trap 'rm -f "$source_marker"' EXIT
           deployment_message="staging-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
           printf '%s' "$deployment_message" > "$source_marker"
-          export EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE="$deployment_message"
-          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway up --detach --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          bash scripts/wait-for-railway-preview-source.sh
-
-      - name: Wait for the exact migrated staging API commit
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID" & api_pid=$!
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID" & worker_pid=$!
+          wait "$api_pid"
+          wait "$worker_pid"
+          bash scripts/verify-railway-deployments.sh "$deployment_message"
+      - name: Verify staging services
         id: railway
-        env:
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
-        run: bash scripts/wait-for-railway-api.sh
-
-      - name: Deploy and alias the staging frontend
-        id: vercel
-        env:
-          API_URL: ${{ steps.railway.outputs.api_url }}
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
         run: |
-          deployment_url="$(vercel deploy --yes --target preview --cwd frontend \
-            --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" \
-            --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" \
-            --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" \
-            --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" \
-            --meta githubCommitSha="$EXPECTED_COMMIT_SHA" \
-            --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
+          bash scripts/wait-for-railway-api.sh & api_pid=$!
+          bash scripts/wait-for-worker-catalogue.sh & worker_pid=$!
+          wait "$api_pid"
+          wait "$worker_pid"
+      - name: Smoke test staging catalogue
+        env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
+        run: bash scripts/smoke-catalogue.sh
+      - name: Deploy and alias staging frontend
+        env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
+        run: |
+          deployment_url="$(vercel deploy --yes --target preview --cwd frontend --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" --meta githubCommitSha="$EXPECTED_COMMIT_SHA" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID")"
           vercel alias set "$deployment_url" "$STAGING_DOMAIN" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
-          origins="$(jq -nr --arg deployment "$deployment_url" --arg staging "https://$STAGING_DOMAIN" '[$deployment, $staging] | unique | join(",")')"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "origins=$origins" >> "$GITHUB_OUTPUT"
+          bash scripts/verify-frontend-release.sh "https://$STAGING_DOMAIN" "$EXPECTED_COMMIT_SHA"
 
-      - name: Trust the staging frontend origins
-        env:
-          FRONTEND_ORIGINS: ${{ steps.vercel.outputs.origins }}
+  promote-production:
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && inputs.action == 'promote-production'
+    needs: [resolve-release, test-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    concurrency: { group: release-staging, cancel-in-progress: false }
+    permissions: { contents: write }
+    environment: { name: production, url: "https://parkdex.app" }
+    env:
+      EXPECTED_COMMIT_SHA: ${{ needs.resolve-release.outputs.sha }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
+      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
+      RAILWAY_ENVIRONMENT: production
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with: { ref: "${{ env.EXPECTED_COMMIT_SHA }}", fetch-depth: 0 }
+      - uses: actions/setup-node@v6
+        with: { node-version: 22 }
+      - name: Resolve release metadata
+        id: release
+        run: node scripts/release-metadata.mjs "$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
+      - name: Install deployment CLIs
+        run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
+      - name: Verify exact staged frontend and API releases
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/staging" --jq '.object.sha')" == "$EXPECTED_COMMIT_SHA" ]]
+          bash scripts/verify-frontend-release.sh "https://staging.parkdex.app" "$EXPECTED_COMMIT_SHA"
+          domain="$(railway domain list --project "$RAILWAY_PROJECT_ID" --environment staging --service "$RAILWAY_API_SERVICE_ID" --json | jq -r '.. | strings | select(test("\\.up\\.railway\\.app$"))' | head -n 1)"
+          [[ -n "$domain" ]]
+          response="$(curl --fail --silent --show-error "https://$domain/ready")"
+          [[ "$(jq -r '.status' <<<"$response")" == ready ]]
+          [[ "$(jq -r '.commit' <<<"$response")" == "$EXPECTED_COMMIT_SHA" ]]
+      - name: Disconnect production Git sources before updating main
+        run: |
+          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
+            railway service source disconnect --service "$service" --environment production --project "$RAILWAY_PROJECT_ID" >/dev/null
+          done
+      - name: Fast-forward main to the staged commit
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          git fetch origin main staging
+          [[ "$(git rev-parse origin/staging)" == "$EXPECTED_COMMIT_SHA" ]]
+          git merge-base --is-ancestor "$(git rev-parse origin/main)" "$EXPECTED_COMMIT_SHA"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/main" -f sha="$EXPECTED_COMMIT_SHA" -F force=false >/dev/null
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" == "$EXPECTED_COMMIT_SHA" ]]
+      - name: Configure production release
         run: |
           source scripts/railway-retry.sh
-          railway_retry "$FRONTEND_ORIGINS" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-          railway_retry '' redeploy --yes --service "$RAILWAY_API_SERVICE_ID" --environment "$RAILWAY_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID"
-
-      - name: Verify final staging API readiness
-        id: final-railway
-        env:
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
-        run: bash scripts/wait-for-railway-api.sh
-
-      - name: Verify staging catalogue and worker database read
-        env:
-          API_URL: ${{ steps.final-railway.outputs.api_url }}
-          EXPECTED_COMMIT_SHA: ${{ steps.source.outputs.sha }}
-        run: |
-          bash scripts/smoke-catalogue.sh
-          bash scripts/wait-for-worker-catalogue.sh
-
-      - name: Verify the public staging frontend
-        run: |
-          page="$(mktemp)"
-          for _ in $(seq 1 12); do
-            if vercel curl / \
-              --deployment "https://$STAGING_DOMAIN" \
-              --cwd frontend \
-              --token "$VERCEL_TOKEN" \
-              --scope "$VERCEL_ORG_ID" \
-              -- --fail --silent --show-error --output "$page"; then
-              break
-            fi
-            sleep 5
+          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
+            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment production --project "$RAILWAY_PROJECT_ID"
           done
-          grep -q '<title>Parkdex' "$page" || { echo 'Staging frontend title was not rendered.' >&2; exit 1; }
-          vercel curl /maplibre/maplibre-gl-worker.mjs \
-            --deployment "https://$STAGING_DOMAIN" \
-            --cwd frontend \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_ORG_ID" \
-            -- --fail --silent --show-error --output /dev/null
-          vercel curl /maplibre/maplibre-gl-shared.mjs \
-            --deployment "https://$STAGING_DOMAIN" \
-            --cwd frontend \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_ORG_ID" \
-            -- --fail --silent --show-error --output /dev/null
+          railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+      - name: Deploy Railway services and wait on provider events
+        run: |
+          source_marker=backend/.production-source-sha
+          trap 'rm -f "$source_marker"' EXIT
+          deployment_message="production-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
+          printf '%s' "$deployment_message" > "$source_marker"
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" & api_pid=$!
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" & worker_pid=$!
+          wait "$api_pid"
+          wait "$worker_pid"
+          bash scripts/verify-railway-deployments.sh "$deployment_message"
+      - name: Verify production services
+        id: railway
+        run: |
+          bash scripts/wait-for-railway-api.sh & api_pid=$!
+          bash scripts/wait-for-worker-catalogue.sh & worker_pid=$!
+          wait "$api_pid"
+          wait "$worker_pid"
+      - name: Smoke test production catalogue
+        env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
+        run: bash scripts/smoke-catalogue.sh
+      - name: Deploy production frontend
+        env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
+        run: |
+          vercel deploy --prod --yes --cwd frontend --build-env NEXT_PUBLIC_API_BASE_URL="$API_URL" --build-env NEXT_PUBLIC_RELEASE_VERSION="${{ steps.release.outputs.version }}" --build-env NEXT_PUBLIC_COMMIT_SHA="${{ steps.release.outputs.commit_sha }}" --build-env NEXT_PUBLIC_COMMIT_DATE="${{ steps.release.outputs.commit_date }}" --meta githubCommitSha="$EXPECTED_COMMIT_SHA" --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
+          bash scripts/verify-frontend-release.sh "https://parkdex.app" "$EXPECTED_COMMIT_SHA"
