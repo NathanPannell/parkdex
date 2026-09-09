@@ -35,6 +35,7 @@ test("staging receives its exact Google and claim settings", () => {
   assert.match(staging, /"https:\/\/\$STAGING_DOMAIN\/auth\/google\/callback" variable set GOOGLE_REDIRECT_URI/);
   assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin/);
   assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin/);
+  assert.match(staging, /"\$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "\$RAILWAY_WORKER_SERVICE_ID"/);
   assert.doesNotMatch(production, /STAGING_GOOGLE_CLIENT|variable set GOOGLE_CLIENT_(?:ID|SECRET)/);
   assert.match(staging, /https:\/\/localhost/);
   assert.doesNotMatch(production, /https:\/\/localhost/);
@@ -47,6 +48,9 @@ test("production explicitly disables claim fixtures", () => {
   assert.match(production, /'false' variable set CLAIM_TEST_MODE/);
   assert.doesNotMatch(production, /railway_retry ['"](?:true|1|yes|on)['"] variable set CLAIM_TEST_MODE/i);
   assert.match(production, /'https:\/\/parkdex\.app,https:\/\/www\.parkdex\.app' variable set FRONTEND_ORIGINS/);
+  assert.match(production, /railway service status --json --service "\$RAILWAY_API_SERVICE_ID" --environment production/);
+  assert.match(production, /printf -v unpooled_reference '\$%s' "\{\{\$\{api_service_name\}\.DATABASE_URL_UNPOOLED\}\}"/);
+  assert.match(production, /"\$unpooled_reference" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "\$RAILWAY_WORKER_SERVICE_ID"/);
 });
 
 test("promotion fails closed around one exact staged commit", () => {

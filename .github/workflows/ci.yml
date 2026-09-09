@@ -221,7 +221,8 @@ jobs:
               --service-config "$RAILWAY_API_SERVICE_ID" variables.APP_ENVIRONMENT.value "staging" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.CLAIM_TEST_MODE.value "false" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN,https://localhost" \
-              --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL"
+              --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL" \
+              --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL_UNPOOLED.value "$STAGING_DATABASE_URL_UNPOOLED"
           fi
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
             railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID"
@@ -229,6 +230,7 @@ jobs:
             railway service source disconnect --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID" >/dev/null
           done
           railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_WORKER_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "staging" variable set APP_ENVIRONMENT --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "false" variable set CLAIM_TEST_MODE --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN,https://localhost" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
@@ -319,9 +321,14 @@ jobs:
       - name: Configure production release
         run: |
           source scripts/railway-retry.sh
+          api_service="$(railway service status --json --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID")"
+          api_service_name="$(jq -er --arg id "$RAILWAY_API_SERVICE_ID" 'select(.id == $id) | .name' <<<"$api_service")"
+          [[ "$api_service_name" =~ ^[A-Za-z0-9_-]{1,64}$ ]]
+          printf -v unpooled_reference '$%s' "{{${api_service_name}.DATABASE_URL_UNPOOLED}}"
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
             railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment production --project "$RAILWAY_PROJECT_ID"
           done
+          railway_retry "$unpooled_reference" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'production' variable set APP_ENVIRONMENT --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'false' variable set CLAIM_TEST_MODE --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"

@@ -9,8 +9,8 @@ MIGRATION_DIR = Path(__file__).resolve().parents[2] / "database" / "migrations"
 LOCK_ID = 7_293_816_401
 
 
-def migrate() -> None:
-    database_url = get_settings().effective_migration_database_url
+def migrate(database_url: str | None = None) -> None:
+    database_url = database_url or get_settings().effective_migration_database_url
     with psycopg.connect(database_url, autocommit=False) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_lock(%s)", (LOCK_ID,))

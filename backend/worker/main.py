@@ -7,6 +7,7 @@ import threading
 from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
 
+from backend.app.migrate import migrate
 from backend.app.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -26,8 +27,16 @@ def catalogue_count(pool: ConnectionPool) -> int:
     return row["place_count"]
 
 
-def main() -> None:
+def prepare_database():
     settings = get_settings()
+    # The API and worker may deploy concurrently. The shared migration advisory
+    # lock makes either process safe to start first, while failures stop startup.
+    migrate(settings.effective_migration_database_url)
+    return settings
+
+
+def main() -> None:
+    settings = prepare_database()
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     with ConnectionPool(
