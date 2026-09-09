@@ -1,7 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +44,19 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
     smtp_from: str = Field(default="Parkdex <no-reply@parkdex.app>", alias="SMTP_FROM")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    app_environment: Literal["local", "test", "preview", "staging", "production"] = Field(
+        default="production", alias="APP_ENVIRONMENT"
+    )
+    claim_test_mode: bool = Field(default=False, alias="CLAIM_TEST_MODE")
+
+    @model_validator(mode="after")
+    def prevent_production_claim_fixtures(self):
+        railway_name = (self.railway_environment_name or "").strip().lower()
+        if self.claim_test_mode and (
+            self.app_environment == "production" or railway_name == "production"
+        ):
+            raise ValueError("CLAIM_TEST_MODE cannot be enabled in production")
+        return self
 
     @property
     def is_preview(self) -> bool:

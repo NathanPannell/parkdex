@@ -55,3 +55,15 @@ def test_local_migrations_may_use_local_database_url() -> None:
         DATABASE_URL_UNPOOLED=None,
     )
     assert settings.effective_migration_database_url == "postgresql://localhost/app"
+
+
+def test_claim_fixtures_fail_closed_in_production() -> None:
+    with pytest.raises(ValueError, match="CLAIM_TEST_MODE"):
+        Settings(APP_ENVIRONMENT="production", CLAIM_TEST_MODE=True)
+    assert Settings(APP_ENVIRONMENT="test", CLAIM_TEST_MODE=True).claim_test_mode is True
+    with pytest.raises(ValueError, match="CLAIM_TEST_MODE"):
+        Settings(
+            APP_ENVIRONMENT="staging",
+            RAILWAY_ENVIRONMENT_NAME="production",
+            CLAIM_TEST_MODE=True,
+        )

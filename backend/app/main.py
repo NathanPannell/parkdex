@@ -3,10 +3,10 @@ import hashlib
 import logging
 import re
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, Response, UploadFile
 from google.auth.exceptions import GoogleAuthError
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
@@ -29,11 +29,24 @@ from backend.app.auth import (
     verify_password,
 )
 from backend.app.db import close_pool, connection, open_pool
+from backend.app.claim_photos import MAX_UPLOAD_BYTES, PhotoInputError, normalize_photo
+from backend.app.claims import (
+    ClaimInputError,
+    LocationSample,
+    create_recommendation_token,
+    get_boundary_registry,
+    recommendation_token_hash,
+    validate_location_sample,
+)
 from backend.app.email_delivery import ensure_email_delivery, send_auth_email
 from backend.app.google_oauth import authorization_url, exchange_and_verify
 from backend.app.schemas import (
     AccountState,
     AuthResult,
+    ClaimRecommendationRequest,
+    ClaimRecommendationResponse,
+    CreateClaimRequest,
+    CreateClaimResponse,
     Credentials,
     EmailRequest,
     GoogleCallback,
@@ -46,6 +59,7 @@ from backend.app.schemas import (
     TrailUpdate,
     TokenConfirmation,
     VisitResult,
+    VisitPhotoResult,
     VisitUpdate,
 )
 from backend.app.settings import get_settings
@@ -90,13 +104,37 @@ def resolve_identity(
     return collection_hash(collection_key, required=required)
 
 
+def visit_from_row(row: dict) -> dict:
+    claim = None
+    if row.get("claimed_at") is not None:
+        claim = {
+            "claimed_at": row["claimed_at"],
+            "captured_at": row["captured_at"],
+            "coordinates": {"latitude": row["claim_latitude"], "longitude": row["claim_longitude"]},
+            "accuracy_meters": row["accuracy_m"],
+            "boundary_version": row["boundary_version"],
+            "match_kind": row["match_kind"],
+            "distance_meters": row["distance_m"],
+            "has_photo": row["photo_bytes"] is not None,
+        }
+    return {"place_id": row["place_id"], "visited_at": row["visited_at"], "claim": claim}
+
+
 def visits_for_account(conn: Connection, account_id: str) -> list[dict]:
     return [
-        {"place_id": row["place_id"], "visited_at": row["visited_at"]}
+        visit_from_row(row)
         for row in conn.execute(
             """
-            SELECT account_visits.place_id, account_visits.visited_at FROM account_visits
+            SELECT account_visits.place_id, account_visits.visited_at,
+                   account_visit_claims.claimed_at, account_visit_claims.captured_at,
+                   account_visit_claims.latitude AS claim_latitude,
+                   account_visit_claims.longitude AS claim_longitude,
+                   account_visit_claims.accuracy_m, account_visit_claims.boundary_version,
+                   account_visit_claims.match_kind, account_visit_claims.distance_m,
+                   account_visit_claims.photo_bytes
+            FROM account_visits
             JOIN places ON places.id = account_visits.place_id AND places.active
+            LEFT JOIN account_visit_claims USING (account_id, place_id)
             WHERE account_visits.account_id = %s ORDER BY account_visits.visited_at, account_visits.place_id
             """,
             (account_id,),
@@ -106,6 +144,28 @@ def visits_for_account(conn: Connection, account_id: str) -> list[dict]:
 
 def visited_ids(visits: list[dict]) -> list[str]:
     return [visit["place_id"] for visit in visits]
+
+
+def visits_for_guest(conn: Connection, owner_hash: str) -> list[dict]:
+    return [
+        visit_from_row(row)
+        for row in conn.execute(
+            """
+            SELECT visits.place_id, visits.visited_at,
+                   guest_visit_claims.claimed_at, guest_visit_claims.captured_at,
+                   guest_visit_claims.latitude AS claim_latitude,
+                   guest_visit_claims.longitude AS claim_longitude,
+                   guest_visit_claims.accuracy_m, guest_visit_claims.boundary_version,
+                   guest_visit_claims.match_kind, guest_visit_claims.distance_m,
+                   guest_visit_claims.photo_bytes
+            FROM visits
+            JOIN places ON places.id = visits.place_id AND places.active
+            LEFT JOIN guest_visit_claims USING (owner_hash, place_id)
+            WHERE visits.owner_hash = %s ORDER BY visits.visited_at, visits.place_id
+            """,
+            (owner_hash,),
+        ).fetchall()
+    ]
 
 
 def completed_trails_for_account(conn: Connection, account_id: str) -> list[str]:
@@ -132,9 +192,19 @@ def account_state(conn: Connection, identity: AccountIdentity) -> dict:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    registry = get_boundary_registry()
     open_pool()
-    yield
-    close_pool()
+    try:
+        with contextmanager(connection)() as conn:
+            active_ids = {row["id"] for row in conn.execute(
+                "SELECT id FROM places WHERE active AND id = ANY(%s)", (list(registry.place_ids),)
+            ).fetchall()}
+            missing = registry.place_ids - active_ids
+            if missing:
+                raise RuntimeError(f"Canonical claim boundaries reference inactive or missing places: {sorted(missing)[:5]}")
+        yield
+    finally:
+        close_pool()
 
 
 settings = get_settings()
@@ -175,6 +245,7 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
         "status": "ready",
         "commit": settings.app_commit_sha,
         "migrations": migration_count["migration_count"],
+        "boundaryVersion": get_boundary_registry().version,
     }
 
 
@@ -206,17 +277,7 @@ def list_places(
         visits = visits_for_account(conn, identity.account_id)
         completed_trail_ids = completed_trails_for_account(conn, identity.account_id)
     elif identity:
-        visits = [
-            {"place_id": row["place_id"], "visited_at": row["visited_at"]}
-            for row in conn.execute(
-                """
-                SELECT visits.place_id, visits.visited_at FROM visits
-                JOIN places ON places.id = visits.place_id AND places.active
-                WHERE visits.owner_hash = %s ORDER BY visits.visited_at, visits.place_id
-                """,
-                (identity,),
-            ).fetchall()
-        ]
+        visits = visits_for_guest(conn, identity)
         completed_trail_ids = [row["trail_id"] for row in conn.execute("SELECT trail_id FROM guest_trail_completions WHERE owner_hash = %s ORDER BY trail_id", (identity,)).fetchall()]
     return {
         "places": places,
@@ -225,6 +286,247 @@ def list_places(
         "completed_trail_ids": completed_trail_ids,
         "coverage_note": COVERAGE_NOTE,
     }
+
+
+CLAIM_TEST_FIXTURES = {
+    "inside-goldstream": "provincial-goldstream-park",
+    "inside-saltspring": "island-saltspring-island",
+}
+
+
+def claim_error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def identity_columns(identity: AccountIdentity | str) -> tuple[str | None, str | None]:
+    return (identity.account_id, None) if isinstance(identity, AccountIdentity) else (None, identity)
+
+
+def owner_visited_ids(conn: Connection, identity: AccountIdentity | str) -> list[str]:
+    if isinstance(identity, AccountIdentity):
+        rows = conn.execute("SELECT place_id FROM account_visits WHERE account_id = %s", (identity.account_id,)).fetchall()
+    else:
+        rows = conn.execute("SELECT place_id FROM visits WHERE owner_hash = %s", (identity,)).fetchall()
+    return [row["place_id"] for row in rows]
+
+
+def claim_response_from_row(row: dict, visited_count: int) -> dict:
+    return {
+        "place_id": row["place_id"],
+        "visited": True,
+        "visited_count": visited_count,
+        "visited_at": row["visited_at"],
+        "claim": {
+            "claimed_at": row["claimed_at"],
+            "captured_at": row["captured_at"],
+            "coordinates": {"latitude": row["latitude"], "longitude": row["longitude"]},
+            "accuracy_meters": row["accuracy_m"],
+            "boundary_version": row["boundary_version"],
+            "match_kind": row["match_kind"],
+            "distance_meters": row["distance_m"],
+            "has_photo": row["photo_bytes"] is not None,
+        },
+    }
+
+
+def fetch_claim_by_recommendation(conn: Connection, identity: AccountIdentity | str, token_hash: str):
+    if isinstance(identity, AccountIdentity):
+        return conn.execute(
+            """
+            SELECT account_visits.place_id, account_visits.visited_at,
+                   account_visit_claims.claimed_at, account_visit_claims.captured_at,
+                   account_visit_claims.latitude, account_visit_claims.longitude,
+                   account_visit_claims.accuracy_m, account_visit_claims.boundary_version,
+                   account_visit_claims.match_kind, account_visit_claims.distance_m,
+                   account_visit_claims.photo_bytes
+            FROM account_visit_claims
+            JOIN account_visits USING (account_id, place_id)
+            WHERE account_visit_claims.account_id = %s AND recommendation_hash = %s
+            """,
+            (identity.account_id, token_hash),
+        ).fetchone()
+    return conn.execute(
+        """
+        SELECT visits.place_id, visits.visited_at,
+               guest_visit_claims.claimed_at, guest_visit_claims.captured_at,
+               guest_visit_claims.latitude, guest_visit_claims.longitude,
+               guest_visit_claims.accuracy_m, guest_visit_claims.boundary_version,
+               guest_visit_claims.match_kind, guest_visit_claims.distance_m,
+               guest_visit_claims.photo_bytes
+        FROM guest_visit_claims
+        JOIN visits USING (owner_hash, place_id)
+        WHERE guest_visit_claims.owner_hash = %s AND recommendation_hash = %s
+        """,
+        (identity, token_hash),
+    ).fetchone()
+
+
+def owner_visit_count(conn: Connection, identity: AccountIdentity | str) -> int:
+    if isinstance(identity, AccountIdentity):
+        return conn.execute(
+            """SELECT COUNT(*) AS count FROM account_visits JOIN places ON places.id = account_visits.place_id AND places.active WHERE account_id = %s""",
+            (identity.account_id,),
+        ).fetchone()["count"]
+    return conn.execute(
+        """SELECT COUNT(*) AS count FROM visits JOIN places ON places.id = visits.place_id AND places.active WHERE owner_hash = %s""",
+        (identity,),
+    ).fetchone()["count"]
+
+
+@app.post("/api/claim-recommendations", response_model=ClaimRecommendationResponse)
+def recommend_claim(
+    payload: ClaimRecommendationRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    registry = get_boundary_registry()
+    now = datetime.now(timezone.utc)
+    if payload.testFixtureId is not None:
+        if not settings.claim_test_mode or settings.app_environment == "production":
+            raise claim_error(403, "claim_test_mode_disabled", "Claim test fixtures are disabled")
+        place_id = CLAIM_TEST_FIXTURES.get(payload.testFixtureId)
+        if place_id is None:
+            raise claim_error(404, "claim_test_fixture_not_found", "Claim test fixture was not found")
+        sample = registry.representative_sample(place_id, now)
+    else:
+        assert payload.location is not None
+        try:
+            sample = validate_location_sample(
+                payload.location.latitude,
+                payload.location.longitude,
+                payload.location.accuracy_meters,
+                payload.location.captured_at_epoch_ms,
+                now,
+            )
+        except ClaimInputError as exc:
+            raise claim_error(422, exc.code, str(exc)) from exc
+    candidate = registry.recommend(sample, owner_visited_ids(conn, identity))
+    if candidate is None:
+        return {"status": "none"}
+    if not conn.execute("SELECT 1 FROM places WHERE id = %s AND active", (candidate.place_id,)).fetchone():
+        raise claim_error(409, "claim_place_unavailable", "The recommended place is no longer available")
+    token, token_hash = create_recommendation_token()
+    account_id, owner_hash = identity_columns(identity)
+    expires_at = sample.captured_at + timedelta(seconds=60)
+    conn.execute("DELETE FROM claim_recommendations WHERE expires_at < NOW() - INTERVAL '1 hour'")
+    conn.execute(
+        """
+        INSERT INTO claim_recommendations (
+            token_hash, account_id, owner_hash, place_id, captured_at, latitude,
+            longitude, accuracy_m, boundary_version, match_kind, distance_m, expires_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            token_hash, account_id, owner_hash, candidate.place_id, sample.captured_at,
+            round(sample.latitude, 5), round(sample.longitude, 5), sample.accuracy_meters,
+            registry.version, candidate.match_kind, round(candidate.distance_meters, 3), expires_at,
+        ),
+    )
+    conn.commit()
+    return {
+        "status": "recommended",
+        "recommendation_token": token,
+        "expires_at": expires_at,
+        "candidate": {
+            "place_id": candidate.place_id,
+            "match_kind": candidate.match_kind,
+            "distance_meters": round(candidate.distance_meters, 3),
+        },
+    }
+
+
+@app.post("/api/claims", response_model=CreateClaimResponse)
+def create_claim(
+    payload: CreateClaimRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    token_hash = recommendation_token_hash(payload.recommendationToken)
+    if token_hash is None:
+        raise claim_error(404, "claim_recommendation_not_found", "Claim recommendation was not found")
+    if isinstance(identity, AccountIdentity):
+        lock_account_progress(conn, identity.account_id)
+    account_id, owner_hash = identity_columns(identity)
+    existing = fetch_claim_by_recommendation(conn, identity, token_hash)
+    if existing is not None:
+        return claim_response_from_row(existing, owner_visit_count(conn, identity))
+    recommendation = conn.execute(
+        """
+        SELECT * FROM claim_recommendations
+        WHERE token_hash = %s
+          AND account_id IS NOT DISTINCT FROM %s
+          AND owner_hash IS NOT DISTINCT FROM %s
+        FOR UPDATE
+        """,
+        (token_hash, account_id, owner_hash),
+    ).fetchone()
+    if recommendation is None:
+        existing = fetch_claim_by_recommendation(conn, identity, token_hash)
+        if existing is not None:
+            return claim_response_from_row(existing, owner_visit_count(conn, identity))
+        raise claim_error(404, "claim_recommendation_not_found", "Claim recommendation was not found")
+    if recommendation["place_id"] != payload.expectedPlaceId:
+        raise claim_error(409, "claim_recommendation_candidate_mismatch", "The expected place does not match this recommendation")
+    if datetime.now(timezone.utc) > recommendation["expires_at"]:
+        raise claim_error(410, "claim_recommendation_expired", "Location recommendation expired; check your location again")
+    if not conn.execute("SELECT 1 FROM places WHERE id = %s AND active", (recommendation["place_id"],)).fetchone():
+        raise claim_error(409, "claim_place_unavailable", "The recommended place is no longer available")
+    if isinstance(identity, AccountIdentity):
+        conn.execute(
+            "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (identity.account_id, recommendation["place_id"]),
+        )
+        existing_claim = conn.execute(
+            "SELECT 1 FROM account_visit_claims WHERE account_id = %s AND place_id = %s",
+            (identity.account_id, recommendation["place_id"]),
+        ).fetchone()
+        if existing_claim:
+            raise claim_error(409, "claim_place_already_claimed", "This place already has a location claim")
+        conn.execute(
+            """
+            INSERT INTO account_visit_claims (
+                account_id, place_id, recommendation_hash, captured_at, latitude,
+                longitude, accuracy_m, boundary_version, match_kind, distance_m
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (identity.account_id, recommendation["place_id"], token_hash, recommendation["captured_at"],
+             recommendation["latitude"], recommendation["longitude"], recommendation["accuracy_m"],
+             recommendation["boundary_version"], recommendation["match_kind"], recommendation["distance_m"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (identity, recommendation["place_id"]),
+        )
+        existing_claim = conn.execute(
+            "SELECT 1 FROM guest_visit_claims WHERE owner_hash = %s AND place_id = %s",
+            (identity, recommendation["place_id"]),
+        ).fetchone()
+        if existing_claim:
+            raise claim_error(409, "claim_place_already_claimed", "This place already has a location claim")
+        conn.execute(
+            """
+            INSERT INTO guest_visit_claims (
+                owner_hash, place_id, recommendation_hash, captured_at, latitude,
+                longitude, accuracy_m, boundary_version, match_kind, distance_m
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (identity, recommendation["place_id"], token_hash, recommendation["captured_at"],
+             recommendation["latitude"], recommendation["longitude"], recommendation["accuracy_m"],
+             recommendation["boundary_version"], recommendation["match_kind"], recommendation["distance_m"]),
+        )
+    created = fetch_claim_by_recommendation(conn, identity, token_hash)
+    conn.execute("DELETE FROM claim_recommendations WHERE token_hash = %s", (token_hash,))
+    conn.commit()
+    return claim_response_from_row(created, owner_visit_count(conn, identity))
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
@@ -245,13 +547,11 @@ def update_visit(
     if isinstance(identity, AccountIdentity):
         lock_account_progress(conn, identity.account_id)
         if payload.visited:
-            conn.execute(
-                """
-                INSERT INTO account_visits (account_id, place_id)
-                VALUES (%s, %s) ON CONFLICT DO NOTHING
-                """,
+            if not conn.execute(
+                "SELECT 1 FROM account_visits WHERE account_id = %s AND place_id = %s",
                 (identity.account_id, place_id),
-            )
+            ).fetchone():
+                raise claim_error(409, "location_claim_required", "A current location claim is required for a new visit")
         else:
             conn.execute(
                 "DELETE FROM account_visits WHERE account_id = %s AND place_id = %s",
@@ -267,10 +567,11 @@ def update_visit(
         ).fetchone()["visited_count"]
     else:
         if payload.visited:
-            conn.execute(
-                "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            if not conn.execute(
+                "SELECT 1 FROM visits WHERE owner_hash = %s AND place_id = %s",
                 (identity, place_id),
-            )
+            ).fetchone():
+                raise claim_error(409, "location_claim_required", "A current location claim is required for a new visit")
         else:
             conn.execute(
                 "DELETE FROM visits WHERE owner_hash = %s AND place_id = %s",
@@ -304,6 +605,135 @@ def update_visit(
         "visited_count": count,
         "visited_at": visited_at,
     }
+
+
+def claim_photo_row(conn: Connection, identity: AccountIdentity | str, place_id: str, *, lock: bool = False):
+    suffix = " FOR UPDATE" if lock else ""
+    if isinstance(identity, AccountIdentity):
+        return conn.execute(
+            """
+            SELECT photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
+            FROM account_visit_claims WHERE account_id = %s AND place_id = %s
+            """ + suffix,
+            (identity.account_id, place_id),
+        ).fetchone()
+    return conn.execute(
+        """
+        SELECT photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
+        FROM guest_visit_claims WHERE owner_hash = %s AND place_id = %s
+        """ + suffix,
+        (identity, place_id),
+    ).fetchone()
+
+
+@app.put("/api/visits/{place_id}/photo", response_model=VisitPhotoResult)
+async def put_visit_photo(
+    place_id: str,
+    photo: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    # Authenticate before doing image work, then authenticate again in the update transaction.
+    with contextmanager(connection)() as conn:
+        identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+        if claim_photo_row(conn, identity, place_id) is None:
+            raise claim_error(404, "claim_not_found", "A location claim is required before adding a photo")
+    raw = await photo.read(MAX_UPLOAD_BYTES + 1)
+    try:
+        normalized = normalize_photo(raw)
+    except PhotoInputError as exc:
+        raise claim_error(422, "invalid_claim_photo", str(exc)) from exc
+    with contextmanager(connection)() as conn:
+        identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+        if isinstance(identity, AccountIdentity):
+            lock_account_progress(conn, identity.account_id)
+        if claim_photo_row(conn, identity, place_id, lock=True) is None:
+            raise claim_error(404, "claim_not_found", "The location claim was removed before the photo was saved")
+        if isinstance(identity, AccountIdentity):
+            row = conn.execute(
+                """
+                UPDATE account_visit_claims SET
+                    photo_bytes = %s, photo_mime = %s, photo_width = %s, photo_height = %s,
+                    photo_sha256 = %s, photo_updated_at = NOW()
+                WHERE account_id = %s AND place_id = %s
+                RETURNING photo_mime, photo_width, photo_height, OCTET_LENGTH(photo_bytes) AS byte_length,
+                          photo_sha256, photo_updated_at
+                """,
+                (normalized.content, normalized.content_type, normalized.width, normalized.height,
+                 normalized.sha256_hex, identity.account_id, place_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                UPDATE guest_visit_claims SET
+                    photo_bytes = %s, photo_mime = %s, photo_width = %s, photo_height = %s,
+                    photo_sha256 = %s, photo_updated_at = NOW()
+                WHERE owner_hash = %s AND place_id = %s
+                RETURNING photo_mime, photo_width, photo_height, OCTET_LENGTH(photo_bytes) AS byte_length,
+                          photo_sha256, photo_updated_at
+                """,
+                (normalized.content, normalized.content_type, normalized.width, normalized.height,
+                 normalized.sha256_hex, identity, place_id),
+            ).fetchone()
+        conn.commit()
+    return {
+        "place_id": place_id,
+        "photo": {
+            "content_type": row["photo_mime"], "width": row["photo_width"], "height": row["photo_height"],
+            "byte_length": row["byte_length"], "sha256": row["photo_sha256"], "updated_at": row["photo_updated_at"],
+        },
+    }
+
+
+@app.get("/api/visits/{place_id}/photo")
+def get_visit_photo(
+    place_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> Response:
+    identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    row = claim_photo_row(conn, identity, place_id)
+    if row is None or row["photo_bytes"] is None:
+        raise claim_error(404, "claim_photo_not_found", "Claim photo was not found")
+    return Response(
+        content=bytes(row["photo_bytes"]),
+        media_type=row["photo_mime"],
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.delete("/api/visits/{place_id}/photo", status_code=204)
+def delete_visit_photo(
+    place_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> Response:
+    identity = resolve_identity(conn, authorization, x_collection_key, required=True)
+    if isinstance(identity, AccountIdentity):
+        lock_account_progress(conn, identity.account_id)
+        row = conn.execute(
+            """
+            UPDATE account_visit_claims SET photo_bytes = NULL, photo_mime = NULL,
+                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL, photo_updated_at = NULL
+            WHERE account_id = %s AND place_id = %s RETURNING 1
+            """,
+            (identity.account_id, place_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            UPDATE guest_visit_claims SET photo_bytes = NULL, photo_mime = NULL,
+                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL, photo_updated_at = NULL
+            WHERE owner_hash = %s AND place_id = %s RETURNING 1
+            """,
+            (identity, place_id),
+        ).fetchone()
+    if row is None:
+        raise claim_error(404, "claim_not_found", "Location claim was not found")
+    conn.commit()
+    return Response(status_code=204)
 
 
 @app.put("/api/trails/{trail_id}", response_model=TrailResult)
@@ -645,6 +1075,35 @@ def import_guest_progress(
         """,
         (identity.account_id, owner_hash),
     ).rowcount
+    conn.execute(
+        """
+        UPDATE account_visits AS destination
+        SET visited_at = LEAST(destination.visited_at, source.visited_at)
+        FROM visits AS source
+        WHERE destination.account_id = %s
+          AND source.owner_hash = %s
+          AND destination.place_id = source.place_id
+        """,
+        (identity.account_id, owner_hash),
+    )
+    conn.execute(
+        """
+        INSERT INTO account_visit_claims (
+            account_id, place_id, recommendation_hash, claimed_at, captured_at,
+            latitude, longitude, accuracy_m, boundary_version, match_kind, distance_m,
+            photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
+        )
+        SELECT %s, guest.place_id, guest.recommendation_hash, guest.claimed_at, guest.captured_at,
+               guest.latitude, guest.longitude, guest.accuracy_m, guest.boundary_version,
+               guest.match_kind, guest.distance_m, guest.photo_bytes, guest.photo_mime,
+               guest.photo_width, guest.photo_height, guest.photo_sha256, guest.photo_updated_at
+        FROM guest_visit_claims AS guest
+        JOIN account_visits ON account_visits.account_id = %s AND account_visits.place_id = guest.place_id
+        WHERE guest.owner_hash = %s
+        ON CONFLICT (account_id, place_id) DO NOTHING
+        """,
+        (identity.account_id, identity.account_id, owner_hash),
+    )
     imported_trails = conn.execute(
         """
         INSERT INTO account_trail_completions (account_id, trail_id, completed_at)

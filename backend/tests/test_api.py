@@ -1,3 +1,4 @@
+import hashlib
 import os
 
 import psycopg
@@ -34,6 +35,10 @@ def test_visit_collection_is_persistent_and_isolated() -> None:
             ),
         )
         conn.execute("DELETE FROM visits WHERE place_id = %s", (TEST_PLACE,))
+        conn.execute(
+            "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s)",
+            (hashlib.sha256(KEY_ONE.encode("ascii")).hexdigest(), TEST_PLACE),
+        )
         conn.commit()
 
     try:
