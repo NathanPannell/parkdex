@@ -8,6 +8,7 @@ import {
   hasLiveClaimImportJourney,
   countEndpointResponses,
   hasNewEndpointResponse,
+  locationUiErrorCode,
   isAllowedLocalRuntimeEndpoints,
   isAllowedClaimFixture,
   isAllowedPreviewApiUrl,
@@ -127,6 +128,14 @@ test("waits for a distinct completed recommendation before advancing", () => {
   expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(false);
   diagnostics.responses.push({ status: 200, url: endpoint });
   expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(true);
+});
+
+test("records a bounded sanitized native location outcome", () => {
+  expect(locationUiErrorCode("Location permission is off. Allow it for Parkdex, then try again.")).toBe("permission-denied");
+  expect(locationUiErrorCode("Your location took too long. Move into open sky and try again.")).toBe("timeout");
+  expect(locationUiErrorCode("Your location is unavailable. Check location services and try again.")).toBe("unavailable");
+  expect(locationUiErrorCode("unexpected plugin message")).toBe("other");
+  expect(locationUiErrorCode("")).toBe("none");
 });
 
 test("requires one exact full commit identity from API readiness", () => {

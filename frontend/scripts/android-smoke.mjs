@@ -34,6 +34,11 @@ function adb(...args) {
   return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+function captureNativeScreenshot(fileName) {
+  const png = execFileSync("adb", ["exec-out", "screencap", "-p"], { stdio: ["ignore", "pipe", "pipe"] });
+  writeFileSync(path.join(artifactDirectory, fileName), png);
+}
+
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export function parseWebViewSocket(unixSockets, pid) {
@@ -137,6 +142,13 @@ export function countEndpointResponses(diagnostics, endpointUrl) {
 
 export function hasNewEndpointResponse(diagnostics, endpointUrl, previousCount) {
   return countEndpointResponses(diagnostics, endpointUrl) > previousCount;
+}
+
+export function locationUiErrorCode(message) {
+  if (/permission is off/i.test(message)) return "permission-denied";
+  if (/took too long/i.test(message)) return "timeout";
+  if (/unavailable/i.test(message)) return "unavailable";
+  return message ? "other" : "none";
 }
 
 class DevToolsSession {
@@ -400,6 +412,7 @@ async function searchForPlace(session, name) {
 }
 
 function configureCoarseEmulatorLocation() {
+  adb("shell", "cmd", "location", "set-location-enabled", "true");
   adb("shell", "pm", "grant", packageName, "android.permission.ACCESS_COARSE_LOCATION");
   try { adb("shell", "pm", "revoke", packageName, "android.permission.ACCESS_FINE_LOCATION"); } catch { /* may already be denied */ }
   try { adb("shell", "appops", "set", packageName, "android:fine_location", "ignore"); } catch { /* platform spelling varies */ }
@@ -407,7 +420,10 @@ function configureCoarseEmulatorLocation() {
   const coarseGranted = /android\.permission\.ACCESS_COARSE_LOCATION: granted=true/.test(packageState);
   const fineGranted = /android\.permission\.ACCESS_FINE_LOCATION: granted=true/.test(packageState);
   if (!coarseGranted || fineGranted) throw new Error("Could not establish coarse-only location permission on the emulator.");
+  const locationEnabled = adb("shell", "cmd", "location", "is-location-enabled") === "true";
+  if (!locationEnabled) throw new Error("Could not enable Android location services on the emulator.");
   adb("emu", "geo", "fix", "-123.542431", "48.475557");
+  return { coarseGranted, fineGranted, locationEnabled };
 }
 
 async function exerciseCoarseNativeLocation(session, diagnostics) {
@@ -418,25 +434,52 @@ async function exerciseCoarseNativeLocation(session, diagnostics) {
     [...document.querySelectorAll("button")]
       .find((button) => button.textContent?.includes("Check if I can claim a park"))?.click()
   `);
-  const accuracyMeters = await waitFor("coarse Capacitor location sample", () => session.evaluate(`(() => {
-    const text = document.querySelector(".claim-sample")?.textContent ?? "";
-    const value = Number(text.match(/±(\\d+)/)?.[1]);
-    return Number.isFinite(value) && value >= 0 ? value : false;
-  })()`));
-  await waitFor("settled coarse location recommendation", async () => {
-    const checking = await session.evaluate(`
-      [...document.querySelectorAll("button")]
-        .some((button) => button.textContent?.includes("Checking your boundary"))
-    `);
-    return !checking && hasNewEndpointResponse(diagnostics, recommendationUrl, responsesBeforeLocate);
-  });
-  diagnostics.emulatorLocation = {
-    permission: "coarse-only",
-    source: "adb-emulator-geo-fix-through-capacitor",
-    requestedLatitude: 48.475557,
-    requestedLongitude: -123.542431,
-    accuracyMeters,
+  let deliveryAttempts = 0;
+  const deliverLocation = () => {
+    try {
+      adb("emu", "geo", "fix", "-123.542431", "48.475557");
+      deliveryAttempts += 1;
+    } catch { /* retain the UI/plugin outcome as evidence */ }
   };
+  deliverLocation();
+  const deliveryTimer = setInterval(deliverLocation, 1_000);
+  try {
+    const outcome = await waitFor("coarse Capacitor location outcome", async () => {
+      const state = await session.evaluate(`(() => ({
+        sample: document.querySelector(".claim-sample")?.textContent ?? "",
+        error: document.querySelector(".claim-error")?.textContent ?? "",
+      }))()`);
+      const accuracyMeters = Number(state.sample.match(/±(\d+)/)?.[1]);
+      if (Number.isFinite(accuracyMeters) && accuracyMeters >= 0) return { status: "sample", accuracyMeters };
+      if (state.error) return { status: "unavailable", errorCode: locationUiErrorCode(state.error) };
+      return false;
+    });
+    await waitFor("settled coarse location operation", async () => {
+      const checking = await session.evaluate(`
+        [...document.querySelectorAll("button")]
+          .some((button) => button.textContent?.includes("Checking your boundary"))
+      `);
+      if (checking) return false;
+      return outcome.status === "unavailable"
+        || hasNewEndpointResponse(diagnostics, recommendationUrl, responsesBeforeLocate);
+    });
+    diagnostics.emulatorLocation = {
+      status: outcome.status,
+      permission: "coarse-only",
+      source: "adb-emulator-geo-fix-through-capacitor",
+      requestedLatitude: 48.475557,
+      requestedLongitude: -123.542431,
+      deliveryAttempts,
+      ...(outcome.status === "sample" ? { accuracyMeters: outcome.accuracyMeters } : { errorCode: outcome.errorCode }),
+    };
+    if (outcome.status === "unavailable") {
+      await session.evaluate("document.querySelector('.claim-error')?.scrollIntoView({ block: 'center' })");
+      await session.screenshot("coarse-location-unavailable.png");
+      captureNativeScreenshot("coarse-location-unavailable-native.png");
+    }
+  } finally {
+    clearInterval(deliveryTimer);
+  }
 }
 
 async function claimGoldstreamWithNamedFixture(session) {
@@ -571,7 +614,7 @@ async function runPreviewOnlineSmoke(diagnostics) {
   const password = `Pkd!${randomBytes(18).toString("base64url")}`;
   try {
     await assertPreviewApiIdentity(diagnostics);
-    configureCoarseEmulatorLocation();
+    diagnostics.emulatorPermission = configureCoarseEmulatorLocation();
     launchApp();
     connection = await connectWebView(diagnostics);
     await waitForParkdex(connection.session);
@@ -609,7 +652,10 @@ async function runPreviewOnlineSmoke(diagnostics) {
     const failures = blockingDiagnostics(diagnostics);
     if (failures.length) throw new Error(failures.join("\n"));
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
-    process.stdout.write(`Android ${smokeMode} smoke passed; coarse native location, fixture claim import, and account restart persistence were verified.\n`);
+    const locationEvidence = diagnostics.emulatorLocation?.status === "sample"
+      ? "coarse native location sample"
+      : "coarse native location unavailability evidence";
+    process.stdout.write(`Android ${smokeMode} smoke passed; ${locationEvidence}, fixture claim import, and account restart persistence were verified.\n`);
   } catch (error) {
     if (connection) {
       try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }
