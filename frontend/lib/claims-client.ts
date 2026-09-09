@@ -1,4 +1,4 @@
-import { ApiError, type Visit, type VisitClaim } from "./account";
+import { ApiError, type VisitClaim } from "./account";
 
 export type ClaimLocation = {
   latitude: number;
