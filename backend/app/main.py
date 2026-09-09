@@ -502,6 +502,13 @@ def create_claim(
              recommendation["boundary_version"], recommendation["match_kind"], recommendation["distance_m"]),
         )
     else:
+        # Distinct valid recommendation tokens can target the same guest/place.
+        # Serialize that pair so the loser receives the controlled existing-claim
+        # response instead of surfacing the child table's unique constraint.
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (f"guest-claim:{identity}:{recommendation['place_id']}",),
+        )
         conn.execute(
             "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (identity, recommendation["place_id"]),
@@ -654,7 +661,7 @@ async def put_visit_photo(
                 """
                 UPDATE account_visit_claims SET
                     photo_bytes = %s, photo_mime = %s, photo_width = %s, photo_height = %s,
-                    photo_sha256 = %s, photo_updated_at = NOW()
+                    photo_sha256 = %s, photo_updated_at = NOW(), photo_account_modified = TRUE
                 WHERE account_id = %s AND place_id = %s
                 RETURNING photo_mime, photo_width, photo_height, OCTET_LENGTH(photo_bytes) AS byte_length,
                           photo_sha256, photo_updated_at
@@ -716,7 +723,8 @@ def delete_visit_photo(
         row = conn.execute(
             """
             UPDATE account_visit_claims SET photo_bytes = NULL, photo_mime = NULL,
-                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL, photo_updated_at = NULL
+                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL,
+                photo_updated_at = NOW(), photo_account_modified = TRUE
             WHERE account_id = %s AND place_id = %s RETURNING 1
             """,
             (identity.account_id, place_id),
@@ -725,7 +733,7 @@ def delete_visit_photo(
         row = conn.execute(
             """
             UPDATE guest_visit_claims SET photo_bytes = NULL, photo_mime = NULL,
-                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL, photo_updated_at = NULL
+                photo_width = NULL, photo_height = NULL, photo_sha256 = NULL, photo_updated_at = NOW()
             WHERE owner_hash = %s AND place_id = %s RETURNING 1
             """,
             (identity, place_id),
@@ -1111,7 +1119,20 @@ def import_guest_progress(
                 latitude, longitude, accuracy_m, boundary_version, match_kind, distance_m,
                 photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (account_id, place_id) DO NOTHING
+            ON CONFLICT (account_id, place_id) DO UPDATE SET
+                photo_bytes = EXCLUDED.photo_bytes,
+                photo_mime = EXCLUDED.photo_mime,
+                photo_width = EXCLUDED.photo_width,
+                photo_height = EXCLUDED.photo_height,
+                photo_sha256 = EXCLUDED.photo_sha256,
+                photo_updated_at = EXCLUDED.photo_updated_at
+            WHERE account_visit_claims.recommendation_hash = EXCLUDED.recommendation_hash
+              AND NOT account_visit_claims.photo_account_modified
+              AND EXCLUDED.photo_updated_at IS NOT NULL
+              AND (
+                  account_visit_claims.photo_updated_at IS NULL
+                  OR EXCLUDED.photo_updated_at > account_visit_claims.photo_updated_at
+              )
             """,
             (
                 identity.account_id, guest_claim["place_id"], imported_hash, guest_claim["claimed_at"],

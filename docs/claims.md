@@ -16,6 +16,10 @@ holes. The map's display-simplified boundary asset is never used for claims.
 Existing server-persisted visits are grandfathered. `PUT /api/visits/{placeId}` can remove or
 repeat one of those visits, but cannot add a new arbitrary place. Guest import copies only
 persisted guest rows and their location evidence; it cannot import client-supplied place IDs.
+If a guest photo upload or deletion finishes after an import, the refreshed guest progress card
+allows another explicit import to merge that change into the same imported claim lineage. An
+account photo upload or deletion is an authoritative edit and later guest imports cannot replace
+or restore it. Imports never graft guest photos onto an independently claimed account visit.
 
 Coordinates, accuracy, and optional photos are private owner-scoped visit data. Coordinates are
 stored to five decimal places for the postcard caption. Photos are decoded, oriented, stripped
