@@ -83,6 +83,27 @@ describe("useFieldJournal identity and progress races", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("fails closed when native credential storage cannot be read", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); vi.mocked(credentials.getItem).mockRejectedValue(new Error("secure read failed"));
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    const fetchMock = vi.fn(() => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.storageUnavailable).toBe(true); expect(fetchMock).not.toHaveBeenCalled(); expect(credentials.setItem).not.toHaveBeenCalled();
+  });
+
+  it("does not send a checkoff until its pending intent is durably stored", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY);
+    let rejectPending = false; vi.mocked(journalStore.setItem).mockImplementation(async (key, value) => { if (rejectPending && key === JOURNAL_STORAGE.guestVisitPending) throw new Error("disk full"); journalStore.values.set(key, value); });
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    const fetchMock = vi.fn((url: string | URL | Request) => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false)); fetchMock.mockClear(); rejectPending = true;
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(fetchMock).not.toHaveBeenCalled(); expect(result.current.syncMessage).toContain("could not save"); expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
   it("records a server visit timestamp immediately and clears it when undone", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       if (String(url).endsWith(`/api/visits/${PLACE.id}`)) {
@@ -305,6 +326,27 @@ describe("useFieldJournal identity and progress races", () => {
     });
     expect([...result.current.visited]).toEqual(["guest-park"]);
     expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toEqual({});
+  });
+
+  it("persists a late account A failure only to account A after account B signs in", async () => {
+    const accountB = { id: "account-two", email: "second@example.com" };
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-a-token"); window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const accountWrite = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) return accountWrite.promise;
+      if (path.endsWith("/api/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
+      if (path.endsWith("/api/auth/login")) return json({ token: "account-b-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: accountB, visitedIds: [], completedTrailIds: [] });
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] });
+      void init; return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false));
+    let pendingToggle!: Promise<void>; act(() => { pendingToggle = result.current.toggleVisit(PLACE.id); });
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toHaveProperty(PLACE.id));
+    await act(() => result.current.logout()); await act(() => result.current.authenticate("login", accountB.email, "password123"));
+    await act(async () => { accountWrite.resolve(await json({ detail: "offline" }, 503)); await pendingToggle; });
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toHaveProperty(PLACE.id);
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(accountB.id, "visits")) ?? "{}")).toEqual({}); expect(result.current.account?.id).toBe(accountB.id);
   });
 
   it("waits for an account write, then resets remote and cached progress without resurrection", async () => {

@@ -316,28 +316,36 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     updateProgress(new Set(visitedRef.current), new Set(trailsRef.current), nextTimestamps, nextMetadata);
   }, [apiBaseUrl, expireAccount, updateProgress]);
 
-  const persistOutbox = useCallback(async (identity: Identity) => {
+  const persistOutbox = useCallback(async (identity: Identity, visitSnapshot: PendingSnapshot, trailSnapshot: PendingSnapshot) => {
+    const target = storage();
+    let visitWritten = false;
+    let trailWritten = false;
     if (identity.kind === "guest") {
-      await persistGuest();
+      visitWritten = await writeStored(target, JOURNAL_STORAGE.guestVisitPending, visitSnapshot);
+      trailWritten = await writeStored(target, JOURNAL_STORAGE.guestTrailPending, trailSnapshot);
     } else if (identity.account) {
-      if (identityRef.current.kind === "account" && identityRef.current.account?.id === identity.account.id) await persistAccount();
-      else await persistAccountOutboxes(identity.account.id);
+      visitWritten = await writeStored(target, accountPendingKey(identity.account.id, "visits"), visitSnapshot);
+      trailWritten = await writeStored(target, accountPendingKey(identity.account.id, "trails"), trailSnapshot);
     }
-  }, [persistAccount, persistAccountOutboxes, persistGuest]);
+    noteStorageFailure(visitWritten && trailWritten);
+    if (!visitWritten || !trailWritten) throw new Error("Could not durably save the pending checkoff.");
+  }, [noteStorageFailure, storage]);
 
   const drainIdentity = useCallback(async (identity: Identity, capturedEpoch: number) => {
     const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
     try {
+      await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
+      if (identity.kind === "guest") await persistGuest(); else await persistAccount();
       const results = await Promise.allSettled([
         visitBox.drainAll((id, enabled) => putProgress("visits", id, enabled, identity, capturedEpoch)),
         trailBox.drainAll((id, enabled) => putProgress("trails", id, enabled, identity, capturedEpoch)),
       ]);
       if (results.some((result) => result.status === "rejected")) throw new Error("Some checkoffs did not sync.");
     } finally {
-      await persistOutbox(identity);
+      await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
     }
-  }, [persistOutbox, putProgress]);
+  }, [persistAccount, persistGuest, persistOutbox, putProgress]);
 
   const retrySync = useCallback(async () => {
     if (transitionRef.current) return;
@@ -387,6 +395,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       if (!collectionKey) {
         collectionKey = createCollectionKey();
         initialStorageAvailable = await writeRawStored(target, JOURNAL_STORAGE.collectionKey, collectionKey);
+        if (!initialStorageAvailable) throw new Error("Could not save the guest collection credential.");
       }
       const guestVisited = guestVisitOutboxRef.current.applyTo(await readStored<string[]>(target, JOURNAL_STORAGE.guestVisited, []));
       const guestTrails = guestTrailOutboxRef.current.applyTo(await readStored<string[]>(target, JOURNAL_STORAGE.guestTrails, []));
@@ -495,7 +504,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       } finally {
         if (active) setLoading(false);
       }
-    })();
+    })().catch(() => {
+      if (!active) return;
+      setStorageUnavailable(true);
+      setLoadError("Secure device storage is unavailable. Restart the app to try again.");
+      setLoading(false);
+      hydrationReadyRef.current?.resolve();
+    });
 
     return () => { active = false; epoch.advance(); };
   }, [apiBaseUrl, expireAccount, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, persistGuest, storage, switchToGuest, updateProgress]);
@@ -520,9 +535,9 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const { next, enabled } = toggledSet(current, id);
     if (kind === "visits") updateProgress(next, new Set(trailsRef.current));
     else updateProgress(new Set(visitedRef.current), next);
-    const outbox = kind === "visits"
-      ? identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current
-      : identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
+    const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
+    const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
+    const outbox = kind === "visits" ? visitBox : trailBox;
     outbox.setDesired(id, enabled);
     if (identity.kind === "guest") {
       const target = storage();
@@ -530,7 +545,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.guestRevision, revision));
       setGuestProgressAvailable(true);
     }
-    await persistOutbox(identity);
+    try {
+      await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
+      if (identity.kind === "guest") await persistGuest(); else await persistAccount();
+    } catch {
+      setSyncMessage("Private device storage could not save this checkoff. Try again before leaving this page.");
+      return;
+    }
     setSyncMessage("");
     const capturedEpoch = epochRef.current.capture();
     try {
@@ -550,9 +571,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           : "Your guest checkoff is saved on this device and waiting to sync.");
       }
     } finally {
-      await persistOutbox(identity);
+      try { await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot()); }
+      catch { setSyncMessage("Private device storage could not save this checkoff. Try again before leaving this page."); }
     }
-  }, [noteStorageFailure, persistOutbox, putProgress, storage, updateProgress]);
+  }, [noteStorageFailure, persistAccount, persistGuest, persistOutbox, putProgress, storage, updateProgress]);
 
   const toggleVisit = useCallback((placeOrId: Pick<Place, "id"> | string) => {
     return toggle("visits", typeof placeOrId === "string" ? placeOrId : placeOrId.id);
