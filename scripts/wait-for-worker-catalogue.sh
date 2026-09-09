@@ -6,7 +6,8 @@ set -euo pipefail
 : "${RAILWAY_ENVIRONMENT:?RAILWAY_ENVIRONMENT is required}"
 : "${EXPECTED_COMMIT_SHA:?EXPECTED_COMMIT_SHA is required}"
 
-for _ in $(seq 1 30); do
+for delay in 0 2 4 8 12 20 30 30 30; do
+  (( delay == 0 )) || sleep "$delay"
   logs="$(railway logs \
     --project "$RAILWAY_PROJECT_ID" \
     --environment "$RAILWAY_ENVIRONMENT" \
@@ -17,7 +18,6 @@ for _ in $(seq 1 30); do
     echo 'Worker catalogue database read verified.'
     exit 0
   fi
-  sleep 10
 done
 
 echo 'Worker did not report a non-empty catalogue database read.' >&2
