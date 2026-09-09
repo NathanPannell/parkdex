@@ -12,6 +12,7 @@ const smokeMode = process.env.ANDROID_SMOKE_MODE || "isolated";
 const smokeApiBaseUrl = (process.env.ANDROID_SMOKE_API_BASE_URL || "").replace(/\/$/, "");
 const readinessBaseUrl = (process.env.ANDROID_SMOKE_READY_URL || smokeApiBaseUrl).replace(/\/$/, "");
 const expectedCommitSha = process.env.ANDROID_SMOKE_EXPECTED_SHA || "";
+const claimFixture = process.env.ANDROID_SMOKE_CLAIM_FIXTURE || "";
 
 if (!["isolated", "online", "preview-online", "local-runtime"].includes(smokeMode)) {
   throw new Error("ANDROID_SMOKE_MODE must be isolated, online, preview-online, or local-runtime.");
@@ -24,6 +25,9 @@ if (smokeMode === "local-runtime" && !isAllowedLocalRuntimeEndpoints(smokeApiBas
 }
 if (["preview-online", "local-runtime"].includes(smokeMode) && !isFullCommitSha(expectedCommitSha)) {
   throw new Error(`${smokeMode} requires ANDROID_SMOKE_EXPECTED_SHA to be a full lowercase 40-character commit SHA.`);
+}
+if (["preview-online", "local-runtime"].includes(smokeMode) && !isAllowedClaimFixture(claimFixture)) {
+  throw new Error(`${smokeMode} requires ANDROID_SMOKE_CLAIM_FIXTURE=inside-goldstream.`);
 }
 
 function adb(...args) {
@@ -59,6 +63,10 @@ export function isAllowedPreviewApiUrl(value) {
 
 export function isAllowedLocalRuntimeEndpoints(apiBaseUrl, readyBaseUrl) {
   return apiBaseUrl === "https://10.0.2.2:8443" && readyBaseUrl === "https://127.0.0.1:8443";
+}
+
+export function isAllowedClaimFixture(value) {
+  return value === "inside-goldstream";
 }
 
 export function isTrackedApplicationUrl(value) {
@@ -100,6 +108,18 @@ export function hasPreviewAuthJourney(diagnostics, apiBaseUrl) {
   const expected = new Map([
     [`${apiBaseUrl}/api/auth/register`, 201],
     [`${apiBaseUrl}/api/auth/me`, 200],
+  ]);
+  for (const { status, url } of diagnostics.responses) {
+    if (expected.get(url) === status) expected.delete(url);
+  }
+  return expected.size === 0;
+}
+
+export function hasLiveClaimImportJourney(diagnostics, apiBaseUrl) {
+  const expected = new Map([
+    [`${apiBaseUrl}/api/claim-recommendations`, 200],
+    [`${apiBaseUrl}/api/claims`, 200],
+    [`${apiBaseUrl}/api/account/import-guest`, 200],
   ]);
   for (const { status, url } of diagnostics.responses) {
     if (expected.get(url) === status) expected.delete(url);
@@ -398,6 +418,57 @@ async function exerciseCoarseNativeLocation(session, diagnostics) {
   };
 }
 
+async function claimGoldstreamWithNamedFixture(session) {
+  const selected = await session.evaluate(`(() => {
+    const fixture = document.querySelector(".claim-fixture select");
+    if (!fixture) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(fixture, ${JSON.stringify(claimFixture)});
+    fixture.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  })()`);
+  if (!selected) throw new Error("The APK was not built with the guarded claim fixture UI enabled.");
+  await waitFor("enabled Goldstream fixture claim", () => session.evaluate(`(() => {
+    const button = [...document.querySelectorAll(".claim-recommendation button")]
+      .find((candidate) => candidate.textContent?.trim() === "Claim this park");
+    return Boolean(button && !button.disabled);
+  })()`));
+  await session.evaluate(`
+    [...document.querySelectorAll(".claim-recommendation button")]
+      .find((button) => button.textContent?.trim() === "Claim this park")?.click()
+  `);
+  await waitFor("claimed guest Goldstream postcard", () => session.evaluate(
+    "Boolean(document.querySelector('.place-sheet .visit-postcard[aria-label*=\"Goldstream Park\"]'))",
+  ));
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Claim my badge"))?.click()
+  `);
+}
+
+async function assertGoldstreamPostcard(session) {
+  await waitFor("imported Goldstream postcard", () => session.evaluate(`
+    Boolean(document.querySelector('.postcard-journal .visit-postcard[aria-label*="Goldstream Park"]'))
+  `));
+}
+
+async function importGuestClaim(session) {
+  const importButton = await waitFor("guest progress import action", () => session.evaluate(`(() => {
+    const button = [...document.querySelectorAll(".import-card button")]
+      .find((candidate) => candidate.textContent?.trim() === "Add guest progress");
+    return Boolean(button && !button.disabled);
+  })()`));
+  if (!importButton) throw new Error("Guest progress was not offered for account import.");
+  await session.evaluate(`
+    [...document.querySelectorAll(".import-card button")]
+      .find((button) => button.textContent?.trim() === "Add guest progress")?.click()
+  `);
+  await assertGoldstreamPostcard(session);
+  await waitFor("completed guest progress import", () => session.evaluate(
+    "!document.querySelector('.import-card')",
+  ));
+}
+
 async function fillLabeledInput(session, label, value) {
   const updated = await session.evaluate(`(() => {
     const field = [...document.querySelectorAll("label")]
@@ -485,7 +556,10 @@ async function runPreviewOnlineSmoke(diagnostics) {
         .find((button) => button.textContent?.trim() === "Map")?.click()
     `);
     await exerciseCoarseNativeLocation(connection.session, diagnostics);
+    await claimGoldstreamWithNamedFixture(connection.session);
+    await connection.session.screenshot("preview-guest-claim.png");
     await registerPreviewAccount(connection.session, email, password);
+    await importGuestClaim(connection.session);
     await maskPreviewAccountIdentity(connection.session);
     await connection.session.screenshot("preview-account-before-restart.png");
     connection.session.close();
@@ -496,16 +570,20 @@ async function runPreviewOnlineSmoke(diagnostics) {
     connection = await connectWebView(diagnostics);
     await waitForParkdex(connection.session);
     await assertPreviewAccountRestored(connection.session, email);
+    await assertGoldstreamPostcard(connection.session);
     await maskPreviewAccountIdentity(connection.session);
     await connection.session.screenshot("preview-account-after-restart.png");
 
     if (!hasPreviewAuthJourney(diagnostics, smokeApiBaseUrl)) {
       throw new Error("The WebView did not complete registration and restart authentication against the required live smoke API.");
     }
+    if (!hasLiveClaimImportJourney(diagnostics, smokeApiBaseUrl)) {
+      throw new Error("The WebView did not complete the fixture claim and guest-to-account import against the live smoke API.");
+    }
     const failures = blockingDiagnostics(diagnostics);
     if (failures.length) throw new Error(failures.join("\n"));
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
-    process.stdout.write(`Android ${smokeMode} smoke passed; coarse native location and account restart persistence were verified.\n`);
+    process.stdout.write(`Android ${smokeMode} smoke passed; coarse native location, fixture claim import, and account restart persistence were verified.\n`);
   } catch (error) {
     if (connection) {
       try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }

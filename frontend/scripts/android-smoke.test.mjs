@@ -5,7 +5,9 @@ import {
   chooseWebViewTarget,
   hasExpectedOfflineCatalogueResponse,
   hasPreviewAuthJourney,
+  hasLiveClaimImportJourney,
   isAllowedLocalRuntimeEndpoints,
+  isAllowedClaimFixture,
   isAllowedPreviewApiUrl,
   isFullCommitSha,
   previewReadyMatches,
@@ -74,6 +76,12 @@ test("allows only the fixed local runtime endpoint pair", () => {
   expect(isAllowedLocalRuntimeEndpoints("https://10.0.2.2:8443", "https://localhost:8443")).toBe(false);
 });
 
+test("allows only the named guarded claim fixture", () => {
+  expect(isAllowedClaimFixture("inside-goldstream")).toBe(true);
+  expect(isAllowedClaimFixture("inside-saltspring")).toBe(false);
+  expect(isAllowedClaimFixture("")).toBe(false);
+});
+
 test("treats the emulator TLS API as an application diagnostic origin", () => {
   expect(isTrackedApplicationUrl("https://10.0.2.2:8443/api/auth/me")).toBe(true);
   expect(isTrackedApplicationUrl("https://127.0.0.1:8443/ready")).toBe(false);
@@ -87,6 +95,20 @@ test("requires live registration and restart authentication responses", () => {
   ] }, api)).toBe(true);
   expect(hasPreviewAuthJourney({ responses: [
     { status: 201, url: `${api}/api/auth/register` },
+  ] }, api)).toBe(false);
+});
+
+test("requires real fixture recommendation, claim, and guest import responses", () => {
+  const api = "https://api-pr-20-152f.up.railway.app";
+  expect(hasLiveClaimImportJourney({ responses: [
+    { status: 200, url: `${api}/api/claim-recommendations` },
+    { status: 200, url: `${api}/api/claims` },
+    { status: 200, url: `${api}/api/account/import-guest` },
+  ] }, api)).toBe(true);
+  expect(hasLiveClaimImportJourney({ responses: [
+    { status: 200, url: `${api}/api/claim-recommendations` },
+    { status: 201, url: `${api}/api/claims` },
+    { status: 200, url: `${api}/api/account/import-guest` },
   ] }, api)).toBe(false);
 });
 
