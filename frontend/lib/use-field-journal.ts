@@ -515,7 +515,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     });
 
     return () => { active = false; epoch.advance(); };
-  }, [apiBaseUrl, expireAccount, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, persistGuest, storage, switchToGuest, updateProgress]);
+  }, [apiBaseUrl, expireAccount, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, persistAccount, persistGuest, storage, switchToGuest, updateProgress]);
 
   useEffect(() => {
     if (loading) return;
@@ -632,7 +632,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [adoptAccountSession, apiBaseUrl, storage]);
+  }, [adoptAccountSession, apiBaseUrl, hydrationReady, storage]);
 
   const authenticateWithGoogle = useCallback(async (code: string, state: string, codeVerifier: string) => {
     if (transitionRef.current) return;
@@ -648,7 +648,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [adoptAccountSession, apiBaseUrl, storage]);
+  }, [adoptAccountSession, apiBaseUrl, hydrationReady, storage]);
 
   const requestEmailVerification = useCallback(async () => {
     const identity = identityRef.current;
