@@ -5,7 +5,10 @@ import { registerPlugin, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
 import { useEffect, useMemo, useState } from "react";
 
-import { createCapacitorNativeCapabilities } from "@/lib/capacitor-native-capabilities";
+import {
+  createCapacitorNativeCapabilities,
+  queueRestoredCameraPhoto,
+} from "@/lib/capacitor-native-capabilities";
 import { registerNativeCapabilities } from "@/lib/native-capabilities";
 import { openNativeGoogleAuthorization, startNativeOAuthBridge } from "@/lib/native-oauth";
 import {
@@ -60,12 +63,18 @@ export function NativeRuntime({
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    let removeCameraRestore = async () => {};
     let removeOAuth = async () => {};
     ensureNativeStorageRegistered();
     const unregisterCapabilities = registerNativeCapabilities(nativeCapabilities);
     void Promise.all([
       getPlatformStorage(),
       SystemBars.setStyle({ style: SystemBarsStyle.Light }),
+      App.addListener("appRestoredResult", queueRestoredCameraPhoto).then(async (listener) => {
+        const remove = async () => listener.remove();
+        if (active) removeCameraRestore = remove;
+        else await remove();
+      }),
       startNativeOAuthBridge().then(async (remove) => {
         if (active) removeOAuth = remove;
         else await remove();
@@ -80,6 +89,7 @@ export function NativeRuntime({
     return () => {
       active = false;
       unregisterCapabilities();
+      void removeCameraRestore();
       void removeOAuth();
     };
   }, [attempt, enabled, nativeCapabilities]);

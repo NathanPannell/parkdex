@@ -14,6 +14,8 @@ vi.mock("@capacitor/geolocation", () => ({ Geolocation: geolocation }));
 
 import {
   createCapacitorNativeCapabilities,
+  queueRestoredCameraPhoto,
+  resetRestoredCameraPhotoForTests,
 } from "./capacitor-native-capabilities";
 import { type LocationCapabilityError } from "./native-capabilities";
 
@@ -23,6 +25,7 @@ beforeEach(() => {
   geolocation.checkPermissions.mockReset();
   geolocation.getCurrentPosition.mockReset();
   geolocation.requestPermissions.mockReset();
+  resetRestoredCameraPhotoForTests();
 });
 
 describe("Capacitor native capabilities", () => {
@@ -50,6 +53,21 @@ describe("Capacitor native capabilities", () => {
       timeout: 12_000,
       maximumAge: 60_000,
     });
+  });
+
+  it("accepts Android approximate location and preserves reported accuracy", async () => {
+    geolocation.checkPermissions.mockResolvedValue({ location: "denied", coarseLocation: "granted" });
+    geolocation.getCurrentPosition.mockResolvedValue({
+      coords: { latitude: 48.4, longitude: -123.4, accuracy: 1_200 },
+      timestamp: 1_780_000_000_001,
+    });
+
+    await expect(createCapacitorNativeCapabilities().getCurrentLocation({
+      highAccuracy: true,
+      timeoutMs: 12_000,
+      maxAgeMs: 60_000,
+    })).resolves.toMatchObject({ accuracyMeters: 1_200 });
+    expect(geolocation.requestPermissions).not.toHaveBeenCalled();
   });
 
   it("normalizes native permission and timeout failures", async () => {
@@ -85,5 +103,57 @@ describe("Capacitor native capabilities", () => {
 
     camera.takePhoto.mockRejectedValue({ code: "OS-PLUG-CAMR-0006" });
     await expect(createCapacitorNativeCapabilities().getPhoto()).resolves.toBeNull();
+  });
+
+  it("hands a restored Android camera result to the next photo request", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob(["restored"], { type: "image/jpeg" }),
+    })));
+
+    expect(queueRestoredCameraPhoto({
+      pluginId: "OtherPlugin",
+      methodName: "takePhoto",
+      success: true,
+      data: { webPath: "capacitor://other-photo" },
+    })).toBe(false);
+    expect(queueRestoredCameraPhoto({
+      pluginId: "Camera",
+      methodName: "takePhoto",
+      success: true,
+      data: { webPath: "capacitor://restored-photo", metadata: { format: "jpeg" } },
+    })).toBe(true);
+
+    const result = await createCapacitorNativeCapabilities().getPhoto();
+
+    expect(result?.file).toBeInstanceOf(File);
+    expect(result?.mimeType).toBe("image/jpeg");
+    expect(camera.takePhoto).not.toHaveBeenCalled();
+  });
+
+  it("ignores cancelled or malformed restored results and opens a fresh camera request", async () => {
+    camera.takePhoto.mockResolvedValue({ webPath: "capacitor://fresh-photo", metadata: { format: "jpeg" } });
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob(["fresh"], { type: "image/jpeg" }),
+    })));
+
+    expect(queueRestoredCameraPhoto({
+      pluginId: "Camera",
+      methodName: "takePhoto",
+      success: false,
+      data: { webPath: "capacitor://cancelled-photo" },
+    })).toBe(false);
+    expect(queueRestoredCameraPhoto({
+      pluginId: "Camera",
+      methodName: "takePhoto",
+      success: true,
+      data: {},
+    })).toBe(false);
+
+    await expect(createCapacitorNativeCapabilities().getPhoto()).resolves.toMatchObject({
+      mimeType: "image/jpeg",
+    });
+    expect(camera.takePhoto).toHaveBeenCalledOnce();
   });
 });

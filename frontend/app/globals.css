@@ -18,6 +18,8 @@
   --soft-shadow: 0 10px 28px rgba(23, 61, 50, .18);
   --park-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --park-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --park-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --park-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --font-display: "Fraunces Variable", Georgia, serif;
   --font-body: "Nunito Sans Variable", Arial, sans-serif;
 }
@@ -510,6 +512,35 @@ button { color: inherit; }
 @media (max-width: 359px) {
   .reset-dialog > div:last-child { grid-template-columns: 1fr; }
   .map-utility .map-mode-switch button { padding: 0 7px; }
+}
+
+@media (orientation: landscape) {
+  .maplibregl-ctrl-top-right { right: max(8px,var(--park-safe-right)); }
+  .first-adventure, .location-note { left: max(12px,var(--park-safe-left)); }
+  .exploration-map-key { right: max(10px,var(--park-safe-right)); }
+  .place-sheet { right: max(12px,var(--park-safe-right)); left: max(12px,var(--park-safe-left)); }
+  .thumb-nav, .nearby-strip, .search-results, .filter-tray, .connection-note, .sync-note, .storage-note {
+    right: max(12px,var(--park-safe-right));
+    left: max(12px,var(--park-safe-left));
+  }
+  .badge-detail-backdrop, .collection-modal-backdrop, .credits-backdrop, .reset-backdrop {
+    padding-right: max(12px,var(--park-safe-right));
+    padding-left: max(12px,var(--park-safe-left));
+  }
+}
+
+@media (orientation: landscape) and (max-width: 859px) {
+  .expedition-header { right: calc(var(--park-safe-right) + 60px); left: max(8px,var(--park-safe-left)); }
+  .map-utility { right: max(8px,var(--park-safe-right)); left: max(8px,var(--park-safe-left)); }
+  .exploration-status-note { right: max(8px,var(--park-safe-right)); left: max(8px,var(--park-safe-left)); }
+  .feature-panel {
+    inset: max(70px,calc(var(--park-safe-top) + 70px)) max(8px,var(--park-safe-right)) max(76px,calc(var(--park-safe-bottom) + 76px)) max(8px,var(--park-safe-left));
+  }
+}
+
+@media (orientation: landscape) and (min-width: 860px) {
+  .expedition-header, .search-dock { left: max(12px,var(--park-safe-left)); }
+  .collection-drawer, .collection-drawer.open { padding-right: max(18px,var(--park-safe-right)); }
 }
 
 @media (min-width: 700px) {
