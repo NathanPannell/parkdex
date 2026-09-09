@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ACCOUNT_TOKEN_KEY } from "./account";
 import { JOURNAL_STORAGE, accountPendingKey } from "./field-journal-state";
+import { registerNativePlatformStorage, resetPlatformStorageForTests, type KeyValueStore } from "./platform-storage";
 import { useFieldJournal } from "./use-field-journal";
 
 const API = "https://api.example.test";
@@ -40,7 +41,19 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function memoryStore(): KeyValueStore & { values: Map<string, string> } {
+  const values = new Map<string, string>();
+  return {
+    values,
+    getItem: vi.fn(async (key) => values.get(key) ?? null),
+    setItem: vi.fn(async (key, value) => { values.set(key, value); }),
+    removeItem: vi.fn(async (key) => { values.delete(key); }),
+  };
+}
+
 beforeEach(() => {
+  resetPlatformStorageForTests();
+  Reflect.deleteProperty(globalThis, "Capacitor");
   window.localStorage.clear();
   window.localStorage.setItem(JOURNAL_STORAGE.collectionKey, KEY);
 });
@@ -49,9 +62,27 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  resetPlatformStorageForTests();
+  Reflect.deleteProperty(globalThis, "Capacitor");
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("waits for native storage readiness before loading owner data", async () => {
+    Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const ready = deferred<{ credentials: KeyValueStore; journal: KeyValueStore }>();
+    registerNativePlatformStorage(() => ready.promise);
+    const fetchMock = vi.fn(() => json(catalogue()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await Promise.resolve();
+    expect(result.current.loading).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await act(async () => { ready.resolve({ credentials: memoryStore(), journal: memoryStore() }); });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("records a server visit timestamp immediately and clears it when undone", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       if (String(url).endsWith(`/api/visits/${PLACE.id}`)) {
@@ -66,6 +97,54 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.visitTimestamps).toEqual({ [PLACE.id]: "2026-09-08T12:00:00Z" });
     await act(() => result.current.toggleVisit(PLACE.id));
     expect(result.current.visitTimestamps).toEqual({});
+    expect(result.current.visitMetadata).toEqual({});
+  });
+
+  it("drops a legacy location-required insertion instead of retrying forever", async () => {
+    let visitWrites = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      if (String(url).endsWith(`/api/visits/${PLACE.id}`)) {
+        visitWrites += 1;
+        return json({ detail: { code: "location_claim_required", message: "Location claim required" } }, 409);
+      }
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.syncMessage).toContain("location claim");
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitPending) ?? "{}" )).toEqual({});
+    act(() => window.dispatchEvent(new Event("online")));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(visitWrites).toBe(1);
+  });
+
+  it("creates a guest claim nonoptimistically and persists its metadata after confirmation", async () => {
+    const claim = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/claim-recommendations")) {
+        expect(new Headers(init?.headers).get("X-Collection-Key")).toBe(KEY);
+        return json({ status: "recommended", recommendationToken: "signed", expiresAt: "2026-09-09T00:01:00Z", candidate: { placeId: PLACE.id, matchKind: "exact", distanceMeters: 0 } });
+      }
+      if (path.endsWith("/api/claims")) return claim.promise;
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const recommendation = await result.current.recommendClaim({ location: { latitude: 49, longitude: -124, accuracyMeters: 5, capturedAtEpochMs: 1_789_000_000_000 } });
+    expect(recommendation.status).toBe("recommended");
+
+    let creating!: Promise<unknown>;
+    act(() => { creating = result.current.createClaim({ recommendationToken: "signed", expectedPlaceId: PLACE.id }); });
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    const confirmed = { placeId: PLACE.id, visited: true, visitedCount: 1, visitedAt: "2026-09-09T00:00:00Z", claim: { claimedAt: "2026-09-09T00:00:00Z", capturedAt: "2026-09-09T00:00:00Z", coordinates: { latitude: 49, longitude: -124 }, accuracyMeters: 5, boundaryVersion: "v1", matchKind: "exact", distanceMeters: 0, hasPhoto: false } };
+    await act(async () => { claim.resolve(await json(confirmed)); await creating; });
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id]).toEqual({ placeId: PLACE.id, visitedAt: confirmed.visitedAt, claim: confirmed.claim });
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitMetadata) ?? "{}")).toHaveProperty(`${PLACE.id}.claim.boundaryVersion`, "v1");
   });
 
   it("keeps the legacy raw guest key and reloads a raw bearer token without quotes", async () => {

@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { KeyValueStore } from "./platform-storage";
 
 import { IdentityEpoch, accountPendingKey, readStored, removeStored, toggledSet, writeRawStored, writeStored } from "./field-journal-state";
 
-function memoryStorage(): Storage {
+function memoryStorage(): KeyValueStore & { values: Map<string, string> } {
   const values = new Map<string, string>();
   return {
-    get length() { return values.size; },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => { values.delete(key); },
-    setItem: (key, value) => { values.set(key, value); },
+    values,
+    getItem: async (key) => values.get(key) ?? null,
+    removeItem: async (key) => { values.delete(key); },
+    setItem: async (key, value) => { values.set(key, value); },
   };
 }
 
@@ -36,25 +35,25 @@ describe("field journal state helpers", () => {
     expect([...next]).toEqual(["two"]);
   });
 
-  it("contains unavailable or corrupt browser storage", () => {
+  it("contains unavailable or corrupt platform storage", async () => {
     const storage = memoryStorage();
-    expect(writeStored(storage, "progress", { ids: ["park"] })).toBe(true);
-    expect(readStored(storage, "progress", { ids: [] })).toEqual({ ids: ["park"] });
-    storage.setItem("broken", "{");
-    expect(readStored(storage, "broken", [])).toEqual([]);
-    expect(removeStored(storage, "progress")).toBe(true);
-    expect(readStored(storage, "progress", null)).toBeNull();
-    expect(writeRawStored(storage, "token", "opaque-token")).toBe(true);
-    expect(storage.getItem("token")).toBe("opaque-token");
-    expect(readStored(storage, "token", "")).toBe("opaque-token");
+    expect(await writeStored(storage, "progress", { ids: ["park"] })).toBe(true);
+    expect(await readStored(storage, "progress", { ids: [] })).toEqual({ ids: ["park"] });
+    storage.values.set("broken", "{");
+    expect(await readStored(storage, "broken", [])).toEqual([]);
+    expect(await removeStored(storage, "progress")).toBe(true);
+    expect(await readStored(storage, "progress", null)).toBeNull();
+    expect(await writeRawStored(storage, "token", "opaque-token")).toBe(true);
+    expect(await storage.getItem("token")).toBe("opaque-token");
+    expect(await readStored(storage, "token", "")).toBe("opaque-token");
 
     const unavailable = {
-      getItem() { throw new Error("blocked"); },
-      setItem() { throw new Error("blocked"); },
-      removeItem() { throw new Error("blocked"); },
+      async getItem() { throw new Error("blocked"); },
+      async setItem() { throw new Error("blocked"); },
+      async removeItem() { throw new Error("blocked"); },
     };
-    expect(readStored(unavailable, "x", ["safe"])).toEqual(["safe"]);
-    expect(writeStored(unavailable, "x", [])).toBe(false);
-    expect(removeStored(unavailable, "x")).toBe(false);
+    expect(await readStored(unavailable, "x", ["safe"])).toEqual(["safe"]);
+    expect(await writeStored(unavailable, "x", [])).toBe(false);
+    expect(await removeStored(unavailable, "x")).toBe(false);
   });
 });

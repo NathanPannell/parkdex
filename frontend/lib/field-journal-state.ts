@@ -1,12 +1,14 @@
 import type { PendingVisit } from "./visit-outbox";
+import type { KeyValueStore } from "./platform-storage";
 
-export type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type StorageLike = KeyValueStore;
 
 export const JOURNAL_STORAGE = {
   collectionKey: "every-park:collection-key:v1",
   places: "every-park:places:v1",
   guestVisited: "every-park:visited:v1",
   guestVisitTimestamps: "every-park:visit-timestamps:v1",
+  guestVisitMetadata: "every-park:visit-metadata:v1",
   guestTrails: "every-park:trails:v1",
   guestVisitPending: "every-park:pending:v1",
   guestTrailPending: "every-park:trail-pending:v1",
@@ -24,10 +26,10 @@ export function importedGuestKey(accountId: string) {
   return `every-park:imported-guest:${accountId}:v1`;
 }
 
-export function readStored<T>(storage: StorageLike, key: string, fallback: T): T {
+export async function readStored<T>(storage: StorageLike, key: string, fallback: T): Promise<T> {
   let raw: string | null = null;
   try {
-    raw = storage.getItem(key);
+    raw = await storage.getItem(key);
     return raw === null ? fallback : JSON.parse(raw) as T;
   } catch {
     if (raw !== null && typeof fallback === "string") return raw as T;
@@ -35,35 +37,27 @@ export function readStored<T>(storage: StorageLike, key: string, fallback: T): T
   }
 }
 
-export function writeStored(storage: StorageLike, key: string, value: unknown): boolean {
+export async function writeStored(storage: StorageLike, key: string, value: unknown): Promise<boolean> {
   try {
-    storage.setItem(key, JSON.stringify(value));
+    await storage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
     return false;
   }
 }
 
-export function writeRawStored(storage: StorageLike, key: string, value: string): boolean {
+export async function writeRawStored(storage: StorageLike, key: string, value: string): Promise<boolean> {
   try {
-    storage.setItem(key, value);
+    await storage.setItem(key, value);
     return true;
   } catch {
     return false;
   }
 }
 
-export function getBrowserStorage(): StorageLike | null {
+export async function removeStored(storage: StorageLike, key: string): Promise<boolean> {
   try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-export function removeStored(storage: StorageLike, key: string): boolean {
-  try {
-    storage.removeItem(key);
+    await storage.removeItem(key);
     return true;
   } catch {
     return false;
