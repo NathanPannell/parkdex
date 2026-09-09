@@ -18,7 +18,7 @@ const journal = {
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadState }: { onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></> }));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.visitMetadata = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.visitMetadata = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); journal.recommendClaim.mockReset(); journal.createClaim.mockReset(); });
 
 async function performBoundaryClaim() {
   Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 49, longitude: -124, accuracy: 8, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) }, timestamp: Date.now(), toJSON: () => ({}) }) } });
@@ -267,6 +267,14 @@ describe("Parkdex navigation", () => {
     expect(await screen.findByText("Signed in with Google.")).toBeTruthy();
   });
 
+  it("names and opens the single park recommended for a different selected place", async () => {
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 49, longitude: -124, accuracy: 8, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) }, timestamp: Date.now(), toJSON: () => ({}) }) } });
+    journal.recommendClaim.mockResolvedValue({ status: "recommended", recommendationToken: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: national.id, matchKind: "buffer", distanceMeters: 12 } });
+    render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Test map marker" })); fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
+    const open = await screen.findByRole("button", { name: "Open Pacific Rim National Park Reserve" }); fireEvent.click(open);
+    expect(screen.getByRole("heading", { name: "Pacific Rim National Park Reserve" })).toBeTruthy(); expect(screen.getAllByText("You’re here, claim this park now")).toHaveLength(1);
+  });
+
   it("completes a queued native Google callback only for the stored state", async () => {
     window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "native-verifier"); window.sessionStorage.setItem("parkdex:google-state:v1", "native-state");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
@@ -283,6 +291,8 @@ describe("Parkdex navigation", () => {
     act(() => window.dispatchEvent(new CustomEvent("parkdex:oauth-callback", { detail: { error: "access_denied", state: "wrong-state" } })));
     expect(await screen.findByText("Google sign-in could not be verified. Please start again.")).toBeTruthy();
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBe("native-verifier"); expect(window.sessionStorage.getItem("parkdex:google-state:v1")).toBe("expected-state");
+    act(() => window.dispatchEvent(new CustomEvent("parkdex:oauth-callback", { detail: { code: "retry-code", state: "expected-state" } })));
+    await waitFor(() => expect(journal.authenticateWithGoogle).toHaveBeenCalledWith("retry-code", "expected-state", "native-verifier"));
   });
 
   it("confirms an email token from the fragment and removes it immediately", async () => {
@@ -362,6 +372,8 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     const closeSheet = new Event("parkdex:back", { cancelable: true }); act(() => window.dispatchEvent(closeSheet));
     expect(closeSheet.defaultPrevented).toBe(true); expect(screen.queryByRole("heading", { name: "Forest Park" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Search places" })); expect(screen.getByRole("button", { name: "Search is open" })).toBeTruthy();
+    const closeSearch = new Event("parkdex:back", { cancelable: true }); act(() => window.dispatchEvent(closeSearch)); expect(closeSearch.defaultPrevented).toBe(true); expect(screen.getByRole("button", { name: "Search places" })).toBeTruthy();
     const atRoot = new Event("parkdex:back", { cancelable: true }); act(() => window.dispatchEvent(atRoot)); expect(atRoot.defaultPrevented).toBe(false);
   });
 });
