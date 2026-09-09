@@ -6,6 +6,8 @@ import {
   hasExpectedOfflineCatalogueResponse,
   hasPreviewAuthJourney,
   hasLiveClaimImportJourney,
+  countEndpointResponses,
+  hasNewEndpointResponse,
   isAllowedLocalRuntimeEndpoints,
   isAllowedClaimFixture,
   isAllowedPreviewApiUrl,
@@ -110,6 +112,20 @@ test("requires real fixture recommendation, claim, and guest import responses", 
     { status: 201, url: `${api}/api/claims` },
     { status: 200, url: `${api}/api/account/import-guest` },
   ] }, api)).toBe(false);
+});
+
+test("waits for a distinct completed recommendation before advancing", () => {
+  const endpoint = "https://10.0.2.2:8443/api/claim-recommendations";
+  const diagnostics = { responses: [{ status: 200, url: endpoint }] };
+  const beforeFixture = countEndpointResponses(diagnostics, endpoint);
+  expect(beforeFixture).toBe(1);
+  expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(false);
+  diagnostics.responses.push({ status: 204, url: endpoint });
+  expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(false);
+  diagnostics.responses.push({ status: 200, url: "https://10.0.2.2:8443/api/places" });
+  expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(false);
+  diagnostics.responses.push({ status: 200, url: endpoint });
+  expect(hasNewEndpointResponse(diagnostics, endpoint, beforeFixture)).toBe(true);
 });
 
 test("requires one exact full commit identity from API readiness", () => {

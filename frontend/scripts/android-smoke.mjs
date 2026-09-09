@@ -127,6 +127,14 @@ export function hasLiveClaimImportJourney(diagnostics, apiBaseUrl) {
   return expected.size === 0;
 }
 
+export function countEndpointResponses(diagnostics, endpointUrl) {
+  return diagnostics.responses.filter(({ status, url }) => url === endpointUrl && status !== 204).length;
+}
+
+export function hasNewEndpointResponse(diagnostics, endpointUrl, previousCount) {
+  return countEndpointResponses(diagnostics, endpointUrl) > previousCount;
+}
+
 class DevToolsSession {
   constructor(socket, diagnostics, isolatedOffline = false) {
     this.socket = socket;
@@ -400,6 +408,8 @@ function configureCoarseEmulatorLocation() {
 
 async function exerciseCoarseNativeLocation(session, diagnostics) {
   await searchForPlace(session, "Goldstream Park");
+  const recommendationUrl = `${smokeApiBaseUrl}/api/claim-recommendations`;
+  const responsesBeforeLocate = countEndpointResponses(diagnostics, recommendationUrl);
   await session.evaluate(`
     [...document.querySelectorAll("button")]
       .find((button) => button.textContent?.includes("Check if I can claim a park"))?.click()
@@ -409,6 +419,13 @@ async function exerciseCoarseNativeLocation(session, diagnostics) {
     const value = Number(text.match(/±(\\d+)/)?.[1]);
     return Number.isFinite(value) && value >= 0 ? value : false;
   })()`));
+  await waitFor("settled coarse location recommendation", async () => {
+    const checking = await session.evaluate(`
+      [...document.querySelectorAll("button")]
+        .some((button) => button.textContent?.includes("Checking your boundary"))
+    `);
+    return !checking && hasNewEndpointResponse(diagnostics, recommendationUrl, responsesBeforeLocate);
+  });
   diagnostics.emulatorLocation = {
     permission: "coarse-only",
     source: "adb-emulator-geo-fix-through-capacitor",
@@ -419,6 +436,8 @@ async function exerciseCoarseNativeLocation(session, diagnostics) {
 }
 
 async function claimGoldstreamWithNamedFixture(session) {
+  const recommendationUrl = `${smokeApiBaseUrl}/api/claim-recommendations`;
+  const responsesBeforeFixture = countEndpointResponses(session.diagnostics, recommendationUrl);
   const selected = await session.evaluate(`(() => {
     const fixture = document.querySelector(".claim-fixture select");
     if (!fixture) return false;
@@ -428,11 +447,14 @@ async function claimGoldstreamWithNamedFixture(session) {
     return true;
   })()`);
   if (!selected) throw new Error("The APK was not built with the guarded claim fixture UI enabled.");
-  await waitFor("enabled Goldstream fixture claim", () => session.evaluate(`(() => {
-    const button = [...document.querySelectorAll(".claim-recommendation button")]
-      .find((candidate) => candidate.textContent?.trim() === "Claim this park");
-    return Boolean(button && !button.disabled);
-  })()`));
+  await waitFor("distinct enabled Goldstream fixture recommendation", async () => {
+    if (!hasNewEndpointResponse(session.diagnostics, recommendationUrl, responsesBeforeFixture)) return false;
+    return session.evaluate(`(() => {
+      const button = [...document.querySelectorAll(".claim-recommendation button")]
+        .find((candidate) => candidate.textContent?.trim() === "Claim this park");
+      return Boolean(button && !button.disabled);
+    })()`);
+  });
   await session.evaluate(`
     [...document.querySelectorAll(".claim-recommendation button")]
       .find((button) => button.textContent?.trim() === "Claim this park")?.click()
