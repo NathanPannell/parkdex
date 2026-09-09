@@ -167,12 +167,11 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const accountVisitOutboxRef = useRef(new VisitOutbox());
   const accountTrailOutboxRef = useRef(new VisitOutbox());
   const accountOutboxOwnerRef = useRef("");
-  const hydrationReadyRef = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
-  if (!hydrationReadyRef.current) {
+  const [hydrationReady] = useState(() => {
     let resolve: () => void = () => {};
     const promise = new Promise<void>((ready) => { resolve = ready; });
-    hydrationReadyRef.current = { promise, resolve };
-  }
+    return { promise, resolve };
+  });
 
   const noteStorageFailure = useCallback((success: boolean) => {
     if (!success) setStorageUnavailable(true);
@@ -380,7 +379,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         setStorageUnavailable(true);
         setLoadError("Secure device storage is unavailable. Restart the app to try again.");
         setLoading(false);
-        hydrationReadyRef.current?.resolve();
+        hydrationReady.resolve();
         return;
       }
       if (!active) return;
@@ -391,11 +390,9 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       guestTrailOutboxRef.current.hydrate(await readStored<PendingSnapshot>(target, JOURNAL_STORAGE.guestTrailPending, {}));
 
       let collectionKey = await readStored<string>(target, JOURNAL_STORAGE.collectionKey, "");
-      let initialStorageAvailable = true;
       if (!collectionKey) {
         collectionKey = createCollectionKey();
-        initialStorageAvailable = await writeRawStored(target, JOURNAL_STORAGE.collectionKey, collectionKey);
-        if (!initialStorageAvailable) throw new Error("Could not save the guest collection credential.");
+        if (!await writeRawStored(target, JOURNAL_STORAGE.collectionKey, collectionKey)) throw new Error("Could not save the guest collection credential.");
       }
       const guestVisited = guestVisitOutboxRef.current.applyTo(await readStored<string[]>(target, JOURNAL_STORAGE.guestVisited, []));
       const guestTrails = guestTrailOutboxRef.current.applyTo(await readStored<string[]>(target, JOURNAL_STORAGE.guestTrails, []));
@@ -406,8 +403,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         : metadataFor(undefined, guestVisited, guestVisitTimestamps);
       const cachedPlaces = await readStored<Place[]>(target, JOURNAL_STORAGE.places, []);
 
-      let savedToken = "";
-      try { savedToken = await target.getItem(ACCOUNT_TOKEN_KEY) ?? ""; } catch { initialStorageAvailable = false; }
+      let savedToken = await target.getItem(ACCOUNT_TOKEN_KEY) ?? "";
       const cachedAccount = await readStored<AccountSnapshot | null>(target, JOURNAL_STORAGE.accountSnapshot, null);
       let initialVisited = guestVisited;
       let initialTrails = guestTrails;
@@ -436,8 +432,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       setAccount(savedToken ? cachedAccount?.account ?? null : null);
       updateProgress(initialVisited, initialTrails, initialVisitTimestamps, initialVisitMetadata);
       setGuestProgressAvailable(await guestHasProgress() && (!cachedAccount || !await guestWasImportedBy(cachedAccount.account.id)));
-      if (!initialStorageAvailable) setStorageUnavailable(true);
-      hydrationReadyRef.current?.resolve();
+      hydrationReady.resolve();
       if (!apiBaseUrl) {
         setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : "The field guide API is not configured.");
         setLoading(false);
@@ -509,7 +504,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       setStorageUnavailable(true);
       setLoadError("Secure device storage is unavailable. Restart the app to try again.");
       setLoading(false);
-      hydrationReadyRef.current?.resolve();
+      hydrationReady.resolve();
     });
 
     return () => { active = false; epoch.advance(); };
@@ -539,16 +534,17 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
     const outbox = kind === "visits" ? visitBox : trailBox;
     outbox.setDesired(id, enabled);
-    if (identity.kind === "guest") {
-      const target = storage();
-      const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
-      noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.guestRevision, revision));
-      setGuestProgressAvailable(true);
-    }
     try {
+      if (identity.kind === "guest") {
+        const target = storage();
+        const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
+        if (!noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.guestRevision, revision))) throw new Error("Could not save the guest revision.");
+        setGuestProgressAvailable(true);
+      }
       await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
       if (identity.kind === "guest") await persistGuest(); else await persistAccount();
     } catch {
+      noteStorageFailure(false);
       setSyncMessage("Private device storage could not save this checkoff. Try again before leaving this page.");
       return;
     }
@@ -609,7 +605,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const authenticate = useCallback(async (mode: "login" | "register", email: string, password: string) => {
     if (transitionRef.current) return;
-    await hydrationReadyRef.current?.promise;
+    await hydrationReady.promise;
     storage();
     transitionRef.current = true;
     setTransitionBusy(true);
@@ -631,7 +627,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const authenticateWithGoogle = useCallback(async (code: string, state: string, codeVerifier: string) => {
     if (transitionRef.current) return;
-    await hydrationReadyRef.current?.promise;
+    await hydrationReady.promise;
     storage();
     transitionRef.current = true;
     setTransitionBusy(true);

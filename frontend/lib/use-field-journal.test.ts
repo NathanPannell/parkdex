@@ -93,13 +93,34 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.storageUnavailable).toBe(true); expect(fetchMock).not.toHaveBeenCalled(); expect(credentials.setItem).not.toHaveBeenCalled();
   });
 
+  it("does not fall back to guest when only the native account token read fails", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY);
+    vi.mocked(credentials.getItem).mockImplementation(async (key) => { if (key === ACCOUNT_TOKEN_KEY) throw new Error("token read failed"); return credentials.values.get(key) ?? null; });
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    const fetchMock = vi.fn(() => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.storageUnavailable).toBe(true); expect(fetchMock).not.toHaveBeenCalled(); expect(result.current.authenticated).toBe(false);
+  });
+
   it("does not send a checkoff until its pending intent is durably stored", async () => {
     window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
     const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY);
     let rejectPending = false; vi.mocked(journalStore.setItem).mockImplementation(async (key, value) => { if (rejectPending && key === JOURNAL_STORAGE.guestVisitPending) throw new Error("disk full"); journalStore.values.set(key, value); });
     registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
-    const fetchMock = vi.fn((url: string | URL | Request) => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = vi.fn(() => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false)); fetchMock.mockClear(); rejectPending = true;
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(fetchMock).not.toHaveBeenCalled(); expect(result.current.storageUnavailable).toBe(true); expect(result.current.syncMessage).toContain("could not save"); expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
+  it("surfaces a guest revision read failure without sending the optimistic checkoff", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY);
+    let rejectRevision = false; vi.mocked(journalStore.getItem).mockImplementation(async (key) => { if (rejectRevision && key === JOURNAL_STORAGE.guestRevision) throw new Error("read failed"); return journalStore.values.get(key) ?? null; });
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    const fetchMock = vi.fn(() => json(catalogue())); vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false)); fetchMock.mockClear(); rejectRevision = true;
     await act(() => result.current.toggleVisit(PLACE.id));
     expect(fetchMock).not.toHaveBeenCalled(); expect(result.current.syncMessage).toContain("could not save"); expect(result.current.visited.has(PLACE.id)).toBe(true);
   });
