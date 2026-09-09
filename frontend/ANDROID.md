@@ -29,4 +29,10 @@ The command-line debug build is `./gradlew assembleDebug` from `frontend/android
 
 The map requires WebGL2 because Parkdex uses MapLibre GL JS 6. Test the map on physical low-end devices as well as an emulator; Capacitor's API 24 floor does not guarantee suitable graphics drivers.
 
+## Emulator smoke test
+
+After installing the debug APK and launching `app.parkdex/.MainActivity` on an emulator, run `node scripts/android-smoke.mjs` from `frontend/`. The script connects directly to the debug WebView through ADB and Chrome DevTools Protocol using Node.js 24's built-in WebSocket client, so it adds no Playwright or browser automation dependency. It verifies that Parkdex renders, marks an unseen park as visited as a guest, force-stops and relaunches the app, and confirms the visit persists.
+
+Screenshots and captured console, exception, HTTP, and network diagnostics are written to `frontend/android-smoke-artifacts/`. The default journey does not use credentials and should target the staging or isolated preview API baked into the APK. A future authenticated variant must use a synthetic account against an isolated preview API; never supply personal or production credentials.
+
 Official references: [Capacitor environment setup](https://capacitorjs.com/docs/getting-started/environment-setup), [Android support](https://capacitorjs.com/docs/android), [configuration](https://capacitorjs.com/docs/config), [geolocation](https://capacitorjs.com/docs/apis/geolocation), [camera](https://capacitorjs.com/docs/apis/camera), [system bars](https://capacitorjs.com/docs/apis/system-bars), [storage](https://capacitorjs.com/docs/guides/storage), [security](https://capacitorjs.com/docs/guides/security), [deep links](https://capacitorjs.com/docs/guides/deep-links), and [Next.js static export](https://nextjs.org/docs/app/guides/static-exports).
