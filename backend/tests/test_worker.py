@@ -10,6 +10,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from backend.app.migrate import migrate
 from backend.worker import main as worker
 from backend.worker.main import catalogue_count
 
@@ -64,13 +65,16 @@ def test_concurrent_worker_startup_migrates_fresh_database(monkeypatch) -> None:
             effective_migration_database_url=scoped_url,
         ))
 
-        def start_worker():
+        def start(operation):
             try:
-                worker.prepare_database()
+                operation()
             except Exception as error:  # surfaced after joining both startup paths
                 errors.append(error)
 
-        threads = [threading.Thread(target=start_worker) for _ in range(2)]
+        threads = [
+            threading.Thread(target=start, args=(lambda: migrate(scoped_url),)),
+            threading.Thread(target=start, args=(worker.prepare_database,)),
+        ]
         for thread in threads:
             thread.start()
         for thread in threads:
