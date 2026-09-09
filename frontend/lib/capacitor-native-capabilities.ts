@@ -80,7 +80,7 @@ export function createCapacitorNativeCapabilities(): NativeCapabilities {
           throw new LocationCapabilityError("permission-denied", "Location permission was denied.");
         }
         const position = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: options.highAccuracy,
+          enableHighAccuracy: options.highAccuracy && permission.location === "granted",
           timeout: options.timeoutMs,
           maximumAge: options.maxAgeMs,
         });

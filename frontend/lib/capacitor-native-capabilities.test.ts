@@ -62,12 +62,29 @@ describe("Capacitor native capabilities", () => {
       timestamp: 1_780_000_000_001,
     });
 
-    await expect(createCapacitorNativeCapabilities().getCurrentLocation({
+    const capabilities = createCapacitorNativeCapabilities();
+    await expect(capabilities.getCurrentLocation({
+      highAccuracy: true,
+      timeoutMs: 12_000,
+      maxAgeMs: 60_000,
+    })).resolves.toMatchObject({ accuracyMeters: 1_200 });
+    await expect(capabilities.getCurrentLocation({
       highAccuracy: true,
       timeoutMs: 12_000,
       maxAgeMs: 60_000,
     })).resolves.toMatchObject({ accuracyMeters: 1_200 });
     expect(geolocation.requestPermissions).not.toHaveBeenCalled();
+    expect(geolocation.getCurrentPosition).toHaveBeenCalledTimes(2);
+    expect(geolocation.getCurrentPosition).toHaveBeenNthCalledWith(1, {
+      enableHighAccuracy: false,
+      timeout: 12_000,
+      maximumAge: 60_000,
+    });
+    expect(geolocation.getCurrentPosition).toHaveBeenNthCalledWith(2, {
+      enableHighAccuracy: false,
+      timeout: 12_000,
+      maximumAge: 60_000,
+    });
   });
 
   it("normalizes native permission and timeout failures", async () => {
