@@ -39,11 +39,12 @@ const claimMessage = (error: unknown) => {
 export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClaim, uploadPhoto, loadPhoto, removePhoto, onClaimed, ownerKey, placeNameForId, onOpenPlace }: Props) {
   const [working, setWorking] = useState(false), [message, setMessage] = useState(""), [recommendation, setRecommendation] = useState<ClaimRecommendation | null>(null);
   const [sample, setSample] = useState<LocationSample | null>(null), [pendingPhoto, setPendingPhoto] = useState<PhotoAsset | null>(null), [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoConfirmed, setPhotoConfirmed] = useState(false);
-  const [uploadRetry, setUploadRetry] = useState<File | null>(null);
+  const [photoConfirmedFor, setPhotoConfirmedFor] = useState<string | null>(null);
+  const [uploadRetry, setUploadRetry] = useState<{ placeId: string; file: File } | null>(null);
   const [recommendationExpired, setRecommendationExpired] = useState(false);
   const testMode = process.env.NEXT_PUBLIC_CLAIM_TEST_MODE === "true";
   const candidateMatches = recommendation?.status === "recommended" && recommendation.candidate.placeId === place.id;
+  const photoConfirmed = photoConfirmedFor === place.id;
   const expired = recommendation?.status === "recommended" && recommendationExpired;
   const otherCandidate = recommendation?.status === "recommended" && !candidateMatches ? recommendation.candidate : null;
   const otherCandidateName = otherCandidate ? placeNameForId?.(otherCandidate.placeId) ?? "the matching park" : "";
@@ -62,7 +63,7 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
       const photo = await getNativeCapabilities().getPhoto();
       if (!photo) return;
       if (photoPreview) URL.revokeObjectURL(photoPreview);
-      setPendingPhoto(photo); setPhotoConfirmed(false); setPhotoPreview(URL.createObjectURL(photo.file));
+      setPendingPhoto(photo); setPhotoConfirmedFor(null); setPhotoPreview(URL.createObjectURL(photo.file));
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not open the camera."); }
   }
 
@@ -84,8 +85,8 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
       const confirmation = await createClaim({ recommendationToken: recommendation.recommendationToken, expectedPlaceId: place.id });
       onClaimed?.(confirmation);
       if (pendingPhoto && photoConfirmed) {
-        try { await uploadPhoto(place.id, pendingPhoto.file); setPendingPhoto(null); setPhotoPreview(null); }
-        catch { setUploadRetry(pendingPhoto.file); setMessage("Your visit is saved, but the photo did not upload. Try the photo again when you’re online."); }
+        try { await uploadPhoto(place.id, pendingPhoto.file); setPendingPhoto(null); setPhotoConfirmedFor(null); setPhotoPreview(null); }
+        catch { setUploadRetry({ placeId: place.id, file: pendingPhoto.file }); setMessage("Your visit is saved, but the photo did not upload. Try the photo again when you’re online."); }
       }
       setRecommendation(null);
     } catch (error) { setMessage(claimMessage(error)); } finally { setWorking(false); }
@@ -94,7 +95,7 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
   async function retryPhoto() {
     if (!uploadRetry) return;
     setWorking(true); setMessage("");
-    try { await uploadPhoto(place.id, uploadRetry); setUploadRetry(null); setPendingPhoto(null); setPhotoPreview(null); }
+    try { await uploadPhoto(uploadRetry.placeId, uploadRetry.file); setUploadRetry(null); setPendingPhoto(null); setPhotoConfirmedFor(null); setPhotoPreview(null); }
     catch { setMessage("The photo still could not upload. Your visit remains saved; try again later."); }
     finally { setWorking(false); }
   }
@@ -106,7 +107,7 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
 
   return <section className="claim-visit" aria-label={`Claim ${place.name}`}>
     <div className="claim-photo-prompt">
-      {photoPreview ? <><img src={photoPreview} alt="Photo ready to attach after you claim this park" /><div><strong>{photoConfirmed ? `Photo ready for ${place.name}` : `Use this photo for ${place.name}?`}</strong><p>{photoConfirmed ? "It will upload after the boundary claim succeeds." : "Confirm the park before this recovered or new photo can be attached."}</p><span className="claim-photo-actions">{!photoConfirmed && <button type="button" onClick={() => setPhotoConfirmed(true)}><Check size={16} />Use photo</button>}<button type="button" onClick={() => { if (photoPreview) URL.revokeObjectURL(photoPreview); setPhotoPreview(null); setPendingPhoto(null); setPhotoConfirmed(false); }}><X size={16} />Discard</button></span></div></> : <button type="button" onClick={() => void capturePhoto()} disabled={working || busy}><Camera size={18} />Take an optional visit photo</button>}
+      {photoPreview ? <><img src={photoPreview} alt="Photo ready to attach after you claim this park" /><div><strong>{photoConfirmed ? `Photo ready for ${place.name}` : `Use this photo for ${place.name}?`}</strong><p>{photoConfirmed ? "It will upload after the boundary claim succeeds." : "Confirm the park before this recovered or new photo can be attached."}</p><span className="claim-photo-actions">{!photoConfirmed && <button type="button" onClick={() => setPhotoConfirmedFor(place.id)}><Check size={16} />Use photo</button>}<button type="button" onClick={() => { if (photoPreview) URL.revokeObjectURL(photoPreview); setPhotoPreview(null); setPendingPhoto(null); setPhotoConfirmedFor(null); }}><X size={16} />Discard</button></span></div></> : <button type="button" onClick={() => void capturePhoto()} disabled={working || busy}><Camera size={18} />Take an optional visit photo</button>}
     </div>
     {!candidateMatches && <button className="claim-locate" type="button" onClick={() => void locate()} disabled={working || busy}><LocateFixed size={19} />{working ? "Checking your boundary…" : "Check if I can claim a park"}</button>}
     {candidateMatches && <div className="claim-recommendation"><strong>You’re here, claim this park now</strong><p>{recommendation.candidate.matchKind === "exact" ? "Your location is inside the published boundary." : `You’re ${Math.round(recommendation.candidate.distanceMeters)} m from this boundary.`}</p><button type="button" onClick={() => void claim()} disabled={working || busy || expired || Boolean(pendingPhoto && !photoConfirmed)}><Check size={19} />{working ? "Claiming…" : "Claim this park"}</button>{pendingPhoto && !photoConfirmed && <small>Use or discard the photo before claiming.</small>}{expired && <button type="button" className="claim-refresh" onClick={() => void locate()}><RefreshCw size={16} />Refresh location</button>}</div>}

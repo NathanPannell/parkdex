@@ -49,14 +49,18 @@ describe("ClaimVisitPanel", () => {
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
     const handlers = props(); handlers.uploadPhoto.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
     function Parent() {
+      const [selected, setSelected] = useState(place);
       const [visit, setVisit] = useState<Visit | undefined>();
-      return <ClaimVisitPanel {...handlers} visit={visit} onClaimed={(created) => setVisit(created)} />;
+      const openClaimedOther = () => { setSelected({ ...place, id: "provincial-goldstream-park", name: "Goldstream Provincial Park" }); setVisit({ ...confirmation, placeId: "provincial-goldstream-park" }); };
+      return <><button onClick={openClaimedOther}>Open claimed Goldstream</button><ClaimVisitPanel {...handlers} place={selected} visit={visit} onClaimed={(created) => setVisit(created)} /></>;
     }
     render(<Parent />);
     fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" })); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); await screen.findByText("You’re here, claim this park now"); fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
     expect(await screen.findByText(/visit is saved, but the photo did not upload/i)).toBeTruthy(); expect(screen.getByLabelText(/Inspect postcard/)).toBeTruthy(); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Open claimed Goldstream" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry photo upload" })); await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledTimes(2)); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+    expect(handlers.uploadPhoto.mock.calls[1]).toEqual([place.id, photo]);
   });
 
   it("names and opens the recommended park when the current sheet does not match", async () => {
@@ -69,5 +73,18 @@ describe("ClaimVisitPanel", () => {
     const open = await screen.findByRole("button", { name: "Open Goldstream Provincial Park" });
     fireEvent.click(open);
     expect(onOpenPlace).toHaveBeenCalledWith(other.candidate.placeId);
+  });
+
+  it("requires photo reconfirmation when opening a different recommended park", async () => {
+    const otherPlace = { ...place, id: "provincial-goldstream-park", name: "Goldstream Provincial Park" };
+    const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
+    const handlers = props(); handlers.recommendClaim.mockResolvedValue({ ...recommendation, candidate: { ...recommendation.candidate, placeId: otherPlace.id } });
+    function Parent() { const [selected, setSelected] = useState(place); return <ClaimVisitPanel {...handlers} place={selected} placeNameForId={(id) => id === otherPlace.id ? otherPlace.name : undefined} onOpenPlace={() => setSelected(otherPlace)} />; }
+    render(<Parent />); fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" })); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); fireEvent.click(await screen.findByRole("button", { name: `Open ${otherPlace.name}` }));
+    const claimButton = screen.getByRole("button", { name: "Claim this park" }) as HTMLButtonElement; expect(claimButton.disabled).toBe(true); expect(screen.getByText(`Use this photo for ${otherPlace.name}?`)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use photo" })); expect(claimButton.disabled).toBe(false); expect(handlers.uploadPhoto).not.toHaveBeenCalled();
   });
 });

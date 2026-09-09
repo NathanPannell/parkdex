@@ -200,6 +200,37 @@ describe("useFieldJournal identity and progress races", () => {
     expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitMetadata) ?? "{}")).toHaveProperty(`${PLACE.id}.claim.boundaryVersion`, "v1");
   });
 
+  it.each(["upload", "remove"] as const)("makes a late guest photo %s importable after login", async (operation) => {
+    window.localStorage.setItem(JOURNAL_STORAGE.guestRevision, "0"); window.localStorage.setItem(importedGuestKey(ACCOUNT.id), "0");
+    const photoResponse = deferred<Response>(); let importCalls = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith(`/api/visits/${PLACE.id}/photo`)) return photoResponse.promise;
+      if (path.endsWith("/api/auth/login")) return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [], completedTrailIds: [] });
+      if (path.endsWith("/api/account/import-guest")) { importCalls += 1; return json({ importedVisitCount: 1, importedTrailCount: 0, visitedIds: [PLACE.id], completedTrailIds: [] }); }
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false));
+    let photoMutation!: Promise<void>; act(() => { photoMutation = operation === "upload" ? result.current.uploadVisitPhoto(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" })) : result.current.removeVisitPhoto(PLACE.id); });
+    await act(() => result.current.authenticate("login", ACCOUNT.email, "password123")); expect(result.current.guestProgressAvailable).toBe(false);
+    await act(async () => { photoResponse.resolve(new Response(null, { status: 204 })); await photoMutation; });
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.guestRevision)).toBe("1"); expect(result.current.guestProgressAvailable).toBe(true);
+    await act(() => result.current.importGuest()); expect(importCalls).toBe(1);
+  });
+
+  it("recovers a guest photo revision after storage returns without reporting the accepted upload as lost", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY); journalStore.values.set(JOURNAL_STORAGE.guestRevision, "5");
+    let rejectRevision = true; vi.mocked(journalStore.setItem).mockImplementation(async (key, value) => { if (rejectRevision && key === JOURNAL_STORAGE.guestRevision) throw new Error("disk full"); journalStore.values.set(key, value); });
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => String(url).endsWith(`/api/visits/${PLACE.id}/photo`) ? Promise.resolve(new Response(null, { status: 204 })) : json(catalogue())));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.uploadVisitPhoto(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" })));
+    expect(result.current.syncMessage).toContain("photo change is saved"); expect(result.current.storageUnavailable).toBe(true); expect(journalStore.values.get(JOURNAL_STORAGE.guestRevision)).toBe("5");
+    rejectRevision = false; act(() => window.dispatchEvent(new Event("online")));
+    await waitFor(() => expect(journalStore.values.get(JOURNAL_STORAGE.guestRevision)).toBe("6")); expect(result.current.guestProgressAvailable).toBe(true);
+  });
+
   it("keeps the legacy raw guest key and reloads a raw bearer token without quotes", async () => {
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "raw-token");
     window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
