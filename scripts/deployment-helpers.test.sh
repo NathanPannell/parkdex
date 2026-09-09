@@ -20,6 +20,7 @@ cat > "$test_dir/vercel" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$1" == curl ]]; then
   [[ " $* " == *" -- --fail --silent --show-error --output "* ]] || exit 2
+  [[ " $* " == *" --deployment https://verified-release.vercel.app "* ]] || exit 2
   path="$2"
   output=''
   while (( $# )); do
@@ -28,7 +29,7 @@ if [[ "$1" == curl ]]; then
   done
   if [[ "$path" == / ]]; then
     [[ "${MOCK_FETCH_FAILURE:-false}" != true ]] || exit 1
-    printf '<title>Parkdex</title>%s\n' "${MOCK_PAGE_SHA:0:7}" > "$output"
+    printf '<title>Parkdex</title><main>Map</main>\n' > "$output"
   else
     [[ "${MOCK_ASSET_FAILURE:-false}" != true ]] || exit 1
     printf 'export {};\n'
@@ -41,9 +42,10 @@ MOCK
 cat > "$test_dir/curl" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *api.vercel.com/v13/deployments/* ]]; then
+  [[ " $* " == *" https://api.vercel.com/v13/deployments/staging.parkdex.app?teamId=org "* ]] || exit 2
   [[ "${MOCK_API_FAILURE:-false}" != true ]] || exit 22
-  printf '{"readyState":"%s","meta":{"githubCommitSha":"%s"},"projectId":"%s"}\n' \
-    "${MOCK_READY_STATE:-READY}" "${MOCK_FRONTEND_SHA}" "${MOCK_PROJECT_ID:-project}"
+  printf '{"readyState":"%s","meta":{"githubCommitSha":"%s"},"projectId":"%s","url":"%s"}\n' \
+    "${MOCK_READY_STATE:-READY}" "${MOCK_FRONTEND_SHA}" "${MOCK_PROJECT_ID:-project}" "${MOCK_DEPLOYMENT_URL-verified-release.vercel.app}"
   exit 0
 fi
 count=0
@@ -87,7 +89,7 @@ if MOCK_READY_STATE=ERROR bash "$repo/scripts/verify-frontend-release.sh" https:
   exit 1
 fi
 
-for failure in MOCK_API_FAILURE=true MOCK_FETCH_FAILURE=true MOCK_ASSET_FAILURE=true MOCK_FRONTEND_SHA= MOCK_PROJECT_ID=wrong; do
+for failure in MOCK_API_FAILURE=true MOCK_FETCH_FAILURE=true MOCK_ASSET_FAILURE=true MOCK_FRONTEND_SHA= MOCK_PROJECT_ID=wrong MOCK_DEPLOYMENT_URL= MOCK_DEPLOYMENT_URL=staging.parkdex.app MOCK_DEPLOYMENT_URL=verified-release.vercel.app/extra MOCK_DEPLOYMENT_URL=verified-release.vercel.app.evil.example; do
   if env "$failure" bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_PAGE_SHA" 2>/dev/null; then
     echo "Invalid frontend verification accepted: $failure" >&2
     exit 1
