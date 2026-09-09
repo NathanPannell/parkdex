@@ -8,7 +8,7 @@ on:
         required: true
         default: none
         type: choice
-        options: [none, inspect-railway-sources, deploy-staging, promote-production]
+        options: [none, deploy-staging, promote-production]
   push:
     branches: [main, staging]
   pull_request:
@@ -17,90 +17,6 @@ permissions:
   contents: read
 
 jobs:
-  inspect-railway-sources:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event_name == 'workflow_dispatch' && inputs.action == 'inspect-railway-sources' && github.ref == 'refs/heads/chore/manual-deploy-workflows' && github.actor == vars.TRUSTED_PREVIEW_ACTOR
-    runs-on: ubuntu-24.04
-    env:
-      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
-      RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
-      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
-    steps:
-      - uses: actions/setup-node@v6
-        with: { node-version: 22 }
-      - name: Install Railway CLI
-        run: npm install --global @railway/cli@5.47.2
-      - name: Inspect allowlisted Railway Git sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          readonly expected_project='0999e6e0-d2ae-4b48-b516-55d53dba7cb5'
-          readonly expected_api='b30d9ca5-fc77-4427-a955-b020a7ec3cf8'
-          readonly expected_worker='99c62f81-d2bb-40db-911d-d8a4a1d05d8f'
-          readonly expected_production='7670d90a-6422-4ed6-816d-7ef243f00ec2'
-
-          [[ "$RAILWAY_PROJECT_ID" == "$expected_project" ]]
-          [[ "$RAILWAY_API_SERVICE_ID" == "$expected_api" ]]
-          [[ "$RAILWAY_WORKER_SERVICE_ID" == "$expected_worker" ]]
-
-          production_status="$(railway status --project "$expected_project" --environment "$expected_production" --json)"
-          staging_status="$(railway status --project "$expected_project" --environment staging --json)"
-          production_id="$(jq -er --arg project "$expected_project" --arg environment "$expected_production" '
-            select(.id == $project)
-            | [.environments.edges[].node | select(.id == $environment and .name == "production")]
-            | if length == 1 then .[0].id else error("production identity mismatch") end
-          ' <<<"$production_status")"
-          staging_id="$(jq -er --arg project "$expected_project" '
-            select(.id == $project)
-            | [.environments.edges[].node | select(.name == "staging")]
-            | if length == 1 then .[0].id else error("staging environment is not unique") end
-          ' <<<"$staging_status")"
-          [[ "$production_id" == "$expected_production" ]]
-          [[ "$staging_id" =~ ^[0-9a-f-]{36}$ ]]
-
-          railway link --project "$expected_project" --environment "$expected_production" >/dev/null
-          summary='[]'
-          for environment in "$production_id" "$staging_id"; do
-            services="$(railway service list --project "$expected_project" --environment "$environment" --json)"
-            jq -e --arg api "$expected_api" --arg worker "$expected_worker" '
-              ([.[].id] | unique) as $ids
-              | ($ids | length) == (length)
-              and ([.[] | select(.id == $api and .name == "api")] | length == 1)
-              and ([.[] | select(.id == $worker and .name == "worker")] | length == 1)
-            ' <<<"$services" >/dev/null
-
-            sources="$(railway environment config --environment "$environment" --json | jq -ce \
-              --arg api "$expected_api" --arg worker "$expected_worker" '
-                .services as $services
-                | if (($services | has($api)) and ($services | has($worker))) then
-                    [$api, $worker] | map(
-                      . as $id
-                      | {serviceId: $id, source: (($services[$id].source // {})
-                          | {repo: (.repo // null), branch: (.branch // null),
-                             image: (.image // null), rootDirectory: (.rootDirectory // null)})}
-                    )
-                  else error("allowlisted service missing from environment config") end
-              ')"
-            environment_name="$([[ "$environment" == "$expected_production" ]] && echo production || echo staging)"
-            summary="$(jq -cn --argjson current "$summary" --argjson sources "$sources" \
-              --arg environmentId "$environment" --arg environmentName "$environment_name" \
-              '$current + ($sources | map(. + {environmentId: $environmentId, environmentName: $environmentName}))')"
-          done
-
-          {
-            echo '### Railway source inspection'
-            echo '| Environment | Environment ID | Service ID | Repository | Branch | Image | Root directory |'
-            echo '| --- | --- | --- | --- | --- | --- | --- |'
-            jq -r '.[] | [.environmentName, .environmentId, .serviceId,
-              (.source.repo // "none"), (.source.branch // "none"),
-              (.source.image // "none"), (.source.rootDirectory // "none")]
-              | "| " + join(" | ") + " |"' <<<"$summary"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
-          if jq -e 'any(.[]; ((.source.repo // "") | length) > 0)' <<<"$summary" >/dev/null; then
-            echo 'One or more allowlisted Railway services still has a Git repository source.' >&2
-            exit 1
-          fi
-
   backend:
     if: github.event_name != 'workflow_dispatch' || inputs.action == 'none'
     runs-on: ubuntu-24.04
