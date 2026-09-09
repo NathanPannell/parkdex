@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import type { Visit } from "@/lib/account";
 import { ClaimVisitPanel } from "./claim-visit-panel";
 
 const place = { id: "provincial-juan-de-fuca-park", name: "Forest Park", category: "provincial" as const, latitude: 49, longitude: -124, region: "South Island", description: "Forest", sourceUrl: "https://example.test", sourceName: "BC Parks" };
@@ -45,10 +47,27 @@ describe("ClaimVisitPanel", () => {
     const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
-    const handlers = props(); handlers.uploadPhoto.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined); render(<ClaimVisitPanel {...handlers} />);
+    const handlers = props(); handlers.uploadPhoto.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+    function Parent() {
+      const [visit, setVisit] = useState<Visit | undefined>();
+      return <ClaimVisitPanel {...handlers} visit={visit} onClaimed={(created) => setVisit(created)} />;
+    }
+    render(<Parent />);
     fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" })); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); await screen.findByText("You’re here, claim this park now"); fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
-    expect(await screen.findByText(/visit is saved, but the photo did not upload/i)).toBeTruthy(); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/visit is saved, but the photo did not upload/i)).toBeTruthy(); expect(screen.getByLabelText(/Inspect postcard/)).toBeTruthy(); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Retry photo upload" })); await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledTimes(2)); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+  });
+
+  it("names and opens the recommended park when the current sheet does not match", async () => {
+    const other = { ...recommendation, candidate: { ...recommendation.candidate, placeId: "provincial-goldstream-park" } };
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null) });
+    const handlers = props(); handlers.recommendClaim.mockResolvedValue(other);
+    const onOpenPlace = vi.fn();
+    render(<ClaimVisitPanel {...handlers} placeNameForId={(id) => id === other.candidate.placeId ? "Goldstream Provincial Park" : undefined} onOpenPlace={onOpenPlace} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
+    const open = await screen.findByRole("button", { name: "Open Goldstream Provincial Park" });
+    fireEvent.click(open);
+    expect(onOpenPlace).toHaveBeenCalledWith(other.candidate.placeId);
   });
 });
