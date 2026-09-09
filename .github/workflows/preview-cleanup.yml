@@ -1,0 +1,70 @@
+name: Full-stack PR preview cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  PREVIEW_ENVIRONMENT: pr-${{ github.event.pull_request.number }}
+  NEON_BRANCH: preview/pr-${{ github.event.pull_request.number }}
+  RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+  RAILWAY_BASE_ENVIRONMENT_ID: ${{ vars.RAILWAY_BASE_ENVIRONMENT_ID }}
+  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+
+jobs:
+  cleanup:
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == vars.TRUSTED_PREVIEW_ACTOR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: 22 }
+      - run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
+      - name: Refuse cleanup outside the PR namespace
+        run: |
+          [[ "$PREVIEW_ENVIRONMENT" == "pr-${{ github.event.pull_request.number }}" ]]
+          [[ "$NEON_BRANCH" == "preview/pr-${{ github.event.pull_request.number }}" ]]
+      - name: Find recorded Vercel deployment
+        id: vercel
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const marker = '<!-- full-stack-preview -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const body = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' &&
+              comment.body?.startsWith(`${marker}\n`)
+            )?.body || '';
+            core.setOutput('deployment_id', body.match(/^Vercel deployment: `(dpl_[A-Za-z0-9]+)`$/m)?.[1] || '');
+      - name: Delete Railway preview environment
+        continue-on-error: true
+        env: { RAILWAY_API_TOKEN: "${{ secrets.RAILWAY_API_TOKEN }}" }
+        run: |
+          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_BASE_ENVIRONMENT_ID"
+          railway environment delete "$PREVIEW_ENVIRONMENT" --yes
+      - name: Delete Neon preview branch
+        continue-on-error: true
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Delete Vercel preview deployment
+        if: steps.vercel.outputs.deployment_id != ''
+        continue-on-error: true
+        env:
+          DEPLOYMENT_ID: ${{ steps.vercel.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel remove "$DEPLOYMENT_ID" --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"

@@ -6,6 +6,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
 
+def normalize_address(value: EmailStr) -> str:
+    normalized = str(value).strip().lower()
+    if normalized.endswith("@googlemail.com"):
+        return normalized.removesuffix("@googlemail.com") + "@gmail.com"
+    return normalized
+
+
 class Place(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     id: str
@@ -56,17 +63,54 @@ class TrailResult(BaseModel):
 
 class Credentials(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=12, max_length=128)
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: EmailStr) -> str:
-        return str(value).strip().lower()
+        return normalize_address(value)
 
 
 class Account(BaseModel):
     id: str
     email: str
+    email_verified: bool = Field(serialization_alias="emailVerified")
+
+
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return normalize_address(value)
+
+
+class TokenConfirmation(BaseModel):
+    token: str = Field(min_length=43, max_length=43)
+
+
+class PasswordResetConfirmation(TokenConfirmation):
+    newPassword: str = Field(min_length=12, max_length=128)
+
+
+class PasswordChange(BaseModel):
+    currentPassword: str = Field(min_length=1, max_length=128)
+    newPassword: str = Field(min_length=12, max_length=128)
+
+
+class GoogleStart(BaseModel):
+    authorization_url: str = Field(serialization_alias="authorizationUrl")
+
+
+class GoogleCallback(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    state: str = Field(min_length=43, max_length=43)
+    codeVerifier: str = Field(
+        min_length=43,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._~-]+$",
+    )
 
 
 class AuthResult(BaseModel):

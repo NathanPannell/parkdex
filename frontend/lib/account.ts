@@ -1,4 +1,5 @@
-export type Account = { id: string; email: string };
+export type Account = { id: string; email: string; emailVerified?: boolean };
+export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
 export type Visit = { placeId: string; visitedAt: string };
 export type AccountSession = {
   token: string;
@@ -19,10 +20,20 @@ export class ApiError extends Error {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  if (response.ok) return response.json() as Promise<T>;
+  if (response.ok) {
+    const body = await response.text();
+    return (body ? JSON.parse(body) : undefined) as T;
+  }
   let message = "Something went wrong. Please try again.";
   try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* use friendly fallback */ }
   throw new ApiError(message, response.status);
+}
+
+function jsonRequest(method: "POST", body?: unknown, token?: string): RequestInit {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return { method, headers, body: body === undefined ? undefined : JSON.stringify(body) };
 }
 
 export async function authenticate(apiBaseUrl: string, mode: "register" | "login", email: string, password: string): Promise<AccountSession> {
@@ -32,6 +43,40 @@ export async function authenticate(apiBaseUrl: string, mode: "register" | "login
     body: JSON.stringify({ email, password }),
   });
   return parseResponse<AccountSession>(response);
+}
+
+export async function loadAuthConfig(apiBaseUrl: string): Promise<AuthConfig> {
+  return parseResponse<AuthConfig>(await fetch(`${apiBaseUrl}/api/auth/config`, { cache: "no-store" }));
+}
+
+export async function requestPasswordReset(apiBaseUrl: string, email: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-reset/request`, jsonRequest("POST", { email })));
+}
+
+export async function confirmPasswordReset(apiBaseUrl: string, token: string, newPassword: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-reset/confirm`, jsonRequest("POST", { token, newPassword })));
+}
+
+export async function changePassword(apiBaseUrl: string, token: string, currentPassword: string, newPassword: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-change`, jsonRequest("POST", { currentPassword, newPassword }, token)));
+}
+
+export async function requestEmailVerification(apiBaseUrl: string, token: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/email-verification/request`, jsonRequest("POST", undefined, token)));
+}
+
+export async function confirmEmailVerification(apiBaseUrl: string, token: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/email-verification/confirm`, jsonRequest("POST", { token })));
+}
+
+export async function requestGoogleAuthorization(apiBaseUrl: string, codeChallenge: string): Promise<string> {
+  const params = new URLSearchParams({ codeChallenge });
+  const result = await parseResponse<{ authorizationUrl: string }>(await fetch(`${apiBaseUrl}/api/auth/google/start?${params}`));
+  return result.authorizationUrl;
+}
+
+export async function completeGoogleAuthorization(apiBaseUrl: string, code: string, state: string, codeVerifier: string): Promise<AccountSession> {
+  return parseResponse<AccountSession>(await fetch(`${apiBaseUrl}/api/auth/google/callback`, jsonRequest("POST", { code, state, codeVerifier })));
 }
 
 export async function loadAccount(apiBaseUrl: string, token: string): Promise<Omit<AccountSession, "token" | "expiresAt">> {

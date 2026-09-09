@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     check_interval_seconds: int = Field(default=180, alias="CHECK_INTERVAL_SECONDS")
     request_timeout_seconds: float = Field(default=10, alias="REQUEST_TIMEOUT_SECONDS")
     app_commit_sha: str = Field(default="local", alias="APP_COMMIT_SHA")
+    app_public_url: str = Field(default="http://localhost:3000", alias="APP_PUBLIC_URL")
+    google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: str | None = Field(default=None, alias="GOOGLE_REDIRECT_URI")
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="Parkdex <no-reply@parkdex.app>", alias="SMTP_FROM")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
 
     @property
     def is_preview(self) -> bool:

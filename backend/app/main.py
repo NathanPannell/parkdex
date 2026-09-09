@@ -1,8 +1,13 @@
 from contextlib import asynccontextmanager, contextmanager
 import hashlib
+import logging
 import re
+import secrets
+from datetime import timedelta
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+import httpx
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
+from google.auth.exceptions import GoogleAuthError
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
 from psycopg.errors import UniqueViolation
@@ -12,21 +17,34 @@ from backend.app.auth import (
     AccountIdentity,
     authenticate_bearer,
     clear_login_failures,
+    consume_action_token,
+    create_action_token,
     create_session,
     hash_password,
     reserve_login_attempt,
+    reserve_rate_limit,
+    record_security_event,
+    pkce_challenge,
     require_bearer,
     verify_password,
 )
 from backend.app.db import close_pool, connection, open_pool
+from backend.app.email_delivery import ensure_email_delivery, send_auth_email
+from backend.app.google_oauth import authorization_url, exchange_and_verify
 from backend.app.schemas import (
     AccountState,
     AuthResult,
     Credentials,
+    EmailRequest,
+    GoogleCallback,
+    GoogleStart,
     GuestImportResult,
     PlaceCollection,
+    PasswordChange,
+    PasswordResetConfirmation,
     TrailResult,
     TrailUpdate,
+    TokenConfirmation,
     VisitResult,
     VisitUpdate,
 )
@@ -101,7 +119,11 @@ def lock_account_progress(conn: Connection, account_id: str) -> None:
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     visits = visits_for_account(conn, identity.account_id)
     return {
-        "account": {"id": identity.account_id, "email": identity.email},
+        "account": {
+            "id": identity.account_id,
+            "email": identity.email,
+            "email_verified": identity.email_verified,
+        },
         "visited_ids": visited_ids(visits),
         "visits": visits,
         "completed_trail_ids": completed_trails_for_account(conn, identity.account_id),
@@ -116,6 +138,20 @@ async def lifespan(_: FastAPI):
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def deliver_auth_email(recipient: str, subject: str, text: str, event_type: str) -> None:
+    try:
+        send_auth_email(settings, recipient, subject, text)
+    except Exception as exc:
+        logger.error("Auth email delivery failed (%s)", type(exc).__name__)
+        try:
+            with contextmanager(connection)() as conn:
+                record_security_event(conn, event_type, recipient, "delivery_failed")
+                conn.commit()
+        except Exception:
+            logger.error("Could not record auth email delivery failure")
 app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -139,6 +175,14 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
         "status": "ready",
         "commit": settings.app_commit_sha,
         "migrations": migration_count["migration_count"],
+    }
+
+
+@app.get("/api/auth/config")
+def auth_config() -> dict[str, bool]:
+    return {
+        "googleEnabled": bool(settings.google_client_id and settings.google_client_secret and settings.google_redirect_uri),
+        "emailEnabled": bool(settings.smtp_host),
     }
 
 
@@ -281,25 +325,42 @@ def update_trail(trail_id: str, payload: TrailUpdate, conn: Connection = Depends
 
 @app.post("/api/auth/register", response_model=AuthResult, status_code=201)
 def register(payload: Credentials):
+    email = str(payload.email)
+    with contextmanager(connection)() as conn:
+        reserve_rate_limit(conn, "register_global", "global", 500, timedelta(minutes=15))
+        reserve_rate_limit(conn, "register", email, 5, timedelta(hours=1))
+        conn.commit()
     password_hash = hash_password(payload.password)
     with contextmanager(connection)() as conn:
         try:
+            conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (email,))
             account = conn.execute(
                 """
                 INSERT INTO accounts (email, password_hash) VALUES (%s, %s)
                 RETURNING id, email
                 """,
-                (str(payload.email), password_hash),
+                (email, password_hash),
             ).fetchone()
         except UniqueViolation:
             conn.rollback()
+            record_security_event(conn, "registration", email, "duplicate")
+            conn.commit()
             raise HTTPException(status_code=409, detail="An account with this email already exists")
         token, expires_at = create_session(conn, str(account["id"]))
+        verification_token = None
+        if settings.smtp_host:
+            verification_token, _ = create_action_token(conn, str(account["id"]), "email_verification")
+        record_security_event(conn, "registration", email, "created")
         conn.commit()
+    if verification_token:
+        try:
+            send_auth_email(settings, email, "Verify your Parkdex email", f"Verify your email: {settings.app_public_url}/#verificationToken={verification_token}")
+        except Exception as exc:
+            logger.error("Registration verification email delivery failed (%s)", type(exc).__name__)
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"]},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": False},
         "visited_ids": [],
         "visits": [],
         "completed_trail_ids": [],
@@ -312,14 +373,17 @@ def login(payload: Credentials):
     with contextmanager(connection)() as conn:
         reserve_login_attempt(conn, email)
         account = conn.execute(
-            "SELECT id, email, password_hash FROM accounts WHERE email = %s", (email,)
+            "SELECT id, email, password_hash, email_verified_at IS NOT NULL AS email_verified FROM accounts WHERE email = %s", (email,)
         ).fetchone()
         conn.commit()
-    password_hash = account["password_hash"] if account else DUMMY_PASSWORD_HASH
+    password_hash = account["password_hash"] if account and account["password_hash"] else DUMMY_PASSWORD_HASH
     if not verify_password(password_hash, payload.password) or account is None:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     with contextmanager(connection)() as conn:
         clear_login_failures(conn, email)
+        current = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (account["id"],)).fetchone()
+        if not current or current["password_hash"] != password_hash:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
         token, expires_at = create_session(conn, str(account["id"]))
         visits = visits_for_account(conn, str(account["id"]))
         completed_trail_ids = completed_trails_for_account(conn, str(account["id"]))
@@ -327,7 +391,7 @@ def login(payload: Credentials):
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"]},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": account["email_verified"]},
         "visited_ids": visited_ids(visits),
         "visits": visits,
         "completed_trail_ids": completed_trail_ids,
@@ -354,6 +418,195 @@ def logout(
     )
     conn.commit()
     return Response(status_code=204)
+
+
+@app.post("/api/auth/password-reset/request", status_code=202)
+def request_password_reset(payload: EmailRequest, background_tasks: BackgroundTasks) -> dict[str, str]:
+    try:
+        ensure_email_delivery(settings)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    email = str(payload.email)
+    token = None
+    with contextmanager(connection)() as conn:
+        reserve_rate_limit(conn, "password_reset", email, 3, timedelta(minutes=15))
+        account = conn.execute("SELECT id FROM accounts WHERE email = %s", (email,)).fetchone()
+        if account:
+            token, _ = create_action_token(conn, str(account["id"]), "password_reset")
+        record_security_event(conn, "password_reset_requested", email, "accepted")
+        conn.commit()
+    if token:
+        background_tasks.add_task(deliver_auth_email, email, "Reset your Parkdex password", f"Reset your password: {settings.app_public_url}/#resetToken={token}\n\nIf you did not request this, ignore this email.", "password_reset_email")
+    return {"detail": "If an account exists, password reset instructions have been sent."}
+
+
+@app.post("/api/auth/password-reset/confirm", status_code=204)
+def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
+    password_hash = hash_password(payload.newPassword)
+    with contextmanager(connection)() as conn:
+        row = consume_action_token(conn, payload.token, "password_reset")
+        if row is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
+        conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
+        conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
+        conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/password-change", status_code=204)
+def change_password(payload: PasswordChange, authorization: str | None = Header(default=None)) -> Response:
+    with contextmanager(connection)() as conn:
+        identity = require_bearer(conn, authorization)
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
+        current_hash = account["password_hash"] if account and account["password_hash"] else DUMMY_PASSWORD_HASH
+    if not account or not account["password_hash"] or not verify_password(current_hash, payload.currentPassword):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    new_hash = hash_password(payload.newPassword)
+    with contextmanager(connection)() as conn:
+        locked = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
+        if not locked or locked["password_hash"] != current_hash:
+            raise HTTPException(status_code=409, detail="Password changed during this request; try again")
+        conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
+        conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        record_security_event(conn, "password_changed", identity.account_id, "success")
+        conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/email-verification/request", status_code=202)
+def request_email_verification(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    try:
+        ensure_email_delivery(settings)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    with contextmanager(connection)() as conn:
+        identity = require_bearer(conn, authorization)
+        reserve_rate_limit(conn, "email_verification", identity.account_id, 3, timedelta(minutes=15))
+        if identity.email_verified:
+            conn.commit()
+            return {"detail": "Email is already verified."}
+        token, _ = create_action_token(conn, identity.account_id, "email_verification")
+        conn.commit()
+    try:
+        send_auth_email(settings, identity.email, "Verify your Parkdex email", f"Verify your email: {settings.app_public_url}/#verificationToken={token}")
+    except Exception as exc:
+        logger.error("Verification email delivery failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Email delivery is temporarily unavailable")
+    return {"detail": "Verification instructions have been sent."}
+
+
+@app.post("/api/auth/email-verification/confirm", status_code=204)
+def confirm_email_verification(payload: TokenConfirmation) -> Response:
+    with contextmanager(connection)() as conn:
+        row = consume_action_token(conn, payload.token, "email_verification")
+        if row is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired email verification token")
+        conn.execute("UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (row["account_id"],))
+        record_security_event(conn, "email_verified", str(row["account_id"]), "success")
+        conn.commit()
+    return Response(status_code=204)
+
+
+@app.get("/api/auth/google/start", response_model=GoogleStart)
+def start_google_oauth(code_challenge: str = Query(alias="codeChallenge", min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]+$")):
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    try:
+        url = authorization_url(settings, state, nonce, code_challenge)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    with contextmanager(connection)() as conn:
+        reserve_rate_limit(conn, "google_start_global", "global", 1000, timedelta(minutes=15))
+        conn.execute("INSERT INTO oauth_authorization_states (state_hash, nonce_hash, code_challenge, expires_at) VALUES (%s, %s, %s, NOW() + INTERVAL '10 minutes')", (hashlib.sha256(state.encode()).hexdigest(), hashlib.sha256(nonce.encode()).hexdigest(), code_challenge))
+        conn.commit()
+    return {"authorization_url": url}
+
+
+def _gmail_aliases(email: str) -> tuple[str, ...]:
+    normalized = email.strip().lower()
+    if normalized.endswith("@googlemail.com"):
+        return (normalized.removesuffix("@googlemail.com") + "@gmail.com", normalized)
+    if normalized.endswith("@gmail.com"):
+        return (normalized, normalized.removesuffix("@gmail.com") + "@googlemail.com")
+    return (normalized,)
+
+
+def _google_conflict(conn: Connection, scope: str, outcome: str, detail: str) -> None:
+    record_security_event(conn, "google_callback", scope, outcome)
+    conn.commit()
+    raise HTTPException(status_code=409, detail=detail)
+
+
+@app.post("/api/auth/google/callback", response_model=AuthResult)
+def finish_google_oauth(payload: GoogleCallback):
+    state_hash = hashlib.sha256(payload.state.encode()).hexdigest()
+    with contextmanager(connection)() as conn:
+        state = conn.execute("UPDATE oauth_authorization_states SET used_at = NOW() WHERE state_hash = %s AND used_at IS NULL AND expires_at > NOW() RETURNING nonce_hash, code_challenge", (state_hash,)).fetchone()
+        if state is None or not secrets.compare_digest(state["code_challenge"], pkce_challenge(payload.codeVerifier)):
+            record_security_event(conn, "google_callback", state_hash, "invalid_state_or_pkce")
+            conn.commit()
+            raise HTTPException(status_code=400, detail="Invalid or expired Google authorization state")
+        conn.commit()
+    try:
+        claims = exchange_and_verify(settings, payload.code, payload.codeVerifier)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except (httpx.HTTPError, GoogleAuthError, ValueError):
+        with contextmanager(connection)() as conn:
+            record_security_event(conn, "google_callback", state_hash, "token_exchange_failed")
+            conn.commit()
+        raise HTTPException(status_code=401, detail="Google authentication failed")
+    nonce = claims.get("nonce")
+    email = claims.get("email")
+    subject = claims.get("sub")
+    if not nonce or not secrets.compare_digest(hashlib.sha256(nonce.encode()).hexdigest(), state["nonce_hash"]):
+        with contextmanager(connection)() as conn:
+            record_security_event(conn, "google_callback", state_hash, "invalid_nonce")
+            conn.commit()
+        raise HTTPException(status_code=401, detail="Google authentication failed")
+    if not subject or not email or claims.get("email_verified") is not True:
+        with contextmanager(connection)() as conn:
+            record_security_event(conn, "google_callback", state_hash, "unverified_identity")
+            conn.commit()
+        raise HTTPException(status_code=401, detail="Google did not verify this email address")
+    aliases = _gmail_aliases(email)
+    canonical_email = aliases[0]
+    is_gmail = canonical_email.endswith("@gmail.com")
+    with contextmanager(connection)() as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (canonical_email,))
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 1))", (subject,))
+        linked = conn.execute("SELECT a.id, a.email FROM account_oauth_identities o JOIN accounts a ON a.id = o.account_id WHERE o.provider = 'google' AND o.subject = %s FOR UPDATE OF a", (subject,)).fetchone()
+        if linked:
+            if linked["email"] not in aliases:
+                _google_conflict(conn, canonical_email, "linked_subject_email_conflict", "Google identity conflicts with an existing account")
+            account = linked
+        else:
+            matches = conn.execute("SELECT id, email, password_hash, email_verified_at FROM accounts WHERE email = ANY(%s) FOR UPDATE", (list(aliases),)).fetchall()
+            if len(matches) > 1:
+                _google_conflict(conn, canonical_email, "multiple_email_matches", "Multiple accounts conflict with this Google identity")
+            if matches:
+                account = matches[0]
+                if not is_gmail:
+                    _google_conflict(conn, canonical_email, "non_gmail_collision", "An account already uses this email. Sign in with email and password.")
+                other_identity = conn.execute("SELECT 1 FROM account_oauth_identities WHERE provider = 'google' AND account_id = %s", (account["id"],)).fetchone()
+                if other_identity:
+                    _google_conflict(conn, canonical_email, "account_identity_conflict", "Account is already linked to another Google identity")
+                if account["email_verified_at"] is None:
+                    conn.execute("UPDATE accounts SET password_hash = NULL, email_verified_at = NOW() WHERE id = %s", (account["id"],))
+                    conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
+                    conn.execute("UPDATE account_action_tokens SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
+                else:
+                    conn.execute("UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (account["id"],))
+            else:
+                account = conn.execute("INSERT INTO accounts (email, password_hash, email_verified_at) VALUES (%s, NULL, NOW()) RETURNING id, email", (canonical_email,)).fetchone()
+            conn.execute("INSERT INTO account_oauth_identities (provider, subject, account_id, email_at_link) VALUES ('google', %s, %s, %s)", (subject, account["id"], canonical_email))
+        token, expires_at = create_session(conn, str(account["id"]))
+        visits = visits_for_account(conn, str(account["id"]))
+        trails = completed_trails_for_account(conn, str(account["id"]))
+        record_security_event(conn, "google_sign_in", str(account["id"]), "success")
+        conn.commit()
+    return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
 
 
 @app.delete("/api/account/progress", status_code=204)
