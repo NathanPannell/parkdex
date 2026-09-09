@@ -70,10 +70,10 @@ jobs:
         run: npm run android:sync
         working-directory: frontend
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: bash ./gradlew --no-daemon assembleDebug
         working-directory: frontend/android
       - name: Assemble Android instrumentation tests
-        run: ./gradlew --no-daemon :app:assembleDebugAndroidTest
+        run: bash ./gradlew --no-daemon :app:assembleDebugAndroidTest
         working-directory: frontend/android
       - name: Enable KVM for the Android emulator
         run: |
@@ -92,7 +92,7 @@ jobs:
           disable-animations: true
           working-directory: frontend/android
           script: |
-            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            bash ./gradlew --no-daemon :app:connectedDebugAndroidTest
             adb shell am start -W -n app.parkdex/.MainActivity
             adb shell pidof app.parkdex
       - uses: actions/upload-artifact@v7
