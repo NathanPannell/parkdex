@@ -9,6 +9,7 @@ import {
   countEndpointResponses,
   hasNewEndpointResponse,
   locationUiErrorCode,
+  canContinueAfterLocationFailure,
   isAllowedLocalRuntimeEndpoints,
   isAllowedClaimFixture,
   isAllowedPreviewApiUrl,
@@ -136,6 +137,14 @@ test("records a bounded sanitized native location outcome", () => {
   expect(locationUiErrorCode("Your location is unavailable. Check location services and try again.")).toBe("unavailable");
   expect(locationUiErrorCode("unexpected plugin message")).toBe("other");
   expect(locationUiErrorCode("")).toBe("none");
+});
+
+test("continues only for known emulator delivery failures", () => {
+  expect(canContinueAfterLocationFailure("timeout")).toBe(true);
+  expect(canContinueAfterLocationFailure("unavailable")).toBe(true);
+  expect(canContinueAfterLocationFailure("permission-denied")).toBe(false);
+  expect(canContinueAfterLocationFailure("other")).toBe(false);
+  expect(canContinueAfterLocationFailure("none")).toBe(false);
 });
 
 test("requires one exact full commit identity from API readiness", () => {

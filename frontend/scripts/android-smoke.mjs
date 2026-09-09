@@ -151,6 +151,10 @@ export function locationUiErrorCode(message) {
   return message ? "other" : "none";
 }
 
+export function canContinueAfterLocationFailure(errorCode) {
+  return errorCode === "timeout" || errorCode === "unavailable";
+}
+
 class DevToolsSession {
   constructor(socket, diagnostics, isolatedOffline = false) {
     this.socket = socket;
@@ -476,6 +480,9 @@ async function exerciseCoarseNativeLocation(session, diagnostics) {
       await session.evaluate("document.querySelector('.claim-error')?.scrollIntoView({ block: 'center' })");
       await session.screenshot("coarse-location-unavailable.png");
       captureNativeScreenshot("coarse-location-unavailable-native.png");
+      if (!canContinueAfterLocationFailure(outcome.errorCode)) {
+        throw new Error(`Unexpected native location failure: ${outcome.errorCode}.`);
+      }
     }
   } finally {
     clearInterval(deliveryTimer);
