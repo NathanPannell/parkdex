@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       api_base_url:
-        description: Public HTTPS API URL baked into the debug APK
+        description: Staging API or the exact https://api-pr-<number>-<id>.up.railway.app preview API URL baked into the debug APK
         required: false
         default: https://api-staging-882c.up.railway.app
         type: string
@@ -36,10 +36,11 @@ jobs:
           cache: gradle
       - name: Verify hosted Android toolchain
         run: |
-          case "$NEXT_PUBLIC_API_BASE_URL" in
-            https://*) ;;
-            *) echo "api_base_url must be an HTTPS URL" >&2; exit 1 ;;
-          esac
+          if [[ "$NEXT_PUBLIC_API_BASE_URL" != "https://api-staging-882c.up.railway.app" ]] && \
+             ! [[ "$NEXT_PUBLIC_API_BASE_URL" =~ ^https://api-pr-[1-9][0-9]*-[a-z0-9]+\.up\.railway\.app$ ]]; then
+            echo "api_base_url must be the staging API or an exact Railway PR preview API URL" >&2
+            exit 1
+          fi
           test -d "$ANDROID_HOME/platforms/android-36"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
           test -x "$ANDROID_HOME/platform-tools/adb"
