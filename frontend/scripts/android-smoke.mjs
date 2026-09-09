@@ -9,17 +9,21 @@ const activityName = process.env.ANDROID_SMOKE_ACTIVITY || ".MainActivity";
 const artifactDirectory = path.resolve(process.env.ANDROID_SMOKE_ARTIFACT_DIR || "android-smoke-artifacts");
 const timeoutMs = Number(process.env.ANDROID_SMOKE_TIMEOUT_MS || 30_000);
 const smokeMode = process.env.ANDROID_SMOKE_MODE || "isolated";
-const previewApiBaseUrl = (process.env.ANDROID_SMOKE_API_BASE_URL || "").replace(/\/$/, "");
+const smokeApiBaseUrl = (process.env.ANDROID_SMOKE_API_BASE_URL || "").replace(/\/$/, "");
+const readinessBaseUrl = (process.env.ANDROID_SMOKE_READY_URL || smokeApiBaseUrl).replace(/\/$/, "");
 const expectedCommitSha = process.env.ANDROID_SMOKE_EXPECTED_SHA || "";
 
-if (!["isolated", "online", "preview-online"].includes(smokeMode)) {
-  throw new Error("ANDROID_SMOKE_MODE must be isolated, online, or preview-online.");
+if (!["isolated", "online", "preview-online", "local-runtime"].includes(smokeMode)) {
+  throw new Error("ANDROID_SMOKE_MODE must be isolated, online, preview-online, or local-runtime.");
 }
-if (smokeMode === "preview-online" && !isAllowedPreviewApiUrl(previewApiBaseUrl)) {
+if (smokeMode === "preview-online" && !isAllowedPreviewApiUrl(smokeApiBaseUrl)) {
   throw new Error("preview-online requires ANDROID_SMOKE_API_BASE_URL to be an HTTPS api-pr-20 Railway origin.");
 }
-if (smokeMode === "preview-online" && !isFullCommitSha(expectedCommitSha)) {
-  throw new Error("preview-online requires ANDROID_SMOKE_EXPECTED_SHA to be a full lowercase 40-character commit SHA.");
+if (smokeMode === "local-runtime" && !isAllowedLocalRuntimeEndpoints(smokeApiBaseUrl, readinessBaseUrl)) {
+  throw new Error("local-runtime requires the exact emulator API and runner readiness HTTPS endpoints.");
+}
+if (["preview-online", "local-runtime"].includes(smokeMode) && !isFullCommitSha(expectedCommitSha)) {
+  throw new Error(`${smokeMode} requires ANDROID_SMOKE_EXPECTED_SHA to be a full lowercase 40-character commit SHA.`);
 }
 
 function adb(...args) {
@@ -53,6 +57,14 @@ export function isAllowedPreviewApiUrl(value) {
   return /^https:\/\/api-pr-20-[a-z0-9]+(?:-[a-z0-9]+)*\.up\.railway\.app$/.test(value);
 }
 
+export function isAllowedLocalRuntimeEndpoints(apiBaseUrl, readyBaseUrl) {
+  return apiBaseUrl === "https://10.0.2.2:8443" && readyBaseUrl === "https://127.0.0.1:8443";
+}
+
+export function isTrackedApplicationUrl(value) {
+  return /(^https:\/\/localhost|\.up\.railway\.app|^https:\/\/10\.0\.2\.2:8443)/.test(value);
+}
+
 export function isFullCommitSha(value) {
   return /^[0-9a-f]{40}$/.test(value);
 }
@@ -69,11 +81,11 @@ export function blockingDiagnostics(diagnostics) {
   return [
     ...diagnostics.exceptions.map((failure) => `JavaScript exception: ${failure}`),
     ...diagnostics.responses
-      .filter(({ status, url }) => status >= 500 && /(^https:\/\/localhost|\.up\.railway\.app)/.test(url))
+      .filter(({ status, url }) => status >= 500 && isTrackedApplicationUrl(url))
       .map(({ status, url }) => `HTTP ${status}: ${url}`),
     ...diagnostics.failedRequests
       .filter(({ errorText, url }) => errorText !== "net::ERR_ABORTED"
-        && /(^https:\/\/localhost|\.up\.railway\.app)/.test(url))
+        && isTrackedApplicationUrl(url))
       .map(({ errorText, url }) => `${errorText}: ${url}`),
   ];
 }
@@ -415,13 +427,13 @@ async function registerPreviewAccount(session, email, password) {
 }
 
 async function assertPreviewApiIdentity(diagnostics) {
-  const response = await fetch(`${previewApiBaseUrl}/ready`, { redirect: "error" });
-  if (!response.ok) throw new Error(`The PR 20 preview readiness check returned HTTP ${response.status}.`);
+  const response = await fetch(`${readinessBaseUrl}/ready`, { redirect: "error" });
+  if (!response.ok) throw new Error(`The live smoke readiness check returned HTTP ${response.status}.`);
   const readiness = await response.json();
   if (!previewReadyMatches(readiness, expectedCommitSha)) {
-    throw new Error("The PR 20 preview API commit does not match ANDROID_SMOKE_EXPECTED_SHA.");
+    throw new Error("The live smoke API commit does not match ANDROID_SMOKE_EXPECTED_SHA.");
   }
-  diagnostics.previewIdentity = { expectedCommitSha, apiCommitSha: readiness.commit };
+  diagnostics.liveIdentity = { expectedCommitSha, apiCommitSha: readiness.commit, runtime: smokeMode };
 }
 
 async function assertPreviewUiIdentity(session) {
@@ -458,7 +470,7 @@ async function maskPreviewAccountIdentity(session) {
 
 async function runPreviewOnlineSmoke(diagnostics) {
   let connection;
-  const email = `android-smoke-${randomUUID()}@example.com`;
+  const email = `android-smoke-${randomUUID()}@parkdex.test`;
   const password = `Pkd!${randomBytes(18).toString("base64url")}`;
   try {
     await assertPreviewApiIdentity(diagnostics);
@@ -487,13 +499,13 @@ async function runPreviewOnlineSmoke(diagnostics) {
     await maskPreviewAccountIdentity(connection.session);
     await connection.session.screenshot("preview-account-after-restart.png");
 
-    if (!hasPreviewAuthJourney(diagnostics, previewApiBaseUrl)) {
-      throw new Error("The WebView did not complete registration and restart authentication against the required PR 20 preview API.");
+    if (!hasPreviewAuthJourney(diagnostics, smokeApiBaseUrl)) {
+      throw new Error("The WebView did not complete registration and restart authentication against the required live smoke API.");
     }
     const failures = blockingDiagnostics(diagnostics);
     if (failures.length) throw new Error(failures.join("\n"));
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
-    process.stdout.write("Android preview smoke passed; coarse native location and account restart persistence were verified.\n");
+    process.stdout.write(`Android ${smokeMode} smoke passed; coarse native location and account restart persistence were verified.\n`);
   } catch (error) {
     if (connection) {
       try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }
@@ -533,7 +545,7 @@ async function assertGuestVisitInUi(session) {
 async function runSmoke() {
   mkdirSync(artifactDirectory, { recursive: true });
   const diagnostics = { mode: smokeMode, console: [], exceptions: [], failedRequests: [], responses: [] };
-  if (smokeMode === "preview-online") {
+  if (["preview-online", "local-runtime"].includes(smokeMode)) {
     await runPreviewOnlineSmoke(diagnostics);
     return;
   }

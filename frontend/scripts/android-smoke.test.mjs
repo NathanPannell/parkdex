@@ -5,10 +5,12 @@ import {
   chooseWebViewTarget,
   hasExpectedOfflineCatalogueResponse,
   hasPreviewAuthJourney,
+  isAllowedLocalRuntimeEndpoints,
   isAllowedPreviewApiUrl,
   isFullCommitSha,
   previewReadyMatches,
   releaseFooterMatches,
+  isTrackedApplicationUrl,
   parseWebViewSocket,
   sanitizedUrl,
 } from "./android-smoke.mjs";
@@ -63,6 +65,18 @@ test("allows only the PR 20 Railway preview origin", () => {
   expect(isAllowedPreviewApiUrl("https://api-pr-21-152f.up.railway.app")).toBe(false);
   expect(isAllowedPreviewApiUrl("https://api-pr-20-152f.up.railway.app.attacker.test")).toBe(false);
   expect(isAllowedPreviewApiUrl("http://api-pr-20-152f.up.railway.app")).toBe(false);
+});
+
+test("allows only the fixed local runtime endpoint pair", () => {
+  expect(isAllowedLocalRuntimeEndpoints("https://10.0.2.2:8443", "https://127.0.0.1:8443")).toBe(true);
+  expect(isAllowedLocalRuntimeEndpoints("https://127.0.0.1:8443", "https://127.0.0.1:8443")).toBe(false);
+  expect(isAllowedLocalRuntimeEndpoints("http://10.0.2.2:8443", "https://127.0.0.1:8443")).toBe(false);
+  expect(isAllowedLocalRuntimeEndpoints("https://10.0.2.2:8443", "https://localhost:8443")).toBe(false);
+});
+
+test("treats the emulator TLS API as an application diagnostic origin", () => {
+  expect(isTrackedApplicationUrl("https://10.0.2.2:8443/api/auth/me")).toBe(true);
+  expect(isTrackedApplicationUrl("https://127.0.0.1:8443/ready")).toBe(false);
 });
 
 test("requires live registration and restart authentication responses", () => {
