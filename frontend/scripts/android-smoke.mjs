@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -8,9 +9,13 @@ const activityName = process.env.ANDROID_SMOKE_ACTIVITY || ".MainActivity";
 const artifactDirectory = path.resolve(process.env.ANDROID_SMOKE_ARTIFACT_DIR || "android-smoke-artifacts");
 const timeoutMs = Number(process.env.ANDROID_SMOKE_TIMEOUT_MS || 30_000);
 const smokeMode = process.env.ANDROID_SMOKE_MODE || "isolated";
+const previewApiBaseUrl = (process.env.ANDROID_SMOKE_API_BASE_URL || "").replace(/\/$/, "");
 
-if (!["isolated", "online"].includes(smokeMode)) {
-  throw new Error("ANDROID_SMOKE_MODE must be isolated or online.");
+if (!["isolated", "online", "preview-online"].includes(smokeMode)) {
+  throw new Error("ANDROID_SMOKE_MODE must be isolated, online, or preview-online.");
+}
+if (smokeMode === "preview-online" && !isAllowedPreviewApiUrl(previewApiBaseUrl)) {
+  throw new Error("preview-online requires ANDROID_SMOKE_API_BASE_URL to be an HTTPS api-pr-20 Railway origin.");
 }
 
 function adb(...args) {
@@ -40,6 +45,10 @@ export function sanitizedUrl(value) {
   }
 }
 
+export function isAllowedPreviewApiUrl(value) {
+  return /^https:\/\/api-pr-20-[a-z0-9]+(?:-[a-z0-9]+)*\.up\.railway\.app$/.test(value);
+}
+
 export function blockingDiagnostics(diagnostics) {
   return [
     ...diagnostics.exceptions.map((failure) => `JavaScript exception: ${failure}`),
@@ -59,6 +68,17 @@ export function hasExpectedOfflineCatalogueResponse(diagnostics) {
   ));
 }
 
+export function hasPreviewAuthJourney(diagnostics, apiBaseUrl) {
+  const expected = new Map([
+    [`${apiBaseUrl}/api/auth/register`, 201],
+    [`${apiBaseUrl}/api/auth/me`, 200],
+  ]);
+  for (const { status, url } of diagnostics.responses) {
+    if (expected.get(url) === status) expected.delete(url);
+  }
+  return expected.size === 0;
+}
+
 class DevToolsSession {
   constructor(socket, diagnostics, isolatedOffline = false) {
     this.socket = socket;
@@ -67,7 +87,7 @@ class DevToolsSession {
     this.pending = new Map();
     this.eventWaiters = new Map();
     this.requests = new Map();
-    this.captureDiagnostics = smokeMode === "online";
+    this.captureDiagnostics = smokeMode !== "isolated";
     this.isolatedOffline = isolatedOffline;
     socket.addEventListener("message", ({ data }) => this.onMessage(String(data)));
     socket.addEventListener("close", () => {
@@ -299,6 +319,148 @@ async function openFixturePlace(session) {
   ));
 }
 
+async function searchForPlace(session, name) {
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.getAttribute("aria-label") === "Search places")?.click()
+  `);
+  await session.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="Search places"]');
+    if (!input) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, ${JSON.stringify(name)});
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
+  await waitFor(`${name} search result`, () => session.evaluate("Boolean(document.querySelector('.search-results button'))"));
+  await session.evaluate("document.querySelector('.search-results button')?.click()");
+  await waitFor(`${name} details`, () => session.evaluate(
+    `document.querySelector('.place-sheet h2')?.textContent?.trim() === ${JSON.stringify(name)}`,
+  ));
+}
+
+function configureCoarseEmulatorLocation() {
+  adb("shell", "pm", "grant", packageName, "android.permission.ACCESS_COARSE_LOCATION");
+  try { adb("shell", "pm", "revoke", packageName, "android.permission.ACCESS_FINE_LOCATION"); } catch { /* may already be denied */ }
+  try { adb("shell", "appops", "set", packageName, "android:fine_location", "ignore"); } catch { /* platform spelling varies */ }
+  const packageState = adb("shell", "dumpsys", "package", packageName);
+  const coarseGranted = /android\.permission\.ACCESS_COARSE_LOCATION: granted=true/.test(packageState);
+  const fineGranted = /android\.permission\.ACCESS_FINE_LOCATION: granted=true/.test(packageState);
+  if (!coarseGranted || fineGranted) throw new Error("Could not establish coarse-only location permission on the emulator.");
+  adb("emu", "geo", "fix", "-123.542431", "48.475557");
+}
+
+async function exerciseCoarseNativeLocation(session, diagnostics) {
+  await searchForPlace(session, "Goldstream Park");
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Check if I can claim a park"))?.click()
+  `);
+  const accuracyMeters = await waitFor("coarse Capacitor location sample", () => session.evaluate(`(() => {
+    const text = document.querySelector(".claim-sample")?.textContent ?? "";
+    const value = Number(text.match(/±(\\d+)/)?.[1]);
+    return Number.isFinite(value) && value >= 0 ? value : false;
+  })()`));
+  diagnostics.emulatorLocation = {
+    permission: "coarse-only",
+    source: "adb-emulator-geo-fix-through-capacitor",
+    requestedLatitude: 48.475557,
+    requestedLongitude: -123.542431,
+    accuracyMeters,
+  };
+}
+
+async function fillLabeledInput(session, label, value) {
+  const updated = await session.evaluate(`(() => {
+    const field = [...document.querySelectorAll("label")]
+      .find((candidate) => candidate.textContent?.trim().startsWith(${JSON.stringify(label)}))
+      ?.querySelector("input");
+    if (!field) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(field, ${JSON.stringify(value)});
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
+  if (!updated) throw new Error(`Could not find the ${label.toLowerCase()} registration field.`);
+}
+
+async function registerPreviewAccount(session, email, password) {
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.trim() === "Account")?.click()
+  `);
+  await waitFor("preview account registration form", () => session.evaluate("Boolean(document.querySelector('.auth-form'))"));
+  await fillLabeledInput(session, "Email", email);
+  await fillLabeledInput(session, "Password", password);
+  await session.evaluate("document.querySelector('.auth-form')?.requestSubmit()");
+  await waitFor("registered preview account", () => session.evaluate(
+    "document.querySelector('.feature-account h2')?.textContent?.trim() === 'Your account'",
+  ));
+}
+
+async function assertPreviewAccountRestored(session, email) {
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.trim() === "Account")?.click()
+  `);
+  await waitFor("preview account restored from native credentials", () => session.evaluate(
+    `document.querySelector('.feature-account h2')?.textContent?.trim() === "Your account"
+      && document.querySelector('.feature-account .panel-heading p')?.textContent?.trim() === ${JSON.stringify(email)}`,
+  ));
+}
+
+async function maskPreviewAccountIdentity(session) {
+  await session.evaluate(`(() => {
+    const identity = document.querySelector('.feature-account .panel-heading p');
+    if (identity) identity.textContent = "Synthetic preview account";
+    for (const input of document.querySelectorAll("input")) input.value = "";
+  })()`);
+}
+
+async function runPreviewOnlineSmoke(diagnostics) {
+  configureCoarseEmulatorLocation();
+  launchApp();
+  let connection = await connectWebView(diagnostics);
+  const email = `android-smoke-${randomUUID()}@example.com`;
+  const password = `Pkd!${randomBytes(18).toString("base64url")}`;
+  try {
+    await waitForParkdex(connection.session);
+    await exerciseCoarseNativeLocation(connection.session, diagnostics);
+    await registerPreviewAccount(connection.session, email, password);
+    await maskPreviewAccountIdentity(connection.session);
+    await connection.session.screenshot("preview-account-before-restart.png");
+    connection.session.close();
+    removeForward(connection.port);
+
+    adb("shell", "am", "force-stop", packageName);
+    launchApp();
+    connection = await connectWebView(diagnostics);
+    await waitForParkdex(connection.session);
+    await assertPreviewAccountRestored(connection.session, email);
+    await maskPreviewAccountIdentity(connection.session);
+    await connection.session.screenshot("preview-account-after-restart.png");
+
+    if (!hasPreviewAuthJourney(diagnostics, previewApiBaseUrl)) {
+      throw new Error("The WebView did not complete registration and restart authentication against the required PR 20 preview API.");
+    }
+    const failures = blockingDiagnostics(diagnostics);
+    if (failures.length) throw new Error(failures.join("\n"));
+    writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
+    process.stdout.write("Android preview smoke passed; coarse native location and account restart persistence were verified.\n");
+  } catch (error) {
+    try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }
+    try { await connection.session.screenshot("smoke-failure.png"); } catch { /* best-effort diagnostics */ }
+    writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({
+      ...diagnostics,
+      error: error instanceof Error ? error.stack : String(error),
+    }, null, 2));
+    throw error;
+  } finally {
+    connection.session.close();
+    removeForward(connection.port);
+  }
+}
+
 async function seedGuestVisitStorage(session) {
   const stored = await session.evaluate(`(async () => {
     const preferences = globalThis.Capacitor?.Plugins?.Preferences;
@@ -320,6 +482,10 @@ async function assertGuestVisitInUi(session) {
 async function runSmoke() {
   mkdirSync(artifactDirectory, { recursive: true });
   const diagnostics = { mode: smokeMode, console: [], exceptions: [], failedRequests: [], responses: [] };
+  if (smokeMode === "preview-online") {
+    await runPreviewOnlineSmoke(diagnostics);
+    return;
+  }
   let connection;
   try {
     launchApp();

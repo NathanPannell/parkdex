@@ -4,6 +4,8 @@ import {
   blockingDiagnostics,
   chooseWebViewTarget,
   hasExpectedOfflineCatalogueResponse,
+  hasPreviewAuthJourney,
+  isAllowedPreviewApiUrl,
   parseWebViewSocket,
   sanitizedUrl,
 } from "./android-smoke.mjs";
@@ -51,4 +53,22 @@ test("distinguishes the expected isolated offline catalogue response", () => {
   expect(hasExpectedOfflineCatalogueResponse({ responses: [
     { status: 408, url: "https://api-staging-882c.up.railway.app/api/claims/recommend" },
   ] })).toBe(false);
+});
+
+test("allows only the PR 20 Railway preview origin", () => {
+  expect(isAllowedPreviewApiUrl("https://api-pr-20-152f.up.railway.app")).toBe(true);
+  expect(isAllowedPreviewApiUrl("https://api-pr-21-152f.up.railway.app")).toBe(false);
+  expect(isAllowedPreviewApiUrl("https://api-pr-20-152f.up.railway.app.attacker.test")).toBe(false);
+  expect(isAllowedPreviewApiUrl("http://api-pr-20-152f.up.railway.app")).toBe(false);
+});
+
+test("requires live registration and restart authentication responses", () => {
+  const api = "https://api-pr-20-152f.up.railway.app";
+  expect(hasPreviewAuthJourney({ responses: [
+    { status: 201, url: `${api}/api/auth/register` },
+    { status: 200, url: `${api}/api/auth/me` },
+  ] }, api)).toBe(true);
+  expect(hasPreviewAuthJourney({ responses: [
+    { status: 201, url: `${api}/api/auth/register` },
+  ] }, api)).toBe(false);
 });
