@@ -10,12 +10,16 @@ const artifactDirectory = path.resolve(process.env.ANDROID_SMOKE_ARTIFACT_DIR ||
 const timeoutMs = Number(process.env.ANDROID_SMOKE_TIMEOUT_MS || 30_000);
 const smokeMode = process.env.ANDROID_SMOKE_MODE || "isolated";
 const previewApiBaseUrl = (process.env.ANDROID_SMOKE_API_BASE_URL || "").replace(/\/$/, "");
+const expectedCommitSha = process.env.ANDROID_SMOKE_EXPECTED_SHA || "";
 
 if (!["isolated", "online", "preview-online"].includes(smokeMode)) {
   throw new Error("ANDROID_SMOKE_MODE must be isolated, online, or preview-online.");
 }
 if (smokeMode === "preview-online" && !isAllowedPreviewApiUrl(previewApiBaseUrl)) {
   throw new Error("preview-online requires ANDROID_SMOKE_API_BASE_URL to be an HTTPS api-pr-20 Railway origin.");
+}
+if (smokeMode === "preview-online" && !isFullCommitSha(expectedCommitSha)) {
+  throw new Error("preview-online requires ANDROID_SMOKE_EXPECTED_SHA to be a full lowercase 40-character commit SHA.");
 }
 
 function adb(...args) {
@@ -47,6 +51,18 @@ export function sanitizedUrl(value) {
 
 export function isAllowedPreviewApiUrl(value) {
   return /^https:\/\/api-pr-20-[a-z0-9]+(?:-[a-z0-9]+)*\.up\.railway\.app$/.test(value);
+}
+
+export function isFullCommitSha(value) {
+  return /^[0-9a-f]{40}$/.test(value);
+}
+
+export function previewReadyMatches(readiness, expectedSha) {
+  return readiness?.status === "ready" && readiness?.commit === expectedSha;
+}
+
+export function releaseFooterMatches(text, expectedSha) {
+  return isFullCommitSha(expectedSha) && new RegExp(`(?:^|\\s)${expectedSha.slice(0, 7)}(?:\\s|$)`).test(text);
 }
 
 export function blockingDiagnostics(diagnostics) {
@@ -398,6 +414,29 @@ async function registerPreviewAccount(session, email, password) {
   ));
 }
 
+async function assertPreviewApiIdentity(diagnostics) {
+  const response = await fetch(`${previewApiBaseUrl}/ready`, { redirect: "error" });
+  if (!response.ok) throw new Error(`The PR 20 preview readiness check returned HTTP ${response.status}.`);
+  const readiness = await response.json();
+  if (!previewReadyMatches(readiness, expectedCommitSha)) {
+    throw new Error("The PR 20 preview API commit does not match ANDROID_SMOKE_EXPECTED_SHA.");
+  }
+  diagnostics.previewIdentity = { expectedCommitSha, apiCommitSha: readiness.commit };
+}
+
+async function assertPreviewUiIdentity(session) {
+  await session.evaluate(`
+    [...document.querySelectorAll("button")]
+      .find((button) => button.textContent?.trim() === "Account")?.click()
+  `);
+  await waitFor("matching APK release footer", () => session.evaluate(`(() => {
+    const footer = document.querySelector(".feature-account .release-footer");
+    return Boolean(footer?.offsetParent)
+      && (footer?.textContent ?? "").split("·").some((part) => part.trim() === ${JSON.stringify(expectedCommitSha.slice(0, 7))});
+  })()`));
+  await session.evaluate("document.querySelector('.feature-account .release-footer')?.scrollIntoView({ block: 'center' })");
+}
+
 async function assertPreviewAccountRestored(session, email) {
   await session.evaluate(`
     [...document.querySelectorAll("button")]
@@ -418,13 +457,21 @@ async function maskPreviewAccountIdentity(session) {
 }
 
 async function runPreviewOnlineSmoke(diagnostics) {
-  configureCoarseEmulatorLocation();
-  launchApp();
-  let connection = await connectWebView(diagnostics);
+  let connection;
   const email = `android-smoke-${randomUUID()}@example.com`;
   const password = `Pkd!${randomBytes(18).toString("base64url")}`;
   try {
+    await assertPreviewApiIdentity(diagnostics);
+    configureCoarseEmulatorLocation();
+    launchApp();
+    connection = await connectWebView(diagnostics);
     await waitForParkdex(connection.session);
+    await assertPreviewUiIdentity(connection.session);
+    await connection.session.screenshot("preview-release-identity.png");
+    await connection.session.evaluate(`
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "Map")?.click()
+    `);
     await exerciseCoarseNativeLocation(connection.session, diagnostics);
     await registerPreviewAccount(connection.session, email, password);
     await maskPreviewAccountIdentity(connection.session);
@@ -448,16 +495,20 @@ async function runPreviewOnlineSmoke(diagnostics) {
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
     process.stdout.write("Android preview smoke passed; coarse native location and account restart persistence were verified.\n");
   } catch (error) {
-    try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }
-    try { await connection.session.screenshot("smoke-failure.png"); } catch { /* best-effort diagnostics */ }
+    if (connection) {
+      try { await maskPreviewAccountIdentity(connection.session); } catch { /* best-effort redaction */ }
+      try { await connection.session.screenshot("smoke-failure.png"); } catch { /* best-effort diagnostics */ }
+    }
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({
       ...diagnostics,
       error: error instanceof Error ? error.stack : String(error),
     }, null, 2));
     throw error;
   } finally {
-    connection.session.close();
-    removeForward(connection.port);
+    if (connection) {
+      connection.session.close();
+      removeForward(connection.port);
+    }
   }
 }
 

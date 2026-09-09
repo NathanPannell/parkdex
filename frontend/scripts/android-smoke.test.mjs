@@ -6,6 +6,9 @@ import {
   hasExpectedOfflineCatalogueResponse,
   hasPreviewAuthJourney,
   isAllowedPreviewApiUrl,
+  isFullCommitSha,
+  previewReadyMatches,
+  releaseFooterMatches,
   parseWebViewSocket,
   sanitizedUrl,
 } from "./android-smoke.mjs";
@@ -71,4 +74,19 @@ test("requires live registration and restart authentication responses", () => {
   expect(hasPreviewAuthJourney({ responses: [
     { status: 201, url: `${api}/api/auth/register` },
   ] }, api)).toBe(false);
+});
+
+test("requires one exact full commit identity from API readiness", () => {
+  const expected = "a".repeat(40);
+  expect(isFullCommitSha(expected)).toBe(true);
+  expect(isFullCommitSha("a".repeat(39))).toBe(false);
+  expect(previewReadyMatches({ status: "ready", commit: expected }, expected)).toBe(true);
+  expect(previewReadyMatches({ status: "ready", commit: "b".repeat(40) }, expected)).toBe(false);
+  expect(previewReadyMatches({ status: "starting", commit: expected }, expected)).toBe(false);
+});
+
+test("rejects a stale commit in the visible Account release footer", () => {
+  const expected = "1234567" + "a".repeat(33);
+  expect(releaseFooterMatches("Parkdex v0.1.123 · 1234567 · Sep 8, 2026", expected)).toBe(true);
+  expect(releaseFooterMatches("Parkdex v0.1.123 · 7654321 · Sep 8, 2026", expected)).toBe(false);
 });
