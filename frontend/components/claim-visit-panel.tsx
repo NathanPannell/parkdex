@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- native camera previews use temporary object URLs */
 
 import { Camera, Check, LocateFixed, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -19,6 +20,8 @@ type Props = {
   removePhoto: (placeId: string) => Promise<void>;
   onClaimed?: (confirmation: ClaimConfirmation) => void;
   ownerKey?: string;
+  placeNameForId?: (placeId: string) => string | undefined;
+  onOpenPlace?: (placeId: string) => void;
 };
 
 const TEST_FIXTURES = [{ id: "inside-goldstream", label: "Inside Goldstream" }, { id: "inside-saltspring", label: "Inside Salt Spring" }];
@@ -33,17 +36,25 @@ const claimMessage = (error: unknown) => {
   return error instanceof Error ? error.message : "Parkdex could not confirm this claim. Try again.";
 };
 
-export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClaim, uploadPhoto, loadPhoto, removePhoto, onClaimed, ownerKey }: Props) {
+export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClaim, uploadPhoto, loadPhoto, removePhoto, onClaimed, ownerKey, placeNameForId, onOpenPlace }: Props) {
   const [working, setWorking] = useState(false), [message, setMessage] = useState(""), [recommendation, setRecommendation] = useState<ClaimRecommendation | null>(null);
   const [sample, setSample] = useState<LocationSample | null>(null), [pendingPhoto, setPendingPhoto] = useState<PhotoAsset | null>(null), [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoConfirmed, setPhotoConfirmed] = useState(false);
   const [uploadRetry, setUploadRetry] = useState<File | null>(null);
+  const [recommendationExpired, setRecommendationExpired] = useState(false);
   const testMode = process.env.NEXT_PUBLIC_CLAIM_TEST_MODE === "true";
   const candidateMatches = recommendation?.status === "recommended" && recommendation.candidate.placeId === place.id;
-  const expired = recommendation?.status === "recommended" && Date.now() >= new Date(recommendation.expiresAt).valueOf();
-  const recommendationText = useMemo(() => recommendation?.status === "none" ? "No eligible park boundary matches this location." : recommendation?.status === "recommended" && !candidateMatches ? "Your location matches another park. Open that park to claim it." : "", [candidateMatches, recommendation]);
+  const expired = recommendation?.status === "recommended" && recommendationExpired;
+  const otherCandidate = recommendation?.status === "recommended" && !candidateMatches ? recommendation.candidate : null;
+  const otherCandidateName = otherCandidate ? placeNameForId?.(otherCandidate.placeId) ?? "the matching park" : "";
+  const recommendationText = useMemo(() => recommendation?.status === "none" ? "No eligible park boundary matches this location." : "", [recommendation]);
 
   useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+  useEffect(() => {
+    if (recommendation?.status !== "recommended") return;
+    const timeout = window.setTimeout(() => setRecommendationExpired(true), Math.max(0, Date.parse(recommendation.expiresAt) - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [recommendation]);
 
   async function capturePhoto() {
     setMessage("");
@@ -56,7 +67,7 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
   }
 
   async function locate(input?: { testFixtureId: string }) {
-    setWorking(true); setMessage(""); setRecommendation(null);
+    setWorking(true); setMessage(""); setRecommendation(null); setRecommendationExpired(false);
     try {
       const location = input ? null : await getNativeCapabilities().getCurrentLocation({ highAccuracy: true, timeoutMs: 12000, maxAgeMs: 0 });
       if (location) setSample(location);
@@ -67,7 +78,7 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
 
   async function claim() {
     if (recommendation?.status !== "recommended" || !candidateMatches) return;
-    if (expired) { setMessage("This recommendation expired. Refresh your location and confirm the park again."); return; }
+    if (expired || Date.now() >= Date.parse(recommendation.expiresAt)) { setRecommendationExpired(true); setMessage("This recommendation expired. Refresh your location and confirm the park again."); return; }
     setWorking(true); setMessage("");
     try {
       const confirmation = await createClaim({ recommendationToken: recommendation.recommendationToken, expectedPlaceId: place.id });
@@ -88,7 +99,9 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
     finally { setWorking(false); }
   }
 
-  if (visit?.claim) return <VisitPostcard place={place} visit={visit} loadPhoto={loadPhoto} removePhoto={removePhoto} ownerKey={ownerKey} />;
+  const retryControl = uploadRetry && <div className="claim-photo-recovery" role="alert"><p>{message || "Your visit is saved, but the photo still needs to upload."}</p><button className="claim-refresh" type="button" onClick={() => void retryPhoto()} disabled={working}><RefreshCw size={16} />{working ? "Uploading photo…" : "Retry photo upload"}</button></div>;
+
+  if (visit?.claim) return <section className="claimed-visit"><VisitPostcard place={place} visit={visit} loadPhoto={loadPhoto} removePhoto={removePhoto} ownerKey={ownerKey} />{retryControl}</section>;
   if (visit) return <p className="legacy-visit-note"><Check size={16} />Visited {new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(visit.visitedAt))}. This legacy visit remains in your journal.</p>;
 
   return <section className="claim-visit" aria-label={`Claim ${place.name}`}>
@@ -97,9 +110,10 @@ export function ClaimVisitPanel({ place, visit, busy, recommendClaim, createClai
     </div>
     {!candidateMatches && <button className="claim-locate" type="button" onClick={() => void locate()} disabled={working || busy}><LocateFixed size={19} />{working ? "Checking your boundary…" : "Check if I can claim a park"}</button>}
     {candidateMatches && <div className="claim-recommendation"><strong>You’re here, claim this park now</strong><p>{recommendation.candidate.matchKind === "exact" ? "Your location is inside the published boundary." : `You’re ${Math.round(recommendation.candidate.distanceMeters)} m from this boundary.`}</p><button type="button" onClick={() => void claim()} disabled={working || busy || expired || Boolean(pendingPhoto && !photoConfirmed)}><Check size={19} />{working ? "Claiming…" : "Claim this park"}</button>{pendingPhoto && !photoConfirmed && <small>Use or discard the photo before claiming.</small>}{expired && <button type="button" className="claim-refresh" onClick={() => void locate()}><RefreshCw size={16} />Refresh location</button>}</div>}
+    {otherCandidate && <div className="claim-other-candidate" role="status"><p>Your location matches <strong>{otherCandidateName}</strong>.</p>{onOpenPlace && <button type="button" onClick={() => onOpenPlace(otherCandidate.placeId)}>Open {otherCandidateName}</button>}</div>}
     {recommendationText && <p className="claim-state" role="status">{recommendationText}</p>}
-    {message && <p className="claim-state claim-error" role="alert">{message}</p>}
-    {uploadRetry && <button className="claim-refresh" type="button" onClick={() => void retryPhoto()} disabled={working}><RefreshCw size={16} />Retry photo upload</button>}
+    {message && !uploadRetry && <p className="claim-state claim-error" role="alert">{message}</p>}
+    {retryControl}
     {testMode && <label className="claim-fixture">Test location<select defaultValue="" onChange={(event) => { if (event.target.value) void locate({ testFixtureId: event.target.value }); }}><option value="" disabled>Choose fixture</option>{TEST_FIXTURES.map((fixture) => <option key={fixture.id} value={fixture.id}>{fixture.label}</option>)}</select></label>}
     {sample && <small className="claim-sample">Location accuracy ±{Math.round(sample.accuracyMeters)} m</small>}
   </section>;
