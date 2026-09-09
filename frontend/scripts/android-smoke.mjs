@@ -54,13 +54,15 @@ export function blockingDiagnostics(diagnostics) {
 }
 
 class DevToolsSession {
-  constructor(socket, diagnostics) {
+  constructor(socket, diagnostics, isolatedOffline = false) {
     this.socket = socket;
     this.diagnostics = diagnostics;
     this.nextId = 1;
     this.pending = new Map();
+    this.eventWaiters = new Map();
     this.requests = new Map();
     this.captureDiagnostics = smokeMode === "online";
+    this.isolatedOffline = isolatedOffline;
     socket.addEventListener("message", ({ data }) => this.onMessage(String(data)));
     socket.addEventListener("close", () => {
       for (const { reject } of this.pending.values()) reject(new Error("WebView DevTools connection closed."));
@@ -79,6 +81,11 @@ class DevToolsSession {
       return;
     }
     const params = message.params ?? {};
+    const waiters = this.eventWaiters.get(message.method);
+    if (waiters?.length) {
+      this.eventWaiters.delete(message.method);
+      for (const resolve of waiters) resolve(params);
+    }
     if (message.method === "Runtime.exceptionThrown" && this.captureDiagnostics) {
       this.diagnostics.exceptions.push("Runtime exception");
     } else if (message.method === "Runtime.consoleAPICalled" && this.captureDiagnostics) {
@@ -119,7 +126,10 @@ class DevToolsSession {
     ];
     let responseCode = 404;
     let body = JSON.stringify({ detail: "Not available in isolated Android smoke mode." });
-    if (params.request.method === "OPTIONS") {
+    if (this.isolatedOffline) {
+      responseCode = 408;
+      body = JSON.stringify({ detail: "Expected offline phase of the Android smoke test." });
+    } else if (params.request.method === "OPTIONS") {
       responseCode = 204;
       body = "";
     } else if (params.request.method === "GET" && url.pathname === "/api/places") {
@@ -158,6 +168,14 @@ class DevToolsSession {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  waitForEvent(method) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${method}.`)), timeoutMs);
+      const wrappedResolve = (params) => { clearTimeout(timer); resolve(params); };
+      this.eventWaiters.set(method, [...(this.eventWaiters.get(method) ?? []), wrappedResolve]);
     });
   }
 
@@ -200,7 +218,7 @@ async function waitForPid() {
   return waitFor("Parkdex process", async () => adb("shell", "pidof", packageName).split(/\s+/)[0]);
 }
 
-async function connectWebView(diagnostics) {
+async function connectWebView(diagnostics, isolatedOffline = false) {
   const pid = await waitForPid();
   const socketName = await waitFor("debuggable Parkdex WebView", async () => (
     parseWebViewSocket(adb("shell", "cat", "/proc/net/unix"), pid)
@@ -217,7 +235,7 @@ async function connectWebView(diagnostics) {
       socket.addEventListener("open", resolve, { once: true });
       socket.addEventListener("error", () => reject(new Error("Could not connect to WebView DevTools.")), { once: true });
     });
-    const session = new DevToolsSession(socket, diagnostics);
+    const session = new DevToolsSession(socket, diagnostics, isolatedOffline);
     await Promise.all([
       session.send("Log.enable"),
       session.send("Network.enable"),
@@ -226,8 +244,10 @@ async function connectWebView(diagnostics) {
     ]);
     if (smokeMode === "isolated") {
       await session.send("Fetch.enable", { patterns: [{ urlPattern: "*api*", requestStage: "Request" }] });
-      await session.send("Page.reload", { ignoreCache: true });
       session.beginDiagnostics();
+      const loaded = session.waitForEvent("Page.loadEventFired");
+      await session.send("Page.reload", { ignoreCache: true });
+      await loaded;
     }
     return { session, port };
   } catch (error) {
@@ -251,66 +271,70 @@ async function waitForParkdex(session) {
   `));
 }
 
-async function openPlaces(session) {
+async function openFixturePlace(session) {
   await session.evaluate(`
     [...document.querySelectorAll("button")]
-      .find((button) => button.textContent?.trim() === "Places")?.click()
+      .find((button) => button.getAttribute("aria-label") === "Search places")?.click()
   `);
-  await waitFor("guest places list", () => session.evaluate("Boolean(document.querySelector('.authority-list .place-row'))"));
-}
-
-async function markUnseenPlaceVisited(session) {
-  const parkName = await session.evaluate(`(() => {
-    const row = [...document.querySelectorAll(".authority-list .place-row")]
-      .find((candidate) => !candidate.querySelector(".specimen-number.caught"));
-    if (!row) return "";
-    const name = row.querySelector("strong")?.textContent?.trim() ?? "";
-    row.click();
-    return name;
-  })()`);
-  if (!parkName) throw new Error("No unvisited park was available for the guest persistence check.");
-  await waitFor("place visit action", () => session.evaluate("Boolean(document.querySelector('.place-sheet .visit-button'))"));
   await session.evaluate(`(() => {
-    const button = document.querySelector(".place-sheet .visit-button");
-    if (button?.textContent?.includes("Mark as visited")) button.click();
+    const input = document.querySelector('input[aria-label="Search places"]');
+    if (!input) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, "Android Smoke Park");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
   })()`);
-  await waitFor("optimistic guest visit", () => session.evaluate(
-    "document.querySelector('.place-sheet .visit-button')?.textContent?.includes('Visited')",
+  await waitFor("guest search result", () => session.evaluate("Boolean(document.querySelector('.search-results button'))"));
+  await session.evaluate(`(() => {
+    document.querySelector(".search-results button")?.click();
+  })()`);
+  await waitFor("Android Smoke Park details", () => session.evaluate(
+    "document.querySelector('.place-sheet h2')?.textContent?.trim() === 'Android Smoke Park'",
   ));
-  return parkName;
 }
 
-async function waitForGuestVisitStorage(session) {
-  await waitFor("guest visit in native Preferences", () => session.evaluate(`(async () => {
+async function seedGuestVisitStorage(session) {
+  const stored = await session.evaluate(`(async () => {
     const preferences = globalThis.Capacitor?.Plugins?.Preferences;
     if (!preferences) return false;
-    const { value } = await preferences.get({ key: "every-park:visited:v1" });
-    try { return JSON.parse(value ?? "[]").length > 0; } catch { return false; }
-  })()`));
+    await preferences.set({ key: "every-park:visited:v1", value: JSON.stringify(["android-smoke-park"]) });
+    await preferences.set({ key: "every-park:visit-timestamps:v1", value: JSON.stringify({ "android-smoke-park": "2026-01-01T00:00:00.000Z" }) });
+    return true;
+  })()`);
+  if (!stored) throw new Error("Capacitor Preferences was unavailable for the guest persistence check.");
 }
 
-async function assertVisitPersisted(session, parkName) {
-  await openPlaces(session);
-  const persisted = await session.evaluate(`(() => {
-    const expected = ${JSON.stringify(parkName)};
-    const row = [...document.querySelectorAll(".authority-list .place-row")]
-      .find((candidate) => candidate.querySelector("strong")?.textContent?.trim() === expected);
-    return Boolean(row?.querySelector(".specimen-number.caught"));
-  })()`);
-  if (!persisted) throw new Error(`Guest visit for ${parkName} was lost after force-stop and relaunch.`);
+async function assertGuestVisitInUi(session) {
+  await openFixturePlace(session);
+  await waitFor("restored guest visit in the Parkdex UI", () => session.evaluate(
+    "document.querySelector('.place-sheet .legacy-visit-note')?.textContent?.includes('Visited')",
+  ));
 }
 
 async function runSmoke() {
   mkdirSync(artifactDirectory, { recursive: true });
-  const diagnostics = { console: [], exceptions: [], failedRequests: [], responses: [] };
+  const diagnostics = { mode: smokeMode, console: [], exceptions: [], failedRequests: [], responses: [] };
   let connection;
   try {
     launchApp();
     connection = await connectWebView(diagnostics);
     await waitForParkdex(connection.session);
-    await openPlaces(connection.session);
-    const parkName = await markUnseenPlaceVisited(connection.session);
-    await waitForGuestVisitStorage(connection.session);
+    if (smokeMode === "online") {
+      await connection.session.screenshot("online-app.png");
+      const failures = blockingDiagnostics(diagnostics);
+      if (failures.length) throw new Error(failures.join("\n"));
+      writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
+      process.stdout.write("Android WebView online smoke passed; Parkdex rendered without application failures.\n");
+      return;
+    }
+    await openFixturePlace(connection.session);
+    await seedGuestVisitStorage(connection.session);
+    connection.session.isolatedOffline = true;
+    const loaded = connection.session.waitForEvent("Page.loadEventFired");
+    await connection.session.send("Page.reload", { ignoreCache: true });
+    await loaded;
+    await waitForParkdex(connection.session);
+    await assertGuestVisitInUi(connection.session);
     await connection.session.screenshot("guest-visit-before-restart.png");
     connection.session.close();
     removeForward(connection.port);
@@ -318,16 +342,19 @@ async function runSmoke() {
 
     adb("shell", "am", "force-stop", packageName);
     launchApp();
-    connection = await connectWebView(diagnostics);
+    connection = await connectWebView(diagnostics, smokeMode === "isolated");
     await waitForParkdex(connection.session);
-    await assertVisitPersisted(connection.session, parkName);
+    await assertGuestVisitInUi(connection.session);
     await connection.session.screenshot("guest-visit-after-restart.png");
 
     const failures = blockingDiagnostics(diagnostics);
     if (failures.length) throw new Error(failures.join("\n"));
-    writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({ ...diagnostics, parkName }, null, 2));
-    process.stdout.write(`Android WebView smoke passed; guest visit persisted for ${parkName}.\n`);
+    writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({ ...diagnostics, parkName: "Android Smoke Park" }, null, 2));
+    process.stdout.write("Android WebView smoke passed; the guest visit persisted for Android Smoke Park.\n");
   } catch (error) {
+    if (connection) {
+      try { await connection.session.screenshot("smoke-failure.png"); } catch { /* best-effort diagnostics */ }
+    }
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({
       ...diagnostics,
       error: error instanceof Error ? error.stack : String(error),

@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import { expect, test } from "vitest";
 
 import {
   blockingDiagnostics,
@@ -10,20 +9,19 @@ import {
 
 test("selects the Parkdex WebView socket and secure local page", () => {
   const sockets = "000000: 00000002 00000000 00010000 0001 01 12345 @webview_devtools_remote_4321";
-  assert.equal(parseWebViewSocket(sockets, "4321"), "webview_devtools_remote_4321");
-  assert.equal(parseWebViewSocket(sockets, "9999"), undefined);
-  assert.equal(chooseWebViewTarget([
+  expect(parseWebViewSocket(sockets, "4321")).toBe("webview_devtools_remote_4321");
+  expect(parseWebViewSocket(sockets, "9999")).toBeUndefined();
+  expect(chooseWebViewTarget([
     { type: "page", url: "about:blank" },
     { type: "page", url: "https://localhost/", id: "parkdex" },
-  ]).id, "parkdex");
+  ])?.id).toBe("parkdex");
 });
 
 test("removes query strings and fragments from diagnostic URLs", () => {
-  assert.equal(
+  expect(
     sanitizedUrl("https://staging.parkdex.app/auth/google/callback?code=secret&state=secret#token"),
-    "https://staging.parkdex.app/auth/google/callback",
-  );
-  assert.equal(sanitizedUrl("not a URL"), "");
+  ).toBe("https://staging.parkdex.app/auth/google/callback");
+  expect(sanitizedUrl("not a URL")).toBe("");
 });
 
 test("blocks application failures while retaining unrelated diagnostics", () => {
@@ -38,7 +36,7 @@ test("blocks application failures while retaining unrelated diagnostics", () => 
       { errorText: "net::ERR_ABORTED", url: "https://api-staging-882c.up.railway.app/api/visits" },
     ],
   });
-  assert.deepEqual(failures, [
+  expect(failures).toEqual([
     "JavaScript exception: Uncaught TypeError",
     "HTTP 503: https://api-staging-882c.up.railway.app/api/visits",
     "net::ERR_CONNECTION_REFUSED: https://localhost/_next/app.js",
