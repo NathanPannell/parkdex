@@ -29,6 +29,7 @@ function setNative(native: boolean) {
 afterEach(() => {
   resetPlatformStorageForTests();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   Reflect.deleteProperty(globalThis, "Capacitor");
 });
 
@@ -39,6 +40,9 @@ describe("platform storage", () => {
 
     expect(window.localStorage.getItem("every-park:visited:v1")).toBe('["park"]');
     expect(await storage.getItem("every-park:visited:v1")).toBe('["park"]');
+    await storage.setItem("parkdex:google-code-verifier:v1", "verifier");
+    expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBe("verifier");
+    expect(window.localStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
     await storage.removeItem("every-park:visited:v1");
     expect(window.localStorage.getItem("every-park:visited:v1")).toBeNull();
   });
@@ -51,6 +55,22 @@ describe("platform storage", () => {
     expect(window.localStorage.getItem("every-park:account-token:v1")).toBe("raw-token");
   });
 
+  it("allows native initialization to retry after a failure", async () => {
+    setNative(true);
+    const credentials = memoryStore();
+    const journal = memoryStore();
+    let attempts = 0;
+    registerNativePlatformStorage(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("storage unavailable");
+      return { credentials, journal };
+    });
+
+    await expect(getPlatformStorage()).rejects.toThrow("storage unavailable");
+    await expect(getPlatformStorage()).resolves.toBeDefined();
+    expect(attempts).toBe(2);
+  });
+
   it("migrates credentials before journal data and removes verified legacy values", async () => {
     setNative(true);
     const credentials = memoryStore();
@@ -60,7 +80,7 @@ describe("platform storage", () => {
     vi.mocked(journal.setItem).mockImplementation(async (key, value) => { order.push(`journal:${key}`); journal.values.set(key, value); });
     window.localStorage.setItem("every-park:account-token:v1", "raw-token");
     window.localStorage.setItem("every-park:collection-key:v1", "guest-key");
-    window.localStorage.setItem("parkdex:google-code-verifier:v1", "pkce-verifier");
+    window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "pkce-verifier");
     window.localStorage.setItem("every-park:visited:v1", '["park"]');
     window.localStorage.setItem("unrelated", "keep");
     registerNativePlatformStorage(async () => ({ credentials, journal }));
@@ -78,6 +98,7 @@ describe("platform storage", () => {
     expect(await storage.getItem("every-park:visited:v1")).toBe('["park"]');
     expect(window.localStorage.getItem("every-park:account-token:v1")).toBeNull();
     expect(window.localStorage.getItem("every-park:visited:v1")).toBeNull();
+    expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
     expect(window.localStorage.getItem("unrelated")).toBe("keep");
   });
 
