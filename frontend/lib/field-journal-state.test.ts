@@ -52,7 +52,7 @@ describe("field journal state helpers", () => {
       async setItem() { throw new Error("blocked"); },
       async removeItem() { throw new Error("blocked"); },
     };
-    expect(await readStored(unavailable, "x", ["safe"])).toEqual(["safe"]);
+    await expect(readStored(unavailable, "x", ["safe"])).rejects.toThrow("blocked");
     expect(await writeStored(unavailable, "x", [])).toBe(false);
     expect(await removeStored(unavailable, "x")).toBe(false);
   });

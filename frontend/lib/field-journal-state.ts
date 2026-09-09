@@ -27,12 +27,12 @@ export function importedGuestKey(accountId: string) {
 }
 
 export async function readStored<T>(storage: StorageLike, key: string, fallback: T): Promise<T> {
-  let raw: string | null = null;
+  const raw = await storage.getItem(key);
+  if (raw === null) return fallback;
   try {
-    raw = await storage.getItem(key);
-    return raw === null ? fallback : JSON.parse(raw) as T;
+    return JSON.parse(raw) as T;
   } catch {
-    if (raw !== null && typeof fallback === "string") return raw as T;
+    if (typeof fallback === "string") return raw as T;
     return fallback;
   }
 }
