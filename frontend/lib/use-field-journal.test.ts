@@ -47,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -247,6 +248,7 @@ describe("useFieldJournal identity and progress races", () => {
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.completedTrails).toEqual(new Set(["west_coast_trail"]));
+    vi.useFakeTimers();
 
     let pendingToggle!: Promise<void>;
     act(() => { pendingToggle = result.current.toggleVisit(PLACE.id); });
@@ -266,6 +268,39 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.visitTimestamps).toEqual({});
     expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")).toEqual({});
     expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}")).toMatchObject({ visitedIds: [], completedTrailIds: [], visitTimestamps: {} });
+    expect(result.current.syncMessage).toBe("Your progress has been reset.");
+    act(() => vi.advanceTimersByTime(3999));
+    expect(result.current.syncMessage).toBe("Your progress has been reset.");
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current.syncMessage).toBe("");
+  });
+
+  it("does not mark signed-in account A verified when confirming account B's token", async () => {
+    const accountA = { ...ACCOUNT, emailVerified: false };
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-a-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: accountA, visitedIds: [], completedTrailIds: [] }));
+    let accountLoads = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/email-verification/confirm")) {
+        expect(JSON.parse(String(init?.body))).toEqual({ token: "account-b-verification-token" });
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (path.endsWith("/api/auth/me")) {
+        accountLoads += 1;
+        expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer account-a-token");
+        return json({ account: accountA, visitedIds: [], completedTrailIds: [] });
+      }
+      return json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.confirmEmailVerification("account-b-verification-token"));
+
+    expect(accountLoads).toBe(2);
+    expect(result.current.account).toEqual(accountA);
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}").account).toEqual(accountA);
   });
 
   it("retains cached account identity offline but clears it after an explicit 401", async () => {

@@ -14,11 +14,27 @@ test("deployments are manual and always pin staging", () => {
 });
 
 test("manual inspections cannot enter release jobs", () => {
-  const releaseGate = ci.match(/  resolve-release:\n    if: (?<gate>.+)/)?.groups?.gate;
+  const releaseGate = ci.match(/  resolve-release:\r?\n    if: (?<gate>.+)/)?.groups?.gate;
   assert.ok(releaseGate);
   assert.match(releaseGate, /inputs\.action == 'deploy-staging'/);
   assert.match(releaseGate, /inputs\.action == 'promote-production'/);
   assert.doesNotMatch(releaseGate, /inputs\.action != 'none'/);
+});
+
+test("staging receives its exact Google settings", () => {
+  const staging = ci.match(/  deploy-staging:\r?\n(?<body>[\s\S]*?)\r?\n  promote-production:/)?.groups?.body;
+  const production = ci.match(/  promote-production:\r?\n(?<body>[\s\S]*)/)?.groups?.body;
+  assert.ok(staging);
+  assert.ok(production);
+  assert.match(staging, /STAGING_GOOGLE_CLIENT_ID: \$\{\{ vars\.STAGING_GOOGLE_CLIENT_ID \}\}/);
+  assert.match(staging, /STAGING_GOOGLE_CLIENT_SECRET: \$\{\{ secrets\.STAGING_GOOGLE_CLIENT_SECRET \}\}/);
+  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set FRONTEND_ORIGINS/);
+  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set APP_PUBLIC_URL/);
+  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN\/auth\/google\/callback" variable set GOOGLE_REDIRECT_URI/);
+  assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin/);
+  assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin/);
+  assert.doesNotMatch(production, /STAGING_GOOGLE_CLIENT|variable set GOOGLE_CLIENT_(?:ID|SECRET)/);
+  assert.doesNotMatch(ci, /https:\/\/localhost/);
 });
 
 test("promotion fails closed around one exact staged commit", () => {

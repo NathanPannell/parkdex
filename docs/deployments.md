@@ -8,6 +8,8 @@ Deploy the latest `staging` commit to the persistent staging environment:
 gh workflow run ci.yml -R NathanPannell/parkdex --ref staging -f action=deploy-staging
 ```
 
+The staging GitHub environment supplies `STAGING_GOOGLE_CLIENT_ID` as a variable and `STAGING_GOOGLE_CLIENT_SECRET` as a secret. The deployment writes those credentials only to the staging API, with `https://staging.parkdex.app/auth/google/callback` as the callback.
+
 After that run succeeds and staging has been reviewed, promote the same release to production:
 
 ```bash

@@ -206,8 +206,12 @@ jobs:
         env:
           STAGING_DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
           STAGING_DATABASE_URL_UNPOOLED: ${{ steps.neon.outputs.db_url }}
+          STAGING_GOOGLE_CLIENT_ID: ${{ vars.STAGING_GOOGLE_CLIENT_ID }}
+          STAGING_GOOGLE_CLIENT_SECRET: ${{ secrets.STAGING_GOOGLE_CLIENT_SECRET }}
         run: |
           source scripts/railway-retry.sh
+          : "${STAGING_GOOGLE_CLIENT_ID:?STAGING_GOOGLE_CLIENT_ID is required}"
+          : "${STAGING_GOOGLE_CLIENT_SECRET:?STAGING_GOOGLE_CLIENT_SECRET is required}"
           railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_BASE_ENVIRONMENT_ID"
           if ! railway environment list --json | jq -e --arg name "$RAILWAY_ENVIRONMENT" '.. | objects | select(.name? == $name)' >/dev/null; then
             railway environment new "$RAILWAY_ENVIRONMENT" \
@@ -224,6 +228,10 @@ jobs:
           done
           railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
       - name: Deploy Railway services and wait on provider events
         run: |
           [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
@@ -311,6 +319,8 @@ jobs:
             railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment production --project "$RAILWAY_PROJECT_ID"
           done
           railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
       - name: Deploy Railway services and wait on provider events
         run: |
           source_marker=backend/.production-source-sha
