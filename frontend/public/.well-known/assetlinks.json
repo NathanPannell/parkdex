@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.parkdex",
+      "sha256_cert_fingerprints": ["A1:2B:B0:48:EC:E6:C2:23:AB:AD:4D:BD:24:2A:41:6D:65:1C:77:D7:36:EE:15:93:DA:10:8C:66:75:C0:B7:8A"]
+    }
+  }
+]

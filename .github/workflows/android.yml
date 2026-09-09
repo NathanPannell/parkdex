@@ -46,6 +46,22 @@ jobs:
           java --version
           node --version
           "$ANDROID_HOME/platform-tools/adb" version
+      - name: Configure stable staging debug signing
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+        env:
+          ANDROID_STAGING_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_STAGING_DEBUG_KEYSTORE_BASE64 }}
+          ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD }}
+          ANDROID_STAGING_DEBUG_KEY_PASSWORD: ${{ secrets.ANDROID_STAGING_DEBUG_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_STAGING_DEBUG_KEYSTORE_BASE64"
+          test -n "$ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_STAGING_DEBUG_KEY_PASSWORD"
+          key_store="$RUNNER_TEMP/parkdex-staging-debug.jks"
+          printf '%s' "$ANDROID_STAGING_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$key_store"
+          echo "PARKDEX_ANDROID_KEYSTORE_FILE=$key_store" >> "$GITHUB_ENV"
+          echo "PARKDEX_ANDROID_KEYSTORE_PASSWORD=$ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "PARKDEX_ANDROID_KEY_ALIAS=parkdex-staging-debug" >> "$GITHUB_ENV"
+          echo "PARKDEX_ANDROID_KEY_PASSWORD=$ANDROID_STAGING_DEBUG_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend
