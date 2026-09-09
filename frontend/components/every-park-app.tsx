@@ -24,6 +24,7 @@ const categories = Object.keys(categoryLabels) as PlaceCategory[];
 type View = "map" | "collection" | "badges" | "account";
 type BadgeImage = { src: string; alt: string; creator: string; license: string; licenseUrl: string; sourceUrl: string; species: string };
 type ShelfItem = { id: string; name: string; kind: "badge" | "place"; image?: string; date?: string };
+type NativeOAuthCallback = { id: number; code?: string; state?: string; error?: string };
 const imageMap = badgeImages as Record<string, BadgeImage>;
 const GOOGLE_VERIFIER_KEY = "parkdex:google-code-verifier:v1";
 const GOOGLE_STATE_KEY = "parkdex:google-state:v1";
@@ -61,6 +62,8 @@ export function ParkdexApp({ apiBaseUrl }: { apiBaseUrl: string }) {
   const [location, setLocation] = useState<(Coordinates & { accuracyMeters?: number | null; heading?: number | null }) | null>(null), [locationStatus, setLocationStatus] = useState<"idle" | "locating" | "ready" | "denied" | "unavailable">("idle");
   const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const [recoveryActive, setRecoveryActive] = useState(false);
+  const [nativeOAuthCallback, setNativeOAuthCallback] = useState<NativeOAuthCallback | null>(null);
+  const nativeOAuthCallbackId = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [boundaryLoadState, setBoundaryLoadState] = useState<BoundaryLoadState>({ status: "loading", placeIds: new Set() });
   const authorities = useMemo(() => [...new Set(places.map(authorityForPlace))].sort(), [places]);
@@ -77,6 +80,16 @@ export function ParkdexApp({ apiBaseUrl }: { apiBaseUrl: string }) {
     const params = new URLSearchParams(window.location.search), fragment = new URLSearchParams(window.location.hash.slice(1));
     const hasReset = fragment.has("resetToken"), hasAccountCallback = hasReset || fragment.has("verificationToken") || ((params.has("code") || params.has("error")) && params.has("state"));
     queueMicrotask(() => { if (hasReset) setRecoveryActive(true); if (hasAccountCallback) setView("account"); });
+  }, []);
+  useEffect(() => {
+    function nativeCallback(event: Event) {
+      const detail = (event as CustomEvent<{ code?: string; state?: string; error?: string }>).detail ?? {};
+      setNativeOAuthCallback({ ...detail, id: ++nativeOAuthCallbackId.current });
+      setView("account");
+    }
+    window.addEventListener("parkdex:oauth-callback", nativeCallback);
+    window.dispatchEvent(new CustomEvent("parkdex:oauth-callback-ready"));
+    return () => window.removeEventListener("parkdex:oauth-callback", nativeCallback);
   }, []);
   useEffect(() => {
     function nativeBack(event: Event) {
@@ -104,6 +117,7 @@ export function ParkdexApp({ apiBaseUrl }: { apiBaseUrl: string }) {
   function resetCollectionFilters() { setCollectionSearch(""); setCollectionCategories(new Set()); setCollectionAuthorities(new Set()); setCollectionVisitFilter("all"); }
   function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) { setter((current) => { const next = new Set(current); if (next.has(value)) next.delete(value); else next.add(value); return next; }); }
   const choosePlace = useCallback((id: string) => { setMapMode((current) => modeForSelection(current, visited, id)); setSelectedId(id); setView("map"); setShowNearby(false); setShowFilters(false); }, [visited]);
+  const consumeNativeOAuthCallback = useCallback((id: number) => setNativeOAuthCallback((current) => current?.id === id ? null : current), []);
   function navigate(next: View) { setSelectedId(null); setShowNearby(false); setShowFilters(false); setView((current) => ((next === "collection" || next === "badges") && current === next ? "map" : next)); }
   function openCollection(category?: PlaceCategory, authority?: string) {
     setCollectionSearch(""); setCollectionVisitFilter("all"); setCollectionCategories(category ? new Set([category]) : new Set()); setCollectionAuthorities(authority ? new Set([authority]) : new Set());
@@ -138,7 +152,7 @@ export function ParkdexApp({ apiBaseUrl }: { apiBaseUrl: string }) {
       {searchExpanded && mapSearch.trim() && !showFilters && <div className="search-results" aria-live="polite">{mapFiltered.length ? <><p>{mapFiltered.length} {mapFiltered.length === 1 ? "place" : "places"} found</p>{mapFiltered.slice(0, 6).map((place) => <button key={place.id} className={`category-${place.category}`} onClick={() => { choosePlace(place.id); setMapSearch(""); setSearchExpanded(false); }}><span><strong>{place.name}</strong><small><i />{categoryLabels[place.category]} · {place.region}</small></span><ArrowUpRight size={17} /></button>)}</> : <p className="empty-search">No places match “{mapSearch.trim()}”.</p>}</div>}
       {showNearby && <NearbyDialog status={locationStatus} nearby={nearby} onClose={() => setShowNearby(false)} choosePlace={choosePlace} />}
     </>}
-    {view !== "map" && <section className={`feature-panel feature-${view}`}>{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} allAuthorities={authorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} toggleAuthority={(value) => toggleSet(setCollectionAuthorities, value)} resetFilters={resetCollectionFilters} choosePlace={choosePlace} />}{view === "badges" && <BadgesView badges={badgeList} earned={earnedBadges} />}{view === "account" && <AccountView apiBaseUrl={apiBaseUrl} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onChangePassword={changePassword} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={signOut} onReset={async () => { await resetProgress(); setCelebrationBadges([]); }} badges={badgeList} places={places.filter((place) => visited.has(place.id))} visitTimestamps={visitTimestamps} visitMetadata={visitMetadata} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} />}</section>}
+    {view !== "map" && <section className={`feature-panel feature-${view}`}>{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} allAuthorities={authorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} toggleAuthority={(value) => toggleSet(setCollectionAuthorities, value)} resetFilters={resetCollectionFilters} choosePlace={choosePlace} />}{view === "badges" && <BadgesView badges={badgeList} earned={earnedBadges} />}{view === "account" && <AccountView apiBaseUrl={apiBaseUrl} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onChangePassword={changePassword} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={signOut} onReset={async () => { await resetProgress(); setCelebrationBadges([]); }} badges={badgeList} places={places.filter((place) => visited.has(place.id))} visitTimestamps={visitTimestamps} visitMetadata={visitMetadata} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} nativeOAuthCallback={nativeOAuthCallback} onNativeOAuthCallbackConsumed={consumeNativeOAuthCallback} />}</section>}
     {showFilters && view === "map" && <div className="filter-tray category-chips"><div className="filter-tray-heading"><strong>Filter places</strong><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={19} /></button></div>{categories.map((category) => <button key={category} className={`category-${category} ${mapCategories.has(category) ? "selected active" : ""}`} onClick={() => toggleSet(setMapCategories, category)}>{categoryLabels[category]}</button>)}{mapCategories.size > 0 && <button className="clear-filter" onClick={resetMapFilters}>Clear filters</button>}</div>}
     {loadError && <p className="connection-note">{loadError}</p>}{syncMessage && <p className="sync-note">{syncMessage}{syncMessage.includes("waiting") && <button onClick={() => void retrySync()}>Retry</button>}</p>}{storageUnavailable && <p className="storage-note">Private storage is blocked; guest progress lasts for this tab.</p>}
     {selected && <article className="place-sheet"><button className="sheet-close" onClick={() => setSelectedId(null)} aria-label="Close place details"><X size={18} /></button><button className={`place-category category-${selected.category}`} onClick={() => openCollection(selected.category)}>{categoryLabels[selected.category]}<ArrowUpRight size={13} /></button><h2>{selected.name}</h2><PlaceImage place={selected} variant="card" /><p className="place-region"><MapPin size={15} />{selected.region}</p><button className="place-collection-link" onClick={() => openCollection(undefined, authorityForPlace(selected))}>{authorityForPlace(selected)}<ArrowUpRight size={13} /></button><PlaceProvenance place={selected} boundaryState={boundaryLoadState} /><p className="place-description">{selected.description}</p><ClaimVisitPanel place={selected} visit={visitMetadata[selected.id]} busy={transitionBusy || loading} recommendClaim={recommendClaim} createClaim={createClaim} uploadPhoto={uploadVisitPhoto} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} onClaimed={celebrateClaim} ownerKey={photoOwnerKey} placeNameForId={(placeId) => places.find((candidate) => candidate.id === placeId)?.name} onOpenPlace={choosePlace} />{visited.has(selected.id) && <div className="sheet-actions"><button disabled={transitionBusy} className="visit-button is-visited" onClick={() => toggleSelected(selected)}><RotateCcw size={19} />Visited · undo</button></div>}</article>}
@@ -171,6 +185,8 @@ type AccountViewProps = {
   onImport: () => Promise<void>; onLogout: () => Promise<void>; onReset: () => Promise<void>;
   badges: Achievement[]; places: Place[]; visitTimestamps: Record<string, string>; visitMetadata: Record<string, Visit>;
   loadPhoto: (placeId: string) => Promise<Blob>; removePhoto: (placeId: string) => Promise<void>; photoOwnerKey: string; choosePlace: (id: string) => void;
+  nativeOAuthCallback: NativeOAuthCallback | null;
+  onNativeOAuthCallbackConsumed: (id: number) => void;
 };
 
 function cleanAuthParams(names: string[]) {
@@ -193,7 +209,7 @@ async function sha256Challenge(value: string) {
   return btoa(String.fromCharCode(...new Uint8Array(digest))).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function AccountView({ apiBaseUrl, account, authenticated, sessionAuthenticated, loading, busy, guestProgressAvailable, onAuth, onGoogleAuth, onChangePassword, onRequestVerification, onConfirmVerification, onImport, onLogout, onReset, badges, places, visitTimestamps, visitMetadata, loadPhoto, removePhoto, photoOwnerKey, choosePlace }: AccountViewProps) {
+function AccountView({ apiBaseUrl, account, authenticated, sessionAuthenticated, loading, busy, guestProgressAvailable, onAuth, onGoogleAuth, onChangePassword, onRequestVerification, onConfirmVerification, onImport, onLogout, onReset, badges, places, visitTimestamps, visitMetadata, loadPhoto, removePhoto, photoOwnerKey, choosePlace, nativeOAuthCallback, onNativeOAuthCallbackConsumed }: AccountViewProps) {
   const [resetToken] = useState(() => typeof window === "undefined" ? "" : emailToken("resetToken"));
   const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">(resetToken ? "reset" : "register"), [email, setEmail] = useState(""), [password, setPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState(""), [newPassword, setNewPassword] = useState(""), [confirmPassword, setConfirmPassword] = useState("");
@@ -201,12 +217,15 @@ function AccountView({ apiBaseUrl, account, authenticated, sessionAuthenticated,
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null), [showPasswordChange, setShowPasswordChange] = useState(false);
   const [expanded, setExpanded] = useState<"badges" | "places" | null>(null), [confirmReset, setConfirmReset] = useState(false), [selectedBadge, setSelectedBadge] = useState<Achievement | null>(null);
   const callbackHandled = useRef(false), earned = badges.filter((badge) => badge.earned);
+  const lastNativeCallbackId = useRef(0);
 
   useEffect(() => { let active = true; void loadAuthConfig(apiBaseUrl).then((config) => { if (active) setAuthConfig(config); }).catch(() => { if (active) setAuthConfig({ googleEnabled: false, emailEnabled: false }); }); return () => { active = false; }; }, [apiBaseUrl]);
   useEffect(() => { if (resetToken) cleanAuthParams(["resetToken"]); }, [resetToken]);
   useEffect(() => {
-    if (callbackHandled.current) return;
     const params = new URLSearchParams(window.location.search), code = params.get("code"), state = params.get("state"), oauthError = params.get("error"), verificationToken = emailToken("verificationToken");
+    const nativeCallback = nativeOAuthCallback && nativeOAuthCallback.id > lastNativeCallbackId.current ? nativeOAuthCallback : null;
+    if (nativeCallback) { lastNativeCallbackId.current = nativeCallback.id; callbackHandled.current = false; onNativeOAuthCallbackConsumed(nativeCallback.id); }
+    if (callbackHandled.current) return;
     if (verificationToken) { callbackHandled.current = true; cleanAuthParams(["verificationToken"]); }
     async function completeCallback(callback: { code?: string; state?: string; error?: string }) {
       const storage = await getPlatformStorage();
@@ -233,12 +252,9 @@ function AccountView({ apiBaseUrl, account, authenticated, sessionAuthenticated,
       callbackHandled.current = true; setFormBusy(true); setError("");
       void completeCallback(callback).catch((caught) => { callbackHandled.current = false; setError(caught instanceof Error ? caught.message : "Could not complete this account link."); }).finally(() => setFormBusy(false));
     }
-    const nativeCallback = (event: Event) => handle((event as CustomEvent<{ code?: string; state?: string; error?: string }>).detail ?? {});
-    window.addEventListener("parkdex:oauth-callback", nativeCallback);
-    window.dispatchEvent(new CustomEvent("parkdex:oauth-callback-ready"));
-    if (code || oauthError || verificationToken) queueMicrotask(() => handle({ code: code ?? undefined, state: state ?? undefined, error: oauthError ?? undefined }));
-    return () => window.removeEventListener("parkdex:oauth-callback", nativeCallback);
-  }, [onConfirmVerification, onGoogleAuth]);
+    if (nativeCallback) queueMicrotask(() => handle(nativeCallback));
+    else if (code || oauthError || verificationToken) queueMicrotask(() => handle({ code: code ?? undefined, state: state ?? undefined, error: oauthError ?? undefined }));
+  }, [nativeOAuthCallback, onConfirmVerification, onGoogleAuth, onNativeOAuthCallbackConsumed]);
 
   function selectShelfItem(item: ShelfItem) { setExpanded(null); if (item.kind === "place") choosePlace(item.id); else setSelectedBadge(earned.find((badge) => badge.id === item.id) ?? null); }
   async function submit(event: React.FormEvent) {

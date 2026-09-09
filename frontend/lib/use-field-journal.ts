@@ -165,6 +165,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const guestVisitOutboxRef = useRef(new VisitOutbox());
   const guestTrailOutboxRef = useRef(new VisitOutbox());
   const guestRevisionPendingRef = useRef(false);
+  const guestRevisionMutationRef = useRef(Promise.resolve());
   const accountVisitOutboxRef = useRef(new VisitOutbox());
   const accountTrailOutboxRef = useRef(new VisitOutbox());
   const accountOutboxOwnerRef = useRef("");
@@ -353,21 +354,25 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (identity.kind === "guest" && !identity.collectionKey) return;
     const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
-    if (!visitBox.hasPending() && !trailBox.hasPending()) return;
+    const hasPendingCheckoffs = visitBox.hasPending() || trailBox.hasPending();
+    if (!hasPendingCheckoffs && !guestRevisionPendingRef.current) return;
     setSyncMessage("Syncing your latest checkoffs…");
     const capturedEpoch = epochRef.current.capture();
     try {
-      if (identity.kind === "guest" && guestRevisionPendingRef.current) {
+      if (guestRevisionPendingRef.current) {
         const target = storage();
         const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
         if (!await writeStored(target, JOURNAL_STORAGE.guestRevision, revision)) throw new Error("Could not save the guest revision.");
         guestRevisionPendingRef.current = false;
+        setGuestProgressAvailable(true);
       }
-      await drainIdentity(identity, capturedEpoch);
+      if (hasPendingCheckoffs) await drainIdentity(identity, capturedEpoch);
       if (epochRef.current.isCurrent(capturedEpoch)) setSyncMessage("");
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) {
-        setSyncMessage(identity.kind === "account"
+        setSyncMessage(guestRevisionPendingRef.current
+          ? "Your guest photo change is saved and waiting for private storage before account import."
+          : identity.kind === "account"
           ? "Your account checkoffs are saved on this device and waiting to sync."
           : "Your guest checkoffs are saved on this device and waiting to sync.");
       }
@@ -758,6 +763,25 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (identity.kind === "account" && error instanceof ApiError && error.status === 401) expireAccount(capturedEpoch);
   }, [expireAccount]);
 
+  const recordGuestOwnerChange = useCallback(async (identity: Identity) => {
+    if (identity.kind !== "guest") return;
+    guestRevisionPendingRef.current = true;
+    const operation = guestRevisionMutationRef.current.then(async () => {
+      const target = storage();
+      const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
+      if (!await writeStored(target, JOURNAL_STORAGE.guestRevision, revision)) throw new Error("Could not save the guest revision.");
+    });
+    guestRevisionMutationRef.current = operation.catch(() => undefined);
+    try {
+      await operation;
+      guestRevisionPendingRef.current = false;
+      setGuestProgressAvailable(true);
+    } catch {
+      noteStorageFailure(false);
+      setSyncMessage("Your guest photo change is saved and waiting for private storage before account import.");
+    }
+  }, [noteStorageFailure, storage]);
+
   const persistCurrentOwner = useCallback(async (identity: Identity) => {
     if (identity.kind === "guest") await persistGuest();
     else await persistAccount();
@@ -816,12 +840,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const capturedEpoch = epochRef.current.capture();
     try {
       await uploadVisitPhotoRequest(apiBaseUrl, claimOwner(identity), placeId, file);
+      await recordGuestOwnerChange(identity);
       await updatePhotoFlag(identity, capturedEpoch, placeId, true);
     } catch (error) {
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, currentClaimIdentity, handleOwnerError, updatePhotoFlag]);
+  }, [apiBaseUrl, currentClaimIdentity, handleOwnerError, recordGuestOwnerChange, updatePhotoFlag]);
 
   const loadVisitPhoto = useCallback(async (placeId: string) => {
     const identity = currentClaimIdentity();
@@ -843,12 +868,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const capturedEpoch = epochRef.current.capture();
     try {
       await removeVisitPhotoRequest(apiBaseUrl, claimOwner(identity), placeId);
+      await recordGuestOwnerChange(identity);
       await updatePhotoFlag(identity, capturedEpoch, placeId, false);
     } catch (error) {
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, currentClaimIdentity, handleOwnerError, updatePhotoFlag]);
+  }, [apiBaseUrl, currentClaimIdentity, handleOwnerError, recordGuestOwnerChange, updatePhotoFlag]);
 
   const resetProgress = useCallback(async () => {
     const identity = identityRef.current;

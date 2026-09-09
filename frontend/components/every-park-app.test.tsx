@@ -278,10 +278,21 @@ describe("Parkdex navigation", () => {
   it("completes a queued native Google callback only for the stored state", async () => {
     window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "native-verifier"); window.sessionStorage.setItem("parkdex:google-state:v1", "native-state");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
-    render(<ParkdexApp apiBaseUrl="https://api.example.test" />); fireEvent.click(screen.getByRole("button", { name: "Account" }));
-    act(() => window.dispatchEvent(new CustomEvent("parkdex:oauth-callback", { detail: { code: "native-code", state: "native-state" } })));
+    window.addEventListener("parkdex:oauth-callback-ready", () => window.dispatchEvent(new CustomEvent("parkdex:oauth-callback", { detail: { code: "native-code", state: "native-state" } })), { once: true });
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
     await waitFor(() => expect(journal.authenticateWithGoogle).toHaveBeenCalledWith("native-code", "native-state", "native-verifier"));
+    expect(screen.getByRole("heading", { name: "Keep your field journal" })).toBeTruthy();
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull(); expect(window.sessionStorage.getItem("parkdex:google-state:v1")).toBeNull();
+  });
+
+  it("opens Account for a queued native Google cancellation from the default map", async () => {
+    window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "native-verifier"); window.sessionStorage.setItem("parkdex:google-state:v1", "native-state");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
+    window.addEventListener("parkdex:oauth-callback-ready", () => window.dispatchEvent(new CustomEvent("parkdex:oauth-callback", { detail: { error: "access_denied", state: "native-state" } })), { once: true });
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in was cancelled. You can try again.");
+    expect(screen.getByRole("heading", { name: "Keep your field journal" })).toBeTruthy();
+    expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
   });
 
   it("rejects a mismatched native Google callback without consuming PKCE", async () => {
