@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   blockingDiagnostics,
   chooseWebViewTarget,
+  hasExpectedOfflineCatalogueResponse,
   parseWebViewSocket,
   sanitizedUrl,
 } from "./android-smoke.mjs";
@@ -41,4 +42,13 @@ test("blocks application failures while retaining unrelated diagnostics", () => 
     "HTTP 503: https://api-staging-882c.up.railway.app/api/visits",
     "net::ERR_CONNECTION_REFUSED: https://localhost/_next/app.js",
   ]);
+});
+
+test("distinguishes the expected isolated offline catalogue response", () => {
+  expect(hasExpectedOfflineCatalogueResponse({ responses: [
+    { status: 408, url: "https://api-staging-882c.up.railway.app/api/places" },
+  ] })).toBe(true);
+  expect(hasExpectedOfflineCatalogueResponse({ responses: [
+    { status: 408, url: "https://api-staging-882c.up.railway.app/api/claims/recommend" },
+  ] })).toBe(false);
 });

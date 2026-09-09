@@ -53,6 +53,12 @@ export function blockingDiagnostics(diagnostics) {
   ];
 }
 
+export function hasExpectedOfflineCatalogueResponse(diagnostics) {
+  return diagnostics.responses.some(({ status, url }) => (
+    status === 408 && url === "https://api-staging-882c.up.railway.app/api/places"
+  ));
+}
+
 class DevToolsSession {
   constructor(socket, diagnostics, isolatedOffline = false) {
     this.socket = socket;
@@ -126,12 +132,12 @@ class DevToolsSession {
     ];
     let responseCode = 404;
     let body = JSON.stringify({ detail: "Not available in isolated Android smoke mode." });
-    if (this.isolatedOffline) {
-      responseCode = 408;
-      body = JSON.stringify({ detail: "Expected offline phase of the Android smoke test." });
-    } else if (params.request.method === "OPTIONS") {
+    if (params.request.method === "OPTIONS") {
       responseCode = 204;
       body = "";
+    } else if (this.isolatedOffline) {
+      responseCode = 408;
+      body = JSON.stringify({ detail: "Expected offline phase of the Android smoke test." });
     } else if (params.request.method === "GET" && url.pathname === "/api/places") {
       responseCode = 200;
       body = JSON.stringify({
@@ -347,6 +353,9 @@ async function runSmoke() {
     await assertGuestVisitInUi(connection.session);
     await connection.session.screenshot("guest-visit-after-restart.png");
 
+    if (!hasExpectedOfflineCatalogueResponse(diagnostics)) {
+      throw new Error("The isolated persistence phase did not exercise the expected offline catalogue response.");
+    }
     const failures = blockingDiagnostics(diagnostics);
     if (failures.length) throw new Error(failures.join("\n"));
     writeFileSync(path.join(artifactDirectory, "diagnostics.json"), JSON.stringify({ ...diagnostics, parkName: "Android Smoke Park" }, null, 2));
