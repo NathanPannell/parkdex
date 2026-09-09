@@ -1,0 +1,63 @@
+name: Android debug APK
+
+on:
+  pull_request:
+    branches: [staging]
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: Public HTTPS API URL baked into the debug APK
+        required: false
+        default: https://api-staging-882c.up.railway.app
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_API_BASE_URL: ${{ inputs.api_base_url || 'https://api-staging-882c.up.railway.app' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Verify hosted Android toolchain
+        run: |
+          case "$NEXT_PUBLIC_API_BASE_URL" in
+            https://*) ;;
+            *) echo "api_base_url must be an HTTPS URL" >&2; exit 1 ;;
+          esac
+          test -d "$ANDROID_HOME/platforms/android-36"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          java --version
+          node --version
+          "$ANDROID_HOME/platform-tools/adb" version
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Sync Capacitor Android project
+        run: npm run android:sync
+        working-directory: frontend
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug
+        working-directory: frontend/android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: parkdex-debug-apk
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
