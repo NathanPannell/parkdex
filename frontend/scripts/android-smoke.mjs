@@ -7,6 +7,11 @@ const packageName = process.env.ANDROID_SMOKE_PACKAGE || "app.parkdex";
 const activityName = process.env.ANDROID_SMOKE_ACTIVITY || ".MainActivity";
 const artifactDirectory = path.resolve(process.env.ANDROID_SMOKE_ARTIFACT_DIR || "android-smoke-artifacts");
 const timeoutMs = Number(process.env.ANDROID_SMOKE_TIMEOUT_MS || 30_000);
+const smokeMode = process.env.ANDROID_SMOKE_MODE || "isolated";
+
+if (!["isolated", "online"].includes(smokeMode)) {
+  throw new Error("ANDROID_SMOKE_MODE must be isolated or online.");
+}
 
 function adb(...args) {
   return execFileSync("adb", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -22,6 +27,17 @@ export function parseWebViewSocket(unixSockets, pid) {
 export function chooseWebViewTarget(targets) {
   return targets.find((target) => target.type === "page" && target.url?.startsWith("https://localhost"))
     ?? targets.find((target) => target.type === "page");
+}
+
+export function sanitizedUrl(value) {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 export function blockingDiagnostics(diagnostics) {
@@ -44,6 +60,7 @@ class DevToolsSession {
     this.nextId = 1;
     this.pending = new Map();
     this.requests = new Map();
+    this.captureDiagnostics = smokeMode === "online";
     socket.addEventListener("message", ({ data }) => this.onMessage(String(data)));
     socket.addEventListener("close", () => {
       for (const { reject } of this.pending.values()) reject(new Error("WebView DevTools connection closed."));
@@ -62,25 +79,78 @@ class DevToolsSession {
       return;
     }
     const params = message.params ?? {};
-    if (message.method === "Runtime.exceptionThrown") {
-      this.diagnostics.exceptions.push(params.exceptionDetails?.text ?? "Unknown exception");
-    } else if (message.method === "Runtime.consoleAPICalled") {
-      this.diagnostics.console.push({
-        type: params.type,
-        values: (params.args ?? []).map((argument) => argument.value ?? argument.description ?? ""),
+    if (message.method === "Runtime.exceptionThrown" && this.captureDiagnostics) {
+      this.diagnostics.exceptions.push("Runtime exception");
+    } else if (message.method === "Runtime.consoleAPICalled" && this.captureDiagnostics) {
+      this.diagnostics.console.push({ category: "runtime-console", level: params.type ?? "unknown" });
+    } else if (message.method === "Log.entryAdded" && this.captureDiagnostics) {
+      this.diagnostics.console.push({ category: "browser-log", level: params.entry?.level ?? "unknown" });
+    } else if (message.method === "Network.requestWillBeSent" && this.captureDiagnostics) {
+      this.requests.set(params.requestId, sanitizedUrl(params.request?.url ?? ""));
+    } else if (message.method === "Network.responseReceived" && this.captureDiagnostics) {
+      this.diagnostics.responses.push({
+        status: params.response?.status ?? 0,
+        url: sanitizedUrl(params.response?.url ?? ""),
       });
-    } else if (message.method === "Log.entryAdded") {
-      this.diagnostics.console.push({ type: params.entry?.level, values: [params.entry?.text ?? ""] });
-    } else if (message.method === "Network.requestWillBeSent") {
-      this.requests.set(params.requestId, params.request?.url ?? "");
-    } else if (message.method === "Network.responseReceived") {
-      this.diagnostics.responses.push({ status: params.response?.status ?? 0, url: params.response?.url ?? "" });
-    } else if (message.method === "Network.loadingFailed") {
+    } else if (message.method === "Network.loadingFailed" && this.captureDiagnostics) {
       this.diagnostics.failedRequests.push({
         errorText: params.errorText ?? "Unknown network failure",
         url: this.requests.get(params.requestId) ?? "",
       });
+    } else if (message.method === "Fetch.requestPaused") {
+      void this.fulfillIsolatedApiRequest(params).catch(() => {
+        this.diagnostics.exceptions.push("Isolated API fulfillment failed");
+      });
     }
+  }
+
+  beginDiagnostics() {
+    this.requests.clear();
+    this.captureDiagnostics = true;
+  }
+
+  async fulfillIsolatedApiRequest(params) {
+    const url = new URL(params.request.url);
+    const commonHeaders = [
+      { name: "Access-Control-Allow-Origin", value: "https://localhost" },
+      { name: "Access-Control-Allow-Headers", value: "Authorization, Content-Type, X-Collection-Key" },
+      { name: "Access-Control-Allow-Methods", value: "GET, PUT, DELETE, OPTIONS" },
+      { name: "Content-Type", value: "application/json" },
+    ];
+    let responseCode = 404;
+    let body = JSON.stringify({ detail: "Not available in isolated Android smoke mode." });
+    if (params.request.method === "OPTIONS") {
+      responseCode = 204;
+      body = "";
+    } else if (params.request.method === "GET" && url.pathname === "/api/places") {
+      responseCode = 200;
+      body = JSON.stringify({
+        places: [{
+          id: "android-smoke-park",
+          name: "Android Smoke Park",
+          category: "regional",
+          latitude: 48.4284,
+          longitude: -123.3656,
+          region: "Vancouver Island",
+          description: "An isolated fixture for the native persistence journey.",
+          sourceUrl: "https://example.invalid/android-smoke-park",
+          sourceName: "Android smoke fixture",
+        }],
+        visitedIds: [],
+        visits: [],
+        completedTrailIds: [],
+        coverageNote: "Isolated Android smoke fixture",
+      });
+    } else if (params.request.method === "PUT" && url.pathname === "/api/visits/android-smoke-park") {
+      responseCode = 200;
+      body = JSON.stringify({ visitedAt: "2026-01-01T00:00:00.000Z" });
+    }
+    await this.send("Fetch.fulfillRequest", {
+      requestId: params.requestId,
+      responseCode,
+      responseHeaders: commonHeaders,
+      body: Buffer.from(body).toString("base64"),
+    });
   }
 
   send(method, params = {}) {
@@ -154,6 +224,11 @@ async function connectWebView(diagnostics) {
       session.send("Page.enable"),
       session.send("Runtime.enable"),
     ]);
+    if (smokeMode === "isolated") {
+      await session.send("Fetch.enable", { patterns: [{ urlPattern: "*api*", requestStage: "Request" }] });
+      await session.send("Page.reload", { ignoreCache: true });
+      session.beginDiagnostics();
+    }
     return { session, port };
   } catch (error) {
     removeForward(port);

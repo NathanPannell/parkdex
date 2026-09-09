@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { blockingDiagnostics, chooseWebViewTarget, parseWebViewSocket } from "./android-smoke.mjs";
+import {
+  blockingDiagnostics,
+  chooseWebViewTarget,
+  parseWebViewSocket,
+  sanitizedUrl,
+} from "./android-smoke.mjs";
 
 test("selects the Parkdex WebView socket and secure local page", () => {
   const sockets = "000000: 00000002 00000000 00010000 0001 01 12345 @webview_devtools_remote_4321";
@@ -11,6 +16,14 @@ test("selects the Parkdex WebView socket and secure local page", () => {
     { type: "page", url: "about:blank" },
     { type: "page", url: "https://localhost/", id: "parkdex" },
   ]).id, "parkdex");
+});
+
+test("removes query strings and fragments from diagnostic URLs", () => {
+  assert.equal(
+    sanitizedUrl("https://staging.parkdex.app/auth/google/callback?code=secret&state=secret#token"),
+    "https://staging.parkdex.app/auth/google/callback",
+  );
+  assert.equal(sanitizedUrl("not a URL"), "");
 });
 
 test("blocks application failures while retaining unrelated diagnostics", () => {
