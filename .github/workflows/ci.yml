@@ -8,7 +8,7 @@ on:
         required: true
         default: none
         type: choice
-        options: [none, deploy-staging, promote-production]
+        options: [none, deploy-staging, promote-production, verify-existing-staging]
   push:
     branches: [main, staging]
   pull_request:
@@ -17,6 +17,21 @@ permissions:
   contents: read
 
 jobs:
+  verify-existing-staging:
+    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event_name == 'workflow_dispatch' && inputs.action == 'verify-existing-staging' && github.ref == 'refs/heads/fix/canonical-release-content' && github.actor == 'NathanPannell'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with: { node-version: 22 }
+      - run: npm install --global vercel@50.1.3
+      - name: Verify existing staged deployment without deployment changes
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: bash scripts/verify-frontend-release.sh https://staging.parkdex.app 54d1b1c0c9a4e3b8f8771fc711301133c024514c
+
   backend:
     if: github.event_name != 'workflow_dispatch' || inputs.action == 'none'
     runs-on: ubuntu-24.04
