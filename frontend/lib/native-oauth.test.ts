@@ -23,6 +23,7 @@ import { NATIVE_OAUTH_CALLBACK_EVENT, NATIVE_OAUTH_CALLBACK_READY_EVENT, openNat
 
 const authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=test&redirect_uri=https%3A%2F%2Fstaging.parkdex.app%2Fauth%2Fgoogle%2Fcallback&response_type=code&code_challenge_method=S256&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=expected-state";
 const callbackUrl = "https://staging.parkdex.app/auth/google/callback?code=authorization-code&state=expected-state";
+const cancellationUrl = "https://staging.parkdex.app/auth/google/callback?error=access_denied&error_description=cancelled&state=expected-state";
 
 describe("native OAuth bridge", () => {
   beforeEach(() => {
@@ -39,9 +40,12 @@ describe("native OAuth bridge", () => {
 
   it("accepts only the configured HTTPS callback with one code and state", () => {
     expect(parseNativeOAuthCallback(callbackUrl)).toEqual({ code: "authorization-code", state: "expected-state" });
+    expect(parseNativeOAuthCallback(cancellationUrl)).toEqual({ error: "access_denied", state: "expected-state" });
     expect(parseNativeOAuthCallback("http://staging.parkdex.app/auth/google/callback?code=a&state=b")).toBeNull();
     expect(parseNativeOAuthCallback("https://staging.parkdex.app/auth/google/other?code=a&state=b")).toBeNull();
     expect(parseNativeOAuthCallback("https://staging.parkdex.app/auth/google/callback?code=a&code=b&state=c")).toBeNull();
+    expect(parseNativeOAuthCallback("https://staging.parkdex.app/auth/google/callback?code=a&error=access_denied&state=c")).toBeNull();
+    expect(parseNativeOAuthCallback("https://staging.parkdex.app/auth/google/callback?error=access_denied&error=server_error&state=c")).toBeNull();
   });
 
   it("opens only the Google authorization endpoint and binds its state", async () => {
@@ -70,6 +74,23 @@ describe("native OAuth bridge", () => {
     expect(mocks.browserClose).toHaveBeenCalledTimes(1);
   });
 
+  it("dispatches a matched cancellation once and consumes the pending state", async () => {
+    await openNativeGoogleAuthorization(authorizationUrl);
+    let callback: unknown;
+    window.addEventListener(NATIVE_OAUTH_CALLBACK_EVENT, (event) => { callback = (event as CustomEvent).detail; });
+    await startNativeOAuthBridge();
+    window.dispatchEvent(new Event(NATIVE_OAUTH_CALLBACK_READY_EVENT));
+    const handler = mocks.addListener.mock.calls[0][1];
+    handler({ url: cancellationUrl });
+
+    await vi.waitFor(() => expect(callback).toEqual({ error: "access_denied", state: "expected-state" }));
+    expect(mocks.browserClose).toHaveBeenCalledTimes(1);
+    expect(mocks.preferenceValues.get("parkdex:native-oauth-state:v1")).toBeUndefined();
+    handler({ url: cancellationUrl });
+    await Promise.resolve();
+    expect(mocks.browserClose).toHaveBeenCalledTimes(1);
+  });
+
   it("does not dispatch a callback that is not bound to the pending state", async () => {
     await openNativeGoogleAuthorization(authorizationUrl);
     let dispatched = false;
@@ -79,6 +100,21 @@ describe("native OAuth bridge", () => {
     const handler = mocks.addListener.mock.calls[0][1];
     handler({ url: "https://staging.parkdex.app/auth/google/callback?code=authorization-code&state=other-state" });
     await Promise.resolve();
+    expect(dispatched).toBe(false);
+    expect(mocks.browserClose).not.toHaveBeenCalled();
+    expect(mocks.preferenceValues.get("parkdex:native-oauth-state:v1")).toBe("expected-state");
+  });
+
+  it("does not dispatch an error callback with a mismatched state", async () => {
+    await openNativeGoogleAuthorization(authorizationUrl);
+    let dispatched = false;
+    window.addEventListener(NATIVE_OAUTH_CALLBACK_EVENT, () => { dispatched = true; });
+    await startNativeOAuthBridge();
+    window.dispatchEvent(new Event(NATIVE_OAUTH_CALLBACK_READY_EVENT));
+    const handler = mocks.addListener.mock.calls[0][1];
+    handler({ url: "https://staging.parkdex.app/auth/google/callback?error=access_denied&state=other-state" });
+    await Promise.resolve();
+
     expect(dispatched).toBe(false);
     expect(mocks.browserClose).not.toHaveBeenCalled();
     expect(mocks.preferenceValues.get("parkdex:native-oauth-state:v1")).toBe("expected-state");

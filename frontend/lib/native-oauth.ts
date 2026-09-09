@@ -12,7 +12,9 @@ const CALLBACK_ORIGIN = "https://staging.parkdex.app";
 const CALLBACK_PATH = "/auth/google/callback";
 const CALLBACK_URL = `${CALLBACK_ORIGIN}${CALLBACK_PATH}`;
 
-export type NativeOAuthCallback = { code: string; state: string };
+export type NativeOAuthCallback =
+  | { code: string; state: string }
+  | { error: string; state: string };
 let callbackConsumed = false;
 let callbackListenerReady = false;
 let queuedCallbackUrl: string | undefined;
@@ -26,9 +28,17 @@ export function parseNativeOAuthCallback(value: string): NativeOAuthCallback | n
   try {
     const url = new URL(value);
     if (url.origin !== CALLBACK_ORIGIN || url.pathname !== CALLBACK_PATH || url.hash) return null;
+    const codeValues = url.searchParams.getAll("code");
+    const errorValues = url.searchParams.getAll("error");
+    if ((codeValues.length === 1) === (errorValues.length === 1)) return null;
+    if (codeValues.length > 1 || errorValues.length > 1) return null;
     const code = oneQueryValue(url, "code");
+    const error = oneQueryValue(url, "error");
     const state = oneQueryValue(url, "state");
-    return code && state ? { code, state } : null;
+    if (!state) return null;
+    if (code) return { code, state };
+    if (error) return { error, state };
+    return null;
   } catch {
     return null;
   }
