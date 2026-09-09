@@ -93,6 +93,7 @@ jobs:
           working-directory: frontend/android
           script: |
             bash ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            bash ./gradlew --no-daemon :app:installDebug
             adb shell am start -W -n app.parkdex/.MainActivity
             adb shell pidof app.parkdex
       - uses: actions/upload-artifact@v7
