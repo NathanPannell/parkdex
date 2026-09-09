@@ -96,8 +96,7 @@ jobs:
             bash ./gradlew --no-daemon :app:installDebug
             adb shell am start -W -n app.parkdex/.MainActivity
             adb shell pidof app.parkdex
-            cd ..
-            ANDROID_SMOKE_ARTIFACT_DIR="$RUNNER_TEMP/android-smoke" node scripts/android-smoke.mjs
+            cd .. && ANDROID_SMOKE_ARTIFACT_DIR="$RUNNER_TEMP/android-smoke" node scripts/android-smoke.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
