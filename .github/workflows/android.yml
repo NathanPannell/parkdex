@@ -48,7 +48,7 @@ jobs:
           node --version
           "$ANDROID_HOME/platform-tools/adb" version
       - name: Configure stable staging debug signing
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+        if: github.event_name == 'workflow_dispatch'
         env:
           ANDROID_STAGING_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_STAGING_DEBUG_KEYSTORE_BASE64 }}
           ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_STAGING_DEBUG_KEYSTORE_PASSWORD }}
