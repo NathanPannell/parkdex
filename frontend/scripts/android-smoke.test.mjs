@@ -15,6 +15,7 @@ import {
   previewReadyMatches,
   releaseFooterMatches,
   isTrackedApplicationUrl,
+  syntheticAccountEmail,
   parseWebViewSocket,
   sanitizedUrl,
 } from "./android-smoke.mjs";
@@ -141,4 +142,9 @@ test("rejects a stale commit in the visible Account release footer", () => {
   const expected = "1234567" + "a".repeat(33);
   expect(releaseFooterMatches("Parkdex v0.1.123 · 1234567 · Sep 8, 2026", expected)).toBe(true);
   expect(releaseFooterMatches("Parkdex v0.1.123 · 7654321 · Sep 8, 2026", expected)).toBe(false);
+});
+
+test("generates a unique-shaped account only in the accepted example domain", () => {
+  expect(syntheticAccountEmail("123e4567-e89b-12d3-a456-426614174000"))
+    .toBe("android-smoke-123e4567-e89b-12d3-a456-426614174000@example.com");
 });

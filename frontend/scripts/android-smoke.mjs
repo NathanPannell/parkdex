@@ -77,6 +77,10 @@ export function isFullCommitSha(value) {
   return /^[0-9a-f]{40}$/.test(value);
 }
 
+export function syntheticAccountEmail(identifier = randomUUID()) {
+  return `android-smoke-${identifier}@example.com`;
+}
+
 export function previewReadyMatches(readiness, expectedSha) {
   return readiness?.status === "ready" && readiness?.commit === expectedSha;
 }
@@ -563,7 +567,7 @@ async function maskPreviewAccountIdentity(session) {
 
 async function runPreviewOnlineSmoke(diagnostics) {
   let connection;
-  const email = `android-smoke-${randomUUID()}@parkdex.test`;
+  const email = syntheticAccountEmail();
   const password = `Pkd!${randomBytes(18).toString("base64url")}`;
   try {
     await assertPreviewApiIdentity(diagnostics);
