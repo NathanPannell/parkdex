@@ -7,6 +7,10 @@
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
+    "prebuild:android": "node scripts/copy-maplibre-worker.mjs",
+    "build:android": "node scripts/build-android.mjs",
+    "android:sync": "npm run build:android && cap sync android",
+    "android:open": "cap open android",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -20,6 +24,13 @@
     "sync:boundaries": "node scripts/sync-boundary-assets.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/camera": "^8.2.4",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/geolocation": "^8.2.2",
+    "@capacitor/preferences": "^8.0.1",
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/nunito-sans": "^5.3.0",
     "lucide-react": "^1.42.0",
@@ -30,6 +41,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@testing-library/react": "^16.3.3",
     "@turf/boolean-valid": "^7.4.0",

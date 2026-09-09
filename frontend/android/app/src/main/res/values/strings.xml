@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Parkdex</string>
+    <string name="title_activity_main">Parkdex</string>
+    <string name="package_name">app.parkdex</string>
+    <string name="custom_url_scheme">app.parkdex</string>
+</resources>
