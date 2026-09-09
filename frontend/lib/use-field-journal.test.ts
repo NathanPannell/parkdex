@@ -4,7 +4,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ACCOUNT_TOKEN_KEY } from "./account";
-import { JOURNAL_STORAGE, accountPendingKey } from "./field-journal-state";
+import { JOURNAL_STORAGE, accountPendingKey, importedGuestKey } from "./field-journal-state";
 import { registerNativePlatformStorage, resetPlatformStorageForTests, type KeyValueStore } from "./platform-storage";
 import { useFieldJournal } from "./use-field-journal";
 
@@ -123,6 +123,17 @@ describe("useFieldJournal identity and progress races", () => {
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false)); fetchMock.mockClear(); rejectRevision = true;
     await act(() => result.current.toggleVisit(PLACE.id));
     expect(fetchMock).not.toHaveBeenCalled(); expect(result.current.syncMessage).toContain("could not save"); expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
+  it("durably advances a failed guest revision before online retry and makes it importable", async () => {
+    window.localStorage.clear(); Object.defineProperty(globalThis, "Capacitor", { configurable: true, value: { isNativePlatform: () => true } });
+    const credentials = memoryStore(), journalStore = memoryStore(); credentials.values.set(JOURNAL_STORAGE.collectionKey, KEY); journalStore.values.set(JOURNAL_STORAGE.guestRevision, "5"); journalStore.values.set(importedGuestKey(ACCOUNT.id), "5");
+    let rejectRevision = false; vi.mocked(journalStore.getItem).mockImplementation(async (key) => { if (rejectRevision && key === JOURNAL_STORAGE.guestRevision) throw new Error("read failed"); return journalStore.values.get(key) ?? null; });
+    registerNativePlatformStorage(async () => ({ credentials, journal: journalStore }));
+    let visitWrites = 0; vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => { const path = String(url); if (path.endsWith(`/api/visits/${PLACE.id}`)) { visitWrites += 1; expect(journalStore.values.get(JOURNAL_STORAGE.guestRevision)).toBe("6"); return json({ placeId: PLACE.id, visited: true, visitedCount: 1 }); } if (path.endsWith("/api/auth/login")) return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [], completedTrailIds: [] }); return json(catalogue()); }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API })); await waitFor(() => expect(result.current.loading).toBe(false)); rejectRevision = true; await act(() => result.current.toggleVisit(PLACE.id)); expect(visitWrites).toBe(0);
+    rejectRevision = false; act(() => window.dispatchEvent(new Event("online"))); await waitFor(() => expect(visitWrites).toBe(1));
+    await act(() => result.current.authenticate("login", ACCOUNT.email, "password123")); expect(result.current.guestProgressAvailable).toBe(true);
   });
 
   it("records a server visit timestamp immediately and clears it when undone", async () => {

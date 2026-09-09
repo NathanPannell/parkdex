@@ -164,6 +164,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const storageRef = useRef<KeyValueStore | null>(null);
   const guestVisitOutboxRef = useRef(new VisitOutbox());
   const guestTrailOutboxRef = useRef(new VisitOutbox());
+  const guestRevisionPendingRef = useRef(false);
   const accountVisitOutboxRef = useRef(new VisitOutbox());
   const accountTrailOutboxRef = useRef(new VisitOutbox());
   const accountOutboxOwnerRef = useRef("");
@@ -356,6 +357,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setSyncMessage("Syncing your latest checkoffs…");
     const capturedEpoch = epochRef.current.capture();
     try {
+      if (identity.kind === "guest" && guestRevisionPendingRef.current) {
+        const target = storage();
+        const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
+        if (!await writeStored(target, JOURNAL_STORAGE.guestRevision, revision)) throw new Error("Could not save the guest revision.");
+        guestRevisionPendingRef.current = false;
+      }
       await drainIdentity(identity, capturedEpoch);
       if (epochRef.current.isCurrent(capturedEpoch)) setSyncMessage("");
     } catch (error) {
@@ -365,7 +372,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           : "Your guest checkoffs are saved on this device and waiting to sync.");
       }
     }
-  }, [drainIdentity]);
+  }, [drainIdentity, storage]);
 
   useEffect(() => {
     let active = true;
@@ -536,9 +543,11 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     outbox.setDesired(id, enabled);
     try {
       if (identity.kind === "guest") {
+        guestRevisionPendingRef.current = true;
         const target = storage();
         const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
         if (!noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.guestRevision, revision))) throw new Error("Could not save the guest revision.");
+        guestRevisionPendingRef.current = false;
         setGuestProgressAvailable(true);
       }
       await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
