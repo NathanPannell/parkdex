@@ -19,7 +19,7 @@ permissions:
 jobs:
   debug-apk:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       NEXT_PUBLIC_API_BASE_URL: ${{ inputs.api_base_url || 'https://api-staging-882c.up.railway.app' }}
     steps:
@@ -71,6 +71,29 @@ jobs:
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
         working-directory: frontend/android
+      - name: Assemble Android instrumentation tests
+        run: ./gradlew --no-daemon :app:assembleDebugAndroidTest
+        working-directory: frontend/android
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run native instrumentation tests on API 35
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          working-directory: frontend/android
+          script: |
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            adb shell am start -W -n app.parkdex/.MainActivity
+            adb shell pidof app.parkdex
       - uses: actions/upload-artifact@v7
         with:
           name: parkdex-debug-apk
