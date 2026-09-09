@@ -81,6 +81,7 @@ describe("platform storage", () => {
     window.localStorage.setItem("every-park:account-token:v1", "raw-token");
     window.localStorage.setItem("every-park:collection-key:v1", "guest-key");
     window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "pkce-verifier");
+    window.sessionStorage.setItem("parkdex:google-state:v1", "oauth-state");
     window.localStorage.setItem("every-park:visited:v1", '["park"]');
     window.localStorage.setItem("unrelated", "keep");
     registerNativePlatformStorage(async () => ({ credentials, journal }));
@@ -91,14 +92,17 @@ describe("platform storage", () => {
       "credential:every-park:account-token:v1",
       "credential:every-park:collection-key:v1",
       "credential:parkdex:google-code-verifier:v1",
+      "credential:parkdex:google-state:v1",
       "journal:every-park:visited:v1",
     ]);
     expect(await storage.getItem("every-park:account-token:v1")).toBe("raw-token");
     expect(await storage.getItem("parkdex:google-code-verifier:v1")).toBe("pkce-verifier");
+    expect(await storage.getItem("parkdex:google-state:v1")).toBe("oauth-state");
     expect(await storage.getItem("every-park:visited:v1")).toBe('["park"]');
     expect(window.localStorage.getItem("every-park:account-token:v1")).toBeNull();
     expect(window.localStorage.getItem("every-park:visited:v1")).toBeNull();
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
+    expect(window.sessionStorage.getItem("parkdex:google-state:v1")).toBeNull();
     expect(window.localStorage.getItem("unrelated")).toBe("keep");
   });
 

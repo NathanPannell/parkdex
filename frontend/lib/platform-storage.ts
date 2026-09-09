@@ -19,6 +19,7 @@ const PERSISTENT_CREDENTIAL_KEYS = new Set([
 ]);
 const SESSION_CREDENTIAL_KEYS = new Set([
   "parkdex:google-code-verifier:v1",
+  "parkdex:google-state:v1",
 ]);
 const CREDENTIAL_KEYS = new Set([...PERSISTENT_CREDENTIAL_KEYS, ...SESSION_CREDENTIAL_KEYS]);
 
