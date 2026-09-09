@@ -38,6 +38,11 @@ export class VisitOutbox {
   snapshot(): Record<string, PendingVisit> { return { ...this.entries }; }
   hasPending(): boolean { return Object.keys(this.entries).length > 0; }
 
+  discard(id: string, visited?: boolean) {
+    if (visited === undefined || this.entries[id]?.visited === visited) delete this.entries[id];
+    if (visited === undefined || this.latestIntent[id]?.visited === visited) delete this.latestIntent[id];
+  }
+
   async clearAndWait(): Promise<void> {
     this.entries = {};
     this.latestIntent = {};

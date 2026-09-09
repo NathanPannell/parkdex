@@ -1,6 +1,16 @@
 export type Account = { id: string; email: string; emailVerified?: boolean };
 export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
-export type Visit = { placeId: string; visitedAt: string };
+export type VisitClaim = {
+  claimedAt: string;
+  capturedAt: string;
+  coordinates: { latitude: number; longitude: number };
+  accuracyMeters: number;
+  boundaryVersion: string;
+  matchKind: "exact" | "buffer";
+  distanceMeters: number;
+  hasPhoto: boolean;
+};
+export type Visit = { placeId: string; visitedAt: string; claim?: VisitClaim | null };
 export type AccountSession = {
   token: string;
   expiresAt: string;
@@ -13,7 +23,7 @@ export type AccountSession = {
 export const ACCOUNT_TOKEN_KEY = "every-park:account-token:v1";
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
     this.name = "ApiError";
   }
