@@ -35,6 +35,8 @@ def normalize_photo(payload: bytes) -> NormalizedPhoto:
         with Image.open(BytesIO(payload)) as source:
             if getattr(source, "n_frames", 1) != 1:
                 raise PhotoInputError("Animated photos are not supported")
+            if source.width * source.height > Image.MAX_IMAGE_PIXELS:
+                raise PhotoInputError("Photo dimensions are too large")
             source.verify()
         with Image.open(BytesIO(payload)) as source:
             image = ImageOps.exif_transpose(source)

@@ -218,7 +218,9 @@ jobs:
               --copy "$RAILWAY_BASE_ENVIRONMENT_ID" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.DATABASE_URL_UNPOOLED.value "$STAGING_DATABASE_URL_UNPOOLED" \
-              --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN" \
+              --service-config "$RAILWAY_API_SERVICE_ID" variables.APP_ENVIRONMENT.value "staging" \
+              --service-config "$RAILWAY_API_SERVICE_ID" variables.CLAIM_TEST_MODE.value "false" \
+              --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN,https://localhost" \
               --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL"
           fi
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
@@ -227,7 +229,9 @@ jobs:
             railway service source disconnect --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID" >/dev/null
           done
           railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
-          railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "staging" variable set APP_ENVIRONMENT --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "false" variable set CLAIM_TEST_MODE --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$STAGING_DOMAIN,https://localhost" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
@@ -318,6 +322,8 @@ jobs:
           for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
             railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment production --project "$RAILWAY_PROJECT_ID"
           done
+          railway_retry 'production' variable set APP_ENVIRONMENT --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry 'false' variable set CLAIM_TEST_MODE --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"

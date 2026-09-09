@@ -22,8 +22,10 @@ stored to five decimal places for the postcard caption. Photos are decoded, orie
 of metadata, resized, and re-encoded as JPEG up to 1 MB before storage in PostgreSQL. Photo reads
 require the same bearer token or collection key as the visit and return `Cache-Control: private,
 no-store`; there are no public image URLs. Undo and account reset cascade to claim evidence and
-photos. Database backups may retain deleted bytes for the database provider's configured backup
-retention period.
+photos. Account reset also removes that owner's unused recommendation tokens. Expired unused
+recommendations are removed opportunistically during later recommendation requests rather than
+by a guaranteed wall-clock cleanup job. Database backups may retain deleted bytes for the
+database provider's configured backup retention period.
 
 Client GPS is evidence for product eligibility, not tamper-proof proof of physical presence.
 Modified clients and devices can spoof coordinates. The backend prevents accidental or stale

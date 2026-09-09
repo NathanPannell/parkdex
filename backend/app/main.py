@@ -373,7 +373,7 @@ def owner_visit_count(conn: Connection, identity: AccountIdentity | str) -> int:
     ).fetchone()["count"]
 
 
-@app.post("/api/claim-recommendations", response_model=ClaimRecommendationResponse)
+@app.post("/api/claim-recommendations", response_model=ClaimRecommendationResponse, response_model_exclude_none=True)
 def recommend_claim(
     payload: ClaimRecommendationRequest,
     response: Response,
@@ -1048,6 +1048,10 @@ def reset_account_progress(
     # Serialize the reset with imports and progress writes for this account.
     lock_account_progress(conn, identity.account_id)
     conn.execute(
+        "DELETE FROM claim_recommendations WHERE account_id = %s",
+        (identity.account_id,),
+    )
+    conn.execute(
         "DELETE FROM account_visits WHERE account_id = %s", (identity.account_id,)
     )
     conn.execute(
@@ -1086,24 +1090,38 @@ def import_guest_progress(
         """,
         (identity.account_id, owner_hash),
     )
-    conn.execute(
+    guest_claims = conn.execute(
         """
-        INSERT INTO account_visit_claims (
-            account_id, place_id, recommendation_hash, claimed_at, captured_at,
-            latitude, longitude, accuracy_m, boundary_version, match_kind, distance_m,
-            photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
-        )
-        SELECT %s, guest.place_id, guest.recommendation_hash, guest.claimed_at, guest.captured_at,
-               guest.latitude, guest.longitude, guest.accuracy_m, guest.boundary_version,
-               guest.match_kind, guest.distance_m, guest.photo_bytes, guest.photo_mime,
-               guest.photo_width, guest.photo_height, guest.photo_sha256, guest.photo_updated_at
-        FROM guest_visit_claims AS guest
+        SELECT guest.* FROM guest_visit_claims AS guest
         JOIN account_visits ON account_visits.account_id = %s AND account_visits.place_id = guest.place_id
         WHERE guest.owner_hash = %s
-        ON CONFLICT (account_id, place_id) DO NOTHING
         """,
-        (identity.account_id, identity.account_id, owner_hash),
-    )
+        (identity.account_id, owner_hash),
+    ).fetchall()
+    for guest_claim in guest_claims:
+        # Imported claims get an account-scoped replay hash. Possession of the old
+        # guest recommendation token must never authorize an account operation.
+        imported_hash = hashlib.sha256(
+            f"import:{identity.account_id}:{guest_claim['recommendation_hash']}".encode("ascii")
+        ).hexdigest()
+        conn.execute(
+            """
+            INSERT INTO account_visit_claims (
+                account_id, place_id, recommendation_hash, claimed_at, captured_at,
+                latitude, longitude, accuracy_m, boundary_version, match_kind, distance_m,
+                photo_bytes, photo_mime, photo_width, photo_height, photo_sha256, photo_updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (account_id, place_id) DO NOTHING
+            """,
+            (
+                identity.account_id, guest_claim["place_id"], imported_hash, guest_claim["claimed_at"],
+                guest_claim["captured_at"], guest_claim["latitude"], guest_claim["longitude"],
+                guest_claim["accuracy_m"], guest_claim["boundary_version"], guest_claim["match_kind"],
+                guest_claim["distance_m"], guest_claim["photo_bytes"], guest_claim["photo_mime"],
+                guest_claim["photo_width"], guest_claim["photo_height"], guest_claim["photo_sha256"],
+                guest_claim["photo_updated_at"],
+            ),
+        )
     imported_trails = conn.execute(
         """
         INSERT INTO account_trail_completions (account_id, trail_id, completed_at)

@@ -142,14 +142,18 @@ def test_guest_claim_photo_imports_to_account_and_reset_cascades():
             account = client.post("/api/auth/register", json={"email": ACCOUNT_EMAIL, "password": "claims integration password"})
             assert account.status_code == 201
             account_headers = bearer(account.json()["token"])
+            pending = recommend(client, account_headers)
             imported = client.post("/api/account/import-guest", headers={**account_headers, "X-Collection-Key": GUEST_ONE})
             assert imported.status_code == 200, imported.text
             visit = next(item for item in imported.json()["visits"] if item["placeId"] == place_id)
             assert visit["claim"]["hasPhoto"] is True
             assert client.get(f"/api/visits/{place_id}/photo", headers=account_headers).status_code == 200
+            old_guest_token = claim(client, account_headers, recommendation)
+            assert old_guest_token.status_code == 404
 
             assert client.delete("/api/account/progress", headers=account_headers).status_code == 204
             assert client.get(f"/api/visits/{place_id}/photo", headers=account_headers).status_code == 404
+            assert claim(client, account_headers, pending).status_code == 404
     finally:
         cleanup()
 
@@ -163,6 +167,11 @@ def test_stale_location_and_expired_recommendation_are_rejected():
             stale = client.post("/api/claim-recommendations", headers=guest_headers(), json=payload)
             assert stale.status_code == 422
             assert stale.json()["detail"]["code"] == "location_stale"
+            inaccurate_payload = location_payload()
+            inaccurate_payload["location"]["accuracyMeters"] = 50.1
+            inaccurate = client.post("/api/claim-recommendations", headers=guest_headers(), json=inaccurate_payload)
+            assert inaccurate.status_code == 422
+            assert inaccurate.json()["detail"]["code"] == "location_accuracy_too_low"
 
             recommendation = recommend(client, guest_headers())
             token_hash = hashlib.sha256(recommendation["recommendationToken"].encode("ascii")).hexdigest()

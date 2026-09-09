@@ -58,9 +58,9 @@ class VisitClaim(BaseModel):
 
 
 class ClaimLocation(BaseModel):
-    latitude: float = Field(allow_inf_nan=False, ge=-90, le=90)
-    longitude: float = Field(allow_inf_nan=False, ge=-180, le=180)
-    accuracy_meters: float = Field(serialization_alias="accuracyMeters", validation_alias="accuracyMeters", allow_inf_nan=False, gt=0, le=50)
+    latitude: float = Field(allow_inf_nan=False)
+    longitude: float = Field(allow_inf_nan=False)
+    accuracy_meters: float = Field(serialization_alias="accuracyMeters", validation_alias="accuracyMeters", allow_inf_nan=False)
     captured_at_epoch_ms: int = Field(serialization_alias="capturedAtEpochMs", validation_alias="capturedAtEpochMs")
 
 

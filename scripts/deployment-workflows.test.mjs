@@ -21,20 +21,32 @@ test("manual inspections cannot enter release jobs", () => {
   assert.doesNotMatch(releaseGate, /inputs\.action != 'none'/);
 });
 
-test("staging receives its exact Google settings", () => {
+test("staging receives its exact Google and claim settings", () => {
   const staging = ci.match(/  deploy-staging:\r?\n(?<body>[\s\S]*?)\r?\n  promote-production:/)?.groups?.body;
   const production = ci.match(/  promote-production:\r?\n(?<body>[\s\S]*)/)?.groups?.body;
   assert.ok(staging);
   assert.ok(production);
   assert.match(staging, /STAGING_GOOGLE_CLIENT_ID: \$\{\{ vars\.STAGING_GOOGLE_CLIENT_ID \}\}/);
   assert.match(staging, /STAGING_GOOGLE_CLIENT_SECRET: \$\{\{ secrets\.STAGING_GOOGLE_CLIENT_SECRET \}\}/);
-  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set FRONTEND_ORIGINS/);
+  assert.match(staging, /"staging" variable set APP_ENVIRONMENT/);
+  assert.match(staging, /"false" variable set CLAIM_TEST_MODE/);
+  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN,https:\/\/localhost" variable set FRONTEND_ORIGINS/);
   assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set APP_PUBLIC_URL/);
   assert.match(staging, /"https:\/\/\$STAGING_DOMAIN\/auth\/google\/callback" variable set GOOGLE_REDIRECT_URI/);
   assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin/);
   assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin/);
   assert.doesNotMatch(production, /STAGING_GOOGLE_CLIENT|variable set GOOGLE_CLIENT_(?:ID|SECRET)/);
-  assert.doesNotMatch(ci, /https:\/\/localhost/);
+  assert.match(staging, /https:\/\/localhost/);
+  assert.doesNotMatch(production, /https:\/\/localhost/);
+});
+
+test("production explicitly disables claim fixtures", () => {
+  const production = ci.match(/  promote-production:\r?\n(?<body>[\s\S]*)/)?.groups?.body;
+  assert.ok(production);
+  assert.match(production, /'production' variable set APP_ENVIRONMENT/);
+  assert.match(production, /'false' variable set CLAIM_TEST_MODE/);
+  assert.doesNotMatch(production, /railway_retry ['"](?:true|1|yes|on)['"] variable set CLAIM_TEST_MODE/i);
+  assert.match(production, /'https:\/\/parkdex\.app,https:\/\/www\.parkdex\.app' variable set FRONTEND_ORIGINS/);
 });
 
 test("promotion fails closed around one exact staged commit", () => {
