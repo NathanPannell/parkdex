@@ -13,11 +13,14 @@ type NativeStorageFactory = () => Promise<NativePlatformStores>;
 type LegacyStorage = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
 
 const LEGACY_PREFIX = "every-park:";
-const CREDENTIAL_KEYS = new Set([
+const PERSISTENT_CREDENTIAL_KEYS = new Set([
   "every-park:account-token:v1",
   "every-park:collection-key:v1",
+]);
+const SESSION_CREDENTIAL_KEYS = new Set([
   "parkdex:google-code-verifier:v1",
 ]);
+const CREDENTIAL_KEYS = new Set([...PERSISTENT_CREDENTIAL_KEYS, ...SESSION_CREDENTIAL_KEYS]);
 
 let nativeStorageFactory: NativeStorageFactory | undefined;
 let platformStoragePromise: Promise<KeyValueStore> | undefined;
@@ -30,10 +33,11 @@ function nativePlatformDetected() {
 }
 
 function browserStorage(): KeyValueStore {
+  const target = (key: string) => SESSION_CREDENTIAL_KEYS.has(key) ? window.sessionStorage : window.localStorage;
   return {
-    getItem: async (key) => window.localStorage.getItem(key),
-    setItem: async (key, value) => { window.localStorage.setItem(key, value); },
-    removeItem: async (key) => { window.localStorage.removeItem(key); },
+    getItem: async (key) => target(key).getItem(key),
+    setItem: async (key, value) => { target(key).setItem(key, value); },
+    removeItem: async (key) => { target(key).removeItem(key); },
   };
 }
 
@@ -70,8 +74,11 @@ async function migrateKey(source: LegacyStorage, destination: KeyValueStore, key
 }
 
 async function migrateLegacyStorage(source: LegacyStorage, stores: NativePlatformStores) {
-  for (const key of CREDENTIAL_KEYS) {
+  for (const key of PERSISTENT_CREDENTIAL_KEYS) {
     await migrateKey(source, stores.credentials, key);
+  }
+  for (const key of SESSION_CREDENTIAL_KEYS) {
+    await migrateKey(window.sessionStorage, stores.credentials, key);
   }
 
   const journalKeys: string[] = [];
@@ -106,6 +113,9 @@ export function getPlatformStorage(): Promise<KeyValueStore> {
   platformStoragePromise = nativeStorageFactory().then(async (stores) => {
     await migrateLegacyStorage(window.localStorage, stores);
     return routedNativeStorage(stores);
+  }).catch((error: unknown) => {
+    platformStoragePromise = undefined;
+    throw error;
   });
   return platformStoragePromise;
 }
