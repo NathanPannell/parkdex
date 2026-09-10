@@ -47,7 +47,7 @@ class PlaceSearchResult(BaseModel):
     offset: int
 
 
-class TripCreate(BaseModel):
+class GroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     placeIds: list[str] = Field(
         default_factory=list,
@@ -62,11 +62,11 @@ class TripCreate(BaseModel):
         return value
 
 
-class TripRename(BaseModel):
+class GroupRename(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
-class TripPlaceMutation(BaseModel):
+class GroupPlaceMutation(BaseModel):
     placeIds: list[str] = Field(
         max_length=100,
     )
@@ -79,7 +79,7 @@ class TripPlaceMutation(BaseModel):
         return value
 
 
-class Trip(BaseModel):
+class Group(BaseModel):
     id: str
     name: str
     is_wishlist: bool = Field(serialization_alias="isWishlist")
@@ -87,12 +87,6 @@ class Trip(BaseModel):
     updated_at: datetime = Field(serialization_alias="updatedAt")
     place_ids: list[str] = Field(serialization_alias="placeIds")
     places: list[Place]
-
-
-class Group(Trip):
-    pass
-
-
 class Visit(BaseModel):
     place_id: str = Field(serialization_alias="placeId")
     visited_at: datetime = Field(serialization_alias="visitedAt")

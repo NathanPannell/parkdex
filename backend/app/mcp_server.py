@@ -22,7 +22,7 @@ from starlette.routing import Route
 from backend.app.auth import reserve_rate_limit
 from backend.app.db import connection
 from backend.app.mcp_oauth import MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
-from backend.app.trips import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, place_detail_row, remove_group_places, rename_group_row, search_place_rows
+from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 
 KEYRING_SERVICE, SESSION_ENV, EMAIL_ENV, ORIGIN_ENV = "parkdex-mcp-session", "PARKDEX_SESSION_TOKEN", "PARKDEX_ACCOUNT_EMAIL", "PARKDEX_API_ORIGIN"
 MAX_TIMEOUT_SECONDS = 20.0

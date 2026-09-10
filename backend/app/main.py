@@ -41,14 +41,13 @@ from backend.app.schemas import (
     GoogleCallback,
     GoogleStart,
     Group,
+    GroupCreate,
+    GroupPlaceMutation,
+    GroupRename,
     GuestImportResult,
     PlaceCollection,
     PlaceSearchResult,
     SearchPlace,
-    Trip,
-    TripCreate,
-    TripPlaceMutation,
-    TripRename,
     PasswordChange,
     PasswordResetConfirmation,
     TrailResult,
@@ -58,10 +57,7 @@ from backend.app.schemas import (
     VisitUpdate,
 )
 from backend.app.settings import get_settings
-from backend.app.trips import (
-    add_trip_places,
-    create_trip_row,
-    delete_trip_row,
+from backend.app.groups import (
     delete_group_row,
     ensure_wishlist,
     add_group_places,
@@ -70,12 +66,8 @@ from backend.app.trips import (
     group_row,
     create_group_row,
     rename_group_row,
-    list_trip_rows,
     place_detail_row,
-    remove_trip_places,
-    rename_trip_row,
     search_place_rows,
-    trip_row,
 )
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
@@ -274,8 +266,8 @@ def _record_id(value: str, label: str) -> str:
         raise HTTPException(status_code=404, detail=f"{label} not found") from exc
 
 
-def _trip_mutation_limit(conn: Connection, account_id: str) -> None:
-    reserve_rate_limit(conn, "trip_mutation", account_id, 120, timedelta(minutes=15))
+def _group_mutation_limit(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(conn, "group_mutation", account_id, 120, timedelta(minutes=15))
 
 
 def _group_name(value: str, label: str = "Group") -> str:
@@ -352,13 +344,13 @@ def list_groups(
 
 @app.post("/api/groups", response_model=Group, status_code=201)
 def create_group(
-    payload: TripCreate,
+    payload: GroupCreate,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
     name = _group_name(payload.name)
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     try:
         result = create_group_row(conn, identity.account_id, name, payload.placeIds)
     except ValueError as exc:
@@ -384,7 +376,7 @@ def get_group(
 @app.patch("/api/groups/{group_id}", response_model=Group)
 def rename_group(
     group_id: str,
-    payload: TripRename,
+    payload: GroupRename,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
@@ -396,7 +388,7 @@ def rename_group(
         raise HTTPException(status_code=404, detail="Group not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be renamed")
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     if not rename_group_row(conn, identity.account_id, canonical_id, name):
         conn.rollback()
         raise HTTPException(status_code=404, detail="Group not found")
@@ -417,7 +409,7 @@ def delete_group(
         raise HTTPException(status_code=404, detail="Group not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be deleted")
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     if not delete_group_row(conn, identity.account_id, canonical_id):
         conn.rollback()
         raise HTTPException(status_code=404, detail="Group not found")
@@ -428,13 +420,13 @@ def delete_group(
 @app.post("/api/groups/{group_id}/places", response_model=Group)
 def add_group_places_api(
     group_id: str,
-    payload: TripPlaceMutation,
+    payload: GroupPlaceMutation,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     try:
         exists = add_group_places(conn, identity.account_id, canonical_id, payload.placeIds)
     except ValueError as exc:
@@ -450,13 +442,13 @@ def add_group_places_api(
 @app.delete("/api/groups/{group_id}/places", response_model=Group)
 def remove_group_places_api(
     group_id: str,
-    payload: TripPlaceMutation,
+    payload: GroupPlaceMutation,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     if not remove_group_places(conn, identity.account_id, canonical_id, payload.placeIds):
         conn.rollback()
         raise HTTPException(status_code=404, detail="Group not found")
@@ -477,12 +469,12 @@ def get_wishlist(
 
 @app.post("/api/wishlist/places", response_model=Group)
 def add_wishlist_places(
-    payload: TripPlaceMutation,
+    payload: GroupPlaceMutation,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     try:
         wishlist = ensure_wishlist(conn, identity.account_id)
         add_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
@@ -495,134 +487,16 @@ def add_wishlist_places(
 
 @app.delete("/api/wishlist/places", response_model=Group)
 def remove_wishlist_places(
-    payload: TripPlaceMutation,
+    payload: GroupPlaceMutation,
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    _trip_mutation_limit(conn, identity.account_id)
+    _group_mutation_limit(conn, identity.account_id)
     wishlist = ensure_wishlist(conn, identity.account_id)
     remove_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
     conn.commit()
     return group_row(conn, identity.account_id, wishlist["id"])
-
-
-@app.get("/api/trips", response_model=list[Trip])
-def list_trips(
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    ensure_wishlist(conn, identity.account_id)
-    conn.commit()
-    return list_trip_rows(conn, identity.account_id)
-
-
-@app.post("/api/trips", response_model=Trip, status_code=201)
-def create_trip(
-    payload: TripCreate,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    name = _group_name(payload.name, "Trip")
-    _trip_mutation_limit(conn, identity.account_id)
-    try:
-        result = create_trip_row(conn, identity.account_id, name, payload.placeIds)
-    except ValueError as exc:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    conn.commit()
-    return result
-
-
-@app.get("/api/trips/{trip_id}", response_model=Trip)
-def get_trip(
-    trip_id: str,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    result = trip_row(conn, identity.account_id, _record_id(trip_id, "Trip"))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    return result
-
-
-@app.patch("/api/trips/{trip_id}", response_model=Trip)
-def rename_trip(
-    trip_id: str,
-    payload: TripRename,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(trip_id, "Trip")
-    name = _group_name(payload.name, "Trip")
-    _trip_mutation_limit(conn, identity.account_id)
-    if not rename_trip_row(conn, identity.account_id, canonical_id, name):
-        conn.rollback()
-        raise HTTPException(status_code=404, detail="Trip not found")
-    conn.commit()
-    return trip_row(conn, identity.account_id, canonical_id)
-
-
-@app.delete("/api/trips/{trip_id}", status_code=204)
-def delete_trip(
-    trip_id: str,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-) -> Response:
-    identity = require_bearer(conn, authorization)
-    _trip_mutation_limit(conn, identity.account_id)
-    if not delete_trip_row(conn, identity.account_id, _record_id(trip_id, "Trip")):
-        conn.rollback()
-        raise HTTPException(status_code=404, detail="Trip not found")
-    conn.commit()
-    return Response(status_code=204)
-
-
-@app.post("/api/trips/{trip_id}/places", response_model=Trip)
-def add_places(
-    trip_id: str,
-    payload: TripPlaceMutation,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(trip_id, "Trip")
-    if trip_row(conn, identity.account_id, canonical_id) is None:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    _trip_mutation_limit(conn, identity.account_id)
-    try:
-        exists = add_trip_places(conn, identity.account_id, canonical_id, payload.placeIds)
-    except ValueError as exc:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not exists:
-        conn.rollback()
-        raise HTTPException(status_code=404, detail="Trip not found")
-    conn.commit()
-    return trip_row(conn, identity.account_id, canonical_id)
-
-
-@app.delete("/api/trips/{trip_id}/places", response_model=Trip)
-def remove_places(
-    trip_id: str,
-    payload: TripPlaceMutation,
-    conn: Connection = Depends(connection),
-    authorization: str | None = Header(default=None),
-):
-    identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(trip_id, "Trip")
-    if trip_row(conn, identity.account_id, canonical_id) is None:
-        raise HTTPException(status_code=404, detail="Trip not found")
-    _trip_mutation_limit(conn, identity.account_id)
-    if not remove_trip_places(conn, identity.account_id, canonical_id, payload.placeIds):
-        conn.rollback()
-        raise HTTPException(status_code=404, detail="Trip not found")
-    conn.commit()
-    return trip_row(conn, identity.account_id, canonical_id)
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)

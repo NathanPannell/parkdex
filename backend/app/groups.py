@@ -172,24 +172,6 @@ def ensure_wishlist(conn: Connection, account_id: str) -> dict:
     return group_row(conn, account_id, str(row["id"]))
 
 
-# Compatibility helpers retained for the first trips API clients.  Wishlist is
-# a protected group and is intentionally not exposed through the old trip API.
-def trip_row(conn: Connection, account_id: str, trip_id: str) -> dict | None:
-    result = group_row(conn, account_id, trip_id)
-    return result if result and not result["is_wishlist"] else None
-
-
-def list_trip_rows(conn: Connection, account_id: str) -> list[dict]:
-    return [group for group in list_group_rows(conn, account_id) if not group["is_wishlist"]]
-
-
-create_trip_row = create_group_row
-rename_trip_row = rename_group_row
-delete_trip_row = delete_group_row
-add_trip_places = add_group_places
-remove_trip_places = remove_group_places
-
-
 def search_place_rows(
     conn: Connection,
     account_id: str,

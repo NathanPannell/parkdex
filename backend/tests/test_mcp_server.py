@@ -4,7 +4,7 @@ import httpx
 from mcp import Client
 
 from backend.app.mcp_server import ParkdexClient, keyring_user, logout_session, mcp, normalize_origin, session_token
-from backend.app.schemas import TripCreate, TripPlaceMutation
+from backend.app.schemas import GroupCreate, GroupPlaceMutation
 
 
 def test_mcp_origin_requires_https_except_loopback() -> None:
@@ -22,10 +22,10 @@ def test_mcp_origin_requires_https_except_loopback() -> None:
 
 
 def test_group_inputs_accept_camel_and_snake_case_place_ids() -> None:
-    assert TripCreate.model_validate({"name": "Coast", "placeIds": ["one"]}).placeIds == ["one"]
-    assert TripCreate.model_validate({"name": "Coast", "place_ids": ["two"]}).placeIds == ["two"]
-    assert TripPlaceMutation.model_validate({"placeIds": ["one"]}).placeIds == ["one"]
-    assert TripPlaceMutation.model_validate({"place_ids": ["two"]}).placeIds == ["two"]
+    assert GroupCreate.model_validate({"name": "Coast", "placeIds": ["one"]}).placeIds == ["one"]
+    assert GroupCreate.model_validate({"name": "Coast", "place_ids": ["two"]}).placeIds == ["two"]
+    assert GroupPlaceMutation.model_validate({"placeIds": ["one"]}).placeIds == ["one"]
+    assert GroupPlaceMutation.model_validate({"place_ids": ["two"]}).placeIds == ["two"]
 
 
 def test_session_key_is_scoped_to_origin_and_email(monkeypatch) -> None:

@@ -6,18 +6,18 @@ from fastapi.testclient import TestClient
 from psycopg.rows import dict_row
 
 from backend.app.main import app
-from backend.app.trips import ensure_wishlist
+from backend.app.groups import ensure_wishlist
 
 
-PLACE_IDS = ["trip-test-alpha", "trip-test-beta", "trip-test-gamma"]
-EMAILS = ["trip-owner@example.com", "trip-other@example.com"]
+PLACE_IDS = ["group-test-alpha", "group-test-beta", "group-test-gamma"]
+EMAILS = ["group-owner@example.com", "group-other@example.com"]
 
 
 def auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_private_trips_search_and_membership_are_persistent_and_isolated() -> None:
+def test_private_groups_search_and_membership_are_persistent_and_isolated() -> None:
     database_url = os.environ["DATABASE_URL"]
     with psycopg.connect(database_url) as conn:
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", (EMAILS,))
@@ -26,9 +26,9 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             """
             INSERT INTO places (id, name, category, latitude, longitude, region, description, source_url, source_name)
             VALUES
-              (%s, 'Trip Test Alpha', 'national', 49.0, -124.0, 'North', 'Ocean overlook', 'https://example.com/a', 'Test'),
-              (%s, 'Trip Test Beta', 'provincial', 49.1, -124.0, 'North', 'Quiet lake', 'https://example.com/b', 'Test'),
-              (%s, 'Trip Test Gamma', 'island', 50.0, -125.0, 'West', 'Island reserve', 'https://example.com/c', 'Test')
+              (%s, 'Group Test Alpha', 'national', 49.0, -124.0, 'North', 'Ocean overlook', 'https://example.com/a', 'Test'),
+              (%s, 'Group Test Beta', 'provincial', 49.1, -124.0, 'North', 'Quiet lake', 'https://example.com/b', 'Test'),
+              (%s, 'Group Test Gamma', 'island', 50.0, -125.0, 'West', 'Island reserve', 'https://example.com/c', 'Test')
             """,
             PLACE_IDS,
         )
@@ -36,22 +36,22 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
 
     try:
         with TestClient(app) as client:
-            first = client.post("/api/auth/register", json={"email": EMAILS[0], "password": "trip owner password"})
-            second = client.post("/api/auth/register", json={"email": EMAILS[1], "password": "trip other password"})
+            first = client.post("/api/auth/register", json={"email": EMAILS[0], "password": "group owner password"})
+            second = client.post("/api/auth/register", json={"email": EMAILS[1], "password": "group other password"})
             first_headers, second_headers = auth(first.json()["token"]), auth(second.json()["token"])
 
             created = client.post(
-                "/api/trips",
+                "/api/groups",
                 headers=first_headers,
                 json={"name": "Island Weekend", "placeIds": [PLACE_IDS[0], PLACE_IDS[0], PLACE_IDS[1]]},
             )
             assert created.status_code == 201
-            trip = created.json()
-            assert trip["name"] == "Island Weekend"
-            assert trip["placeIds"] == PLACE_IDS[:2]
+            group = created.json()
+            assert group["name"] == "Island Weekend"
+            assert group["placeIds"] == PLACE_IDS[:2]
 
             repeated = client.post(
-                f"/api/trips/{trip['id']}/places",
+                f"/api/groups/{group['id']}/places",
                 headers=first_headers,
                 json={"placeIds": [PLACE_IDS[1], PLACE_IDS[2], PLACE_IDS[2]]},
             )
@@ -72,23 +72,24 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
                 f"/api/groups/{wishlist_id}", headers=first_headers, json={"name": "Later"}
             ).status_code == 409
             assert client.delete(f"/api/groups/{wishlist_id}", headers=first_headers).status_code == 409
-            assert [item["id"] for item in client.get("/api/trips", headers=first_headers).json()] == [trip["id"]]
+            assert {item["id"] for item in client.get("/api/groups", headers=first_headers).json()} == {group["id"], wishlist_id}
             assert client.post(
                 "/api/groups", headers=first_headers, json={"name": "Wishlist", "placeIds": []}
             ).status_code == 422
             assert client.get("/api/wishlist", headers=second_headers).json()["placeIds"] == []
 
-            assert client.get("/api/trips", headers=second_headers).json() == []
-            assert client.get(f"/api/trips/{trip['id']}", headers=second_headers).status_code == 404
+            second_groups = client.get("/api/groups", headers=second_headers).json()
+            assert len(second_groups) == 1 and second_groups[0]["isWishlist"]
+            assert client.get(f"/api/groups/{group['id']}", headers=second_headers).status_code == 404
             assert client.post(
-                f"/api/groups/{trip['id']}/places", headers=second_headers, json={"placeIds": [PLACE_IDS[2]]}
+                f"/api/groups/{group['id']}/places", headers=second_headers, json={"placeIds": [PLACE_IDS[2]]}
             ).status_code == 404
-            assert client.get("/api/trips").status_code == 401
+            assert client.get("/api/groups").status_code == 401
 
             filtered = client.get(
                 "/api/places/search",
                 headers=first_headers,
-                params={"type": "provincial", "query": "Trip Test Beta", "visited": "false"},
+                params={"type": "provincial", "query": "Group Test Beta", "visited": "false"},
             )
             assert filtered.status_code == 200
             assert [place["id"] for place in filtered.json()["places"]] == [PLACE_IDS[1]]
@@ -96,7 +97,7 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             nearby = client.get(
                 "/api/places/search",
                 headers=first_headers,
-                params={"latitude": 49.0, "longitude": -124.0, "radius_km": 20, "query": "Trip Test", "limit": 1, "offset": 0},
+                params={"latitude": 49.0, "longitude": -124.0, "radius_km": 20, "query": "Group Test", "limit": 1, "offset": 0},
             )
             assert nearby.status_code == 200
             assert nearby.json()["places"][0]["id"] == PLACE_IDS[0]
@@ -105,7 +106,7 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             next_nearby = client.get(
                 "/api/places/search",
                 headers=first_headers,
-                params={"latitude": 49.0, "longitude": -124.0, "radius_km": 20, "query": "Trip Test", "limit": 1, "offset": 1},
+                params={"latitude": 49.0, "longitude": -124.0, "radius_km": 20, "query": "Group Test", "limit": 1, "offset": 1},
             )
             assert [place["id"] for place in next_nearby.json()["places"]] == [PLACE_IDS[1]]
 
@@ -122,7 +123,7 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
                 conn.execute("UPDATE places SET active = FALSE WHERE id = %s", (PLACE_IDS[1],))
                 conn.commit()
             inactive = client.post(
-                f"/api/trips/{trip['id']}/places",
+                f"/api/groups/{group['id']}/places",
                 headers=first_headers,
                 json={"placeIds": [PLACE_IDS[1]]},
             )
@@ -130,19 +131,19 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             details = client.get(f"/api/places/{PLACE_IDS[1]}", headers=first_headers)
             assert details.status_code == 404
             renamed = client.patch(
-                f"/api/groups/{trip['id']}", headers=first_headers, json={"name": "Renamed route"}
+                f"/api/groups/{group['id']}", headers=first_headers, json={"name": "Renamed route"}
             )
             assert renamed.status_code == 200
             assert renamed.json()["name"] == "Renamed route"
             removed = client.request(
                 "DELETE",
-                f"/api/groups/{trip['id']}/places",
+                f"/api/groups/{group['id']}/places",
                 headers=first_headers,
                 json={"placeIds": [PLACE_IDS[2]]},
             )
             assert removed.status_code == 200
             assert PLACE_IDS[2] not in removed.json()["placeIds"]
-            assert client.delete(f"/api/groups/{trip['id']}", headers=first_headers).status_code == 204
+            assert client.delete(f"/api/groups/{group['id']}", headers=first_headers).status_code == 204
     finally:
         with psycopg.connect(database_url) as conn:
             conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", (EMAILS,))
