@@ -4,7 +4,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Place } from "./places";
-import { useTrips } from "./use-trips";
+import { useGroups } from "./use-groups";
 
 const place: Place = {
   id: "park-1",
@@ -34,13 +34,13 @@ function deferred<T>() {
 
 afterEach(cleanup);
 
-describe("useTrips account isolation", () => {
+describe("useGroups account isolation", () => {
   it("discards a list response from the previous account", async () => {
     const first = deferred<Response>();
     const requestA = vi.fn(() => first.promise);
     const requestB = vi.fn(() => json([{ id: "group-b", name: "B", isWishlist: false, placeIds: [] }]));
     const { result, rerender } = renderHook(
-      ({ identityKey, request }) => useTrips({
+      ({ identityKey, request }) => useGroups({
         apiBaseUrl: "https://api.example.test",
         authenticated: true,
         identityKey,
@@ -52,13 +52,13 @@ describe("useTrips account isolation", () => {
     await waitFor(() => expect(requestA).toHaveBeenCalled());
 
     rerender({ identityKey: "account-b", request: requestB });
-    await waitFor(() => expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]));
 
     await act(async () => {
       first.resolve(await json([{ id: "group-a", name: "A", isWishlist: false, placeIds: [] }]));
       await first.promise;
     });
-    expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]);
+    expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]);
   });
 
   it("discards an in-flight membership mutation after account switch", async () => {
@@ -68,7 +68,7 @@ describe("useTrips account isolation", () => {
       : json([{ id: "group-a", name: "A", isWishlist: false, placeIds: [] }]));
     const requestB = vi.fn(() => json([{ id: "group-b", name: "B", isWishlist: false, placeIds: [] }]));
     const { result, rerender } = renderHook(
-      ({ identityKey, request }) => useTrips({
+      ({ identityKey, request }) => useGroups({
         apiBaseUrl: "https://api.example.test",
         authenticated: true,
         identityKey,
@@ -77,7 +77,7 @@ describe("useTrips account isolation", () => {
       }),
       { initialProps: { identityKey: "account-a", request: requestA } },
     );
-    await waitFor(() => expect(result.current.trips.map((group) => group.id)).toEqual(["group-a"]));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["group-a"]));
 
     let pending!: Promise<void>;
     act(() => { pending = result.current.addPlace("group-a", place.id); });
@@ -87,13 +87,13 @@ describe("useTrips account isolation", () => {
     ));
 
     rerender({ identityKey: "account-b", request: requestB });
-    await waitFor(() => expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]));
     expect(result.current.busy).toBe(false);
     await act(async () => {
       mutation.resolve(await json([{ id: "group-a", name: "A", isWishlist: false, placeIds: [place.id] }]));
       await pending;
     });
-    expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]);
+    expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]);
     expect(result.current.busy).toBe(false);
   });
 });

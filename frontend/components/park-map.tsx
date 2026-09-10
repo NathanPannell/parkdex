@@ -92,7 +92,7 @@ function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode
         name: place.name,
         category: place.category,
         visited: visited.has(place.id) ? 1 : 0,
-        tripSelected: selectedIds.has(place.id) ? 1 : 0,
+        groupSelected: selectedIds.has(place.id) ? 1 : 0,
       },
     })),
   };
@@ -479,8 +479,8 @@ export function ParkMap({
     clusterFitRequestRef.current += 1;
     if ((!selectedId && !selectedIds.size) || !mapRef.current) return;
     const place = selectedId ? places.find((candidate) => candidate.id === selectedId) : undefined;
-    const tripPlaces = places.filter((candidate) => selectedIds.has(candidate.id));
-    if (!place && !tripPlaces.length) return;
+    const groupPlaces = places.filter((candidate) => selectedIds.has(candidate.id));
+    if (!place && !groupPlaces.length) return;
     const map = mapRef.current;
     const container = containerRef.current;
     if (!container) return;
@@ -499,8 +499,8 @@ export function ParkMap({
           map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
           return;
         }
-        const longitudes = tripPlaces.map((candidate) => candidate.longitude);
-        const latitudes = tripPlaces.map((candidate) => candidate.latitude);
+        const longitudes = groupPlaces.map((candidate) => candidate.longitude);
+        const latitudes = groupPlaces.map((candidate) => candidate.latitude);
         if (!longitudes.length || !latitudes.length) return;
         const bounds: [[number, number], [number, number]] = [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]];
         if (bounds[0][0] === bounds[1][0] && bounds[0][1] === bounds[1][1]) {

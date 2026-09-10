@@ -73,9 +73,9 @@ export function placeMarkerLayerSpecifications(): LayerSpecification[] {
       filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-color": categoryColor,
-        "circle-radius": ["case", ["==", ["get", "tripSelected"], 1], 16, ["==", ["get", "visited"], 1], 13, 10],
+        "circle-radius": ["case", ["==", ["get", "groupSelected"], 1], 16, ["==", ["get", "visited"], 1], 13, 10],
         "circle-stroke-color": MAP_INK,
-        "circle-stroke-width": ["case", ["==", ["get", "tripSelected"], 1], 5, 3],
+        "circle-stroke-width": ["case", ["==", ["get", "groupSelected"], 1], 5, 3],
       },
     },
     {
