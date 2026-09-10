@@ -27,6 +27,7 @@ from backend.app.auth import (
     DUMMY_PASSWORD_HASH,
     clear_login_failures,
     reserve_login_attempt,
+    reserve_rate_limit,
     sha256_hex,
     verify_password,
 )
@@ -38,6 +39,11 @@ AUTH_REQUEST_LIFETIME = timedelta(minutes=10)
 AUTH_CODE_LIFETIME = timedelta(minutes=5)
 ACCESS_TOKEN_LIFETIME = timedelta(hours=1)
 REFRESH_TOKEN_LIFETIME = timedelta(days=30)
+MAX_DCR_METADATA_BYTES = 16 * 1024
+MAX_DCR_REDIRECT_URIS = 10
+MAX_DCR_REDIRECT_URI_LENGTH = 2048
+MAX_DCR_CLIENT_NAME_LENGTH = 128
+MAX_CONSENT_BODY_BYTES = 16 * 1024
 
 
 def database_thread(method):
@@ -70,6 +76,7 @@ def _cleanup_expired(conn) -> None:
     conn.execute("DELETE FROM mcp_oauth_authorization_requests WHERE expires_at < NOW()")
     conn.execute("DELETE FROM mcp_oauth_authorization_codes WHERE expires_at < NOW()")
     conn.execute("DELETE FROM mcp_oauth_tokens WHERE expires_at < NOW()")
+    conn.execute("DELETE FROM mcp_oauth_clients WHERE last_used_at < NOW() - INTERVAL '90 days' AND NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_requests r WHERE r.client_id = mcp_oauth_clients.client_id AND r.expires_at > NOW()) AND NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_codes c WHERE c.client_id = mcp_oauth_clients.client_id AND c.expires_at > NOW()) AND NOT EXISTS (SELECT 1 FROM mcp_oauth_tokens t WHERE t.client_id = mcp_oauth_clients.client_id AND t.revoked_at IS NULL AND t.expires_at > NOW())")
 
 
 class ParkdexAccessToken(AccessToken):
@@ -78,6 +85,8 @@ class ParkdexAccessToken(AccessToken):
 
 class ParkdexRefreshToken(RefreshToken):
     grant_id: str
+    family_id: str
+    revoked: bool = False
 
 
 class ParkdexOAuthProvider(
@@ -95,9 +104,11 @@ class ParkdexOAuthProvider(
         except ValueError:
             return None
         with contextmanager(connection)() as conn:
+            _cleanup_expired(conn)
             row = conn.execute(
-                "SELECT metadata FROM mcp_oauth_clients WHERE client_id = %s", (client_id,)
+                "UPDATE mcp_oauth_clients SET last_used_at = NOW() WHERE client_id = %s RETURNING metadata", (client_id,)
             ).fetchone()
+            conn.commit()
         return OAuthClientInformationFull.model_validate(row["metadata"]) if row else None
 
     @database_thread
@@ -124,9 +135,20 @@ class ParkdexOAuthProvider(
                 error="invalid_redirect_uri",
                 error_description="Redirect URIs must use HTTPS or loopback HTTP and cannot contain credentials or fragments",
             )
+        if len(client_info.redirect_uris) > MAX_DCR_REDIRECT_URIS or any(len(str(uri)) > MAX_DCR_REDIRECT_URI_LENGTH for uri in client_info.redirect_uris):
+            from mcp.server.auth.provider import RegistrationError
+            raise RegistrationError(error="invalid_redirect_uri", error_description="Too many or too-long redirect URIs")
+        if client_info.client_name and len(client_info.client_name) > MAX_DCR_CLIENT_NAME_LENGTH:
+            from mcp.server.auth.provider import RegistrationError
+            raise RegistrationError(error="invalid_client_metadata", error_description="Client name is too long")
         metadata = client_info.model_dump(mode="json")
+        import json
+        if len(json.dumps(metadata, separators=(",", ":")).encode("utf-8")) > MAX_DCR_METADATA_BYTES:
+            from mcp.server.auth.provider import RegistrationError
+            raise RegistrationError(error="invalid_client_metadata", error_description="Client metadata is too large")
         with contextmanager(connection)() as conn:
             _cleanup_expired(conn)
+            reserve_rate_limit(conn, "mcp_dcr", "global", 100, timedelta(hours=1))
             try:
                 conn.execute(
                     "INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, %s::jsonb)",
@@ -222,14 +244,17 @@ class ParkdexOAuthProvider(
     ) -> ParkdexRefreshToken | None:
         with contextmanager(connection)() as conn:
             row = conn.execute(
-                """SELECT grant_id, account_id, scopes, resource, expires_at FROM mcp_oauth_tokens
+                """SELECT grant_id, family_id, account_id, scopes, resource, expires_at, revoked_at FROM mcp_oauth_tokens
                    WHERE token_hash = %s AND token_kind = 'refresh' AND client_id = %s
-                     AND revoked_at IS NULL AND expires_at > NOW()""",
+                     AND expires_at > NOW()""",
                 (sha256_hex(refresh_token), client.client_id),
             ).fetchone()
+            if row is not None:
+                conn.execute("UPDATE mcp_oauth_clients SET last_used_at = NOW() WHERE client_id = %s", (client.client_id,))
+                conn.commit()
         if row is None:
             return None
-        return ParkdexRefreshToken(token=refresh_token, grant_id=str(row["grant_id"]), client_id=str(client.client_id), subject=str(row["account_id"]), scopes=row["scopes"], resource=row["resource"], expires_at=_timestamp(row["expires_at"]))
+        return ParkdexRefreshToken(token=refresh_token, grant_id=str(row["grant_id"]), family_id=str(row["family_id"]), revoked=row["revoked_at"] is not None, client_id=str(client.client_id), subject=str(row["account_id"]), scopes=row["scopes"], resource=row["resource"], expires_at=_timestamp(row["expires_at"]))
 
     @database_thread
     async def exchange_refresh_token(
@@ -238,16 +263,21 @@ class ParkdexOAuthProvider(
         access, refresh, grant_id = _token(), _token(), str(uuid4())
         now = datetime.now(timezone.utc)
         with contextmanager(connection)() as conn:
-            revoked = conn.execute(
-                """UPDATE mcp_oauth_tokens SET revoked_at = NOW()
-                   WHERE grant_id = %s AND client_id = %s AND revoked_at IS NULL
-                   RETURNING account_id, resource""",
-                (refresh_token.grant_id, client.client_id),
-            ).fetchall()
-            if not revoked:
+            row = conn.execute(
+                """SELECT grant_id, account_id, resource, family_id, revoked_at FROM mcp_oauth_tokens
+                   WHERE token_hash = %s AND token_kind = 'refresh' AND client_id = %s
+                     AND expires_at > NOW() FOR UPDATE""",
+                (sha256_hex(refresh_token.token), client.client_id),
+            ).fetchone()
+            if row is None:
                 conn.rollback()
-                raise TokenError(error="invalid_grant", error_description="Refresh token is invalid or already used")
-            self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(refresh_token.subject), scopes, refresh_token.resource or self.resource_url, now)
+                raise TokenError(error="invalid_grant", error_description="Refresh token is invalid or expired")
+            if row["revoked_at"] is not None:
+                conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE family_id = %s AND revoked_at IS NULL", (row["family_id"],))
+                conn.commit()
+                raise TokenError(error="invalid_grant", error_description="Refresh token reuse detected")
+            conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE grant_id = %s AND client_id = %s AND revoked_at IS NULL", (row["grant_id"], client.client_id))
+            self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(row["account_id"]), scopes, row["resource"] or self.resource_url, now, family_id=str(row["family_id"]), parent_grant_id=str(row["grant_id"]))
             conn.commit()
         return OAuthToken(access_token=access, refresh_token=refresh, expires_in=int(ACCESS_TOKEN_LIFETIME.total_seconds()), scope=" ".join(scopes))
 
@@ -260,6 +290,9 @@ class ParkdexOAuthProvider(
                      AND revoked_at IS NULL AND expires_at > NOW()""",
                 (sha256_hex(token),),
             ).fetchone()
+            if row is not None:
+                conn.execute("UPDATE mcp_oauth_clients SET last_used_at = NOW() WHERE client_id = %s", (row["client_id"],))
+                conn.commit()
         if row is None:
             return None
         return ParkdexAccessToken(token=token, grant_id=str(row["grant_id"]), client_id=str(row["client_id"]), subject=str(row["account_id"]), scopes=row["scopes"], resource=row["resource"], expires_at=_timestamp(row["expires_at"]))
@@ -270,15 +303,15 @@ class ParkdexOAuthProvider(
             conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE grant_id = %s AND revoked_at IS NULL", (token.grant_id,))
             conn.commit()
 
-    def _insert_pair(self, conn, access: str, refresh: str, grant_id: str, client_id: str, account_id: str, scopes: list[str], resource: str, now: datetime) -> None:
+    def _insert_pair(self, conn, access: str, refresh: str, grant_id: str, client_id: str, account_id: str, scopes: list[str], resource: str, now: datetime, *, family_id: str | None = None, parent_grant_id: str | None = None) -> None:
         with conn.cursor() as cursor:
             cursor.executemany(
             """INSERT INTO mcp_oauth_tokens
-               (token_hash, token_kind, grant_id, client_id, account_id, scopes, resource, expires_at)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+               (token_hash, token_kind, grant_id, family_id, parent_grant_id, client_id, account_id, scopes, resource, expires_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             [
-                (sha256_hex(access), "access", grant_id, client_id, account_id, scopes, resource, now + ACCESS_TOKEN_LIFETIME),
-                (sha256_hex(refresh), "refresh", grant_id, client_id, account_id, scopes, resource, now + REFRESH_TOKEN_LIFETIME),
+                (sha256_hex(access), "access", grant_id, family_id or grant_id, parent_grant_id, client_id, account_id, scopes, resource, now + ACCESS_TOKEN_LIFETIME),
+                (sha256_hex(refresh), "refresh", grant_id, family_id or grant_id, parent_grant_id, client_id, account_id, scopes, resource, now + REFRESH_TOKEN_LIFETIME),
                 ],
             )
 
@@ -361,6 +394,12 @@ async def consent_get(request: Request, provider: ParkdexOAuthProvider) -> HTMLR
 
 async def consent_post(request: Request, provider: ParkdexOAuthProvider) -> RedirectResponse | HTMLResponse:
     import anyio
+    content_length = request.headers.get("content-length")
+    if content_length is not None and (not content_length.isdigit() or int(content_length) > MAX_CONSENT_BODY_BYTES):
+        return HTMLResponse("Authorization form is too large.", status_code=413, headers=_html_headers())
+    body = await request.body()
+    if len(body) > MAX_CONSENT_BODY_BYTES:
+        return HTMLResponse("Authorization form is too large.", status_code=413, headers=_html_headers())
     form = await request.form()
     response = await anyio.to_thread.run_sync(
         provider.complete_consent, str(form.get("request", "")), str(form.get("email", "")),

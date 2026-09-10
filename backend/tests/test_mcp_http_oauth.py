@@ -83,9 +83,32 @@ def test_public_oauth_pkce_streamable_http_and_revocation() -> None:
         groups = client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "list_groups", "arguments": {}}})
         assert groups.status_code == 200 and groups.json()["result"]["isError"] is False
 
+        old_refresh = tokens.json()["refresh_token"]
+        rotated = client.post("/token", data={
+            "grant_type": "refresh_token", "client_id": client_id,
+            "refresh_token": old_refresh, "scope": "mcp", "resource": "http://localhost:8000/mcp",
+        })
+        assert rotated.status_code == 200
+        replay = client.post("/token", data={
+            "grant_type": "refresh_token", "client_id": client_id,
+            "refresh_token": old_refresh, "scope": "mcp", "resource": "http://localhost:8000/mcp",
+        })
+        assert replay.status_code == 400
+        assert client.post("/mcp", headers={"Authorization": f"Bearer {rotated.json()['access_token']}", "Accept": "application/json, text/event-stream"}, json={"jsonrpc": "2.0", "id": 99, "method": "tools/list", "params": {}}).status_code == 401
+
         revoked = client.post("/revoke", data={"token": access_token, "client_id": client_id, "client_secret": ""})
         assert revoked.status_code == 200
         assert client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}).status_code == 401
+
+        oversized = "x" * 16_385
+        assert client.post("/oauth/consent", data={"request": oversized}).status_code == 413
+
+        too_many_redirects = client.post("/register", json={
+            "client_name": "Bounded client", "redirect_uris": [f"http://127.0.0.1:{18000 + i}/callback" for i in range(11)],
+            "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"], "scope": "mcp",
+        })
+        assert too_many_redirects.status_code == 400
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         stored = " ".join(row[0] for row in conn.execute("SELECT token_hash FROM mcp_oauth_tokens").fetchall())

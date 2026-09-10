@@ -49,6 +49,7 @@ from backend.app.schemas import (
     PlaceSearchResult,
     SearchPlace,
     PasswordChange,
+    PasswordSet,
     PasswordResetConfirmation,
     TrailResult,
     TrailUpdate,
@@ -138,11 +139,13 @@ def lock_account_progress(conn: Connection, account_id: str) -> None:
 
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     visits = visits_for_account(conn, identity.account_id)
+    account = conn.execute("SELECT password_hash IS NOT NULL AS has_password FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
     return {
         "account": {
             "id": identity.account_id,
             "email": identity.email,
             "email_verified": identity.email_verified,
+            "has_password": bool(account and account["has_password"]),
         },
         "visited_ids": visited_ids(visits),
         "visits": visits,
@@ -632,7 +635,7 @@ def register(payload: Credentials):
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": False},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": False, "has_password": True},
         "visited_ids": [],
         "visits": [],
         "completed_trail_ids": [],
@@ -663,7 +666,7 @@ def login(payload: Credentials):
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": account["email_verified"]},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": account["email_verified"], "has_password": bool(account["password_hash"])},
         "visited_ids": visited_ids(visits),
         "visits": visits,
         "completed_trail_ids": completed_trail_ids,
@@ -721,6 +724,7 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
             raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
         conn.commit()
     return Response(status_code=204)
@@ -741,7 +745,27 @@ def change_password(payload: PasswordChange, authorization: str | None = Header(
             raise HTTPException(status_code=409, detail="Password changed during this request; try again")
         conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
         record_security_event(conn, "password_changed", identity.account_id, "success")
+        conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/password-set", status_code=204)
+def set_password(payload: PasswordSet, authorization: str | None = Header(default=None)) -> Response:
+    """Set the first local password on a Google-created account."""
+    new_hash = hash_password(payload.newPassword)
+    with contextmanager(connection)() as conn:
+        identity = require_bearer(conn, authorization)
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        if account["password_hash"] is not None:
+            raise HTTPException(status_code=409, detail="A password is already set; use password change instead")
+        conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
+        conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        record_security_event(conn, "password_set", identity.account_id, "success")
         conn.commit()
     return Response(status_code=204)
 
@@ -867,6 +891,7 @@ def finish_google_oauth(payload: GoogleCallback):
                 if account["email_verified_at"] is None:
                     conn.execute("UPDATE accounts SET password_hash = NULL, email_verified_at = NOW() WHERE id = %s", (account["id"],))
                     conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
+                    conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
                     conn.execute("UPDATE account_action_tokens SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
                 else:
                     conn.execute("UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (account["id"],))
@@ -878,7 +903,9 @@ def finish_google_oauth(payload: GoogleCallback):
         trails = completed_trails_for_account(conn, str(account["id"]))
         record_security_event(conn, "google_sign_in", str(account["id"]), "success")
         conn.commit()
-    return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
+    with contextmanager(connection)() as conn:
+        account = conn.execute("SELECT id, email, password_hash FROM accounts WHERE id = %s", (account["id"],)).fetchone()
+    return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True, "has_password": bool(account.get("password_hash"))}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
 
 
 @app.delete("/api/account/progress", status_code=204)

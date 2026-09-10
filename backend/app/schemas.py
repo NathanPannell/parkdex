@@ -127,6 +127,7 @@ class Account(BaseModel):
     id: str
     email: str
     email_verified: bool = Field(serialization_alias="emailVerified")
+    has_password: bool = Field(serialization_alias="hasPassword")
 
 
 class EmailRequest(BaseModel):
@@ -148,6 +149,10 @@ class PasswordResetConfirmation(TokenConfirmation):
 
 class PasswordChange(BaseModel):
     currentPassword: str = Field(min_length=1, max_length=128)
+    newPassword: str = Field(min_length=12, max_length=128)
+
+
+class PasswordSet(BaseModel):
     newPassword: str = Field(min_length=12, max_length=128)
 
 
