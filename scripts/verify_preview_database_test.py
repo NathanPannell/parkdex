@@ -1,6 +1,8 @@
+import json
+
 import pytest
 
-from scripts.verify_preview_database import validate_target
+from scripts.verify_preview_database import CATALOGUE, expected_place_ids, validate_target
 
 
 def test_preview_target_requires_exact_owned_database_and_host() -> None:
@@ -23,3 +25,9 @@ def test_preview_target_requires_exact_owned_database_and_host() -> None:
 def test_preview_target_rejects_parent_or_mismatched_identity(url: str, database: str, host: str) -> None:
     with pytest.raises(RuntimeError):
         validate_target(url, database, host)
+
+
+def test_historical_place_ids_are_derived_from_exact_seed_migrations() -> None:
+    current_ids = {place["id"] for place in json.loads(CATALOGUE.read_text(encoding="utf-8"))}
+    migration_ids = set(expected_place_ids())
+    assert current_ids < migration_ids

@@ -54,6 +54,21 @@ def expected_migrations() -> dict[str, str]:
     }
 
 
+def expected_place_ids() -> list[str]:
+    ids: set[str] = set()
+    for path in sorted(MIGRATIONS.glob("*.sql")):
+        source = path.read_text(encoding="utf-8")
+        for values in re.findall(
+            r"INSERT\s+INTO\s+places\b.*?\bVALUES\s*(.*?)\s+ON\s+CONFLICT",
+            source,
+            flags=re.IGNORECASE | re.DOTALL,
+        ):
+            ids.update(value.replace("''", "'") for value in re.findall(r"\(\s*'((?:''|[^'])+)'\s*,", values))
+    if not ids:
+        raise RuntimeError("Source migrations contain no deterministic place catalogue")
+    return sorted(ids)
+
+
 def verify_migrated(conn: psycopg.Connection) -> None:
     expected = expected_migrations()
     actual = dict(conn.execute("SELECT version, checksum FROM schema_migrations ORDER BY version").fetchall())
@@ -62,7 +77,7 @@ def verify_migrated(conn: psycopg.Connection) -> None:
 
     expected_ids = sorted(place["id"] for place in json.loads(CATALOGUE.read_text(encoding="utf-8")))
     place_rows = conn.execute("SELECT id, active FROM places ORDER BY id").fetchall()
-    if [row[0] for row in place_rows] != expected_ids or not all(row[1] for row in place_rows):
+    if [row[0] for row in place_rows if row[1]] != expected_ids or [row[0] for row in place_rows] != expected_place_ids():
         raise RuntimeError("Preview catalogue does not match the exact source catalogue")
 
     for table in table_names(conn):

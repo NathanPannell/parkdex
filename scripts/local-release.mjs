@@ -13,7 +13,7 @@ const value = (name, fallback = "") => {
 };
 const flag = (name) => process.argv.includes(name);
 const LIVE_PROOF_PR = 99999;
-const LIVE_PROOF_RELEASE_ID = "a450f814-81ac-4366-a2da-c12d340c44b3";
+const LIVE_PROOF_RELEASE_ID = "f08d195c-cb6d-4f08-8fe1-d1083a4a69ec";
 const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
 
 function run(command, args, options = {}) {
