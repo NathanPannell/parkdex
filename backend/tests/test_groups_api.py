@@ -2,7 +2,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
+import pytest
 from fastapi.testclient import TestClient
+from psycopg.errors import CheckViolation
 from psycopg.rows import dict_row
 
 from backend.app.main import app
@@ -182,4 +184,25 @@ def test_wishlist_is_a_singleton_under_concurrent_creation() -> None:
     finally:
         with psycopg.connect(database_url) as conn:
             conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+            conn.commit()
+
+
+def test_database_enforces_wishlist_group_identity() -> None:
+    database_url = os.environ["DATABASE_URL"]
+    email = "wishlist-constraint@example.com"
+    with psycopg.connect(database_url) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        account_id = conn.execute(
+            "INSERT INTO accounts (email) VALUES (%s) RETURNING id", (email,)
+        ).fetchone()[0]
+        conn.commit()
+        try:
+            with pytest.raises(CheckViolation):
+                conn.execute(
+                    "INSERT INTO account_groups (account_id, name, is_wishlist) VALUES (%s, 'Wishlist', FALSE)",
+                    (account_id,),
+                )
+        finally:
+            conn.rollback()
+            conn.execute("DELETE FROM accounts WHERE id = %s", (account_id,))
             conn.commit()

@@ -4,7 +4,11 @@ CREATE TABLE account_groups (
     name TEXT NOT NULL CHECK (CHAR_LENGTH(BTRIM(name)) BETWEEN 1 AND 200),
     is_wishlist BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+        (is_wishlist AND name = 'Wishlist')
+        OR (NOT is_wishlist AND LOWER(BTRIM(name)) <> 'wishlist')
+    )
 );
 
 CREATE INDEX account_groups_account_id_updated_idx
