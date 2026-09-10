@@ -12,7 +12,7 @@ https://<railway-api-domain>/mcp
 
 The client discovers Parkdex's OAuth metadata, dynamically registers, and opens the Parkdex authorization page. Sign in there and approve access. Access is account-scoped, revocable, and never grants the MCP client access to Parkdex's REST session endpoints.
 
-Google-only accounts must set a Parkdex password before using the hosted authorization page. Local development uses the same endpoint at `http://localhost:8000/mcp` with `API_PUBLIC_URL=http://localhost:8000` and `MCP_PUBLIC_URL=http://localhost:8000/mcp`.
+Google-only accounts must first use **Set password** in Parkdex Account settings. Local development uses the same endpoint at `http://localhost:8000/mcp` with `API_PUBLIC_URL=http://localhost:8000` and `MCP_PUBLIC_URL=http://localhost:8000/mcp`.
 
 ## Groups and tools
 

@@ -754,14 +754,21 @@ def change_password(payload: PasswordChange, authorization: str | None = Header(
 @app.post("/api/auth/password-set", status_code=204)
 def set_password(payload: PasswordSet, authorization: str | None = Header(default=None)) -> Response:
     """Set the first local password on a Google-created account."""
-    new_hash = hash_password(payload.newPassword)
     with contextmanager(connection)() as conn:
         identity = require_bearer(conn, authorization)
-        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
         if account["password_hash"] is not None:
             raise HTTPException(status_code=409, detail="A password is already set; use password change instead")
+    new_hash = hash_password(payload.newPassword)
+    with contextmanager(connection)() as conn:
+        current_identity = require_bearer(conn, authorization)
+        if current_identity.account_id != identity.account_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
+        if not account or account["password_hash"] is not None:
+            raise HTTPException(status_code=409, detail="A password was set during this request; sign in again")
         conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))

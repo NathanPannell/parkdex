@@ -21,7 +21,7 @@ from starlette.routing import Route
 
 from backend.app.auth import reserve_rate_limit
 from backend.app.db import connection
-from backend.app.mcp_oauth import MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
+from backend.app.mcp_oauth import MAX_CONSENT_BODY_BYTES, MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
 from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 from backend.app.schemas import Group, PlaceSearchResult, SearchPlace
 
@@ -206,6 +206,32 @@ class RestartableHostedMCP:
     async def __call__(self, scope, receive, send):
         if self._app is None:
             await JSONResponse({"detail": "MCP server is not ready"}, status_code=503)(scope, receive, send)
+            return
+        if scope.get("type") == "http" and scope.get("path") in {"/register", "/oauth/consent", "/token", "/revoke"}:
+            content_length = next((value for key, value in scope.get("headers", []) if key == b"content-length"), None)
+            if content_length is not None and (not content_length.isdigit() or int(content_length) > MAX_CONSENT_BODY_BYTES):
+                await JSONResponse({"detail": "OAuth request is too large"}, status_code=413)(scope, receive, send)
+                return
+            body = bytearray()
+            more_body = True
+            while more_body:
+                message = await receive()
+                if message.get("type") != "http.request":
+                    await JSONResponse({"detail": "OAuth request was interrupted"}, status_code=400)(scope, receive, send)
+                    return
+                body.extend(message.get("body", b""))
+                if len(body) > MAX_CONSENT_BODY_BYTES:
+                    await JSONResponse({"detail": "OAuth request is too large"}, status_code=413)(scope, receive, send)
+                    return
+                more_body = message.get("more_body", False)
+            delivered = False
+            async def replay_body():
+                nonlocal delivered
+                if delivered:
+                    return {"type": "http.disconnect"}
+                delivered = True
+                return {"type": "http.request", "body": bytes(body), "more_body": False}
+            await self._app(scope, replay_body, send)
             return
         await self._app(scope, receive, send)
 

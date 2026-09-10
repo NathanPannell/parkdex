@@ -57,7 +57,10 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             created = client.post("/api/auth/register", json={"email": email, "password": "old password value"}).json()
             mcp_grant = str(uuid4())
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) SELECT %s, 'access', %s, %s, gen_random_uuid(), id, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour' FROM accounts WHERE email = %s", (hashlib.sha256(b"reset-mcp-token").hexdigest(), mcp_grant, mcp_grant, email))
+                client_id = str(uuid4())
+                conn.execute("INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, '{}')", (client_id,))
+                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) SELECT %s, 'access', %s, %s, %s, id, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour' FROM accounts WHERE email = %s", (hashlib.sha256(b"reset-mcp-token").hexdigest(), mcp_grant, mcp_grant, client_id, email))
+                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) SELECT %s, 'refresh', %s, %s, %s, id, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '30 days' FROM accounts WHERE email = %s", (hashlib.sha256(b"reset-mcp-refresh").hexdigest(), mcp_grant, mcp_grant, client_id, email))
                 conn.commit()
             known = client.post("/api/auth/password-reset/request", json={"email": email})
             missing = client.post("/api/auth/password-reset/request", json={"email": unknown})
@@ -74,7 +77,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             assert client.post("/api/auth/password-reset/confirm", json={"token": reset_token, "newPassword": "another password value"}).status_code == 400
             assert client.get("/api/auth/me", headers=bearer(created["token"])).status_code == 401
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                assert conn.execute("SELECT revoked_at IS NOT NULL FROM mcp_oauth_tokens WHERE grant_id = %s", (mcp_grant,)).fetchone()[0] is True
+                assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE grant_id = %s AND revoked_at IS NOT NULL", (mcp_grant,)).fetchone()[0] == 2
             assert client.post("/api/auth/login", json={"email": email, "password": "new password value"}).status_code == 200
     finally:
         clean(email)
@@ -122,7 +125,10 @@ def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessio
             mcp_grant = str(uuid4())
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 account_id = conn.execute("SELECT id FROM accounts WHERE email = %s", (email,)).fetchone()[0]
-                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) VALUES (%s, 'access', %s, %s, gen_random_uuid(), %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour')", (hashlib.sha256(b"change-mcp-token").hexdigest(), mcp_grant, mcp_grant, account_id))
+                client_id = str(uuid4())
+                conn.execute("INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, '{}')", (client_id,))
+                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) VALUES (%s, 'access', %s, %s, %s, %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour')", (hashlib.sha256(b"change-mcp-token").hexdigest(), mcp_grant, mcp_grant, client_id, account_id))
+                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) VALUES (%s, 'refresh', %s, %s, %s, %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '30 days')", (hashlib.sha256(b"change-mcp-refresh").hexdigest(), mcp_grant, mcp_grant, client_id, account_id))
                 conn.commit()
             old_token = token_from_message(sent[-1][2], "verificationToken")
             assert client.post("/api/auth/email-verification/request", headers=bearer(first["token"])).status_code == 202
@@ -135,7 +141,7 @@ def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessio
             assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 401
             assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 401
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                assert conn.execute("SELECT revoked_at IS NOT NULL FROM mcp_oauth_tokens WHERE grant_id = %s", (mcp_grant,)).fetchone()[0] is True
+                assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE grant_id = %s AND revoked_at IS NOT NULL", (mcp_grant,)).fetchone()[0] == 2
     finally:
         clean(email)
 

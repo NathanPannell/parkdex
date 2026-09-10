@@ -19,6 +19,7 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from fastapi import HTTPException
 from psycopg.errors import UniqueViolation
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse
@@ -146,22 +147,33 @@ class ParkdexOAuthProvider(
         if len(json.dumps(metadata, separators=(",", ":")).encode("utf-8")) > MAX_DCR_METADATA_BYTES:
             from mcp.server.auth.provider import RegistrationError
             raise RegistrationError(error="invalid_client_metadata", error_description="Client metadata is too large")
+        rate_limited = False
+        duplicate_client = False
         with contextmanager(connection)() as conn:
             _cleanup_expired(conn)
-            reserve_rate_limit(conn, "mcp_dcr", "global", 100, timedelta(hours=1))
             try:
-                conn.execute(
-                    "INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, %s::jsonb)",
-                    (client_info.client_id, __import__("json").dumps(metadata)),
-                )
+                reserve_rate_limit(conn, "mcp_dcr", "global", 100, timedelta(hours=1))
+            except HTTPException:
+                rate_limited = True
+            if rate_limited:
                 conn.commit()
-            except UniqueViolation as exc:
-                conn.rollback()
-                from mcp.server.auth.provider import RegistrationError
+            else:
+                try:
+                    conn.execute(
+                        "INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, %s::jsonb)",
+                        (client_info.client_id, __import__("json").dumps(metadata)),
+                    )
+                    conn.commit()
+                except UniqueViolation:
+                    conn.rollback()
+                    duplicate_client = True
+        if rate_limited or duplicate_client:
+            from mcp.server.auth.provider import RegistrationError
 
-                raise RegistrationError(
-                    error="invalid_client_metadata", error_description="Client already registered"
-                ) from exc
+            raise RegistrationError(
+                error="invalid_client_metadata",
+                error_description="Registration rate limit exceeded" if rate_limited else "Client already registered",
+            )
 
     @database_thread
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
@@ -222,6 +234,7 @@ class ParkdexOAuthProvider(
     ) -> OAuthToken:
         access, refresh, grant_id = _token(), _token(), str(uuid4())
         now = datetime.now(timezone.utc)
+        token_error: str | None = None
         with contextmanager(connection)() as conn:
             row = conn.execute(
                 """
@@ -262,6 +275,7 @@ class ParkdexOAuthProvider(
     ) -> OAuthToken:
         access, refresh, grant_id = _token(), _token(), str(uuid4())
         now = datetime.now(timezone.utc)
+        token_error = None
         with contextmanager(connection)() as conn:
             row = conn.execute(
                 """SELECT grant_id, account_id, resource, family_id, revoked_at FROM mcp_oauth_tokens
@@ -271,14 +285,17 @@ class ParkdexOAuthProvider(
             ).fetchone()
             if row is None:
                 conn.rollback()
-                raise TokenError(error="invalid_grant", error_description="Refresh token is invalid or expired")
-            if row["revoked_at"] is not None:
+                token_error = "Refresh token is invalid or expired"
+            elif row["revoked_at"] is not None:
                 conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE family_id = %s AND revoked_at IS NULL", (row["family_id"],))
                 conn.commit()
-                raise TokenError(error="invalid_grant", error_description="Refresh token reuse detected")
-            conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE grant_id = %s AND client_id = %s AND revoked_at IS NULL", (row["grant_id"], client.client_id))
-            self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(row["account_id"]), scopes, row["resource"] or self.resource_url, now, family_id=str(row["family_id"]), parent_grant_id=str(row["grant_id"]))
-            conn.commit()
+                token_error = "Refresh token reuse detected"
+            else:
+                conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE grant_id = %s AND client_id = %s AND revoked_at IS NULL", (row["grant_id"], client.client_id))
+                self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(row["account_id"]), scopes, row["resource"] or self.resource_url, now, family_id=str(row["family_id"]), parent_grant_id=str(row["grant_id"]))
+                conn.commit()
+        if token_error:
+            raise TokenError(error="invalid_grant", error_description=token_error)
         return OAuthToken(access_token=access, refresh_token=refresh, expires_in=int(ACCESS_TOKEN_LIFETIME.total_seconds()), scope=" ".join(scopes))
 
     @database_thread

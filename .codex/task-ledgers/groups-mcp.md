@@ -26,6 +26,8 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 - 2026-09-10: frontend terminology conversion passed 117 tests, lint, typecheck, and interface checks; repository-wide legacy collection routes, types, helpers, filenames, UI copy, and documentation were removed.
 - 2026-09-10: hosted MCP focused test passed discovery, unauthenticated challenge, dynamic registration, PKCE login/consent, single-use code exchange, Streamable HTTP initialization/tool calls, hashed-token storage, and revocation.
 - 2026-09-10: merged current `origin/staging` at `ce80152aa5cda66b9422e3838d6e0cfc2fe9f1e2` and configured preview/staging/production Railway API services with exact `API_PUBLIC_URL` and `MCP_PUBLIC_URL` values.
+- 2026-09-10: hardened hosted OAuth with refresh-family replay revocation, account password-change/reset grant revocation, bounded and rate-limited DCR, stale-client cleanup, bounded OAuth request bodies, and a first-password flow for Google-created accounts.
+- 2026-09-10: focused disposable-database verification passed 17 tests covering OAuth discovery/DCR, consent and CSRF, PKCE failure/success, code and refresh replay, access/refresh revocation, expiry, resource/scope/redirect binding, cross-account isolation, exact public tool surface and output casing, Groups/Wishlist invariants, and stdio compatibility.
 
 ## Active verification plan
 
@@ -36,4 +38,4 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 
 ## Next action
 
-Commit the integrated deployment configuration, run the exact-revision validation and independent security review, then push and hand the attested SHA to the preview deployment owner.
+Commit the final security hardening, run exact-revision validation and independent security review, then push and hand the attested SHA to the preview deployment owner.
