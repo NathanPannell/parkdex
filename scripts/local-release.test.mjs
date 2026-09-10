@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, verifyRailwayServicePatchResult } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayServicePatchResult } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -52,6 +52,17 @@ test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
   assert.ok(command.args.includes("--data=-"));
   assert.ok(!command.args.includes("-"));
   assert.deepEqual(JSON.parse(command.input), { branch: { name: "preview/test" } });
+});
+
+test("provider diagnostics redact connection values at the call boundary", () => {
+  const safe = sanitizeProviderDiagnostic('{"value":"sensitive","url":"postgresql://owner:password@example.neon.tech/app","token":"long-lived-token"}');
+  assert.doesNotMatch(safe, /sensitive|password|long-lived-token/);
+  assert.match(safe, /\[redacted\]/);
+});
+
+test("preview database identity guards pass", () => {
+  const result = spawnSync("python", ["-m", "pytest", "scripts/verify_preview_database_test.py", "-q"], { cwd: process.cwd(), encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
 test("preview names stay in the conservative Railway-safe subset", () => {
@@ -147,6 +158,12 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /parkdexEnvironment/);
   assert.match(source, /state\.neonBranch !== `preview\/\$\{state\.railwayEnvironment\}`/);
   assert.match(source, /Preview database zero-row gate/);
+  assert.match(source, /app_preview_/);
+  assert.match(source, /endpoint\.host/);
+  assert.match(source, /-pooler\$2/);
+  assert.ok(source.indexOf("neonDatabaseInitialization") < source.indexOf("Preview database migrations"));
+  assert.match(source, /Preview database migration idempotency/);
+  assert.match(source, /Preview database isolation and catalogue gate/);
   assert.match(source, /frontend-creating/);
   assert.match(source, /railway-services-creating/);
   assert.match(providerSource, /environmentPatchCommit/);

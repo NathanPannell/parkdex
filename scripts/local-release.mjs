@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -13,7 +13,7 @@ const value = (name, fallback = "") => {
 };
 const flag = (name) => process.argv.includes(name);
 const LIVE_PROOF_PR = 99999;
-const LIVE_PROOF_RELEASE_ID = "30e9f675-420c-4655-b9bb-3430de5c877f";
+const LIVE_PROOF_RELEASE_ID = "a450f814-81ac-4366-a2da-c12d340c44b3";
 const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
 
 function run(command, args, options = {}) {
@@ -27,7 +27,7 @@ function run(command, args, options = {}) {
   });
   if (result.error || result.status !== 0) {
     const error = new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
-    error.providerStderr = result.stderr || "";
+    Object.defineProperty(error, "providerStderr", { value: sanitizeProviderDiagnostic(result.stderr), enumerable: false });
     throw error;
   }
   return (result.stdout || "").trim();
@@ -141,16 +141,42 @@ async function createNeonBranch(root, state, journalPath) {
   const details = detailsData.branch || detailsData;
   const annotations = neonAnnotations(detailsData);
   if (details?.name !== state.neonBranch || details?.init_source !== "parent-schema" || (details?.parent_id != null && details.parent_id !== parent[0].id) || annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon branch provenance was not verified");
-  updateJournal(journalPath, state, { neonBranchId: branch.id, status: "neon-created" });
+  const endpointListing = neonApi(root, `${base}/endpoints`, { query: { limit: 1000 } });
+  const endpoints = (endpointListing.endpoints || []).filter((endpoint) => endpoint.branch_id === branch.id && endpoint.project_id === project && endpoint.type === "read_write");
+  if (endpoints.length !== 1) throw new Error("Neon preview endpoint identity was not verified");
+  const endpoint = endpoints[0];
+  const directHost = endpoint.host;
+  const pooledHost = directHost?.replace(/^([^.]+)(\..+)$/, "$1-pooler$2");
+  if (!directHost || !pooledHost || directHost === pooledHost || !directHost.startsWith(`${endpoint.id}.`) || !directHost.endsWith(".neon.tech") || !pooledHost.startsWith(`${endpoint.id}-pooler.`) || !pooledHost.endsWith(".neon.tech")) throw new Error("Neon preview endpoint hosts were not verified");
+  updateJournal(journalPath, state, { neonBranchId: branch.id, neonEndpointId: endpoint.id, status: "neon-created" });
+
+  const databaseName = `app_preview_${state.releaseId.replaceAll("-", "").slice(0, 8)}`;
+  const databasePath = `${base}/branches/${branch.id}/databases`;
+  const databaseListing = neonApi(root, databasePath);
+  if ((databaseListing.databases || []).some((database) => database.name === databaseName)) throw new Error("Refusing to adopt an existing Neon preview database");
+  let database;
+  try {
+    updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), neonDatabase: { projectId: project, branchId: branch.id, endpointId: endpoint.id, databaseName, ownerName: "app_owner" } }, status: "neon-database-creating" });
+    const created = neonApi(root, databasePath, { method: "POST", body: { database: { name: databaseName, owner_name: "app_owner" } } });
+    database = created.database || created;
+  } catch (error) {
+    const recovered = neonApi(root, databasePath);
+    const matches = (recovered.databases || []).filter((item) => item.name === databaseName);
+    if (matches.length !== 1) throw error;
+    database = matches[0];
+  }
+  if (!database?.id || database.name !== databaseName || (database.branch_id != null && database.branch_id !== branch.id) || (database.owner_name != null && database.owner_name !== "app_owner")) throw new Error("Neon preview database identity was not verified");
+  updateJournal(journalPath, state, { neonDatabaseId: database.id, neonDatabaseName: databaseName, status: "neon-database-created" });
   const connection = async (pooled) => {
-    return neonApi(root, `${base}/connection_uri`, { query: { branch_id: branch.id, database_name: "app", role_name: "app_owner", pooled: String(pooled) } }).uri;
+    return neonApi(root, `${base}/connection_uri`, { query: { branch_id: branch.id, database_name: databaseName, role_name: "app_owner", pooled: String(pooled) } }).uri;
   };
   const validateUri = (uri, pooled) => {
     const parsed = new URL(uri);
-    if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname.endsWith('.neon.tech') || parsed.pathname !== '/app' || decodeURIComponent(parsed.username) !== 'app_owner' || pooled !== parsed.hostname.includes('-pooler')) throw new Error("Neon connection URI identity was not verified");
+    const expectedHost = pooled ? pooledHost : directHost;
+    if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || parsed.hostname !== expectedHost || parsed.pathname !== `/${databaseName}` || decodeURIComponent(parsed.username) !== 'app_owner') throw new Error("Neon connection URI identity was not verified");
     return uri;
   };
-  return { pooled: validateUri(await connection(true), true), direct: validateUri(await connection(false), false) };
+  return { pooled: validateUri(await connection(true), true), direct: validateUri(await connection(false), false), databaseName, directHost, pooledHost };
 }
 
 function railwayContext(projectId, baseEnvironment, token) {
@@ -347,7 +373,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
   const railwayEnvironment = preview ? buildPreviewEnvironmentName(pullRequest, sha, releaseId) : "staging";
   const neonBranch = preview ? `preview/${railwayEnvironment}` : null;
   const expiresAt = preview ? new Date(Date.now() + 7 * 86400_000).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
-  const state = { schema: "parkdex.local-release/v3", mode, status: "planned", releaseId, commitSha: sha, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const state = { schema: "parkdex.local-release/v3", mode, status: "planned", releaseId, commitSha: sha, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   const plan = { mode, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety: ["clean exact SHA", "reviewed code only", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] };
   if (!flag("--apply")) { console.log(JSON.stringify(plan, null, 2)); return; }
   if (!value("--sha")) throw new Error("--apply requires an explicit full --sha");
@@ -364,7 +390,12 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
   try {
     if (preview) {
       database = await createNeonBranch(root, state, journalPath);
-      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py")], { cwd: sourceRoot, env: minimalEnv({ PREVIEW_DATABASE_URL_UNPOOLED: database.direct }), label: "Preview database zero-row gate" });
+      const databaseEnv = { PREVIEW_DATABASE_URL: database.pooled, PREVIEW_DATABASE_URL_UNPOOLED: database.direct, PREVIEW_DATABASE_NAME: database.databaseName, PREVIEW_DATABASE_HOST: database.directHost, RAILWAY_ENVIRONMENT_NAME: railwayEnvironment };
+      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py"), "--phase", "empty"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database zero-row gate" });
+      updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), neonDatabaseInitialization: { branchId: state.neonBranchId, databaseId: state.neonDatabaseId, databaseName: database.databaseName } }, status: "database-initializing" });
+      run("python", ["-m", "backend.app.migrate"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database migrations" });
+      run("python", ["-m", "backend.app.migrate"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database migration idempotency" });
+      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py"), "--phase", "migrated"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database isolation and catalogue gate" });
       updateJournal(journalPath, state, { status: "database-verified" });
     }
     else database = { pooled: process.env.PARKDEX_STAGING_DATABASE_URL, direct: process.env.PARKDEX_STAGING_DATABASE_URL_UNPOOLED };

@@ -5,6 +5,17 @@ export function buildNeonApiCommand(cli, path, { method = "GET", query = {}, bod
   return { args, input: body === undefined ? undefined : JSON.stringify(body) };
 }
 
+export function sanitizeProviderDiagnostic(value) {
+  return String(value || "")
+    .replace(/(postgres(?:ql)?:\/\/)[^\s"']+/gi, "$1[redacted]")
+    .replace(/("value"\s*:\s*")[^"]*(")/gi, "$1[redacted]$2")
+    .replace(/("[^"]*(?:token|secret|password|api[_-]?key)[^"]*"\s*:\s*")[^"]*(")/gi, "$1[redacted]$2")
+    .replace(/((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/[A-Za-z0-9_-]{41,}/g, "[redacted]")
+    .trim()
+    .slice(-1000);
+}
+
 export function buildPreviewEnvironmentName(pullRequest, commitSha, releaseId) {
   const name = `lp-pr-${pullRequest}-${commitSha.slice(0, 8)}-${releaseId.replaceAll("-", "").slice(0, 8)}`;
   if (!/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(name) || name.length > 30) {
