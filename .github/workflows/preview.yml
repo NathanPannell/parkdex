@@ -2,7 +2,7 @@ name: Full-stack PR preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [closed]
 
 permissions:
   contents: read
@@ -25,7 +25,8 @@ env:
 
 jobs:
   deploy:
-    if: vars.BOOTSTRAP_COMPLETE == 'true' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == vars.TRUSTED_PREVIEW_ACTOR && github.actor == vars.TRUSTED_PREVIEW_ACTOR
+    # Preview creation is disabled; the closed-PR cleanup job below remains active.
+    if: false
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
