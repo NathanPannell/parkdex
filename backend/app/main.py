@@ -163,7 +163,7 @@ mcp_http_app = build_hosted_mcp_app(
 async def lifespan(_: FastAPI):
     open_pool()
     try:
-        async with mcp_http_app.router.lifespan_context(mcp_http_app):
+        async with mcp_http_app.lifespan():
             yield
     finally:
         close_pool()

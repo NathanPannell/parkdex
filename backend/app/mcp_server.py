@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse, getpass, os
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Annotated, Literal
@@ -179,7 +179,33 @@ def get_wishlist()->dict:
         with contextmanager(connection)() as conn: result=ensure_wishlist(conn,account_id); conn.commit(); return result
     with _local_client() as client: return client.request("GET","/api/wishlist")
 
-def build_hosted_mcp_app(*,issuer_url:str,resource_url:str,account_url:str):
+class RestartableHostedMCP:
+    """Create a fresh SDK session manager for every application lifespan."""
+
+    def __init__(self, factory):
+        self._factory = factory
+        self._app = None
+
+    @asynccontextmanager
+    async def lifespan(self):
+        if self._app is not None:
+            raise RuntimeError("Hosted MCP lifespan is already active")
+        app = self._factory()
+        self._app = app
+        try:
+            async with app.router.lifespan_context(app):
+                yield
+        finally:
+            self._app = None
+
+    async def __call__(self, scope, receive, send):
+        if self._app is None:
+            await JSONResponse({"detail": "MCP server is not ready"}, status_code=503)(scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+
+def _build_hosted_mcp_app_once(*,issuer_url:str,resource_url:str,account_url:str):
     issuer=normalize_origin(issuer_url)
     if resource_url!=f"{issuer}/mcp": raise ValueError("MCP resource URL must be canonical issuer plus /mcp")
     provider=ParkdexOAuthProvider(issuer_url=issuer,resource_url=resource_url,account_url=account_url)
@@ -203,6 +229,19 @@ def build_hosted_mcp_app(*,issuer_url:str,resource_url:str,account_url:str):
         }, headers={"Cache-Control":"no-store","Access-Control-Allow-Origin":"*"})
     app.routes.insert(0, Route("/.well-known/oauth-authorization-server", public_metadata, methods=["GET"]))
     return app
+
+
+def build_hosted_mcp_app(*,issuer_url:str,resource_url:str,account_url:str):
+    issuer=normalize_origin(issuer_url)
+    if resource_url != f"{issuer}/mcp":
+        raise ValueError("MCP resource URL must be canonical issuer plus /mcp")
+    return RestartableHostedMCP(
+        lambda: _build_hosted_mcp_app_once(
+            issuer_url=issuer,
+            resource_url=resource_url,
+            account_url=account_url,
+        )
+    )
 
 def main(argv:list[str]|None=None):
     parser=argparse.ArgumentParser(); parser.add_argument("command",choices=("serve","setup","logout"),nargs="?",default="serve"); parser.add_argument("--origin",default=os.environ.get(ORIGIN_ENV,"https://parkdex.app")); parser.add_argument("--email",default=os.environ.get(EMAIL_ENV)); args=parser.parse_args(argv)

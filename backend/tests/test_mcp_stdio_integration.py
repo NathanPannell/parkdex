@@ -60,7 +60,7 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
             "search_places",
             "get_place_details",
             "create_group",
-            "add_places_to_wishlist",
+            "add_places_to_group",
             "list_groups",
         } <= names
 
@@ -85,8 +85,12 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
         assert not details.is_error
         assert _payload(details)["id"] == place["id"]
 
+        wishlist = await client.call_tool("get_wishlist", {})
+        assert not wishlist.is_error
+        wishlist_id = _payload(wishlist)["id"]
         wishlist = await client.call_tool(
-            "add_places_to_wishlist", {"place_ids": [place["id"], place["id"]]}
+            "add_places_to_group",
+            {"group_id": wishlist_id, "place_ids": [place["id"], place["id"]]},
         )
         assert not wishlist.is_error
         wishlist_payload = _payload(wishlist)
