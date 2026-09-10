@@ -13,10 +13,6 @@ on:
           - deploy-staging
           - deploy-production
           - repair-production-cors
-  push:
-    branches: [main, staging]
-  pull_request:
-
 permissions:
   contents: read
 
