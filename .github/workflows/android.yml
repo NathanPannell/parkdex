@@ -1,10 +1,6 @@
 name: Android debug APK
 
 on:
-  pull_request:
-    branches: [staging]
-  push:
-    branches: [staging]
   workflow_dispatch:
     inputs:
       api_base_url:
