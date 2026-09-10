@@ -20,7 +20,17 @@ MOCK
 
 cat > "$test_dir/vercel" <<'MOCK'
 #!/usr/bin/env bash
-if [[ "$1" == curl ]]; then
+if [[ "$1" == list ]]; then
+  [[ " $* " == *" --meta githubCommitSha=${MOCK_FRONTEND_SHA} "* ]] || exit 0
+  [[ " $* " == *" --meta parkdexReleaseId=${EXPECTED_RELEASE_ID} "* ]] || exit 0
+  [[ " $* " == *" --meta parkdexEnvironment=${EXPECTED_PREVIEW_ENVIRONMENT} "* ]] || exit 0
+  [[ "${MOCK_LIST_FAILURE:-false}" != true ]] || exit 1
+  printf 'https://verified-release.vercel.app\n'
+elif [[ "$1" == inspect ]]; then
+  [[ "${MOCK_INSPECT_FAILURE:-false}" != true ]] || exit 1
+  printf '{"id":"dpl_test","name":"%s","url":"%s","readyState":"%s"}\n' \
+    "${MOCK_PROJECT_NAME:-every-park}" "${MOCK_DEPLOYMENT_URL:-verified-release.vercel.app}" "${MOCK_READY_STATE:-READY}"
+elif [[ "$1" == curl ]]; then
   [[ " $* " == *" -- --fail --silent --show-error --output "* ]] || exit 2
   [[ " $* " == *" --deployment https://verified-release.vercel.app "* ]] || exit 2
   path="$2"
@@ -45,9 +55,7 @@ cat > "$test_dir/curl" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *api.vercel.com/v13/deployments/* ]]; then
   [[ " $* " == *" https://api.vercel.com/v13/deployments/staging.parkdex.app?teamId=org "* ]] || exit 2
-  [[ "${MOCK_API_FAILURE:-false}" != true ]] || exit 22
-  printf '{"readyState":"%s","meta":{"githubCommitSha":"%s"},"projectId":"%s","url":"%s"}\n' \
-    "${MOCK_READY_STATE:-READY}" "${MOCK_FRONTEND_SHA}" "${MOCK_PROJECT_ID:-project}" "${MOCK_DEPLOYMENT_URL-verified-release.vercel.app}"
+  printf '{"readyState":"READY","meta":{"githubCommitSha":"%s"},"projectId":"project","url":"verified-release.vercel.app"}\n' "$MOCK_FRONTEND_SHA"
   exit 0
 fi
 count=0
@@ -76,33 +84,38 @@ if MOCK_RAILWAY_STATUS=SUCCESS bash "$repo/scripts/verify-railway-deployments.sh
   exit 1
 fi
 
-export VERCEL_TOKEN=test VERCEL_ORG_ID=org VERCEL_PROJECT_ID=project
+mkdir -p "$test_dir/work/frontend/.vercel"
+printf '{"projectId":"project","orgId":"team_test"}\n' > "$test_dir/work/frontend/.vercel/project.json"
+export VERCEL_SCOPE=scope VERCEL_PROJECT_NAME=every-park VERCEL_PROJECT_ID=project
+export EXPECTED_RELEASE_ID=release-123 EXPECTED_PREVIEW_ENVIRONMENT=local-pr-1-abcdef012345-12345678
 export VERIFY_DELAYS=0
 export MOCK_PAGE_SHA=abcdef0123456789012345678901234567890123
 export MOCK_FRONTEND_SHA="$MOCK_PAGE_SHA" MOCK_READY_STATE=READY
-bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_FRONTEND_SHA"
+(cd "$test_dir/work" && bash "$repo/scripts/verify-frontend-release.sh" https://verified-release.vercel.app "$MOCK_FRONTEND_SHA")
+env -u VERCEL_SCOPE -u VERCEL_PROJECT_NAME VERCEL_TOKEN=test VERCEL_ORG_ID=org \
+  bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://staging.parkdex.app '$MOCK_FRONTEND_SHA'"
 if MOCK_FRONTEND_SHA=abcdef0fffffffffffffffffffffffffffffffff \
-  bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_PAGE_SHA" 2>/dev/null; then
+  bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://verified-release.vercel.app '$MOCK_PAGE_SHA'" 2>/dev/null; then
   echo 'Frontend with only a matching short SHA was accepted.' >&2
   exit 1
 fi
-if MOCK_READY_STATE=ERROR bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_PAGE_SHA" 2>/dev/null; then
+if MOCK_READY_STATE=ERROR bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://verified-release.vercel.app '$MOCK_PAGE_SHA'" 2>/dev/null; then
   echo 'Unready frontend was accepted.' >&2
   exit 1
 fi
 
-for failure in MOCK_API_FAILURE=true MOCK_FETCH_FAILURE=true MOCK_ASSET_FAILURE=true MOCK_FRONTEND_SHA= MOCK_PROJECT_ID=wrong MOCK_DEPLOYMENT_URL= MOCK_DEPLOYMENT_URL=staging.parkdex.app MOCK_DEPLOYMENT_URL=verified-release.vercel.app/extra MOCK_DEPLOYMENT_URL=verified-release.vercel.app.evil.example; do
-  if env "$failure" bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_PAGE_SHA" 2>/dev/null; then
+for failure in MOCK_LIST_FAILURE=true MOCK_INSPECT_FAILURE=true MOCK_FETCH_FAILURE=true MOCK_ASSET_FAILURE=true MOCK_FRONTEND_SHA= MOCK_PROJECT_NAME=wrong MOCK_DEPLOYMENT_URL=staging.parkdex.app MOCK_DEPLOYMENT_URL=verified-release.vercel.app.evil.example; do
+  if env "$failure" bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://verified-release.vercel.app '$MOCK_PAGE_SHA'" 2>/dev/null; then
     echo "Invalid frontend verification accepted: $failure" >&2
     exit 1
   fi
 done
-if env -u VERCEL_TOKEN bash "$repo/scripts/verify-frontend-release.sh" https://staging.parkdex.app "$MOCK_PAGE_SHA" 2>/dev/null; then
-  echo 'Unauthenticated short-SHA fallback was accepted.' >&2
+if env VERCEL_PROJECT_ID=wrong bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://verified-release.vercel.app '$MOCK_PAGE_SHA'" 2>/dev/null; then
+  echo 'Wrong linked Vercel project was accepted.' >&2
   exit 1
 fi
 
-unset VERCEL_TOKEN
+unset EXPECTED_RELEASE_ID EXPECTED_PREVIEW_ENVIRONMENT
 export EXPECTED_COMMIT_SHA=abcdef0123456789012345678901234567890123
 export MOCK_CURL_COUNT="$test_dir/curl-count" GITHUB_OUTPUT="$test_dir/github-output"
 bash "$repo/scripts/wait-for-railway-api.sh"
