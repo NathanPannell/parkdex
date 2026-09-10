@@ -42,6 +42,7 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 - 2026-09-10: fresh design finish review found rename validation was not rendered beside its form. Fixed the accessible inline alert association, 44px mobile action targets, and long-name wrapping; re-review passed.
 - 2026-09-10: independent backend audit identified snake-case REST input compatibility and IPv6 loopback normalization gaps. Added `placeIds`/`place_ids` input aliases, bracket-safe IPv6 origin normalization, and regression tests; focused MCP tests passed 6/6.
 - 2026-09-10: independent quality review identified two account-transition gaps. Authenticated Groups requests now expire only the captured current account on 401, and identity changes reset group mutation busy state while stale completions remain ignored. Added focused regressions; 13/13 journal/group hook tests and typecheck passed. Group listing also skips a row deleted between its ID snapshot and detail fetch instead of returning a 500.
+- 2026-09-10: quality re-review passed with no material findings. The first final-SHA full-CI attempt caught a React lint error in the busy reset while its 43 backend tests passed; moved the reset to the completed current-identity load and replaced warning-prone input aliases with equivalent pre-validation. Focused lint, 13 frontend tests, typecheck, and 6 MCP tests with warnings treated as errors passed.
 
 ## Dependencies and blockers
 

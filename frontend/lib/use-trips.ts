@@ -51,11 +51,11 @@ export function useTrips({ apiBaseUrl, authenticated, identityKey = "", places, 
     } catch (caught) {
       if (epoch === epochRef.current) setError(messageFor(caught));
     } finally {
-      if (epoch === epochRef.current) setLoading(false);
+      if (epoch === epochRef.current) { setLoading(false); setBusy(false); }
     }
   }, [apiBaseUrl, authenticated, identityKey]);
 
-  useEffect(() => { setBusy(false); void load(); return () => { epochRef.current += 1; }; }, [load]);
+  useEffect(() => { void load(); return () => { epochRef.current += 1; }; }, [load]);
   const hydratedTrips = useMemo(() => hydrate(trips), [hydrate, trips]);
 
   const mutate = useCallback(async (operation: (request: AuthenticatedRequest) => Promise<Trip | void>) => {

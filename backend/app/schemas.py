@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
@@ -52,8 +52,14 @@ class TripCreate(BaseModel):
     placeIds: list[str] = Field(
         default_factory=list,
         max_length=100,
-        validation_alias=AliasChoices("placeIds", "place_ids"),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_snake_case_place_ids(cls, value):
+        if isinstance(value, dict) and "placeIds" not in value and "place_ids" in value:
+            return {**value, "placeIds": value["place_ids"]}
+        return value
 
 
 class TripRename(BaseModel):
@@ -63,8 +69,14 @@ class TripRename(BaseModel):
 class TripPlaceMutation(BaseModel):
     placeIds: list[str] = Field(
         max_length=100,
-        validation_alias=AliasChoices("placeIds", "place_ids"),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_snake_case_place_ids(cls, value):
+        if isinstance(value, dict) and "placeIds" not in value and "place_ids" in value:
+            return {**value, "placeIds": value["place_ids"]}
+        return value
 
 
 class Trip(BaseModel):
