@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -318,12 +318,19 @@ async function smokeCatalogue(apiUrl) {
   }
 }
 
-async function verifyFrontendContent(frontendUrl) {
-  const page = await fetch(frontendUrl, { signal: AbortSignal.timeout(20_000) });
-  if (!page.ok || !(await page.text()).includes("<title>Parkdex")) throw new Error("Preview frontend page was not verified");
-  for (const asset of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"]) {
-    const response = await fetch(new URL(`/maplibre/${asset}`, frontendUrl), { signal: AbortSignal.timeout(20_000) });
-    if (!response.ok) throw new Error(`Preview frontend asset ${asset} was not verified`);
+function verifyFrontendContent(sourceRoot, frontendUrl) {
+  const binding = parseJson(readFileSync(join(sourceRoot, "frontend", ".vercel", "project.json"), "utf8"), "Vercel project binding");
+  if (binding.projectId !== process.env.VERCEL_PROJECT_ID || binding.orgId !== process.env.VERCEL_ORG_ID || binding.projectName !== process.env.VERCEL_PROJECT_NAME) throw new Error("Vercel project binding identity was not verified");
+  const directory = mkdtempSync(join(tmpdir(), "parkdex-vercel-verify-"));
+  try {
+    for (const [route, filename] of [["/", "page.html"], ["/maplibre/maplibre-gl-worker.mjs", "worker.mjs"], ["/maplibre/maplibre-gl-shared.mjs", "shared.mjs"]]) {
+      const outputPath = join(directory, filename);
+      run("vercel", buildVercelCurlArgs(route, frontendUrl, process.env.VERCEL_SCOPE, outputPath), { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: `Vercel protected content ${route}` });
+      const content = readFileSync(outputPath);
+      if (!content.length || (route === "/" && !content.toString("utf8").includes("<title>Parkdex"))) throw new Error(`Preview frontend content ${route} was not verified`);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 
@@ -527,7 +534,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     await waitForRailwayApi(state.apiUrl, sha, releaseId);
     await waitForWorkerCatalogue(state, process.env.RAILWAY_API_TOKEN, sha, releaseId);
     await smokeCatalogue(state.apiUrl);
-    await verifyFrontendContent(vercel.url);
+    verifyFrontendContent(sourceRoot, vercel.url);
     if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
     updateJournal(journalPath, state, { status: "ready", readyAt: new Date().toISOString() });
     console.log(`local-release status=ready mode=${mode} sha=${sha} journal=${journalPath}`);

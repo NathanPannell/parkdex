@@ -23,6 +23,14 @@ export function buildProviderProcess(command, args, platform = process.platform)
   return { executable: command, args };
 }
 
+export function buildVercelCurlArgs(route, deploymentUrl, scope, outputPath) {
+  const parsed = new URL(deploymentUrl);
+  if (parsed.protocol !== "https:" || !/^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/.test(parsed.hostname) || parsed.pathname !== "/") throw new Error("Vercel deployment URL was invalid");
+  if (!/^\/[a-zA-Z0-9./_-]*$/.test(route) || route.includes("..")) throw new Error("Vercel asset route was invalid");
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(scope) || !outputPath) throw new Error("Vercel verification target was invalid");
+  return ["curl", route, "--deployment", deploymentUrl, "--cwd", "frontend", "--scope", scope, "--", "--fail", "--silent", "--show-error", "--output", outputPath];
+}
+
 export function buildPreviewEnvironmentName(pullRequest, commitSha, releaseId) {
   const name = `lp-pr-${pullRequest}-${commitSha.slice(0, 8)}-${releaseId.replaceAll("-", "").slice(0, 8)}`;
   if (!/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(name) || name.length > 30) {

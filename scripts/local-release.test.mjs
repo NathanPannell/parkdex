@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -73,6 +73,25 @@ test("Windows provider commands execute through the cmd shim with status preserv
     const failure = buildProviderProcess("railway", ["fail"], "win32");
     const failureResult = spawnSync(failure.executable, failure.args, { encoding: "utf8", env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH}` } });
     assert.equal(failureResult.status, 7);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("protected Vercel content uses the exact native CLI target on Windows", { skip: process.platform !== "win32" }, () => {
+  const directory = mkdtempSync(join(tmpdir(), "parkdex-vercel-shim-"));
+  try {
+    writeFileSync(join(directory, "vercel.cmd"), "@echo off\r\nif \"%~2\"==\"/fail\" exit /b 9\r\necho %*\r\n", "utf8");
+    const outputPath = join(directory, "page.html");
+    const args = buildVercelCurlArgs("/", "https://exact-preview.vercel.app/", "exact-scope", outputPath);
+    const command = buildProviderProcess("vercel", args, "win32");
+    const result = spawnSync(command.executable, command.args, { encoding: "utf8", env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH}` } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /curl \/ --deployment https:\/\/exact-preview\.vercel\.app\/ --cwd frontend --scope exact-scope -- --fail --silent --show-error --output/);
+    assert.throws(() => buildVercelCurlArgs("/", "https://vercel.com/sso-api", "exact-scope", outputPath), /URL was invalid/);
+    assert.throws(() => buildVercelCurlArgs("/../secret", "https://exact-preview.vercel.app/", "exact-scope", outputPath), /route was invalid/);
+    const failure = buildProviderProcess("vercel", ["curl", "/fail"], "win32");
+    assert.equal(spawnSync(failure.executable, failure.args, { env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH}` } }).status, 9);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -183,6 +202,8 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /APP_RELEASE_ID/);
   assert.match(source, /verifyRailwayDeployments/);
   assert.doesNotMatch(source, /callBash/);
+  assert.match(source, /buildVercelCurlArgs/);
+  assert.doesNotMatch(source, /fetch\(frontendUrl/);
   assert.match(source, /parkdexReleaseId/);
   assert.match(source, /parkdexEnvironment/);
   assert.match(source, /state\.neonBranch !== `preview\/\$\{state\.railwayEnvironment\}`/);
