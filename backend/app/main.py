@@ -32,6 +32,7 @@ from backend.app.auth import (
 from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import ensure_email_delivery, send_auth_email
 from backend.app.google_oauth import authorization_url, exchange_and_verify
+from backend.app.mcp_server import build_hosted_mcp_app
 from backend.app.schemas import (
     AccountState,
     AuthResult,
@@ -157,15 +158,23 @@ def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     }
 
 
+settings = get_settings()
+logger = logging.getLogger(__name__)
+mcp_http_app = build_hosted_mcp_app(
+    issuer_url=settings.api_public_url,
+    resource_url=settings.mcp_public_url,
+    account_url=settings.app_public_url,
+)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     open_pool()
-    yield
-    close_pool()
-
-
-settings = get_settings()
-logger = logging.getLogger(__name__)
+    try:
+        async with mcp_http_app.router.lifespan_context(mcp_http_app):
+            yield
+    finally:
+        close_pool()
 
 
 def deliver_auth_email(recipient: str, subject: str, text: str, event_type: str) -> None:
@@ -1051,3 +1060,8 @@ def import_guest_progress(
         "imported_trail_count": imported_trails,
         "completed_trail_ids": completed_trails_for_account(conn, identity.account_id),
     }
+
+
+# Mounted last so the API's explicit routes retain precedence. Its lifespan is
+# entered by the parent lifespan above because Starlette does not start mounted lifespans.
+app.mount("/", mcp_http_app)
