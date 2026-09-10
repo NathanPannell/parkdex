@@ -31,15 +31,28 @@ gh workflow run hosted-checkpoint.yml -R NathanPannell/parkdex --ref staging \
   -f commit_sha="$(git rev-parse HEAD)" -f reason='ready for review'
 ```
 
-The local release wrapper is planner-only until an isolated Railway/Neon/Vercel create, configure, deploy, verify, and cleanup proof succeeds. `-Apply` and cleanup are fail-closed. The planned path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates an empty Railway environment, instantiates only the two verified project services with a sanitized variable-free patch, and uses a fresh database inside a schema-only Neon branch so migrations and catalogue seed data run without parent application data. Owned resources are journaled outside the repository before later mutations, and commit, release, provider project, and deployment identities are verified.
+The local preview path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates an empty Railway environment, instantiates only the two verified project services with a sanitized variable-free patch, and uses a fresh database inside a schema-only Neon branch so migrations and deterministic catalogue seed data run without parent application data. Owned resources are journaled outside the repository before later mutations; deployment, API, worker, protected Vercel content, source, release, and provider identities are verified.
+
+Preview `-Apply` must run from a clean checkout at the freshly fetched `origin/staging`. It requires an explicit full source SHA, open PR targeting `staging`, remote head name, and successful full merge-candidate attestation produced by that trusted staging validator. The runner rechecks the attestation, nested evidence hash, current merge tree, remote branch, and PR identity before provider access. The attestation is the reviewed-source gate; an open PR alone is not authorization. Because same-user reviewed source can still read local credential files, `-Apply` is also the operator's explicit deployment decision and must not be used for untrusted code.
 
 ```powershell
-pwsh -File scripts/local-release.ps1 -Mode Preview -PullRequest 20
+$featureRef = '<feature-branch>'
+$pullRequest = 123
+$featureSha = git rev-parse "origin/$featureRef"
+$evidence = Join-Path $env:TEMP "parkdex-merge-candidate-$featureSha.json"
+node scripts/merge-candidate.mjs --base origin/staging --head $featureSha --head-ref $featureRef --suite all --output $evidence
+pwsh -File scripts/local-release.ps1 -Mode Preview -PullRequest $pullRequest -CommitSha $featureSha -HeadRef $featureRef -AttestationPath $evidence -Apply
+
+# Cleanup remains journal-owned even after the PR closes or its head changes.
+$journal = 'C:\Users\me\AppData\Local\Parkdex\release-journal\<release-id>.json'
+pwsh -File scripts/local-release.ps1 -Mode Cleanup -StatePath $journal -Apply
 ```
+
+The isolated proof exercised Neon initialization, Railway/Vercel creation, both service deployments, exact API/worker identity, catalogue isolation, a real-browser map/search/place-details journey, and authoritative cleanup. A Windows shell-boundary failure required the final verification steps to be completed manually on that exact release; the corrected native Node wrapper and protected `vercel curl` path were then accepted from the combined live evidence plus focused synthetic tests, not a second end-to-end provider run.
 
 Successful publication accepts only full merge-candidate evidence and rechecks the remote feature head, current staging base, merge tree, nested evidence hash, and trusted staging copies of the validator and publisher. Its status context includes the staging SHA, so an older success is not a claim about a later staging base; it is informational rather than a fixed branch-protection check.
 
-Staging uses the existing `staging` Railway environment and requires its exact ID plus separately supplied staging database and authentication settings. It never creates or copies a staging environment. The local provider path is contract-tested but has not been exercised against Railway/Neon from this workstation because those credentials are unavailable; use an isolated owned preview before relying on it for staging.
+Local staging `-Apply` remains disabled because the persistent staging mutation path was not covered by the isolated preview proof. Use the reviewed manual GitHub staging workflow below; it targets the existing exact `staging` Railway environment and never creates or copies one. Production remains reachable only through its separate manual promotion gate.
 
 Preview creation is not automatic. The close-event cleanup workflow remains enabled so resources created by older preview runs are removed when those pull requests close.
 
@@ -65,4 +78,4 @@ Vercel Git deployments must remain disabled, and Railway API and worker Git sour
 
 The September 8, 2026 rollout inspection confirmed that the API and worker have no Git or image source attached in either staging or production, so no source migration was required.
 
-PR preview creation is disabled. The close-event cleanup workflow remains temporarily so resources created by older preview runs are removed when those pull requests close.
+Automatic PR preview creation remains disabled. Explicit attested local previews use their external journal for cleanup; the close-event cleanup workflow remains enabled for resources created by older preview runs.

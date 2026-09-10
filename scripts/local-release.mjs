@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -12,9 +12,7 @@ const value = (name, fallback = "") => {
   return index >= 0 ? process.argv[index + 1] : fallback;
 };
 const flag = (name) => process.argv.includes(name);
-const LIVE_PROOF_PR = 99999;
-const LIVE_PROOF_RELEASE_ID = "f08d195c-cb6d-4f08-8fe1-d1083a4a69ec";
-const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
+const REPOSITORY = "NathanPannell/parkdex";
 
 function run(command, args, options = {}) {
   const provider = buildProviderProcess(command, args);
@@ -60,6 +58,49 @@ function updateJournal(path, state, patch) {
 
 function parseJson(text, label) {
   try { return JSON.parse(text); } catch { throw new Error(`${label} returned invalid JSON`); }
+}
+
+function repositorySlug(remote) {
+  const normalized = String(remote || "").replaceAll("\\", "/");
+  const match = normalized.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  return match ? `${match[1]}/${match[2]}`.toLowerCase() : "";
+}
+
+function successfulLocalEvidence(evidence) {
+  const required = ["database isolation contracts", "create owned CI database", "backend seed contract", "backend migrations", "backend tests", "drop owned CI database", "repository dependencies", "catalogue validation", "boundary source tests", "boundary geometry", "release metadata tests", "workflow contract tests", "local release contract tests", "CI evidence contract tests", "deployment helper tests", "frontend dependencies", "frontend boundary asset", "frontend territory contract", "frontend lint", "frontend typecheck", "frontend tests", "frontend build"];
+  const successful = new Set((evidence?.results || []).filter((item) => item?.status === 0).map((item) => item.label));
+  return required.every((label) => successful.has(label));
+}
+
+function trustedHarness(root) {
+  if (repositorySlug(git(root, ["remote", "get-url", "origin"])) !== REPOSITORY.toLowerCase()) throw new Error("Origin does not match the canonical Parkdex repository");
+  git(root, ["fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging"]);
+  const harnessSha = git(root, ["rev-parse", "HEAD"]);
+  if (harnessSha !== git(root, ["rev-parse", "refs/remotes/origin/staging"])) throw new Error("Provider Apply requires the clean current remote staging harness");
+  return harnessSha;
+}
+
+function verifyPreviewAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath) {
+  if (!/^[A-Za-z0-9._/-]+$/.test(headRef || "") || headRef.startsWith("/") || headRef.includes("..")) throw new Error("Preview apply requires a safe --head-ref");
+  const resolved = resolve(attestationPath);
+  const relativePath = relative(root, resolved);
+  if (!relativePath.startsWith("..") || !existsSync(resolved)) throw new Error("Preview attestation must be an existing file outside the repository");
+  const evidenceText = readFileSync(resolved, "utf8");
+  const evidence = parseJson(evidenceText, "Merge-candidate attestation");
+  if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || repositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
+  git(root, ["fetch", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`]);
+  if (git(root, ["rev-parse", `refs/remotes/origin/${headRef}`]) !== sourceSha) throw new Error("Preview source no longer matches the attested remote head");
+  const pr = parseJson(run("gh", ["pr", "view", String(pullRequest), "--repo", REPOSITORY, "--json", "number,state,baseRefName,headRefName,headRefOid"], { env: minimalEnv(), label: "GitHub pull request identity" }), "GitHub pull request identity");
+  if (pr.number !== pullRequest || pr.state !== "OPEN" || pr.baseRefName !== "staging" || pr.headRefName !== headRef || pr.headRefOid !== sourceSha) throw new Error("Preview pull request identity did not match the requested source");
+  const treeSha = git(root, ["merge-tree", "--write-tree", harnessSha, sourceSha]).split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
+  if (!treeSha || treeSha !== evidence.treeSha) throw new Error("Preview merge tree no longer matches the attestation");
+  const trustedValidator = `${git(root, ["show", `${harnessSha}:scripts/local-ci.mjs`])}\n`;
+  if (createHash("sha256").update(trustedValidator).digest("hex") !== evidence.trustedValidatorSha256) throw new Error("Preview trusted validator identity did not match staging");
+  const localEvidenceText = readFileSync(evidence.localEvidencePath, "utf8");
+  if (createHash("sha256").update(localEvidenceText).digest("hex") !== evidence.localEvidenceSha256) throw new Error("Preview nested local evidence hash did not match");
+  const localEvidence = parseJson(localEvidenceText, "Nested local evidence");
+  if (localEvidence.schema !== "parkdex.local-ci/v1" || localEvidence.status !== "success" || localEvidence.commitSha !== evidence.candidateSha || localEvidence.suite !== "all" || !successfulLocalEvidence(localEvidence)) throw new Error("Preview nested evidence did not prove the complete merge candidate");
+  return { schema: evidence.schema, attestationSha256: createHash("sha256").update(evidenceText).digest("hex"), baseSha: harnessSha, headSha: sourceSha, headRef, treeSha, candidateSha: evidence.candidateSha, pullRequest };
 }
 
 function railwayEnv(token, extra = {}) {
@@ -337,10 +378,11 @@ function verifyFrontendContent(sourceRoot, frontendUrl) {
 async function cleanup(root, journalPath) {
   if (!journalPath || !existsSync(journalPath)) throw new Error("Cleanup requires an explicit existing --journal path");
   const state = parseJson(readFileSync(journalPath, "utf8"), "Release journal");
-  if (state.schema !== "parkdex.local-release/v3" || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
+  if (!["parkdex.local-release/v3", "parkdex.local-release/v4"].includes(state.schema) || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
     throw new Error("Release journal is not an active owned preview");
   }
   requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
+  if (state.providerProjects && (state.providerProjects.railway !== process.env.RAILWAY_PROJECT_ID || state.providerProjects.neon !== process.env.NEON_PROJECT_ID || state.providerProjects.vercel !== process.env.VERCEL_PROJECT_ID || state.providerProjects.vercelOrg !== process.env.VERCEL_ORG_ID)) throw new Error("Cleanup provider project identities do not match the release journal");
   providerPreflight(root, true);
   if (!state.railwayEnvironmentId) {
     const context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
@@ -436,13 +478,14 @@ async function cleanup(root, journalPath) {
   console.log(`local-release cleanup=success journal=${journalPath}`);
 }
 
-async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
+async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harnessSha, sourceAuthorization) {
   const preview = mode === "preview";
   const railwayEnvironment = preview ? buildPreviewEnvironmentName(pullRequest, sha, releaseId) : "staging";
   const neonBranch = preview ? `preview/${railwayEnvironment}` : null;
   const expiresAt = preview ? new Date(Date.now() + 7 * 86400_000).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
-  const state = { schema: "parkdex.local-release/v3", mode, status: "planned", releaseId, commitSha: sha, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  const plan = { mode, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety: ["clean exact SHA", "reviewed code only", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] };
+  const state = { schema: "parkdex.local-release/v4", mode, status: "planned", releaseId, harnessSha, commitSha: sha, sourceAuthorization, providerProjects: { railway: process.env.RAILWAY_PROJECT_ID || null, neon: preview ? process.env.NEON_PROJECT_ID || null : null, vercel: process.env.VERCEL_PROJECT_ID || null, vercelOrg: process.env.VERCEL_ORG_ID || null }, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const safety = preview ? ["trusted clean staging harness", "attested exact source SHA", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] : ["clean exact staging SHA", "persistent staging only", "manual production boundary"];
+  const plan = { mode, harnessSha, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety };
   if (!flag("--apply")) { console.log(JSON.stringify(plan, null, 2)); return; }
   if (!value("--sha")) throw new Error("--apply requires an explicit full --sha");
   if (resolve(journalPath).startsWith(`${resolve(root)}\\`) || resolve(journalPath).startsWith(`${resolve(root)}/`)) throw new Error("Release journals must be stored outside the repository");
@@ -550,7 +593,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
 const root = git(process.cwd(), ["rev-parse", "--show-toplevel"]);
 const actualSha = git(root, ["rev-parse", "HEAD"]);
 const expectedSha = value("--sha", actualSha);
-if (!/^[0-9a-f]{40}$/.test(expectedSha) || expectedSha !== actualSha) throw new Error("Refusing a stale or non-full commit SHA");
+if (!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error("Refusing a non-full source commit SHA");
 if (git(root, ["status", "--porcelain"])) throw new Error("Refusing a dirty worktree");
 const mode = value("--mode", "staging").toLowerCase();
 if (!["preview", "staging", "cleanup"].includes(mode)) throw new Error("--mode must be preview, staging, or cleanup");
@@ -562,17 +605,16 @@ const defaultRoot = process.env.LOCALAPPDATA || tmpdir();
 const journalPath = resolve(value("--journal", join(defaultRoot, "Parkdex", "release-journal", `${releaseId}.json`)));
 
 if (mode === "cleanup" && !flag("--apply")) throw new Error("Cleanup requires explicit --apply");
-if (flag("--apply") && !flag("--live-proof")) throw new Error("Provider mutation remains disabled outside an independently reviewed --live-proof run");
-if (flag("--apply")) {
-  const authorizedSha = git(root, ["rev-parse", LIVE_PROOF_REF]);
-  if (authorizedSha !== actualSha || expectedSha !== actualSha || releaseId !== LIVE_PROOF_RELEASE_ID) throw new Error("Live proof authorization does not match this exact commit and release");
-  if (mode === "preview" && pullRequest !== LIVE_PROOF_PR) throw new Error("Live proof authorization requires the isolated preview sentinel");
-  if (mode === "cleanup") {
-    if (!value("--journal") || !existsSync(journalPath)) throw new Error("Live proof cleanup requires its exact journal");
-    const proofState = parseJson(readFileSync(journalPath, "utf8"), "Release journal");
-    if (proofState.commitSha !== actualSha || proofState.releaseId !== LIVE_PROOF_RELEASE_ID || proofState.pullRequest !== LIVE_PROOF_PR) throw new Error("Live proof cleanup journal does not match the authorization");
-  }
-  if (!['preview', 'cleanup'].includes(mode)) throw new Error("Live proof authorization cannot target staging or production");
+if (flag("--apply") && mode === "staging") throw new Error("Local staging Apply remains disabled; use the reviewed manual staging workflow");
+if (mode === "cleanup") {
+  if (!value("--journal") || !existsSync(journalPath)) throw new Error("Cleanup requires its exact existing release journal");
+  trustedHarness(root);
+  await cleanup(root, journalPath);
+} else if (flag("--apply")) {
+  if (!value("--sha") || !value("--attestation") || !value("--head-ref")) throw new Error("Preview apply requires explicit --sha, --head-ref, and --attestation");
+  const harnessSha = trustedHarness(root);
+  const authorization = verifyPreviewAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"));
+  await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, harnessSha, authorization);
+} else {
+  await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, actualSha, null);
 }
-if (mode === "cleanup") await cleanup(root, value("--journal"));
-else await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest);

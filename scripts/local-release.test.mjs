@@ -22,9 +22,12 @@ function invoke(args, env = {}) {
 }
 
 test("preview planning is unique and provider-free", () => {
-  const result = invoke(["--mode", "preview", "--pr", "321", "--release-id", fixedRelease]);
+  const sourceSha = "a".repeat(40);
+  const result = invoke(["--mode", "preview", "--pr", "321", "--release-id", fixedRelease, "--sha", sourceSha]);
   assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
+  assert.equal(plan.harnessSha, head);
+  assert.equal(plan.commitSha, sourceSha);
   assert.match(plan.railwayEnvironment, /^lp-pr-321-[0-9a-f]{8}-11111111$/);
   assert.ok(plan.railwayEnvironment.length <= 30);
   assert.equal(plan.neonBranch, `preview/${plan.railwayEnvironment}`);
@@ -34,19 +37,25 @@ test("preview planning is unique and provider-free", () => {
 test("apply remains fail-closed before provider commands", () => {
   const result = invoke(["--mode", "preview", "--pr", "321", "--release-id", fixedRelease, "--sha", head, "--apply"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Provider mutation remains disabled/);
+  assert.match(result.stderr, /Preview apply requires explicit --sha, --head-ref, and --attestation/);
 });
 
 test("cleanup requires an explicit durable journal", () => {
   const result = invoke(["--mode", "cleanup", "--release-id", fixedRelease, "--apply"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Provider mutation remains disabled/);
+  assert.match(result.stderr, /Cleanup requires its exact existing release journal/);
 });
 
 test("cleanup without apply is rejected before journal access", () => {
   const result = invoke(["--mode", "cleanup", "--release-id", fixedRelease]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Cleanup requires explicit --apply/);
+});
+
+test("local staging apply remains disabled", () => {
+  const result = invoke(["--mode", "staging", "--release-id", fixedRelease, "--sha", head, "--apply"]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Local staging Apply remains disabled/);
 });
 
 test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
@@ -220,7 +229,13 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.doesNotMatch(source, /service", "source", "disconnect/);
   assert.match(source, /process\.env\.VERCEL_PROJECT_ID/);
   assert.doesNotMatch(source, /"vercel", \["link"/);
-  assert.match(source, /Provider mutation remains disabled outside an independently reviewed --live-proof run/);
+  assert.doesNotMatch(source, /LIVE_PROOF|--live-proof/);
+  assert.match(source, /refs\/remotes\/origin\/staging/);
+  assert.match(source, /parkdex\.merge-candidate\/v1/);
+  assert.match(source, /trustedValidatorSha256/);
+  assert.match(source, /Preview pull request identity did not match/);
+  assert.match(source, /Cleanup provider project identities do not match/);
+  assert.doesNotMatch(source, /expectedSha !== actualSha/);
   assert.ok(source.indexOf("atomicJournal(journalPath, state)") < source.lastIndexOf("createNeonBranch(root, state, journalPath)"));
   assert.doesNotMatch(source, /npm(?:\.cmd)?[^\n]*run[^\n]*build/);
 });
