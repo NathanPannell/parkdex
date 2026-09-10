@@ -1,0 +1,39 @@
+name: Hosted CI checkpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full commit SHA to validate; this is an explicit checkpoint, not routine PR CI.
+        required: true
+        type: string
+      reason:
+        description: Short reason for this checkpoint.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-slim
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 1
+      - name: Verify exact checkpoint source
+        env:
+          EXPECTED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+          git diff --check
+      - name: Run workflow contract checks
+        run: |
+          node --check scripts/local-ci.mjs
+          node --check scripts/github-status.mjs
+          node --check scripts/merge-candidate.mjs
+          node --test scripts/deployment-workflows.test.mjs

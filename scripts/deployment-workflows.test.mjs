@@ -9,6 +9,8 @@ test("deployments are manual and always pin staging", () => {
   assert.match(ci, /workflow_dispatch:/);
   assert.match(ci, /options: \[none, deploy-staging, promote-production\]/);
   assert.match(ci, /git\/ref\/heads\/staging/);
+  assert.doesNotMatch(ci, /^  push:/m);
+  assert.doesNotMatch(ci, /^  pull_request:/m);
   assert.doesNotMatch(ci, /github\.event_name == 'push' && github\.ref/);
   assert.doesNotMatch(cleanup, /vercel deploy|railway up|create-branch-action/);
 });
