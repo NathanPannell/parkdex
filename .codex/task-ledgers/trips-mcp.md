@@ -43,6 +43,7 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 - 2026-09-10: independent backend audit identified snake-case REST input compatibility and IPv6 loopback normalization gaps. Added `placeIds`/`place_ids` input aliases, bracket-safe IPv6 origin normalization, and regression tests; focused MCP tests passed 6/6.
 - 2026-09-10: independent quality review identified two account-transition gaps. Authenticated Groups requests now expire only the captured current account on 401, and identity changes reset group mutation busy state while stale completions remain ignored. Added focused regressions; 13/13 journal/group hook tests and typecheck passed. Group listing also skips a row deleted between its ID snapshot and detail fetch instead of returning a 500.
 - 2026-09-10: quality re-review passed with no material findings. The first final-SHA full-CI attempt caught a React lint error in the busy reset while its 43 backend tests passed; moved the reset to the completed current-identity load and replaced warning-prone input aliases with equivalent pre-validation. Focused lint, 13 frontend tests, typecheck, and 6 MCP tests with warnings treated as errors passed.
+- 2026-09-10: full local CI passed at `738e90d77d1aa463325b088da673b6b2e09c4880`: 43 backend tests, 118 frontend tests, lint, typecheck, production build, data/boundary validation, workflow contracts, and deployment-helper contracts. Attestation: `C:/Users/n8tew/AppData/Local/Temp/parkdex-trips-mcp-final-local-ci.json`; its disposable database was dropped automatically.
 
 ## Dependencies and blockers
 
@@ -52,4 +53,4 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 
 ## Next action
 
-Complete the independent quality review, run full local CI at the final commit, then push and open one PR to `staging` without merging or deploying it.
+Push and open one PR to `staging`, then hand the exact PR URL, commit, verification evidence, and residual limits to the root task without merging or deploying it.
