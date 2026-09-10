@@ -9,9 +9,6 @@ on:
         default: none
         type: choice
         options: [none, deploy-staging, promote-production]
-  push:
-    branches: [main, staging]
-  pull_request:
 
 permissions:
   contents: read
