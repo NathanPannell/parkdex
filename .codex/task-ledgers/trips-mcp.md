@@ -41,6 +41,7 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 - 2026-09-10: local browser acceptance passed on desktop and 390x844 mobile. Created a multi-place group, focused all members on the map, saved to Wishlist in one click, added through the group picker, confirmed a second account saw only its singleton Wishlist, then created `MCP coast picks` through a real authenticated stdio MCP subprocess and saw it after UI refresh. Browser console warnings/errors: none. The owned browser database and both local servers were removed afterward.
 - 2026-09-10: fresh design finish review found rename validation was not rendered beside its form. Fixed the accessible inline alert association, 44px mobile action targets, and long-name wrapping; re-review passed.
 - 2026-09-10: independent backend audit identified snake-case REST input compatibility and IPv6 loopback normalization gaps. Added `placeIds`/`place_ids` input aliases, bracket-safe IPv6 origin normalization, and regression tests; focused MCP tests passed 6/6.
+- 2026-09-10: independent quality review identified two account-transition gaps. Authenticated Groups requests now expire only the captured current account on 401, and identity changes reset group mutation busy state while stale completions remain ignored. Added focused regressions; 13/13 journal/group hook tests and typecheck passed. Group listing also skips a row deleted between its ID snapshot and detail fetch instead of returning a 500.
 
 ## Dependencies and blockers
 

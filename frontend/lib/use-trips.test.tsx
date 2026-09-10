@@ -88,10 +88,12 @@ describe("useTrips account isolation", () => {
 
     rerender({ identityKey: "account-b", request: requestB });
     await waitFor(() => expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]));
+    expect(result.current.busy).toBe(false);
     await act(async () => {
       mutation.resolve(await json([{ id: "group-a", name: "A", isWishlist: false, placeIds: [place.id] }]));
       await pending;
     });
     expect(result.current.trips.map((group) => group.id)).toEqual(["group-b"]);
+    expect(result.current.busy).toBe(false);
   });
 });

@@ -67,7 +67,7 @@ def list_group_rows(conn: Connection, account_id: str) -> list[dict]:
         """,
         (account_id,),
     ).fetchall()
-    return [group_row(conn, account_id, str(row["id"])) for row in rows]
+    return [group for row in rows if (group := group_row(conn, account_id, str(row["id"]))) is not None]
 
 
 def create_group_row(

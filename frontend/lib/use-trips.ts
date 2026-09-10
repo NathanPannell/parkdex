@@ -55,7 +55,7 @@ export function useTrips({ apiBaseUrl, authenticated, identityKey = "", places, 
     }
   }, [apiBaseUrl, authenticated, identityKey]);
 
-  useEffect(() => { void load(); return () => { epochRef.current += 1; }; }, [load]);
+  useEffect(() => { setBusy(false); void load(); return () => { epochRef.current += 1; }; }, [load]);
   const hydratedTrips = useMemo(() => hydrate(trips), [hydrate, trips]);
 
   const mutate = useCallback(async (operation: (request: AuthenticatedRequest) => Promise<Trip | void>) => {
