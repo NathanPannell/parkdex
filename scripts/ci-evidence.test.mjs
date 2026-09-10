@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
 
 const repoRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
 const mergeScript = join(repoRoot, "scripts", "merge-candidate.mjs");
 const statusScript = join(repoRoot, "scripts", "github-status.mjs");
 const statusSource = readFileSync(statusScript, "utf8");
+const evidenceValidationSource = readFileSync(join(repoRoot, "scripts", "evidence-validation.mjs"), "utf8");
 const requiredLabels = ["database isolation contracts", "create owned CI database", "backend seed contract", "backend migrations", "backend tests", "drop owned CI database", "repository dependencies", "catalogue validation", "boundary source tests", "boundary geometry", "release metadata tests", "workflow contract tests", "local release contract tests", "CI evidence contract tests", "deployment helper tests", "frontend dependencies", "frontend boundary asset", "frontend territory contract", "frontend lint", "frontend typecheck", "frontend tests", "frontend build"];
 
 function run(command, args, cwd, env = process.env) {
@@ -17,6 +19,15 @@ function run(command, args, cwd, env = process.env) {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
 }
+
+test("canonical GitHub remotes reject hostile prefixes and URL ambiguity", () => {
+  assert.equal(canonicalGithubRepositorySlug("https://github.com/NathanPannell/parkdex.git"), "nathanpannell/parkdex");
+  assert.equal(canonicalGithubRepositorySlug("git@github.com:NathanPannell/parkdex.git"), "nathanpannell/parkdex");
+  assert.equal(canonicalGithubRepositorySlug("ssh://git@github.com/NathanPannell/parkdex.git"), "nathanpannell/parkdex");
+  for (const hostile of ["https://attacker.example/github.com/NathanPannell/parkdex", "https://user@github.com/NathanPannell/parkdex", "https://github.com/NathanPannell/parkdex?next=evil", "https://github.com/NathanPannell/parkdex/extra"]) {
+    assert.equal(canonicalGithubRepositorySlug(hostile), "");
+  }
+});
 
 test("trusted staging orchestration ignores feature-owned validators and binds status to the current merge tree", () => {
   const root = mkdtempSync(join(tmpdir(), "parkdex-evidence-contract-"));
@@ -31,9 +42,10 @@ test("trusted staging orchestration ignores feature-owned validators and binds s
     run("git", ["config", "user.email", "test@example.invalid"], work);
     mkdirSync(join(work, "scripts"));
     writeFileSync(join(work, "base.txt"), "base\n");
-    const trustedValidator = `import {writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';const arg=n=>process.argv[process.argv.indexOf(n)+1];const sha=arg('--sha');const suite=arg('--suite');const output=arg('--output');const results=${JSON.stringify(requiredLabels)}.map(label=>({label,status:0}));writeFileSync(output,JSON.stringify({schema:'parkdex.local-ci/v1',status:'success',commitSha:sha,suite,results})+'\\n');\n`;
+    const trustedValidator = `import {readFileSync,writeFileSync} from 'node:fs';import {spawnSync} from 'node:child_process';import {createHash} from 'node:crypto';import {fileURLToPath} from 'node:url';const arg=n=>process.argv[process.argv.indexOf(n)+1];const git=a=>spawnSync('git',a,{encoding:'utf8'}).stdout.trim();const sha=arg('--sha');const suite=arg('--suite');const output=arg('--output');const results=${JSON.stringify(requiredLabels)}.map(label=>({label,status:0}));writeFileSync(output,JSON.stringify({schema:'parkdex.local-ci/v1',status:'success',repository:git(['remote','get-url','origin']),commitSha:sha,treeSha:git(['rev-parse','HEAD^{tree}']),suite,validatorSha256:createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),results})+'\\n');\n`;
     writeFileSync(join(work, "scripts", "local-ci.mjs"), trustedValidator);
     writeFileSync(join(work, "scripts", "github-status.mjs"), statusSource);
+    writeFileSync(join(work, "scripts", "evidence-validation.mjs"), evidenceValidationSource);
     writeFileSync(join(work, "scripts", "merge-candidate.mjs"), "throw new Error('repository copy is not invoked by this contract');\n");
     run("git", ["add", "."], work);
     run("git", ["commit", "-m", "trusted staging harness"], work);
@@ -42,7 +54,7 @@ test("trusted staging orchestration ignores feature-owned validators and binds s
     const baseSha = run("git", ["rev-parse", "HEAD"], work);
     run("git", ["switch", "-c", "feature"], work);
     writeFileSync(join(work, "feature.txt"), "feature\n");
-    for (const name of ["local-ci.mjs", "merge-candidate.mjs", "github-status.mjs"]) writeFileSync(join(work, "scripts", name), "process.exit(9);\n");
+    for (const name of ["local-ci.mjs", "merge-candidate.mjs", "github-status.mjs", "evidence-validation.mjs"]) writeFileSync(join(work, "scripts", name), "process.exit(9);\n");
     run("git", ["add", "."], work);
     run("git", ["commit", "-m", "replace repository harnesses"], work);
     const headSha = run("git", ["rev-parse", "HEAD"], work);
@@ -63,6 +75,24 @@ test("trusted staging orchestration ignores feature-owned validators and binds s
     const accepted = spawnSync(process.execPath, [statusScript, "--repository", "owner/repo", "--sha", headSha, "--head-ref", "feature", "--state", "success", "--attestation", evidencePath, "--dry-run"], { cwd: work, encoding: "utf8" });
     assert.equal(accepted.status, 0, accepted.stderr);
     assert.match(accepted.stdout, new RegExp(`local-ci/staging-${baseSha.slice(0, 12)}`));
+
+    const originalEvidenceText = readFileSync(evidencePath, "utf8");
+    run("git", ["switch", "feature"], work);
+    writeFileSync(join(work, "feature.txt"), "changed after successful evidence\n");
+    run("git", ["add", "feature.txt"], work);
+    run("git", ["commit", "-m", "change attested source"], work);
+    const changedHeadSha = run("git", ["rev-parse", "HEAD"], work);
+    run("git", ["push", "origin", "feature"], work);
+    run("git", ["switch", "staging"], work);
+    const changedTreeSha = run("git", ["merge-tree", "--write-tree", baseSha, changedHeadSha], work).split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
+    const changedCandidateSha = run("git", ["commit-tree", changedTreeSha, "-p", baseSha, "-p", changedHeadSha], work);
+    const replayed = { ...evidence, headSha: changedHeadSha, treeSha: changedTreeSha, candidateSha: changedCandidateSha };
+    writeFileSync(evidencePath, `${JSON.stringify(replayed)}\n`);
+    const replay = spawnSync(process.execPath, [statusScript, "--repository", "owner/repo", "--sha", changedHeadSha, "--head-ref", "feature", "--state", "success", "--attestation", evidencePath, "--dry-run"], { cwd: work, encoding: "utf8" });
+    assert.notEqual(replay.status, 0);
+    assert.match(replay.stderr, /Nested local evidence/);
+    writeFileSync(evidencePath, originalEvidenceText);
+    run("git", ["push", "--force", "origin", `${headSha}:refs/heads/feature`], work);
 
     const nestedPath = evidence.localEvidencePath;
     const nestedText = readFileSync(nestedPath, "utf8");

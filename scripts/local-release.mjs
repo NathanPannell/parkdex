@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
 import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
@@ -60,20 +61,8 @@ function parseJson(text, label) {
   try { return JSON.parse(text); } catch { throw new Error(`${label} returned invalid JSON`); }
 }
 
-function repositorySlug(remote) {
-  const normalized = String(remote || "").replaceAll("\\", "/");
-  const match = normalized.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/i);
-  return match ? `${match[1]}/${match[2]}`.toLowerCase() : "";
-}
-
-function successfulLocalEvidence(evidence) {
-  const required = ["database isolation contracts", "create owned CI database", "backend seed contract", "backend migrations", "backend tests", "drop owned CI database", "repository dependencies", "catalogue validation", "boundary source tests", "boundary geometry", "release metadata tests", "workflow contract tests", "local release contract tests", "CI evidence contract tests", "deployment helper tests", "frontend dependencies", "frontend boundary asset", "frontend territory contract", "frontend lint", "frontend typecheck", "frontend tests", "frontend build"];
-  const successful = new Set((evidence?.results || []).filter((item) => item?.status === 0).map((item) => item.label));
-  return required.every((label) => successful.has(label));
-}
-
 function trustedHarness(root) {
-  if (repositorySlug(git(root, ["remote", "get-url", "origin"])) !== REPOSITORY.toLowerCase()) throw new Error("Origin does not match the canonical Parkdex repository");
+  if (canonicalGithubRepositorySlug(git(root, ["remote", "get-url", "origin"])) !== REPOSITORY.toLowerCase()) throw new Error("Origin does not match the canonical Parkdex repository");
   git(root, ["fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging"]);
   const harnessSha = git(root, ["rev-parse", "HEAD"]);
   if (harnessSha !== git(root, ["rev-parse", "refs/remotes/origin/staging"])) throw new Error("Provider Apply requires the clean current remote staging harness");
@@ -87,19 +76,20 @@ function verifyPreviewAuthorization(root, harnessSha, sourceSha, pullRequest, he
   if (!relativePath.startsWith("..") || !existsSync(resolved)) throw new Error("Preview attestation must be an existing file outside the repository");
   const evidenceText = readFileSync(resolved, "utf8");
   const evidence = parseJson(evidenceText, "Merge-candidate attestation");
-  if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || repositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
+  if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || canonicalGithubRepositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
   git(root, ["fetch", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`]);
   if (git(root, ["rev-parse", `refs/remotes/origin/${headRef}`]) !== sourceSha) throw new Error("Preview source no longer matches the attested remote head");
   const pr = parseJson(run("gh", ["pr", "view", String(pullRequest), "--repo", REPOSITORY, "--json", "number,state,baseRefName,headRefName,headRefOid"], { env: minimalEnv(), label: "GitHub pull request identity" }), "GitHub pull request identity");
   if (pr.number !== pullRequest || pr.state !== "OPEN" || pr.baseRefName !== "staging" || pr.headRefName !== headRef || pr.headRefOid !== sourceSha) throw new Error("Preview pull request identity did not match the requested source");
   const treeSha = git(root, ["merge-tree", "--write-tree", harnessSha, sourceSha]).split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
   if (!treeSha || treeSha !== evidence.treeSha) throw new Error("Preview merge tree no longer matches the attestation");
+  if (git(root, ["rev-parse", `${evidence.candidateSha}^{tree}`]) !== treeSha || git(root, ["show", "-s", "--format=%P", evidence.candidateSha]) !== `${harnessSha} ${sourceSha}`) throw new Error("Preview candidate commit does not bind the exact merge tree and parents");
   const trustedValidator = `${git(root, ["show", `${harnessSha}:scripts/local-ci.mjs`])}\n`;
   if (createHash("sha256").update(trustedValidator).digest("hex") !== evidence.trustedValidatorSha256) throw new Error("Preview trusted validator identity did not match staging");
   const localEvidenceText = readFileSync(evidence.localEvidencePath, "utf8");
   if (createHash("sha256").update(localEvidenceText).digest("hex") !== evidence.localEvidenceSha256) throw new Error("Preview nested local evidence hash did not match");
   const localEvidence = parseJson(localEvidenceText, "Nested local evidence");
-  if (localEvidence.schema !== "parkdex.local-ci/v1" || localEvidence.status !== "success" || localEvidence.commitSha !== evidence.candidateSha || localEvidence.suite !== "all" || !successfulLocalEvidence(localEvidence)) throw new Error("Preview nested evidence did not prove the complete merge candidate");
+  if (!validateNestedLocalEvidence(localEvidence, { candidateSha: evidence.candidateSha, treeSha, repository: REPOSITORY, validatorSha256: evidence.trustedValidatorSha256, requireCanonicalGithub: true })) throw new Error("Preview nested evidence did not prove the exact complete merge candidate");
   return { schema: evidence.schema, attestationSha256: createHash("sha256").update(evidenceText).digest("hex"), baseSha: harnessSha, headSha: sourceSha, headRef, treeSha, candidateSha: evidence.candidateSha, pullRequest };
 }
 
