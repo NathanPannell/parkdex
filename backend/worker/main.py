@@ -39,8 +39,9 @@ def main() -> None:
         while not stop_event.is_set():
             place_count = catalogue_count(pool)
             logger.info(
-                "Parkdex catalogue ready commit=%s places=%d",
+                "Parkdex catalogue ready commit=%s release=%s places=%d",
                 settings.app_commit_sha,
+                settings.app_release_id,
                 place_count,
             )
             stop_event.wait(max(settings.check_interval_seconds, 300))

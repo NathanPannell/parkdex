@@ -41,6 +41,7 @@ def test_visit_collection_is_persistent_and_isolated() -> None:
             readiness = client.get("/ready")
             assert readiness.status_code == 200
             assert readiness.json()["commit"]
+            assert readiness.json()["release"]
 
             visit = client.put(
                 f"/api/visits/{TEST_PLACE}",

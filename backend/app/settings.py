@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     check_interval_seconds: int = Field(default=180, alias="CHECK_INTERVAL_SECONDS")
     request_timeout_seconds: float = Field(default=10, alias="REQUEST_TIMEOUT_SECONDS")
     app_commit_sha: str = Field(default="local", alias="APP_COMMIT_SHA")
+    app_release_id: str = Field(default="local", alias="APP_RELEASE_ID")
     app_public_url: str = Field(default="http://localhost:3000", alias="APP_PUBLIC_URL")
     google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")

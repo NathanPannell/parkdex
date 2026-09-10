@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 function readArg(name, fallback = undefined) {
   const index = process.argv.indexOf(name);
@@ -34,6 +36,9 @@ function runGit(root, args) {
 
 const root = runGit(process.cwd(), ["rev-parse", "--show-toplevel"]);
 const actualSha = runGit(root, ["rev-parse", "HEAD"]);
+const treeSha = runGit(root, ["rev-parse", "HEAD^{tree}"]);
+const repository = runGit(root, ["remote", "get-url", "origin"]);
+const validatorSha256 = createHash("sha256").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex");
 const expectedSha = readArg("--sha");
 if (expectedSha && expectedSha !== actualSha) {
   console.error(`local-ci refused stale checkout: expected ${expectedSha}, found ${actualSha}`);
@@ -53,6 +58,7 @@ if (!["all", "backend", "frontend"].includes(suite)) {
 
 const startedAt = new Date().toISOString();
 const results = [];
+const databaseAdminUrl = process.env.PARKDEX_TEST_DATABASE_ADMIN_URL || "postgresql://postgres:postgres@localhost:5432/postgres";
 const env = { ...process.env, CI: "true" };
 for (const key of Object.keys(env)) {
   if (/TOKEN|SECRET|PASSWORD|PRIVATE.?KEY|API.?KEY|RAILWAY|VERCEL|NEON|GITHUB_TOKEN|DATABASE_URL/i.test(key)) {
@@ -60,8 +66,6 @@ for (const key of Object.keys(env)) {
     delete process.env[key];
   }
 }
-env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/app";
-env.DATABASE_URL_UNPOOLED = env.DATABASE_URL;
 
 function run(label, command, args, cwd = root, extraEnv = {}) {
   const started = Date.now();
@@ -89,12 +93,23 @@ let status = "success";
 let failure = "";
 try {
   if (suite === "all" || suite === "backend") {
-    run("backend seed contract", "python", ["scripts/build_seed_migration.py", "--check"]);
-    if (hasFlag("--install-backend")) {
-      run("backend dependencies", "python", ["-m", "pip", "install", "-r", "backend/requirements-dev.txt"]);
+    const databaseName = `parkdex_ci_${process.pid}_${Date.now()}_${randomBytes(4).toString("hex")}`;
+    const databaseUrl = `${databaseAdminUrl.slice(0, databaseAdminUrl.lastIndexOf("/") + 1)}${databaseName}`;
+    const databaseEnv = { PARKDEX_TEST_DATABASE_ADMIN_URL: databaseAdminUrl, DATABASE_URL: databaseUrl, DATABASE_URL_UNPOOLED: databaseUrl };
+    let databaseCreated = false;
+    try {
+      run("database isolation contracts", "python", ["-m", "pytest", "scripts/local_test_database_test.py", "-q"], root, { PARKDEX_TEST_DATABASE_ADMIN_URL: databaseAdminUrl });
+      run("create owned CI database", "python", ["scripts/local_test_database.py", "create", databaseName], root, { PARKDEX_TEST_DATABASE_ADMIN_URL: databaseAdminUrl });
+      databaseCreated = true;
+      run("backend seed contract", "python", ["scripts/build_seed_migration.py", "--check"], root, databaseEnv);
+      if (hasFlag("--install-backend")) {
+        run("backend dependencies", "python", ["-m", "pip", "install", "-r", "backend/requirements-dev.txt"], root, databaseEnv);
+      }
+      run("backend migrations", "python", ["-m", "backend.app.migrate"], root, databaseEnv);
+      run("backend tests", "python", ["-m", "pytest", "backend/tests"], root, databaseEnv);
+    } finally {
+      if (databaseCreated) run("drop owned CI database", "python", ["scripts/local_test_database.py", "drop", databaseName], root, { PARKDEX_TEST_DATABASE_ADMIN_URL: databaseAdminUrl });
     }
-    run("backend migrations", "python", ["-m", "backend.app.migrate"]);
-    run("backend tests", "python", ["-m", "pytest", "backend/tests"]);
   }
 
   if (suite === "all" || suite === "frontend") {
@@ -104,6 +119,8 @@ try {
     run("boundary geometry", "node", ["scripts/boundary-validate.mjs"]);
     run("release metadata tests", "node", ["--test", "scripts/release-metadata.test.mjs"]);
     run("workflow contract tests", "node", ["--test", "scripts/deployment-workflows.test.mjs"]);
+    run("local release contract tests", "node", ["--test", "scripts/local-release.test.mjs"]);
+    run("CI evidence contract tests", "node", ["--test", "scripts/ci-evidence.test.mjs"]);
     run("deployment helper tests", "bash", ["scripts/deployment-helpers.test.sh"]);
     run("frontend dependencies", "npm", ["ci"], join(root, "frontend"));
     run("frontend boundary asset", "node", ["scripts/check-boundary-asset.mjs"], join(root, "frontend"));
@@ -135,13 +152,18 @@ if (status === "success") {
 }
 
 const endedAt = new Date().toISOString();
-const output = readArg("--output", join(tmpdir(), `parkdex-local-ci-${actualSha}-${Date.now()}.json`));
+const output = resolve(readArg("--output", join(tmpdir(), `parkdex-local-ci-${actualSha}-${Date.now()}.json`)));
+const outputRelative = relative(root, output);
+if (!outputRelative.startsWith("..") && outputRelative !== "") throw new Error("Attestation output must be outside the repository");
 const attestation = {
   schema: "parkdex.local-ci/v1",
   status,
   failure: failure || undefined,
+  repository,
   commitSha: actualSha,
+  treeSha,
   suite,
+  validatorSha256,
   startedAt,
   endedAt,
   runner: `${process.platform}/${process.arch}`,
@@ -149,6 +171,8 @@ const attestation = {
   results,
 };
 mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, `${JSON.stringify(attestation, null, 2)}\n`, "utf8");
+const temporaryOutput = `${output}.${process.pid}.tmp`;
+writeFileSync(temporaryOutput, `${JSON.stringify(attestation, null, 2)}\n`, "utf8");
+renameSync(temporaryOutput, output);
 console.log(`local-ci status=${status} sha=${actualSha} attestation=${output}`);
 process.exitCode = status === "success" ? 0 : 1;
