@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { changePassword, completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset } from "./account";
+import { changePassword, completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset, setPassword } from "./account";
 
 const API = "https://api.example.test";
 
@@ -32,5 +32,14 @@ describe("account security requests", () => {
     expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer bearer");
     expect(await completeGoogleAuthorization(API, "code", "state", "verifier")).toEqual(session);
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ code: "code", state: "state", codeVerifier: "verifier" });
+  });
+
+  it("sets a first password through the authenticated account endpoint", async () => {
+    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal("fetch", fetchMock);
+    await setPassword(API, "bearer", "new secure password");
+    expect(fetchMock).toHaveBeenCalledWith(`${API}/api/auth/password-set`, expect.objectContaining({ method: "POST" }));
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer bearer");
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ newPassword: "new secure password" });
   });
 });

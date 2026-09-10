@@ -1,4 +1,4 @@
-export type Account = { id: string; email: string; emailVerified?: boolean };
+export type Account = { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean };
 export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
 export type Visit = { placeId: string; visitedAt: string };
 export type AccountSession = {
@@ -59,6 +59,10 @@ export async function confirmPasswordReset(apiBaseUrl: string, token: string, ne
 
 export async function changePassword(apiBaseUrl: string, token: string, currentPassword: string, newPassword: string): Promise<void> {
   await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-change`, jsonRequest("POST", { currentPassword, newPassword }, token)));
+}
+
+export async function setPassword(apiBaseUrl: string, token: string, newPassword: string): Promise<void> {
+  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-set`, jsonRequest("POST", { newPassword }, token)));
 }
 
 export async function requestEmailVerification(apiBaseUrl: string, token: string): Promise<void> {

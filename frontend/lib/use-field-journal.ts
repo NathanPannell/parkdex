@@ -14,6 +14,7 @@ import {
   logout as logoutAccount,
   requestEmailVerification as requestAccountEmailVerification,
   resetAccountProgress,
+  setPassword as setAccountPassword,
   type Account,
   type AccountSession,
   type Visit,
@@ -73,6 +74,7 @@ export type FieldJournal = {
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
   authenticateWithGoogle: (code: string, state: string, codeVerifier: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setPassword: (newPassword: string) => Promise<void>;
   requestEmailVerification: () => Promise<void>;
   confirmEmailVerification: (verificationToken: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -576,6 +578,21 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
   }, [apiBaseUrl, switchToGuest]);
 
+  const setPassword = useCallback(async (newPassword: string) => {
+    const identity = identityRef.current;
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    if (identity.kind !== "account") throw new Error("Sign in before setting your password.");
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    try {
+      await setAccountPassword(apiBaseUrl, identity.token, newPassword);
+      switchToGuest("Password set. Sign in again on this device.");
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [apiBaseUrl, switchToGuest]);
+
   const logout = useCallback(async () => {
     if (transitionRef.current || identityRef.current.kind !== "account") return;
     transitionRef.current = true;
@@ -693,6 +710,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     authenticate,
     authenticateWithGoogle,
     changePassword,
+    setPassword,
     requestEmailVerification,
     confirmEmailVerification,
     logout,

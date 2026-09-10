@@ -9,15 +9,15 @@ const rathtrevor = { id: "provincial-rathtrevor-beach-park", name: "Rathtrevor B
 const national = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national" as const, latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const journal = {
   places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
-  account: null as { id: string; email: string; emailVerified?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
+  account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
-  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), changePassword: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
+  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), changePassword: vi.fn(), setPassword: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
 };
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadState }: { onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></> }));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.setPassword.mockClear(); journal.confirmEmailVerification.mockClear(); });
 
 describe("Parkdex navigation", () => {
   it("keeps map modes, location, and search in one utility toolbar", () => {
@@ -317,5 +317,18 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "See all" })[1]);
     fireEvent.click(screen.getAllByRole("button", { name: "Open Forest Park" }).find((element) => element.classList.contains("collection-modal-row"))!);
     expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
+  });
+
+  it("lets a Google-only account set its first password for MCP", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true, hasPassword: false };
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+    expect(screen.queryByLabelText("Current password")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a secure local password" } });
+    fireEvent.change(screen.getByLabelText(/^Confirm new password/), { target: { value: "a secure local password" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Set password" }).at(-1)!);
+    await waitFor(() => expect(journal.setPassword).toHaveBeenCalledWith("a secure local password"));
   });
 });
