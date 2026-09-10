@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, verifyRailwayServicePatchResult } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
+const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
 const fixedRelease = "11111111-1111-4111-8111-111111111111";
 const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
@@ -71,6 +72,70 @@ test("only Railway's exact invalid-name rejection is classified as pre-create", 
   assert.equal(classifyRailwayEnvironmentCreateFailure("not authorized"), "unknown");
 });
 
+test("Railway preview services are created from a sanitized patch", () => {
+  const patch = buildRailwayServicePatch("api-id", "worker-id");
+  assert.deepEqual(Object.keys(patch.services).sort(), ["api-id", "worker-id"]);
+  assert.equal(patch.services["api-id"].isCreated, true);
+  assert.equal(patch.services["worker-id"].isCreated, true);
+  assert.ok(!JSON.stringify(patch).includes("variables"));
+  assert.ok(!JSON.stringify(patch).includes("source"));
+  assert.ok(!JSON.stringify(patch).includes("networking"));
+});
+
+test("Railway GraphQL patch keeps structured variables on stdin", () => {
+  const request = buildRailwayServiceMutation("environment-id", "api-id", "worker-id");
+  const command = buildRailwayApiCommand(request.query, request.variables);
+  assert.deepEqual(command.args.slice(-3), ["--variables", "@-", "--compact"]);
+  assert.equal(JSON.parse(command.input).environmentId, "environment-id");
+  assert.deepEqual(Object.keys(JSON.parse(command.input).patch.services).sort(), ["api-id", "worker-id"]);
+});
+
+test("Railway preview service readback rejects copied configuration", () => {
+  const patch = buildRailwayServicePatch("api-id", "worker-id");
+  assert.equal(verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), true);
+  patch.services["api-id"].variables = { SECRET: { value: "copied" } };
+  assert.throws(() => verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), /forbidden configuration/);
+  delete patch.services["api-id"].variables;
+  patch.services["extra-id"] = { isCreated: true };
+  assert.throws(() => verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), /identities/);
+});
+
+test("Railway empty-environment shim journals, patches, then verifies readback", () => {
+  const events = [];
+  const config = buildRailwayServicePatch("api-id", "worker-id");
+  provisionRailwayServiceInstances({
+    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+    listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
+    recordIntent: (intent) => events.push(["intent", intent]),
+    commitPatch: (request) => events.push(["patch", request.variables.environmentId]),
+    readConfig: () => { events.push(["readback"]); return config; },
+  });
+  assert.deepEqual(events.map(([event]) => event), ["intent", "patch", "readback"]);
+  assert.deepEqual(events[0][1], { projectId: "project-id", environmentId: "environment-id", serviceIds: ["api-id", "worker-id"] });
+});
+
+test("Railway patch failure remains journaled and stops before readback", () => {
+  const events = [];
+  assert.throws(() => provisionRailwayServiceInstances({
+    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+    listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
+    recordIntent: () => events.push("intent"),
+    commitPatch: () => { events.push("patch"); throw new Error("provider rejected patch"); },
+    readConfig: () => { events.push("readback"); return {}; },
+  }), /provider rejected patch/);
+  assert.deepEqual(events, ["intent", "patch"]);
+});
+
+test("Railway service patch refuses an environment outside the exact project inventory", () => {
+  const events = [];
+  assert.throws(() => provisionRailwayServiceInstances({
+    projectId: "project-id", environmentId: "wrong-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+    listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
+    recordIntent: () => events.push("intent"), commitPatch: () => events.push("patch"), readConfig: () => ({}),
+  }), /identity was not verified/);
+  assert.deepEqual(events, []);
+});
+
 test("orchestration preserves the isolation and identity contracts", () => {
   assert.doesNotMatch(source, /environment", "new"[^\n]*--(?:copy|duplicate)/);
   assert.doesNotMatch(source, /APP_ENVIRONMENT/);
@@ -83,6 +148,9 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /state\.neonBranch !== `preview\/\$\{state\.railwayEnvironment\}`/);
   assert.match(source, /Preview database zero-row gate/);
   assert.match(source, /frontend-creating/);
+  assert.match(source, /railway-services-creating/);
+  assert.match(providerSource, /environmentPatchCommit/);
+  assert.doesNotMatch(source, /service", "source", "disconnect/);
   assert.match(source, /VERCEL_PROJECT_ID: process\.env\.VERCEL_PROJECT_ID/);
   assert.doesNotMatch(source, /"vercel", \["link"/);
   assert.match(source, /Provider mutation remains disabled outside an independently reviewed --live-proof run/);

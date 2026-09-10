@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -13,7 +13,7 @@ const value = (name, fallback = "") => {
 };
 const flag = (name) => process.argv.includes(name);
 const LIVE_PROOF_PR = 99999;
-const LIVE_PROOF_RELEASE_ID = "295361ae-1a86-4195-94d6-6e78b1a9ed0a";
+const LIVE_PROOF_RELEASE_ID = "30e9f675-420c-4655-b9bb-3430de5c877f";
 const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
 
 function run(command, args, options = {}) {
@@ -162,6 +162,27 @@ function railwayContext(projectId, baseEnvironment, token) {
 function listRailwayEnvironments(cwd, token) {
   const payload = parseJson(run("railway", ["environment", "list", "--json"], { cwd, env: railwayEnv(token), label: "Railway environment list" }), "Railway environment list");
   return parseRailwayEnvironmentInventory(payload);
+}
+
+function createRailwayServiceInstances(cwd, state, journalPath, token) {
+  provisionRailwayServiceInstances({
+    projectId: process.env.RAILWAY_PROJECT_ID,
+    environmentId: state.railwayEnvironmentId,
+    environmentName: state.railwayEnvironment,
+    apiServiceId: process.env.RAILWAY_API_SERVICE_ID,
+    workerServiceId: process.env.RAILWAY_WORKER_SERVICE_ID,
+    listEnvironments: () => listRailwayEnvironments(cwd, token),
+    recordIntent: (intent) => updateJournal(journalPath, state, {
+      resourceIntent: { ...(state.resourceIntent || {}), railwayServices: intent },
+      status: "railway-services-creating",
+    }),
+    commitPatch: ({ query, variables }) => {
+      const command = buildRailwayApiCommand(query, variables);
+      return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview service create" });
+    },
+    readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview service inventory" }), "Railway preview service inventory"),
+  });
+  updateJournal(journalPath, state, { status: "railway-services-created" });
 }
 
 function setRailwayVariable(name, value, service, environment, project, token) {
@@ -314,7 +335,7 @@ async function cleanup(root, journalPath) {
   }
   const unresolved = [];
   if (state.resourceIntent?.vercel && !state.cleanup?.vercel) unresolved.push("Vercel deployment");
-  if ((state.resourceIntent?.railway || state.resourceIntent?.railwayDomain) && !state.cleanup?.railway) unresolved.push("Railway environment");
+  if ((state.resourceIntent?.railway || state.resourceIntent?.railwayServices || state.resourceIntent?.railwayDomain) && !state.cleanup?.railway) unresolved.push("Railway environment");
   if (state.resourceIntent?.neon && !state.cleanup?.neon) unresolved.push("Neon branch");
   if (unresolved.length) throw new Error(`Cleanup could not authoritatively resolve: ${unresolved.join(", ")}`);
   updateJournal(journalPath, state, { status: "cleaned", cleanedAt: new Date().toISOString() });
@@ -352,15 +373,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
       const environments = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN);
       if (preview) {
         if (environments.some((item) => item.name === railwayEnvironment)) throw new Error("Refusing to adopt an existing Railway preview environment");
-        const createEnvironmentArgs = [
-          "environment", "new", railwayEnvironment, "--json",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "build.builder", "DOCKERFILE",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "build.dockerfilePath", "backend/Dockerfile.api",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "deploy.preDeployCommand", "python -m backend.app.migrate",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "deploy.healthcheckPath", "/health",
-          "--service-config", process.env.RAILWAY_WORKER_SERVICE_ID, "build.builder", "DOCKERFILE",
-          "--service-config", process.env.RAILWAY_WORKER_SERVICE_ID, "build.dockerfilePath", "backend/Dockerfile.worker",
-        ];
+        const createEnvironmentArgs = ["environment", "new", railwayEnvironment, "--json"];
         updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railway: { environmentName: railwayEnvironment, releaseId } }, status: "railway-creating" });
         try {
           run("railway", createEnvironmentArgs, { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment create" });
@@ -376,6 +389,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
         if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified");
         state.railwayEnvironmentId = matches[0].id;
         updateJournal(journalPath, state, { railwayEnvironmentId: matches[0].id, status: "railway-created" });
+        createRailwayServiceInstances(context, state, journalPath, process.env.RAILWAY_API_TOKEN);
       } else if (!environments.some((item) => item.id === state.railwayEnvironmentId && item.name === "staging")) throw new Error("Railway staging environment identity was not verified");
     } finally { rmSync(context, { recursive: true, force: true }); }
     const railwayArgs = ["--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_API_SERVICE_ID, "--json"];
@@ -409,7 +423,6 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     const directName = preview ? "PREVIEW_DATABASE_URL_UNPOOLED" : "DATABASE_URL_UNPOOLED";
     for (const service of services) {
       for (const [name, val] of [[dbName, database.pooled], [directName, database.direct], ["RAILWAY_ENVIRONMENT_NAME", railwayEnvironment], ["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]]) setRailwayVariable(name, val, service, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
-      run("railway", ["service", "source", "disconnect", "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway source disconnect" });
     }
     for (const [name, val] of [["FRONTEND_ORIGINS", state.frontendUrl], ["APP_PUBLIC_URL", state.frontendUrl]]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
     if (!preview) for (const [name, val] of [["GOOGLE_CLIENT_ID", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_ID], ["GOOGLE_CLIENT_SECRET", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_SECRET], ["GOOGLE_REDIRECT_URI", "https://staging.parkdex.app/auth/google/callback"]]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);

@@ -31,3 +31,57 @@ export function parseRailwayEnvironmentInventory(payload) {
 export function classifyRailwayEnvironmentCreateFailure(stderr) {
   return /(?:^|\r?\n)Error in name - Invalid input(?:\r?\n|$)/.test(stderr || "") ? "invalid-name" : "unknown";
 }
+
+export function buildRailwayServicePatch(apiServiceId, workerServiceId) {
+  return {
+    services: {
+      [apiServiceId]: {
+        isCreated: true,
+        build: { builder: "DOCKERFILE", dockerfilePath: "backend/Dockerfile.api", watchPatterns: ["backend/**", "database/**"] },
+        deploy: { preDeployCommand: ["python -m backend.app.migrate"], healthcheckPath: "/health" },
+      },
+      [workerServiceId]: {
+        isCreated: true,
+        build: { builder: "DOCKERFILE", dockerfilePath: "backend/Dockerfile.worker", watchPatterns: ["backend/**", "database/**"] },
+      },
+    },
+  };
+}
+
+export function buildRailwayServiceMutation(environmentId, apiServiceId, workerServiceId) {
+  return {
+    query: "mutation LocalReleaseServices($environmentId: String!, $patch: EnvironmentConfig!) { environmentPatchCommit(environmentId: $environmentId, patch: $patch, commitMessage: \"Parkdex isolated local preview services\") }",
+    variables: { environmentId, patch: buildRailwayServicePatch(apiServiceId, workerServiceId) },
+  };
+}
+
+export function buildRailwayApiCommand(query, variables) {
+  return { args: ["api", query, "--variables", "@-", "--compact"], input: JSON.stringify(variables) };
+}
+
+export function verifyRailwayServicePatchResult(config, apiServiceId, workerServiceId) {
+  const services = config?.services;
+  if (!services || typeof services !== "object" || Array.isArray(services)) throw new Error("Railway service configuration was not returned");
+  const ids = Object.keys(services).sort();
+  if (ids.join(",") !== [apiServiceId, workerServiceId].sort().join(",")) throw new Error("Railway preview service identities were not verified");
+  const api = services[apiServiceId];
+  const worker = services[workerServiceId];
+  if (api?.build?.builder !== "DOCKERFILE" || api?.build?.dockerfilePath !== "backend/Dockerfile.api" || api?.deploy?.healthcheckPath !== "/health" || api?.deploy?.preDeployCommand?.join(" ") !== "python -m backend.app.migrate") throw new Error("Railway API service configuration was not verified");
+  if (worker?.build?.builder !== "DOCKERFILE" || worker?.build?.dockerfilePath !== "backend/Dockerfile.worker") throw new Error("Railway worker service configuration was not verified");
+  for (const service of [api, worker]) {
+    if (service?.source != null || service?.networking != null || service?.configFile != null || Object.keys(service?.variables || {}).length || Object.keys(service?.volumeMounts || {}).length) throw new Error("Railway preview service inherited forbidden configuration");
+  }
+  if (Object.keys(config.sharedVariables || {}).length || Object.keys(config.volumes || {}).length || Object.keys(config.buckets || {}).length) throw new Error("Railway preview environment inherited forbidden configuration");
+  return true;
+}
+
+export function provisionRailwayServiceInstances({ projectId, environmentId, environmentName, apiServiceId, workerServiceId, listEnvironments, recordIntent, commitPatch, readConfig }) {
+  const matches = listEnvironments().filter((environment) => environment.id === environmentId && environment.name === environmentName);
+  if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified before service creation");
+  const request = buildRailwayServiceMutation(environmentId, apiServiceId, workerServiceId);
+  recordIntent({ projectId, environmentId, serviceIds: Object.keys(request.variables.patch.services).sort() });
+  commitPatch(request);
+  const config = readConfig();
+  verifyRailwayServicePatchResult(config, apiServiceId, workerServiceId);
+  return config;
+}
