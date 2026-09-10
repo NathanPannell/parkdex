@@ -209,6 +209,9 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /RAILWAY_ENVIRONMENT_NAME/);
   assert.match(source, /PREVIEW_DATABASE_URL_UNPOOLED/);
   assert.match(source, /APP_RELEASE_ID/);
+  assert.match(source, /API_PUBLIC_URL/);
+  assert.match(source, /MCP_PUBLIC_URL/);
+  assert.match(source, /`\$\{state\.apiUrl\}\/mcp`/);
   assert.match(source, /verifyRailwayDeployments/);
   assert.doesNotMatch(source, /callBash/);
   assert.match(source, /buildVercelCurlArgs/);

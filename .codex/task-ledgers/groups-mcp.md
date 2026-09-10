@@ -23,6 +23,9 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 - 2026-09-10: official OpenAI documentation confirms public servers require a stable HTTPS Streamable HTTP endpoint and user-specific private/write tools require OAuth 2.1 with protected-resource discovery, authorization-server discovery, PKCE S256, resource binding, and per-request token verification.
 - 2026-09-10: delegated independent hosted-MCP architecture analysis, backend OAuth/Streamable HTTP implementation, and frontend Groups-only conversion with non-overlapping ownership.
 - 2026-09-10: notified the preview deployment owner that the published PR head is stale and must not be deployed; final tested SHA will be sent after revision.
+- 2026-09-10: frontend terminology conversion passed 117 tests, lint, typecheck, and interface checks; repository-wide legacy collection routes, types, helpers, filenames, UI copy, and documentation were removed.
+- 2026-09-10: hosted MCP focused test passed discovery, unauthenticated challenge, dynamic registration, PKCE login/consent, single-use code exchange, Streamable HTTP initialization/tool calls, hashed-token storage, and revocation.
+- 2026-09-10: merged current `origin/staging` at `ce80152aa5cda66b9422e3838d6e0cfc2fe9f1e2` and configured preview/staging/production Railway API services with exact `API_PUBLIC_URL` and `MCP_PUBLIC_URL` values.
 
 ## Active verification plan
 
@@ -33,4 +36,4 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 
 ## Next action
 
-Integrate the delegated changes, eliminate remaining legacy naming, and run focused protocol/security tests.
+Commit the integrated deployment configuration, run the exact-revision validation and independent security review, then push and hand the attested SHA to the preview deployment owner.
