@@ -31,7 +31,7 @@ gh workflow run hosted-checkpoint.yml -R NathanPannell/parkdex --ref staging \
   -f commit_sha="$(git rev-parse HEAD)" -f reason='ready for review'
 ```
 
-The local release wrapper is planner-only until an isolated Railway/Neon/Vercel create, configure, deploy, verify, and cleanup proof succeeds. `-Apply` and cleanup are fail-closed. The planned path uses a unique `local-pr-<number>-<sha>-<release>` namespace, creates Railway without copying another environment, journals owned resources outside the repository before later mutations, and verifies commit, release, provider project, and deployment identities.
+The local release wrapper is planner-only until an isolated Railway/Neon/Vercel create, configure, deploy, verify, and cleanup proof succeeds. `-Apply` and cleanup are fail-closed. The planned path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates Railway without copying another environment, journals owned resources outside the repository before later mutations, and verifies commit, release, provider project, and deployment identities.
 
 ```powershell
 pwsh -File scripts/local-release.ps1 -Mode Preview -PullRequest 20

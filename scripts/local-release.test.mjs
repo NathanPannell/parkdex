@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const fixedRelease = "11111111-1111-4111-8111-111111111111";
@@ -22,7 +22,8 @@ test("preview planning is unique and provider-free", () => {
   const result = invoke(["--mode", "preview", "--pr", "321", "--release-id", fixedRelease]);
   assert.equal(result.status, 0, result.stderr);
   const plan = JSON.parse(result.stdout);
-  assert.match(plan.railwayEnvironment, /^local-pr-321-[0-9a-f]{12}-11111111$/);
+  assert.match(plan.railwayEnvironment, /^lp-pr-321-[0-9a-f]{8}-11111111$/);
+  assert.ok(plan.railwayEnvironment.length <= 30);
   assert.equal(plan.neonBranch, `preview/${plan.railwayEnvironment}`);
   assert.equal(plan.apply, false);
 });
@@ -50,6 +51,24 @@ test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
   assert.ok(command.args.includes("--data=-"));
   assert.ok(!command.args.includes("-"));
   assert.deepEqual(JSON.parse(command.input), { branch: { name: "preview/test" } });
+});
+
+test("preview names stay in the conservative Railway-safe subset", () => {
+  assert.equal(buildPreviewEnvironmentName(999999, "abcdef0123456789", fixedRelease), "lp-pr-999999-abcdef01-11111111");
+  assert.equal(buildPreviewEnvironmentName(999999, "abcdef0123456789", fixedRelease).length, 30);
+});
+
+test("Railway absence is accepted only from a complete non-paginated inventory", () => {
+  assert.deepEqual(parseRailwayEnvironmentInventory({ environments: [] }), []);
+  assert.throws(() => parseRailwayEnvironmentInventory({}), /complete list/);
+  assert.throws(() => parseRailwayEnvironmentInventory({ environments: [], pageInfo: { hasNextPage: true } }), /paginated/);
+  assert.throws(() => parseRailwayEnvironmentInventory({ environments: [{ name: "preview" }] }), /invalid entry/);
+});
+
+test("only Railway's exact invalid-name rejection is classified as pre-create", () => {
+  assert.equal(classifyRailwayEnvironmentCreateFailure("> Environment name bad\nError in name - Invalid input\n"), "invalid-name");
+  assert.equal(classifyRailwayEnvironmentCreateFailure("operation timed out"), "unknown");
+  assert.equal(classifyRailwayEnvironmentCreateFailure("not authorized"), "unknown");
 });
 
 test("orchestration preserves the isolation and identity contracts", () => {

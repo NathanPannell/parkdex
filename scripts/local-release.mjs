@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildNeonApiCommand } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -13,7 +13,7 @@ const value = (name, fallback = "") => {
 };
 const flag = (name) => process.argv.includes(name);
 const LIVE_PROOF_PR = 99999;
-const LIVE_PROOF_RELEASE_ID = "8c64851b-7a9c-438b-adf3-b519be01dcce";
+const LIVE_PROOF_RELEASE_ID = "295361ae-1a86-4195-94d6-6e78b1a9ed0a";
 const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
 
 function run(command, args, options = {}) {
@@ -26,7 +26,9 @@ function run(command, args, options = {}) {
     ...options,
   });
   if (result.error || result.status !== 0) {
-    throw new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
+    const error = new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
+    error.providerStderr = result.stderr || "";
+    throw error;
   }
   return (result.stdout || "").trim();
 }
@@ -56,15 +58,6 @@ function atomicJournal(path, state) {
 function updateJournal(path, state, patch) {
   Object.assign(state, patch, { updatedAt: new Date().toISOString() });
   atomicJournal(path, state);
-}
-
-function findNamedObjects(node, output = []) {
-  if (Array.isArray(node)) for (const item of node) findNamedObjects(item, output);
-  else if (node && typeof node === "object") {
-    if (typeof node.id === "string" && typeof node.name === "string") output.push(node);
-    for (const item of Object.values(node)) findNamedObjects(item, output);
-  }
-  return output;
 }
 
 function parseJson(text, label) {
@@ -167,7 +160,8 @@ function railwayContext(projectId, baseEnvironment, token) {
 }
 
 function listRailwayEnvironments(cwd, token) {
-  return findNamedObjects(parseJson(run("railway", ["environment", "list", "--json"], { cwd, env: railwayEnv(token), label: "Railway environment list" }), "Railway environment list"));
+  const payload = parseJson(run("railway", ["environment", "list", "--json"], { cwd, env: railwayEnv(token), label: "Railway environment list" }), "Railway environment list");
+  return parseRailwayEnvironmentInventory(payload);
 }
 
 function setRailwayVariable(name, value, service, environment, project, token) {
@@ -228,7 +222,7 @@ function callBash(root, script, env, args = []) {
 async function cleanup(root, journalPath) {
   if (!journalPath || !existsSync(journalPath)) throw new Error("Cleanup requires an explicit existing --journal path");
   const state = parseJson(readFileSync(journalPath, "utf8"), "Release journal");
-  if (state.schema !== "parkdex.local-release/v3" || state.mode !== "preview" || !/^local-pr-[0-9]+-[0-9a-f]{12}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
+  if (state.schema !== "parkdex.local-release/v3" || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
     throw new Error("Release journal is not an active owned preview");
   }
   requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
@@ -239,6 +233,26 @@ async function cleanup(root, journalPath) {
       const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === state.railwayEnvironment);
       if (matches.length > 1) throw new Error("Multiple Railway environments matched the journal identity");
       if (matches.length === 1) updateJournal(journalPath, state, { railwayEnvironmentId: matches[0].id, status: "cleanup-recovered" });
+      else if (state.resourceIntent?.railway?.createFailure === "invalid-name") {
+        const verifiedAt = [];
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+          const repeated = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === state.railwayEnvironment);
+          if (repeated.length > 1) throw new Error("Multiple Railway environments matched the journal identity");
+          if (repeated.length === 1) {
+            updateJournal(journalPath, state, { railwayEnvironmentId: repeated[0].id, status: "cleanup-recovered" });
+            break;
+          }
+          verifiedAt.push(new Date().toISOString());
+        }
+        if (!state.railwayEnvironmentId) {
+          updateJournal(journalPath, state, {
+            cleanupIntent: { ...(state.cleanupIntent || {}), railway: { projectId: process.env.RAILWAY_PROJECT_ID, environmentName: state.railwayEnvironment, completeInventories: verifiedAt } },
+            cleanup: { ...(state.cleanup || {}), railway: true },
+            status: "cleanup-verified-absent",
+          });
+        }
+      }
     } finally { rmSync(context, { recursive: true, force: true }); }
   }
   if (!state.neonBranchId) {
@@ -308,10 +322,8 @@ async function cleanup(root, journalPath) {
 }
 
 async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
-  const shortSha = sha.slice(0, 12);
-  const suffix = releaseId.replaceAll("-", "").slice(0, 8);
   const preview = mode === "preview";
-  const railwayEnvironment = preview ? `local-pr-${pullRequest}-${shortSha}-${suffix}` : "staging";
+  const railwayEnvironment = preview ? buildPreviewEnvironmentName(pullRequest, sha, releaseId) : "staging";
   const neonBranch = preview ? `preview/${railwayEnvironment}` : null;
   const expiresAt = preview ? new Date(Date.now() + 7 * 86400_000).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
   const state = { schema: "parkdex.local-release/v3", mode, status: "planned", releaseId, commitSha: sha, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -354,6 +366,10 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
           run("railway", createEnvironmentArgs, { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment create" });
         } catch (error) {
           const recovered = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === railwayEnvironment);
+          const createFailure = classifyRailwayEnvironmentCreateFailure(error.providerStderr);
+          if (recovered.length === 0 && createFailure !== "unknown") {
+            updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railway: { ...state.resourceIntent.railway, createFailure } } });
+          }
           if (recovered.length !== 1) throw error;
         }
         const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === railwayEnvironment);

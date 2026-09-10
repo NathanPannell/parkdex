@@ -25,7 +25,7 @@ def test_local_release_namespace_uses_preview_database() -> None:
     settings = Settings(
         DATABASE_URL="postgresql://production",
         PREVIEW_DATABASE_URL="postgresql://preview",
-        RAILWAY_ENVIRONMENT_NAME="local-pr-99999-abcdef012345-12345678",
+        RAILWAY_ENVIRONMENT_NAME="lp-pr-99999-abcdef01-12345678",
     )
     assert settings.effective_database_url == "postgresql://preview"
 
