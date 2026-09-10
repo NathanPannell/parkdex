@@ -37,6 +37,10 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 - 2026-09-10: integrated backend commit `b650818` atop frontend `60a5e8b`; renamed the unapplied migration to truthful `0011_create_account_groups.sql`, clarified group/Wishlist errors and copy, reserved the special Wishlist name, rejected radius without origin, and kept trip aliases ordinary-group-only.
 - 2026-09-10: added a true MCP stdio subprocess round trip against a locally served API, covering origin/type/unvisited search, details, deduplicated group/Wishlist mutations, REST agreement, protocol error handling, and second-account denial. Added concurrent Wishlist singleton and stale account list/mutation tests.
 - 2026-09-10: integration-focused verification passed 8 backend/MCP tests in a fresh owned database that was dropped afterward, plus 6 frontend group/client race tests and frontend typecheck.
+- 2026-09-10: full local CI passed at `2e627901bf198700de37e30c3de0a127529f8369`: 42 backend tests, 116 frontend tests across 24 files, lint, typecheck, production build, data validation, boundary checks, workflow contracts, and deploy-helper contracts. The disposable CI database was dropped automatically.
+- 2026-09-10: local browser acceptance passed on desktop and 390x844 mobile. Created a multi-place group, focused all members on the map, saved to Wishlist in one click, added through the group picker, confirmed a second account saw only its singleton Wishlist, then created `MCP coast picks` through a real authenticated stdio MCP subprocess and saw it after UI refresh. Browser console warnings/errors: none. The owned browser database and both local servers were removed afterward.
+- 2026-09-10: fresh design finish review found rename validation was not rendered beside its form. Fixed the accessible inline alert association, 44px mobile action targets, and long-name wrapping; re-review passed.
+- 2026-09-10: independent backend audit identified snake-case REST input compatibility and IPv6 loopback normalization gaps. Added `placeIds`/`place_ids` input aliases, bracket-safe IPv6 origin normalization, and regression tests; focused MCP tests passed 6/6.
 
 ## Dependencies and blockers
 
@@ -46,4 +50,4 @@ Ship one PR to `staging` adding private account-owned groups shared between the 
 
 ## Next action
 
-Commit integration fixes, run full local CI, perform local browser acceptance and Impeccable screenshots, then independent quality review and PR delivery.
+Complete the independent quality review, run full local CI at the final commit, then push and open one PR to `staging` without merging or deploying it.

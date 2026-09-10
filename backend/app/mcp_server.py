@@ -39,7 +39,7 @@ def normalize_origin(value: str) -> str:
         raise ValueError("API origin must use HTTPS (HTTP is allowed only for local development)")
     if not hostname or parsed.path not in {"", "/"}:
         raise ValueError("API origin must be a host origin without a path")
-    netloc = hostname
+    netloc = f"[{hostname}]" if ":" in hostname else hostname
     if parsed.port is not None:
         default = (parsed.scheme == "https" and parsed.port == 443) or (
             parsed.scheme == "http" and parsed.port == 80

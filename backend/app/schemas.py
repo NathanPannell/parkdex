@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
@@ -52,6 +52,7 @@ class TripCreate(BaseModel):
     placeIds: list[str] = Field(
         default_factory=list,
         max_length=100,
+        validation_alias=AliasChoices("placeIds", "place_ids"),
     )
 
 
@@ -62,6 +63,7 @@ class TripRename(BaseModel):
 class TripPlaceMutation(BaseModel):
     placeIds: list[str] = Field(
         max_length=100,
+        validation_alias=AliasChoices("placeIds", "place_ids"),
     )
 
 
