@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayServicePatchResult } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -60,6 +62,22 @@ test("provider diagnostics redact connection values at the call boundary", () =>
   assert.match(safe, /\[redacted\]/);
 });
 
+test("Windows provider commands execute through the cmd shim with status preserved", { skip: process.platform !== "win32" }, () => {
+  const directory = mkdtempSync(join(tmpdir(), "parkdex-provider-shim-"));
+  try {
+    writeFileSync(join(directory, "railway.cmd"), "@echo off\r\nif \"%~1\"==\"fail\" exit /b 7\r\necho %*\r\n", "utf8");
+    const success = buildProviderProcess("railway", ["deployment", "list"], "win32");
+    const successResult = spawnSync(success.executable, success.args, { encoding: "utf8", env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH}` } });
+    assert.equal(successResult.status, 0, successResult.stderr);
+    assert.match(successResult.stdout, /deployment list/);
+    const failure = buildProviderProcess("railway", ["fail"], "win32");
+    const failureResult = spawnSync(failure.executable, failure.args, { encoding: "utf8", env: { ...process.env, PATH: `${directory}${delimiter}${process.env.PATH}` } });
+    assert.equal(failureResult.status, 7);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("preview database identity guards pass", () => {
   const result = spawnSync("python", ["-m", "pytest", "scripts/verify_preview_database_test.py", "-q"], { cwd: process.cwd(), encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -111,6 +129,16 @@ test("Railway preview service readback rejects copied configuration", () => {
   assert.throws(() => verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), /identities/);
 });
 
+test("native runtime checks require exact provider identities", () => {
+  const message = "local-release release-id commit commit-sha";
+  assert.equal(verifyRailwayDeploymentResult([{ id: "deployment-id", status: "SUCCESS", meta: { cliMessage: message } }], message), "deployment-id");
+  assert.throws(() => verifyRailwayDeploymentResult([{ id: "deployment-id", status: "FAILED", meta: { cliMessage: message } }], message), /exact successful/);
+  assert.equal(verifyReadyPayload({ status: "ready", commit: "commit-sha", release: "release-id" }, "commit-sha", "release-id"), true);
+  assert.throws(() => verifyReadyPayload({ status: "ready", commit: "other", release: "release-id" }, "commit-sha", "release-id"), /identity/);
+  assert.equal(workerCatalogueReady("Parkdex catalogue ready commit=commit-sha release=release-id places=195", "commit-sha", "release-id"), true);
+  assert.equal(workerCatalogueReady("Parkdex catalogue ready commit=other release=release-id places=195", "commit-sha", "release-id"), false);
+});
+
 test("Railway empty-environment shim journals, patches, then verifies readback", () => {
   const events = [];
   const config = buildRailwayServicePatch("api-id", "worker-id");
@@ -153,7 +181,8 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /RAILWAY_ENVIRONMENT_NAME/);
   assert.match(source, /PREVIEW_DATABASE_URL_UNPOOLED/);
   assert.match(source, /APP_RELEASE_ID/);
-  assert.match(source, /verify-railway-deployments\.sh/);
+  assert.match(source, /verifyRailwayDeployments/);
+  assert.doesNotMatch(source, /callBash/);
   assert.match(source, /parkdexReleaseId/);
   assert.match(source, /parkdexEnvironment/);
   assert.match(source, /state\.neonBranch !== `preview\/\$\{state\.railwayEnvironment\}`/);
@@ -168,7 +197,7 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /railway-services-creating/);
   assert.match(providerSource, /environmentPatchCommit/);
   assert.doesNotMatch(source, /service", "source", "disconnect/);
-  assert.match(source, /VERCEL_PROJECT_ID: process\.env\.VERCEL_PROJECT_ID/);
+  assert.match(source, /process\.env\.VERCEL_PROJECT_ID/);
   assert.doesNotMatch(source, /"vercel", \["link"/);
   assert.match(source, /Provider mutation remains disabled outside an independently reviewed --live-proof run/);
   assert.ok(source.indexOf("atomicJournal(journalPath, state)") < source.lastIndexOf("createNeonBranch(root, state, journalPath)"));

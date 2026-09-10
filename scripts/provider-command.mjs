@@ -16,6 +16,13 @@ export function sanitizeProviderDiagnostic(value) {
     .slice(-1000);
 }
 
+export function buildProviderProcess(command, args, platform = process.platform) {
+  if (platform === "win32" && ["railway", "vercel"].includes(command)) {
+    return { executable: "cmd.exe", args: ["/d", "/s", "/c", command, ...args] };
+  }
+  return { executable: command, args };
+}
+
 export function buildPreviewEnvironmentName(pullRequest, commitSha, releaseId) {
   const name = `lp-pr-${pullRequest}-${commitSha.slice(0, 8)}-${releaseId.replaceAll("-", "").slice(0, 8)}`;
   if (!/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(name) || name.length > 30) {
@@ -84,6 +91,29 @@ export function verifyRailwayServicePatchResult(config, apiServiceId, workerServ
   }
   if (Object.keys(config.sharedVariables || {}).length || Object.keys(config.volumes || {}).length || Object.keys(config.buckets || {}).length) throw new Error("Railway preview environment inherited forbidden configuration");
   return true;
+}
+
+export function verifyRailwayDeploymentResult(deployments, message) {
+  if (!Array.isArray(deployments)) throw new Error("Railway deployment inventory was invalid");
+  const matches = deployments.filter((deployment) => deployment?.meta?.cliMessage === message);
+  if (matches.length !== 1 || matches[0].status !== "SUCCESS" || typeof matches[0].id !== "string") {
+    throw new Error("Railway deployment did not match the exact successful local release");
+  }
+  return matches[0].id;
+}
+
+export function verifyReadyPayload(payload, commitSha, releaseId) {
+  if (payload?.status !== "ready" || payload?.commit !== commitSha || payload?.release !== releaseId) {
+    throw new Error("Railway API readiness identity did not match the local release");
+  }
+  return true;
+}
+
+export function workerCatalogueReady(logs, commitSha, releaseId) {
+  return String(logs || "").split(/\r?\n/).some((line) => {
+    const marker = line.match(/(?:Every Park|Parkdex) catalogue ready commit=([^ ]+) release=([^ ]+) places=([0-9]+)/);
+    return marker?.[1] === commitSha && marker?.[2] === releaseId && Number(marker[3]) > 0;
+  });
 }
 
 export function provisionRailwayServiceInstances({ projectId, environmentId, environmentName, apiServiceId, workerServiceId, listEnvironments, recordIntent, commitPatch, readConfig }) {

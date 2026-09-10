@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -17,10 +17,8 @@ const LIVE_PROOF_RELEASE_ID = "f08d195c-cb6d-4f08-8fe1-d1083a4a69ec";
 const LIVE_PROOF_REF = "refs/tags/parkdex-local-release-proof-authorized";
 
 function run(command, args, options = {}) {
-  const commandShim = process.platform === "win32" && ["railway", "vercel"].includes(command);
-  const executable = commandShim ? "cmd.exe" : command;
-  const childArgs = commandShim ? ["/d", "/s", "/c", command, ...args] : args;
-  const result = spawnSync(executable, childArgs, {
+  const provider = buildProviderProcess(command, args);
+  const result = spawnSync(provider.executable, provider.args, {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     ...options,
@@ -262,8 +260,71 @@ function verifyVercelDeployment(url, sha, releaseId, environment) {
   return { id: matches[0].id, url: matches[0].url };
 }
 
-function callBash(root, script, env, args = []) {
-  run("bash", [join(root, script), ...args], { cwd: root, env: minimalEnv(env), label: script });
+const wait = (delay) => new Promise((resolveWait) => setTimeout(resolveWait, delay));
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function verifyRailwayDeployments(state, token, message) {
+  for (const service of [process.env.RAILWAY_API_SERVICE_ID, process.env.RAILWAY_WORKER_SERVICE_ID]) {
+    const deployments = parseJson(run("railway", ["deployment", "list", "--json", "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(token), label: "Railway deployment list" }), "Railway deployment list");
+    verifyRailwayDeploymentResult(deployments, message);
+  }
+}
+
+async function waitForRailwayApi(apiUrl, commitSha, releaseId) {
+  const delays = [0, 2, 4, 8, 12, 20, 30, 30, 30, 30, 30, 30];
+  for (const seconds of delays) {
+    if (seconds) await wait(seconds * 1000);
+    try {
+      verifyReadyPayload(await fetchJson(`${apiUrl}/ready`), commitSha, releaseId);
+      return;
+    } catch {}
+  }
+  throw new Error("Railway API never reported the exact local release ready");
+}
+
+async function waitForWorkerCatalogue(state, token, commitSha, releaseId) {
+  for (const seconds of [0, 2, 4, 8, 12, 20, 30, 30, 30]) {
+    if (seconds) await wait(seconds * 1000);
+    try {
+      const logs = run("railway", ["logs", "--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_WORKER_SERVICE_ID, "--lines", "200"], { env: railwayEnv(token), label: "Railway worker logs" });
+      if (workerCatalogueReady(logs, commitSha, releaseId)) return;
+    } catch {}
+  }
+  throw new Error("Railway worker did not report the exact non-empty catalogue");
+}
+
+async function smokeCatalogue(apiUrl) {
+  const collectionKey = randomBytes(32).toString("base64url");
+  const secondCollectionKey = randomBytes(32).toString("base64url");
+  const catalogue = await fetchJson(`${apiUrl}/api/places`);
+  const placeId = catalogue?.places?.[0]?.id;
+  if (!placeId || catalogue.places.length < 1) throw new Error("Preview catalogue was empty");
+  const visit = (key, visited) => fetchJson(`${apiUrl}/api/visits/${encodeURIComponent(placeId)}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Collection-Key": key }, body: JSON.stringify({ visited }) });
+  const collection = (key) => fetchJson(`${apiUrl}/api/places`, { headers: key ? { "X-Collection-Key": key } : {} });
+  try {
+    const visited = await visit(collectionKey, true);
+    if (visited?.visited !== true || visited?.placeId !== placeId) throw new Error("Preview visit write was not verified");
+    if (!(await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit read was not verified");
+    if ((await collection()).visitedIds?.includes(placeId) || (await collection(secondCollectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit isolation was not verified");
+    await visit(collectionKey, false);
+    if ((await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit cleanup was not verified");
+  } finally {
+    try { await visit(collectionKey, false); } catch {}
+  }
+}
+
+async function verifyFrontendContent(frontendUrl) {
+  const page = await fetch(frontendUrl, { signal: AbortSignal.timeout(20_000) });
+  if (!page.ok || !(await page.text()).includes("<title>Parkdex")) throw new Error("Preview frontend page was not verified");
+  for (const asset of ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"]) {
+    const response = await fetch(new URL(`/maplibre/${asset}`, frontendUrl), { signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw new Error(`Preview frontend asset ${asset} was not verified`);
+  }
 }
 
 async function cleanup(root, journalPath) {
@@ -462,12 +523,11 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     const marker = join(sourceRoot, "backend", ".local-release-source-sha");
     writeFileSync(marker, `${sha} ${releaseId}`, "utf8");
     for (const service of services) run("railway", ["up", "--ci", "--yes", "--message", message, "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { cwd: sourceRoot, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway deploy" });
-    const helperEnv = { RAILWAY_API_TOKEN: process.env.RAILWAY_API_TOKEN, RAILWAY_PROJECT_ID: process.env.RAILWAY_PROJECT_ID, RAILWAY_ENVIRONMENT: state.railwayEnvironmentId, PREVIEW_ENVIRONMENT: state.railwayEnvironmentId, RAILWAY_API_SERVICE_ID: process.env.RAILWAY_API_SERVICE_ID, RAILWAY_WORKER_SERVICE_ID: process.env.RAILWAY_WORKER_SERVICE_ID, EXPECTED_COMMIT_SHA: sha, EXPECTED_RELEASE_ID: releaseId, EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE: message, GITHUB_OUTPUT: join(tmpdir(), `parkdex-api-${releaseId}.out`) };
-    callBash(sourceRoot, "scripts/verify-railway-deployments.sh", helperEnv, [message]);
-    callBash(sourceRoot, "scripts/wait-for-railway-api.sh", helperEnv);
-    callBash(sourceRoot, "scripts/wait-for-worker-catalogue.sh", helperEnv);
-    callBash(sourceRoot, "scripts/smoke-catalogue.sh", { ...helperEnv, API_URL: state.apiUrl });
-    callBash(sourceRoot, "scripts/verify-frontend-release.sh", { VERCEL_SCOPE: process.env.VERCEL_SCOPE, VERCEL_PROJECT_NAME: process.env.VERCEL_PROJECT_NAME, VERCEL_PROJECT_ID: process.env.VERCEL_PROJECT_ID, EXPECTED_RELEASE_ID: releaseId, EXPECTED_PREVIEW_ENVIRONMENT: railwayEnvironment }, [vercel.url, sha]);
+    verifyRailwayDeployments(state, process.env.RAILWAY_API_TOKEN, message);
+    await waitForRailwayApi(state.apiUrl, sha, releaseId);
+    await waitForWorkerCatalogue(state, process.env.RAILWAY_API_TOKEN, sha, releaseId);
+    await smokeCatalogue(state.apiUrl);
+    await verifyFrontendContent(vercel.url);
     if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
     updateJournal(journalPath, state, { status: "ready", readyAt: new Date().toISOString() });
     console.log(`local-release status=ready mode=${mode} sha=${sha} journal=${journalPath}`);
