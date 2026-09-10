@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -575,8 +575,15 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     if (existsSync(journalPath)) updateJournal(journalPath, state, { status: "failed", failure: error.message });
     throw error;
   } finally {
-    run("git", ["worktree", "remove", "--force", sourceRoot], { cwd: root, label: "git worktree remove" });
-    rmSync(sourceRoot, { recursive: true, force: true });
+    const normalizedSourceRoot = resolve(sourceRoot).replaceAll("\\", "/").toLowerCase();
+    finalizeReleaseSourceCleanup({
+      sourceRoot,
+      removeWorktree: () => run("git", ["worktree", "remove", "--force", sourceRoot], { cwd: root, label: "git worktree remove" }),
+      removeDirectory: () => rmSync(sourceRoot, { recursive: true, force: true }),
+      pruneWorktrees: () => run("git", ["worktree", "prune"], { cwd: root, label: "git worktree prune" }),
+      sourceExists: existsSync,
+      sourceRegistered: () => git(root, ["worktree", "list", "--porcelain"]).split(/\r?\n/).some((line) => line.startsWith("worktree ") && line.slice(9).replaceAll("\\", "/").toLowerCase() === normalizedSourceRoot),
+    });
   }
 }
 

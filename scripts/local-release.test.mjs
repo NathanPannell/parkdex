@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -85,6 +85,34 @@ test("Windows provider commands execute through the cmd shim with status preserv
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("release source cleanup recovers from a partial git worktree removal", () => {
+  const calls = [];
+  let exists = true;
+  let registered = true;
+  const result = finalizeReleaseSourceCleanup({
+    sourceRoot: "C:/temp/release-source",
+    removeWorktree: () => { calls.push("worktree"); registered = false; throw new Error("partial removal"); },
+    removeDirectory: () => { calls.push("directory"); exists = false; },
+    pruneWorktrees: () => { calls.push("prune"); },
+    sourceExists: () => exists,
+    sourceRegistered: () => registered,
+  });
+  assert.deepEqual(result, { recovered: true });
+  assert.deepEqual(calls, ["worktree", "directory", "prune"]);
+});
+
+test("release source cleanup stays fail-closed when residue remains", () => {
+  const original = new Error("worktree removal failed");
+  assert.throws(() => finalizeReleaseSourceCleanup({
+    sourceRoot: "C:/temp/release-source",
+    removeWorktree: () => { throw original; },
+    removeDirectory: () => {},
+    pruneWorktrees: () => {},
+    sourceExists: () => false,
+    sourceRegistered: () => true,
+  }), (error) => error === original);
 });
 
 test("protected Vercel content uses the exact native CLI target on Windows", { skip: process.platform !== "win32" }, () => {
