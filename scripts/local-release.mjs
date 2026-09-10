@@ -1,25 +1,31 @@
 #!/usr/bin/env node
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : fallback;
 };
 const flag = (name) => process.argv.includes(name);
+const REPOSITORY = "NathanPannell/parkdex";
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const provider = buildProviderProcess(command, args);
+  const result = spawnSync(provider.executable, provider.args, {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     ...options,
   });
   if (result.error || result.status !== 0) {
-    throw new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
+    const error = new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
+    Object.defineProperty(error, "providerStderr", { value: sanitizeProviderDiagnostic(result.stderr), enumerable: false });
+    throw error;
   }
   return (result.stdout || "").trim();
 }
@@ -51,79 +57,155 @@ function updateJournal(path, state, patch) {
   atomicJournal(path, state);
 }
 
-function findNamedObjects(node, output = []) {
-  if (Array.isArray(node)) for (const item of node) findNamedObjects(item, output);
-  else if (node && typeof node === "object") {
-    if (typeof node.id === "string" && typeof node.name === "string") output.push(node);
-    for (const item of Object.values(node)) findNamedObjects(item, output);
-  }
-  return output;
-}
-
 function parseJson(text, label) {
   try { return JSON.parse(text); } catch { throw new Error(`${label} returned invalid JSON`); }
 }
 
+function trustedHarness(root) {
+  if (canonicalGithubRepositorySlug(git(root, ["remote", "get-url", "origin"])) !== REPOSITORY.toLowerCase()) throw new Error("Origin does not match the canonical Parkdex repository");
+  git(root, ["fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging"]);
+  const harnessSha = git(root, ["rev-parse", "HEAD"]);
+  if (harnessSha !== git(root, ["rev-parse", "refs/remotes/origin/staging"])) throw new Error("Provider Apply requires the clean current remote staging harness");
+  return harnessSha;
+}
+
+function verifyPreviewAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath) {
+  if (!/^[A-Za-z0-9._/-]+$/.test(headRef || "") || headRef.startsWith("/") || headRef.includes("..")) throw new Error("Preview apply requires a safe --head-ref");
+  const resolved = resolve(attestationPath);
+  const relativePath = relative(root, resolved);
+  if (!relativePath.startsWith("..") || !existsSync(resolved)) throw new Error("Preview attestation must be an existing file outside the repository");
+  const evidenceText = readFileSync(resolved, "utf8");
+  const evidence = parseJson(evidenceText, "Merge-candidate attestation");
+  if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || canonicalGithubRepositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
+  git(root, ["fetch", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`]);
+  if (git(root, ["rev-parse", `refs/remotes/origin/${headRef}`]) !== sourceSha) throw new Error("Preview source no longer matches the attested remote head");
+  const pr = parseJson(run("gh", ["pr", "view", String(pullRequest), "--repo", REPOSITORY, "--json", "number,state,baseRefName,headRefName,headRefOid"], { env: minimalEnv(), label: "GitHub pull request identity" }), "GitHub pull request identity");
+  if (pr.number !== pullRequest || pr.state !== "OPEN" || pr.baseRefName !== "staging" || pr.headRefName !== headRef || pr.headRefOid !== sourceSha) throw new Error("Preview pull request identity did not match the requested source");
+  const treeSha = git(root, ["merge-tree", "--write-tree", harnessSha, sourceSha]).split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
+  if (!treeSha || treeSha !== evidence.treeSha) throw new Error("Preview merge tree no longer matches the attestation");
+  if (git(root, ["rev-parse", `${evidence.candidateSha}^{tree}`]) !== treeSha || git(root, ["show", "-s", "--format=%P", evidence.candidateSha]) !== `${harnessSha} ${sourceSha}`) throw new Error("Preview candidate commit does not bind the exact merge tree and parents");
+  const trustedValidator = `${git(root, ["show", `${harnessSha}:scripts/local-ci.mjs`])}\n`;
+  if (createHash("sha256").update(trustedValidator).digest("hex") !== evidence.trustedValidatorSha256) throw new Error("Preview trusted validator identity did not match staging");
+  const localEvidenceText = readFileSync(evidence.localEvidencePath, "utf8");
+  if (createHash("sha256").update(localEvidenceText).digest("hex") !== evidence.localEvidenceSha256) throw new Error("Preview nested local evidence hash did not match");
+  const localEvidence = parseJson(localEvidenceText, "Nested local evidence");
+  if (!validateNestedLocalEvidence(localEvidence, { candidateSha: evidence.candidateSha, treeSha, repository: REPOSITORY, validatorSha256: evidence.trustedValidatorSha256, requireCanonicalGithub: true })) throw new Error("Preview nested evidence did not prove the exact complete merge candidate");
+  return { schema: evidence.schema, attestationSha256: createHash("sha256").update(evidenceText).digest("hex"), baseSha: harnessSha, headSha: sourceSha, headRef, treeSha, candidateSha: evidence.candidateSha, pullRequest };
+}
+
 function railwayEnv(token, extra = {}) {
-  return minimalEnv({ RAILWAY_API_TOKEN: token, ...extra });
+  return minimalEnv({ ...(token ? { RAILWAY_API_TOKEN: token } : {}), ...extra });
 }
 
 function vercelEnv(token, extra = {}) {
-  return minimalEnv({ VERCEL_TOKEN: token, VERCEL_ORG_ID: process.env.VERCEL_ORG_ID, VERCEL_PROJECT_ID: process.env.VERCEL_PROJECT_ID, ...extra });
+  return minimalEnv({ ...(token ? { VERCEL_TOKEN: token } : {}), ...extra });
 }
 
-async function providerJson(url, token, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { Accept: "application/json", Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(options.headers || {}) },
-  });
-  const text = await response.text();
-  const body = text ? parseJson(text, "Provider API") : {};
-  if (!response.ok) throw new Error(`Provider API request failed with HTTP ${response.status}`);
-  return body;
+function neonCli(root) {
+  const cli = join(root, "node_modules", "neonctl", "bin", "cli.js");
+  if (!existsSync(cli)) throw new Error("Neon CLI dependency is not installed; run npm ci");
+  return cli;
 }
 
-async function createNeonBranch(state, journalPath) {
+function neonApi(root, path, { method = "GET", query = {}, body } = {}) {
+  const cli = neonCli(root);
+  const command = buildNeonApiCommand(cli, path, { method, query, body });
+  return parseJson(run(process.execPath, command.args, { cwd: root, input: command.input, env: minimalEnv(), label: `Neon API ${method} ${path}` }), "Neon API");
+}
+
+function neonAnnotations(payload) {
+  return payload?.annotation?.value || payload?.branch?.annotation_value || payload?.branch?.annotations || payload?.annotation_value || payload?.annotations || {};
+}
+
+function providerPreflight(root, preview) {
+  run("railway", ["whoami"], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway authentication" });
+  const railwayProjects = parseJson(run("railway", ["list", "--json"], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway project inventory" }), "Railway project inventory");
+  const railwayMatches = railwayProjects.filter((project) => project.id === process.env.RAILWAY_PROJECT_ID && project.deletedAt == null);
+  if (railwayMatches.length !== 1) throw new Error("Railway project identity was not verified");
+  const railwayProject = railwayMatches[0];
+  const serviceIds = new Set((railwayProject.services?.edges || []).map((edge) => edge.node?.id));
+  if (!serviceIds.has(process.env.RAILWAY_API_SERVICE_ID) || !serviceIds.has(process.env.RAILWAY_WORKER_SERVICE_ID)) throw new Error("Railway service identities were not verified");
+  const environmentId = preview ? process.env.RAILWAY_BASE_ENVIRONMENT_ID : process.env.RAILWAY_STAGING_ENVIRONMENT_ID;
+  const environment = (railwayProject.environments?.edges || []).map((edge) => edge.node).find((item) => item?.id === environmentId);
+  if (!environment || environment.name !== "staging") throw new Error("Railway staging/base environment identity was not verified");
+
+  if (preview) {
+    run(process.execPath, [neonCli(root), "me", "--output", "json", "--analytics", "false"], { cwd: root, env: minimalEnv(), label: "Neon authentication" });
+    const neonProjects = neonApi(root, "/projects", { query: { limit: 100, org_id: process.env.NEON_ORG_ID } });
+    if ((neonProjects.projects || []).filter((project) => project.id === process.env.NEON_PROJECT_ID).length !== 1) throw new Error("Neon project identity was not verified");
+  }
+
+  run("vercel", ["whoami"], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel authentication" });
+  const vercelProjects = parseJson(run("vercel", ["project", "ls", "--json", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel project inventory" }), "Vercel project inventory");
+  if ((vercelProjects.projects || []).filter((project) => project.id === process.env.VERCEL_PROJECT_ID && project.name === process.env.VERCEL_PROJECT_NAME).length !== 1) throw new Error("Vercel project identity was not verified");
+}
+
+async function createNeonBranch(root, state, journalPath) {
   const project = process.env.NEON_PROJECT_ID;
-  const token = process.env.NEON_API_KEY;
-  const base = `https://console.neon.tech/api/v2/projects/${project}`;
-  const listing = await providerJson(`${base}/branches?limit=1000`, token);
+  const base = `/projects/${project}`;
+  const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
   const parent = (listing.branches || []).filter((branch) => branch.name === process.env.NEON_PARENT_BRANCH);
   if (parent.length !== 1) throw new Error("Neon parent branch was not resolved exactly");
   if ((listing.branches || []).some((branch) => branch.name === state.neonBranch)) throw new Error("Refusing to adopt an existing Neon preview branch");
   let branch;
   try {
-    const created = await providerJson(`${base}/branches`, token, {
+    updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), neon: { branchName: state.neonBranch, parentId: parent[0].id, releaseId: state.releaseId } }, status: "neon-creating" });
+    const created = neonApi(root, `${base}/branches`, {
       method: "POST",
-      body: JSON.stringify({
+      body: {
         branch: { name: state.neonBranch, parent_id: parent[0].id, init_source: "parent-schema", expires_at: state.expiresAt },
         endpoints: [{ type: "read_write" }],
         annotation_value: { "parkdex-release-id": state.releaseId, "parkdex-commit": state.commitSha, "parkdex-environment": state.railwayEnvironment },
-      }),
+      },
     });
     branch = created.branch;
   } catch (error) {
-    const recovered = await providerJson(`${base}/branches?limit=1000`, token);
+    const recovered = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
     const matches = (recovered.branches || []).filter((item) => item.name === state.neonBranch);
     if (matches.length !== 1) throw error;
     branch = matches[0];
   }
   if (!branch?.id || branch.name !== state.neonBranch) throw new Error("Neon branch creation identity was not verified");
-  const detailsData = await providerJson(`${base}/branches/${branch.id}`, token);
+  const detailsData = neonApi(root, `${base}/branches/${branch.id}`);
   const details = detailsData.branch || detailsData;
-  const annotations = details?.annotation_value || details?.annotations || {};
+  const annotations = neonAnnotations(detailsData);
   if (details?.name !== state.neonBranch || details?.init_source !== "parent-schema" || (details?.parent_id != null && details.parent_id !== parent[0].id) || annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon branch provenance was not verified");
-  updateJournal(journalPath, state, { neonBranchId: branch.id, status: "neon-created" });
+  const endpointListing = neonApi(root, `${base}/endpoints`, { query: { limit: 1000 } });
+  const endpoints = (endpointListing.endpoints || []).filter((endpoint) => endpoint.branch_id === branch.id && endpoint.project_id === project && endpoint.type === "read_write");
+  if (endpoints.length !== 1) throw new Error("Neon preview endpoint identity was not verified");
+  const endpoint = endpoints[0];
+  const directHost = endpoint.host;
+  const pooledHost = directHost?.replace(/^([^.]+)(\..+)$/, "$1-pooler$2");
+  if (!directHost || !pooledHost || directHost === pooledHost || !directHost.startsWith(`${endpoint.id}.`) || !directHost.endsWith(".neon.tech") || !pooledHost.startsWith(`${endpoint.id}-pooler.`) || !pooledHost.endsWith(".neon.tech")) throw new Error("Neon preview endpoint hosts were not verified");
+  updateJournal(journalPath, state, { neonBranchId: branch.id, neonEndpointId: endpoint.id, status: "neon-created" });
+
+  const databaseName = `app_preview_${state.releaseId.replaceAll("-", "").slice(0, 8)}`;
+  const databasePath = `${base}/branches/${branch.id}/databases`;
+  const databaseListing = neonApi(root, databasePath);
+  if ((databaseListing.databases || []).some((database) => database.name === databaseName)) throw new Error("Refusing to adopt an existing Neon preview database");
+  let database;
+  try {
+    updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), neonDatabase: { projectId: project, branchId: branch.id, endpointId: endpoint.id, databaseName, ownerName: "app_owner" } }, status: "neon-database-creating" });
+    const created = neonApi(root, databasePath, { method: "POST", body: { database: { name: databaseName, owner_name: "app_owner" } } });
+    database = created.database || created;
+  } catch (error) {
+    const recovered = neonApi(root, databasePath);
+    const matches = (recovered.databases || []).filter((item) => item.name === databaseName);
+    if (matches.length !== 1) throw error;
+    database = matches[0];
+  }
+  if (!database?.id || database.name !== databaseName || (database.branch_id != null && database.branch_id !== branch.id) || (database.owner_name != null && database.owner_name !== "app_owner")) throw new Error("Neon preview database identity was not verified");
+  updateJournal(journalPath, state, { neonDatabaseId: database.id, neonDatabaseName: databaseName, status: "neon-database-created" });
   const connection = async (pooled) => {
-    const query = new URLSearchParams({ branch_id: branch.id, database_name: "app", role_name: "app_owner", pooled: String(pooled) });
-    return (await providerJson(`${base}/connection_uri?${query}`, token)).uri;
+    return neonApi(root, `${base}/connection_uri`, { query: { branch_id: branch.id, database_name: databaseName, role_name: "app_owner", pooled: String(pooled) } }).uri;
   };
   const validateUri = (uri, pooled) => {
     const parsed = new URL(uri);
-    if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname.endsWith('.neon.tech') || parsed.pathname !== '/app' || decodeURIComponent(parsed.username) !== 'app_owner' || pooled !== parsed.hostname.includes('-pooler')) throw new Error("Neon connection URI identity was not verified");
+    const expectedHost = pooled ? pooledHost : directHost;
+    if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || parsed.hostname !== expectedHost || parsed.pathname !== `/${databaseName}` || decodeURIComponent(parsed.username) !== 'app_owner') throw new Error("Neon connection URI identity was not verified");
     return uri;
   };
-  return { pooled: validateUri(await connection(true), true), direct: validateUri(await connection(false), false) };
+  return { pooled: validateUri(await connection(true), true), direct: validateUri(await connection(false), false), databaseName, directHost, pooledHost };
 }
 
 function railwayContext(projectId, baseEnvironment, token) {
@@ -133,7 +215,29 @@ function railwayContext(projectId, baseEnvironment, token) {
 }
 
 function listRailwayEnvironments(cwd, token) {
-  return findNamedObjects(parseJson(run("railway", ["environment", "list", "--json"], { cwd, env: railwayEnv(token), label: "Railway environment list" }), "Railway environment list"));
+  const payload = parseJson(run("railway", ["environment", "list", "--json"], { cwd, env: railwayEnv(token), label: "Railway environment list" }), "Railway environment list");
+  return parseRailwayEnvironmentInventory(payload);
+}
+
+function createRailwayServiceInstances(cwd, state, journalPath, token) {
+  provisionRailwayServiceInstances({
+    projectId: process.env.RAILWAY_PROJECT_ID,
+    environmentId: state.railwayEnvironmentId,
+    environmentName: state.railwayEnvironment,
+    apiServiceId: process.env.RAILWAY_API_SERVICE_ID,
+    workerServiceId: process.env.RAILWAY_WORKER_SERVICE_ID,
+    listEnvironments: () => listRailwayEnvironments(cwd, token),
+    recordIntent: (intent) => updateJournal(journalPath, state, {
+      resourceIntent: { ...(state.resourceIntent || {}), railwayServices: intent },
+      status: "railway-services-creating",
+    }),
+    commitPatch: ({ query, variables }) => {
+      const command = buildRailwayApiCommand(query, variables);
+      return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview service create" });
+    },
+    readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview service inventory" }), "Railway preview service inventory"),
+  });
+  updateJournal(journalPath, state, { status: "railway-services-created" });
 }
 
 function setRailwayVariable(name, value, service, environment, project, token) {
@@ -149,56 +253,164 @@ function releaseMetadata(root, sha) {
   return Object.fromEntries(output.split(/\r?\n/).map((line) => line.split("=")).filter(([key, val]) => key && val));
 }
 
-async function listVercelReleases(sha, releaseId, environment) {
-  const query = new URLSearchParams({ projectId: process.env.VERCEL_PROJECT_ID, teamId: process.env.VERCEL_ORG_ID, limit: "100" });
-  const listing = await providerJson(`https://api.vercel.com/v6/deployments?${query}`, process.env.VERCEL_TOKEN);
-  return (listing.deployments || []).filter((item) => item.projectId === process.env.VERCEL_PROJECT_ID && item.meta?.githubCommitSha === sha && item.meta?.parkdexReleaseId === releaseId && item.meta?.parkdexEnvironment === environment);
+function vercelScopeArgs() {
+  return ["--scope", process.env.VERCEL_SCOPE];
 }
 
-async function findVercelRelease(sha, releaseId, environment) {
-  const matches = await listVercelReleases(sha, releaseId, environment);
+function bindVercelProject(sourceRoot) {
+  if (!/^team_[A-Za-z0-9]+$/.test(process.env.VERCEL_ORG_ID || "")) throw new Error("VERCEL_ORG_ID has an invalid shape");
+  const directory = join(sourceRoot, "frontend", ".vercel");
+  const link = { projectId: process.env.VERCEL_PROJECT_ID, orgId: process.env.VERCEL_ORG_ID, projectName: process.env.VERCEL_PROJECT_NAME };
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, "project.json"), `${JSON.stringify(link)}\n`, { encoding: "utf8", mode: 0o600 });
+  return link;
+}
+
+function listVercelReleases(sha, releaseId, environment) {
+  const output = run("vercel", ["list", process.env.VERCEL_PROJECT_NAME, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${environment}`, "--yes", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deployment list" });
+  const urls = [...new Set(output.match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app/g) || [])];
+  return urls.map((host) => {
+    const data = parseJson(run("vercel", ["inspect", host, "--json", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deployment inspect" }), "Vercel deployment inspect");
+    return { ...data, url: `https://${data.url}` };
+  }).filter((item) => item.name === process.env.VERCEL_PROJECT_NAME && /^dpl_[A-Za-z0-9]+$/.test(item.id || ""));
+}
+
+function findVercelRelease(sha, releaseId, environment) {
+  const matches = listVercelReleases(sha, releaseId, environment);
   if (matches.length !== 1 || !matches[0].url) throw new Error("Vercel deployment could not be recovered exactly");
-  return `https://${matches[0].url}`;
+  return matches[0].url;
 }
 
-async function verifyVercelDeployment(url, sha, releaseId, environment) {
+function verifyVercelDeployment(url, sha, releaseId, environment) {
   const host = new URL(url).host;
   if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/.test(host)) throw new Error("Vercel returned an invalid deployment URL");
-  const data = await providerJson(`https://api.vercel.com/v13/deployments/${host}?teamId=${process.env.VERCEL_ORG_ID}`, process.env.VERCEL_TOKEN);
-  if (data.readyState !== "READY" || data.projectId !== process.env.VERCEL_PROJECT_ID || data.meta?.githubCommitSha !== sha || data.meta?.parkdexReleaseId !== releaseId || data.meta?.parkdexEnvironment !== environment || !/^dpl_[A-Za-z0-9]+$/.test(data.id || "")) {
+  const matches = listVercelReleases(sha, releaseId, environment).filter((item) => new URL(item.url).host === host);
+  if (matches.length !== 1 || matches[0].readyState !== "READY") {
     throw new Error("Vercel deployment identity was not verified");
   }
-  return { id: data.id, url: `https://${data.url}` };
+  return { id: matches[0].id, url: matches[0].url };
 }
 
-function callBash(root, script, env, args = []) {
-  run("bash", [join(root, script), ...args], { cwd: root, env: minimalEnv(env), label: script });
+const wait = (delay) => new Promise((resolveWait) => setTimeout(resolveWait, delay));
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+function verifyRailwayDeployments(state, token, message) {
+  for (const service of [process.env.RAILWAY_API_SERVICE_ID, process.env.RAILWAY_WORKER_SERVICE_ID]) {
+    const deployments = parseJson(run("railway", ["deployment", "list", "--json", "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(token), label: "Railway deployment list" }), "Railway deployment list");
+    verifyRailwayDeploymentResult(deployments, message);
+  }
+}
+
+async function waitForRailwayApi(apiUrl, commitSha, releaseId) {
+  const delays = [0, 2, 4, 8, 12, 20, 30, 30, 30, 30, 30, 30];
+  for (const seconds of delays) {
+    if (seconds) await wait(seconds * 1000);
+    try {
+      verifyReadyPayload(await fetchJson(`${apiUrl}/ready`), commitSha, releaseId);
+      return;
+    } catch {}
+  }
+  throw new Error("Railway API never reported the exact local release ready");
+}
+
+async function waitForWorkerCatalogue(state, token, commitSha, releaseId) {
+  for (const seconds of [0, 2, 4, 8, 12, 20, 30, 30, 30]) {
+    if (seconds) await wait(seconds * 1000);
+    try {
+      const logs = run("railway", ["logs", "--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_WORKER_SERVICE_ID, "--lines", "200"], { env: railwayEnv(token), label: "Railway worker logs" });
+      if (workerCatalogueReady(logs, commitSha, releaseId)) return;
+    } catch {}
+  }
+  throw new Error("Railway worker did not report the exact non-empty catalogue");
+}
+
+async function smokeCatalogue(apiUrl) {
+  const collectionKey = randomBytes(32).toString("base64url");
+  const secondCollectionKey = randomBytes(32).toString("base64url");
+  const catalogue = await fetchJson(`${apiUrl}/api/places`);
+  const placeId = catalogue?.places?.[0]?.id;
+  if (!placeId || catalogue.places.length < 1) throw new Error("Preview catalogue was empty");
+  const visit = (key, visited) => fetchJson(`${apiUrl}/api/visits/${encodeURIComponent(placeId)}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Collection-Key": key }, body: JSON.stringify({ visited }) });
+  const collection = (key) => fetchJson(`${apiUrl}/api/places`, { headers: key ? { "X-Collection-Key": key } : {} });
+  try {
+    const visited = await visit(collectionKey, true);
+    if (visited?.visited !== true || visited?.placeId !== placeId) throw new Error("Preview visit write was not verified");
+    if (!(await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit read was not verified");
+    if ((await collection()).visitedIds?.includes(placeId) || (await collection(secondCollectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit isolation was not verified");
+    await visit(collectionKey, false);
+    if ((await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit cleanup was not verified");
+  } finally {
+    try { await visit(collectionKey, false); } catch {}
+  }
+}
+
+function verifyFrontendContent(sourceRoot, frontendUrl) {
+  const binding = parseJson(readFileSync(join(sourceRoot, "frontend", ".vercel", "project.json"), "utf8"), "Vercel project binding");
+  if (binding.projectId !== process.env.VERCEL_PROJECT_ID || binding.orgId !== process.env.VERCEL_ORG_ID || binding.projectName !== process.env.VERCEL_PROJECT_NAME) throw new Error("Vercel project binding identity was not verified");
+  const directory = mkdtempSync(join(tmpdir(), "parkdex-vercel-verify-"));
+  try {
+    for (const [route, filename] of [["/", "page.html"], ["/maplibre/maplibre-gl-worker.mjs", "worker.mjs"], ["/maplibre/maplibre-gl-shared.mjs", "shared.mjs"]]) {
+      const outputPath = join(directory, filename);
+      run("vercel", buildVercelCurlArgs(route, frontendUrl, process.env.VERCEL_SCOPE, outputPath), { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: `Vercel protected content ${route}` });
+      const content = readFileSync(outputPath);
+      if (!content.length || (route === "/" && !content.toString("utf8").includes("<title>Parkdex"))) throw new Error(`Preview frontend content ${route} was not verified`);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 async function cleanup(root, journalPath) {
   if (!journalPath || !existsSync(journalPath)) throw new Error("Cleanup requires an explicit existing --journal path");
   const state = parseJson(readFileSync(journalPath, "utf8"), "Release journal");
-  if (state.schema !== "parkdex.local-release/v2" || state.mode !== "preview" || !/^local-pr-[0-9]+-[0-9a-f]{12}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
+  if (!["parkdex.local-release/v3", "parkdex.local-release/v4"].includes(state.schema) || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
     throw new Error("Release journal is not an active owned preview");
   }
-  requireEnv(["RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_PROJECT_ID", "NEON_API_KEY", "VERCEL_TOKEN", "VERCEL_ORG_ID", "VERCEL_PROJECT_ID"]);
+  requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
+  if (state.providerProjects && (state.providerProjects.railway !== process.env.RAILWAY_PROJECT_ID || state.providerProjects.neon !== process.env.NEON_PROJECT_ID || state.providerProjects.vercel !== process.env.VERCEL_PROJECT_ID || state.providerProjects.vercelOrg !== process.env.VERCEL_ORG_ID)) throw new Error("Cleanup provider project identities do not match the release journal");
+  providerPreflight(root, true);
   if (!state.railwayEnvironmentId) {
     const context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
     try {
       const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === state.railwayEnvironment);
       if (matches.length > 1) throw new Error("Multiple Railway environments matched the journal identity");
       if (matches.length === 1) updateJournal(journalPath, state, { railwayEnvironmentId: matches[0].id, status: "cleanup-recovered" });
+      else if (state.resourceIntent?.railway?.createFailure === "invalid-name") {
+        const verifiedAt = [];
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+          const repeated = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === state.railwayEnvironment);
+          if (repeated.length > 1) throw new Error("Multiple Railway environments matched the journal identity");
+          if (repeated.length === 1) {
+            updateJournal(journalPath, state, { railwayEnvironmentId: repeated[0].id, status: "cleanup-recovered" });
+            break;
+          }
+          verifiedAt.push(new Date().toISOString());
+        }
+        if (!state.railwayEnvironmentId) {
+          updateJournal(journalPath, state, {
+            cleanupIntent: { ...(state.cleanupIntent || {}), railway: { projectId: process.env.RAILWAY_PROJECT_ID, environmentName: state.railwayEnvironment, completeInventories: verifiedAt } },
+            cleanup: { ...(state.cleanup || {}), railway: true },
+            status: "cleanup-verified-absent",
+          });
+        }
+      }
     } finally { rmSync(context, { recursive: true, force: true }); }
   }
   if (!state.neonBranchId) {
-    const base = `https://console.neon.tech/api/v2/projects/${process.env.NEON_PROJECT_ID}`;
-    const listing = await providerJson(`${base}/branches?limit=1000`, process.env.NEON_API_KEY);
+    const base = `/projects/${process.env.NEON_PROJECT_ID}`;
+    const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
     const matches = (listing.branches || []).filter((item) => item.name === state.neonBranch);
     if (matches.length > 1) throw new Error("Multiple Neon branches matched the journal identity");
     if (matches.length === 1) {
-      const detailsData = await providerJson(`${base}/branches/${matches[0].id}`, process.env.NEON_API_KEY);
+      const detailsData = neonApi(root, `${base}/branches/${matches[0].id}`);
       const details = detailsData.branch || detailsData;
-      const annotations = details?.annotation_value || details?.annotations || {};
+      const annotations = neonAnnotations(detailsData);
       if (annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Recovered Neon branch provenance did not match the journal");
       updateJournal(journalPath, state, { neonBranchId: matches[0].id, status: "cleanup-recovered" });
     }
@@ -209,48 +421,68 @@ async function cleanup(root, journalPath) {
     if (matches.length === 1) updateJournal(journalPath, state, { vercelDeploymentId: matches[0].id, status: "cleanup-recovered" });
   }
   if (state.vercelDeploymentId && !state.cleanup?.vercel) {
-    const data = await providerJson(`https://api.vercel.com/v13/deployments/${state.vercelDeploymentId}?teamId=${process.env.VERCEL_ORG_ID}`, process.env.VERCEL_TOKEN);
-    if (data.id !== state.vercelDeploymentId || data.projectId !== process.env.VERCEL_PROJECT_ID || data.meta?.githubCommitSha !== state.commitSha || data.meta?.parkdexReleaseId !== state.releaseId || data.meta?.parkdexEnvironment !== state.railwayEnvironment) throw new Error("Vercel cleanup ownership verification failed");
-    await providerJson(`https://api.vercel.com/v13/deployments/${state.vercelDeploymentId}?teamId=${process.env.VERCEL_ORG_ID}`, process.env.VERCEL_TOKEN, { method: "DELETE" });
+    const matches = listVercelReleases(state.commitSha, state.releaseId, state.railwayEnvironment).filter((item) => item.id === state.vercelDeploymentId);
+    if (matches.length === 0 && state.cleanupIntent?.vercel) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
+    else if (matches.length !== 1) throw new Error("Vercel cleanup ownership verification failed");
+    else {
+      updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), vercel: true } });
+      run("vercel", ["remove", state.vercelDeploymentId, "--yes", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deployment delete" });
+    }
     updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
   }
   if (state.railwayEnvironmentId && !state.cleanup?.railway) {
     const context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
     try {
       const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.id === state.railwayEnvironmentId && item.name === state.railwayEnvironment);
-      if (matches.length !== 1) throw new Error("Railway cleanup ownership verification failed");
-      run("railway", ["environment", "delete", state.railwayEnvironmentId, "--yes"], { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment delete" });
+      if (matches.length === 0 && state.cleanupIntent?.railway) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), railway: true } });
+      else if (matches.length !== 1) throw new Error("Railway cleanup ownership verification failed");
+      else {
+        updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), railway: true } });
+        run("railway", ["environment", "delete", state.railwayEnvironmentId, "--yes"], { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment delete" });
+      }
     } finally { rmSync(context, { recursive: true, force: true }); }
     updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), railway: true } });
   }
   if (state.neonBranchId && !state.cleanup?.neon) {
-    const base = `https://console.neon.tech/api/v2/projects/${process.env.NEON_PROJECT_ID}/branches/${state.neonBranchId}`;
-    const data = await providerJson(base, process.env.NEON_API_KEY);
-    const branch = data.branch || data;
-    const annotations = branch.annotation_value || branch.annotations || {};
-    if (branch.id !== state.neonBranchId || branch.name !== state.neonBranch || annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon cleanup ownership verification failed");
-    await providerJson(base, process.env.NEON_API_KEY, { method: "DELETE" });
+    const base = `/projects/${process.env.NEON_PROJECT_ID}`;
+    const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
+    const matches = (listing.branches || []).filter((branch) => branch.id === state.neonBranchId && branch.name === state.neonBranch);
+    if (matches.length === 0 && state.cleanupIntent?.neon) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
+    else if (matches.length !== 1) throw new Error("Neon cleanup ownership verification failed");
+    else {
+      const data = neonApi(root, `${base}/branches/${state.neonBranchId}`);
+      const branch = data.branch || data;
+      const annotations = neonAnnotations(data);
+      if (annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon cleanup ownership verification failed");
+      updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), neon: true } });
+      neonApi(root, `${base}/branches/${state.neonBranchId}`, { method: "DELETE" });
+    }
     updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
   }
+  const unresolved = [];
+  if (state.resourceIntent?.vercel && !state.cleanup?.vercel) unresolved.push("Vercel deployment");
+  if ((state.resourceIntent?.railway || state.resourceIntent?.railwayServices || state.resourceIntent?.railwayDomain) && !state.cleanup?.railway) unresolved.push("Railway environment");
+  if (state.resourceIntent?.neon && !state.cleanup?.neon) unresolved.push("Neon branch");
+  if (unresolved.length) throw new Error(`Cleanup could not authoritatively resolve: ${unresolved.join(", ")}`);
   updateJournal(journalPath, state, { status: "cleaned", cleanedAt: new Date().toISOString() });
   console.log(`local-release cleanup=success journal=${journalPath}`);
 }
 
-async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
-  const shortSha = sha.slice(0, 12);
-  const suffix = releaseId.replaceAll("-", "").slice(0, 8);
+async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harnessSha, sourceAuthorization) {
   const preview = mode === "preview";
-  const railwayEnvironment = preview ? `local-pr-${pullRequest}-${shortSha}-${suffix}` : "staging";
+  const railwayEnvironment = preview ? buildPreviewEnvironmentName(pullRequest, sha, releaseId) : "staging";
   const neonBranch = preview ? `preview/${railwayEnvironment}` : null;
   const expiresAt = preview ? new Date(Date.now() + 7 * 86400_000).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
-  const state = { schema: "parkdex.local-release/v2", mode, status: "planned", releaseId, commitSha: sha, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, vercelDeploymentId: null, frontendUrl: null, apiUrl: null, expiresAt, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  const plan = { mode, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety: ["clean exact SHA", "reviewed code only", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] };
+  const state = { schema: "parkdex.local-release/v4", mode, status: "planned", releaseId, harnessSha, commitSha: sha, sourceAuthorization, providerProjects: { railway: process.env.RAILWAY_PROJECT_ID || null, neon: preview ? process.env.NEON_PROJECT_ID || null : null, vercel: process.env.VERCEL_PROJECT_ID || null, vercelOrg: process.env.VERCEL_ORG_ID || null }, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const safety = preview ? ["trusted clean staging harness", "attested exact source SHA", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] : ["clean exact staging SHA", "persistent staging only", "manual production boundary"];
+  const plan = { mode, harnessSha, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety };
   if (!flag("--apply")) { console.log(JSON.stringify(plan, null, 2)); return; }
   if (!value("--sha")) throw new Error("--apply requires an explicit full --sha");
   if (resolve(journalPath).startsWith(`${resolve(root)}\\`) || resolve(journalPath).startsWith(`${resolve(root)}/`)) throw new Error("Release journals must be stored outside the repository");
   if (existsSync(journalPath)) throw new Error("Refusing to overwrite an existing release journal");
-  const common = ["RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "VERCEL_TOKEN", "VERCEL_ORG_ID", "VERCEL_PROJECT_ID"];
-  requireEnv(preview ? [...common, "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_PROJECT_ID", "NEON_API_KEY", "NEON_PARENT_BRANCH"] : [...common, "RAILWAY_STAGING_ENVIRONMENT_ID", "PARKDEX_STAGING_DATABASE_URL", "PARKDEX_STAGING_DATABASE_URL_UNPOOLED", "PARKDEX_STAGING_GOOGLE_CLIENT_ID", "PARKDEX_STAGING_GOOGLE_CLIENT_SECRET"]);
+  const common = ["RAILWAY_PROJECT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"];
+  requireEnv(preview ? [...common, "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "NEON_PARENT_BRANCH"] : [...common, "RAILWAY_STAGING_ENVIRONMENT_ID", "PARKDEX_STAGING_DATABASE_URL", "PARKDEX_STAGING_DATABASE_URL_UNPOOLED", "PARKDEX_STAGING_GOOGLE_CLIENT_ID", "PARKDEX_STAGING_GOOGLE_CLIENT_SECRET"]);
+  providerPreflight(root, preview);
   atomicJournal(journalPath, state);
   const metadata = releaseMetadata(root, sha);
   const sourceRoot = mkdtempSync(join(tmpdir(), "parkdex-release-source-"));
@@ -258,8 +490,13 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
   let database;
   try {
     if (preview) {
-      database = await createNeonBranch(state, journalPath);
-      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py")], { cwd: sourceRoot, env: minimalEnv({ PREVIEW_DATABASE_URL_UNPOOLED: database.direct }), label: "Preview database zero-row gate" });
+      database = await createNeonBranch(root, state, journalPath);
+      const databaseEnv = { PREVIEW_DATABASE_URL: database.pooled, PREVIEW_DATABASE_URL_UNPOOLED: database.direct, PREVIEW_DATABASE_NAME: database.databaseName, PREVIEW_DATABASE_HOST: database.directHost, RAILWAY_ENVIRONMENT_NAME: railwayEnvironment };
+      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py"), "--phase", "empty"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database zero-row gate" });
+      updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), neonDatabaseInitialization: { branchId: state.neonBranchId, databaseId: state.neonDatabaseId, databaseName: database.databaseName } }, status: "database-initializing" });
+      run("python", ["-m", "backend.app.migrate"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database migrations" });
+      run("python", ["-m", "backend.app.migrate"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database migration idempotency" });
+      run("python", [join(sourceRoot, "scripts", "verify_preview_database.py"), "--phase", "migrated"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database isolation and catalogue gate" });
       updateJournal(journalPath, state, { status: "database-verified" });
     }
     else database = { pooled: process.env.PARKDEX_STAGING_DATABASE_URL, direct: process.env.PARKDEX_STAGING_DATABASE_URL_UNPOOLED };
@@ -268,31 +505,30 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
       const environments = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN);
       if (preview) {
         if (environments.some((item) => item.name === railwayEnvironment)) throw new Error("Refusing to adopt an existing Railway preview environment");
-        const createEnvironmentArgs = [
-          "environment", "new", railwayEnvironment, "--json",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "build.builder", "DOCKERFILE",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "build.dockerfilePath", "backend/Dockerfile.api",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "deploy.preDeployCommand", "python -m backend.app.migrate",
-          "--service-config", process.env.RAILWAY_API_SERVICE_ID, "deploy.healthcheckPath", "/health",
-          "--service-config", process.env.RAILWAY_WORKER_SERVICE_ID, "build.builder", "DOCKERFILE",
-          "--service-config", process.env.RAILWAY_WORKER_SERVICE_ID, "build.dockerfilePath", "backend/Dockerfile.worker",
-        ];
+        const createEnvironmentArgs = ["environment", "new", railwayEnvironment, "--json"];
+        updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railway: { environmentName: railwayEnvironment, releaseId } }, status: "railway-creating" });
         try {
           run("railway", createEnvironmentArgs, { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment create" });
         } catch (error) {
           const recovered = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === railwayEnvironment);
+          const createFailure = classifyRailwayEnvironmentCreateFailure(error.providerStderr);
+          if (recovered.length === 0 && createFailure !== "unknown") {
+            updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railway: { ...state.resourceIntent.railway, createFailure } } });
+          }
           if (recovered.length !== 1) throw error;
         }
         const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.name === railwayEnvironment);
         if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified");
         state.railwayEnvironmentId = matches[0].id;
         updateJournal(journalPath, state, { railwayEnvironmentId: matches[0].id, status: "railway-created" });
+        createRailwayServiceInstances(context, state, journalPath, process.env.RAILWAY_API_TOKEN);
       } else if (!environments.some((item) => item.id === state.railwayEnvironmentId && item.name === "staging")) throw new Error("Railway staging environment identity was not verified");
     } finally { rmSync(context, { recursive: true, force: true }); }
     const railwayArgs = ["--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_API_SERVICE_ID, "--json"];
     let domains = parseJson(run("railway", ["domain", "list", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain list" }), "Railway domains");
     let domain = JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/)?.[0];
     if (!domain) {
+      updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railwayDomain: { environmentId: state.railwayEnvironmentId, serviceId: process.env.RAILWAY_API_SERVICE_ID } }, status: "railway-domain-creating" });
       run("railway", ["domain", "--port", "8080", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain create" });
       domains = parseJson(run("railway", ["domain", "list", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain list" }), "Railway domains");
       domain = JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/)?.[0];
@@ -300,9 +536,12 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     if (!domain) throw new Error("Railway API domain was not verified");
     state.apiUrl = `https://${domain}`;
     updateJournal(journalPath, state, { status: "frontend-creating" });
+    const vercelLink = bindVercelProject(sourceRoot);
+    updateJournal(journalPath, state, { vercelOrgId: vercelLink.orgId, status: "frontend-linked" });
     let deploymentUrl;
     try {
-      const deployOutput = run("vercel", ["deploy", "--yes", "--target", "preview", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, "--scope", process.env.VERCEL_ORG_ID], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
+      updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), vercel: { projectId: process.env.VERCEL_PROJECT_ID, commitSha: sha, releaseId, environment: railwayEnvironment } }, status: "vercel-creating" });
+      const deployOutput = run("vercel", ["deploy", "--yes", "--target", "preview", "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
       deploymentUrl = deployOutput.split(/\r?\n/).findLast((line) => /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(line.trim()))?.trim();
     } catch {
       deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
@@ -316,7 +555,6 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     const directName = preview ? "PREVIEW_DATABASE_URL_UNPOOLED" : "DATABASE_URL_UNPOOLED";
     for (const service of services) {
       for (const [name, val] of [[dbName, database.pooled], [directName, database.direct], ["RAILWAY_ENVIRONMENT_NAME", railwayEnvironment], ["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]]) setRailwayVariable(name, val, service, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
-      run("railway", ["service", "source", "disconnect", "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway source disconnect" });
     }
     for (const [name, val] of [["FRONTEND_ORIGINS", state.frontendUrl], ["APP_PUBLIC_URL", state.frontendUrl]]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
     if (!preview) for (const [name, val] of [["GOOGLE_CLIENT_ID", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_ID], ["GOOGLE_CLIENT_SECRET", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_SECRET], ["GOOGLE_REDIRECT_URI", "https://staging.parkdex.app/auth/google/callback"]]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
@@ -325,13 +563,12 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
     const marker = join(sourceRoot, "backend", ".local-release-source-sha");
     writeFileSync(marker, `${sha} ${releaseId}`, "utf8");
     for (const service of services) run("railway", ["up", "--ci", "--yes", "--message", message, "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { cwd: sourceRoot, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway deploy" });
-    const helperEnv = { RAILWAY_API_TOKEN: process.env.RAILWAY_API_TOKEN, RAILWAY_PROJECT_ID: process.env.RAILWAY_PROJECT_ID, RAILWAY_ENVIRONMENT: state.railwayEnvironmentId, PREVIEW_ENVIRONMENT: state.railwayEnvironmentId, RAILWAY_API_SERVICE_ID: process.env.RAILWAY_API_SERVICE_ID, RAILWAY_WORKER_SERVICE_ID: process.env.RAILWAY_WORKER_SERVICE_ID, EXPECTED_COMMIT_SHA: sha, EXPECTED_RELEASE_ID: releaseId, EXPECTED_PREVIEW_DEPLOYMENT_MESSAGE: message, GITHUB_OUTPUT: join(tmpdir(), `parkdex-api-${releaseId}.out`) };
-    callBash(sourceRoot, "scripts/verify-railway-deployments.sh", helperEnv, [message]);
-    callBash(sourceRoot, "scripts/wait-for-railway-api.sh", helperEnv);
-    callBash(sourceRoot, "scripts/wait-for-worker-catalogue.sh", helperEnv);
-    callBash(sourceRoot, "scripts/smoke-catalogue.sh", { ...helperEnv, API_URL: state.apiUrl });
-    callBash(sourceRoot, "scripts/verify-frontend-release.sh", { VERCEL_TOKEN: process.env.VERCEL_TOKEN, VERCEL_ORG_ID: process.env.VERCEL_ORG_ID, VERCEL_PROJECT_ID: process.env.VERCEL_PROJECT_ID }, [vercel.url, sha]);
-    if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", "--scope", process.env.VERCEL_ORG_ID], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
+    verifyRailwayDeployments(state, process.env.RAILWAY_API_TOKEN, message);
+    await waitForRailwayApi(state.apiUrl, sha, releaseId);
+    await waitForWorkerCatalogue(state, process.env.RAILWAY_API_TOKEN, sha, releaseId);
+    await smokeCatalogue(state.apiUrl);
+    verifyFrontendContent(sourceRoot, vercel.url);
+    if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
     updateJournal(journalPath, state, { status: "ready", readyAt: new Date().toISOString() });
     console.log(`local-release status=ready mode=${mode} sha=${sha} journal=${journalPath}`);
   } catch (error) {
@@ -346,7 +583,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest) {
 const root = git(process.cwd(), ["rev-parse", "--show-toplevel"]);
 const actualSha = git(root, ["rev-parse", "HEAD"]);
 const expectedSha = value("--sha", actualSha);
-if (!/^[0-9a-f]{40}$/.test(expectedSha) || expectedSha !== actualSha) throw new Error("Refusing a stale or non-full commit SHA");
+if (!/^[0-9a-f]{40}$/.test(expectedSha)) throw new Error("Refusing a non-full source commit SHA");
 if (git(root, ["status", "--porcelain"])) throw new Error("Refusing a dirty worktree");
 const mode = value("--mode", "staging").toLowerCase();
 if (!["preview", "staging", "cleanup"].includes(mode)) throw new Error("--mode must be preview, staging, or cleanup");
@@ -358,6 +595,16 @@ const defaultRoot = process.env.LOCALAPPDATA || tmpdir();
 const journalPath = resolve(value("--journal", join(defaultRoot, "Parkdex", "release-journal", `${releaseId}.json`)));
 
 if (mode === "cleanup" && !flag("--apply")) throw new Error("Cleanup requires explicit --apply");
-if (flag("--apply")) throw new Error("Provider mutation remains disabled until an isolated create/configure/deploy/verify/cleanup proof succeeds");
-if (mode === "cleanup") await cleanup(root, value("--journal"));
-else await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest);
+if (flag("--apply") && mode === "staging") throw new Error("Local staging Apply remains disabled; use the reviewed manual staging workflow");
+if (mode === "cleanup") {
+  if (!value("--journal") || !existsSync(journalPath)) throw new Error("Cleanup requires its exact existing release journal");
+  trustedHarness(root);
+  await cleanup(root, journalPath);
+} else if (flag("--apply")) {
+  if (!value("--sha") || !value("--attestation") || !value("--head-ref")) throw new Error("Preview apply requires explicit --sha, --head-ref, and --attestation");
+  const harnessSha = trustedHarness(root);
+  const authorization = verifyPreviewAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"));
+  await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, harnessSha, authorization);
+} else {
+  await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, actualSha, null);
+}

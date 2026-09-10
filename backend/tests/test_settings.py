@@ -21,6 +21,15 @@ def test_preview_uses_preview_database() -> None:
     assert settings.effective_database_url == "postgresql://preview"
 
 
+def test_local_release_namespace_uses_preview_database() -> None:
+    settings = Settings(
+        DATABASE_URL="postgresql://production",
+        PREVIEW_DATABASE_URL="postgresql://preview",
+        RAILWAY_ENVIRONMENT_NAME="lp-pr-99999-abcdef01-12345678",
+    )
+    assert settings.effective_database_url == "postgresql://preview"
+
+
 def test_preview_migrations_require_direct_database_url() -> None:
     settings = Settings(
         PREVIEW_DATABASE_URL="postgresql://preview-pooled",

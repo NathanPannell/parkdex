@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { canonicalSource, repositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
 
 const readArg = (name, fallback) => {
   const index = process.argv.indexOf(name);
@@ -15,22 +16,6 @@ function git(root, args) {
   if (result.status !== 0) throw new Error(`git ${args[0]} failed`);
   return result.stdout.trim();
 }
-
-function repositorySlug(value) {
-  const normalized = String(value || "").replaceAll("\\", "/");
-  const match = normalized.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/i) || normalized.match(/(?:^|\/)([^/]+)\/([^/]+?)(?:\.git)?$/);
-  return match ? `${match[1]}/${match[2]}`.toLowerCase() : normalized.replace(/\.git$/, "").toLowerCase();
-}
-
-function successfulResults(evidence, suite) {
-  const backend = ["database isolation contracts", "create owned CI database", "backend seed contract", "backend migrations", "backend tests", "drop owned CI database"];
-  const frontend = ["repository dependencies", "catalogue validation", "boundary source tests", "boundary geometry", "release metadata tests", "workflow contract tests", "local release contract tests", "CI evidence contract tests", "deployment helper tests", "frontend dependencies", "frontend boundary asset", "frontend territory contract", "frontend lint", "frontend typecheck", "frontend tests", "frontend build"];
-  const required = suite === "backend" ? backend : suite === "frontend" ? frontend : [...backend, ...frontend];
-  const labels = new Set((evidence.results || []).filter((item) => item?.status === 0).map((item) => item.label));
-  return required.every((label) => labels.has(label));
-}
-
-const canonicalSource = (value) => `${String(value).replaceAll("\r\n", "\n").trimEnd()}\n`;
 
 const repository = readArg("--repository", process.env.GITHUB_REPOSITORY);
 const sha = readArg("--sha");
@@ -74,12 +59,13 @@ if (state === "success") {
     const treeOutput = git(root, ["merge-tree", "--write-tree", evidence.baseSha, sha]);
     const treeSha = treeOutput.split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
     if (!treeSha || treeSha !== evidence.treeSha) throw new Error("Merge tree no longer matches the attestation");
+    if (git(root, ["rev-parse", `${evidence.candidateSha}^{tree}`]) !== treeSha || git(root, ["show", "-s", "--format=%P", evidence.candidateSha]) !== `${evidence.baseSha} ${sha}`) throw new Error("Candidate commit does not bind the attested merge tree and parents");
     const trustedSource = `${git(root, ["show", `${evidence.baseSha}:scripts/local-ci.mjs`])}\n`;
     if (createHash("sha256").update(trustedSource).digest("hex") !== evidence.trustedValidatorSha256) throw new Error("Trusted validator identity does not match staging");
     const localText = readFileSync(evidence.localEvidencePath, "utf8");
     if (createHash("sha256").update(localText).digest("hex") !== evidence.localEvidenceSha256) throw new Error("Nested local evidence hash does not match");
     const localEvidence = JSON.parse(localText);
-    if (localEvidence.schema !== "parkdex.local-ci/v1" || localEvidence.status !== "success" || localEvidence.commitSha !== evidence.candidateSha || localEvidence.suite !== "all" || !successfulResults(localEvidence, "all")) {
+    if (!validateNestedLocalEvidence(localEvidence, { candidateSha: evidence.candidateSha, treeSha, repository, validatorSha256: evidence.trustedValidatorSha256 })) {
       throw new Error("Nested local evidence does not prove the complete candidate suite");
     }
     context = `${baseContext}/staging-${evidence.baseSha.slice(0, 12)}`;

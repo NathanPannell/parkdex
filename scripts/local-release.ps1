@@ -6,6 +6,8 @@ param(
   [string]$CommitSha = '',
   [string]$StatePath = '',
   [string]$ReleaseId = '',
+  [string]$HeadRef = '',
+  [string]$AttestationPath = '',
   [switch]$Apply
 )
 
@@ -15,6 +17,8 @@ if ($PullRequest -gt 0) { $releaseArgs += @('--pr', "$PullRequest") }
 if ($CommitSha) { $releaseArgs += @('--sha', $CommitSha) }
 if ($StatePath) { $releaseArgs += @('--journal', $StatePath) }
 if ($ReleaseId) { $releaseArgs += @('--release-id', $ReleaseId) }
+if ($HeadRef) { $releaseArgs += @('--head-ref', $HeadRef) }
+if ($AttestationPath) { $releaseArgs += @('--attestation', $AttestationPath) }
 if ($Apply) { $releaseArgs += '--apply' }
 
 node @releaseArgs
