@@ -174,6 +174,7 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
     return {
         "status": "ready",
         "commit": settings.app_commit_sha,
+        "release": settings.app_release_id,
         "migrations": migration_count["migration_count"],
     }
 

@@ -38,12 +38,17 @@ api_url="https://${domain}"
 for delay in 0 2 4 8 12 20 30 30 30 30 30 30; do
   (( delay == 0 )) || sleep "$delay"
   response="$(curl --fail --silent --show-error --max-time 10 "${api_url}/ready" 2>/dev/null || true)"
+  release_ok=true
+  if [[ -n "${EXPECTED_RELEASE_ID:-}" ]]; then
+    [[ "$(jq -r '.release // empty' <<<"$response" 2>/dev/null)" == "$EXPECTED_RELEASE_ID" ]] || release_ok=false
+  fi
   if [[ "$(jq -r '.status // empty' <<<"$response" 2>/dev/null)" == "ready" ]] && \
-     [[ "$(jq -r '.commit // empty' <<<"$response" 2>/dev/null)" == "$EXPECTED_COMMIT_SHA" ]]; then
+     [[ "$(jq -r '.commit // empty' <<<"$response" 2>/dev/null)" == "$EXPECTED_COMMIT_SHA" ]] && \
+     [[ "$release_ok" == true ]]; then
     echo "api_url=${api_url}" >> "$GITHUB_OUTPUT"
     exit 0
   fi
 done
 
-echo "Railway API never reported ready for commit ${EXPECTED_COMMIT_SHA} at ${api_url}" >&2
+echo "Railway API never reported ready for commit ${EXPECTED_COMMIT_SHA} release ${EXPECTED_RELEASE_ID:-any} at ${api_url}" >&2
 exit 1

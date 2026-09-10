@@ -37,3 +37,5 @@ jobs:
           node --check scripts/github-status.mjs
           node --check scripts/merge-candidate.mjs
           node --test scripts/deployment-workflows.test.mjs
+          node --test scripts/local-release.test.mjs
+          node --test scripts/ci-evidence.test.mjs
