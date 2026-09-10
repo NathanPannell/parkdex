@@ -22,7 +22,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const body = await response.text();
     return (body ? JSON.parse(body) : undefined) as T;
   }
-  let message = "Trips are unavailable right now. Please try again.";
+  let message = "Groups are unavailable right now. Please try again.";
   try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* friendly fallback */ }
   throw new TripsApiError(message, response.status);
 }

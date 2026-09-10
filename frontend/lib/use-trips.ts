@@ -20,7 +20,7 @@ type TripState = {
 };
 
 function messageFor(error: unknown) {
-  return error instanceof Error ? error.message : "Trips are unavailable right now. Please try again.";
+  return error instanceof Error ? error.message : "Groups are unavailable right now. Please try again.";
 }
 
 export function useTrips({ apiBaseUrl, authenticated, identityKey = "", places, request }: { apiBaseUrl: string; authenticated: boolean; identityKey?: string; places: Place[]; request?: AuthenticatedRequest }): TripState {
@@ -60,7 +60,7 @@ export function useTrips({ apiBaseUrl, authenticated, identityKey = "", places, 
 
   const mutate = useCallback(async (operation: (request: AuthenticatedRequest) => Promise<Trip | void>) => {
     const currentRequest = requestRef.current;
-    if (!currentRequest) throw new Error("Sign in to manage trips.");
+    if (!currentRequest) throw new Error("Sign in to manage groups.");
     const epoch = epochRef.current;
     const identity = identityKey;
     setBusy(true); setError("");

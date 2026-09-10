@@ -26,11 +26,18 @@ Configure an MCP host to launch:
   "mcpServers": {
     "parkdex": {
       "command": "python",
-      "args": ["-m", "backend.app.mcp_server"]
+      "args": ["-m", "backend.app.mcp_server"],
+      "cwd": "/absolute/path/to/parkdex",
+      "env": {
+        "PARKDEX_API_ORIGIN": "https://parkdex.app",
+        "PARKDEX_ACCOUNT_EMAIL": "you@example.com"
+      }
     }
   }
 }
 ```
+
+Replace the working directory and email with your checkout and account. Keep the bearer token out of host configuration when the OS keyring is available.
 
 The intended workflow is `search_places` (optionally `visited=false`, `type`/`category`, text, origin latitude/longitude, `radius_km`, `limit`, and `offset`) → `get_place_details` → `create_group` with `place_ids` → `add_places_to_group` / `remove_places_from_group`. Origin results are in kilometres, nearest-first, with deterministic name/ID tie ordering and bounded pagination. `list_groups`, `get_group`, `rename_group`, and `delete_group` manage private account-owned groups; each account also has one protected `Wishlist`, available through `get_wishlist`, `add_places_to_wishlist`, and `remove_places_from_wishlist`. Wishlist cannot be renamed/deleted. Duplicate place IDs are ignored. The `/api/trips` REST/MCP names remain compatibility aliases over the same group records. MCP exposes no visit mutation or collection-key access.
 

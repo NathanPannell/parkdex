@@ -1,9 +1,12 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 from fastapi.testclient import TestClient
+from psycopg.rows import dict_row
 
 from backend.app.main import app
+from backend.app.trips import ensure_wishlist
 
 
 PLACE_IDS = ["trip-test-alpha", "trip-test-beta", "trip-test-gamma"]
@@ -64,10 +67,22 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             )
             assert wishlist.status_code == 200
             assert wishlist.json()["placeIds"] == [PLACE_IDS[0]]
+            wishlist_id = wishlist.json()["id"]
+            assert client.patch(
+                f"/api/groups/{wishlist_id}", headers=first_headers, json={"name": "Later"}
+            ).status_code == 409
+            assert client.delete(f"/api/groups/{wishlist_id}", headers=first_headers).status_code == 409
+            assert [item["id"] for item in client.get("/api/trips", headers=first_headers).json()] == [trip["id"]]
+            assert client.post(
+                "/api/groups", headers=first_headers, json={"name": "Wishlist", "placeIds": []}
+            ).status_code == 422
             assert client.get("/api/wishlist", headers=second_headers).json()["placeIds"] == []
 
             assert client.get("/api/trips", headers=second_headers).json() == []
             assert client.get(f"/api/trips/{trip['id']}", headers=second_headers).status_code == 404
+            assert client.post(
+                f"/api/groups/{trip['id']}/places", headers=second_headers, json={"placeIds": [PLACE_IDS[2]]}
+            ).status_code == 404
             assert client.get("/api/trips").status_code == 401
 
             filtered = client.get(
@@ -87,11 +102,21 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             assert nearby.json()["places"][0]["id"] == PLACE_IDS[0]
             assert nearby.json()["places"][0]["distanceKm"] == 0
             assert nearby.json()["total"] == 2
+            next_nearby = client.get(
+                "/api/places/search",
+                headers=first_headers,
+                params={"latitude": 49.0, "longitude": -124.0, "radius_km": 20, "query": "Trip Test", "limit": 1, "offset": 1},
+            )
+            assert [place["id"] for place in next_nearby.json()["places"]] == [PLACE_IDS[1]]
 
             bad_origin = client.get(
                 "/api/places/search", headers=first_headers, params={"latitude": 49}
             )
             assert bad_origin.status_code == 400
+            radius_without_origin = client.get(
+                "/api/places/search", headers=first_headers, params={"radius_km": 20}
+            )
+            assert radius_without_origin.status_code == 400
 
             with psycopg.connect(database_url) as conn:
                 conn.execute("UPDATE places SET active = FALSE WHERE id = %s", (PLACE_IDS[1],))
@@ -104,8 +129,56 @@ def test_private_trips_search_and_membership_are_persistent_and_isolated() -> No
             assert inactive.status_code == 400
             details = client.get(f"/api/places/{PLACE_IDS[1]}", headers=first_headers)
             assert details.status_code == 404
+            renamed = client.patch(
+                f"/api/groups/{trip['id']}", headers=first_headers, json={"name": "Renamed route"}
+            )
+            assert renamed.status_code == 200
+            assert renamed.json()["name"] == "Renamed route"
+            removed = client.request(
+                "DELETE",
+                f"/api/groups/{trip['id']}/places",
+                headers=first_headers,
+                json={"placeIds": [PLACE_IDS[2]]},
+            )
+            assert removed.status_code == 200
+            assert PLACE_IDS[2] not in removed.json()["placeIds"]
+            assert client.delete(f"/api/groups/{trip['id']}", headers=first_headers).status_code == 204
     finally:
         with psycopg.connect(database_url) as conn:
             conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", (EMAILS,))
             conn.execute("DELETE FROM places WHERE id = ANY(%s)", (PLACE_IDS,))
+            conn.commit()
+
+
+def test_wishlist_is_a_singleton_under_concurrent_creation() -> None:
+    database_url = os.environ["DATABASE_URL"]
+    email = "wishlist-race@example.com"
+    with psycopg.connect(database_url) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        conn.commit()
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/auth/register",
+                json={"email": email, "password": "wishlist race password"},
+            )
+            assert response.status_code == 201
+            account_id = response.json()["account"]["id"]
+
+        def create_once(_: int) -> str:
+            with psycopg.connect(database_url, row_factory=dict_row) as conn:
+                return ensure_wishlist(conn, account_id)["id"]
+
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            ids = list(executor.map(create_once, range(12)))
+        assert len(set(ids)) == 1
+        with psycopg.connect(database_url) as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM account_groups WHERE account_id = %s AND is_wishlist",
+                (account_id,),
+            ).fetchone()[0]
+            assert count == 1
+    finally:
+        with psycopg.connect(database_url) as conn:
+            conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
             conn.commit()

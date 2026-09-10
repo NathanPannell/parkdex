@@ -130,7 +130,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const authenticatedRequest = useCallback(async (path: string, init: RequestInit = {}) => {
     const identity = identityRef.current;
-    if (identity.kind !== "account") throw new Error("Sign in to manage trips.");
+    if (identity.kind !== "account") throw new Error("Sign in to manage groups.");
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${identity.token}`);
     return fetch(`${apiBaseUrl}${path}`, { ...init, headers });

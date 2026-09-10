@@ -6,12 +6,14 @@ import argparse
 import getpass
 import os
 from dataclasses import dataclass
+from typing import Annotated, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import keyring
 from keyring.errors import PasswordDeleteError
 from mcp.server import MCPServer
+from pydantic import Field
 
 
 KEYRING_SERVICE = "parkdex-mcp-session"
@@ -19,6 +21,11 @@ SESSION_ENV = "PARKDEX_SESSION_TOKEN"
 EMAIL_ENV = "PARKDEX_ACCOUNT_EMAIL"
 ORIGIN_ENV = "PARKDEX_API_ORIGIN"
 MAX_TIMEOUT_SECONDS = 20.0
+PlaceType = Literal["national", "provincial", "regional", "island"]
+GroupName = Annotated[str, Field(min_length=1, max_length=200)]
+GroupId = Annotated[str, Field(pattern=r"^[0-9a-fA-F-]{36}$")]
+PlaceIds = Annotated[list[str], Field(min_length=1, max_length=100)]
+OptionalPlaceIds = Annotated[list[str] | None, Field(max_length=100)]
 
 
 def normalize_origin(value: str) -> str:
@@ -131,20 +138,25 @@ def logout_session(origin: str, email: str | None = None) -> None:
         account_email = input("Parkdex email for the saved session: ").strip().lower()
     token = session_token(origin, account_email)
     client = ParkdexClient(origin, token)
+    revoke_error: Exception | None = None
     try:
         client.request("POST", "/api/auth/logout")
+    except Exception as exc:
+        revoke_error = exc
     finally:
         client.close()
     try:
         keyring.delete_password(KEYRING_SERVICE, keyring_user(origin, account_email))
     except PasswordDeleteError:
         pass
+    if revoke_error is not None:
+        raise RuntimeError("Saved session was removed locally, but server revocation failed") from revoke_error
     print(f"Session revoked for {account_email} at {origin}.")
 
 
 mcp = MCPServer(
-    "Parkdex Trips",
-    description="Search Parkdex places and manage private account-owned trips.",
+    "Parkdex Groups",
+    description="Search Parkdex places and manage private account-owned groups and Wishlist.",
     instructions="Use search_places first, then get_place_details, then create_group or add_places_to_wishlist. Groups and Wishlist are private to the authenticated Parkdex account.",
 )
 
@@ -152,16 +164,16 @@ mcp = MCPServer(
 @mcp.tool()
 def search_places(
     visited: bool | None = None,
-    type: str | None = None,
-    category: str | None = None,
-    query: str | None = None,
-    latitude: float | None = None,
-    longitude: float | None = None,
-    radius_km: float | None = None,
-    limit: int = 25,
-    offset: int = 0,
+    type: PlaceType | None = None,
+    category: PlaceType | None = None,
+    query: Annotated[str | None, Field(max_length=200)] = None,
+    latitude: Annotated[float | None, Field(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Field(ge=-180, le=180)] = None,
+    radius_km: Annotated[float | None, Field(gt=0, le=20000)] = None,
+    limit: Annotated[int, Field(ge=1, le=100)] = 25,
+    offset: Annotated[int, Field(ge=0, le=10000)] = 0,
 ) -> dict:
-    """Search active places. `type` and `category` use national/provincial/regional/island; origin searches are nearest-first."""
+    """Search active places. Types are national/provincial/regional/island. Provide both latitude and longitude; radius_km requires them. Results are nearest-first for an origin. limit is 1-100 and offset is 0-10000."""
     if type and category and type != category:
         raise ValueError("type and category must match when both are provided")
     client = _client()
@@ -173,7 +185,7 @@ def search_places(
 
 
 @mcp.tool()
-def get_place_details(place_id: str) -> dict:
+def get_place_details(place_id: Annotated[str, Field(min_length=1, max_length=200)]) -> dict:
     """Retrieve one active place's details and whether it is visited by this account."""
     client = _client()
     try:
@@ -193,7 +205,7 @@ def list_trips() -> list:
 
 
 @mcp.tool()
-def get_trip(trip_id: str) -> dict:
+def get_trip(trip_id: GroupId) -> dict:
     """Get one private trip with its active places."""
     client = _client()
     try:
@@ -203,7 +215,7 @@ def get_trip(trip_id: str) -> dict:
 
 
 @mcp.tool()
-def create_trip(name: str, place_ids: list[str] | None = None) -> dict:
+def create_trip(name: GroupName, place_ids: OptionalPlaceIds = None) -> dict:
     """Create a private trip and optionally add existing active places; duplicate IDs are ignored."""
     client = _client()
     try:
@@ -213,7 +225,7 @@ def create_trip(name: str, place_ids: list[str] | None = None) -> dict:
 
 
 @mcp.tool()
-def rename_trip(trip_id: str, name: str) -> dict:
+def rename_trip(trip_id: GroupId, name: GroupName) -> dict:
     """Rename a private trip."""
     client = _client()
     try:
@@ -223,7 +235,7 @@ def rename_trip(trip_id: str, name: str) -> dict:
 
 
 @mcp.tool()
-def delete_trip(trip_id: str) -> dict:
+def delete_trip(trip_id: GroupId) -> dict:
     """Delete a private trip."""
     client = _client()
     try:
@@ -234,7 +246,7 @@ def delete_trip(trip_id: str) -> dict:
 
 
 @mcp.tool()
-def add_places_to_trip(trip_id: str, place_ids: list[str]) -> dict:
+def add_places_to_trip(trip_id: GroupId, place_ids: PlaceIds) -> dict:
     """Add active places to a private trip; duplicate memberships are ignored."""
     client = _client()
     try:
@@ -244,7 +256,7 @@ def add_places_to_trip(trip_id: str, place_ids: list[str]) -> dict:
 
 
 @mcp.tool()
-def remove_places_from_trip(trip_id: str, place_ids: list[str]) -> dict:
+def remove_places_from_trip(trip_id: GroupId, place_ids: PlaceIds) -> dict:
     """Remove places from a private trip; no visit state is changed."""
     client = _client()
     try:
@@ -264,7 +276,7 @@ def list_groups() -> list:
 
 
 @mcp.tool()
-def get_group(group_id: str) -> dict:
+def get_group(group_id: GroupId) -> dict:
     """Get one private group with its active places."""
     client = _client()
     try:
@@ -274,7 +286,7 @@ def get_group(group_id: str) -> dict:
 
 
 @mcp.tool()
-def create_group(name: str, place_ids: list[str] | None = None) -> dict:
+def create_group(name: GroupName, place_ids: OptionalPlaceIds = None) -> dict:
     """Create an ordinary private group; duplicate place IDs are ignored."""
     client = _client()
     try:
@@ -284,7 +296,7 @@ def create_group(name: str, place_ids: list[str] | None = None) -> dict:
 
 
 @mcp.tool()
-def rename_group(group_id: str, name: str) -> dict:
+def rename_group(group_id: GroupId, name: GroupName) -> dict:
     """Rename an ordinary group; the protected Wishlist cannot be renamed."""
     client = _client()
     try:
@@ -294,7 +306,7 @@ def rename_group(group_id: str, name: str) -> dict:
 
 
 @mcp.tool()
-def delete_group(group_id: str) -> dict:
+def delete_group(group_id: GroupId) -> dict:
     """Delete an ordinary private group; the protected Wishlist cannot be deleted."""
     client = _client()
     try:
@@ -305,7 +317,7 @@ def delete_group(group_id: str) -> dict:
 
 
 @mcp.tool()
-def add_places_to_group(group_id: str, place_ids: list[str]) -> dict:
+def add_places_to_group(group_id: GroupId, place_ids: PlaceIds) -> dict:
     """Add active places to an ordinary group or Wishlist; duplicate memberships are ignored."""
     client = _client()
     try:
@@ -315,7 +327,7 @@ def add_places_to_group(group_id: str, place_ids: list[str]) -> dict:
 
 
 @mcp.tool()
-def remove_places_from_group(group_id: str, place_ids: list[str]) -> dict:
+def remove_places_from_group(group_id: GroupId, place_ids: PlaceIds) -> dict:
     """Remove places from a group without changing visit state."""
     client = _client()
     try:
@@ -335,7 +347,7 @@ def get_wishlist() -> dict:
 
 
 @mcp.tool()
-def add_places_to_wishlist(place_ids: list[str]) -> dict:
+def add_places_to_wishlist(place_ids: PlaceIds) -> dict:
     """Add active places to the protected Wishlist; duplicate memberships are ignored."""
     client = _client()
     try:
@@ -345,7 +357,7 @@ def add_places_to_wishlist(place_ids: list[str]) -> dict:
 
 
 @mcp.tool()
-def remove_places_from_wishlist(place_ids: list[str]) -> dict:
+def remove_places_from_wishlist(place_ids: PlaceIds) -> dict:
     """Remove places from the protected Wishlist without changing visit state."""
     client = _client()
     try:
