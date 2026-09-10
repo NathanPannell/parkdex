@@ -3,12 +3,15 @@ import hashlib
 import json
 import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 import psycopg
 from fastapi.testclient import TestClient
 
+import backend.app.mcp_oauth as oauth
 from backend.app.main import app
 
 
@@ -17,7 +20,7 @@ OTHER_EMAIL = "hosted-mcp-other@example.com"
 PASSWORD = "hosted mcp password"
 
 
-def test_public_oauth_pkce_streamable_http_and_revocation() -> None:
+def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", ([EMAIL, OTHER_EMAIL],))
         conn.execute(
@@ -29,6 +32,12 @@ def test_public_oauth_pkce_streamable_http_and_revocation() -> None:
     verifier = "v" * 64
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     with TestClient(app, base_url="http://localhost:8000", follow_redirects=False) as client:
+        preflight = client.options(
+            "/api/groups/example",
+            headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "PATCH"},
+        )
+        assert preflight.status_code == 200
+        assert "PATCH" in preflight.headers["access-control-allow-methods"]
         assert client.post("/api/auth/register", json={"email": EMAIL, "password": PASSWORD}).status_code == 201
 
         metadata = client.get("/.well-known/oauth-authorization-server").json()
@@ -172,20 +181,36 @@ def test_public_oauth_pkce_streamable_http_and_revocation() -> None:
             assert conn.execute("SELECT 1 FROM mcp_oauth_clients WHERE client_id = %s", (stale_client_id,)).fetchone() is None
 
         with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-            conn.execute(
-                """INSERT INTO auth_rate_limits (action, scope_hash, attempt_count, window_started_at)
-                   VALUES ('mcp_dcr', %s, 100, NOW())
-                   ON CONFLICT (action, scope_hash) DO UPDATE SET attempt_count = 100, window_started_at = NOW()""",
-                (hashlib.sha256(b"global").hexdigest(),),
-            )
-            conn.commit()
-        rate_limited = client.post("/register", json={
-            "client_name": "Rate-limited client", "redirect_uris": ["http://127.0.0.1:19000/callback"],
+            client_count = conn.execute("SELECT COUNT(*) FROM mcp_oauth_clients").fetchone()[0]
+        monkeypatch.setattr(oauth, "MAX_DCR_CLIENTS", client_count)
+        capacity_registration = client.post("/register", json={
+            "client_name": "Capacity client", "redirect_uris": ["http://127.0.0.1:19002/callback"],
             "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"], "scope": "mcp",
         })
-        assert rate_limited.status_code == 400
-        assert rate_limited.json()["error_description"] == "Registration rate limit exceeded"
+        assert capacity_registration.status_code == 201
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_clients").fetchone()[0] == client_count
+
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            conn.execute(
+                """INSERT INTO auth_rate_limits (action, scope_hash, attempt_count, window_started_at)
+                   VALUES ('mcp_dcr', %s, %s, NOW())
+                   ON CONFLICT (action, scope_hash) DO UPDATE SET attempt_count = %s, window_started_at = NOW()""",
+                (hashlib.sha256(b"global").hexdigest(), oauth.MAX_DCR_REGISTRATIONS_PER_HOUR, oauth.MAX_DCR_REGISTRATIONS_PER_HOUR),
+            )
+            event_count = conn.execute("SELECT COUNT(*) FROM auth_security_events WHERE event_type = 'mcp_dcr_rate_limit'").fetchone()[0]
+            conn.commit()
+        for _ in range(5):
+            rate_limited = client.post("/register", json={
+                "client_name": "Rate-limited client", "redirect_uris": ["http://127.0.0.1:19000/callback"],
+                "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"], "scope": "mcp",
+            })
+            assert rate_limited.status_code == 400
+            assert rate_limited.json()["error_description"] == "Registration rate limit exceeded"
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM auth_security_events WHERE event_type = 'mcp_dcr_rate_limit'").fetchone()[0] == event_count
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         stored = " ".join(row[0] for row in conn.execute("SELECT token_hash FROM mcp_oauth_tokens").fetchall())
@@ -193,3 +218,65 @@ def test_public_oauth_pkce_streamable_http_and_revocation() -> None:
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", ([EMAIL, OTHER_EMAIL],))
         conn.execute("DELETE FROM auth_rate_limits WHERE action = 'mcp_dcr' AND scope_hash = %s", (hashlib.sha256(b"global").hexdigest(),))
         conn.commit()
+
+
+def test_refresh_exchange_cannot_escape_account_recovery_lock() -> None:
+    email = "mcp-recovery-race@example.com"
+    refresh_token = "mcp-refresh-before-recovery"
+    grant_id = uuid4()
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        conn.execute("DELETE FROM auth_rate_limits WHERE action = 'register' AND scope_hash = %s", (hashlib.sha256(email.encode()).hexdigest(),))
+        conn.commit()
+    try:
+        with TestClient(app, base_url="http://localhost:8000", follow_redirects=False) as client:
+            account = client.post("/api/auth/register", json={"email": email, "password": "recovery race password"}).json()["account"]
+            registered = client.post("/register", json={
+                "client_name": "Recovery race", "redirect_uris": ["http://127.0.0.1:17779/callback"],
+                "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"], "scope": "mcp",
+            })
+            assert registered.status_code == 201
+            client_id = registered.json()["client_id"]
+            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+                conn.execute(
+                    """INSERT INTO mcp_oauth_tokens
+                       (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at)
+                       VALUES (%s, 'refresh', %s, %s, %s, %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '30 days')""",
+                    (hashlib.sha256(refresh_token.encode()).hexdigest(), grant_id, grant_id, client_id, account["id"]),
+                )
+                conn.commit()
+
+            with psycopg.connect(os.environ["DATABASE_URL"]) as recovery_conn:
+                recovery_conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (account["id"],))
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    exchange = executor.submit(lambda: client.post("/token", data={
+                        "grant_type": "refresh_token", "client_id": client_id,
+                        "refresh_token": refresh_token, "scope": "mcp", "resource": "http://localhost:8000/mcp",
+                    }))
+                    deadline = time.monotonic() + 5
+                    waiting = False
+                    while time.monotonic() < deadline:
+                        with psycopg.connect(os.environ["DATABASE_URL"]) as observer:
+                            waiting = observer.execute(
+                                """SELECT EXISTS (
+                                       SELECT 1 FROM pg_stat_activity
+                                       WHERE datname = current_database() AND wait_event_type = 'Lock'
+                                         AND query LIKE 'SELECT id FROM accounts WHERE id = % FOR UPDATE%'
+                                   )"""
+                            ).fetchone()[0]
+                        if waiting:
+                            break
+                        time.sleep(0.02)
+                    assert waiting, "refresh exchange never waited on the account recovery lock"
+                    recovery_conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
+                    recovery_conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
+                    recovery_conn.commit()
+                    assert exchange.result(timeout=5).status_code == 400
+            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+                assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE account_id = %s AND revoked_at IS NULL", (account["id"],)).fetchone()[0] == 0
+    finally:
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+            conn.execute("DELETE FROM auth_rate_limits WHERE action = 'register' AND scope_hash = %s", (hashlib.sha256(email.encode()).hexdigest(),))
+            conn.commit()

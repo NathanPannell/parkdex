@@ -28,6 +28,8 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 - 2026-09-10: merged current `origin/staging` at `ce80152aa5cda66b9422e3838d6e0cfc2fe9f1e2` and configured preview/staging/production Railway API services with exact `API_PUBLIC_URL` and `MCP_PUBLIC_URL` values.
 - 2026-09-10: hardened hosted OAuth with refresh-family replay revocation, account password-change/reset grant revocation, bounded and rate-limited DCR, stale-client cleanup, bounded OAuth request bodies, and a first-password flow for Google-created accounts.
 - 2026-09-10: focused disposable-database verification passed 17 tests covering OAuth discovery/DCR, consent and CSRF, PKCE failure/success, code and refresh replay, access/refresh revocation, expiry, resource/scope/redirect binding, cross-account isolation, exact public tool surface and output casing, Groups/Wishlist invariants, and stdio compatibility.
+- 2026-09-10: independent review found account-recovery/token-exchange races, outstanding pre-recovery codes, DCR write amplification/capacity risk, and missing cross-origin PATCH. The revised implementation now takes the account lock before consuming codes or refresh grants, invalidates codes during every credential-recovery path, suppresses throttled DCR event writes, caps and evicts inactive DCR clients, retains security events for 90 days, and permits/tests PATCH preflight.
+- 2026-09-10: expanded disposable-database suite passed 18 tests, including a deterministic refresh/recovery lock race, stale-code rejection after password reset, bounded DCR event growth/capacity, and Group rename preflight.
 
 ## Active verification plan
 

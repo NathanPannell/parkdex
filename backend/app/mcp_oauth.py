@@ -45,6 +45,8 @@ MAX_DCR_REDIRECT_URIS = 10
 MAX_DCR_REDIRECT_URI_LENGTH = 2048
 MAX_DCR_CLIENT_NAME_LENGTH = 128
 MAX_CONSENT_BODY_BYTES = 16 * 1024
+MAX_DCR_CLIENTS = 10_000
+MAX_DCR_REGISTRATIONS_PER_HOUR = 5_000
 
 
 def database_thread(method):
@@ -78,6 +80,7 @@ def _cleanup_expired(conn) -> None:
     conn.execute("DELETE FROM mcp_oauth_authorization_codes WHERE expires_at < NOW()")
     conn.execute("DELETE FROM mcp_oauth_tokens WHERE expires_at < NOW()")
     conn.execute("DELETE FROM mcp_oauth_clients WHERE last_used_at < NOW() - INTERVAL '90 days' AND NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_requests r WHERE r.client_id = mcp_oauth_clients.client_id AND r.expires_at > NOW()) AND NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_codes c WHERE c.client_id = mcp_oauth_clients.client_id AND c.expires_at > NOW()) AND NOT EXISTS (SELECT 1 FROM mcp_oauth_tokens t WHERE t.client_id = mcp_oauth_clients.client_id AND t.revoked_at IS NULL AND t.expires_at > NOW())")
+    conn.execute("DELETE FROM auth_security_events WHERE occurred_at < NOW() - INTERVAL '90 days'")
 
 
 class ParkdexAccessToken(AccessToken):
@@ -147,15 +150,37 @@ class ParkdexOAuthProvider(
         if len(json.dumps(metadata, separators=(",", ":")).encode("utf-8")) > MAX_DCR_METADATA_BYTES:
             from mcp.server.auth.provider import RegistrationError
             raise RegistrationError(error="invalid_client_metadata", error_description="Client metadata is too large")
-        rate_limited = False
+        registration_error: str | None = None
         duplicate_client = False
         with contextmanager(connection)() as conn:
             _cleanup_expired(conn)
             try:
-                reserve_rate_limit(conn, "mcp_dcr", "global", 100, timedelta(hours=1))
+                reserve_rate_limit(
+                    conn,
+                    "mcp_dcr",
+                    "global",
+                    MAX_DCR_REGISTRATIONS_PER_HOUR,
+                    timedelta(hours=1),
+                    record_throttled=False,
+                )
             except HTTPException:
-                rate_limited = True
-            if rate_limited:
+                registration_error = "Registration rate limit exceeded"
+            if registration_error is None:
+                client_count = conn.execute("SELECT COUNT(*) AS count FROM mcp_oauth_clients").fetchone()["count"]
+                if client_count >= MAX_DCR_CLIENTS:
+                    evicted = conn.execute(
+                        """DELETE FROM mcp_oauth_clients WHERE client_id = (
+                               SELECT candidate.client_id FROM mcp_oauth_clients candidate
+                               WHERE NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_requests r WHERE r.client_id = candidate.client_id AND r.expires_at > NOW())
+                                 AND NOT EXISTS (SELECT 1 FROM mcp_oauth_authorization_codes c WHERE c.client_id = candidate.client_id AND c.expires_at > NOW() AND c.used_at IS NULL)
+                                 AND NOT EXISTS (SELECT 1 FROM mcp_oauth_tokens t WHERE t.client_id = candidate.client_id AND t.revoked_at IS NULL AND t.expires_at > NOW())
+                               ORDER BY candidate.last_used_at, candidate.created_at
+                               LIMIT 1
+                           ) RETURNING client_id"""
+                    ).fetchone()
+                    if evicted is None:
+                        registration_error = "Registration capacity is temporarily full"
+            if registration_error is not None:
                 conn.commit()
             else:
                 try:
@@ -167,12 +192,12 @@ class ParkdexOAuthProvider(
                 except UniqueViolation:
                     conn.rollback()
                     duplicate_client = True
-        if rate_limited or duplicate_client:
+        if registration_error or duplicate_client:
             from mcp.server.auth.provider import RegistrationError
 
             raise RegistrationError(
                 error="invalid_client_metadata",
-                error_description="Registration rate limit exceeded" if rate_limited else "Client already registered",
+                error_description=registration_error or "Client already registered",
             )
 
     @database_thread
@@ -236,6 +261,13 @@ class ParkdexOAuthProvider(
         now = datetime.now(timezone.utc)
         token_error: str | None = None
         with contextmanager(connection)() as conn:
+            candidate = conn.execute(
+                """SELECT account_id FROM mcp_oauth_authorization_codes
+                   WHERE code_hash = %s AND client_id = %s""",
+                (sha256_hex(authorization_code.code), client.client_id),
+            ).fetchone()
+            if candidate is not None:
+                conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (candidate["account_id"],))
             row = conn.execute(
                 """
                 UPDATE mcp_oauth_authorization_codes SET used_at = NOW()
@@ -246,9 +278,12 @@ class ParkdexOAuthProvider(
             ).fetchone()
             if row is None:
                 conn.rollback()
-                raise TokenError(error="invalid_grant", error_description="Authorization code is invalid or already used")
-            self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(row["account_id"]), row["scopes"], row["resource"], now)
-            conn.commit()
+                token_error = "Authorization code is invalid or already used"
+            else:
+                self._insert_pair(conn, access, refresh, grant_id, str(client.client_id), str(row["account_id"]), row["scopes"], row["resource"], now)
+                conn.commit()
+        if token_error:
+            raise TokenError(error="invalid_grant", error_description=token_error)
         return OAuthToken(access_token=access, refresh_token=refresh, expires_in=int(ACCESS_TOKEN_LIFETIME.total_seconds()), scope=" ".join(row["scopes"]))
 
     @database_thread
@@ -277,6 +312,13 @@ class ParkdexOAuthProvider(
         now = datetime.now(timezone.utc)
         token_error = None
         with contextmanager(connection)() as conn:
+            candidate = conn.execute(
+                """SELECT account_id FROM mcp_oauth_tokens
+                   WHERE token_hash = %s AND token_kind = 'refresh' AND client_id = %s""",
+                (sha256_hex(refresh_token.token), client.client_id),
+            ).fetchone()
+            if candidate is not None:
+                conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (candidate["account_id"],))
             row = conn.execute(
                 """SELECT grant_id, account_id, resource, family_id, revoked_at FROM mcp_oauth_tokens
                    WHERE token_hash = %s AND token_kind = 'refresh' AND client_id = %s

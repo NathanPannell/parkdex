@@ -55,12 +55,26 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
     try:
         with TestClient(api.app) as client:
             created = client.post("/api/auth/register", json={"email": email, "password": "old password value"}).json()
+            registered = client.post("/register", json={
+                "client_name": "Recovery test", "redirect_uris": ["http://127.0.0.1:17778/callback"],
+                "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"], "scope": "mcp",
+            })
+            assert registered.status_code == 201
+            client_id = registered.json()["client_id"]
             mcp_grant = str(uuid4())
+            authorization_code = "pre-reset-authorization-code"
+            verifier = "v" * 64
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                client_id = str(uuid4())
-                conn.execute("INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, '{}')", (client_id,))
                 conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) SELECT %s, 'access', %s, %s, %s, id, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour' FROM accounts WHERE email = %s", (hashlib.sha256(b"reset-mcp-token").hexdigest(), mcp_grant, mcp_grant, client_id, email))
                 conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) SELECT %s, 'refresh', %s, %s, %s, id, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '30 days' FROM accounts WHERE email = %s", (hashlib.sha256(b"reset-mcp-refresh").hexdigest(), mcp_grant, mcp_grant, client_id, email))
+                conn.execute(
+                    """INSERT INTO mcp_oauth_authorization_codes
+                       (code_hash, client_id, account_id, redirect_uri, redirect_uri_provided_explicitly, scopes, code_challenge, resource, expires_at)
+                       SELECT %s, %s, id, 'http://127.0.0.1:17778/callback', TRUE, ARRAY['mcp'], %s, 'http://localhost:8000/mcp', NOW() + INTERVAL '5 minutes'
+                       FROM accounts WHERE email = %s""",
+                    (hashlib.sha256(authorization_code.encode()).hexdigest(), client_id, pkce_challenge(verifier), email),
+                )
                 conn.commit()
             known = client.post("/api/auth/password-reset/request", json={"email": email})
             missing = client.post("/api/auth/password-reset/request", json={"email": unknown})
@@ -78,6 +92,12 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             assert client.get("/api/auth/me", headers=bearer(created["token"])).status_code == 401
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE grant_id = %s AND revoked_at IS NOT NULL", (mcp_grant,)).fetchone()[0] == 2
+            stale_code = client.post("/token", data={
+                "grant_type": "authorization_code", "client_id": client_id,
+                "code": authorization_code, "code_verifier": verifier,
+                "redirect_uri": "http://127.0.0.1:17778/callback", "resource": "http://localhost:8000/mcp",
+            })
+            assert stale_code.status_code == 400
             assert client.post("/api/auth/login", json={"email": email, "password": "new password value"}).status_code == 200
     finally:
         clean(email)

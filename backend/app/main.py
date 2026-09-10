@@ -187,7 +187,7 @@ app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Collection-Key"],
 )
 
@@ -724,6 +724,7 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
             raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (row["account_id"],))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
         conn.commit()
@@ -745,6 +746,7 @@ def change_password(payload: PasswordChange, authorization: str | None = Header(
             raise HTTPException(status_code=409, detail="Password changed during this request; try again")
         conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (identity.account_id,))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
         record_security_event(conn, "password_changed", identity.account_id, "success")
         conn.commit()
@@ -771,6 +773,7 @@ def set_password(payload: PasswordSet, authorization: str | None = Header(defaul
             raise HTTPException(status_code=409, detail="A password was set during this request; sign in again")
         conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (identity.account_id,))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
         record_security_event(conn, "password_set", identity.account_id, "success")
         conn.commit()
@@ -898,6 +901,7 @@ def finish_google_oauth(payload: GoogleCallback):
                 if account["email_verified_at"] is None:
                     conn.execute("UPDATE accounts SET password_hash = NULL, email_verified_at = NOW() WHERE id = %s", (account["id"],))
                     conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
+                    conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
                     conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
                     conn.execute("UPDATE account_action_tokens SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
                 else:
