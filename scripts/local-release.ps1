@@ -6,7 +6,8 @@ param(
   [string]$CommitSha = '',
   [string]$StatePath = '',
   [string]$ReleaseId = '',
-  [switch]$Apply
+  [switch]$Apply,
+  [switch]$LiveProof
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,6 +17,7 @@ if ($CommitSha) { $releaseArgs += @('--sha', $CommitSha) }
 if ($StatePath) { $releaseArgs += @('--journal', $StatePath) }
 if ($ReleaseId) { $releaseArgs += @('--release-id', $ReleaseId) }
 if ($Apply) { $releaseArgs += '--apply' }
+if ($LiveProof) { $releaseArgs += '--live-proof' }
 
 node @releaseArgs
 if ($LASTEXITCODE -ne 0) { throw "Local release command failed with exit $LASTEXITCODE." }

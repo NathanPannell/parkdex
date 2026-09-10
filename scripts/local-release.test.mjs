@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { buildNeonApiCommand } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const fixedRelease = "11111111-1111-4111-8111-111111111111";
@@ -44,6 +45,13 @@ test("cleanup without apply is rejected before journal access", () => {
   assert.match(result.stderr, /Cleanup requires explicit --apply/);
 });
 
+test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
+  const command = buildNeonApiCommand("neon-cli.mjs", "/projects/p/branches", { method: "POST", body: { branch: { name: "preview/test" } } });
+  assert.ok(command.args.includes("--data=-"));
+  assert.ok(!command.args.includes("-"));
+  assert.deepEqual(JSON.parse(command.input), { branch: { name: "preview/test" } });
+});
+
 test("orchestration preserves the isolation and identity contracts", () => {
   assert.doesNotMatch(source, /environment", "new"[^\n]*--(?:copy|duplicate)/);
   assert.doesNotMatch(source, /APP_ENVIRONMENT/);
@@ -57,7 +65,8 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /Preview database zero-row gate/);
   assert.match(source, /frontend-creating/);
   assert.match(source, /VERCEL_PROJECT_ID: process\.env\.VERCEL_PROJECT_ID/);
-  assert.match(source, /Provider mutation remains disabled until/);
-  assert.ok(source.indexOf("atomicJournal(journalPath, state)") < source.lastIndexOf("createNeonBranch(state, journalPath)"));
+  assert.doesNotMatch(source, /"vercel", \["link"/);
+  assert.match(source, /Provider mutation remains disabled outside an independently reviewed --live-proof run/);
+  assert.ok(source.indexOf("atomicJournal(journalPath, state)") < source.lastIndexOf("createNeonBranch(root, state, journalPath)"));
   assert.doesNotMatch(source, /npm(?:\.cmd)?[^\n]*run[^\n]*build/);
 });
