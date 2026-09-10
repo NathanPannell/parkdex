@@ -31,6 +31,9 @@ $plan = [ordered]@{
   apply = [bool]$Apply
   safety = @('exact clean SHA', 'schema-only Neon branch for previews', '7-day preview TTL', 'recorded namespace cleanup only')
 }
+if ($Apply) {
+  throw 'Provider apply path is intentionally disabled: local deployment orchestration is not yet validated. Use the dry-run plan only; no provider mutation was attempted.'
+}
 if (-not $Apply) {
   $plan | ConvertTo-Json -Depth 4
   exit 0

@@ -28,7 +28,7 @@ gh workflow run hosted-checkpoint.yml -R NathanPannell/parkdex --ref staging \
   -f commit_sha="$(git rev-parse HEAD)" -f reason='ready for review'
 ```
 
-The local release wrapper is dry-run by default and refuses dirty or stale checkouts. Review its exact-SHA plan first; use `-Apply` only with the provider credentials and namespace you intend to create:
+The local release wrapper is a dry-run planner only. Its provider `-Apply` path intentionally fails closed because local deployment orchestration has not been validated; no provider mutation should be attempted through this wrapper:
 
 ```powershell
 pwsh -File scripts/local-release.ps1 -Mode Preview -PullRequest 20
