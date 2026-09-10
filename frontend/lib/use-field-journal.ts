@@ -78,6 +78,7 @@ export type FieldJournal = {
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
   resetProgress: () => Promise<void>;
+  authenticatedRequest: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 function hasEntries(outbox: VisitOutbox) {
@@ -126,6 +127,14 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const accountVisitOutboxRef = useRef(new VisitOutbox());
   const accountTrailOutboxRef = useRef(new VisitOutbox());
   const accountOutboxOwnerRef = useRef("");
+
+  const authenticatedRequest = useCallback(async (path: string, init: RequestInit = {}) => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account") throw new Error("Sign in to manage trips.");
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${identity.token}`);
+    return fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+  }, [apiBaseUrl]);
 
   const noteStorageFailure = useCallback((success: boolean) => {
     if (!success) setStorageUnavailable(true);
@@ -686,5 +695,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     logout,
     importGuest,
     resetProgress,
+    authenticatedRequest,
   };
 }
