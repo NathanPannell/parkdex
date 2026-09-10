@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 from datetime import timedelta
+from uuid import UUID
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
@@ -38,8 +39,15 @@ from backend.app.schemas import (
     EmailRequest,
     GoogleCallback,
     GoogleStart,
+    Group,
     GuestImportResult,
     PlaceCollection,
+    PlaceSearchResult,
+    SearchPlace,
+    Trip,
+    TripCreate,
+    TripPlaceMutation,
+    TripRename,
     PasswordChange,
     PasswordResetConfirmation,
     TrailResult,
@@ -49,6 +57,25 @@ from backend.app.schemas import (
     VisitUpdate,
 )
 from backend.app.settings import get_settings
+from backend.app.trips import (
+    add_trip_places,
+    create_trip_row,
+    delete_trip_row,
+    delete_group_row,
+    ensure_wishlist,
+    add_group_places,
+    remove_group_places,
+    list_group_rows,
+    group_row,
+    create_group_row,
+    rename_group_row,
+    list_trip_rows,
+    place_detail_row,
+    remove_trip_places,
+    rename_trip_row,
+    search_place_rows,
+    trip_row,
+)
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
@@ -226,6 +253,349 @@ def list_places(
         "completed_trail_ids": completed_trail_ids,
         "coverage_note": COVERAGE_NOTE,
     }
+
+
+PLACE_CATEGORIES = frozenset({"national", "provincial", "regional", "island"})
+
+
+def _trip_id(value: str) -> str:
+    try:
+        return str(UUID(value))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Trip not found") from exc
+
+
+def _trip_mutation_limit(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(conn, "trip_mutation", account_id, 120, timedelta(minutes=15))
+
+
+@app.get("/api/places/search", response_model=PlaceSearchResult)
+def search_places(
+    visited: bool | None = Query(default=None),
+    place_type: str | None = Query(default=None, alias="type"),
+    category: str | None = Query(default=None),
+    query: str | None = Query(default=None, max_length=200),
+    latitude: float | None = Query(default=None, ge=-90, le=90),
+    longitude: float | None = Query(default=None, ge=-180, le=180),
+    radius_km: float | None = Query(default=None, gt=0, le=20000),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10000),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    if place_type and category and place_type != category:
+        raise HTTPException(status_code=400, detail="type and category must match when both are provided")
+    selected_category = place_type or category
+    if selected_category and selected_category not in PLACE_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Invalid place type")
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="latitude and longitude must be provided together")
+    rows, total = search_place_rows(
+        conn,
+        identity.account_id,
+        visited=visited,
+        category=selected_category,
+        query=query,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        limit=limit,
+        offset=offset,
+    )
+    return {"places": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/places/{place_id}", response_model=SearchPlace)
+def get_place_details(
+    place_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    row = place_detail_row(conn, identity.account_id, place_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    return row
+
+
+@app.get("/api/groups", response_model=list[Group])
+def list_groups(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    ensure_wishlist(conn, identity.account_id)
+    conn.commit()
+    return list_group_rows(conn, identity.account_id)
+
+
+@app.post("/api/groups", response_model=Group, status_code=201)
+def create_group(
+    payload: TripCreate,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Group name must not be blank")
+    _trip_mutation_limit(conn, identity.account_id)
+    try:
+        result = create_group_row(conn, identity.account_id, payload.name, payload.place_ids)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return result
+
+
+@app.get("/api/groups/{group_id}", response_model=Group)
+def get_group(
+    group_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    result = group_row(conn, identity.account_id, _trip_id(group_id))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return result
+
+
+@app.patch("/api/groups/{group_id}", response_model=Group)
+def rename_group(
+    group_id: str,
+    payload: TripRename,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(group_id)
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Group name must not be blank")
+    _trip_mutation_limit(conn, identity.account_id)
+    if not rename_group_row(conn, identity.account_id, canonical_id, payload.name):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/groups/{group_id}", status_code=204)
+def delete_group(
+    group_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    _trip_mutation_limit(conn, identity.account_id)
+    if not delete_group_row(conn, identity.account_id, _trip_id(group_id)):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/groups/{group_id}/places", response_model=Group)
+def add_group_places_api(
+    group_id: str,
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(group_id)
+    _trip_mutation_limit(conn, identity.account_id)
+    try:
+        exists = add_group_places(conn, identity.account_id, canonical_id, payload.place_ids)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not exists:
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/groups/{group_id}/places", response_model=Group)
+def remove_group_places_api(
+    group_id: str,
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(group_id)
+    _trip_mutation_limit(conn, identity.account_id)
+    if not remove_group_places(conn, identity.account_id, canonical_id, payload.place_ids):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.get("/api/wishlist", response_model=Group)
+def get_wishlist(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    result = ensure_wishlist(conn, identity.account_id)
+    conn.commit()
+    return result
+
+
+@app.post("/api/wishlist/places", response_model=Group)
+def add_wishlist_places(
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    _trip_mutation_limit(conn, identity.account_id)
+    try:
+        wishlist = ensure_wishlist(conn, identity.account_id)
+        add_group_places(conn, identity.account_id, wishlist["id"], payload.place_ids)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return group_row(conn, identity.account_id, wishlist["id"])
+
+
+@app.delete("/api/wishlist/places", response_model=Group)
+def remove_wishlist_places(
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    _trip_mutation_limit(conn, identity.account_id)
+    wishlist = ensure_wishlist(conn, identity.account_id)
+    remove_group_places(conn, identity.account_id, wishlist["id"], payload.place_ids)
+    conn.commit()
+    return group_row(conn, identity.account_id, wishlist["id"])
+
+
+@app.get("/api/trips", response_model=list[Trip])
+def list_trips(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    ensure_wishlist(conn, identity.account_id)
+    conn.commit()
+    return list_trip_rows(conn, identity.account_id)
+
+
+@app.post("/api/trips", response_model=Trip, status_code=201)
+def create_trip(
+    payload: TripCreate,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Trip name must not be blank")
+    _trip_mutation_limit(conn, identity.account_id)
+    try:
+        result = create_trip_row(conn, identity.account_id, payload.name, payload.place_ids)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return result
+
+
+@app.get("/api/trips/{trip_id}", response_model=Trip)
+def get_trip(
+    trip_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    result = trip_row(conn, identity.account_id, _trip_id(trip_id))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return result
+
+
+@app.patch("/api/trips/{trip_id}", response_model=Trip)
+def rename_trip(
+    trip_id: str,
+    payload: TripRename,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(trip_id)
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="Trip name must not be blank")
+    _trip_mutation_limit(conn, identity.account_id)
+    if not rename_trip_row(conn, identity.account_id, canonical_id, payload.name):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Trip not found")
+    conn.commit()
+    return trip_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/trips/{trip_id}", status_code=204)
+def delete_trip(
+    trip_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    _trip_mutation_limit(conn, identity.account_id)
+    if not delete_trip_row(conn, identity.account_id, _trip_id(trip_id)):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Trip not found")
+    conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/trips/{trip_id}/places", response_model=Trip)
+def add_places(
+    trip_id: str,
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(trip_id)
+    if trip_row(conn, identity.account_id, canonical_id) is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    _trip_mutation_limit(conn, identity.account_id)
+    try:
+        exists = add_trip_places(conn, identity.account_id, canonical_id, payload.place_ids)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not exists:
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Trip not found")
+    conn.commit()
+    return trip_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/trips/{trip_id}/places", response_model=Trip)
+def remove_places(
+    trip_id: str,
+    payload: TripPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _trip_id(trip_id)
+    if trip_row(conn, identity.account_id, canonical_id) is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    _trip_mutation_limit(conn, identity.account_id)
+    if not remove_trip_places(conn, identity.account_id, canonical_id, payload.place_ids):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Trip not found")
+    conn.commit()
+    return trip_row(conn, identity.account_id, canonical_id)
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)

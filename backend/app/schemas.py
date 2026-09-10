@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
@@ -33,6 +33,54 @@ class PlaceCollection(BaseModel):
     visits: list["Visit"]
     coverage_note: str = Field(serialization_alias="coverageNote")
     completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
+
+
+class SearchPlace(Place):
+    visited: bool = False
+    distance_km: float | None = Field(default=None, serialization_alias="distanceKm")
+
+
+class PlaceSearchResult(BaseModel):
+    places: list[SearchPlace]
+    total: int
+    limit: int
+    offset: int
+
+
+class TripCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    place_ids: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+        validation_alias=AliasChoices("placeIds", "place_ids"),
+        serialization_alias="placeIds",
+    )
+
+
+class TripRename(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class TripPlaceMutation(BaseModel):
+    place_ids: list[str] = Field(
+        max_length=100,
+        validation_alias=AliasChoices("placeIds", "place_ids"),
+        serialization_alias="placeIds",
+    )
+
+
+class Trip(BaseModel):
+    id: str
+    name: str
+    is_wishlist: bool = Field(serialization_alias="isWishlist")
+    created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")
+    place_ids: list[str] = Field(serialization_alias="placeIds")
+    places: list[Place]
+
+
+class Group(Trip):
+    pass
 
 
 class Visit(BaseModel):
