@@ -52,9 +52,12 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
-        "line-opacity": 0.2,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.6, 10, 5.8, 14, 8.5],
-        "line-blur": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 14, 1.2],
+        // Keep a restrained colour echo around the rounded perimeter. The
+        // display asset no longer offsets park geometry, so this layer must
+        // not recreate the old padded silhouette between adjacent parks.
+        "line-opacity": 0.12,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.2, 10, 2.1, 14, 3],
+        "line-blur": ["interpolate", ["linear"], ["zoom"], 5, 0.25, 14, 0.6],
       },
     },
     {
@@ -85,7 +88,10 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       type: "fill",
       source: displaySource,
       filter: selectedBoundaryFilter(null, []),
-      paint: { "fill-color": "#ffd862", "fill-opacity": 0.3 },
+      paint: {
+        "fill-color": ["match", ["get", "category"], "island", "#ffd862", "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.44, 9, 0.52, 12, 0.6],
+      },
     },
     {
       id: "boundary-selected-halo",
@@ -93,7 +99,7 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       source: displaySource,
       filter: selectedBoundaryFilter(null, []),
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#fffaf0", "line-opacity": 0.95, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 3, 12, 6] },
+      paint: { "line-color": "#fffaf0", "line-opacity": 0.95, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5] },
     },
     {
       id: "boundary-selected-line",
@@ -104,7 +110,7 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       paint: {
         "line-color": ["case", ["==", ["get", "category"], "island"], "#9b641f", "#173d32"],
         "line-opacity": 1,
-        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 12, 3],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.8, 12, 5.5],
       },
     },
     {
