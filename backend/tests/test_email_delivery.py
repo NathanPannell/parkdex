@@ -68,8 +68,8 @@ def test_resend_rejection_has_a_safe_error(monkeypatch) -> None:
         raise AssertionError("expected safe provider error")
 
 
-@pytest.mark.parametrize("url", ["http://api.resend.test/emails", "https://", "https:///emails", "https:emails"])
-def test_resend_api_url_must_be_a_real_https_url(url: str) -> None:
+@pytest.mark.parametrize("url", ["http://api.resend.test/emails", "https://", "https:///emails", "https:emails", "https://[", "https://api.resend.test:bad/emails"])
+def test_resend_api_url_must_be_a_real_https_url(monkeypatch, url: str) -> None:
     settings = Settings(
         EMAIL_PROVIDER="resend",
         RESEND_API_KEY="re_test_key",
@@ -77,9 +77,12 @@ def test_resend_api_url_must_be_a_real_https_url(url: str) -> None:
         RESEND_API_URL=url,
     )
 
+    requests: list[dict] = []
+    monkeypatch.setattr(httpx, "post", lambda endpoint, **kwargs: requests.append({"endpoint": endpoint, **kwargs}))
     assert not email_delivery_configured(settings)
     with pytest.raises(RuntimeError, match="must use HTTPS"):
         send_auth_email(settings, "secret@example.com", "Subject", "token-link")
+    assert requests == []
 
 
 def test_provider_must_be_configured_explicitly() -> None:
