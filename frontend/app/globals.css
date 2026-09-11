@@ -734,6 +734,11 @@ button { color: inherit; }
 .group-picker-create button { display: grid; width: 48px; min-height: 46px; place-items: center; border: 0; border-radius: 10px; background: var(--forest); color: var(--paper-bright); cursor: pointer; }
 .group-picker-create button:disabled { cursor: wait; opacity: .5; }
 .groups-inline-success { grid-column: 1 / -1; margin: 0; color: var(--forest); font-size: 11px; font-weight: 900; }
+.sheet-actions:has(.groups-inline-success) > .visit-button,
+.sheet-actions:has(.groups-inline-success) .wishlist-button,
+.sheet-actions:has(.groups-inline-success) .group-quick-action { grid-row: 2; }
+.sheet-actions:has(.groups-inline-success) .groups-inline-success { grid-column: 1 / -1; grid-row: 1; padding: 2px 2px 4px; }
+.sheet-actions:has(.groups-inline-success) .groups-inline-error { grid-row: 3; }
 .group-map-mode .map-wrap { right: 0; }
 .group-map-mode .maplibregl-ctrl-attrib { margin-bottom: 0 !important; }
 .group-map-exit { position: absolute; z-index: 11; top: max(14px,env(safe-area-inset-top)); left: 14px; display: inline-flex; align-items: center; gap: 7px; min-height: 43px; padding: 0 13px; border: 0; border-radius: 12px; background: var(--paper-bright); color: var(--forest); box-shadow: var(--soft-shadow); cursor: pointer; font-size: 12px; font-weight: 950; }
