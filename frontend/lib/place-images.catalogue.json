@@ -1957,28 +1957,6 @@
     "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Thetis_Lake,_Canada_01.jpg",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
   },
-  "provincial-flores-island-park": {
-    "thumbnail": {
-      "src": "/places/flores-island-park-thumb.webp",
-      "width": 320,
-      "height": 240
-    },
-    "detail": {
-      "src": "/places/flores-island-park.webp",
-      "width": 960,
-      "height": 720
-    },
-    "alt": "A forested Flores Island shoreline at dusk",
-    "creator": "djmonkeyboy from London, UK",
-    "license": "CC BY-SA 2.0",
-    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
-    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dusk,_Flores_Island.jpg",
-    "sourceTitle": "Dusk, Flores Island",
-    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/52/Dusk%2C_Flores_Island.jpg",
-    "locationEvidence": "Wikimedia Commons places the file in its Flores Island Marine Provincial Park category, and BC Parks confirms the park protects the island's western and southern portions.",
-    "locationEvidenceUrl": "https://bcparks.ca/flores-island-park/",
-    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
-  },
   "regional-brooks-point-regional-park": {
     "thumbnail": {
       "src": "/places/brooks-point-regional-park-thumb.webp",
@@ -2021,6 +1999,72 @@
     "originalUrl": "https://live.staticflickr.com/65535/51265349732_c7f29d005d_b.jpg",
     "locationEvidence": "The creator's caption says the photo was taken from Stoney Hill Regional Park, looking across Sansum Narrows to Salt Spring Island; the CVRD park page describes the same view.",
     "locationEvidenceUrl": "https://www.cvrd.ca/parks/stoney-hill-regional-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-mansons-landing-park": {
+    "thumbnail": {
+      "src": "/places/mansons-landing-park-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/mansons-landing-park.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A trail beside the tidal saltmarsh at Mansons Lagoon",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://www.flickr.com/photos/davidstanleytravel/50273045731/",
+    "sourceTitle": "Mansons Lagoon",
+    "originalUrl": "https://live.staticflickr.com/65535/50273045731_e1aff823f8_b.jpg",
+    "locationEvidence": "The source description identifies the lagoon trail as being in Mansons Landing Provincial Park; BC Parks confirms Mansons Lagoon and its trails are within the park.",
+    "locationEvidenceUrl": "https://bcparks.ca/mansons-landing-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-morden-colliery-historic-park": {
+    "thumbnail": {
+      "src": "/places/morden-colliery-historic-park-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/morden-colliery-historic-park.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "The concrete coal tipple at Morden Colliery Historic Provincial Park",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://www.flickr.com/photos/davidstanleytravel/51220708427/",
+    "sourceTitle": "Morden Colliery Historic Provincial Park",
+    "originalUrl": "https://live.staticflickr.com/65535/51220708427_2f446650b9_b.jpg",
+    "locationEvidence": "The source identifies this concrete tipple at Morden Colliery Historic Provincial Park; BC Parks confirms the park contains Vancouver Island's only remaining coal tipple.",
+    "locationEvidenceUrl": "https://bcparks.ca/morden-colliery-historic-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-spider-lake-park": {
+    "thumbnail": {
+      "src": "/places/spider-lake-park-thumb.webp",
+      "width": 320,
+      "height": 212
+    },
+    "detail": {
+      "src": "/places/spider-lake-park.webp",
+      "width": 960,
+      "height": 636
+    },
+    "alt": "The small sandy beach and forested shoreline at Spider Lake Provincial Park",
+    "creator": "Kurayba",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
+    "sourceUrl": "https://www.flickr.com/photos/kurt-b/49616838462/",
+    "sourceTitle": "Spider Lake Provincial Park",
+    "originalUrl": "https://live.staticflickr.com/65535/49616838462_f195f46269_b.jpg",
+    "locationEvidence": "The source title identifies Spider Lake Provincial Park and describes its warm water and small beach; BC Parks independently identifies the same park features.",
+    "locationEvidenceUrl": "https://bcparks.ca/spider-lake-park/",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
   }
 }

@@ -14,7 +14,7 @@ describe("place image manifest", () => {
     const knownIds = new Set(places.map((place) => place.id));
     const imagePaths = Object.values(PLACE_IMAGES).flatMap((image) => [image.thumbnail.src, image.detail.src]);
 
-    expect(PLACE_IMAGE_COUNT).toBe(110);
+    expect(PLACE_IMAGE_COUNT).toBe(112);
     expect(new Set(imagePaths).size).toBe(imagePaths.length);
     for (const [placeId, image] of Object.entries(PLACE_IMAGES)) {
       expect(knownIds.has(placeId), `unknown place ID: ${placeId}`).toBe(true);
