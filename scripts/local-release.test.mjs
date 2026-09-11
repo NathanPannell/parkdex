@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -69,6 +69,19 @@ test("provider diagnostics redact connection values at the call boundary", () =>
   const safe = sanitizeProviderDiagnostic('{"value":"sensitive","url":"postgresql://owner:password@example.neon.tech/app","token":"long-lived-token"}');
   assert.doesNotMatch(safe, /sensitive|password|long-lived-token/);
   assert.match(safe, /\[redacted\]/);
+});
+
+test("browser CORS readiness requires the exact origin and requested preflight contract", () => {
+  const origin = "https://every-park-3qskgeya-nathanpannells-projects.vercel.app";
+  const headers = new Headers({
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "access-control-allow-headers": "Authorization, Content-Type, X-Collection-Key",
+  });
+  assert.doesNotThrow(() => verifyCorsHeaders(headers, origin, { method: "PUT", requestedHeaders: ["content-type", "x-collection-key"] }));
+  assert.throws(() => verifyCorsHeaders(headers, "https://staging.parkdex.app"), /exact frontend origin/);
+  assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin }), origin, { method: "PUT", requestedHeaders: ["x-collection-key"] }), /did not allow PUT/);
+  assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin, "access-control-allow-methods": "PUT", "access-control-allow-headers": "content-type" }), origin, { method: "PUT", requestedHeaders: ["x-collection-key"] }), /requested headers/);
 });
 
 test("Windows provider commands execute through the cmd shim with status preserved", { skip: process.platform !== "win32" }, () => {
@@ -240,6 +253,8 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /verifyRailwayDeployments/);
   assert.doesNotMatch(source, /callBash/);
   assert.match(source, /buildVercelCurlArgs/);
+  assert.match(source, /verifyBrowserCors/);
+  assert.match(source, /verifyCorsHeaders/);
   assert.doesNotMatch(source, /fetch\(frontendUrl/);
   assert.match(source, /parkdexReleaseId/);
   assert.match(source, /parkdexEnvironment/);

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -282,13 +282,35 @@ function findVercelRelease(sha, releaseId, environment) {
 }
 
 function verifyVercelDeployment(url, sha, releaseId, environment) {
-  const host = new URL(url).host;
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/.test(host)) throw new Error("Vercel returned an invalid deployment URL");
+  const parsed = new URL(url);
+  const host = parsed.host;
+  if (parsed.protocol !== "https:" || !/^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/.test(host)) throw new Error("Vercel returned an invalid deployment URL");
   const matches = listVercelReleases(sha, releaseId, environment).filter((item) => new URL(item.url).host === host);
   if (matches.length !== 1 || matches[0].readyState !== "READY") {
     throw new Error("Vercel deployment identity was not verified");
   }
-  return { id: matches[0].id, url: matches[0].url };
+  return { id: matches[0].id, url: new URL(matches[0].url).origin };
+}
+
+async function verifyBrowserCors(apiUrl, frontendUrl) {
+  const origin = new URL(frontendUrl).origin;
+  const response = await fetch(`${apiUrl}/api/places`, {
+    headers: { Origin: origin },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`Browser CORS GET returned HTTP ${response.status}`);
+  verifyCorsHeaders(response.headers, origin);
+  const preflight = await fetch(`${apiUrl}/api/places`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "PUT",
+      "Access-Control-Request-Headers": "content-type,x-collection-key",
+    },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!preflight.ok) throw new Error(`Browser CORS preflight returned HTTP ${preflight.status}`);
+  verifyCorsHeaders(preflight.headers, origin, { method: "PUT", requestedHeaders: ["content-type", "x-collection-key"] });
 }
 
 const wait = (delay) => new Promise((resolveWait) => setTimeout(resolveWait, delay));
@@ -566,6 +588,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     verifyRailwayDeployments(state, process.env.RAILWAY_API_TOKEN, message);
     await waitForRailwayApi(state.apiUrl, sha, releaseId);
     await waitForWorkerCatalogue(state, process.env.RAILWAY_API_TOKEN, sha, releaseId);
+    await verifyBrowserCors(state.apiUrl, vercel.url);
     await smokeCatalogue(state.apiUrl);
     verifyFrontendContent(sourceRoot, vercel.url);
     if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
