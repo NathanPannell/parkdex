@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
 import {
@@ -53,6 +54,22 @@ export type MapLocation = {
   accuracyMeters?: number | null;
   heading?: number | null;
 };
+
+export type MapCameraSnapshot = {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+  bearing: number;
+  pitch: number;
+};
+
+export function cameraViewDiffers(current: MapCameraSnapshot, overview: MapCameraSnapshot) {
+  return Math.abs(current.longitude - overview.longitude) > 0.005
+    || Math.abs(current.latitude - overview.latitude) > 0.005
+    || Math.abs(current.zoom - overview.zoom) > 0.05
+    || Math.abs(current.bearing - overview.bearing) > 0.1
+    || Math.abs(current.pitch - overview.pitch) > 0.1;
+}
 
 const FIELD_GUIDE_STYLE: StyleSpecification = {
   version: 8,
@@ -119,10 +136,29 @@ function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<G
 }
 
 function fitOverview(map: MapLibreMap, animated: boolean) {
+  const padding = measuredCameraPadding(map.getContainer(), false);
   map.fitBounds(
     VANCOUVER_ISLAND_OVERVIEW_BOUNDS,
-    { padding: measuredCameraPadding(map.getContainer(), false), maxZoom: 7, duration: animated ? 520 : 0 },
+    { padding, maxZoom: 7, duration: animated ? 520 : 0 },
   );
+}
+
+function overviewCameraSnapshot(map: MapLibreMap): MapCameraSnapshot | null {
+  const camera = map.cameraForBounds(VANCOUVER_ISLAND_OVERVIEW_BOUNDS, {
+    padding: measuredCameraPadding(map.getContainer(), false),
+    maxZoom: 7,
+  });
+  if (!camera?.center || camera.zoom == null) return null;
+  const center = Array.isArray(camera.center)
+    ? { longitude: camera.center[0], latitude: camera.center[1] }
+    : { longitude: "lng" in camera.center ? camera.center.lng : camera.center.lon, latitude: camera.center.lat };
+  return {
+    longitude: center.longitude,
+    latitude: center.latitude,
+    zoom: camera.zoom,
+    bearing: camera.bearing ?? 0,
+    pitch: 0,
+  };
 }
 
 function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
@@ -151,7 +187,19 @@ function layoutRect(element: HTMLElement): LayoutRect {
 }
 
 function measuredSelectionPadding(container: HTMLElement) {
-  return measuredCameraPadding(container, true);
+  const mapRect = container.getBoundingClientRect();
+  return cameraPaddingWithContentMargin(mapRect, measuredCameraPadding(container, true), 0.1);
+}
+
+function cameraSnapshot(map: MapLibreMap): MapCameraSnapshot {
+  const center = map.getCenter();
+  return {
+    longitude: center.lng,
+    latitude: center.lat,
+    zoom: map.getZoom(),
+    bearing: map.getBearing(),
+    pitch: map.getPitch(),
+  };
 }
 
 function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
@@ -235,9 +283,13 @@ export function ParkMap({
   const boundaryDataRef = useRef<BoundaryIndex | null>(null);
   const boundaryVisitedRef = useRef<Set<string>>(new Set());
   const clusterFitRequestRef = useRef(0);
+  const overviewCameraRef = useRef<MapCameraSnapshot | null>(null);
+  const resetOverviewRef = useRef<(() => void) | null>(null);
+  const viewDiffersRef = useRef(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
+  const [viewDiffersFromDefault, setViewDiffersFromDefault] = useState(false);
 
   useEffect(() => { dataRef.current = { places, visited, mode, currentLocation, selectedIds }; }, [places, visited, mode, currentLocation, selectedIds]);
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
@@ -266,6 +318,20 @@ export function ParkMap({
       });
       mapRef.current = map;
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const setViewDiffers = (differs: boolean) => {
+        viewDiffersRef.current = differs;
+        setViewDiffersFromDefault(differs);
+      };
+      const moveToOverview = (animated: boolean) => {
+        overviewCameraRef.current = overviewCameraSnapshot(map);
+        setViewDiffers(false);
+        fitOverview(map, animated);
+      };
+      resetOverviewRef.current = () => moveToOverview(!reduceMotion);
+      map.on("moveend", () => {
+        const overview = overviewCameraRef.current;
+        if (overview) setViewDiffers(cameraViewDiffers(cameraSnapshot(map), overview));
+      });
       loadDeadline = window.setTimeout(() => {
         if (!map.isStyleLoaded()) {
           setMapFailed(true);
@@ -409,12 +475,14 @@ export function ParkMap({
           map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
           map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
         });
-        fitOverview(map, false);
+        moveToOverview(false);
         mapResizeObserver = new ResizeObserver(() => {
           window.cancelAnimationFrame(resizeFrame);
           resizeFrame = window.requestAnimationFrame(() => {
             map.resize();
-            if (!selectedRef.current && map.isStyleLoaded()) fitOverview(map, !reduceMotion);
+            if (!selectedRef.current && !dataRef.current.selectedIds.size && !viewDiffersRef.current && map.isStyleLoaded()) {
+              moveToOverview(!reduceMotion);
+            }
           });
         });
         mapResizeObserver.observe(map.getContainer());
@@ -444,6 +512,8 @@ export function ParkMap({
       if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
       mapRef.current = null;
+      resetOverviewRef.current = null;
+      overviewCameraRef.current = null;
     };
   }, []);
 
@@ -526,6 +596,17 @@ export function ParkMap({
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
+      {!selectedId && viewDiffersFromDefault && (
+        <button
+          type="button"
+          className="map-reset-button"
+          aria-label="Reset map view"
+          title="Reset map view"
+          onClick={() => resetOverviewRef.current?.()}
+        >
+          <RotateCcw size={20} aria-hidden="true" />
+        </button>
+      )}
       {mode === "explored" && visited.size > 0 && (
         <div className="exploration-map-key">
           <span className="exploration-map-key__swatch" aria-hidden="true" />

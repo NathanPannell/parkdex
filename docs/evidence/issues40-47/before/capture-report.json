@@ -1,0 +1,194 @@
+[
+  {
+    "environment": "production",
+    "url": "https://www.parkdex.app/",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "httpStatus": 200,
+    "responseHeaders": {
+      "access-control-allow-origin": "*",
+      "age": "285005",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-disposition": "inline",
+      "content-encoding": "br",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Fri, 11 Sep 2026 22:54:19 GMT",
+      "etag": "W/\"7880e6841e87aa865702fd53a28d5ede\"",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=63072000",
+      "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+      "x-matched-path": "/",
+      "x-nextjs-prerender": "1",
+      "x-nextjs-stale-time": "300",
+      "x-vercel-cache": "HIT",
+      "x-vercel-id": "pdx1::4ft4z-1789167259202-707378dc190c"
+    },
+    "title": "Parkdex · Vancouver Island field guide",
+    "screenshots": [
+      "production-desktop-home.png",
+      "production-desktop-search-goldstream.png",
+      "production-desktop-selected-goldstream.png",
+      "production-desktop-places.png",
+      "production-desktop-nearby-victoria-simulated.png"
+    ],
+    "unavailable": [
+      "groups guest navigation"
+    ],
+    "visibleVersionText": null,
+    "errors": []
+  },
+  {
+    "environment": "production",
+    "url": "https://www.parkdex.app/",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "httpStatus": 200,
+    "responseHeaders": {
+      "access-control-allow-origin": "*",
+      "age": "285020",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-disposition": "inline",
+      "content-encoding": "br",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Fri, 11 Sep 2026 22:54:34 GMT",
+      "etag": "W/\"7880e6841e87aa865702fd53a28d5ede\"",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=63072000",
+      "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+      "x-matched-path": "/",
+      "x-nextjs-prerender": "1",
+      "x-nextjs-stale-time": "300",
+      "x-vercel-cache": "HIT",
+      "x-vercel-id": "pdx1::qvvpp-1789167274001-a7f0026e88f9"
+    },
+    "title": "Parkdex · Vancouver Island field guide",
+    "screenshots": [
+      "production-mobile-home.png",
+      "production-mobile-map-shifted-no-selection.png",
+      "production-mobile-search-goldstream.png",
+      "production-mobile-selected-goldstream.png",
+      "production-mobile-places.png",
+      "production-mobile-nearby-victoria-simulated.png"
+    ],
+    "unavailable": [
+      "groups guest navigation"
+    ],
+    "visibleVersionText": null,
+    "errors": []
+  },
+  {
+    "environment": "staging",
+    "url": "https://vercel.com/login?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fstaging.parkdex.app%252F%26nonce%3D511d6d457f8849e9ba005adfca0608324e8f635aa2f2b79eaf837f286e0dc5aa",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "httpStatus": 200,
+    "responseHeaders": {
+      "access-control-allow-origin": "*",
+      "age": "17",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-disposition": "inline",
+      "content-encoding": "br",
+      "content-security-policy": "default-src 'self' vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: www.google.com www.gstatic.com *.youtube.com *.youtube-nocookie.com *.ytimg.com *.twimg.com cdn.ampproject.org *.googleapis.com *.fides-cdn.ethyca.com *.ethyca.com cdn.ethyca.com cdn.vercel-insights.com va.vercel-scripts.com cdp.vercel.com vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;child-src *.youtube.com *.youtube-nocookie.com *.stripe.com www.google.com github.com calendly.com *.vusercontent.net *.vercel.run vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;style-src 'self' 'unsafe-inline' *.googleapis.com vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;img-src * blob: data:;media-src 'self' videos.ctfassets.net user-images.githubusercontent.com replicate.delivery *.public.blob.vercel-storage.com *.private.blob.vercel-storage.com blob: data: vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;connect-src wss://ws-us3.pusher.com data: * https://*.contentful.com cdp.vercel.com;font-src 'self' *.vercel.com *.gstatic.com vercel.live;frame-ancestors 'none';worker-src 'self' *.vercel.com blob:",
+      "content-type": "text/html; charset=utf-8",
+      "cross-origin-opener-policy": "same-origin-allow-popups",
+      "date": "Fri, 11 Sep 2026 22:54:49 GMT",
+      "feature-policy": "fullscreen 'self'; camera 'none'",
+      "link": "<https://avatars.githubusercontent.com>; rel=preconnect; crossorigin=\"\", <https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com>; rel=preconnect; crossorigin=\"\", <https://images.ctfassets.net>; rel=preconnect; crossorigin=\"\", <https://accounts.google.com>; rel=preconnect; crossorigin=\"\", </_next/static/immutable/media/797e433ab948586e.p.1v5bejj26fx9h.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/immutable/media/Geist_Variable-s.p.2v-cf9syxr5ni.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\"",
+      "referrer-policy": "origin-when-cross-origin",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+      "x-content-type-options": "nosniff",
+      "x-dns-prefetch-control": "on",
+      "x-download-options": "noopen",
+      "x-frame-options": "DENY",
+      "x-matched-path": "/login",
+      "x-nextjs-prerender": "1",
+      "x-nextjs-stale-time": "300",
+      "x-vercel-cache": "HIT",
+      "x-vercel-id": "pdx1::9lv79-1789167289456-76186a875081",
+      "x-xss-protection": "0"
+    },
+    "title": "Login – Vercel",
+    "screenshots": [
+      "staging-desktop-home.png"
+    ],
+    "unavailable": [
+      "search control",
+      "Places navigation",
+      "nearby control",
+      "groups guest navigation"
+    ],
+    "visibleVersionText": null,
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 403 ()",
+      "console: Provider's accounts list is empty.",
+      "console: Not signed in with the identity provider.",
+      "console: Failed to load resource: the server responded with a status of 403 ()",
+      "console: Failed to load resource: the server responded with a status of 429 ()",
+      "console: [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token.",
+      "console: Failed to load resource: the server responded with a status of 429 ()"
+    ]
+  },
+  {
+    "environment": "staging",
+    "url": "https://vercel.com/login?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fstaging.parkdex.app%252F%26nonce%3Dd1b6e1d1535841856b060e14433bc4b30475e1c75687dc40bc2ce0f95ec74f2c",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "httpStatus": 200,
+    "responseHeaders": {
+      "access-control-allow-origin": "*",
+      "age": "24",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-disposition": "inline",
+      "content-encoding": "br",
+      "content-security-policy": "default-src 'self' vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: www.google.com www.gstatic.com *.youtube.com *.youtube-nocookie.com *.ytimg.com *.twimg.com cdn.ampproject.org *.googleapis.com *.fides-cdn.ethyca.com *.ethyca.com cdn.ethyca.com cdn.vercel-insights.com va.vercel-scripts.com cdp.vercel.com vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;child-src *.youtube.com *.youtube-nocookie.com *.stripe.com www.google.com github.com calendly.com *.vusercontent.net *.vercel.run vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;style-src 'self' 'unsafe-inline' *.googleapis.com vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;img-src * blob: data:;media-src 'self' videos.ctfassets.net user-images.githubusercontent.com replicate.delivery *.public.blob.vercel-storage.com *.private.blob.vercel-storage.com blob: data: vercel.com *.vercel.com *.vercel.sh vercel.live *.stripe.com twitter.com *.twitter.com *.google.com *.github.com *.codesandbox.io https://risk.clearbit.com wss://*.vercel.com localhost:* chrome-extension://*;connect-src wss://ws-us3.pusher.com data: * https://*.contentful.com cdp.vercel.com;font-src 'self' *.vercel.com *.gstatic.com vercel.live;frame-ancestors 'none';worker-src 'self' *.vercel.com blob:",
+      "content-type": "text/html; charset=utf-8",
+      "cross-origin-opener-policy": "same-origin-allow-popups",
+      "date": "Fri, 11 Sep 2026 22:54:57 GMT",
+      "feature-policy": "fullscreen 'self'; camera 'none'",
+      "link": "<https://avatars.githubusercontent.com>; rel=preconnect; crossorigin=\"\", <https://py8fhxnkzwtsqdo9.public.blob.vercel-storage.com>; rel=preconnect; crossorigin=\"\", <https://images.ctfassets.net>; rel=preconnect; crossorigin=\"\", <https://accounts.google.com>; rel=preconnect; crossorigin=\"\", </_next/static/immutable/media/797e433ab948586e.p.1v5bejj26fx9h.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", </_next/static/immutable/media/Geist_Variable-s.p.2v-cf9syxr5ni.woff2>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\"",
+      "referrer-policy": "origin-when-cross-origin",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+      "x-content-type-options": "nosniff",
+      "x-dns-prefetch-control": "on",
+      "x-download-options": "noopen",
+      "x-frame-options": "DENY",
+      "x-matched-path": "/login",
+      "x-nextjs-prerender": "1",
+      "x-nextjs-stale-time": "300",
+      "x-vercel-cache": "HIT",
+      "x-vercel-id": "pdx1::krsvk-1789167297431-d693a80b42c7",
+      "x-xss-protection": "0"
+    },
+    "title": "Login – Vercel",
+    "screenshots": [
+      "staging-mobile-home.png"
+    ],
+    "unavailable": [
+      "search control",
+      "Places navigation",
+      "nearby control",
+      "groups guest navigation"
+    ],
+    "visibleVersionText": null,
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 403 ()",
+      "console: Provider's accounts list is empty.",
+      "console: Not signed in with the identity provider.",
+      "console: Failed to load resource: the server responded with a status of 403 ()",
+      "console: [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token.",
+      "console: Failed to load resource: the server responded with a status of 429 ()"
+    ]
+  }
+]
