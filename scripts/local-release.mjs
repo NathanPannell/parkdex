@@ -300,17 +300,21 @@ async function verifyBrowserCors(apiUrl, frontendUrl) {
   });
   if (!response.ok) throw new Error(`Browser CORS GET returned HTTP ${response.status}`);
   verifyCorsHeaders(response.headers, origin);
-  const preflight = await fetch(`${apiUrl}/api/places`, {
-    method: "OPTIONS",
-    headers: {
-      Origin: origin,
-      "Access-Control-Request-Method": "PUT",
-      "Access-Control-Request-Headers": "content-type,x-collection-key",
-    },
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!preflight.ok) throw new Error(`Browser CORS preflight returned HTTP ${preflight.status}`);
-  verifyCorsHeaders(preflight.headers, origin, { method: "PUT", requestedHeaders: ["content-type", "x-collection-key"] });
+  const verifyPreflight = async (method, requestedHeaders) => {
+    const preflight = await fetch(`${apiUrl}/api/places`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: origin,
+        "Access-Control-Request-Method": method,
+        "Access-Control-Request-Headers": requestedHeaders.join(","),
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!preflight.ok) throw new Error(`Browser CORS ${method} preflight returned HTTP ${preflight.status}`);
+    verifyCorsHeaders(preflight.headers, origin, { method, requestedHeaders });
+  };
+  await verifyPreflight("GET", ["authorization"]);
+  await verifyPreflight("PUT", ["content-type", "x-collection-key"]);
 }
 
 const wait = (delay) => new Promise((resolveWait) => setTimeout(resolveWait, delay));

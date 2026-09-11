@@ -78,10 +78,11 @@ test("browser CORS readiness requires the exact origin and requested preflight c
     "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
     "access-control-allow-headers": "Authorization, Content-Type, X-Collection-Key",
   });
+  assert.doesNotThrow(() => verifyCorsHeaders(headers, origin, { method: "GET", requestedHeaders: ["authorization"] }));
   assert.doesNotThrow(() => verifyCorsHeaders(headers, origin, { method: "PUT", requestedHeaders: ["content-type", "x-collection-key"] }));
   assert.throws(() => verifyCorsHeaders(headers, "https://staging.parkdex.app"), /exact frontend origin/);
   assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin }), origin, { method: "PUT", requestedHeaders: ["x-collection-key"] }), /did not allow PUT/);
-  assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin, "access-control-allow-methods": "PUT", "access-control-allow-headers": "content-type" }), origin, { method: "PUT", requestedHeaders: ["x-collection-key"] }), /requested headers/);
+  assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin, "access-control-allow-methods": "GET", "access-control-allow-headers": "content-type" }), origin, { method: "GET", requestedHeaders: ["authorization"] }), /requested headers/);
 });
 
 test("Windows provider commands execute through the cmd shim with status preserved", { skip: process.platform !== "win32" }, () => {
