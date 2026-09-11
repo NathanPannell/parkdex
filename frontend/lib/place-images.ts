@@ -1,3 +1,5 @@
+import cataloguePlaceImages from "./place-images.catalogue.json";
+
 export type PlaceImageAsset = {
   src: string;
   width: number;
@@ -21,7 +23,7 @@ export type PlaceImageRecord = {
 
 const CHANGES = "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed.";
 
-export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
+const BASE_PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
   "provincial-artlish-caves-park": {
     thumbnail: { src: "/places/artlish-caves-thumb.webp", width: 320, height: 474 },
     detail: { src: "/places/artlish-caves.webp", width: 438, height: 648 },
@@ -274,6 +276,11 @@ export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
     locationEvidenceUrl: "https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg",
     changes: CHANGES,
   },
+};
+
+export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
+  ...BASE_PLACE_IMAGES,
+  ...(cataloguePlaceImages as Record<string, PlaceImageRecord>),
 };
 
 export const PLACE_IMAGE_COUNT = Object.keys(PLACE_IMAGES).length;

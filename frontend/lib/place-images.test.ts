@@ -14,7 +14,7 @@ describe("place image manifest", () => {
     const knownIds = new Set(places.map((place) => place.id));
     const imagePaths = Object.values(PLACE_IMAGES).flatMap((image) => [image.thumbnail.src, image.detail.src]);
 
-    expect(PLACE_IMAGE_COUNT).toBe(18);
+    expect(PLACE_IMAGE_COUNT).toBe(107);
     expect(new Set(imagePaths).size).toBe(imagePaths.length);
     for (const [placeId, image] of Object.entries(PLACE_IMAGES)) {
       expect(knownIds.has(placeId), `unknown place ID: ${placeId}`).toBe(true);
@@ -44,11 +44,11 @@ describe("place image manifest", () => {
       expect(image.creator.trim(), placeId).not.toBe("");
       expect(image.sourceTitle.trim(), placeId).not.toBe("");
       expect(image.locationEvidence.length, placeId).toBeGreaterThan(30);
-      expect(image.locationEvidenceUrl, placeId).toMatch(/^https:\/\/(?:bcparks\.ca|commons\.wikimedia\.org)\//);
+      expect(image.locationEvidenceUrl, placeId).toMatch(/^https:\/\/(?:bcparks\.ca|commons\.wikimedia\.org|www\.crd\.ca|rdn\.bc\.ca|www\.flickr\.com)\//);
       expect(image.changes.length, placeId).toBeGreaterThan(20);
-      expect(image.sourceUrl, placeId).toMatch(/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/);
-      expect(image.originalUrl, placeId).toMatch(/^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\//);
-      expect(image.license, placeId).toMatch(/^(CC BY(?:-SA)? [234]\.0|Public domain)$/);
+      expect(image.sourceUrl, placeId).toMatch(/^https:\/\/(?:commons\.wikimedia\.org\/wiki\/File:|www\.flickr\.com\/photos\/)/);
+      expect(image.originalUrl, placeId).toMatch(/^https:\/\/(?:upload\.wikimedia\.org\/wikipedia\/commons\/|live\.staticflickr\.com\/)/);
+      expect(image.license, placeId).toMatch(/^(CC BY(?:-SA)? [234]\.0|CC0 1\.0|Public domain)$/);
       expect(image.licenseUrl, placeId).toMatch(/^https:\/\/creativecommons\.org\//);
     }
   });

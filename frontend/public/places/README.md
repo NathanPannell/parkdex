@@ -1,6 +1,6 @@
 # Place photos
 
-These images depict the named park or a documented feature within its boundary. The Wikimedia Commons source pages and API metadata were rechecked on 2026-09-08 for the named location, creator, original file, and reusable license. When a Commons description names only a feature, the manifest links the BC Parks page that documents the feature inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
+These images depict the named park or a documented feature within its boundary. Source landing pages and available API metadata were rechecked on 2026-09-11 for the named location, creator, original file, and reusable license. When a source description names only a feature, the manifest links an official park page that documents the feature inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
 
 Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wide and 64 KB for collection lists; the detail file is at most 960 pixels wide and 425 KB for place cards. Neither variant is upscaled. The interface may center-crop a variant to fit its responsive frame, and Next.js may negotiate a smaller encoded response for the device.
 
@@ -25,7 +25,7 @@ Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wid
 | East Sooke Regional Park | [East Sooke Park](https://commons.wikimedia.org/wiki/File:East_Sooke_Park_BC.jpg) | Brandon Godfrey | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
 | Little Huson Cave Regional Park | [Natural Bridge](https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 
-Parks without a verified, freely licensed image use the explicit `Photo unavailable` treatment. Gold Muchalat, Lower Nimpkish, White River, Woss Lake, Kwaksistah, and Mount Cain Alpine remain intentionally uncovered after the bounded source search.
+The [expanded catalogue credit index](./CATALOGUE_CREDITS.md) lists the photos added by the 2026-09-11 coverage pass. Parks without a verified, freely licensed image continue to use the explicit `Photo unavailable` treatment; the task ledger links the search report for all reviewed gaps.
 
 To contribute a photo:
 
