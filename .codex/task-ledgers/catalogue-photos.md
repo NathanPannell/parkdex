@@ -30,6 +30,7 @@ Run a systematic, rights-safe photo search for all 198 catalogue places, add eve
 - Integrated 89 new records / 178 new WebP variants into the existing manifest. Every candidate was inspected in contact sheets; current Commons metadata was re-fetched, and the two Flickr landing pages were independently checked for their displayed CC BY 2.0 license and place title.
 - Focused place-image validation passes at 107 total records. Final integrated verification passed: 24 test files / 125 tests, lint, typecheck, and the production Webpack build. The default Turbopack build was also attempted; it could not traverse the worktree's external `node_modules` junction, an environment-only restriction, while the equivalent production Webpack build completed.
 - Browser verification exercised a real mobile search and place detail flow against a local fixture generated from `data/places.json`. Arbutus Grove returned one exact result, its local detail image loaded at nonzero width, and its visible creator/original/license credits rendered. External map tiles were blocked by the browser sandbox; the catalogue API and local photo asset succeeded.
+- Independent quality review cleared commit `b1c07eaf640ec8f0ede0ceb39bc51c74281a05df` with no material findings after reviewing all 89 photos and decoding all 178 variants. Three optional metadata/documentation cleanups were applied afterward without changing any image assets.
 
 ## Evidence and sources
 
@@ -55,4 +56,4 @@ Run a systematic, rights-safe photo search for all 198 catalogue places, add eve
 
 ## Next action
 
-Commit and push the reviewed artifacts, then open the staging-targeted pull request without merging or deploying it.
+Keep draft PR #39 unmerged and undeployed for user review.

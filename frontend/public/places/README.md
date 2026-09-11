@@ -1,6 +1,6 @@
 # Place photos
 
-These images depict the named park or a documented feature within its boundary. The Wikimedia Commons source pages and API metadata were rechecked on 2026-09-11 for the named location, creator, original file, and reusable license. When a Commons description names only a feature, the manifest links the BC Parks page that documents the feature inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
+These images depict the named park or a documented feature within its boundary. Source landing pages and available API metadata were rechecked on 2026-09-11 for the named location, creator, original file, and reusable license. When a source description names only a feature, the manifest links an official park page that documents the feature inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
 
 Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wide and 64 KB for collection lists; the detail file is at most 960 pixels wide and 425 KB for place cards. Neither variant is upscaled. The interface may center-crop a variant to fit its responsive frame, and Next.js may negotiate a smaller encoded response for the device.
 

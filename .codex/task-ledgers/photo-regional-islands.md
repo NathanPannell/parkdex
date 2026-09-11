@@ -21,8 +21,6 @@ Verified regional candidates cover Albert Head Lagoon, Beachcomber, Benson Creek
 
 The five uncertain records are Mount Arrowsmith Massif (feature/parcel relationship), Mount Benson (Roberts Roost/parcel relationship), Nanaimo River (highway crossing/park relationship), Roche Cove (bridge/viewpoint/park relationship), and Sooke Potholes Regional Park (location is explicit, but the only result is a close-up insect that may misrepresent the place editorially).
 
-The JSON is the authoritative handoff. It contains the required candidate fields, separate uncertain candidates, all 29 unmatched reasons, and a 77-entry search log with exact queries, sources, and outcome:
+The research JSON was the authoritative handoff during integration. Its accepted, withheld, and unmatched outcomes now live in `.codex/photo-search-report-regional-islands.md`, and the integrated records retain all required source fields in `frontend/lib/place-images.catalogue.json`.
 
-`C:/repo/parkdex-worktrees/catalogue-photos/.codex/photo-candidates-regional-islands.json`
-
-Next: `/root/photo_delivery` independently verifies the landing-page metadata, current license, original image, visual subject, and crop suitability before selecting or integrating any record. Honest `Photo unavailable` fallbacks remain correct for every unmatched or rejected place.
+`/root/photo_delivery` independently verified the landing-page metadata, current license, original image, visual subject, and crop suitability before integration. Honest `Photo unavailable` fallbacks remain correct for every unmatched or rejected place.
