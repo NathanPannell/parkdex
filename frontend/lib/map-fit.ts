@@ -69,6 +69,14 @@ export function hasUsableCameraViewport(
     && map.height - padding.top - padding.bottom >= minimumVisibleSize;
 }
 
+/** Centers a point in the space left after overlays without persisting map padding. */
+export function cameraOffsetForPadding(padding: CameraPadding): [number, number] {
+  return [
+    (padding.left - padding.right) / 2,
+    (padding.top - padding.bottom) / 2,
+  ];
+}
+
 /**
  * Keeps fitted content inside the middle portion of the map space that remains
  * after headers, sheets, and controls have been reserved.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
+import { cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -80,5 +80,10 @@ describe("selected boundary camera padding", () => {
     const padding = cameraPaddingForOverlays(map, [rect(0, 0, 390, 280), rect(0, 300, 390, 320)]);
     expect(hasUsableCameraViewport(map, padding, 96)).toBe(true);
     expect(padding.top + padding.bottom).toBeCloseTo(524);
+  });
+
+  it("centers point-camera fallbacks in the unobstructed area without map padding", () => {
+    expect(cameraOffsetForPadding({ top: 110, right: 58, bottom: 458, left: 58 })).toEqual([0, -174]);
+    expect(cameraOffsetForPadding({ top: 40, right: 160, bottom: 40, left: 20 })).toEqual([-70, 0]);
   });
 });

@@ -1,0 +1,61 @@
+{
+  "appUrl": "http://localhost:3127",
+  "context": "synthetic fixture",
+  "checks": {
+    "lakeResultClearance": {
+      "resultBottom": 642,
+      "utilityTop": 668,
+      "clearsUtility": true
+    },
+    "collapseRetainsFilter": true,
+    "activeMapReset": {
+      "detailsClosed": true,
+      "resetButtonVisible": false
+    },
+    "nearby": {
+      "heading": true,
+      "excludesGoldstream": true,
+      "excludesWrigglesworth": true
+    },
+    "nearbyClose": true,
+    "groupPersistsAfterReload": true,
+    "groupDetailButtons": [
+      "All groups",
+      "Independent QA renamed",
+      "View on map",
+      "Strathcona Park",
+      "Pick from map",
+      "Map",
+      "Places",
+      "Groups",
+      "Badges",
+      "Account"
+    ],
+    "groupPickerButtons": [
+      "Done adding places"
+    ],
+    "groupPickerText": "Done adding places",
+    "groupMapPick": {
+      "placeIds": [
+        "provincial-strathcona-park",
+        "provincial-strathcona-westmin-park"
+      ],
+      "addedSecondPlace": true
+    },
+    "deleteCancelKeepsGroup": true,
+    "deleteConfirmRemovesGroup": true,
+    "pageErrors": []
+  },
+  "screenshots": [
+    "independent-mobile-lake-last.png",
+    "independent-mobile-strathcona.png",
+    "independent-mobile-active-map-reset.png",
+    "independent-mobile-wrigglesworth.png",
+    "independent-mobile-nearby.png",
+    "independent-mobile-account-fallback.png",
+    "independent-mobile-group-detail.png",
+    "independent-mobile-group-picker.png",
+    "independent-mobile-group-picker-selected.png"
+  ],
+  "errors": []
+}
