@@ -789,3 +789,11 @@ button { color: inherit; }
   .thumb-nav.authenticated { grid-template-columns: 1fr 1.5fr; }
   .nav-cluster { display: grid; }
 }
+
+/* Keep group-card photo credits in their own flow, below the image. */
+.group-member-card .place-image--card { height: auto; }
+.group-member-card .place-image--card .place-image__photo { display: block; width: 100%; height: 145px; object-fit: cover; }
+@media (min-width: 860px) {
+  .group-member-card .place-image--card { height: auto; }
+  .group-member-card .place-image--card .place-image__photo { height: 170px; }
+}
