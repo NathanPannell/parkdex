@@ -616,6 +616,193 @@ button { color: inherit; }
 }
 @media (min-width: 860px) { .feature-collection .collection-view { height: calc(100% - 70px); } }
 
+/* Desktop map shell: keep navigation in the expedition header and tools in a low, centered dock. */
+@media (min-width: 860px) {
+  .expedition-header {
+    z-index: 14;
+    top: 16px;
+    right: auto;
+    left: 50%;
+    display: flex;
+    width: min(940px, calc(100vw - 32px));
+    min-height: 68px;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 14px;
+    transform: translateX(-50%);
+  }
+
+  .expedition-header .brand-mark { flex: 0 0 auto; }
+  .expedition-header .brand-copy { flex: 0 0 auto; width: 245px; }
+  .expedition-header .brand-copy h1 { font-size: 25px; }
+  .expedition-header .brand-copy p { white-space: nowrap; }
+
+  .desktop-top-nav {
+    position: absolute;
+    top: 7px;
+    right: 10px;
+    bottom: 7px;
+    left: 270px;
+    display: flex;
+    min-width: 0;
+    align-items: stretch;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px;
+    border-radius: 14px;
+    background: #e7ead8;
+  }
+
+  .desktop-top-nav button {
+    position: relative;
+    display: flex;
+    min-width: 88px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 950;
+    white-space: nowrap;
+  }
+
+  .desktop-top-nav button.active {
+    background: var(--forest);
+    color: var(--paper-bright);
+    box-shadow: 0 4px 12px rgba(23,61,50,.16);
+  }
+
+  .desktop-top-nav button b {
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--lime);
+    color: var(--forest);
+    font-size: 9px;
+  }
+
+  .maplibregl-ctrl-top-right { top: 98px; right: 16px; }
+
+  .map-utility {
+    top: auto;
+    right: auto;
+    bottom: 20px;
+    left: 50%;
+    display: flex;
+    width: min(760px, calc(100vw - 32px));
+    min-height: 60px;
+    align-items: stretch;
+    justify-content: center;
+    gap: 7px;
+    padding: 6px;
+    border-radius: 17px;
+    transform: translateX(-50%);
+  }
+
+  .map-utility .map-mode-switch {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .map-utility .map-mode-switch button {
+    min-width: 104px;
+    min-height: 46px;
+  }
+
+  .map-utility .map-mode-switch .locate-button {
+    display: grid;
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    min-height: 46px;
+    padding: 0;
+    place-items: center;
+  }
+
+  .map-utility .search-dock {
+    flex: 1 1 320px;
+    width: auto;
+    min-width: 220px;
+    min-height: 46px;
+  }
+
+  .map-utility .search-toggle { width: 42px; height: 42px; }
+  .map-utility .search-dock input { height: 42px; }
+
+  .first-adventure {
+    top: 50%;
+    left: 50%;
+    width: min(430px, calc(100vw - 32px));
+    padding: 24px 28px 26px;
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+
+  .first-adventure strong { font-size: 28px; line-height: 1; }
+  .first-adventure span { font-size: 13px; }
+  .first-adventure button { min-height: 50px; margin-top: 10px; font-size: 14px; }
+
+  .search-results {
+    right: auto;
+    bottom: 94px;
+    left: 50%;
+    width: min(760px, calc(100vw - 32px));
+    transform: translateX(-50%);
+  }
+
+  .filter-tray {
+    top: auto;
+    right: auto;
+    bottom: 94px;
+    left: 50%;
+    width: min(760px, calc(100vw - 32px));
+    transform: translateX(-50%);
+  }
+
+  .feature-panel {
+    z-index: 8;
+    padding-top: 112px;
+  }
+}
+
+@media (min-width: 860px) and (max-width: 1100px) {
+  .expedition-header { width: min(820px, calc(100vw - 24px)); }
+  .expedition-header .brand-copy { width: 190px; }
+  .desktop-top-nav { left: 225px; }
+  .desktop-top-nav button { min-width: 76px; padding-inline: 9px; }
+  .map-utility { width: min(700px, calc(100vw - 24px)); }
+  .map-utility .map-mode-switch button { min-width: 92px; }
+}
+
+@media (max-width: 859px) {
+  .desktop-top-nav { display: none; }
+}
+
+@media (min-width: 860px) {
+  .view-map .expedition-header,
+  .expedition-header {
+    right: auto;
+    width: min(940px, calc(100vw - 32px));
+    max-width: none;
+  }
+
+  .thumb-nav { display: none; }
+}
+
+@media (min-width: 860px) and (max-width: 1100px) {
+  .view-map .expedition-header,
+  .expedition-header { width: min(820px, calc(100vw - 24px)); }
+}
+
 @media (min-width: 700px) and (max-width: 859px) and (max-height: 600px) {
   .badge-detail { grid-template: 1fr / minmax(250px,.9fr) minmax(300px,1fr); }
   .badge-detail-stage { min-height: 0; }
