@@ -31,7 +31,7 @@ import {
   explorationBoundaryFilter,
   explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
-import { cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
+import { cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Place } from "@/lib/places";
 
@@ -161,7 +161,7 @@ function overviewCameraSnapshot(map: MapLibreMap): MapCameraSnapshot | null {
   };
 }
 
-export function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
+function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
   const bounds = boundsForPlace(index, placeId);
   if (!bounds) return false;
   map.fitBounds(bounds, {
@@ -457,7 +457,7 @@ export function ParkMap({
             const padding = cameraPaddingWithContentMargin(mapRect, overlayPadding);
             if (!hasUsableCameraViewport(mapRect, padding)) return;
             if (fit.coincident) {
-              map.easeTo({ center: fit.center, padding, zoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 480 });
+              map.easeTo({ center: fit.center, offset: cameraOffsetForPadding(padding), zoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 480 });
               return;
             }
             map.fitBounds(fit.bounds, { padding, maxZoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 560 });
@@ -468,7 +468,7 @@ export function ParkMap({
               if (requestIsCurrent()) {
                 const mapRect = map.getContainer().getBoundingClientRect();
                 const padding = cameraPaddingWithContentMargin(mapRect, measuredCameraPadding(map.getContainer(), true));
-                map.easeTo({ center: coordinates, padding, zoom, duration: reduceMotion ? 0 : 420 });
+                map.easeTo({ center: coordinates, offset: cameraOffsetForPadding(padding), zoom, duration: reduceMotion ? 0 : 420 });
               }
             } catch {
               // The source changed while MapLibre was resolving this cluster.
@@ -574,7 +574,7 @@ export function ParkMap({
         if (!hasUsableCameraViewport(mapRect, padding)) return;
         if (place && boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, place.id, !reduceMotion, padding)) return;
         if (place) {
-          map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+          map.easeTo({ center: [place.longitude, place.latitude], offset: cameraOffsetForPadding(padding), zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
           return;
         }
         const longitudes = groupPlaces.map((candidate) => candidate.longitude);
@@ -582,7 +582,7 @@ export function ParkMap({
         if (!longitudes.length || !latitudes.length) return;
         const bounds: [[number, number], [number, number]] = [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]];
         if (bounds[0][0] === bounds[1][0] && bounds[0][1] === bounds[1][1]) {
-          map.easeTo({ center: bounds[0], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+          map.easeTo({ center: bounds[0], offset: cameraOffsetForPadding(padding), zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
         } else {
           map.fitBounds(bounds, { padding, maxZoom: 12, duration: reduceMotion ? 0 : 520 });
         }
