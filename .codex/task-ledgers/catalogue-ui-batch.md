@@ -52,3 +52,5 @@
 - `docs/evidence/issues40-47/after/fixture-review.cjs` runs a stateful, isolated authenticated browser fixture with synthetic account and group data; it produces photo and group-flow screenshots without accessing shared user data or staging credentials.
 - Focused app/map tests pass 40/40, TypeScript passes, targeted ESLint passes, and the Impeccable detector reports no findings. Browser reviewer retest is active for the map-reset, small-boundary, notice, search-clearance, Nearby, and group/account flows.
 - The reviewer confirmed the group screen hides inline photo attribution while its title-to-map path keeps attribution available; the styled confirmation and map actions remain intact.
+- At 390px, the mobile dock explicitly restores its grid layout: five equal authenticated slots or two guest slots, with 50px targets. The reviewer confirmed the dock spans the full bar.
+- Final map review confirms Strathcona and Wrigglesworth fit within the usable mobile viewport without page or HTTP errors. Point-camera fallbacks now use an offset derived from overlay space, avoiding persistent MapLibre padding.

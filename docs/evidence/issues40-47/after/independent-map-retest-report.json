@@ -1,0 +1,12 @@
+{
+  "appUrl": "http://localhost:3127",
+  "context": "synthetic fixture",
+  "checks": {
+    "pageErrors": []
+  },
+  "screenshots": [
+    "independent-mobile-strathcona-final.png",
+    "independent-mobile-wrigglesworth-final.png"
+  ],
+  "errors": []
+}
