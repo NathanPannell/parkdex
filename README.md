@@ -21,3 +21,5 @@ Coverage is selective, especially for regional parks. Map pins represent places 
 ## About the code
 
 Parkdex runs on Next.js, MapLibre, FastAPI, and PostgreSQL. See the [architecture guide](ARCHITECTURE.md) for the application structure.
+
+Account email provider setup, environment separation, and preview/testing guidance are in [Account email delivery](docs/account-email.md).

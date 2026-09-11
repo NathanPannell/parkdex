@@ -30,7 +30,7 @@ from backend.app.auth import (
     verify_password,
 )
 from backend.app.db import close_pool, connection, open_pool
-from backend.app.email_delivery import ensure_email_delivery, send_auth_email
+from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
 from backend.app.google_oauth import authorization_url, exchange_and_verify
 from backend.app.mcp_server import build_hosted_mcp_app
 from backend.app.schemas import (
@@ -183,6 +183,12 @@ def deliver_auth_email(recipient: str, subject: str, text: str, event_type: str)
                 conn.commit()
         except Exception:
             logger.error("Could not record auth email delivery failure")
+
+
+def auth_link(fragment: str) -> str:
+    return f"{settings.app_public_url.rstrip('/')}/#{fragment}"
+
+
 app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -214,7 +220,7 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
 def auth_config() -> dict[str, bool]:
     return {
         "googleEnabled": bool(settings.google_client_id and settings.google_client_secret and settings.google_redirect_uri),
-        "emailEnabled": bool(settings.smtp_host),
+        "emailEnabled": email_delivery_configured(settings),
     }
 
 
@@ -623,13 +629,13 @@ def register(payload: Credentials):
             raise HTTPException(status_code=409, detail="An account with this email already exists")
         token, expires_at = create_session(conn, str(account["id"]))
         verification_token = None
-        if settings.smtp_host:
+        if email_delivery_configured(settings):
             verification_token, _ = create_action_token(conn, str(account["id"]), "email_verification")
         record_security_event(conn, "registration", email, "created")
         conn.commit()
     if verification_token:
         try:
-            send_auth_email(settings, email, "Verify your Parkdex email", f"Verify your email: {settings.app_public_url}/#verificationToken={verification_token}")
+            send_auth_email(settings, email, "Verify your Parkdex email", f"Verify your email: {auth_link(f'verificationToken={verification_token}')}")
         except Exception as exc:
             logger.error("Registration verification email delivery failed (%s)", type(exc).__name__)
     return {
@@ -711,7 +717,7 @@ def request_password_reset(payload: EmailRequest, background_tasks: BackgroundTa
         record_security_event(conn, "password_reset_requested", email, "accepted")
         conn.commit()
     if token:
-        background_tasks.add_task(deliver_auth_email, email, "Reset your Parkdex password", f"Reset your password: {settings.app_public_url}/#resetToken={token}\n\nIf you did not request this, ignore this email.", "password_reset_email")
+        background_tasks.add_task(deliver_auth_email, email, "Reset your Parkdex password", f"Reset your password: {auth_link(f'resetToken={token}')}\n\nIf you did not request this, ignore this email.", "password_reset_email")
     return {"detail": "If an account exists, password reset instructions have been sent."}
 
 
@@ -795,7 +801,7 @@ def request_email_verification(authorization: str | None = Header(default=None))
         token, _ = create_action_token(conn, identity.account_id, "email_verification")
         conn.commit()
     try:
-        send_auth_email(settings, identity.email, "Verify your Parkdex email", f"Verify your email: {settings.app_public_url}/#verificationToken={token}")
+        send_auth_email(settings, identity.email, "Verify your Parkdex email", f"Verify your email: {auth_link(f'verificationToken={token}')}")
     except Exception as exc:
         logger.error("Verification email delivery failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Email delivery is temporarily unavailable")

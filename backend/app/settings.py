@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,12 +41,16 @@ class Settings(BaseSettings):
     google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
     google_redirect_uri: str | None = Field(default=None, alias="GOOGLE_REDIRECT_URI")
+    email_provider: Literal["smtp", "resend"] = Field(default="smtp", alias="EMAIL_PROVIDER")
     smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")
     smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
     smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
     smtp_from: str = Field(default="Parkdex <no-reply@parkdex.app>", alias="SMTP_FROM")
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    resend_api_key: str | None = Field(default=None, alias="RESEND_API_KEY")
+    resend_api_url: str = Field(default="https://api.resend.com/emails", alias="RESEND_API_URL")
+    resend_from: str = Field(default="Parkdex <no-reply@parkdex.app>", alias="RESEND_FROM")
 
     @property
     def is_preview(self) -> bool:

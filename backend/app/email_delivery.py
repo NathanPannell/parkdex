@@ -1,17 +1,57 @@
 import smtplib
 import ssl
 from email.message import EmailMessage
+from urllib.parse import urlparse
+
+import httpx
 
 from backend.app.settings import Settings
 
 
+class EmailDeliveryError(RuntimeError):
+    """A provider failure safe to expose through the application boundary."""
+
+
 def ensure_email_delivery(settings: Settings) -> None:
+    if settings.email_provider == "resend":
+        if not settings.resend_api_key or not settings.resend_from:
+            raise RuntimeError("Resend email delivery is not configured")
+        try:
+            parsed_url = urlparse(settings.resend_api_url)
+            hostname = parsed_url.hostname
+            parsed_url.port
+        except ValueError:
+            parsed_url = None
+            hostname = None
+        if parsed_url is None or parsed_url.scheme != "https" or not hostname:
+            raise RuntimeError("Resend API URL must use HTTPS")
+        return
     if not settings.smtp_host:
-        raise RuntimeError("Email delivery is not configured")
+        raise RuntimeError("SMTP email delivery is not configured")
+
+
+def email_delivery_configured(settings: Settings) -> bool:
+    try:
+        ensure_email_delivery(settings)
+    except RuntimeError:
+        return False
+    return True
 
 
 def send_auth_email(settings: Settings, recipient: str, subject: str, text: str) -> None:
     ensure_email_delivery(settings)
+    if settings.email_provider == "resend":
+        try:
+            response = httpx.post(
+                settings.resend_api_url,
+                headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+                json={"from": settings.resend_from, "to": [recipient], "subject": subject, "text": text},
+                timeout=10,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise EmailDeliveryError("Email provider request failed") from exc
+        return
     message = EmailMessage()
     message["From"] = settings.smtp_from
     message["To"] = recipient
