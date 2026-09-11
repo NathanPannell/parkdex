@@ -73,6 +73,36 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
         clean(email)
 
 
+def test_resend_provider_delivers_registration_and_reset_links(monkeypatch) -> None:
+    email = "resend-flow@example.com"
+    requests: list[dict] = []
+    clean(email)
+    monkeypatch.setattr(api.settings, "email_provider", "resend")
+    monkeypatch.setattr(api.settings, "resend_api_key", "re_test_key")
+    monkeypatch.setattr(api.settings, "resend_from", "Parkdex <test@example.com>")
+    monkeypatch.setattr(api.settings, "app_public_url", "https://preview.example.test/")
+
+    def fake_post(url, **kwargs):
+        requests.append({"url": url, **kwargs})
+        return httpx.Response(200, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    try:
+        with TestClient(api.app) as client:
+            assert client.get("/api/auth/config").json()["emailEnabled"] is True
+            assert client.post("/api/auth/register", json={"email": email, "password": "resend password value"}).status_code == 201
+            assert client.post("/api/auth/password-reset/request", json={"email": email}).status_code == 202
+
+        assert len(requests) == 2
+        assert all(request["url"] == "https://api.resend.com/emails" for request in requests)
+        assert all(request["headers"] == {"Authorization": "Bearer re_test_key"} for request in requests)
+        assert requests[0]["json"]["from"] == "Parkdex <test@example.com>"
+        assert "https://preview.example.test/#verificationToken=" in requests[0]["json"]["text"]
+        assert "https://preview.example.test/#resetToken=" in requests[1]["json"]["text"]
+    finally:
+        clean(email)
+
+
 def test_action_token_can_only_win_one_concurrent_confirmation(monkeypatch) -> None:
     email = "token-race@example.com"
     sent: list[tuple[str, str, str]] = []
