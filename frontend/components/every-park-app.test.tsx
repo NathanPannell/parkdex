@@ -262,6 +262,19 @@ describe("Parkdex navigation", () => {
     expect(await screen.findByRole("heading", { name: "That reset link is no longer valid" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Request a new link" }));
     expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("restores a signed-in account when a reset-link journey is abandoned", async () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true };
+    window.history.replaceState({}, "", "/#resetToken=abandoned-token");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Back to log in" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your account" })).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Reset password by email" })).toBeTruthy();
   });
 
   it("replaces direct account password changes with the email reset journey", async () => {

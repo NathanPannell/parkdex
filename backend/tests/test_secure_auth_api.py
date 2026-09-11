@@ -54,6 +54,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
     try:
         with TestClient(api.app) as client:
             created = client.post("/api/auth/register", json={"email": email, "password": "old password value"}).json()
+            second = client.post("/api/auth/login", json={"email": email, "password": "old password value"}).json()
             known = client.post("/api/auth/password-reset/request", json={"email": email})
             missing = client.post("/api/auth/password-reset/request", json={"email": unknown})
             assert known.status_code == missing.status_code == 202
@@ -68,6 +69,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             assert client.post("/api/auth/password-reset/confirm", json={"token": reset_token, "newPassword": "new password value"}).status_code == 204
             assert client.post("/api/auth/password-reset/confirm", json={"token": reset_token, "newPassword": "another password value"}).status_code == 400
             assert client.get("/api/auth/me", headers=bearer(created["token"])).status_code == 401
+            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 401
             assert client.post("/api/auth/login", json={"email": email, "password": "new password value"}).status_code == 200
     finally:
         clean(email)
@@ -141,7 +143,6 @@ def test_verification_resend_invalidates_old_token(monkeypatch) -> None:
     try:
         with TestClient(api.app) as client:
             first = client.post("/api/auth/register", json={"email": email, "password": "current password value"}).json()
-            second = client.post("/api/auth/login", json={"email": email, "password": "current password value"}).json()
             old_token = token_from_message(sent[-1][2], "verificationToken")
             assert client.post("/api/auth/email-verification/request", headers=bearer(first["token"])).status_code == 202
             new_token = token_from_message(sent[-1][2], "verificationToken")
@@ -149,9 +150,14 @@ def test_verification_resend_invalidates_old_token(monkeypatch) -> None:
             assert client.post("/api/auth/email-verification/confirm", json={"token": new_token}).status_code == 204
             assert client.get("/api/auth/me", headers=bearer(first["token"])).json()["account"]["emailVerified"] is True
             assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 200
-            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 200
     finally:
         clean(email)
+
+
+def test_direct_password_change_endpoint_is_removed() -> None:
+    with TestClient(api.app) as client:
+        response = client.post("/api/auth/password-change", json={"currentPassword": "old", "newPassword": "a sufficiently long password"})
+    assert response.status_code == 404
 
 
 def test_google_pkce_state_and_unverified_gmail_linking_prevent_takeover(monkeypatch) -> None:
