@@ -786,5 +786,6 @@ button { color: inherit; }
   .thumb-nav { display: grid; }
   .group-picker-backdrop { align-items: center; }
   .group-member-card .place-image--card { height: 170px; }
-  .nav-cluster { display: none; }
+  .thumb-nav.authenticated { grid-template-columns: 1fr 1.5fr; }
+  .nav-cluster { display: grid; }
 }
