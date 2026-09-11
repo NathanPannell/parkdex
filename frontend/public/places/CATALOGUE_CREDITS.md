@@ -93,3 +93,9 @@ These local variants were verified against the linked Wikimedia Commons file met
 | Sonora Island | [Sonora Island forest.jpg](https://commons.wikimedia.org/wiki/File:Sonora_Island_forest.jpg) | Hugo Chisholm | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0) |
 | Meares Island | [Meares Island boardwalk 2.jpg](https://commons.wikimedia.org/wiki/File:Meares_Island_boardwalk_2.jpg) | Rob Dabal | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
 | Thetis Lake Regional Park | [Thetis Lake, Canada 01.jpg](https://commons.wikimedia.org/wiki/File:Thetis_Lake,_Canada_01.jpg) | Michal Klajban | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+
+| Brooks Point Regional Park | [Brocks Point (7799165450)](https://commons.wikimedia.org/wiki/File:Brocks_Point_(7799165450).jpg) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
+| Stoney Hill Regional Park | [Samsun Narrows](https://www.flickr.com/photos/davidstanleytravel/51265349732) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
+| Mansons Landing Park | [Mansons Lagoon](https://www.flickr.com/photos/davidstanleytravel/50273045731/) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
+| Morden Colliery Historic Park | [Morden Colliery Historic Provincial Park](https://www.flickr.com/photos/davidstanleytravel/51220708427/) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
+| Spider Lake Park | [Spider Lake Provincial Park](https://www.flickr.com/photos/kurt-b/49616838462/) | Kurayba | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
