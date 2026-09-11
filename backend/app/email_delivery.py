@@ -16,7 +16,8 @@ def ensure_email_delivery(settings: Settings) -> None:
     if settings.email_provider == "resend":
         if not settings.resend_api_key or not settings.resend_from:
             raise RuntimeError("Resend email delivery is not configured")
-        if urlparse(settings.resend_api_url).scheme != "https":
+        parsed_url = urlparse(settings.resend_api_url)
+        if parsed_url.scheme != "https" or not parsed_url.hostname:
             raise RuntimeError("Resend API URL must use HTTPS")
         return
     if not settings.smtp_host:

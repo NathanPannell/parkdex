@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from backend.app.email_delivery import EmailDeliveryError, email_delivery_configured, send_auth_email
 from backend.app.settings import Settings
@@ -65,6 +66,20 @@ def test_resend_rejection_has_a_safe_error(monkeypatch) -> None:
         assert str(exc) == "Email provider request failed"
     else:
         raise AssertionError("expected safe provider error")
+
+
+@pytest.mark.parametrize("url", ["http://api.resend.test/emails", "https://", "https:///emails", "https:emails"])
+def test_resend_api_url_must_be_a_real_https_url(url: str) -> None:
+    settings = Settings(
+        EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="re_test_key",
+        RESEND_FROM="Parkdex <test@example.com>",
+        RESEND_API_URL=url,
+    )
+
+    assert not email_delivery_configured(settings)
+    with pytest.raises(RuntimeError, match="must use HTTPS"):
+        send_auth_email(settings, "secret@example.com", "Subject", "token-link")
 
 
 def test_provider_must_be_configured_explicitly() -> None:
