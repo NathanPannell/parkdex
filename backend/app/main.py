@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 from datetime import timedelta
+from uuid import UUID
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
@@ -31,6 +32,7 @@ from backend.app.auth import (
 from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
 from backend.app.google_oauth import authorization_url, exchange_and_verify
+from backend.app.mcp_server import build_hosted_mcp_app
 from backend.app.schemas import (
     AccountState,
     AuthResult,
@@ -38,9 +40,16 @@ from backend.app.schemas import (
     EmailRequest,
     GoogleCallback,
     GoogleStart,
+    Group,
+    GroupCreate,
+    GroupPlaceMutation,
+    GroupRename,
     GuestImportResult,
     PlaceCollection,
+    PlaceSearchResult,
+    SearchPlace,
     PasswordChange,
+    PasswordSet,
     PasswordResetConfirmation,
     TrailResult,
     TrailUpdate,
@@ -49,6 +58,18 @@ from backend.app.schemas import (
     VisitUpdate,
 )
 from backend.app.settings import get_settings
+from backend.app.groups import (
+    delete_group_row,
+    ensure_wishlist,
+    add_group_places,
+    remove_group_places,
+    list_group_rows,
+    group_row,
+    create_group_row,
+    rename_group_row,
+    place_detail_row,
+    search_place_rows,
+)
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
@@ -118,11 +139,13 @@ def lock_account_progress(conn: Connection, account_id: str) -> None:
 
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     visits = visits_for_account(conn, identity.account_id)
+    account = conn.execute("SELECT password_hash IS NOT NULL AS has_password FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
     return {
         "account": {
             "id": identity.account_id,
             "email": identity.email,
             "email_verified": identity.email_verified,
+            "has_password": bool(account and account["has_password"]),
         },
         "visited_ids": visited_ids(visits),
         "visits": visits,
@@ -130,15 +153,23 @@ def account_state(conn: Connection, identity: AccountIdentity) -> dict:
     }
 
 
+settings = get_settings()
+logger = logging.getLogger(__name__)
+mcp_http_app = build_hosted_mcp_app(
+    issuer_url=settings.api_public_url,
+    resource_url=settings.mcp_public_url,
+    account_url=settings.app_public_url,
+)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     open_pool()
-    yield
-    close_pool()
-
-
-settings = get_settings()
-logger = logging.getLogger(__name__)
+    try:
+        async with mcp_http_app.lifespan():
+            yield
+    finally:
+        close_pool()
 
 
 def deliver_auth_email(recipient: str, subject: str, text: str, event_type: str) -> None:
@@ -162,7 +193,7 @@ app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Collection-Key"],
 )
 
@@ -232,6 +263,249 @@ def list_places(
         "completed_trail_ids": completed_trail_ids,
         "coverage_note": COVERAGE_NOTE,
     }
+
+
+PLACE_CATEGORIES = frozenset({"national", "provincial", "regional", "island"})
+
+
+def _record_id(value: str, label: str) -> str:
+    try:
+        return str(UUID(value))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=f"{label} not found") from exc
+
+
+def _group_mutation_limit(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(conn, "group_mutation", account_id, 120, timedelta(minutes=15))
+
+
+def _group_name(value: str, label: str = "Group") -> str:
+    name = value.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail=f"{label} name must not be blank")
+    if name.casefold() == "wishlist":
+        raise HTTPException(status_code=422, detail="Wishlist is reserved for the protected account group")
+    return name
+
+
+@app.get("/api/places/search", response_model=PlaceSearchResult)
+def search_places(
+    visited: bool | None = Query(default=None),
+    place_type: str | None = Query(default=None, alias="type"),
+    category: str | None = Query(default=None),
+    query: str | None = Query(default=None, max_length=200),
+    latitude: float | None = Query(default=None, ge=-90, le=90),
+    longitude: float | None = Query(default=None, ge=-180, le=180),
+    radius_km: float | None = Query(default=None, gt=0, le=20000),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10000),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    if place_type and category and place_type != category:
+        raise HTTPException(status_code=400, detail="type and category must match when both are provided")
+    selected_category = place_type or category
+    if selected_category and selected_category not in PLACE_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Invalid place type")
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="latitude and longitude must be provided together")
+    if radius_km is not None and latitude is None:
+        raise HTTPException(status_code=400, detail="radius_km requires latitude and longitude")
+    rows, total = search_place_rows(
+        conn,
+        identity.account_id,
+        visited=visited,
+        category=selected_category,
+        query=query,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        limit=limit,
+        offset=offset,
+    )
+    return {"places": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/places/{place_id}", response_model=SearchPlace)
+def get_place_details(
+    place_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    row = place_detail_row(conn, identity.account_id, place_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    return row
+
+
+@app.get("/api/groups", response_model=list[Group])
+def list_groups(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    ensure_wishlist(conn, identity.account_id)
+    conn.commit()
+    return list_group_rows(conn, identity.account_id)
+
+
+@app.post("/api/groups", response_model=Group, status_code=201)
+def create_group(
+    payload: GroupCreate,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    name = _group_name(payload.name)
+    _group_mutation_limit(conn, identity.account_id)
+    try:
+        result = create_group_row(conn, identity.account_id, name, payload.placeIds)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return result
+
+
+@app.get("/api/groups/{group_id}", response_model=Group)
+def get_group(
+    group_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    result = group_row(conn, identity.account_id, _record_id(group_id, "Group"))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return result
+
+
+@app.patch("/api/groups/{group_id}", response_model=Group)
+def rename_group(
+    group_id: str,
+    payload: GroupRename,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _record_id(group_id, "Group")
+    name = _group_name(payload.name)
+    current = group_row(conn, identity.account_id, canonical_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if current["is_wishlist"]:
+        raise HTTPException(status_code=409, detail="Wishlist cannot be renamed")
+    _group_mutation_limit(conn, identity.account_id)
+    if not rename_group_row(conn, identity.account_id, canonical_id, name):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/groups/{group_id}", status_code=204)
+def delete_group(
+    group_id: str,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> Response:
+    identity = require_bearer(conn, authorization)
+    canonical_id = _record_id(group_id, "Group")
+    current = group_row(conn, identity.account_id, canonical_id)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if current["is_wishlist"]:
+        raise HTTPException(status_code=409, detail="Wishlist cannot be deleted")
+    _group_mutation_limit(conn, identity.account_id)
+    if not delete_group_row(conn, identity.account_id, canonical_id):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/groups/{group_id}/places", response_model=Group)
+def add_group_places_api(
+    group_id: str,
+    payload: GroupPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _record_id(group_id, "Group")
+    _group_mutation_limit(conn, identity.account_id)
+    try:
+        exists = add_group_places(conn, identity.account_id, canonical_id, payload.placeIds)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not exists:
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.delete("/api/groups/{group_id}/places", response_model=Group)
+def remove_group_places_api(
+    group_id: str,
+    payload: GroupPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    canonical_id = _record_id(group_id, "Group")
+    _group_mutation_limit(conn, identity.account_id)
+    if not remove_group_places(conn, identity.account_id, canonical_id, payload.placeIds):
+        conn.rollback()
+        raise HTTPException(status_code=404, detail="Group not found")
+    conn.commit()
+    return group_row(conn, identity.account_id, canonical_id)
+
+
+@app.get("/api/wishlist", response_model=Group)
+def get_wishlist(
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    result = ensure_wishlist(conn, identity.account_id)
+    conn.commit()
+    return result
+
+
+@app.post("/api/wishlist/places", response_model=Group)
+def add_wishlist_places(
+    payload: GroupPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    _group_mutation_limit(conn, identity.account_id)
+    try:
+        wishlist = ensure_wishlist(conn, identity.account_id)
+        add_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
+    except ValueError as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    conn.commit()
+    return group_row(conn, identity.account_id, wishlist["id"])
+
+
+@app.delete("/api/wishlist/places", response_model=Group)
+def remove_wishlist_places(
+    payload: GroupPlaceMutation,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    identity = require_bearer(conn, authorization)
+    _group_mutation_limit(conn, identity.account_id)
+    wishlist = ensure_wishlist(conn, identity.account_id)
+    remove_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
+    conn.commit()
+    return group_row(conn, identity.account_id, wishlist["id"])
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
@@ -367,7 +641,7 @@ def register(payload: Credentials):
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": False},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": False, "has_password": True},
         "visited_ids": [],
         "visits": [],
         "completed_trail_ids": [],
@@ -398,7 +672,7 @@ def login(payload: Credentials):
     return {
         "token": token,
         "expires_at": expires_at,
-        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": account["email_verified"]},
+        "account": {"id": str(account["id"]), "email": account["email"], "email_verified": account["email_verified"], "has_password": bool(account["password_hash"])},
         "visited_ids": visited_ids(visits),
         "visits": visits,
         "completed_trail_ids": completed_trail_ids,
@@ -456,6 +730,8 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
             raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
         conn.commit()
     return Response(status_code=204)
@@ -476,7 +752,36 @@ def change_password(payload: PasswordChange, authorization: str | None = Header(
             raise HTTPException(status_code=409, detail="Password changed during this request; try again")
         conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
         record_security_event(conn, "password_changed", identity.account_id, "success")
+        conn.commit()
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/password-set", status_code=204)
+def set_password(payload: PasswordSet, authorization: str | None = Header(default=None)) -> Response:
+    """Set the first local password on a Google-created account."""
+    with contextmanager(connection)() as conn:
+        identity = require_bearer(conn, authorization)
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        if account["password_hash"] is not None:
+            raise HTTPException(status_code=409, detail="A password is already set; use password change instead")
+    new_hash = hash_password(payload.newPassword)
+    with contextmanager(connection)() as conn:
+        current_identity = require_bearer(conn, authorization)
+        if current_identity.account_id != identity.account_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
+        if not account or account["password_hash"] is not None:
+            raise HTTPException(status_code=409, detail="A password was set during this request; sign in again")
+        conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
+        conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (identity.account_id,))
+        conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
+        record_security_event(conn, "password_set", identity.account_id, "success")
         conn.commit()
     return Response(status_code=204)
 
@@ -602,6 +907,8 @@ def finish_google_oauth(payload: GoogleCallback):
                 if account["email_verified_at"] is None:
                     conn.execute("UPDATE accounts SET password_hash = NULL, email_verified_at = NOW() WHERE id = %s", (account["id"],))
                     conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
+                    conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
+                    conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (account["id"],))
                     conn.execute("UPDATE account_action_tokens SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (account["id"],))
                 else:
                     conn.execute("UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (account["id"],))
@@ -613,7 +920,9 @@ def finish_google_oauth(payload: GoogleCallback):
         trails = completed_trails_for_account(conn, str(account["id"]))
         record_security_event(conn, "google_sign_in", str(account["id"]), "success")
         conn.commit()
-    return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
+    with contextmanager(connection)() as conn:
+        account = conn.execute("SELECT id, email, password_hash FROM accounts WHERE id = %s", (account["id"],)).fetchone()
+    return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True, "has_password": bool(account.get("password_hash"))}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
 
 
 @app.delete("/api/account/progress", status_code=204)
@@ -669,3 +978,8 @@ def import_guest_progress(
         "imported_trail_count": imported_trails,
         "completed_trail_ids": completed_trails_for_account(conn, identity.account_id),
     }
+
+
+# Mounted last so the API's explicit routes retain precedence. Its lifespan is
+# entered by the parent lifespan above because Starlette does not start mounted lifespans.
+app.mount("/", mcp_http_app)

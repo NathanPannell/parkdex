@@ -212,7 +212,15 @@ def consume_action_token(conn: Connection, token: str, purpose: str):
     ).fetchone()
 
 
-def reserve_rate_limit(conn: Connection, action: str, scope: str, limit: int, window: timedelta) -> None:
+def reserve_rate_limit(
+    conn: Connection,
+    action: str,
+    scope: str,
+    limit: int,
+    window: timedelta,
+    *,
+    record_throttled: bool = True,
+) -> None:
     now = datetime.now(timezone.utc)
     window_start = now - window
     row = conn.execute(
@@ -228,10 +236,11 @@ def reserve_rate_limit(conn: Connection, action: str, scope: str, limit: int, wi
         (action, sha256_hex(scope), now, window_start, window_start, now, window_start, limit),
     ).fetchone()
     if row is None:
-        conn.execute(
-            "INSERT INTO auth_security_events (event_type, scope_hash, outcome) VALUES (%s, %s, 'throttled')",
-            (f"{action}_rate_limit", sha256_hex(scope)),
-        )
+        if record_throttled:
+            conn.execute(
+                "INSERT INTO auth_security_events (event_type, scope_hash, outcome) VALUES (%s, %s, 'throttled')",
+                (f"{action}_rate_limit", sha256_hex(scope)),
+            )
         conn.commit()
         raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
 

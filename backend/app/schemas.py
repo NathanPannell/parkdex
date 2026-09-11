@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
@@ -35,6 +35,58 @@ class PlaceCollection(BaseModel):
     completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
 
 
+class SearchPlace(Place):
+    visited: bool = False
+    distance_km: float | None = Field(default=None, serialization_alias="distanceKm")
+
+
+class PlaceSearchResult(BaseModel):
+    places: list[SearchPlace]
+    total: int
+    limit: int
+    offset: int
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    placeIds: list[str] = Field(
+        default_factory=list,
+        max_length=100,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_snake_case_place_ids(cls, value):
+        if isinstance(value, dict) and "placeIds" not in value and "place_ids" in value:
+            return {**value, "placeIds": value["place_ids"]}
+        return value
+
+
+class GroupRename(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class GroupPlaceMutation(BaseModel):
+    placeIds: list[str] = Field(
+        max_length=100,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_snake_case_place_ids(cls, value):
+        if isinstance(value, dict) and "placeIds" not in value and "place_ids" in value:
+            return {**value, "placeIds": value["place_ids"]}
+        return value
+
+
+class Group(BaseModel):
+    id: str
+    name: str
+    is_wishlist: bool = Field(serialization_alias="isWishlist")
+    created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")
+    place_ids: list[str] = Field(serialization_alias="placeIds")
+    places: list[Place]
 class Visit(BaseModel):
     place_id: str = Field(serialization_alias="placeId")
     visited_at: datetime = Field(serialization_alias="visitedAt")
@@ -75,6 +127,7 @@ class Account(BaseModel):
     id: str
     email: str
     email_verified: bool = Field(serialization_alias="emailVerified")
+    has_password: bool = Field(serialization_alias="hasPassword")
 
 
 class EmailRequest(BaseModel):
@@ -96,6 +149,10 @@ class PasswordResetConfirmation(TokenConfirmation):
 
 class PasswordChange(BaseModel):
     currentPassword: str = Field(min_length=1, max_length=128)
+    newPassword: str = Field(min_length=12, max_length=128)
+
+
+class PasswordSet(BaseModel):
     newPassword: str = Field(min_length=12, max_length=128)
 
 

@@ -18,7 +18,7 @@ Coordinates are representative map pins. Provincial and regional pins use the ar
 
 Bowen Island's Apodaca Park and North Thormanby Island's Buccaneer Bay Park are excluded as Howe Sound/Sunshine Coast features outside the Vancouver Island collection.
 
-The geographic review compares each published park boundary with Vancouver Island and the 24 supported-island coastlines. Parks wholly on other offshore islands are retired from the active catalogue; the full list and reason are recorded in `coverage-audit.json`. Four familiar Vancouver Island day-trip destinations—Mitlenatch Island, Pirates Cove, Saysutshun/Newcastle Island, and Wallace Island—remain intentional park-level exceptions. Their published park footprints are also cut out of the map's gray focus mask.
+The geographic review compares each published park boundary with Vancouver Island and the 24 supported-island coastlines. Parks wholly on other offshore islands are retired from the active catalogue; the full list and reason are recorded in `coverage-audit.json`. Four familiar Vancouver Island excursion destinations—Mitlenatch Island, Pirates Cove, Saysutshun/Newcastle Island, and Wallace Island—remain intentional park-level exceptions. Their published park footprints are also cut out of the map's gray focus mask.
 
 ## Known limitations
 

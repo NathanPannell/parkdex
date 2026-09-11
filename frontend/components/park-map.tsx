@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
+import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
 import {
   boundaryFilter,
@@ -81,7 +81,7 @@ function visiblePlaces(places: Place[], visited: Set<string>, mode: ParkMapMode)
   return mode === "discover" ? places : places.filter((place) => visited.has(place.id));
 }
 
-function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode): GeoJSON.FeatureCollection {
+function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: visiblePlaces(places, visited, mode).map((place) => ({
@@ -92,6 +92,7 @@ function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode
         name: place.name,
         category: place.category,
         visited: visited.has(place.id) ? 1 : 0,
+        groupSelected: selectedIds.has(place.id) ? 1 : 0,
       },
     })),
   };
@@ -193,14 +194,16 @@ function addBoundaryLayers(map: MapLibreMap) {
   boundaryLayerSpecifications(BOUNDARY_DISPLAY_SOURCE_ID).forEach((layer) => map.addLayer(layer, beforeId));
 }
 
-function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null) {
+function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null, selectedIds: ReadonlySet<string> = new Set()) {
   if (!map.getSource(BOUNDARY_SOURCE)) return;
   const ids = places.map((place) => place.id);
   BOUNDARY_VISIBLE_LAYERS.forEach((layer) => {
     map.setFilter(layer, boundaryFilter(ids, layer.includes("island") ? "island" : "park"));
   });
   map.setFilter("boundary-hit", boundaryFilter(ids));
-  const selected = selectedBoundaryFilter(selectedId, ids);
+  const selected: FilterSpecification = selectedIds.size
+    ? ["in", ["get", "id"], ["literal", [...selectedIds]]]
+    : selectedBoundaryFilter(selectedId, ids);
   BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, selected));
 }
 
@@ -210,6 +213,7 @@ export function ParkMap({
   mode = "explored",
   currentLocation = null,
   selectedId,
+  selectedIds = new Set<string>(),
   onSelect,
   onBoundaryLoadState,
 }: {
@@ -218,12 +222,13 @@ export function ParkMap({
   mode?: ParkMapMode;
   currentLocation?: MapLocation | null;
   selectedId: string | null;
+  selectedIds?: ReadonlySet<string>;
   onSelect: (id: string) => void;
   onBoundaryLoadState?: (state: BoundaryLoadState) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const dataRef = useRef({ places, visited, mode, currentLocation });
+  const dataRef = useRef({ places, visited, mode, currentLocation, selectedIds });
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const boundaryStateRef = useRef(onBoundaryLoadState);
@@ -234,7 +239,7 @@ export function ParkMap({
   const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
 
-  useEffect(() => { dataRef.current = { places, visited, mode, currentLocation }; }, [places, visited, mode, currentLocation]);
+  useEffect(() => { dataRef.current = { places, visited, mode, currentLocation, selectedIds }; }, [places, visited, mode, currentLocation, selectedIds]);
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { boundaryStateRef.current = onBoundaryLoadState; }, [onBoundaryLoadState]);
@@ -303,9 +308,9 @@ export function ParkMap({
           if (!map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("canonical", "failed");
           if (!map.isSourceLoaded(BOUNDARY_DISPLAY_SOURCE_ID)) reportBoundaryStatus("display", "failed");
         }, 12_000);
-        const { places: currentPlaces, visited: currentVisited, mode: currentMode } = dataRef.current;
+        const { places: currentPlaces, visited: currentVisited, mode: currentMode, selectedIds: currentSelectedIds } = dataRef.current;
         const currentVisiblePlaces = visiblePlaces(currentPlaces, currentVisited, currentMode);
-        updateBoundaryFilters(map, currentVisiblePlaces, selectedRef.current);
+        updateBoundaryFilters(map, currentVisiblePlaces, selectedRef.current, currentSelectedIds);
         const availableIds = boundaryPlaceIds(index);
         currentVisited.forEach((id) => {
           if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
@@ -336,6 +341,7 @@ export function ParkMap({
           visited: currentVisited,
           mode: currentMode,
           currentLocation: initialLocation,
+          selectedIds: initialSelectedIds,
         } = dataRef.current;
         const explorationIds = currentMode === "explored" ? [...currentVisited] : [];
         map.addSource(EXPLORATION_TERRITORY_SOURCE_ID, {
@@ -345,7 +351,7 @@ export function ParkMap({
         explorationLayerSpecifications(explorationIds).forEach((layer) => map.addLayer(layer));
         map.addSource("places", {
           type: "geojson",
-          data: collectionData(currentPlaces, currentVisited, currentMode),
+          data: collectionData(currentPlaces, currentVisited, currentMode, initialSelectedIds),
           cluster: true,
           clusterMaxZoom: 10,
           clusterRadius: 52,
@@ -446,14 +452,14 @@ export function ParkMap({
     if (!map) return;
     clusterFitRequestRef.current += 1;
     const source = map.getSource("places") as GeoJSONSource | undefined;
-    source?.setData(collectionData(places, visited, mode));
+    source?.setData(collectionData(places, visited, mode, selectedIds));
     const explorationFilter = explorationVisitedFilter(mode === "explored" ? [...visited] : []);
     const explorationEdgeFilter = explorationBoundaryFilter(mode === "explored" ? [...visited] : []);
     if (map.getLayer("exploration-fill")) map.setFilter("exploration-fill", explorationFilter);
     if (map.getLayer("exploration-edge-glow")) map.setFilter("exploration-edge-glow", explorationEdgeFilter);
     if (map.getLayer("exploration-edge")) map.setFilter("exploration-edge", explorationEdgeFilter);
     if (!map.getSource(BOUNDARY_SOURCE)) return;
-    updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId);
+        updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId, selectedIds);
     const availableIds = boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set<string>();
     boundaryVisitedRef.current.forEach((id) => {
       if (!visited.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: false });
@@ -462,7 +468,7 @@ export function ParkMap({
       if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
     });
     boundaryVisitedRef.current = new Set([...visited].filter((id) => availableIds.has(id)));
-  }, [places, visited, mode, selectedId]);
+  }, [places, visited, mode, selectedId, selectedIds]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJSONSource | undefined;
@@ -471,13 +477,14 @@ export function ParkMap({
 
   useEffect(() => {
     clusterFitRequestRef.current += 1;
-    if (!selectedId || !mapRef.current) return;
-    const place = places.find((candidate) => candidate.id === selectedId);
-    if (!place) return;
+    if ((!selectedId && !selectedIds.size) || !mapRef.current) return;
+    const place = selectedId ? places.find((candidate) => candidate.id === selectedId) : undefined;
+    const groupPlaces = places.filter((candidate) => selectedIds.has(candidate.id));
+    if (!place && !groupPlaces.length) return;
     const map = mapRef.current;
     const container = containerRef.current;
     if (!container) return;
-    updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId);
+    updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId, selectedIds);
     let animationFrame = 0;
     const fitSelected = () => {
       window.cancelAnimationFrame(animationFrame);
@@ -487,8 +494,20 @@ export function ParkMap({
         const padding = measuredSelectionPadding(container);
         const mapRect = container.getBoundingClientRect();
         if (!hasUsableCameraViewport(mapRect, padding)) return;
-        if (boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, selectedId, !reduceMotion, padding)) return;
-        map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+        if (place && boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, place.id, !reduceMotion, padding)) return;
+        if (place) {
+          map.easeTo({ center: [place.longitude, place.latitude], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+          return;
+        }
+        const longitudes = groupPlaces.map((candidate) => candidate.longitude);
+        const latitudes = groupPlaces.map((candidate) => candidate.latitude);
+        if (!longitudes.length || !latitudes.length) return;
+        const bounds: [[number, number], [number, number]] = [[Math.min(...longitudes), Math.min(...latitudes)], [Math.max(...longitudes), Math.max(...latitudes)]];
+        if (bounds[0][0] === bounds[1][0] && bounds[0][1] === bounds[1][1]) {
+          map.easeTo({ center: bounds[0], padding, zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
+        } else {
+          map.fitBounds(bounds, { padding, maxZoom: 12, duration: reduceMotion ? 0 : 520 });
+        }
       });
     };
     fitSelected();
@@ -502,7 +521,7 @@ export function ParkMap({
       resizeObserver.disconnect();
       window.removeEventListener("resize", fitSelected);
     };
-  }, [selectedId, places, visited, mode, boundaryRevision]);
+  }, [selectedId, places, visited, mode, boundaryRevision, selectedIds]);
 
   return (
     <div className="map-wrap">

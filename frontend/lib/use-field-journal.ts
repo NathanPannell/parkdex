@@ -14,6 +14,7 @@ import {
   logout as logoutAccount,
   requestEmailVerification as requestAccountEmailVerification,
   resetAccountProgress,
+  setPassword as setAccountPassword,
   type Account,
   type AccountSession,
   type Visit,
@@ -73,11 +74,13 @@ export type FieldJournal = {
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
   authenticateWithGoogle: (code: string, state: string, codeVerifier: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setPassword: (newPassword: string) => Promise<void>;
   requestEmailVerification: () => Promise<void>;
   confirmEmailVerification: (verificationToken: string) => Promise<void>;
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
   resetProgress: () => Promise<void>;
+  authenticatedRequest: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 function hasEntries(outbox: VisitOutbox) {
@@ -222,6 +225,17 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (!epochRef.current.isCurrent(capturedEpoch) || identityRef.current.kind !== "account") return;
     switchToGuest("Your session expired. Sign in again to continue syncing your account.");
   }, [switchToGuest]);
+
+  const authenticatedRequest = useCallback(async (path: string, init: RequestInit = {}) => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account") throw new Error("Sign in to manage groups.");
+    const capturedEpoch = epochRef.current.capture();
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${identity.token}`);
+    const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+    if (response.status === 401) expireAccount(capturedEpoch);
+    return response;
+  }, [apiBaseUrl, expireAccount]);
 
   const putProgress = useCallback(async (
     kind: "visits" | "trails",
@@ -564,6 +578,21 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
   }, [apiBaseUrl, switchToGuest]);
 
+  const setPassword = useCallback(async (newPassword: string) => {
+    const identity = identityRef.current;
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    if (identity.kind !== "account") throw new Error("Sign in before setting your password.");
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    try {
+      await setAccountPassword(apiBaseUrl, identity.token, newPassword);
+      switchToGuest("Password set. Sign in again on this device.");
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [apiBaseUrl, switchToGuest]);
+
   const logout = useCallback(async () => {
     if (transitionRef.current || identityRef.current.kind !== "account") return;
     transitionRef.current = true;
@@ -681,10 +710,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     authenticate,
     authenticateWithGoogle,
     changePassword,
+    setPassword,
     requestEmailVerification,
     confirmEmailVerification,
     logout,
     importGuest,
     resetProgress,
+    authenticatedRequest,
   };
 }
