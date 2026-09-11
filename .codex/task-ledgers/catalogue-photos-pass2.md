@@ -32,7 +32,8 @@ Search every remaining catalogue photo gap using expanded aliases, Wikimedia Com
 - Independently reviewed both regional handoffs. Brooks Point coordinates fall inside the official park polygon and its Commons metadata records CC BY 2.0; Stoney Hill's current Flickr caption, CC BY 2.0 link, official CVRD view description, and image subject all match.
 - Integrated five optimized photo sets: Brooks Point, Stoney Hill, Mansons Landing, Morden Colliery Historic, and Spider Lake. Coverage is now 112 / 198: 2 national, 63 provincial, 23 regional, 24 islands; park coverage is 88 / 174 (50.6%).
 - The focused first batch is committed locally as `c4a1374`. An attempted push was rejected by automatic approval review; root is handling the scoped push using the user's earlier staging authorization.
+- The non-Commons residual pass is complete: Openverse was queried for all 43 gaps (32 zero-result searches; 11 searches with 31 mostly unrelated results), direct Flickr/file pages were reviewed for 36, and seven explicit direct-search omissions are recorded. Three candidates passed and 40 remain missing with individual reasons in `.codex/photo-search-report-provincial-residual.md`.
 
 ## Next action
 
-Run the focused manifest and asset-budget checks for the three-candidate residual delta, create a second contact sheet, and commit it for root review. Continue integrating any further verified residual candidates as the independent Openverse/Flickr pass reports them.
+Commit the final residual report and hand the documentation-only delta to root for its already authorized branch push. Await independent quality review; do not merge or deploy.

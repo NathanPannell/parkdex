@@ -23,7 +23,7 @@ The strongest file was inspected at full resolution but withheld after independe
 
 ## Non-Commons residual follow-up
 
-The remaining 43 provincial gaps were handed to a separate Openverse/direct-Flickr pass without further Commons API calls. Three exact-place files have passed independent review so far:
+The remaining 43 provincial gaps received an Openverse commercial-license pass without further Commons API calls: 32 searches returned no results and 11 returned 31 mostly unrelated files. Direct Flickr/file-page review covered 36 of the 43; seven names were not attempted there and are identified in `.codex/photo-search-report-provincial-residual.md`. Three exact-place files passed independent review:
 
 | Place | Evidence | License |
 | --- | --- | --- |
@@ -32,3 +32,5 @@ The remaining 43 provincial gaps were handed to a separate Openverse/direct-Flic
 | Spider Lake Park | The source title names the park and describes its warm lake and small beach; BC Parks describes the same features. | Kurayba, CC BY-SA 2.0 |
 
 All three current Flickr file pages link to the stated commercial-compatible license deeds. Their downloaded originals were independently inspected for relevance and crop suitability before integration.
+
+The other 40 remain missing for the individual reasons in the residual report. This was a bounded source pass; it does not claim that every possible source was exhausted.
