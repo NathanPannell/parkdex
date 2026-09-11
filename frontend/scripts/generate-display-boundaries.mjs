@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import buffer from "@turf/buffer";
 import booleanValid from "@turf/boolean-valid";
 import simplify from "@turf/simplify";
+import polygonClipping from "polygon-clipping";
 
 const inputUrl = new URL("../../data/boundaries.geojson", import.meta.url);
 const outputUrl = new URL("../public/data/boundaries-display.v1.geojson", import.meta.url);
@@ -51,6 +52,25 @@ export function displayBufferMeters(feature) {
   return Math.min(MAX_BUFFER_METERS, Math.max(MIN_BUFFER_METERS, diagonalKm(feature.geometry) * 1000 * BUFFER_PER_DIAGONAL));
 }
 
+function containedDisplayBoundary(feature, canonical) {
+  // Keep the clipping operands at the asset's eventual precision. This
+  // avoids near-coincident buffered vertices producing an uncloseable ring
+  // in polygon-clipping while retaining sub-metre display detail.
+  const displayCoordinates = roundCoordinatesTo(feature.geometry.coordinates, 6);
+  const canonicalCoordinates = roundCoordinatesTo(canonical.geometry.coordinates, 6);
+  const coordinates = polygonClipping.intersection(
+    feature.geometry.type === "Polygon" ? [displayCoordinates] : displayCoordinates,
+    canonical.geometry.type === "Polygon" ? [canonicalCoordinates] : canonicalCoordinates,
+  );
+  if (!coordinates.length) throw new Error(`Could not contain display boundary for ${canonical.properties?.id ?? "unknown"}`);
+  return {
+    ...feature,
+    geometry: coordinates.length === 1
+      ? { type: "Polygon", coordinates: coordinates[0] }
+      : { type: "MultiPolygon", coordinates },
+  };
+}
+
 export function softenBoundary(feature) {
   const bufferMeters = displayBufferMeters(feature);
   const roundingMeters = Math.min(MAX_ROUNDING_METERS, Math.max(MIN_ROUNDING_METERS, diagonalKm(feature.geometry) * 1000 * ROUNDING_PER_DIAGONAL));
@@ -59,7 +79,13 @@ export function softenBoundary(feature) {
   const expanded = buffer(simplified, (bufferMeters + roundingMeters) / 1000, { units: "kilometers", steps: BUFFER_STEPS });
   const softened = expanded && buffer(expanded, -roundingMeters / 1000, { units: "kilometers", steps: BUFFER_STEPS });
   if (!softened) throw new Error(`Could not create display boundary for ${feature.properties?.id ?? "unknown"}`);
-  return { ...softened, properties: feature.properties };
+  const display = { ...softened, properties: feature.properties };
+  // Rounding is a presentation treatment. Clip park displays back to their
+  // canonical polygon so the treatment cannot create a false overlap with a
+  // neighbouring park. Islands intentionally retain their display offset.
+  return feature.properties?.category === "island"
+    ? display
+    : containedDisplayBoundary(display, feature);
 }
 
 function polygonParts(feature) {

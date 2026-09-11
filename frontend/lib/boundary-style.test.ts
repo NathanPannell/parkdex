@@ -54,7 +54,7 @@ describe("boundary map style", () => {
     const selectedLine = layers.find((layer) => layer.id === "boundary-selected-line");
 
     expect(selectedFill?.paint).toMatchObject({
-      "fill-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
+      "fill-color": ["match", ["get", "category"], "island", "#ffd862", "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
     });
     expect((selectedHalo?.paint as Record<string, unknown> | undefined)?.["line-width"])
       .toEqual(["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5]);

@@ -1,6 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import polygonClipping from "polygon-clipping";
+import buffer from "@turf/buffer";
+import simplify from "@turf/simplify";
 
 import {
   EXPLORATION_CATEGORY_WEIGHTS,
@@ -11,10 +13,14 @@ import {
 } from "../lib/exploration-geometry.ts";
 
 const catalogueUrl = new URL("../../data/places.json", import.meta.url);
-const displayUrl = new URL("../public/data/boundaries-display.v1.geojson", import.meta.url);
+const canonicalBoundariesUrl = new URL("../../data/boundaries.geojson", import.meta.url);
 const mainIslandUrl = new URL("../../data/vancouver-island-focus.geojson", import.meta.url);
 const outputUrl = new URL("../public/data/exploration-territories.v1.geojson", import.meta.url);
 const CIRCLE_STEPS = 192;
+const EXPLORATION_PARK_PADDING_METERS = 180;
+const EXPLORATION_ISLAND_PADDING_METERS = 220;
+const EXPLORATION_PADDING_STEPS = 8;
+const EXPLORATION_SIMPLIFY_PER_PADDING = 0.3;
 const EXCURSION_IDS = new Set([
   "provincial-mitlenatch-island-nature-park",
   "provincial-pirates-cove-marine-park",
@@ -22,9 +28,9 @@ const EXCURSION_IDS = new Set([
   "provincial-wallace-island-marine-park",
 ]);
 
-const [places, display, mainIsland] = await Promise.all([
+const [places, canonical, mainIsland] = await Promise.all([
   readFile(fileURLToPath(catalogueUrl), "utf8").then(JSON.parse),
-  readFile(fileURLToPath(displayUrl), "utf8").then(JSON.parse),
+  readFile(fileURLToPath(canonicalBoundariesUrl), "utf8").then(JSON.parse),
   readFile(fileURLToPath(mainIslandUrl), "utf8").then(JSON.parse),
 ]);
 
@@ -33,10 +39,25 @@ function exteriorPolygons(feature) {
   return feature.geometry.coordinates.map((polygon) => [polygon[0]]);
 }
 
-const nearbyIslands = display.features.filter((feature) => feature.properties?.category === "island");
-const excursionParks = display.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
+function paddedLandFeature(feature) {
+  const paddingMeters = feature.properties?.category === "island"
+    ? EXPLORATION_ISLAND_PADDING_METERS
+    : EXPLORATION_PARK_PADDING_METERS;
+  const toleranceDegrees = paddingMeters / 111_320 * EXPLORATION_SIMPLIFY_PER_PADDING;
+  const simplified = simplify(feature, { tolerance: toleranceDegrees, highQuality: true, mutate: false });
+  const padded = buffer(simplified, paddingMeters / 1000, { units: "kilometers", steps: EXPLORATION_PADDING_STEPS });
+  if (!padded) throw new Error(`Could not pad exploration land for ${feature.properties?.id ?? "unknown"}`);
+  return padded;
+}
+
+// Exploration land intentionally starts from canonical boundaries and owns
+// its own rounded padding. It must not inherit presentation changes from the
+// per-park display asset used by the discover map.
+const nearbyIslands = canonical.features.filter((feature) => feature.properties?.category === "island");
+const excursionParks = canonical.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
 if (excursionParks.length !== EXCURSION_IDS.size) throw new Error("Exploration territory excursion geometry is incomplete");
-const landInputs = [mainIsland, ...nearbyIslands, ...excursionParks].flatMap(exteriorPolygons);
+const landInputs = [mainIsland, ...nearbyIslands.map(paddedLandFeature), ...excursionParks.map(paddedLandFeature)]
+  .flatMap(exteriorPolygons);
 const land = polygonClipping.union(landInputs[0], ...landInputs.slice(1));
 
 function everyPair(multiPolygon) {
@@ -351,6 +372,11 @@ const asset = {
     edgeSegmentCount: uniqueSegments.size,
     coastEdgeSegmentCount,
     interiorEdgeSegmentCount,
+    landSource: "canonical-boundaries-independent-padded",
+    explorationPaddingMeters: {
+      park: EXPLORATION_PARK_PADDING_METERS,
+      island: EXPLORATION_ISLAND_PADDING_METERS,
+    },
     note: "Display-only completion estimate; it does not represent land travelled, access, or ownership.",
   },
   features: [{

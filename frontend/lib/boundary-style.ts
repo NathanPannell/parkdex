@@ -89,7 +89,7 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       source: displaySource,
       filter: selectedBoundaryFilter(null, []),
       paint: {
-        "fill-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
+        "fill-color": ["match", ["get", "category"], "island", "#ffd862", "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
         "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.44, 9, 0.52, 12, 0.6],
       },
     },

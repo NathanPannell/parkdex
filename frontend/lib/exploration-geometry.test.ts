@@ -133,6 +133,8 @@ describe("weighted exploration territory", () => {
       activePlaceCount: 195,
       territoryCount: 195,
       categoryWeights: EXPLORATION_CATEGORY_WEIGHTS,
+      landSource: "canonical-boundaries-independent-padded",
+      explorationPaddingMeters: { park: 180, island: 220 },
     });
     expect(new Set(territories.map((feature) => feature.properties.id)))
       .toEqual(new Set(places.map((place) => place.id)));
