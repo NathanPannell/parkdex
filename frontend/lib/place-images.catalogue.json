@@ -1,0 +1,1960 @@
+{
+  "provincial-arbutus-grove-park": {
+    "thumbnail": {
+      "src": "/places/arbutus-grove-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/arbutus-grove.webp",
+      "width": 768,
+      "height": 1024
+    },
+    "alt": "A mature arbutus tree rising through Arbutus Grove Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Arbutus_Tree_(51279255866).jpg",
+    "sourceTitle": "Arbutus Tree (51279255866)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Arbutus_Tree_%2851279255866%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Arbutus Grove Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Arbutus_Tree_(51279255866).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-bamberton-park": {
+    "thumbnail": {
+      "src": "/places/bamberton-thumb.webp",
+      "width": 320,
+      "height": 217
+    },
+    "detail": {
+      "src": "/places/bamberton.webp",
+      "width": 760,
+      "height": 516
+    },
+    "alt": "The stone and timber entrance sign for Bamberton Provincial Park",
+    "creator": "Redonebird",
+    "license": "CC0 1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bamberton_PP.jpg",
+    "sourceTitle": "Bamberton PP",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/07/Bamberton_PP.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Bamberton Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bamberton_PP.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-bellhouse-park": {
+    "thumbnail": {
+      "src": "/places/bellhouse-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/bellhouse.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Rocky shoreline and sea view from Bellhouse Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bellhouse_Provincial_Park_(7743628022).jpg",
+    "sourceTitle": "Bellhouse Provincial Park (7743628022)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/23/Bellhouse_Provincial_Park_%287743628022%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Bellhouse Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bellhouse_Provincial_Park_(7743628022).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-big-bunsby-marine-park": {
+    "thumbnail": {
+      "src": "/places/big-bunsby-marine-thumb.webp",
+      "width": 320,
+      "height": 189
+    },
+    "detail": {
+      "src": "/places/big-bunsby-marine.webp",
+      "width": 960,
+      "height": 567
+    },
+    "alt": "A paddler crossing calm water among the forested Bunsby Islands",
+    "creator": "Kiwican",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Exploring_the_Bunsby_Islands.jpg",
+    "sourceTitle": "Exploring the Bunsby Islands",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Exploring_the_Bunsby_Islands.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Big Bunsby Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Exploring_the_Bunsby_Islands.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-bodega-ridge-park": {
+    "thumbnail": {
+      "src": "/places/bodega-ridge-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/bodega-ridge.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Island and mountain views from Bodega Ridge Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bodega_Ridge_Provincial_Park_(7743625994).jpg",
+    "sourceTitle": "Bodega Ridge Provincial Park (7743625994)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/43/Bodega_Ridge_Provincial_Park_%287743625994%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Bodega Ridge Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bodega_Ridge_Provincial_Park_(7743625994).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-boyle-point-park": {
+    "thumbnail": {
+      "src": "/places/boyle-point-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/boyle-point.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Two bald eagles perched in trees at Boyle Point on Denman Island",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bald_Eagles_(16619049882).jpg",
+    "sourceTitle": "Bald Eagles (16619049882)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8b/Bald_Eagles_%2816619049882%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons description locates the eagles at Boyle Point on Denman Island; BC Parks identifies Boyle Point as the park's namesake protected point.",
+    "locationEvidenceUrl": "https://bcparks.ca/boyle-point-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-burgoyne-bay-park": {
+    "thumbnail": {
+      "src": "/places/burgoyne-bay-thumb.webp",
+      "width": 320,
+      "height": 100
+    },
+    "detail": {
+      "src": "/places/burgoyne-bay.webp",
+      "width": 960,
+      "height": 299
+    },
+    "alt": "Burgoyne Bay and the green slopes of Burgoyne Bay Provincial Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Burgoyne_Bay_with_Burgoyne_Bay_Provincial_Park,_Saltspring_Island,_British_Columbia,_Canada_08.jpg",
+    "sourceTitle": "Burgoyne Bay with Burgoyne Bay Provincial Park, Saltspring Island, British Columbia, Canada 08",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Burgoyne_Bay_with_Burgoyne_Bay_Provincial_Park%2C_Saltspring_Island%2C_British_Columbia%2C_Canada_08.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Burgoyne Bay Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Burgoyne_Bay_with_Burgoyne_Bay_Provincial_Park,_Saltspring_Island,_British_Columbia,_Canada_08.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-clayoquot-plateau-park": {
+    "thumbnail": {
+      "src": "/places/clayoquot-plateau-thumb.webp",
+      "width": 320,
+      "height": 180
+    },
+    "detail": {
+      "src": "/places/clayoquot-plateau.webp",
+      "width": 960,
+      "height": 540
+    },
+    "alt": "Mountain ridges and forest in Clayoquot Plateau Provincial Park",
+    "creator": "Abhiroop Singh Gill",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Clayoquot_Plateau_Provincial_Park.jpg",
+    "sourceTitle": "Clayoquot Plateau Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/be/Clayoquot_Plateau_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Clayoquot Plateau Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Clayoquot_Plateau_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-collinson-point-park": {
+    "thumbnail": {
+      "src": "/places/collinson-point-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/collinson-point.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Arbutus trees above the rocky shoreline at Collinson Point Provincial Park",
+    "creator": "Arrecife",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Shoreline_with_Arbutus,_Collinson_Point.jpg",
+    "sourceTitle": "Shoreline with Arbutus, Collinson Point",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/1d/Shoreline_with_Arbutus%2C_Collinson_Point.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Collinson Point Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Shoreline_with_Arbutus,_Collinson_Point.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-cowichan-river-park": {
+    "thumbnail": {
+      "src": "/places/cowichan-river-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/cowichan-river.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Cowichan River rushing through Marie Canyon in the provincial park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:David_Stanley_-_Cowichan_River_Provincial_Park.jpg",
+    "sourceTitle": "David Stanley - Cowichan River Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cd/David_Stanley_-_Cowichan_River_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Cowichan River Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:David_Stanley_-_Cowichan_River_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-dionisio-point-park": {
+    "thumbnail": {
+      "src": "/places/dionisio-point-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/dionisio-point.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A sheltered lagoon in Dionisio Point Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dionisio_Point_Provincial_Park_(7743625336).jpg",
+    "sourceTitle": "Dionisio Point Provincial Park (7743625336)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/21/Dionisio_Point_Provincial_Park_%287743625336%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Dionisio Point Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Dionisio_Point_Provincial_Park_(7743625336).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-drumbeg-park": {
+    "thumbnail": {
+      "src": "/places/drumbeg-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/drumbeg.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Sculpted sandstone shoreline at low tide in Drumbeg Provincial Park",
+    "creator": "Laurie MacBride",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Low_tide_at_the_beach_at_Drumbeg_Provincial_Park.jpg",
+    "sourceTitle": "Low tide at the beach at Drumbeg Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Low_tide_at_the_beach_at_Drumbeg_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Drumbeg Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Low_tide_at_the_beach_at_Drumbeg_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-eves-park": {
+    "thumbnail": {
+      "src": "/places/eves-thumb.webp",
+      "width": 320,
+      "height": 121
+    },
+    "detail": {
+      "src": "/places/eves.webp",
+      "width": 960,
+      "height": 362
+    },
+    "alt": "A grassy bluff bordered by forest in Eves Provincial Park",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Eves_Park_Bluffs_-_panoramio.jpg",
+    "sourceTitle": "Eves Park Bluffs - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/7/73/Eves_Park_Bluffs_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Eves Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Eves_Park_Bluffs_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-fillongley-park": {
+    "thumbnail": {
+      "src": "/places/fillongley-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/fillongley.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Hornby Island viewed across the water from Fillongley Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hornby_from_Denman_(16442326470).jpg",
+    "sourceTitle": "Hornby from Denman (16442326470)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/91/Hornby_from_Denman_%2816442326470%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Fillongley Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Hornby_from_Denman_(16442326470).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-fossli-park": {
+    "thumbnail": {
+      "src": "/places/fossli-thumb.webp",
+      "width": 320,
+      "height": 569
+    },
+    "detail": {
+      "src": "/places/fossli.webp",
+      "width": 960,
+      "height": 1707
+    },
+    "alt": "A narrow footbridge crossing a rainforest creek in Fossli Provincial Park",
+    "creator": "Kevstan",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Footbridge_in_Fossli_Park.jpg",
+    "sourceTitle": "Footbridge in Fossli Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/84/Footbridge_in_Fossli_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Fossli Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Footbridge_in_Fossli_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-french-beach-park": {
+    "thumbnail": {
+      "src": "/places/french-beach-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/french-beach.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Driftwood and waves along French Beach Provincial Park",
+    "creator": "Alanah Nasadyk",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:French_Beach_Provincial_Park.jpg",
+    "sourceTitle": "French Beach Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/04/French_Beach_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies French Beach Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:French_Beach_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-gabriola-sands-park": {
+    "thumbnail": {
+      "src": "/places/gabriola-sands-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/gabriola-sands.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Sandstone shore and sea at Gabriola Sands Provincial Park",
+    "creator": "Ruth Hartnup",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gabriola_Sands_Provincial_Park.jpg",
+    "sourceTitle": "Gabriola Sands Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b8/Gabriola_Sands_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Gabriola Sands Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Gabriola_Sands_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-gibson-marine-park": {
+    "thumbnail": {
+      "src": "/places/gibson-marine-thumb.webp",
+      "width": 320,
+      "height": 242
+    },
+    "detail": {
+      "src": "/places/gibson-marine.webp",
+      "width": 960,
+      "height": 725
+    },
+    "alt": "A windsurfer and kayaks off Gibson Marine Provincial Park",
+    "creator": "Andrew Daviel",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Windsurfer_at_Gibson_Provincial_Park.jpg",
+    "sourceTitle": "Windsurfer at Gibson Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/30/Windsurfer_at_Gibson_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Gibson Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Windsurfer_at_Gibson_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-gowlland-tod-park": {
+    "thumbnail": {
+      "src": "/places/gowlland-tod-thumb.webp",
+      "width": 320,
+      "height": 194
+    },
+    "detail": {
+      "src": "/places/gowlland-tod.webp",
+      "width": 960,
+      "height": 581
+    },
+    "alt": "A quiet forested bay in Gowlland Tod Provincial Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gowlland_Tod_Provincial_Park,_Vancouver_Island,_Canada_03.jpg",
+    "sourceTitle": "Gowlland Tod Provincial Park, Vancouver Island, Canada 03",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/32/Gowlland_Tod_Provincial_Park%2C_Vancouver_Island%2C_Canada_03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Gowlland Tod Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Gowlland_Tod_Provincial_Park,_Vancouver_Island,_Canada_03.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-helliwell-park": {
+    "thumbnail": {
+      "src": "/places/helliwell-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/helliwell.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A grassy coastal trail beside the cliffs of Helliwell Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Helliwell_Provincial_Park_(16438058070).jpg",
+    "sourceTitle": "Helliwell Provincial Park (16438058070)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Helliwell_Provincial_Park_%2816438058070%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Helliwell Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Helliwell_Provincial_Park_(16438058070).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-hemer-park": {
+    "thumbnail": {
+      "src": "/places/hemer-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/hemer.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A wetland bordered by forest in Hemer Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hemer_Provincial_Park_(9457280183).jpg",
+    "sourceTitle": "Hemer Provincial Park (9457280183)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/6d/Hemer_Provincial_Park_%289457280183%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Hemer Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Hemer_Provincial_Park_(9457280183).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-kitty-coleman-beach-park": {
+    "thumbnail": {
+      "src": "/places/kitty-coleman-beach-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/kitty-coleman-beach.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Strait of Georgia shoreline at Kitty Coleman Beach Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kitty_Coleman_Beach_Provincial_Park_(6942517582).jpg",
+    "sourceTitle": "Kitty Coleman Beach Provincial Park (6942517582)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/12/Kitty_Coleman_Beach_Provincial_Park_%286942517582%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Kitty Coleman Beach Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kitty_Coleman_Beach_Provincial_Park_(6942517582).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-koksilah-river-park": {
+    "thumbnail": {
+      "src": "/places/koksilah-river-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/koksilah-river.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Koksilah River flowing between forested banks in the provincial park",
+    "creator": "Jennifer Dawes",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:2012.03.25_Koksilah_River_in_spring.jpg",
+    "sourceTitle": "2012.03.25 Koksilah River in spring",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2f/2012.03.25_Koksilah_River_in_spring.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Koksilah River Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:2012.03.25_Koksilah_River_in_spring.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-main-lake-park": {
+    "thumbnail": {
+      "src": "/places/main-lake-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/main-lake.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Canoes pulled onto a lakeside campsite beach in Main Lake Provincial Park",
+    "creator": "Loneshieling",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Main_Lakes_2.jpg",
+    "sourceTitle": "Main Lakes 2",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/38/Main_Lakes_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Main Lake Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Main_Lakes_2.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-marble-river-park": {
+    "thumbnail": {
+      "src": "/places/marble-river-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/marble-river.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Bear Falls cascading through Marble River Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Falls_(28817878196).jpg",
+    "sourceTitle": "Bear Falls (28817878196)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Bear_Falls_%2828817878196%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Marble River Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Falls_(28817878196).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-miracle-beach-park": {
+    "thumbnail": {
+      "src": "/places/miracle-beach-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/miracle-beach.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A wide beach facing the Strait of Georgia in Miracle Beach Provincial Park",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Miracle_Beach_Provincial_Park.jpg",
+    "sourceTitle": "Miracle Beach Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Miracle_Beach_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Miracle Beach Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Miracle_Beach_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-montague-harbour-marine-park": {
+    "thumbnail": {
+      "src": "/places/montague-harbour-marine-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/montague-harbour-marine.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Shell beach and calm water in Montague Harbour Marine Provincial Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Montague_Harbour_Provincial_Marine_Park_(7743626430).jpg",
+    "sourceTitle": "Montague Harbour Provincial Marine Park (7743626430)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/6c/Montague_Harbour_Provincial_Marine_Park_%287743626430%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Montague Harbour Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Montague_Harbour_Provincial_Marine_Park_(7743626430).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-mount-maxwell-park": {
+    "thumbnail": {
+      "src": "/places/mount-maxwell-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/mount-maxwell.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Gulf Island channels viewed from Baynes Peak in Mount Maxwell Provincial Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Baynes_Peak,_Saltspring_Island,_British_Columbia,_Canada_04.jpg",
+    "sourceTitle": "View from Baynes Peak, Saltspring Island, British Columbia, Canada 04",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9f/View_from_Baynes_Peak%2C_Saltspring_Island%2C_British_Columbia%2C_Canada_04.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons title identifies Baynes Peak on Salt Spring Island; BC Parks documents Baynes Peak as the summit viewpoint in Mount Maxwell Park.",
+    "locationEvidenceUrl": "https://bcparks.ca/mount-maxwell-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-nuchatlitz-park": {
+    "thumbnail": {
+      "src": "/places/nuchatlitz-thumb.webp",
+      "width": 320,
+      "height": 215
+    },
+    "detail": {
+      "src": "/places/nuchatlitz.webp",
+      "width": 960,
+      "height": 644
+    },
+    "alt": "Calm water and forested islets in Nuchatlitz Provincial Park",
+    "creator": "Kiwican",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Still_waters_on_a_wild_coast.jpg",
+    "sourceTitle": "Still waters on a wild coast",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/af/Still_waters_on_a_wild_coast.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Nuchatlitz Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Still_waters_on_a_wild_coast.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-octopus-islands-marine-park": {
+    "thumbnail": {
+      "src": "/places/octopus-islands-marine-thumb.webp",
+      "width": 320,
+      "height": 230
+    },
+    "detail": {
+      "src": "/places/octopus-islands-marine.webp",
+      "width": 435,
+      "height": 313
+    },
+    "alt": "A weathered Octopus Islands Marine Provincial Park sign beside the shore",
+    "creator": "Carl & Gloria Tenning",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Octopus_Island_Marine_Park_sign.jpg",
+    "sourceTitle": "Octopus Island Marine Park sign",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Octopus_Island_Marine_Park_sign.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Octopus Islands Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Octopus_Island_Marine_Park_sign.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-petroglyph-park": {
+    "thumbnail": {
+      "src": "/places/petroglyph-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/petroglyph.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Carved rock figures at Petroglyph Provincial Park",
+    "creator": "Ymblanter",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Petroglyph_Provincial_Park_petroglyphs_2.jpg",
+    "sourceTitle": "Petroglyph Provincial Park petroglyphs 2",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Petroglyph_Provincial_Park_petroglyphs_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Petroglyph Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Petroglyph_Provincial_Park_petroglyphs_2.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-pirates-cove-marine-park": {
+    "thumbnail": {
+      "src": "/places/pirates-cove-marine-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/pirates-cove-marine.webp",
+      "width": 960,
+      "height": 638
+    },
+    "alt": "A BC Parks marker for Pirates Cove Marine Provincial Park",
+    "creator": "Louise Janes",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Pirates_cove.jpg",
+    "sourceTitle": "Pirates cove",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/67/Pirates_cove.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Pirates Cove Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Pirates_cove.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-quatsino-park": {
+    "thumbnail": {
+      "src": "/places/quatsino-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/quatsino.webp",
+      "width": 768,
+      "height": 1024
+    },
+    "alt": "A bald eagle perched in rainy Quatsino Provincial Park",
+    "creator": "Pashniak",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bald_eagle_in_Quatsino_Provincial_Park.jpg",
+    "sourceTitle": "Bald eagle in Quatsino Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2a/Bald_eagle_in_Quatsino_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Quatsino Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bald_eagle_in_Quatsino_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-raft-cove-park": {
+    "thumbnail": {
+      "src": "/places/raft-cove-thumb.webp",
+      "width": 320,
+      "height": 83
+    },
+    "detail": {
+      "src": "/places/raft-cove.webp",
+      "width": 960,
+      "height": 249
+    },
+    "alt": "An aerial view of beach, river, and forest in Raft Cove Provincial Park",
+    "creator": "Kristiangillies",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Raft_Cove_from_the_air.jpg",
+    "sourceTitle": "Raft Cove from the air",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/99/Raft_Cove_from_the_air.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Raft Cove Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Raft_Cove_from_the_air.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-rebecca-spit-marine-park": {
+    "thumbnail": {
+      "src": "/places/rebecca-spit-marine-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/rebecca-spit-marine.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Rocky shore and sea in Rebecca Spit Marine Provincial Park",
+    "creator": "Owen Lloyd",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rebecca_Spit_Marine_Provincial_Park.jpg",
+    "sourceTitle": "Rebecca Spit Marine Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/32/Rebecca_Spit_Marine_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Rebecca Spit Marine Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Rebecca_Spit_Marine_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-roberts-memorial-park": {
+    "thumbnail": {
+      "src": "/places/roberts-memorial-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/roberts-memorial.webp",
+      "width": 453,
+      "height": 604
+    },
+    "alt": "A shaded forest trail in Roberts Memorial Provincial Park",
+    "creator": "Adam Walker",
+    "license": "Public domain",
+    "licenseUrl": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Roberts_Memorial_Trail.jpg",
+    "sourceTitle": "Roberts Memorial Trail",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/21/Roberts_Memorial_Trail.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Roberts Memorial Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Roberts_Memorial_Trail.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-rosewall-creek-park": {
+    "thumbnail": {
+      "src": "/places/rosewall-creek-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/rosewall-creek.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A forest trail in Rosewall Creek Provincial Park",
+    "creator": "Wasrts",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trail_within_Rosewall_Creek_Provincial_Park.JPG",
+    "sourceTitle": "Trail within Rosewall Creek Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/87/Trail_within_Rosewall_Creek_Provincial_Park.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Rosewall Creek Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trail_within_Rosewall_Creek_Provincial_Park.JPG",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-ruckle-park": {
+    "thumbnail": {
+      "src": "/places/ruckle-thumb.webp",
+      "width": 320,
+      "height": 173
+    },
+    "detail": {
+      "src": "/places/ruckle.webp",
+      "width": 960,
+      "height": 518
+    },
+    "alt": "Rocky coast and evergreen forest in Ruckle Provincial Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rocky_coast_of_Ruckle_Provincial_Park,_Saltspring_Island,_Canada_06.jpg",
+    "sourceTitle": "Rocky coast of Ruckle Provincial Park, Saltspring Island, Canada 06",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cb/Rocky_coast_of_Ruckle_Provincial_Park%2C_Saltspring_Island%2C_Canada_06.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Ruckle Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Rocky_coast_of_Ruckle_Provincial_Park,_Saltspring_Island,_Canada_06.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-sandwell-park": {
+    "thumbnail": {
+      "src": "/places/sandwell-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/sandwell.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Sandstone beach and coastal forest at Sandwell Provincial Park",
+    "creator": "Ruth Hartnup",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sandwell_Provincial_Park_(2022).jpg",
+    "sourceTitle": "Sandwell Provincial Park (2022)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Sandwell_Provincial_Park_%282022%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Sandwell Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sandwell_Provincial_Park_(2022).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-sproat-lake-park": {
+    "thumbnail": {
+      "src": "/places/sproat-lake-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/sproat-lake.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Blue water and forested mountains in Sproat Lake Provincial Park",
+    "creator": "LMEdelsward",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sproat_Lake.jpg",
+    "sourceTitle": "Sproat Lake",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Sproat_Lake.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Sproat Lake Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sproat_Lake.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-squitty-bay-park": {
+    "thumbnail": {
+      "src": "/places/squitty-bay-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/squitty-bay.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Storm clouds over the rocky shore at Squitty Bay Provincial Park",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Stormy_Squitty_Bay_-_panoramio.jpg",
+    "sourceTitle": "Stormy Squitty Bay - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/34/Stormy_Squitty_Bay_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Squitty Bay Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Stormy_Squitty_Bay_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-stamp-river-park": {
+    "thumbnail": {
+      "src": "/places/stamp-river-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/stamp-river.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Stamp River flowing through a forested canyon in the provincial park",
+    "creator": "GoToVan from Vancouver, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Stamp_River_Provincial_Park,_Vancouver_Island_(36846680235).jpg",
+    "sourceTitle": "Stamp River Provincial Park, Vancouver Island (36846680235)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/23/Stamp_River_Provincial_Park%2C_Vancouver_Island_%2836846680235%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Stamp River Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Stamp_River_Provincial_Park,_Vancouver_Island_(36846680235).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-strathcona-westmin-park": {
+    "thumbnail": {
+      "src": "/places/strathcona-westmin-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/strathcona-westmin.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Turquoise pools and waterfalls at Lower Myra Falls in Strathcona-Westmin Park",
+    "creator": "Evsd1",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lower_Myra_Falls_Upper_Waterfall_and_Swimming_Hole.jpg",
+    "sourceTitle": "Lower Myra Falls Upper Waterfall and Swimming Hole",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/05/Lower_Myra_Falls_Upper_Waterfall_and_Swimming_Hole.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Strathcona - Westmin Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Lower_Myra_Falls_Upper_Waterfall_and_Swimming_Hole.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-wakes-cove-park": {
+    "thumbnail": {
+      "src": "/places/wakes-cove-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/wakes-cove.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Rocky shoreline and forest at Wakes Cove Provincial Park",
+    "creator": "MADaboutforests",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wakes_Cove_Provincial_Park.jpg",
+    "sourceTitle": "Wakes Cove Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/10/Wakes_Cove_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies Wakes Cove Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Wakes_Cove_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-wallace-island-marine-park": {
+    "thumbnail": {
+      "src": "/places/wallace-island-marine-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/wallace-island-marine.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A sheltered cove at low tide on Wallace Island Marine Provincial Park",
+    "creator": "Andrew Daviel",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sunrise_Cove.jpg",
+    "sourceTitle": "Sunrise Cove",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/45/Sunrise_Cove.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons description identifies Sunrise Cove on Wallace Island; BC Parks documents Sunrise Cove inside Wallace Island Marine Park.",
+    "locationEvidenceUrl": "https://bcparks.ca/wallace-island-marine-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-west-shawnigan-lake-park": {
+    "thumbnail": {
+      "src": "/places/west-shawnigan-lake-thumb.webp",
+      "width": 320,
+      "height": 256
+    },
+    "detail": {
+      "src": "/places/west-shawnigan-lake.webp",
+      "width": 500,
+      "height": 400
+    },
+    "alt": "The entrance gate at West Shawnigan Lake Provincial Park",
+    "creator": "Redonebird",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:West_Shawnigan_Lake_Provincial_Park.jpg",
+    "sourceTitle": "West Shawnigan Lake Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4f/West_Shawnigan_Lake_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Wikimedia Commons title or description identifies West Shawnigan Lake Park as the depicted location.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:West_Shawnigan_Lake_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-cormorant-island": {
+    "thumbnail": {
+      "src": "/places/cormorant-island-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/cormorant-island.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Sunlight filtering through dense forest on Cormorant Island",
+    "creator": "Owen Lloyd",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cormorant_Island_forest.jpg",
+    "sourceTitle": "Cormorant Island forest",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Cormorant_Island_forest.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Cormorant Island or the depicted named feature within it. Source detail: Most of Cormorant Island remains forested.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Cormorant_Island_forest.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-benson-creek-falls-regional-park": {
+    "thumbnail": {
+      "src": "/places/benson-creek-falls-thumb.webp",
+      "width": 320,
+      "height": 480
+    },
+    "detail": {
+      "src": "/places/benson-creek-falls.webp",
+      "width": 960,
+      "height": 1440
+    },
+    "alt": "A waterfall cascading over dark rock in Benson Creek Falls Regional Park",
+    "creator": "Gerry Thomasen from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Benson_Creek_Falls_Regional_Park_(79544621).jpg",
+    "sourceTitle": "Benson Creek Falls Regional Park (79544621)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9e/Benson_Creek_Falls_Regional_Park_%2879544621%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Benson Creek Falls Regional Park or the depicted named feature within it. Source detail: This is not Benson Creek Falls.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Benson_Creek_Falls_Regional_Park_(79544621).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-englishman-river-regional-park": {
+    "thumbnail": {
+      "src": "/places/englishman-river-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/englishman-river.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "The Channel Trail winding through forest in Englishman River Regional Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Channel_Trail_(50714451511).jpg",
+    "sourceTitle": "Channel Trail (50714451511)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/91/Channel_Trail_%2850714451511%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Englishman River Regional Park or the depicted named feature within it. Source detail: The Channel Trail leads through the western section of Englishman River Regional Park near Parksville, British Columbia, Canada.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Channel_Trail_(50714451511).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-francis-king-regional-park": {
+    "thumbnail": {
+      "src": "/places/francis-king-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/francis-king.webp",
+      "width": 768,
+      "height": 1024
+    },
+    "alt": "A giant living Douglas fir with a hollow trunk in Francis King Regional Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Giant_Douglas_Fir_(50221369688).jpg",
+    "sourceTitle": "Giant Douglas Fir (50221369688)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/43/Giant_Douglas_Fir_%2850221369688%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Francis/King Regional Park or the depicted named feature within it. Source detail: A giant Douglas fir in Heritage Grove at Francis/King Regional Park in Saanich, British Columbia, Canada, has been hollowed out but still lives.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Giant_Douglas_Fir_(50221369688).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-island-view-beach-regional-park": {
+    "thumbnail": {
+      "src": "/places/view-beach-thumb.webp",
+      "width": 320,
+      "height": 215
+    },
+    "detail": {
+      "src": "/places/view-beach.webp",
+      "width": 960,
+      "height": 645
+    },
+    "alt": "A vivid red sunrise over Island View Beach with a heron at the waterline",
+    "creator": "Brandon Godfrey from Victoria B.C, Canada",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Island_View_Beach_BC.jpg",
+    "sourceTitle": "Island View Beach BC",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Island_View_Beach_BC.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons description identifies Island View Beach; the CRD page documents the beach as the defining feature of Island View Beach Regional Park.",
+    "locationEvidenceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/island-view-beach-regional-park",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-matheson-lake-regional-park": {
+    "thumbnail": {
+      "src": "/places/matheson-lake-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/matheson-lake.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Yellow skunk cabbage beside a forest stream in Matheson Lake Regional Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Matheson_Lake_Regional_Park,_Canada_02.jpg",
+    "sourceTitle": "Matheson Lake Regional Park, Canada 02",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Matheson_Lake_Regional_Park%2C_Canada_02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Matheson Lake Regional Park or the depicted named feature within it. Source detail: Matheson Lake Regional Park, Canada",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Matheson_Lake_Regional_Park,_Canada_02.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-matthews-point-regional-park": {
+    "thumbnail": {
+      "src": "/places/matthews-point-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/matthews-point.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "A blue coastal channel bordered by Matthews Point Regional Park",
+    "creator": "dronepicr",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Matthews_Point_Regional_Park_Canada_(30852746388).jpg",
+    "sourceTitle": "Matthews Point Regional Park Canada (30852746388)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/45/Matthews_Point_Regional_Park_Canada_%2830852746388%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Matthews Point Regional Park or the depicted named feature within it. Source detail: Matthews Point Regional Park Canada",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Matthews_Point_Regional_Park_Canada_(30852746388).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-mill-hill-regional-park": {
+    "thumbnail": {
+      "src": "/places/mill-hill-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/mill-hill.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Rocky dry terrain along the Calypso Trail in Mill Hill Regional Park",
+    "creator": "John Newcomb",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Calypso_Trail_in_Mill_Hill_Regional_Park_(1).jpg",
+    "sourceTitle": "Calypso Trail in Mill Hill Regional Park (1)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Calypso_Trail_in_Mill_Hill_Regional_Park_%281%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Mill Hill Regional Park or the depicted named feature within it. Source detail: Calypso Trail. INFO IN PANORAMIO DESCRIPTION",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Calypso_Trail_in_Mill_Hill_Regional_Park_(1).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-moorecroft-regional-park": {
+    "thumbnail": {
+      "src": "/places/moorecroft-thumb.webp",
+      "width": 320,
+      "height": 82
+    },
+    "detail": {
+      "src": "/places/moorecroft.webp",
+      "width": 960,
+      "height": 246
+    },
+    "alt": "Still water reflecting the forested shore at Moorecroft Regional Park",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Moorecroft_Camp_Bay_-_panoramio.jpg",
+    "sourceTitle": "Moorecroft Camp Bay - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/13/Moorecroft_Camp_Bay_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons file identifies Moorecroft Camp Bay; the RDN page documents the former Camp Moorecroft site as today's oceanfront Moorecroft Regional Park.",
+    "locationEvidenceUrl": "https://rdn.bc.ca/moorecroft-regional-park",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-albert-head-lagoon-regional-park": {
+    "thumbnail": {
+      "src": "/places/albert-head-lagoon-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/albert-head-lagoon.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Calm lagoon water and forest at Albert Head Lagoon Regional Park",
+    "creator": "Kesara Rathnayake from Wellington, New Zealand",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Albert_Head_Lagoon_(IMG_1403)_-_Flickr_-_Kesara_Rathnayake_(kesara.lk).png",
+    "sourceTitle": "Albert Head Lagoon (IMG 1403) - Flickr - Kesara Rathnayake (kesara.lk)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4f/Albert_Head_Lagoon_%28IMG_1403%29_-_Flickr_-_Kesara_Rathnayake_%28kesara.lk%29.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Albert Head Lagoon Regional Park or the depicted named feature within it. Source detail: Albert Head Lagoon Regional Park, Victoria BC",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Albert_Head_Lagoon_(IMG_1403)_-_Flickr_-_Kesara_Rathnayake_(kesara.lk).png",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-mount-parke-regional-park": {
+    "thumbnail": {
+      "src": "/places/mount-parke-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/mount-parke.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "The trailhead sign at Mount Parke Regional Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Parke_Regional_Park_(7846569942).jpg",
+    "sourceTitle": "Mount Parke Regional Park (7846569942)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2c/Mount_Parke_Regional_Park_%287846569942%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Mount Parke Regional Park or the depicted named feature within it. Source detail: Mount Parke Regional Park offers the best hiking on Mayne Island, Canada.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Parke_Regional_Park_(7846569942).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-sandy-pool-regional-park": {
+    "thumbnail": {
+      "src": "/places/sandy-pool-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/sandy-pool.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A fern-lined forest trail in Sandy Pool Regional Park",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sandy_Pool_Regional_Park_(50056402581).jpg",
+    "sourceTitle": "Sandy Pool Regional Park (50056402581)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Sandy_Pool_Regional_Park_%2850056402581%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Sandy Pool Regional Park or the depicted named feature within it. Source detail: Sandy Pool Regional Park on the Cowichan River west of Duncan, BC, Canada, is noted for its cottonwood trees.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sandy_Pool_Regional_Park_(50056402581).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-sea-to-sea-regional-park": {
+    "thumbnail": {
+      "src": "/places/sea-to-sea-thumb.webp",
+      "width": 320,
+      "height": 83
+    },
+    "detail": {
+      "src": "/places/sea-to-sea.webp",
+      "width": 960,
+      "height": 249
+    },
+    "alt": "Layered Sooke Hills fading into dusk in Sea to Sea Regional Park",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dusk_Falls_over_the_Sooke_Hills_-_panoramio.jpg",
+    "sourceTitle": "Dusk Falls over the Sooke Hills - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9b/Dusk_Falls_over_the_Sooke_Hills_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Sea to Sea Regional Park or the depicted named feature within it. Source detail: Dusk Falls over the Sooke Hills",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Dusk_Falls_over_the_Sooke_Hills_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-sooke-hills-wilderness-regional-park": {
+    "thumbnail": {
+      "src": "/places/sooke-hills-wilderness-thumb.webp",
+      "width": 320,
+      "height": 88
+    },
+    "detail": {
+      "src": "/places/sooke-hills-wilderness.webp",
+      "width": 960,
+      "height": 264
+    },
+    "alt": "A broad view across forested Sooke Hills and distant waterways",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sooke_Basin_from_Sugarloaf_-_panoramio.jpg",
+    "sourceTitle": "Sooke Basin from Sugarloaf - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/58/Sooke_Basin_from_Sugarloaf_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Sooke Hills Wilderness Regional Park or the depicted named feature within it. Source detail: Sooke Basin from Sugarloaf",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sooke_Basin_from_Sugarloaf_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-witty-s-lagoon-regional-park": {
+    "thumbnail": {
+      "src": "/places/witty-s-lagoon-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/witty-s-lagoon.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Rocky shoreline and blue water at Tower Point in Witty's Lagoon Regional Park",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tower_Point_in_Witty%27s_Lagoon_Regional_Park.jpg",
+    "sourceTitle": "Tower Point in Witty's Lagoon Regional Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/17/Tower_Point_in_Witty%27s_Lagoon_Regional_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Witty's Lagoon Regional Park or the depicted named feature within it. Source detail: Seals reside on small islands off Tower Point in Witty's Lagoon Regional Park at Metchosin, British Columbia, Canada.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Tower_Point_in_Witty%27s_Lagoon_Regional_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-flores-island": {
+    "thumbnail": {
+      "src": "/places/flores-island-thumb.webp",
+      "width": 320,
+      "height": 181
+    },
+    "detail": {
+      "src": "/places/flores-island.webp",
+      "width": 960,
+      "height": 542
+    },
+    "alt": "An aerial view of Flores Island between mountain inlets",
+    "creator": "Sam Beebe/Ecotrust",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ahousaht_First_Nation,_Flores_Island,_British_Columbia_-_panoramio.jpg",
+    "sourceTitle": "Ahousaht First Nation, Flores Island, British Columbia - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Ahousaht_First_Nation%2C_Flores_Island%2C_British_Columbia_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Flores Island or the depicted named feature within it. Source detail: The source title explicitly locates the photograph at Ahousaht First Nation on Flores Island, British Columbia.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Ahousaht_First_Nation,_Flores_Island,_British_Columbia_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-south-pender-island": {
+    "thumbnail": {
+      "src": "/places/south-pender-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/south-pender-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "South Pender Island rising beyond a rocky shoreline",
+    "creator": "D-Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://www.flickr.com/photos/79721788@N00/7799166760",
+    "sourceTitle": "South Pender",
+    "originalUrl": "https://live.staticflickr.com/8427/7799166760_3a6b6e20ec_b.jpg",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies South Pender Island or the depicted named feature within it. Source detail: The source title identifies South Pender and the source tags identify Pender, Gulf Islands, British Columbia.",
+    "locationEvidenceUrl": "https://www.flickr.com/photos/79721788@N00/7799166760",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-beachcomber-regional-park": {
+    "thumbnail": {
+      "src": "/places/beachcomber-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/beachcomber.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Rocky intertidal shore and distant mountains at Beachcomber Regional Park",
+    "creator": "alans1948",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://www.flickr.com/photos/88823436@N00/36800730101",
+    "sourceTitle": "Beachcomber Regional Park, Parkesville, Vancouver Island, British Columbia, Canada",
+    "originalUrl": "https://live.staticflickr.com/4350/36800730101_0c540f007e_b.jpg",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Beachcomber Regional Park or the depicted named feature within it. Source detail: The source title explicitly identifies Beachcomber Regional Park on Vancouver Island.",
+    "locationEvidenceUrl": "https://www.flickr.com/photos/88823436@N00/36800730101",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-elk-beaver-lake-regional-park": {
+    "thumbnail": {
+      "src": "/places/elk-beaver-lake-thumb.webp",
+      "width": 320,
+      "height": 118
+    },
+    "detail": {
+      "src": "/places/elk-beaver-lake.webp",
+      "width": 960,
+      "height": 353
+    },
+    "alt": "A lone paddler crossing Elk Lake beneath an overcast sky",
+    "creator": "Andy Smith from Victoria, BC, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Elk_Lake_-_Panorama_(8508492059).jpg",
+    "sourceTitle": "Elk Lake - Panorama (8508492059)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/34/Elk_Lake_-_Panorama_%288508492059%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Elk/Beaver Lake Regional Park or the depicted named feature within it. Source detail: The Commons description identifies this as a panorama of Elk/Beaver Lake Regional Park in British Columbia.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Elk_Lake_-_Panorama_(8508492059).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-mount-work-regional-park": {
+    "thumbnail": {
+      "src": "/places/mount-work-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/mount-work.webp",
+      "width": 960,
+      "height": 719
+    },
+    "alt": "Durrance Lake reflecting forested slopes in Mount Work Regional Park",
+    "creator": "Hardo Müller from Bonn, Germany",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Durrance_Lake_(4044918348).jpg",
+    "sourceTitle": "Durrance Lake (4044918348)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/48/Durrance_Lake_%284044918348%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The Commons file identifies Durrance Lake and categorizes it under Mount Work Regional Park; the CRD page documents Durrance Lake inside the park.",
+    "locationEvidenceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-work-regional-park",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-lone-tree-hill-regional-park": {
+    "thumbnail": {
+      "src": "/places/lone-tree-hill-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/lone-tree-hill.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A sweeping forest view from Lone Tree Hill Regional Park",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_From_Lone_Tree_Hill_-_panoramio.jpg",
+    "sourceTitle": "View From Lone Tree Hill - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/42/View_From_Lone_Tree_Hill_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Lone Tree Hill Regional Park or the depicted named feature within it. Source detail: Commons identifies the view as from Lone Tree Hill; embedded coordinates 48.519447,-123.514051 agree with the tracked park geography.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:View_From_Lone_Tree_Hill_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-vargas-island": {
+    "thumbnail": {
+      "src": "/places/vargas-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/vargas-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Golden sunset light reaching a beach on the north side of Vargas Island",
+    "creator": "Davidwegan",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sunset_view_on_a_beach_on_the_north_side_of_Vargas_Island,_British_Columbia_1.jpg",
+    "sourceTitle": "Sunset view on a beach on the north side of Vargas Island, British Columbia 1",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a7/Sunset_view_on_a_beach_on_the_north_side_of_Vargas_Island%2C_British_Columbia_1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Vargas Island or the depicted named feature within it. Source detail: Sunset view on a beach on the north side of Vargas Island, British Columbia",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sunset_view_on_a_beach_on_the_north_side_of_Vargas_Island,_British_Columbia_1.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-thetis-island": {
+    "thumbnail": {
+      "src": "/places/thetis-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/thetis-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A rocky cove and forested shore on Thetis Island",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:North_Cove_on_Thetis_Island_(50382678892).jpg",
+    "sourceTitle": "North Cove on Thetis Island (50382678892)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/1c/North_Cove_on_Thetis_Island_%2850382678892%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Thetis Island or the depicted named feature within it. Source detail: North Cove on Thetis Island, British Columbia, Canada, is seldom visited by tourists.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:North_Cove_on_Thetis_Island_(50382678892).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-cortes-island": {
+    "thumbnail": {
+      "src": "/places/cortes-island-thumb.webp",
+      "width": 320,
+      "height": 211
+    },
+    "detail": {
+      "src": "/places/cortes-island.webp",
+      "width": 960,
+      "height": 634
+    },
+    "alt": "Shoreline homes and oyster beds at Squirrel Cove on Cortes Island",
+    "creator": "A.Davey",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Settlement_of_Squirrel_Cove,_Cortes_Island,_BC.jpg",
+    "sourceTitle": "Settlement of Squirrel Cove, Cortes Island, BC",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Settlement_of_Squirrel_Cove%2C_Cortes_Island%2C_BC.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Cortes Island or the depicted named feature within it. Source detail: When we were there, people were harvesting oysters on the beach. Cortes Island, BC.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Settlement_of_Squirrel_Cove,_Cortes_Island,_BC.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-denman-island": {
+    "thumbnail": {
+      "src": "/places/denman-island-thumb.webp",
+      "width": 320,
+      "height": 167
+    },
+    "detail": {
+      "src": "/places/denman-island.webp",
+      "width": 506,
+      "height": 264
+    },
+    "alt": "Denman Island seen across the water from Comox",
+    "creator": "Guinness323",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Denman_Island_from_Comox.jpg",
+    "sourceTitle": "Denman Island from Comox",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/45/Denman_Island_from_Comox.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Denman Island or the depicted named feature within it. Source detail: Denman Island from Comox",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Denman_Island_from_Comox.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-gabriola-island": {
+    "thumbnail": {
+      "src": "/places/gabriola-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/gabriola-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Smooth sandstone ledges and sheltered water on Gabriola Island",
+    "creator": "No machine-readable author provided. Clayoquot assumed (based on copyright claims).",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Taylor_Bay_Gabriola.JPG",
+    "sourceTitle": "Taylor Bay Gabriola",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Taylor_Bay_Gabriola.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Gabriola Island or the depicted named feature within it. Source detail: Descanso Bay on Gabriola Island, British Columbia. Taken by user:Clayoquot",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Taylor_Bay_Gabriola.JPG",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-galiano-island": {
+    "thumbnail": {
+      "src": "/places/galiano-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/galiano-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Gulf Islands and blue channels viewed from Mount Galiano",
+    "creator": "No machine-readable author provided. Clayoquot assumed (based on copyright claims).",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:From_Mount_Galiano.JPG",
+    "sourceTitle": "From Mount Galiano",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/60/From_Mount_Galiano.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Galiano Island or the depicted named feature within it. Source detail: Taken by user:Clayoquot in 2006",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:From_Mount_Galiano.JPG",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-hornby-island": {
+    "thumbnail": {
+      "src": "/places/hornby-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/hornby-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Forested cliffs and shoreline on western Hornby Island",
+    "creator": "Drm310",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hornby-Island.jpg",
+    "sourceTitle": "Hornby-Island",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Hornby-Island.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Hornby Island or the depicted named feature within it. Source detail: The western part of Hornby Island, British Columbia, Canada, approaching the ferry terminal from Denman Island.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Hornby-Island.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-lasqueti-island": {
+    "thumbnail": {
+      "src": "/places/lasqueti-island-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/lasqueti-island.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Layered rock ledges meeting the sea at Spring Bay on Lasqueti Island",
+    "creator": "Kiwibirdman",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Spring_Bay_-_panoramio.jpg",
+    "sourceTitle": "Spring Bay - panoramio",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/20/Spring_Bay_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Lasqueti Island or the depicted named feature within it. Source detail: Spring Bay",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Spring_Bay_-_panoramio.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-malcolm-island": {
+    "thumbnail": {
+      "src": "/places/malcolm-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/malcolm-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A boardwalk overlooking Big Lake in the forest of Malcolm Island",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Big_Lake_(21433336733).jpg",
+    "sourceTitle": "Big Lake (21433336733)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/6c/Big_Lake_%2821433336733%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Malcolm Island or the depicted named feature within it. Source detail: Big Lake lies near the center of Malcolm Island, British Columbia, Canada.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Big_Lake_(21433336733).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-maurelle-island": {
+    "thumbnail": {
+      "src": "/places/maurelle-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/maurelle-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A wooden pier on Hoskyn Channel with Maurelle Island beyond",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hoskyn_Channel_(9169123821).jpg",
+    "sourceTitle": "Hoskyn Channel (9169123821)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Hoskyn_Channel_%289169123821%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Maurelle Island or the depicted named feature within it. Source detail: A pier on Hoskyn Channel, Quadra Island, British Columbia, Canada. Maurelle Island is to the left and Read Island to the right.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Hoskyn_Channel_(9169123821).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-valdes-island": {
+    "thumbnail": {
+      "src": "/places/valdes-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/valdes-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Sculpted coastal sandstone formations on Valdes Island",
+    "creator": "MADaboutforests",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Valdes_Island_Sandstone_Formations.jpg",
+    "sourceTitle": "Valdes Island Sandstone Formations",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Valdes_Island_Sandstone_Formations.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Valdes Island or the depicted named feature within it. Source detail: Sandstone Geology that is commonplace on Valdes Island, caused by years of winter storms attacking the rock",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Valdes_Island_Sandstone_Formations.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-mayne-island": {
+    "thumbnail": {
+      "src": "/places/mayne-island-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/mayne-island.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Sailboats anchored in a quiet bay on Mayne Island",
+    "creator": "Shannon LaBelle - User: (WT-shared) Minnow at wts wikivoyage",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:MayneIsland_DinnerBay.JPG",
+    "sourceTitle": "MayneIsland DinnerBay",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0f/MayneIsland_DinnerBay.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Mayne Island or the depicted named feature within it. Source detail: Dinner Bay, Mayne Island.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:MayneIsland_DinnerBay.JPG",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-nootka-island": {
+    "thumbnail": {
+      "src": "/places/nootka-island-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/nootka-island.webp",
+      "width": 960,
+      "height": 638
+    },
+    "alt": "A rugged forest trail crossing mossy rock on Nootka Island",
+    "creator": "Tim Gage",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nootka_Island_Trail.jpg",
+    "sourceTitle": "Nootka Island Trail",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/60/Nootka_Island_Trail.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Nootka Island or the depicted named feature within it. Source detail: In my opinion, this was the most beautiful place on the whole trail",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Nootka_Island_Trail.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-north-pender-island": {
+    "thumbnail": {
+      "src": "/places/north-pender-island-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/north-pender-island.webp",
+      "width": 960,
+      "height": 639
+    },
+    "alt": "North Pender Island viewed across calm blue water from a ferry",
+    "creator": "Ymblanter",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:North_Pender_Island_from_the_ferry_2.jpg",
+    "sourceTitle": "North Pender Island from the ferry 2",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/7/72/North_Pender_Island_from_the_ferry_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies North Pender Island or the depicted named feature within it. Source detail: North Pender Island from the ferry.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:North_Pender_Island_from_the_ferry_2.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-penelakut-island": {
+    "thumbnail": {
+      "src": "/places/penelakut-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/penelakut-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Homes and boats along the Penelakut Island shoreline",
+    "creator": "David Stanley from Nanaimo, Canada",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Penelakut_First_Nation_(50385963131).jpg",
+    "sourceTitle": "Penelakut First Nation (50385963131)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Penelakut_First_Nation_%2850385963131%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Penelakut Island or the depicted named feature within it. Source detail: Penelakut (Kuper) Island, British Columbia, Canada, is home to around 300 members of the Penelakut First Nation. The entire island is a tribal reserve.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Penelakut_First_Nation_(50385963131).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-quadra-island": {
+    "thumbnail": {
+      "src": "/places/quadra-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/quadra-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Blue water and forested hills around Orchard Bay on Quadra Island",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Orchard_Bay,_Quadra_Island.jpg",
+    "sourceTitle": "Orchard Bay, Quadra Island",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a0/Orchard_Bay%2C_Quadra_Island.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Quadra Island or the depicted named feature within it. Source detail: Orchard Bay on northern Quadra Island, British Columbia, Canada, is often used as a refuge by boats waiting to navigate the strong tides in Seymour Narrows.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Orchard_Bay,_Quadra_Island.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-read-island": {
+    "thumbnail": {
+      "src": "/places/read-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/read-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Oyster rafts below the steep forested shore of Read Island",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Read_Island_oyster_farms.jpg",
+    "sourceTitle": "Read Island oyster farms",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/80/Read_Island_oyster_farms.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Read Island or the depicted named feature within it. Source detail: Pacific oysters grow on trays below rafts seen along the shores of Read Island, British Columbia, Canada.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Read_Island_oyster_farms.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-saltspring-island": {
+    "thumbnail": {
+      "src": "/places/saltspring-island-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/saltspring-island.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Salt Spring Island valleys and channels viewed from Baynes Peak",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Baynes_Peak,_Saltspring_Island,_British_Columbia,_Canada_04.jpg",
+    "sourceTitle": "View from Baynes Peak, Saltspring Island, British Columbia, Canada 04",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9f/View_from_Baynes_Peak%2C_Saltspring_Island%2C_British_Columbia%2C_Canada_04.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Saltspring Island or the depicted named feature within it. Source detail: View from Baynes Peak, Saltspring Island, British Columbia, Canada",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Baynes_Peak,_Saltspring_Island,_British_Columbia,_Canada_04.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-saturna-island": {
+    "thumbnail": {
+      "src": "/places/saturna-island-thumb.webp",
+      "width": 320,
+      "height": 263
+    },
+    "detail": {
+      "src": "/places/saturna-island.webp",
+      "width": 960,
+      "height": 790
+    },
+    "alt": "An aerial view of Saturna Island's forested ridges and long inlet",
+    "creator": "Canuckle",
+    "license": "CC0 1.0",
+    "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Saturna_Island.jpg",
+    "sourceTitle": "Saturna Island",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/10/Saturna_Island.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Saturna Island or the depicted named feature within it. Source detail: South-facing aerial view of Saturna Island",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Saturna_Island.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-sonora-island": {
+    "thumbnail": {
+      "src": "/places/sonora-island-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/sonora-island.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Dense evergreen forest and fallen logs on Sonora Island",
+    "creator": "Hugo Chisholm",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sonora_Island_forest.jpg",
+    "sourceTitle": "Sonora Island forest",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/bc/Sonora_Island_forest.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Sonora Island or the depicted named feature within it. Source detail: Sonora Island forest",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sonora_Island_forest.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "island-meares-island": {
+    "thumbnail": {
+      "src": "/places/meares-island-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/meares-island.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "A hiker standing beside a giant old-growth cedar on Meares Island",
+    "creator": "Rob Dabal",
+    "license": "CC BY-SA 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Meares_Island_boardwalk_2.jpg",
+    "sourceTitle": "Meares Island boardwalk 2",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/30/Meares_Island_boardwalk_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Meares Island or the depicted named feature within it. Source detail: A hiker looks on at a giant Thuja plicata in Meares Island, British Columbia",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Meares_Island_boardwalk_2.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-thetis-lake-regional-park": {
+    "thumbnail": {
+      "src": "/places/thetis-lake-thumb.webp",
+      "width": 320,
+      "height": 180
+    },
+    "detail": {
+      "src": "/places/thetis-lake.webp",
+      "width": 960,
+      "height": 540
+    },
+    "alt": "Clouds and forest reflected in the still water of Thetis Lake Regional Park",
+    "creator": "Michal Klajban",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Thetis_Lake,_Canada_01.jpg",
+    "sourceTitle": "Thetis Lake, Canada 01",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/da/Thetis_Lake%2C_Canada_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Thetis Lake Regional Park or the depicted named feature within it. Source detail: Commons identifies Thetis Lake at 48.467869,-123.468969; the Commons Thetis Lake category documents the lakes as lying within Thetis Lake Regional Park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Thetis_Lake,_Canada_01.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  }
+}
