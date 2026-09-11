@@ -9,7 +9,7 @@ const rathtrevor = { id: "provincial-rathtrevor-beach-park", name: "Rathtrevor B
 const national = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national" as const, latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const journal = {
   places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
-  account: null as { id: string; email: string; emailVerified?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
+  account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
   authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
@@ -20,6 +20,17 @@ vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadSt
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
 
 describe("Parkdex navigation", () => {
+  it("renders the authenticated desktop primary navigation beside the brand", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(navigation).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Map tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Places tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Badges tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Account tab" })).toBeTruthy();
+  });
+
   it("keeps map modes, location, and search in one utility toolbar", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     const toolbar = screen.getByRole("toolbar", { name: "Map utilities" });
@@ -376,4 +387,5 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Open Forest Park" }).find((element) => element.classList.contains("collection-modal-row"))!);
     expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
   });
+
 });

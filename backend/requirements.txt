@@ -6,4 +6,10 @@ google-auth[requests]==2.48.0
 psycopg[binary,pool]==3.2.9
 pydantic-settings==2.10.1
 uvicorn[standard]==0.35.0
+# Official MCP Python SDK v2 stdio server dependencies.  Keep Starlette on
+# FastAPI's supported line; this server does not expose HTTP/SSE transport.
+mcp==2.2.0
+keyring==25.6.0
+starlette==0.47.3
+sse-starlette==3.0.0
 

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     app_commit_sha: str = Field(default="local", alias="APP_COMMIT_SHA")
     app_release_id: str = Field(default="local", alias="APP_RELEASE_ID")
     app_public_url: str = Field(default="http://localhost:3000", alias="APP_PUBLIC_URL")
+    api_public_url: str = Field(default="http://localhost:8000", alias="API_PUBLIC_URL")
+    mcp_public_url: str = Field(default="http://localhost:8000/mcp", alias="MCP_PUBLIC_URL")
     google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
     google_client_secret: str | None = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
     google_redirect_uri: str | None = Field(default=None, alias="GOOGLE_REDIRECT_URI")

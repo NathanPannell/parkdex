@@ -226,6 +226,10 @@ jobs:
           railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          api_domain="$(railway domain list --project "$RAILWAY_PROJECT_ID" --environment staging --service "$RAILWAY_API_SERVICE_ID" --json | jq -r '.. | strings | select(test("\\.up\\.railway\\.app$"))' | head -n 1)"
+          : "${api_domain:?Railway API domain is required}"
+          railway_retry "https://$api_domain" variable set API_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$api_domain/mcp" variable set MCP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
@@ -317,6 +321,10 @@ jobs:
           done
           railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          api_domain="$(railway domain list --project "$RAILWAY_PROJECT_ID" --environment production --service "$RAILWAY_API_SERVICE_ID" --json | jq -r '.. | strings | select(test("\\.up\\.railway\\.app$"))' | head -n 1)"
+          : "${api_domain:?Railway API domain is required}"
+          railway_retry "https://$api_domain" variable set API_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
+          railway_retry "https://$api_domain/mcp" variable set MCP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
       - name: Deploy Railway services and wait on provider events
         run: |

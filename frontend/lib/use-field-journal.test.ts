@@ -325,4 +325,24 @@ describe("useFieldJournal identity and progress races", () => {
     expect(expired.result.current.authenticated).toBe(false);
     expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBeNull();
   });
+
+  it("expires the current account when an authenticated group request returns 401", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] });
+      if (path.endsWith("/api/groups")) return json({ detail: "Invalid authentication credentials" }, 401);
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+
+    await act(() => result.current.authenticatedRequest("/api/groups"));
+
+    expect(result.current.authenticated).toBe(false);
+    expect(result.current.account).toBeNull();
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBeNull();
+    expect(result.current.syncMessage).toBe("Your session expired. Sign in again to continue syncing your account.");
+  });
 });

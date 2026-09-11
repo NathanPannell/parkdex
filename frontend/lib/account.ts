@@ -1,4 +1,4 @@
-export type Account = { id: string; email: string; emailVerified?: boolean };
+export type Account = { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean };
 export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
 export type Visit = { placeId: string; visitedAt: string };
 export type AccountSession = {

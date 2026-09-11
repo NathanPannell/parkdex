@@ -29,4 +29,5 @@ describe("account security requests", () => {
     expect(await completeGoogleAuthorization(API, "code", "state", "verifier")).toEqual(session);
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ code: "code", state: "state", codeVerifier: "verifier" });
   });
+
 });

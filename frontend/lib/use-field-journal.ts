@@ -76,6 +76,7 @@ export type FieldJournal = {
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
   resetProgress: () => Promise<void>;
+  authenticatedRequest: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 function hasEntries(outbox: VisitOutbox) {
@@ -220,6 +221,17 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (!epochRef.current.isCurrent(capturedEpoch) || identityRef.current.kind !== "account") return;
     switchToGuest("Your session expired. Sign in again to continue syncing your account.");
   }, [switchToGuest]);
+
+  const authenticatedRequest = useCallback(async (path: string, init: RequestInit = {}) => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account") throw new Error("Sign in to manage groups.");
+    const capturedEpoch = epochRef.current.capture();
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${identity.token}`);
+    const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+    if (response.status === 401) expireAccount(capturedEpoch);
+    return response;
+  }, [apiBaseUrl, expireAccount]);
 
   const putProgress = useCallback(async (
     kind: "visits" | "trails",
@@ -668,5 +680,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     logout,
     importGuest,
     resetProgress,
+    authenticatedRequest,
   };
 }
