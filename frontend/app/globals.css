@@ -887,9 +887,9 @@ button { color: inherit; }
 .map-reset-button { display: none; }
 
 @media (max-width: 859px) {
-  .thumb-nav { grid-template-columns: repeat(5,minmax(0,1fr)); padding-top: 5px; background: var(--paper-bright); }
+  .thumb-nav { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); padding-top: 5px; background: var(--paper-bright); }
   .thumb-nav.guest { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .thumb-nav button { color: var(--muted); }
+  .thumb-nav button { min-width: 0; min-height: 50px; color: var(--muted); }
   .thumb-nav button.active { background: var(--forest); color: var(--paper-bright); }
   .map-utility { right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 10px; top: auto; width: auto; }
   .connection-note, .sync-note { bottom: calc(144px + env(safe-area-inset-bottom)); }
