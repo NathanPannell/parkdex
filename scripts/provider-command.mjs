@@ -42,6 +42,18 @@ export function buildVercelCurlArgs(route, deploymentUrl, scope, outputPath) {
   return ["curl", route, "--deployment", deploymentUrl, "--cwd", "frontend", "--scope", scope, "--", "--fail", "--silent", "--show-error", "--output", outputPath];
 }
 
+export function verifyCorsHeaders(headers, origin, { method, requestedHeaders = [] } = {}) {
+  if (headers.get("access-control-allow-origin") !== origin) {
+    throw new Error("API CORS did not allow the exact frontend origin");
+  }
+  if (method && !headers.get("access-control-allow-methods")?.split(",").map((value) => value.trim().toUpperCase()).includes(method.toUpperCase())) {
+    throw new Error(`API CORS did not allow ${method}`);
+  }
+  const allowedHeaders = headers.get("access-control-allow-headers")?.split(",").map((value) => value.trim().toLowerCase()) || [];
+  const missing = requestedHeaders.filter((header) => !allowedHeaders.includes(header.toLowerCase()));
+  if (missing.length) throw new Error(`API CORS did not allow requested headers: ${missing.join(", ")}`);
+}
+
 export function buildPreviewEnvironmentName(pullRequest, commitSha, releaseId) {
   const name = `lp-pr-${pullRequest}-${commitSha.slice(0, 8)}-${releaseId.replaceAll("-", "").slice(0, 8)}`;
   if (!/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(name) || name.length > 30) {
