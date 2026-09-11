@@ -20,6 +20,17 @@ vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadSt
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
 
 describe("Parkdex navigation", () => {
+  it("renders the authenticated desktop primary navigation beside the brand", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(navigation).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Map tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Places tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Badges tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Account tab" })).toBeTruthy();
+  });
+
   it("keeps map modes, location, and search in one utility toolbar", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     const toolbar = screen.getByRole("toolbar", { name: "Map utilities" });
