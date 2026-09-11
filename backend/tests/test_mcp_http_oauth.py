@@ -5,6 +5,7 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
@@ -275,6 +276,94 @@ def test_refresh_exchange_cannot_escape_account_recovery_lock() -> None:
                     assert exchange.result(timeout=5).status_code == 400
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE account_id = %s AND revoked_at IS NULL", (account["id"],)).fetchone()[0] == 0
+    finally:
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+            conn.execute("DELETE FROM auth_rate_limits WHERE action = 'register' AND scope_hash = %s", (hashlib.sha256(email.encode()).hexdigest(),))
+            conn.commit()
+
+
+def test_password_reset_serializes_with_consent_and_revokes_the_racing_code(monkeypatch) -> None:
+    email = "mcp-consent-reset-race@example.com"
+    password = "consent reset race password"
+    reset_token = "r" * 43
+    verifier = "v" * 64
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        conn.execute("DELETE FROM auth_rate_limits WHERE action = 'register' AND scope_hash = %s", (hashlib.sha256(email.encode()).hexdigest(),))
+        conn.commit()
+    try:
+        with TestClient(app, base_url="http://localhost:8000", follow_redirects=False) as client:
+            account = client.post("/api/auth/register", json={"email": email, "password": password}).json()["account"]
+            registered = client.post("/register", json={
+                "client_name": "Consent reset race", "redirect_uris": ["http://127.0.0.1:17780/callback"],
+                "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"], "scope": "mcp",
+            })
+            client_id = registered.json()["client_id"]
+            authorization = client.get("/authorize", params={
+                "client_id": client_id, "redirect_uri": "http://127.0.0.1:17780/callback",
+                "response_type": "code", "code_challenge": challenge, "code_challenge_method": "S256",
+                "scope": "mcp", "state": "reset-race", "resource": "http://localhost:8000/mcp",
+            })
+            consent_page = client.get(authorization.headers["location"])
+            request_token = re.search(r"name=request value='([^']+)'", consent_page.text).group(1)
+            csrf = re.search(r"name=csrf value='([^']+)'", consent_page.text).group(1)
+            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+                conn.execute(
+                    "INSERT INTO account_action_tokens (token_hash, account_id, purpose, expires_at) VALUES (%s, %s, 'password_reset', NOW() + INTERVAL '1 hour')",
+                    (hashlib.sha256(reset_token.encode()).hexdigest(), account["id"]),
+                )
+                conn.commit()
+
+            verify_started = Event()
+            release_verify = Event()
+            original_verify = oauth.verify_password
+
+            def paused_verify(password_hash: str, candidate: str) -> bool:
+                verify_started.set()
+                assert release_verify.wait(5), "consent password verification was not released"
+                return original_verify(password_hash, candidate)
+
+            monkeypatch.setattr(oauth, "verify_password", paused_verify)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                consent = executor.submit(lambda: client.post("/oauth/consent", data={
+                    "request": request_token, "csrf": csrf, "email": email, "password": password, "decision": "allow",
+                }))
+                assert verify_started.wait(5), "consent never reached password verification"
+                reset = executor.submit(lambda: client.post("/api/auth/password-reset/confirm", json={
+                    "token": reset_token, "newPassword": "new consent reset password",
+                }))
+                deadline = time.monotonic() + 5
+                waiting = False
+                while time.monotonic() < deadline:
+                    with psycopg.connect(os.environ["DATABASE_URL"]) as observer:
+                        waiting = observer.execute(
+                            """SELECT EXISTS (
+                                   SELECT 1 FROM pg_stat_activity
+                                   WHERE datname = current_database() AND wait_event_type = 'Lock'
+                                     AND query LIKE 'SELECT 1 FROM accounts WHERE id = % FOR UPDATE%'
+                               )"""
+                        ).fetchone()[0]
+                    if waiting:
+                        break
+                    time.sleep(0.02)
+                assert waiting, "password reset never waited on the consent account lock"
+                release_verify.set()
+                callback = consent.result(timeout=5)
+                reset_response = reset.result(timeout=5)
+
+            assert callback.status_code == 303
+            assert reset_response.status_code == 204
+            code = parse_qs(urlsplit(callback.headers["location"]).query)["code"][0]
+            exchange = client.post("/token", data={
+                "grant_type": "authorization_code", "client_id": client_id, "code": code,
+                "code_verifier": verifier, "redirect_uri": "http://127.0.0.1:17780/callback",
+                "resource": "http://localhost:8000/mcp",
+            })
+            assert exchange.status_code == 400
+            assert client.post("/api/auth/login", json={"email": email, "password": "new consent reset password"}).status_code == 200
     finally:
         with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
             conn.execute("DELETE FROM accounts WHERE email = %s", (email,))

@@ -57,14 +57,6 @@ export async function confirmPasswordReset(apiBaseUrl: string, token: string, ne
   await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-reset/confirm`, jsonRequest("POST", { token, newPassword })));
 }
 
-export async function changePassword(apiBaseUrl: string, token: string, currentPassword: string, newPassword: string): Promise<void> {
-  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-change`, jsonRequest("POST", { currentPassword, newPassword }, token)));
-}
-
-export async function setPassword(apiBaseUrl: string, token: string, newPassword: string): Promise<void> {
-  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/password-set`, jsonRequest("POST", { newPassword }, token)));
-}
-
 export async function requestEmailVerification(apiBaseUrl: string, token: string): Promise<void> {
   await parseResponse<void>(await fetch(`${apiBaseUrl}/api/auth/email-verification/request`, jsonRequest("POST", undefined, token)));
 }

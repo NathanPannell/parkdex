@@ -541,7 +541,17 @@ button { color: inherit; }
 .verification-card p { margin: 3px 0 0; color: #4b594c; font-size: 11px; line-height: 1.4; }
 .verification-card button { grid-column: 1 / -1; min-height: 42px; margin-top: 7px; border: 0; border-radius: 10px; background: var(--forest); color: white; cursor: pointer; font-size: 11px; font-weight: 900; }
 .verification-card button:disabled { cursor: not-allowed; opacity: .58; }
-.password-change { margin: 10px 0 18px; padding: 14px; border-radius: 14px; background: #e8eadb; }
+.password-reset-flow { max-width: 390px; margin: 3vh auto 0; padding: 24px 20px 20px; border-radius: 18px; background: var(--paper-bright); box-shadow: 0 8px 24px rgba(23,61,50,.11); text-align: center; }
+.password-reset-flow h2 { margin: 10px 0 7px; font: 750 clamp(29px,7vw,38px)/.98 var(--font-display); letter-spacing: -.025em; }
+.password-reset-flow > p { margin: 0 auto; max-width: 34ch; color: var(--muted); font-size: 12px; font-weight: 720; line-height: 1.5; }
+.password-reset-flow .auth-form { margin-top: 20px; text-align: left; }
+.password-reset-flow .auth-link { display: block; width: 100%; margin-top: 8px; }
+.password-reset-icon { display: grid; width: 58px; height: 58px; margin: 0 auto; place-items: center; border-radius: 18px; background: var(--lime); color: var(--forest); box-shadow: 0 5px 0 #86b53a; }
+.password-reset-icon.sent { background: var(--sun); box-shadow: 0 5px 0 #cba73d; }
+.password-reset-icon.expired { background: #f6c5b8; color: #68261e; box-shadow: 0 5px 0 #d68171; }
+.password-reset-flow input[readonly] { background: #e8eadb; color: var(--muted); cursor: default; }
+.password-reset-flow .primary-action { width: 100%; min-height: 49px; margin-top: 20px; border: 0; border-radius: 12px; background: var(--lime); color: var(--forest); cursor: pointer; font-weight: 950; }
+.password-reset-flow .primary-action:focus-visible, .password-reset-flow .auth-link:focus-visible { outline: 3px solid var(--water); outline-offset: 3px; }
 
 @media (min-width: 860px) {
   .map-utility { right: 450px; max-width: 760px; }

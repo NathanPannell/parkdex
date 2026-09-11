@@ -55,6 +55,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
     try:
         with TestClient(api.app) as client:
             created = client.post("/api/auth/register", json={"email": email, "password": "old password value"}).json()
+            second = client.post("/api/auth/login", json={"email": email, "password": "old password value"}).json()
             registered = client.post("/register", json={
                 "client_name": "Recovery test", "redirect_uris": ["http://127.0.0.1:17778/callback"],
                 "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
@@ -90,6 +91,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             assert client.post("/api/auth/password-reset/confirm", json={"token": reset_token, "newPassword": "new password value"}).status_code == 204
             assert client.post("/api/auth/password-reset/confirm", json={"token": reset_token, "newPassword": "another password value"}).status_code == 400
             assert client.get("/api/auth/me", headers=bearer(created["token"])).status_code == 401
+            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 401
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE grant_id = %s AND revoked_at IS NOT NULL", (mcp_grant,)).fetchone()[0] == 2
             stale_code = client.post("/token", data={
@@ -163,7 +165,7 @@ def test_registration_limit_is_atomic_and_observable() -> None:
         clean(email)
 
 
-def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessions(monkeypatch) -> None:
+def test_verification_resend_invalidates_old_token(monkeypatch) -> None:
     email = "verify-change@example.com"
     sent: list[tuple[str, str, str]] = []
     clean(email)
@@ -171,49 +173,21 @@ def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessio
     try:
         with TestClient(api.app) as client:
             first = client.post("/api/auth/register", json={"email": email, "password": "current password value"}).json()
-            second = client.post("/api/auth/login", json={"email": email, "password": "current password value"}).json()
-            mcp_grant = str(uuid4())
-            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                account_id = conn.execute("SELECT id FROM accounts WHERE email = %s", (email,)).fetchone()[0]
-                client_id = str(uuid4())
-                conn.execute("INSERT INTO mcp_oauth_clients (client_id, metadata) VALUES (%s, '{}')", (client_id,))
-                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) VALUES (%s, 'access', %s, %s, %s, %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '1 hour')", (hashlib.sha256(b"change-mcp-token").hexdigest(), mcp_grant, mcp_grant, client_id, account_id))
-                conn.execute("INSERT INTO mcp_oauth_tokens (token_hash, token_kind, grant_id, family_id, client_id, account_id, scopes, resource, expires_at) VALUES (%s, 'refresh', %s, %s, %s, %s, ARRAY['mcp'], 'http://localhost:8000/mcp', NOW() + INTERVAL '30 days')", (hashlib.sha256(b"change-mcp-refresh").hexdigest(), mcp_grant, mcp_grant, client_id, account_id))
-                conn.commit()
             old_token = token_from_message(sent[-1][2], "verificationToken")
             assert client.post("/api/auth/email-verification/request", headers=bearer(first["token"])).status_code == 202
             new_token = token_from_message(sent[-1][2], "verificationToken")
             assert client.post("/api/auth/email-verification/confirm", json={"token": old_token}).status_code == 400
             assert client.post("/api/auth/email-verification/confirm", json={"token": new_token}).status_code == 204
             assert client.get("/api/auth/me", headers=bearer(first["token"])).json()["account"]["emailVerified"] is True
-            assert client.post("/api/auth/password-change", headers=bearer(first["token"]), json={"currentPassword": "wrong", "newPassword": "replacement password"}).status_code == 401
-            assert client.post("/api/auth/password-change", headers=bearer(first["token"]), json={"currentPassword": "current password value", "newPassword": "replacement password"}).status_code == 204
-            assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 401
-            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 401
-            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                assert conn.execute("SELECT COUNT(*) FROM mcp_oauth_tokens WHERE grant_id = %s AND revoked_at IS NOT NULL", (mcp_grant,)).fetchone()[0] == 2
+            assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 200
     finally:
         clean(email)
 
 
-def test_google_only_account_can_set_first_password_and_existing_password_cannot_be_overwritten() -> None:
-    email = "google-only-password@example.com"
-    clean(email)
-    try:
-        with TestClient(api.app) as client:
-            created = client.post("/api/auth/register", json={"email": email, "password": "temporary password value"}).json()
-            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                conn.execute("UPDATE accounts SET password_hash = NULL, email_verified_at = NOW() WHERE email = %s", (email,))
-                conn.commit()
-            assert client.get("/api/auth/me", headers=bearer(created["token"])).json()["account"]["hasPassword"] is False
-            assert client.post("/api/auth/password-set", headers=bearer(created["token"]), json={"newPassword": "google account password"}).status_code == 204
-            with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-                row = conn.execute("SELECT password_hash FROM accounts WHERE email = %s", (email,)).fetchone()
-                assert row[0] and row[0].startswith("$argon2id$")
-            logged_in = client.post("/api/auth/login", json={"email": email, "password": "google account password"}).json()
-            assert client.post("/api/auth/password-set", headers=bearer(logged_in["token"]), json={"newPassword": "replacement password"}).status_code == 409
-    finally:
-        clean(email)
+def test_direct_password_change_endpoint_is_removed() -> None:
+    with TestClient(api.app) as client:
+        response = client.post("/api/auth/password-change", json={"currentPassword": "old", "newPassword": "a sufficiently long password"})
+    assert response.status_code == 404
 
 
 def test_google_pkce_state_and_unverified_gmail_linking_prevent_takeover(monkeypatch) -> None:

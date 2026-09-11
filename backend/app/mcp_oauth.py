@@ -418,7 +418,10 @@ class ParkdexOAuthProvider(
                 conn.execute("UPDATE mcp_oauth_authorization_requests SET used_at = NOW() WHERE request_hash = %s", (sha256_hex(request_token),))
                 conn.commit()
                 return RedirectResponse(construct_redirect_uri(request_row["redirect_uri"], error="access_denied", state=request_row["state"], iss=self.issuer_url), status_code=303, headers={"Cache-Control": "no-store"})
-            account = conn.execute("SELECT id, password_hash FROM accounts WHERE email = %s", (normalized_email,)).fetchone()
+            account = conn.execute(
+                "SELECT id, password_hash FROM accounts WHERE email = %s FOR UPDATE",
+                (normalized_email,),
+            ).fetchone()
             valid = verify_password(account["password_hash"] if account and account["password_hash"] else DUMMY_PASSWORD_HASH, password)
             if not valid or account is None:
                 conn.rollback()

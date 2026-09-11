@@ -11,13 +11,13 @@ const journal = {
   places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
   account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
-  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), changePassword: vi.fn(), setPassword: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
+  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
 };
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ onSelect, onBoundaryLoadState }: { onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></> }));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.setPassword.mockClear(); journal.confirmEmailVerification.mockClear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); });
 
 describe("Parkdex navigation", () => {
   it("renders the authenticated desktop primary navigation beside the brand", () => {
@@ -241,6 +241,64 @@ describe("Parkdex navigation", () => {
     expect(journal.logout).toHaveBeenCalledTimes(1);
   });
 
+  it("offers an email-only reset request from login and shows a generic inbox state", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "If an account exists, password reset instructions have been sent." }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ranger@example.test" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send reset link" }).hasAttribute("disabled")).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("heading", { name: "Check your inbox" })).toBeTruthy();
+    expect(screen.getByText(/If that email is connected to a Parkdex account/)).toBeTruthy();
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ email: "ranger@example.test" });
+  });
+
+  it("turns an invalid reset token into a recoverable request state", async () => {
+    window.history.replaceState({}, "", "/#resetToken=expired-token");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Invalid or expired password reset token" }), { status: 400, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a long secure password" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "a long secure password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    expect(await screen.findByRole("heading", { name: "That reset link is no longer valid" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Request a new link" }));
+    expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("restores a signed-in account when a reset-link journey is abandoned", async () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true };
+    window.history.replaceState({}, "", "/#resetToken=abandoned-token");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Back to log in" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your account" })).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Reset password by email" })).toBeTruthy();
+  });
+
+  it("replaces direct account password changes with the email reset journey", async () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true };
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.queryByRole("button", { name: "Change password" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reset password by email" }));
+    expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+    expect(screen.getByLabelText(/^Email/).getAttribute("readonly")).not.toBeNull();
+  });
+
   it("shows a retryable Google cancellation and clears callback state", async () => {
     window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "verifier");
     window.history.replaceState({}, "", "/?error=access_denied&state=oauth-state");
@@ -330,16 +388,4 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
   });
 
-  it("lets a Google-only account set its first password for MCP", async () => {
-    journal.authenticated = true;
-    journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true, hasPassword: false };
-    render(<ParkdexApp apiBaseUrl="" />);
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
-    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
-    expect(screen.queryByLabelText("Current password")).toBeNull();
-    fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a secure local password" } });
-    fireEvent.change(screen.getByLabelText(/^Confirm new password/), { target: { value: "a secure local password" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Set password" }).at(-1)!);
-    await waitFor(() => expect(journal.setPassword).toHaveBeenCalledWith("a secure local password"));
-  });
 });
