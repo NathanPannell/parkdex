@@ -1,1 +1,1 @@
-database/migrations/0007_focus_vancouver_island_catalogue.sql
+database/migrations/0013_expand_regional_catalogue.sql

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-08T05:58:38.509Z",
-  "placeCount": 195,
-  "featureCount": 195,
+  "generatedAt": "2026-09-11T08:50:14.572Z",
+  "placeCount": 198,
+  "featureCount": 198,
   "missingIds": [],
   "duplicateIds": [],
   "sourceCounts": {
@@ -9,19 +9,19 @@
     "Capital Regional District — Park GIS layer": 34,
     "Cowichan Valley Regional District — Parks GIS layer": 3,
     "Natural Resources Canada — Canada Lands Survey System": 2,
-    "OpenStreetMap contributors": 25,
+    "OpenStreetMap contributors": 28,
     "Regional District of Nanaimo — Regional Parks spatial data": 14
   },
   "geometryCounts": {
-    "Polygon": 135,
-    "MultiPolygon": 60
+    "Polygon": 137,
+    "MultiPolygon": 61
   },
-  "totalParts": 419,
+  "totalParts": 426,
   "totalHoles": 96,
-  "sourceParts": 419,
+  "sourceParts": 426,
   "sourceHoles": 96,
-  "totalPositions": 68004,
-  "payloadBytes": 1561976,
+  "totalPositions": 68105,
+  "payloadBytes": 1565106,
   "nationalParts": {
     "national-gulf-islands-national-park-reserve": 80,
     "national-pacific-rim-national-park-reserve": 20

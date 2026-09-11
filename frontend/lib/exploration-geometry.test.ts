@@ -114,7 +114,7 @@ describe("weighted exploration territory", () => {
 
   it("gives every active catalogue representative its own deterministic nearest score", () => {
     const places = catalogue();
-    expect(places).toHaveLength(195);
+    expect(places).toHaveLength(198);
     places.forEach((place) => expect(nearestWeightedExplorationPoint(place, places)?.id).toBe(place.id));
   });
 
@@ -130,8 +130,8 @@ describe("weighted exploration territory", () => {
     expect(scope).toBeDefined();
     expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(3_000_000);
     expect(asset.metadata).toMatchObject({
-      activePlaceCount: 195,
-      territoryCount: 195,
+      activePlaceCount: 198,
+      territoryCount: 198,
       categoryWeights: EXPLORATION_CATEGORY_WEIGHTS,
       landSource: "canonical-boundaries-independent-padded",
       explorationPaddingMeters: { park: 180, island: 220 },
