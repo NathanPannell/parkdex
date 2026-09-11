@@ -187,7 +187,9 @@ async function buildCrd() {
   const collection = await fetchJson(sources.crd.data);
   return collection.features.map((feature) => {
     const name = feature.properties.Name;
-    const id = `regional-${slugify(name)}`;
+    const id = feature.properties.OBJECTID === 1958
+      ? 'regional-sooke-river-regional-park'
+      : `regional-${slugify(name)}`;
     if (!placeById.has(id)) return null;
     return makeFeature(requirePlace(id), feature.geometry, sources.crd, feature.properties.OBJECTID);
   }).filter(Boolean);

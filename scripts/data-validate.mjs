@@ -25,8 +25,23 @@ const expected = [
   'national-pacific-rim-national-park-reserve', 'national-gulf-islands-national-park-reserve',
   'provincial-cape-scott-park', 'provincial-strathcona-park', 'provincial-elk-falls-park',
   'provincial-rathtrevor-beach-park', 'provincial-miracle-beach-park',
+  'regional-kwaksistah-regional-park', 'regional-little-huson-cave-regional-park',
+  'regional-mount-cain-alpine-park',
+  'regional-sooke-river-regional-park',
 ];
 for (const id of expected) if (!ids.has(id)) throw new Error(`coverage regression: ${id}`);
+
+const reviewedRegionalPointSources = new Map([
+  ['regional-kwaksistah-regional-park', 'W827164115'],
+  ['regional-little-huson-cave-regional-park', 'W816998556'],
+  ['regional-mount-cain-alpine-park', 'W579980733'],
+]);
+for (const [id, sourceId] of reviewedRegionalPointSources) {
+  const place = places.find((item) => item.id === id);
+  if (place?.sourceId !== sourceId || !place.sourceName.includes('OpenStreetMap contributors')) {
+    throw new Error(`${id}: reviewed point-source provenance mismatch`);
+  }
+}
 
 const excludedMainlandIds = [
   'provincial-alice-lake-park', 'provincial-garibaldi-park', 'provincial-shannon-falls-park',

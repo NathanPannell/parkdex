@@ -260,6 +260,20 @@ export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
     locationEvidenceUrl: "https://commons.wikimedia.org/wiki/File:East_Sooke_Park_BC.jpg",
     changes: CHANGES,
   },
+  "regional-little-huson-cave-regional-park": {
+    thumbnail: { src: "/places/little-huson-thumb.webp", width: 320, height: 240 },
+    detail: { src: "/places/little-huson.webp", width: 960, height: 720 },
+    alt: "Atluck Creek flowing from beneath the natural bridge in Little Huson Cave Regional Park",
+    creator: "David Stanley",
+    license: "CC BY 2.0",
+    licenseUrl: "https://creativecommons.org/licenses/by/2.0/",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg",
+    sourceTitle: "Natural Bridge in Little Huson Regional Park",
+    originalUrl: "https://upload.wikimedia.org/wikipedia/commons/f/f7/Natural_Bridge_%2828723312295%29.jpg",
+    locationEvidence: "The Commons description and coordinates identify Atluck Creek and the natural bridge inside Little Huson Regional Park on Vancouver Island.",
+    locationEvidenceUrl: "https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg",
+    changes: CHANGES,
+  },
 };
 
 export const PLACE_IMAGE_COUNT = Object.keys(PLACE_IMAGES).length;

@@ -23,8 +23,9 @@ Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wid
 | MacMillan Park | [Cathedral Grove](https://commons.wikimedia.org/wiki/File:CathedralGrove-VancouverIsland.jpg) | Aaron Carlson | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
 | Saysutshun (Newcastle Island Marine) Park | [Newcastle Island beach](https://commons.wikimedia.org/wiki/File:Newcastle_Island_beach_(28994072520).jpg) | Kristina D.C. Hoeppner | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
 | East Sooke Regional Park | [East Sooke Park](https://commons.wikimedia.org/wiki/File:East_Sooke_Park_BC.jpg) | Brandon Godfrey | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
+| Little Huson Cave Regional Park | [Natural Bridge](https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 
-Parks without a verified, freely licensed image use the explicit `Photo unavailable` treatment. Gold Muchalat, Lower Nimpkish, White River, and Woss Lake remain intentionally uncovered after the bounded source search.
+Parks without a verified, freely licensed image use the explicit `Photo unavailable` treatment. Gold Muchalat, Lower Nimpkish, White River, Woss Lake, Kwaksistah, and Mount Cain Alpine remain intentionally uncovered after the bounded source search.
 
 To contribute a photo:
 

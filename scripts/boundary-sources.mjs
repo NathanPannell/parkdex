@@ -7,7 +7,7 @@ export const boundarySources = Object.freeze({
   crd: Object.freeze({
     name: 'Capital Regional District — Park GIS layer',
     page: 'https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3',
-    data: "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3/query?where=Type%3D%27Regional%20Park%27&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
+    data: "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3/query?where=Type%3D%27Regional%20Park%27%20OR%20OBJECTID%3D1958&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
   }),
   cvrd: Object.freeze({
     name: 'Cowichan Valley Regional District — Parks GIS layer',
@@ -46,7 +46,11 @@ export const osmObjects = new Map([
   ['island-saturna-island', 'R1725547'], ['island-sonora-island', 'R2143966'],
   ['island-south-pender-island', 'R8335965'], ['island-thetis-island', 'R5553191'],
   ['island-valdes-island', 'R8338288'],
-  ['island-vargas-island', 'R8371770'], ['regional-bere-point-regional-park', 'W449016643'],
+  ['island-vargas-island', 'R8371770'],
+  ['regional-bere-point-regional-park', 'W449016643'],
+  ['regional-kwaksistah-regional-park', 'W827164115'],
+  ['regional-little-huson-cave-regional-park', 'W816998556'],
+  ['regional-mount-cain-alpine-park', 'W579980733'],
 ]);
 
 const nationalSourceIds = new Map([
@@ -73,7 +77,7 @@ const crdSourceIds = new Map([
   ['regional-kapoor-regional-park', '1630'],
   ['regional-lone-tree-hill-regional-park', '1631'],
   ['regional-matheson-lake-regional-park', '1818'],
-  ['regional-matthews-point-regional-park', '1632'],
+  ['regional-matthews-point-regional-park', '1633'],
   ['regional-mill-farm-regional-park', '1872'],
   ['regional-mill-hill-regional-park', '1847'],
   ['regional-mount-parke-regional-park', '1641'],
@@ -84,7 +88,7 @@ const crdSourceIds = new Map([
   ['regional-sea-to-sea-regional-park', '1659'],
   ['regional-sooke-hills-wilderness-regional-park', '1668'],
   ['regional-sooke-potholes-regional-park', '1678'],
-  ['regional-sooke-river-regional-park', '1800'],
+  ['regional-sooke-river-regional-park', '1958'],
   ['regional-st-john-point-regional-park', '1679'],
   ['regional-thetis-lake-regional-park', '1686'],
   ['regional-witty-s-lagoon-regional-park', '1696'],
@@ -96,14 +100,14 @@ export const expectedSourceCounts = Object.freeze({
   [boundarySources.crd.name]: 34,
   [boundarySources.cvrd.name]: 3,
   [boundarySources.national.name]: 2,
-  [boundarySources.osm.name]: 25,
+  [boundarySources.osm.name]: 28,
   [boundarySources.rdn.name]: 14,
 });
 
 export function expectedBoundarySource(place) {
   if (place.category === 'national') return { source: boundarySources.national, sourceId: nationalSourceIds.get(place.id) };
   if (place.category === 'provincial') return { source: boundarySources.bcParks, sourceId: place.sourceId == null ? null : String(place.sourceId) };
-  if (place.category === 'island' || place.id === 'regional-bere-point-regional-park') {
+  if (place.category === 'island' || osmObjects.has(place.id)) {
     return { source: boundarySources.osm, sourceId: osmObjects.get(place.id) };
   }
   if (place.sourceName === boundarySources.crd.name) return { source: boundarySources.crd, sourceId: crdSourceIds.get(place.id) };

@@ -1979,6 +1979,30 @@
     "sourceName": "Capital Regional District — Park GIS layer"
   },
   {
+    "id": "regional-kwaksistah-regional-park",
+    "name": "Kwaksistah Regional Park",
+    "category": "regional",
+    "latitude": 50.521979,
+    "longitude": -128.027444,
+    "region": "North Island",
+    "description": "A Regional District of Mount Waddington park and rustic campground at Winter Harbour. The pin represents the reviewed mapped park feature, not a campsite.",
+    "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/kwaksistah-regional-park/",
+    "sourceName": "Regional District of Mount Waddington + OpenStreetMap contributors",
+    "sourceId": "W827164115"
+  },
+  {
+    "id": "regional-little-huson-cave-regional-park",
+    "name": "Little Huson Cave Regional Park",
+    "category": "regional",
+    "latitude": 50.28532,
+    "longitude": -126.950779,
+    "region": "North Island",
+    "description": "A Regional District of Mount Waddington day-use park protecting caves and karst formations along Atluck Creek. The pin represents the reviewed mapped park feature, not the parking area.",
+    "sourceUrl": "https://www.rdmw.bc.ca/media/Huson%20Cave%20Park%20Overview%281%29.pdf",
+    "sourceName": "Regional District of Mount Waddington + OpenStreetMap contributors",
+    "sourceId": "W816998556"
+  },
+  {
     "id": "regional-little-qualicum-river-estuary-regional-conservation-area",
     "name": "Little Qualicum River Estuary Regional Conservation Area",
     "category": "regional",
@@ -2026,8 +2050,8 @@
     "id": "regional-matthews-point-regional-park",
     "name": "Matthews Point Regional Park",
     "category": "regional",
-    "latitude": 48.863907,
-    "longitude": -123.328882,
+    "latitude": 48.863899,
+    "longitude": -123.32888,
     "region": "Capital Region",
     "description": "A Capital Regional District regional park. The map pin represents the largest official GIS parcel, not an entrance or trailhead.",
     "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
@@ -2098,6 +2122,18 @@
     "description": "A Regional District of Nanaimo regional park or conservation area. The pin represents the largest official GIS polygon, not an entrance or trailhead.",
     "sourceUrl": "https://rdn.bc.ca/spatial-data-files",
     "sourceName": "Regional District of Nanaimo — Regional Parks spatial data"
+  },
+  {
+    "id": "regional-mount-cain-alpine-park",
+    "name": "Mount Cain Alpine Park",
+    "category": "regional",
+    "latitude": 50.222771,
+    "longitude": -126.345699,
+    "region": "North Island",
+    "description": "A Regional District of Mount Waddington alpine park with a community-operated ski area. The pin represents the reviewed mapped park feature, not an access road or facility.",
+    "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/",
+    "sourceName": "Regional District of Mount Waddington + OpenStreetMap contributors",
+    "sourceId": "W579980733"
   },
   {
     "id": "regional-mount-parke-regional-park",
@@ -2224,12 +2260,12 @@
   },
   {
     "id": "regional-sooke-river-regional-park",
-    "name": "Sooke River Regional Park",
+    "name": "Sooke River Park",
     "category": "regional",
-    "latitude": 48.401975,
-    "longitude": -123.70525,
+    "latitude": 48.389814,
+    "longitude": -123.702495,
     "region": "Capital Region",
-    "description": "A Capital Regional District regional park. The map pin represents the largest official GIS parcel, not an entrance or trailhead.",
+    "description": "A Capital Regional District municipal park along the Sooke River. The map pin represents the official GIS parcel, not an entrance or trailhead.",
     "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
     "sourceName": "Capital Regional District — Park GIS layer"
   },

@@ -17,7 +17,7 @@ const sources = {
   crd: {
     name: 'Capital Regional District — Park GIS layer',
     page: 'https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3',
-    data: "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3/query?where=Type%3D%27Regional%20Park%27&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
+    data: "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3/query?where=Type%3D%27Regional%20Park%27%20OR%20OBJECTID%3D1958&outFields=*&returnGeometry=true&outSR=4326&f=geojson",
   },
   rdn: {
     name: 'Regional District of Nanaimo — Regional Parks spatial data',
@@ -329,9 +329,12 @@ async function buildCrd() {
     if (!grouped.has(name) || point.area > grouped.get(name).area) grouped.set(name, point);
   }
   return [...grouped].map(([name, point]) => ({
-    id: `regional-${slugify(name)}`, name, category: 'regional', latitude: round(point.latitude),
+    id: name === 'Sooke River Park' ? 'regional-sooke-river-regional-park' : `regional-${slugify(name)}`,
+    name, category: 'regional', latitude: round(point.latitude),
     longitude: round(point.longitude), region: point.longitude > -123.3 ? 'Gulf Islands' : 'Capital Region',
-    description: 'A Capital Regional District regional park. The map pin represents the largest official GIS parcel, not an entrance or trailhead.',
+    description: name === 'Sooke River Park'
+      ? 'A Capital Regional District municipal park along the Sooke River. The map pin represents the official GIS parcel, not an entrance or trailhead.'
+      : 'A Capital Regional District regional park. The map pin represents the largest official GIS parcel, not an entrance or trailhead.',
     sourceUrl: sources.crd.page, sourceName: sources.crd.name,
   }));
 }
@@ -408,18 +411,56 @@ function buildNational() {
 }
 
 function buildVerifiedRegionalPoints() {
-  return [{
-    id: 'regional-bere-point-regional-park',
-    name: 'Bere Point Regional Park',
-    category: 'regional',
-    latitude: 50.670833,
-    longitude: -127.056667,
-    region: 'Northern Islands',
-    description: 'A Regional District of Mount Waddington park on Malcolm Island. The pin uses the official BC Geographical Names position for Bere Point, not an entrance or campsite.',
-    sourceUrl: 'https://www.rdmw.bc.ca/recreation-leisure/camping-information/bere-point/',
-    sourceName: 'Regional District of Mount Waddington + BC Geographical Names Office',
-    sourceId: 'bcgnis-22727',
-  }];
+  return [
+    {
+      id: 'regional-bere-point-regional-park',
+      name: 'Bere Point Regional Park',
+      category: 'regional',
+      latitude: 50.670833,
+      longitude: -127.056667,
+      region: 'Northern Islands',
+      description: 'A Regional District of Mount Waddington park on Malcolm Island. The pin uses the official BC Geographical Names position for Bere Point, not an entrance or campsite.',
+      sourceUrl: 'https://www.rdmw.bc.ca/recreation-leisure/camping-information/bere-point/',
+      sourceName: 'Regional District of Mount Waddington + BC Geographical Names Office',
+      sourceId: 'bcgnis-22727',
+    },
+    {
+      id: 'regional-kwaksistah-regional-park',
+      name: 'Kwaksistah Regional Park',
+      category: 'regional',
+      latitude: 50.521979,
+      longitude: -128.027444,
+      region: 'North Island',
+      description: 'A Regional District of Mount Waddington park and rustic campground at Winter Harbour. The pin represents the reviewed mapped park feature, not a campsite.',
+      sourceUrl: 'https://www.rdmw.bc.ca/recreation-leisure/camping-information/kwaksistah-regional-park/',
+      sourceName: 'Regional District of Mount Waddington + OpenStreetMap contributors',
+      sourceId: 'W827164115',
+    },
+    {
+      id: 'regional-little-huson-cave-regional-park',
+      name: 'Little Huson Cave Regional Park',
+      category: 'regional',
+      latitude: 50.28532,
+      longitude: -126.950779,
+      region: 'North Island',
+      description: 'A Regional District of Mount Waddington day-use park protecting caves and karst formations along Atluck Creek. The pin represents the reviewed mapped park feature, not the parking area.',
+      sourceUrl: 'https://www.rdmw.bc.ca/media/Huson%20Cave%20Park%20Overview%281%29.pdf',
+      sourceName: 'Regional District of Mount Waddington + OpenStreetMap contributors',
+      sourceId: 'W816998556',
+    },
+    {
+      id: 'regional-mount-cain-alpine-park',
+      name: 'Mount Cain Alpine Park',
+      category: 'regional',
+      latitude: 50.222771,
+      longitude: -126.345699,
+      region: 'North Island',
+      description: 'A Regional District of Mount Waddington alpine park with a community-operated ski area. The pin represents the reviewed mapped park feature, not an access road or facility.',
+      sourceUrl: 'https://www.rdmw.bc.ca/recreation-leisure/',
+      sourceName: 'Regional District of Mount Waddington + OpenStreetMap contributors',
+      sourceId: 'W579980733',
+    },
+  ];
 }
 
 async function buildIslands() {
@@ -462,6 +503,7 @@ function validate(places) {
     'Loveland Bay Park', 'Miracle Beach Park', 'Morden Colliery Historic Park', 'Morton Lake Park',
     'Petroglyph Park', 'Rathtrevor Beach Park', 'Roberts Memorial Park', 'Rock Bay Marine Park',
     'Sandwell Park', 'Mitlenatch Island Nature Park', 'Thurston Bay Marine Park',
+    'Kwaksistah Regional Park', 'Little Huson Cave Regional Park', 'Mount Cain Alpine Park',
   ]) {
     if (!places.some((place) => place.name === required)) throw new Error(`Required coverage missing: ${required}`);
   }
