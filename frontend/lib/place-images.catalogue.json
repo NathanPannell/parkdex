@@ -1956,5 +1956,71 @@
     "locationEvidence": "The verified source title, description, or reviewed Commons category identifies Thetis Lake Regional Park or the depicted named feature within it. Source detail: Commons identifies Thetis Lake at 48.467869,-123.468969; the Commons Thetis Lake category documents the lakes as lying within Thetis Lake Regional Park.",
     "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Thetis_Lake,_Canada_01.jpg",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-flores-island-park": {
+    "thumbnail": {
+      "src": "/places/flores-island-park-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/flores-island-park.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "A forested Flores Island shoreline at dusk",
+    "creator": "djmonkeyboy from London, UK",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Dusk,_Flores_Island.jpg",
+    "sourceTitle": "Dusk, Flores Island",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/52/Dusk%2C_Flores_Island.jpg",
+    "locationEvidence": "Wikimedia Commons places the file in its Flores Island Marine Provincial Park category, and BC Parks confirms the park protects the island's western and southern portions.",
+    "locationEvidenceUrl": "https://bcparks.ca/flores-island-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-brooks-point-regional-park": {
+    "thumbnail": {
+      "src": "/places/brooks-point-regional-park-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/brooks-point-regional-park.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "The rocky Brooks Point shoreline and navigation beacon",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Brocks_Point_(7799165450).jpg",
+    "sourceTitle": "Brocks Point (7799165450)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Brocks_Point_%287799165450%29.jpg",
+    "locationEvidence": "The file coordinates fall inside the official park polygon. The CRD management plan identifies Brooks Point and the adjoining southeastern tip of South Pender Island as part of the park.",
+    "locationEvidenceUrl": "https://www.crd.ca/media/file/brooks-point-regional-park-management-plan-2014pdf",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "regional-stoney-hill-regional-park": {
+    "thumbnail": {
+      "src": "/places/stoney-hill-regional-park-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/stoney-hill-regional-park.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Sansum Narrows and Salt Spring Island viewed from Stoney Hill Regional Park",
+    "creator": "David Stanley",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "sourceUrl": "https://www.flickr.com/photos/davidstanleytravel/51265349732",
+    "sourceTitle": "Samsun Narrows",
+    "originalUrl": "https://live.staticflickr.com/65535/51265349732_c7f29d005d_b.jpg",
+    "locationEvidence": "The creator's caption says the photo was taken from Stoney Hill Regional Park, looking across Sansum Narrows to Salt Spring Island; the CVRD park page describes the same view.",
+    "locationEvidenceUrl": "https://www.cvrd.ca/parks/stoney-hill-regional-park/",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
   }
 }
