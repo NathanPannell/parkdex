@@ -47,6 +47,7 @@ function diagonalKm(geometry) {
 }
 
 export function displayBufferMeters(feature) {
+  if (feature.properties?.category !== "island") return 0;
   return Math.min(MAX_BUFFER_METERS, Math.max(MIN_BUFFER_METERS, diagonalKm(feature.geometry) * 1000 * BUFFER_PER_DIAGONAL));
 }
 
@@ -116,7 +117,8 @@ const manifest = {
   outputSha256: sha256(outputText),
   featureCount: display.features.length,
   algorithm: {
-    name: "adaptive-simplify-rounded-offset",
+    name: "adaptive-simplify-rounded-category-offset",
+    parkBufferMeters: 0,
     minBufferMeters: MIN_BUFFER_METERS,
     maxBufferMeters: MAX_BUFFER_METERS,
     bufferPerDiagonal: BUFFER_PER_DIAGONAL,

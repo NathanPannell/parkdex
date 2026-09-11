@@ -45,9 +45,23 @@ describe("softened boundary display asset", () => {
     expect(invalidIds).toEqual([]);
   });
 
-  it("slightly expands representative boundary extents while retaining polygon geometry", () => {
+  it("keeps representative park extents within the canonical boundary while retaining rounded geometry", () => {
     const canonicalFeature = canonical.features.find((feature) => feature.properties.id === "provincial-strathcona-park");
     const displayFeature = display.features.find((feature) => feature.properties.id === "provincial-strathcona-park");
+    expect(canonicalFeature).toBeDefined();
+    expect(displayFeature).toBeDefined();
+    const canonicalBounds = geometryBounds(canonicalFeature!.geometry)!;
+    const displayBounds = geometryBounds(displayFeature!.geometry)!;
+    expect(displayBounds[0][0]).toBeGreaterThanOrEqual(canonicalBounds[0][0]);
+    expect(displayBounds[0][1]).toBeGreaterThanOrEqual(canonicalBounds[0][1]);
+    expect(displayBounds[1][0]).toBeLessThanOrEqual(canonicalBounds[1][0]);
+    expect(displayBounds[1][1]).toBeLessThanOrEqual(canonicalBounds[1][1]);
+    expect(["Polygon", "MultiPolygon"]).toContain(displayFeature!.geometry.type);
+  });
+
+  it("retains the expanded display treatment for island context", () => {
+    const canonicalFeature = canonical.features.find((feature) => feature.properties.id === "island-cormorant-island");
+    const displayFeature = display.features.find((feature) => feature.properties.id === "island-cormorant-island");
     expect(canonicalFeature).toBeDefined();
     expect(displayFeature).toBeDefined();
     const canonicalBounds = geometryBounds(canonicalFeature!.geometry)!;
@@ -56,6 +70,5 @@ describe("softened boundary display asset", () => {
     expect(displayBounds[0][1]).toBeLessThan(canonicalBounds[0][1]);
     expect(displayBounds[1][0]).toBeGreaterThan(canonicalBounds[1][0]);
     expect(displayBounds[1][1]).toBeGreaterThan(canonicalBounds[1][1]);
-    expect(["Polygon", "MultiPolygon"]).toContain(displayFeature!.geometry.type);
   });
 });

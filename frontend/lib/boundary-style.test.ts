@@ -46,4 +46,19 @@ describe("boundary map style", () => {
     expect(parkBuffer).toMatchObject({ source: BOUNDARY_DISPLAY_SOURCE_ID });
     expect(layers.find((layer) => layer.id === "boundary-hit")).toMatchObject({ source: BOUNDARY_SOURCE_ID });
   });
+
+  it("makes the active park category readable without changing hit geometry", () => {
+    const layers = boundaryLayerSpecifications(BOUNDARY_DISPLAY_SOURCE_ID);
+    const selectedFill = layers.find((layer) => layer.id === "boundary-selected-fill");
+    const selectedHalo = layers.find((layer) => layer.id === "boundary-selected-halo");
+    const selectedLine = layers.find((layer) => layer.id === "boundary-selected-line");
+
+    expect(selectedFill?.paint).toMatchObject({
+      "fill-color": ["match", ["get", "category"], "national", "#ffd862", "provincial", "#b9ea55", "regional", "#ef755f", "#b9ea55"],
+    });
+    expect((selectedHalo?.paint as Record<string, unknown> | undefined)?.["line-width"])
+      .toEqual(["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5]);
+    expect((selectedLine?.paint as Record<string, unknown> | undefined)?.["line-width"])
+      .toEqual(["interpolate", ["linear"], ["zoom"], 5, 2.8, 12, 5.5]);
+  });
 });
