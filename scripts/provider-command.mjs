@@ -5,6 +5,17 @@ export function buildNeonApiCommand(cli, path, { method = "GET", query = {}, bod
   return { args, input: body === undefined ? undefined : JSON.stringify(body) };
 }
 
+export function finalizeReleaseSourceCleanup({ sourceRoot, removeWorktree, removeDirectory, pruneWorktrees, sourceExists, sourceRegistered }) {
+  let removalError;
+  try { removeWorktree(); } catch (error) { removalError = error; }
+  try { removeDirectory(); } catch (error) { removalError ||= error; }
+  try { pruneWorktrees(); } catch (error) { removalError ||= error; }
+  if (sourceExists(sourceRoot) || sourceRegistered(sourceRoot)) {
+    throw removalError || new Error("Release source cleanup was not verified");
+  }
+  return { recovered: Boolean(removalError) };
+}
+
 export function sanitizeProviderDiagnostic(value) {
   return String(value || "")
     .replace(/(postgres(?:ql)?:\/\/)[^\s"']+/gi, "$1[redacted]")
