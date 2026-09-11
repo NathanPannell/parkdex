@@ -892,10 +892,11 @@ button { color: inherit; }
   .thumb-nav button { color: var(--muted); }
   .thumb-nav button.active { background: var(--forest); color: var(--paper-bright); }
   .map-utility { right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 10px; top: auto; width: auto; }
+  .connection-note, .sync-note { bottom: calc(144px + env(safe-area-inset-bottom)); }
   .map-utility .map-mode-switch button { min-height: 44px; }
   .map-utility .search-dock { width: auto; min-width: 92px; min-height: 44px; }
   .map-utility .locate-button, .map-utility .search-toggle { width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; }
-  .search-results, .filter-tray { top: auto; bottom: calc(139px + env(safe-area-inset-bottom)); max-height: min(46dvh,420px); }
+  .search-results, .filter-tray { top: auto; bottom: calc(194px + env(safe-area-inset-bottom)); max-height: min(46dvh,420px); }
   .place-sheet { bottom: calc(76px + env(safe-area-inset-bottom)); max-height: min(330px,calc(100dvh - 130px)); padding: 13px; }
   .place-sheet h2 { margin: 8px 0 4px; font-size: clamp(22px,6.5vw,29px); }
   .place-sheet-media { grid-template-columns: minmax(0,2fr) minmax(50px,1fr); gap: 8px; margin: 8px 0; }

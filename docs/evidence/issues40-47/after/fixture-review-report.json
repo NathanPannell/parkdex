@@ -1,0 +1,14 @@
+{
+  "appUrl": "http://localhost:3127",
+  "account": "synthetic",
+  "screenshots": [
+    "fixture-mobile-account-photo.png",
+    "fixture-mobile-group-confirmation.png"
+  ],
+  "checks": [
+    "authenticated account shelf rendered",
+    "create-empty, rename, add-by-search, and styled-delete-cancel rendered",
+    "fixture mutations remained available for the review run"
+  ],
+  "pageErrors": []
+}

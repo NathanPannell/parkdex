@@ -44,3 +44,10 @@
 - Impeccable detector returned no findings for the changed UI targets.
 - Baseline evidence is tracked under `docs/evidence/issues40-47/before`; authenticated #42/#44/#47 baseline states remain issue-authored because the public guest cannot access them.
 - Active: browser after-state capture at 1440×900, 390×844, and 320px; authenticated workflows require a bounded local fixture or safe staging API connection before final review.
+
+## Final review corrections
+
+- Mobile offline and sync notices now sit above the map utility, and map search/filter results reserve the utility's full open height.
+- An already-active Map tab sends an explicit overview-reset request; closing a selected place does not reset the camera. Small selected boundaries may use the map's actual maximum zoom while retaining the measured fit padding.
+- `docs/evidence/issues40-47/after/fixture-review.cjs` runs a stateful, isolated authenticated browser fixture with synthetic account and group data; it produces photo and group-flow screenshots without accessing shared user data or staging credentials.
+- Focused app/map tests pass 40/40, TypeScript passes, targeted ESLint passes, and the Impeccable detector reports no findings. Browser reviewer retest is active for the map-reset, small-boundary, notice, search-clearance, Nearby, and group/account flows.

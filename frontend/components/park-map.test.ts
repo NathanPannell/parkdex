@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { Map as MapLibreMap } from "maplibre-gl";
 
+import type { BoundaryIndex } from "@/lib/boundaries";
 import { cameraPaddingWithContentMargin } from "@/lib/map-fit";
-import { cameraViewDiffers, type MapCameraSnapshot } from "./park-map";
+import { cameraViewDiffers, fitBoundary, type MapCameraSnapshot } from "./park-map";
 
 const overview: MapCameraSnapshot = {
   longitude: -125.25,
@@ -34,5 +36,37 @@ describe("map reset visibility state", () => {
       { top: 100, right: 20, bottom: 200, left: 20 },
       0.1,
     )).toEqual({ top: 130, right: 56, bottom: 230, left: 56 });
+  });
+});
+
+describe("selected boundary fit", () => {
+  it("uses the map's full zoom range for genuinely small park boundaries", () => {
+    const calls: Array<{ bounds: unknown; options: { maxZoom?: number } }> = [];
+    const map = {
+      getMaxZoom: () => 15,
+      fitBounds: (bounds: unknown, options: { maxZoom?: number }) => calls.push({ bounds, options }),
+    } as unknown as MapLibreMap;
+    const index: BoundaryIndex = {
+      version: 1,
+      boundsById: {
+        "regional-wrigglesworth-lake-regional-park": [[-123.5766, 48.51766], [-123.56986, 48.52289]],
+      },
+    };
+
+    expect(fitBoundary(
+      map,
+      index,
+      "regional-wrigglesworth-lake-regional-park",
+      false,
+      { top: 38, right: 39, bottom: 38, left: 39 },
+    )).toBe(true);
+    expect(calls).toEqual([{
+      bounds: index.boundsById["regional-wrigglesworth-lake-regional-park"],
+      options: {
+        padding: { top: 38, right: 39, bottom: 38, left: 39 },
+        maxZoom: 15,
+        duration: 0,
+      },
+    }]);
   });
 });

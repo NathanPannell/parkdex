@@ -161,12 +161,12 @@ function overviewCameraSnapshot(map: MapLibreMap): MapCameraSnapshot | null {
   };
 }
 
-function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
+export function fitBoundary(map: MapLibreMap, index: BoundaryIndex, placeId: string, animated: boolean, padding: PaddingOptions) {
   const bounds = boundsForPlace(index, placeId);
   if (!bounds) return false;
   map.fitBounds(bounds, {
     padding,
-    maxZoom: 12,
+    maxZoom: map.getMaxZoom(),
     duration: animated ? 560 : 0,
   });
   return true;
@@ -262,6 +262,7 @@ export function ParkMap({
   currentLocation = null,
   selectedId,
   selectedIds = new Set<string>(),
+  resetViewRequest = 0,
   onSelect,
   onBoundaryLoadState,
 }: {
@@ -271,6 +272,7 @@ export function ParkMap({
   currentLocation?: MapLocation | null;
   selectedId: string | null;
   selectedIds?: ReadonlySet<string>;
+  resetViewRequest?: number;
   onSelect: (id: string) => void;
   onBoundaryLoadState?: (state: BoundaryLoadState) => void;
 }) {
@@ -285,6 +287,7 @@ export function ParkMap({
   const clusterFitRequestRef = useRef(0);
   const overviewCameraRef = useRef<MapCameraSnapshot | null>(null);
   const resetOverviewRef = useRef<(() => void) | null>(null);
+  const handledResetRequestRef = useRef(resetViewRequest);
   const viewDiffersRef = useRef(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
@@ -295,6 +298,11 @@ export function ParkMap({
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { boundaryStateRef.current = onBoundaryLoadState; }, [onBoundaryLoadState]);
+  useEffect(() => {
+    if (handledResetRequestRef.current === resetViewRequest) return;
+    handledResetRequestRef.current = resetViewRequest;
+    resetOverviewRef.current?.();
+  }, [resetViewRequest]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
