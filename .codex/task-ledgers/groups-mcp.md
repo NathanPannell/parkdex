@@ -30,6 +30,7 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 - 2026-09-10: focused disposable-database verification passed 17 tests covering OAuth discovery/DCR, consent and CSRF, PKCE failure/success, code and refresh replay, access/refresh revocation, expiry, resource/scope/redirect binding, cross-account isolation, exact public tool surface and output casing, Groups/Wishlist invariants, and stdio compatibility.
 - 2026-09-10: independent review found account-recovery/token-exchange races, outstanding pre-recovery codes, DCR write amplification/capacity risk, and missing cross-origin PATCH. The revised implementation now takes the account lock before consuming codes or refresh grants, invalidates codes during every credential-recovery path, suppresses throttled DCR event writes, caps and evicts inactive DCR clients, retains security events for 90 days, and permits/tests PATCH preflight.
 - 2026-09-10: expanded disposable-database suite passed 18 tests, including a deterministic refresh/recovery lock race, stale-code rejection after password reset, bounded DCR event growth/capacity, and Group rename preflight.
+- 2026-09-10: refreshed the mobile-first Groups UX with Wishlist-first indexing, separate group detail screens, spacious place cards, a Spotify-style add-to-group picker, grouped bottom navigation, and a group-only fullscreen map mode; merged current `origin/staging` Resend delivery changes at `b17752b`.
 
 ## Active verification plan
 
@@ -40,4 +41,4 @@ Update PR #28 so Groups are the only collection concept across the app, REST API
 
 ## Next action
 
-Commit the final security hardening, run exact-revision validation and independent security review, then push and hand the attested SHA to the preview deployment owner.
+Run the exact merged-head validation, push the PR revision, redeploy the isolated preview, and complete fresh browser and independent black-box review before updating the PR evidence.
