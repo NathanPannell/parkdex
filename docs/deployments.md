@@ -54,7 +54,7 @@ Successful publication accepts only full merge-candidate evidence and rechecks t
 
 Local staging `-Apply` remains disabled because the persistent staging mutation path was not covered by the isolated preview proof. Use the reviewed manual GitHub staging workflow below; it targets the existing exact `staging` Railway environment and never creates or copies one. Production remains reachable only through its separate manual promotion gate.
 
-Preview creation is not automatic. The close-event cleanup workflow remains enabled so resources created by older preview runs are removed when those pull requests close.
+Preview creation is not automatic. The close-event workflow has no access to external release journals, so it makes no provider calls and fails visibly until the authorized coordinator completes exact journal-owned cleanup and verifies every recorded resource absent.
 
 Deploy the latest `staging` commit to the persistent staging environment:
 
@@ -72,10 +72,10 @@ gh workflow run ci.yml -R NathanPannell/parkdex --ref staging -f action=promote-
 
 Promotion pins the latest `staging` commit, reruns the full release checks, verifies that exact commit is live in the staging frontend and API, and fails if `staging` changes during the run. It then fast-forwards `main` without force and deploys that commit to production. If `main` is not an ancestor of `staging`, reconcile the branches through a pull request before retrying.
 
-GitHub only dispatches workflows that exist on the default branch. This keeps the existing `ci.yml` entry point so the commands work after this change reaches `staging`, but future edits to a new workflow file must first reach `main` before GitHub can dispatch them.
+GitHub only dispatches workflows that exist on the default branch. This keeps the existing `ci.yml` entry point so the commands work after this change reaches `staging`, but future edits to a new workflow file must first reach `main` before GitHub can dispatch them. A staging-only cleanup-hook change is therefore prepared but inactive until a separately authorized promotion reaches the default branch.
 
 Vercel Git deployments must remain disabled, and Railway API and worker Git sources must be disconnected in both environments. The workflow disconnects Railway sources before its uploads, but the first rollout should confirm the provider settings before merging a change that would otherwise trigger an automatic build.
 
 The September 8, 2026 rollout inspection confirmed that the API and worker have no Git or image source attached in either staging or production, so no source migration was required.
 
-Automatic PR preview creation remains disabled. Explicit attested local previews use their external journal for cleanup; the close-event cleanup workflow remains enabled for resources created by older preview runs.
+Automatic PR preview creation remains disabled. Explicit attested local previews use their external journal for cleanup; the close-event workflow reports that coordinator-owned cleanup as unresolved rather than guessing provider identities or claiming success.

@@ -15,6 +15,15 @@ test("deployments are manual and always pin staging", () => {
   assert.doesNotMatch(cleanup, /vercel deploy|railway up|create-branch-action/);
 });
 
+test("merged preview cleanup delegates only to exact external journals", () => {
+  assert.match(cleanup, /github\.event\.pull_request\.merged == true/);
+  assert.match(cleanup, /preview-cleanup-disposition\.mjs/);
+  assert.match(cleanup, /core\.setFailed\(result\.message\)/);
+  assert.match(cleanup, /Merged preview cleanup is unresolved/);
+  assert.match(cleanup, /permissions:\r?\n  contents: read/);
+  assert.doesNotMatch(cleanup, /continue-on-error|RAILWAY_|NEON_|VERCEL_|deployment_id|environment delete|delete-branch-action|vercel remove|npm install/);
+});
+
 test("manual inspections cannot enter release jobs", () => {
   const releaseGate = ci.match(/  resolve-release:\r?\n    if: (?<gate>.+)/)?.groups?.gate;
   assert.ok(releaseGate);
