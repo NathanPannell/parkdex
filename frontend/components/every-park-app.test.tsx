@@ -11,7 +11,7 @@ const journal = {
   places: [place, rathtrevor, national], visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
   account: null as { id: string; email: string; emailVerified?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
-  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), changePassword: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
+  authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
 };
 
@@ -228,6 +228,51 @@ describe("Parkdex navigation", () => {
     const resetCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/password-reset/confirm"));
     expect(JSON.parse(String(resetCall?.[1]?.body))).toMatchObject({ token: "secret-token" });
     expect(journal.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers an email-only reset request from login and shows a generic inbox state", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "If an account exists, password reset instructions have been sent." }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ranger@example.test" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send reset link" }).hasAttribute("disabled")).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("heading", { name: "Check your inbox" })).toBeTruthy();
+    expect(screen.getByText(/If that email is connected to a Parkdex account/)).toBeTruthy();
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ email: "ranger@example.test" });
+  });
+
+  it("turns an invalid reset token into a recoverable request state", async () => {
+    window.history.replaceState({}, "", "/#resetToken=expired-token");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Invalid or expired password reset token" }), { status: 400, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a long secure password" } });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "a long secure password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset password" }));
+    expect(await screen.findByRole("heading", { name: "That reset link is no longer valid" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Request a new link" }));
+    expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+  });
+
+  it("replaces direct account password changes with the email reset journey", async () => {
+    journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test", emailVerified: true };
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.queryByRole("button", { name: "Change password" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reset password by email" }));
+    expect(screen.getByRole("heading", { name: "Reset your password" })).toBeTruthy();
+    expect(screen.getByLabelText(/^Email/).getAttribute("readonly")).not.toBeNull();
   });
 
   it("shows a retryable Google cancellation and clears callback state", async () => {

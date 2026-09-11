@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { changePassword, completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset } from "./account";
+import { completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset } from "./account";
 
 const API = "https://api.example.test";
 
@@ -22,15 +22,11 @@ describe("account security requests", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ token: "single-use-token" });
   });
 
-  it("authenticates password changes and carries PKCE data through Google callback", async () => {
+  it("carries PKCE data through Google callback", async () => {
     const session = { token: "session", expiresAt: "2026-09-09T00:00:00Z", account: { id: "1", email: "ranger@example.test", emailVerified: true }, visitedIds: [], visits: [], completedTrailIds: [] };
-    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response()))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(session), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify(session), { status: 200, headers: { "Content-Type": "application/json" } })));
     vi.stubGlobal("fetch", fetchMock);
-    await changePassword(API, "bearer", "old password", "new secure password");
-    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer bearer");
     expect(await completeGoogleAuthorization(API, "code", "state", "verifier")).toEqual(session);
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ code: "code", state: "state", codeVerifier: "verifier" });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({ code: "code", state: "state", codeVerifier: "verifier" });
   });
 });

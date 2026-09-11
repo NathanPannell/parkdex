@@ -133,7 +133,7 @@ def test_registration_limit_is_atomic_and_observable() -> None:
         clean(email)
 
 
-def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessions(monkeypatch) -> None:
+def test_verification_resend_invalidates_old_token(monkeypatch) -> None:
     email = "verify-change@example.com"
     sent: list[tuple[str, str, str]] = []
     clean(email)
@@ -148,10 +148,8 @@ def test_verification_resend_invalidates_old_token_and_change_revokes_all_sessio
             assert client.post("/api/auth/email-verification/confirm", json={"token": old_token}).status_code == 400
             assert client.post("/api/auth/email-verification/confirm", json={"token": new_token}).status_code == 204
             assert client.get("/api/auth/me", headers=bearer(first["token"])).json()["account"]["emailVerified"] is True
-            assert client.post("/api/auth/password-change", headers=bearer(first["token"]), json={"currentPassword": "wrong", "newPassword": "replacement password"}).status_code == 401
-            assert client.post("/api/auth/password-change", headers=bearer(first["token"]), json={"currentPassword": "current password value", "newPassword": "replacement password"}).status_code == 204
-            assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 401
-            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 401
+            assert client.get("/api/auth/me", headers=bearer(first["token"])).status_code == 200
+            assert client.get("/api/auth/me", headers=bearer(second["token"])).status_code == 200
     finally:
         clean(email)
 

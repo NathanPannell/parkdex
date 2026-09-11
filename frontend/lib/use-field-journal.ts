@@ -6,7 +6,6 @@ import {
   ACCOUNT_TOKEN_KEY,
   ApiError,
   authenticate as authenticateAccount,
-  changePassword as changeAccountPassword,
   completeGoogleAuthorization,
   confirmEmailVerification as confirmAccountEmailVerification,
   importGuestProgress,
@@ -72,7 +71,6 @@ export type FieldJournal = {
   retrySync: () => Promise<void>;
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
   authenticateWithGoogle: (code: string, state: string, codeVerifier: string) => Promise<void>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   requestEmailVerification: () => Promise<void>;
   confirmEmailVerification: (verificationToken: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -549,21 +547,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     persistAccount();
   }, [apiBaseUrl, expireAccount, persistAccount]);
 
-  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
-    const identity = identityRef.current;
-    if (transitionRef.current) throw new Error("Another account change is still in progress.");
-    if (identity.kind !== "account") throw new Error("Sign in before changing your password.");
-    transitionRef.current = true;
-    setTransitionBusy(true);
-    try {
-      await changeAccountPassword(apiBaseUrl, identity.token, currentPassword, newPassword);
-      switchToGuest("Password changed. Sign in again on this device.");
-    } finally {
-      transitionRef.current = false;
-      setTransitionBusy(false);
-    }
-  }, [apiBaseUrl, switchToGuest]);
-
   const logout = useCallback(async () => {
     if (transitionRef.current || identityRef.current.kind !== "account") return;
     transitionRef.current = true;
@@ -680,7 +663,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     retrySync,
     authenticate,
     authenticateWithGoogle,
-    changePassword,
     requestEmailVerification,
     confirmEmailVerification,
     logout,

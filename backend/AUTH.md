@@ -1,6 +1,6 @@
 # Account API
 
-Account sessions are opaque 256-bit bearer tokens stored only as SHA-256 digests. They expire after 30 days. Logout revokes the current session; password reset and password change revoke every session for that account. Passwords use Argon2id with OWASP's 19 MiB, two-pass, single-lane minimum and new passwords must contain 12–128 characters.
+Account sessions are opaque 256-bit bearer tokens stored only as SHA-256 digests. They expire after 30 days. Logout revokes the current session; password reset revokes every session for that account. Passwords use Argon2id with OWASP's 19 MiB, two-pass, single-lane minimum and new passwords must contain 12–128 characters.
 
 `GET /api/auth/config` returns `{googleEnabled,emailEnabled}`. Clients should hide or disable an integration when its value is false. Direct email and Google requests return `503` when the corresponding integration is unavailable.
 
@@ -10,7 +10,6 @@ Account sessions are opaque 256-bit bearer tokens stored only as SHA-256 digests
 - `POST /api/auth/login` accepts `{email,password}`.
 - `POST /api/auth/password-reset/request` accepts `{email}` and always returns the same `202` response for a syntactically valid address. Delivery runs after the response only for a matching account, so the endpoint neither reveals account existence nor sends unsolicited reset messages to arbitrary addresses. The token expires after one hour and is single use.
 - `POST /api/auth/password-reset/confirm` accepts `{token,newPassword}` and returns `204`.
-- `POST /api/auth/password-change` requires a bearer token and accepts `{currentPassword,newPassword}`. It returns `204` and revokes all sessions.
 - `POST /api/auth/email-verification/request` requires a bearer token and returns `202`.
 - `POST /api/auth/email-verification/confirm` accepts `{token}` and returns `204`. Resending invalidates earlier unused tokens.
 

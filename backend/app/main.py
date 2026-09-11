@@ -40,7 +40,6 @@ from backend.app.schemas import (
     GoogleStart,
     GuestImportResult,
     PlaceCollection,
-    PasswordChange,
     PasswordResetConfirmation,
     TrailResult,
     TrailUpdate,
@@ -457,26 +456,6 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
-        conn.commit()
-    return Response(status_code=204)
-
-
-@app.post("/api/auth/password-change", status_code=204)
-def change_password(payload: PasswordChange, authorization: str | None = Header(default=None)) -> Response:
-    with contextmanager(connection)() as conn:
-        identity = require_bearer(conn, authorization)
-        account = conn.execute("SELECT password_hash FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
-        current_hash = account["password_hash"] if account and account["password_hash"] else DUMMY_PASSWORD_HASH
-    if not account or not account["password_hash"] or not verify_password(current_hash, payload.currentPassword):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-    new_hash = hash_password(payload.newPassword)
-    with contextmanager(connection)() as conn:
-        locked = conn.execute("SELECT password_hash FROM accounts WHERE id = %s FOR UPDATE", (identity.account_id,)).fetchone()
-        if not locked or locked["password_hash"] != current_hash:
-            raise HTTPException(status_code=409, detail="Password changed during this request; try again")
-        conn.execute("UPDATE accounts SET password_hash = %s WHERE id = %s", (new_hash, identity.account_id))
-        conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (identity.account_id,))
-        record_security_event(conn, "password_changed", identity.account_id, "success")
         conn.commit()
     return Response(status_code=204)
 

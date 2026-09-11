@@ -94,11 +94,6 @@ class PasswordResetConfirmation(TokenConfirmation):
     newPassword: str = Field(min_length=12, max_length=128)
 
 
-class PasswordChange(BaseModel):
-    currentPassword: str = Field(min_length=1, max_length=128)
-    newPassword: str = Field(min_length=12, max_length=128)
-
-
 class GoogleStart(BaseModel):
     authorization_url: str = Field(serialization_alias="authorizationUrl")
 
