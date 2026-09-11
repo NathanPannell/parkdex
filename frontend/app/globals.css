@@ -456,6 +456,7 @@ button { color: inherit; }
 .map-utility .map-mode-switch { display: flex; flex: 0 0 auto; gap: 4px; padding: 0; }
 .map-utility .map-mode-switch button { min-height: 42px; }
 .map-utility .search-dock { flex: 1 1 320px; width: min(360px,35vw); min-height: 42px; }
+.map-utility .locate-button { display: grid; place-items: center; border: 0; border-radius: 11px; background: var(--lime); color: var(--forest); cursor: pointer; }
 .map-utility .search-toggle, .map-utility .map-mode-switch .locate-button { flex: 0 0 42px; width: 42px; height: 42px; min-height: 42px; padding: 0; }
 
 @media (max-width: 859px) {
