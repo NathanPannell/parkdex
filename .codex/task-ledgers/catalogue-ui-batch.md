@@ -51,3 +51,4 @@
 - An already-active Map tab sends an explicit overview-reset request; closing a selected place does not reset the camera. Small selected boundaries may use the map's actual maximum zoom while retaining the measured fit padding.
 - `docs/evidence/issues40-47/after/fixture-review.cjs` runs a stateful, isolated authenticated browser fixture with synthetic account and group data; it produces photo and group-flow screenshots without accessing shared user data or staging credentials.
 - Focused app/map tests pass 40/40, TypeScript passes, targeted ESLint passes, and the Impeccable detector reports no findings. Browser reviewer retest is active for the map-reset, small-boundary, notice, search-clearance, Nearby, and group/account flows.
+- The reviewer confirmed the group screen hides inline photo attribution while its title-to-map path keeps attribution available; the styled confirmation and map actions remain intact.
