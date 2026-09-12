@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { Focus } from "lucide-react";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
 import {
@@ -612,7 +612,7 @@ export function ParkMap({
           title="Reset map view"
           onClick={() => resetOverviewRef.current?.()}
         >
-          <RotateCcw size={20} aria-hidden="true" />
+          <Focus size={20} aria-hidden="true" />
         </button>
       )}
       {mode === "explored" && visited.size > 0 && (

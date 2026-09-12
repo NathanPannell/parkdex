@@ -1,7 +1,8 @@
 import Image from "next/image";
-import { MapPin } from "lucide-react";
 import type { Place } from "@/lib/places";
 import { getPlaceImage } from "@/lib/place-images";
+
+export const PLACE_PLACEHOLDER_SRC = "/places/place-placeholder.png";
 
 type PlaceImageProps = {
   place: Pick<Place, "id" | "name">;
@@ -9,6 +10,7 @@ type PlaceImageProps = {
   sizes?: string;
   preload?: boolean;
   className?: string;
+  showCredit?: boolean;
 };
 
 export function PlaceImage({
@@ -17,6 +19,7 @@ export function PlaceImage({
   sizes,
   preload = false,
   className = "",
+  showCredit = true,
 }: PlaceImageProps) {
   const image = getPlaceImage(place.id);
   const rootClassName = `place-image place-image--${variant}${className ? ` ${className}` : ""}`;
@@ -27,23 +30,33 @@ export function PlaceImage({
         <span
           className={`${rootClassName} place-image--fallback`}
           role="img"
-          aria-label={`Photo unavailable for ${place.name}`}
+          aria-label={`Placeholder artwork for ${place.name}`}
         >
-          <MapPin aria-hidden="true" />
-          <span>Photo unavailable</span>
+          <Image
+            className="place-image__photo"
+            src={PLACE_PLACEHOLDER_SRC}
+            alt=""
+            width={320}
+            height={240}
+            sizes={sizes ?? "72px"}
+            {...(preload ? { preload: true } : { loading: "lazy" as const })}
+          />
         </span>
       );
     }
 
     return (
-      <div
-        className={`${rootClassName} place-image--fallback`}
-        role="img"
-        aria-label={`Photo unavailable for ${place.name}`}
-      >
-        <MapPin aria-hidden="true" />
-        <span>Photo unavailable</span>
-      </div>
+      <figure className={`${rootClassName} place-image--fallback`} role="img" aria-label={`Placeholder artwork for ${place.name}`}>
+        <Image
+          className="place-image__photo"
+          src={PLACE_PLACEHOLDER_SRC}
+          alt=""
+          width={960}
+          height={720}
+          sizes={sizes ?? "(max-width: 760px) calc(100vw - 40px), 520px"}
+          {...(preload ? { preload: true } : { loading: "lazy" as const })}
+        />
+      </figure>
     );
   }
 
@@ -76,7 +89,7 @@ export function PlaceImage({
         sizes={sizes ?? "(max-width: 760px) calc(100vw - 40px), 520px"}
         {...(preload ? { preload: true } : { loading: "lazy" as const })}
       />
-      {variant === "card" ? (
+      {variant === "card" && showCredit ? (
         <figcaption className="place-image__credit">
           Photo by{" "}
           <a href={image.sourceUrl} target="_blank" rel="noreferrer">
