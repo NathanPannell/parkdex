@@ -33,6 +33,19 @@ beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); groupState.groups = []; groupState.selectedGroupId = null; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
+  it("clears an expired Google callback without a verifier and leaves navigation usable", async () => {
+    window.history.replaceState({ framework: "preserved" }, "", "/?code=expired&state=expired");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false })))));
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in expired. Please try again.");
+    expect(window.location.search).toBe("?view=account");
+    expect(window.history.state.framework).toBe("preserved");
+    expect(journal.authenticateWithGoogle).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    expect(screen.getByRole("button", { name: "Find places" })).toBeTruthy();
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("map");
+  });
+
   it.each([false, true])("restores a bookmarked place after catalogue initialization (visited: %s)", async (wasVisited) => {
     window.history.replaceState({ framework: "preserved" }, "", `/?view=map&place=${place.id}`);
     journal.loading = true; journal.places = [];

@@ -380,8 +380,8 @@ function AccountView({ apiBaseUrl, account, authenticated, sessionAuthenticated,
       }
       if (code && state) {
         const verifier = window.sessionStorage.getItem(GOOGLE_VERIFIER_KEY);
-        if (!verifier) throw new Error("Google sign-in expired. Please try again.");
         window.sessionStorage.removeItem(GOOGLE_VERIFIER_KEY); cleanAuthParams(["code", "state"]);
+        if (!verifier) throw new Error("Google sign-in expired. Please try again.");
         await onGoogleAuth(code, state, verifier);
         setNotice("Signed in with Google."); return;
       }
