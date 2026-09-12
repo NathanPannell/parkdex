@@ -46,11 +46,13 @@ describe("PlaceImage", () => {
     expect(screen.getByRole("link", { name: "CC BY-SA 3.0" }).getAttribute("href")).toContain("creativecommons.org");
   });
 
-  it("states honestly when no verified photo exists", () => {
+  it("uses the text-free tree placeholder when no verified photo exists", () => {
     render(
       <PlaceImage place={{ id: "provincial-woss-lake-park", name: "Woss Lake Park" }} variant="card" />,
     );
 
-    expect(screen.getByRole("img", { name: "Photo unavailable for Woss Lake Park" }).textContent).toContain("Photo unavailable");
+    const placeholder = screen.getByRole("img", { name: "Placeholder artwork for Woss Lake Park" });
+    expect(placeholder.querySelector("img")?.getAttribute("src")).toBe("/places/place-placeholder.png");
+    expect(placeholder.textContent).toBe("");
   });
 });
