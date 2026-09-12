@@ -12,6 +12,7 @@ type GroupState = {
   busy: boolean;
   selectGroup: (id: string | null) => void;
   retry: () => Promise<void>;
+  refreshAfterReset: () => Promise<void>;
   create: (name: string, placeIds: string[]) => Promise<Group | null>;
   rename: (id: string, name: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -82,5 +83,15 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const remove = useCallback(async (id: string) => { const epoch = epochRef.current; await mutate((currentRequest) => deleteGroup(currentRequest, id)); if (epoch === epochRef.current) { setGroups((current) => current.filter((group) => group.id !== id)); if (selectedGroupId === id) setSelectedGroupId(null); } }, [mutate, selectedGroupId]);
   const addPlace = useCallback(async (groupId: string, placeId: string) => { await mutate((currentRequest) => addGroupPlace(currentRequest, groupId, placeId)); }, [mutate]);
   const removePlace = useCallback(async (groupId: string, placeId: string) => { await mutate((currentRequest) => removeGroupPlace(currentRequest, groupId, placeId)); }, [mutate]);
-  return useMemo(() => ({ groups: hydratedGroups, selectedGroupId, loading, error, busy, selectGroup: setSelectedGroupId, retry: load, create, rename, remove, addPlace, removePlace }), [addPlace, busy, create, error, hydratedGroups, load, loading, remove, removePlace, rename, selectedGroupId]);
+  const refreshAfterReset = useCallback(async () => {
+    // The caller invokes this only after the account reset request succeeds.
+    // Clear first so deleted memberships cannot flash while the fresh Wishlist loads.
+    epochRef.current += 1;
+    setGroups([]);
+    setSelectedGroupId(null);
+    setError("");
+    setBusy(false);
+    await load();
+  }, [load]);
+  return useMemo(() => ({ groups: hydratedGroups, selectedGroupId, loading, error, busy, selectGroup: setSelectedGroupId, retry: load, refreshAfterReset, create, rename, remove, addPlace, removePlace }), [addPlace, busy, create, error, hydratedGroups, load, loading, refreshAfterReset, remove, removePlace, rename, selectedGroupId]);
 }

@@ -1135,3 +1135,49 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
   .place-sheet-header { padding: 16px 16px 8px; }
   .place-sheet-content { padding: 0 16px 16px; }
 }
+
+/* Issues 76–82: resilient mobile controls, persistent search, and global progress. */
+.global-progress {
+  display: grid;
+  min-width: 88px;
+  min-height: 44px;
+  width: 88px;
+  place-items: center;
+  color: var(--forest);
+  font-variant-numeric: tabular-nums;
+}
+.global-progress strong { font: 800 23px/1 var(--font-display); letter-spacing: -.03em; }
+.group-map-progress { position: absolute; z-index: 11; top: max(14px,env(safe-area-inset-top)); right: 14px; width: 92px; padding: 9px 10px; border-radius: 12px; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
+
+.collection-search-dock { justify-self: stretch; width: 100%; background: var(--paper-bright); }
+.collection-search-icon { flex: 0 0 auto; margin-left: 8px; color: var(--water); }
+.collection-search-dock input { min-height: 44px; }
+
+.group-detail > header { display: grid; grid-template-columns: minmax(0,1fr) auto; }
+.group-detail > header > div, .group-item-copy { min-width: 0; }
+.group-detail h3, .group-item-copy strong { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.group-detail-actions { flex: 0 0 auto; }
+
+.category-chips > button.category-regional.active,
+.filter-tray button.category-regional.selected { border-color: #8a4300; background: #8a4300; color: #fff; }
+
+@media (max-width: 859px) {
+  .map-utility .map-mode-switch { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px; }
+  .map-utility .map-mode-switch > button:not(.locate-button) { min-width: 0; }
+  .map-utility .map-mode-switch > button:not(.locate-button) span { white-space: nowrap; }
+  .map-utility .map-mode-switch .locate-button,
+  .map-utility .search-dock,
+  .map-utility .search-toggle { width: 44px; min-width: 44px; max-width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; }
+  .map-utility.search-open .search-dock { width: 100%; max-width: none; }
+  .group-detail-actions button, .group-rename button { flex: 0 0 44px; }
+}
+
+@media (max-width: 350px) {
+  .brand-copy p { display: none; }
+  .map-utility .map-mode-switch > button:not(.locate-button) { flex-direction: column; gap: 1px; padding-inline: 3px; font-size: 10px; line-height: 1; }
+}
+
+@media (min-width: 860px) {
+  .expedition-header .global-progress { position: absolute; z-index: 2; top: 7px; right: 10px; bottom: 7px; width: 90px; align-content: center; }
+  .desktop-top-nav { right: 110px; }
+}

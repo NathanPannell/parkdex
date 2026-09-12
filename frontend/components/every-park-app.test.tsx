@@ -22,7 +22,7 @@ const journal = {
 };
 const groupState = {
   groups: [] as Array<{ id: string; name: string; isWishlist?: boolean; places: Place[] }>, selectedGroupId: null as string | null,
-  loading: false, error: "", busy: false, retry: vi.fn(async () => undefined), selectGroup: vi.fn(), create: vi.fn(async () => null), rename: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), addPlace: vi.fn(async () => undefined), removePlace: vi.fn(async () => undefined),
+  loading: false, error: "", busy: false, retry: vi.fn(async () => undefined), refreshAfterReset: vi.fn(async () => undefined), selectGroup: vi.fn(), create: vi.fn(async () => null), rename: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), addPlace: vi.fn(async () => undefined), removePlace: vi.fn(async () => undefined),
 };
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
@@ -357,7 +357,20 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
     await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(groupState.refreshAfterReset).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("does not clear the group cache when account reset fails", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    journal.resetProgress.mockRejectedValueOnce(new Error("Reset failed."));
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Reset failed.");
+    expect(groupState.refreshAfterReset).not.toHaveBeenCalled();
   });
 
   it("clears collection restrictions when opening global map search", () => {
@@ -518,19 +531,76 @@ describe("Parkdex navigation", () => {
     expect(await screen.findByText("Email verified. Your field journal is ready.")).toBeTruthy();
   });
 
-  it("keeps collection search in a bottom dock and exposes mixed category progress", () => {
+  it("keeps collection search expanded in a bottom dock and exposes mixed category progress", () => {
     journal.authenticated = true; journal.visited = new Set([place.id, national.id]);
     render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Places" }));
     expect(screen.getByRole("progressbar", { name: "2 of 3 places collected" }).getAttribute("aria-valuenow")).toBe("2");
     const progress = screen.getByLabelText("Collection progress");
     expect(progress.querySelector("li.category-provincial")?.textContent).toContain("1/2");
-    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Search collection" }), { target: { value: "Pacific" } });
+    const search = screen.getByRole("textbox", { name: "Search collection" });
+    fireEvent.change(search, { target: { value: "Pacific" } });
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close collection search" }));
-    expect(screen.queryByRole("textbox", { name: "Search collection" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
-    expect((screen.getByRole("textbox", { name: "Search collection" }) as HTMLInputElement).value).toBe("Pacific");
+    fireEvent.click(screen.getByRole("button", { name: "Clear collection search" }));
+    expect(screen.getByRole("textbox", { name: "Search collection" })).toBe(search);
+    expect((search as HTMLInputElement).value).toBe("");
+  });
+
+  it("gates global percentage on the last badge claim, ticks numerically, and settles ARIA once", () => {
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });
+    vi.stubGlobal("requestAnimationFrame", requestFrame);
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
+    expect(progress.textContent).toBe("0.0%");
+    expect(progress.children).toHaveLength(1);
+    expect(progress.getAttribute("aria-valuetext")).toContain("0.0%");
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark as visited" }));
+    journal.visited = new Set([place.id]);
+    journal.visitTimestamps = { [place.id]: "2026-09-12T12:00:00Z" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(progress.getAttribute("aria-valuetext")).toContain("0.0%");
+    fireEvent.click(screen.getByRole("button", { name: "Claim my badge" }));
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+    expect(progress.textContent).toBe("0.0%");
+    expect(progress.getAttribute("aria-valuetext")).toContain("0.0%");
+    act(() => frames.shift()?.(0));
+    act(() => frames.shift()?.(325));
+    const midpoint = Number(progress.textContent?.replace("%", ""));
+    expect(midpoint).toBeGreaterThan(0);
+    expect(midpoint).toBeLessThan(33.3);
+    expect(progress.getAttribute("aria-valuetext")).toContain("0.0%");
+    act(() => frames.shift()?.(700));
+    expect(progress.textContent).toBe("33.3%");
+    expect(Number(progress.getAttribute("aria-valuenow"))).toBeCloseTo(33.33333333333333);
+    expect(progress.getAttribute("aria-valuetext")).toBe("33.3% · 1 of 3 places visited");
+  });
+
+  it("settles global percentage immediately for reduced motion", () => {
+    const requestFrame = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", requestFrame);
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    journal.visited = new Set([rathtrevor.id]);
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
+    expect(progress.textContent).toBe("33.3%");
+    expect(progress.getAttribute("aria-valuetext")).toBe("33.3% · 1 of 3 places visited");
+    expect(requestFrame).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale visited ids and keeps percentage ARIA bounded to 100", () => {
+    journal.visited = new Set(["removed-place", ...defaultPlaces.map((item) => item.id)]);
+    render(<ParkdexApp apiBaseUrl="" />);
+    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
+    expect(progress.textContent).toBe("100.0%");
+    expect(progress.getAttribute("aria-valuemin")).toBe("0");
+    expect(progress.getAttribute("aria-valuemax")).toBe("100");
+    expect(progress.getAttribute("aria-valuenow")).toBe("100");
+    expect(progress.getAttribute("aria-valuetext")).toBe("100.0% · 3 of 3 places visited");
   });
 
   it("groups badges into collected and uncollected sections", () => {
@@ -761,7 +831,6 @@ describe("Parkdex navigation", () => {
     const nationalCollection = screen.getByText("National Parks").closest("details");
     expect(nationalCollection?.hasAttribute("open")).toBe(false);
     expect(screen.getByText("Provincial Parks")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Search collection" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search collection" }), { target: { value: "Pacific" } });
     expect(screen.getByText("National Parks").closest("details")?.hasAttribute("open")).toBe(true);
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();

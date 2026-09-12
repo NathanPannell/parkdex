@@ -22,7 +22,7 @@ from starlette.routing import Route
 from backend.app.auth import reserve_rate_limit
 from backend.app.db import connection
 from backend.app.mcp_oauth import MAX_CONSENT_BODY_BYTES, MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
-from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, place_detail_row, remove_group_places, rename_group_row, search_place_rows
+from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, lock_account_group_mutations, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 from backend.app.schemas import Group, PlaceSearchResult, SearchPlace
 
 KEYRING_SERVICE, SESSION_ENV, EMAIL_ENV, ORIGIN_ENV = "parkdex-mcp-session", "PARKDEX_SESSION_TOKEN", "PARKDEX_ACCOUNT_EMAIL", "PARKDEX_API_ORIGIN"
@@ -128,7 +128,7 @@ def get_place_details(place_id:Annotated[str,Field(min_length=1,max_length=200)]
 def list_groups()->list:
     """Read all private groups, including Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: ensure_wishlist(conn,account_id); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id)]
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); ensure_wishlist(conn,account_id); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id)]
     with _local_client() as client: return client.request("GET","/api/groups")
 @mcp.tool(annotations=READ_ONLY)
 def get_group(group_id:GroupId)->dict:
@@ -142,13 +142,14 @@ def get_group(group_id:GroupId)->dict:
 def create_group(name:GroupName,place_ids:OptionalPlaceIds=None)->dict:
     """Create a private group. This writes group data."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or []); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or []); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("POST","/api/groups",json={"name":name,"placeIds":place_ids or []})
 @mcp.tool(annotations=WRITE)
 def rename_group(group_id:GroupId,name:GroupName)->dict:
     """Rename an ordinary group. Wishlist is protected."""
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
+            lock_account_group_mutations(conn,account_id)
             current=group_row(conn,account_id,group_id)
             if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
             _mutation_limit(conn,account_id); rename_group_row(conn,account_id,group_id,_name(name)); conn.commit(); return _group_output(group_row(conn,account_id,group_id))
@@ -158,6 +159,7 @@ def delete_group(group_id:GroupId)->dict:
     """Permanently delete an ordinary group. Wishlist is protected."""
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
+            lock_account_group_mutations(conn,account_id)
             current=group_row(conn,account_id,group_id)
             if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
             _mutation_limit(conn,account_id); delete_group_row(conn,account_id,group_id); conn.commit(); return {"deleted":True,"group_id":group_id}
@@ -165,7 +167,7 @@ def delete_group(group_id:GroupId)->dict:
 def _change_places(group_id,place_ids,remove):
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
-            _mutation_limit(conn,account_id); fn=remove_group_places if remove else add_group_places
+            lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); fn=remove_group_places if remove else add_group_places
             if not fn(conn,account_id,group_id,place_ids): raise ValueError("Group not found")
             conn.commit(); return _group_output(group_row(conn,account_id,group_id))
     with _local_client() as client: return client.request("DELETE" if remove else "POST",f"/api/groups/{group_id}/places",json={"placeIds":place_ids})
@@ -181,7 +183,7 @@ def remove_places_from_group(group_id:GroupId,place_ids:PlaceIds)->dict:
 def get_wishlist()->dict:
     """Read the protected group named Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: result=ensure_wishlist(conn,account_id); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); result=ensure_wishlist(conn,account_id); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("GET","/api/wishlist")
 
 class RestartableHostedMCP:

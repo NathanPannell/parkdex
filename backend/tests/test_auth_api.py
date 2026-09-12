@@ -125,6 +125,34 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
             assert logged_in.json()["visitedIds"] == [TEST_PLACE]
             assert logged_in.json()["completedTrailIds"] == ["west_coast_trail"]
 
+            first_group = client.post(
+                "/api/groups",
+                headers=bearer(token),
+                json={"name": "Reset me", "placeIds": [TEST_PLACE]},
+            ).json()
+            first_wishlist = client.post(
+                "/api/wishlist/places",
+                headers=bearer(token),
+                json={"placeIds": [TEST_PLACE]},
+            ).json()
+            second_group = client.post(
+                "/api/groups",
+                headers=bearer(second.json()["token"]),
+                json={"name": "Keep me", "placeIds": [TEST_PLACE]},
+            ).json()
+            second_wishlist = client.post(
+                "/api/wishlist/places",
+                headers=bearer(second.json()["token"]),
+                json={"placeIds": [TEST_PLACE]},
+            ).json()
+            with psycopg.connect(database_url) as conn:
+                account_id = conn.execute(
+                    "SELECT id FROM accounts WHERE email = %s", (ACCOUNT_EMAILS[0],)
+                ).fetchone()[0]
+                audit_count = conn.execute(
+                    "SELECT COUNT(*) FROM auth_security_events"
+                ).fetchone()[0]
+
             assert client.delete("/api/account/progress").status_code == 401
             reset = client.delete("/api/account/progress", headers=bearer(token))
             assert reset.status_code == 204
@@ -133,15 +161,27 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
             assert reset_state["visitedIds"] == []
             assert reset_state["visits"] == []
             assert reset_state["completedTrailIds"] == []
+            reset_groups = client.get("/api/groups", headers=bearer(token)).json()
+            assert len(reset_groups) == 1
+            assert reset_groups[0]["isWishlist"] is True
+            assert reset_groups[0]["placeIds"] == []
+            assert reset_groups[0]["id"] != first_wishlist["id"]
+            assert all(group["id"] != first_group["id"] for group in reset_groups)
             # Resetting one account leaves guest data and other accounts untouched.
             assert TEST_PLACE in client.get(
                 "/api/places", headers={"X-Collection-Key": GUEST_KEY}
             ).json()["visitedIds"]
             assert client.get("/api/auth/me", headers=bearer(second.json()["token"])).json()["visitedIds"] == []
+            other_groups = client.get("/api/groups", headers=bearer(second.json()["token"])).json()
+            assert {group["id"] for group in other_groups} == {second_group["id"], second_wishlist["id"]}
+            assert all(group["placeIds"] == [TEST_PLACE] for group in other_groups)
             # Other live sessions for the same account immediately see the reset.
             assert client.get(
                 "/api/auth/me", headers=bearer(logged_in.json()["token"])
             ).json()["visitedIds"] == []
+            with psycopg.connect(database_url) as conn:
+                assert conn.execute("SELECT 1 FROM accounts WHERE id = %s", (account_id,)).fetchone()
+                assert conn.execute("SELECT COUNT(*) FROM auth_security_events").fetchone()[0] >= audit_count
 
             logout = client.post("/api/auth/logout", headers=bearer(token))
             assert logout.status_code == 204

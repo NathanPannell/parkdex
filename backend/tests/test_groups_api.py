@@ -1,5 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import psycopg
 import pytest
@@ -7,8 +8,9 @@ from fastapi.testclient import TestClient
 from psycopg.errors import CheckViolation
 from psycopg.rows import dict_row
 
+import backend.app.main as main_module
 from backend.app.main import app
-from backend.app.groups import ensure_wishlist
+from backend.app.groups import create_group_row, ensure_wishlist, lock_account_group_mutations
 
 
 PLACE_IDS = ["group-test-alpha", "group-test-beta", "group-test-gamma"]
@@ -205,4 +207,130 @@ def test_database_enforces_wishlist_group_identity() -> None:
         finally:
             conn.rollback()
             conn.execute("DELETE FROM accounts WHERE id = %s", (account_id,))
+            conn.commit()
+
+
+def test_account_reset_waits_for_direct_group_mutation_then_clears_it(monkeypatch) -> None:
+    """The direct path mirrors an in-process MCP mutation racing the HTTP reset."""
+    database_url = os.environ["DATABASE_URL"]
+    email = "group-reset-race@example.com"
+    place_id = "group-reset-race-place"
+    with psycopg.connect(database_url) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        conn.execute("DELETE FROM places WHERE id = %s", (place_id,))
+        conn.execute(
+            """
+            INSERT INTO places (id, name, category, latitude, longitude, region, description, source_url, source_name)
+            VALUES (%s, 'Reset Race', 'regional', 49.0, -124.0, 'South', '', 'https://example.test/reset', 'Test')
+            """,
+            (place_id,),
+        )
+        conn.commit()
+    try:
+        with TestClient(app) as client:
+            registered = client.post(
+                "/api/auth/register",
+                json={"email": email, "password": "group reset race password"},
+            ).json()
+            account_id = registered["account"]["id"]
+            headers = auth(registered["token"])
+            lock_attempted = Event()
+            original_lock = main_module.lock_account_progress
+
+            def instrumented_lock(conn, locked_account_id: str) -> None:
+                lock_attempted.set()
+                original_lock(conn, locked_account_id)
+
+            monkeypatch.setattr(main_module, "lock_account_progress", instrumented_lock)
+            with psycopg.connect(database_url, row_factory=dict_row) as mutation_conn:
+                lock_account_group_mutations(mutation_conn, account_id)
+                created = create_group_row(mutation_conn, account_id, "MCP race", [place_id])
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    resetting = executor.submit(client.delete, "/api/account/progress", headers=headers)
+                    assert lock_attempted.wait(timeout=2), "reset never reached account lock acquisition"
+                    assert not resetting.done(), "reset completed while the MCP-style mutation held the account lock"
+                    mutation_conn.commit()
+                    assert resetting.result(timeout=5).status_code == 204
+            groups = client.get("/api/groups", headers=headers).json()
+            assert len(groups) == 1
+            assert groups[0]["isWishlist"] is True
+            assert groups[0]["placeIds"] == []
+            assert groups[0]["id"] != created["id"]
+    finally:
+        with psycopg.connect(database_url) as conn:
+            conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+            conn.execute("DELETE FROM places WHERE id = %s", (place_id,))
+            conn.commit()
+
+
+def test_account_reset_rolls_back_every_progress_collection_when_wishlist_recreation_fails(monkeypatch) -> None:
+    database_url = os.environ["DATABASE_URL"]
+    email = "group-reset-rollback@example.com"
+    place_id = "group-reset-rollback-place"
+    with psycopg.connect(database_url) as conn:
+        conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+        conn.execute("DELETE FROM places WHERE id = %s", (place_id,))
+        conn.execute(
+            """
+            INSERT INTO places (id, name, category, latitude, longitude, region, description, source_url, source_name)
+            VALUES (%s, 'Rollback Park', 'regional', 49.0, -124.0, 'South', '', 'https://example.test/rollback', 'Test')
+            """,
+            (place_id,),
+        )
+        conn.commit()
+    try:
+        with TestClient(app) as client:
+            registered = client.post(
+                "/api/auth/register",
+                json={"email": email, "password": "group reset rollback password"},
+            ).json()
+            account_id = registered["account"]["id"]
+            headers = auth(registered["token"])
+            assert client.put(f"/api/visits/{place_id}", headers=headers, json={"visited": True}).status_code == 200
+            assert client.put("/api/trails/west_coast_trail", headers=headers, json={"completed": True}).status_code == 200
+            group = client.post(
+                "/api/groups", headers=headers, json={"name": "Keep together", "placeIds": [place_id]}
+            ).json()
+            wishlist = client.post(
+                "/api/wishlist/places", headers=headers, json={"placeIds": [place_id]}
+            ).json()
+
+            def fail_wishlist_recreation(*_args, **_kwargs):
+                raise RuntimeError("forced reset failure")
+
+            monkeypatch.setattr(main_module, "ensure_wishlist", fail_wishlist_recreation)
+            with pytest.raises(RuntimeError, match="forced reset failure"):
+                client.delete("/api/account/progress", headers=headers)
+
+            with psycopg.connect(database_url) as conn:
+                assert conn.execute(
+                    "SELECT 1 FROM account_visits WHERE account_id = %s AND place_id = %s",
+                    (account_id, place_id),
+                ).fetchone()
+                assert conn.execute(
+                    "SELECT 1 FROM account_trail_completions WHERE account_id = %s AND trail_id = 'west_coast_trail'",
+                    (account_id,),
+                ).fetchone()
+                groups = conn.execute(
+                    "SELECT id, is_wishlist FROM account_groups WHERE account_id = %s ORDER BY is_wishlist, id",
+                    (account_id,),
+                ).fetchall()
+                assert {str(row[0]) for row in groups} == {group["id"], wishlist["id"]}
+                memberships = conn.execute(
+                    """
+                    SELECT ag.id, agp.place_id
+                    FROM account_groups ag
+                    JOIN account_group_places agp ON agp.group_id = ag.id
+                    WHERE ag.account_id = %s
+                    """,
+                    (account_id,),
+                ).fetchall()
+                assert {(str(row[0]), row[1]) for row in memberships} == {
+                    (group["id"], place_id),
+                    (wishlist["id"], place_id),
+                }
+    finally:
+        with psycopg.connect(database_url) as conn:
+            conn.execute("DELETE FROM accounts WHERE email = %s", (email,))
+            conn.execute("DELETE FROM places WHERE id = %s", (place_id,))
             conn.commit()

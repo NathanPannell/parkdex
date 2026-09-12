@@ -4,6 +4,8 @@
 
 Deploy the root-approved exact PR head to persistent staging for review without merging or moving the staging/main Git refs. Reservations issue #14 is excluded. Deployment and task-owned temporary resource cleanup owner: `/root/staging_deploy` (Astra Ultra). Root owns application implementation, independent reviews, final browser gate, PR evidence, and Telegram notification.
 
+The user subsequently requested that issues #76–#82 be included in PR #75, then deployed to staging and merged. #77 is the verification/release acceptance issue. This supersedes the earlier “keep PR open/no merge” instruction after all release gates pass.
+
 ## Readiness — 2026-09-12
 
 - Read repository deployment documentation, current workflow, prior staging records, and full-stack-delivery existing-project/credential guidance.
@@ -31,4 +33,4 @@ Prior staging records prove the Google/email integration works and a synthetic-a
 
 ## Next action
 
-Await root's exact checked candidate before any deployment. Prepare filtered staging configuration inspection and synthetic-account support as needed.
+Await root's exact checked candidate for the expanded #62–#82 scope. After the independent-review fix cycle, the builder reports frontend 188/188, backend 64/64, lint, typecheck, production build, deterministic reset-lock and rollback coverage, deterministic percentage animation/reduced-motion coverage, and a clean design-detector pass. Root still owns review, exact commit/PR evidence, deployment, fresh browser review, merge, and the single final Telegram notification.
