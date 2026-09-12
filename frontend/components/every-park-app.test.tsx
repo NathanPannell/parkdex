@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
 import { ParkdexApp } from "./every-park-app";
@@ -26,7 +27,7 @@ const groupState = {
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button></div> }));
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); groupState.groups = []; groupState.selectedGroupId = null; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
@@ -419,6 +420,22 @@ describe("Parkdex navigation", () => {
     expect(screen.getByLabelText("Map filter active")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     expect((screen.getByRole("textbox", { name: "Search places" }) as HTMLInputElement).value).toBe("Park");
+  });
+
+  it("keeps the moved-map reset control off non-map panels and restores its behavior on Map", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Displace map" }));
+    expect(screen.getByRole("button", { name: "Reset map view" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Groups tab" }));
+    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Account tab" }));
+    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Map tab" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset map view" }));
+    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
   });
 
   it("keeps location in the mode row and closes filters when search regains focus", () => {

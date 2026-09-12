@@ -263,6 +263,7 @@ export function ParkMap({
   selectedId,
   selectedIds = new Set<string>(),
   resetViewRequest = 0,
+  showResetControl = true,
   onSelect,
   onBoundaryLoadState,
 }: {
@@ -273,6 +274,7 @@ export function ParkMap({
   selectedId: string | null;
   selectedIds?: ReadonlySet<string>;
   resetViewRequest?: number;
+  showResetControl?: boolean;
   onSelect: (id: string) => void;
   onBoundaryLoadState?: (state: BoundaryLoadState) => void;
 }) {
@@ -604,7 +606,7 @@ export function ParkMap({
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
-      {!selectedId && viewDiffersFromDefault && (
+      {showResetControl && !selectedId && viewDiffersFromDefault && (
         <button
           type="button"
           className="map-reset-button"
