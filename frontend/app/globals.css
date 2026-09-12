@@ -619,7 +619,7 @@ button { color: inherit; }
 @media (max-width: 859px) {
   .expedition-header { right: 8px; grid-template-columns: 38px minmax(0,1fr); }
   .map-utility { display: grid; grid-template-columns: minmax(0,1fr) 42px; }
-  .map-utility .map-mode-switch { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.18fr) 42px; }
+  .map-utility .map-mode-switch { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.18fr); }
   .map-utility .map-mode-switch > button:not(.locate-button) { width: 100%; padding-inline: 6px; }
   .map-utility .search-toggle, .map-utility .map-mode-switch .locate-button { flex-basis: 42px; width: 42px; height: 42px; min-height: 42px; padding: 0; }
   .map-utility.search-open { grid-template-columns: 1fr; }
@@ -892,10 +892,11 @@ button { color: inherit; }
   .thumb-nav.guest { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .thumb-nav button { min-width: 0; min-height: 50px; color: var(--muted); }
   .thumb-nav button.active { background: var(--forest); color: var(--paper-bright); }
-  .map-utility { right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 10px; top: auto; width: auto; }
+  .map-utility { grid-template-columns: minmax(0,1fr) 96px; right: 10px; bottom: calc(78px + env(safe-area-inset-bottom)); left: 10px; top: auto; width: auto; }
   .connection-note, .sync-note { bottom: calc(144px + env(safe-area-inset-bottom)); }
   .map-utility .map-mode-switch button { min-height: 44px; }
-  .map-utility .search-dock { width: auto; min-width: 92px; min-height: 44px; }
+  .map-utility .search-dock { width: 96px; min-width: 96px; min-height: 44px; }
+  .map-utility.search-open .search-dock { width: 100%; min-width: 0; }
   .map-utility .locate-button, .map-utility .search-toggle { width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; }
   .search-results, .filter-tray { top: auto; bottom: calc(194px + env(safe-area-inset-bottom)); max-height: min(46dvh,420px); }
   .place-sheet { bottom: calc(76px + env(safe-area-inset-bottom)); max-height: min(330px,calc(100dvh - 130px)); padding: 13px; }
