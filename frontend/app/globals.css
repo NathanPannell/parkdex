@@ -1138,16 +1138,23 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 
 /* Issues 76–82: resilient mobile controls, persistent search, and global progress. */
 .global-progress {
+  position: absolute;
+  z-index: 15;
+  top: max(15px,calc(env(safe-area-inset-top) + 15px));
+  right: max(12px,env(safe-area-inset-right));
   display: grid;
   min-width: 88px;
   min-height: 44px;
-  width: 88px;
+  width: 92px;
   place-items: center;
+  border-radius: 12px;
+  background: var(--paper-bright);
   color: var(--forest);
+  box-shadow: var(--soft-shadow);
   font-variant-numeric: tabular-nums;
 }
 .global-progress strong { font: 800 23px/1 var(--font-display); letter-spacing: -.03em; }
-.group-map-progress { position: absolute; z-index: 11; top: max(14px,env(safe-area-inset-top)); right: 14px; width: 92px; padding: 9px 10px; border-radius: 12px; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
+.group-map-progress { z-index: 15; }
 
 .collection-search-dock { justify-self: stretch; width: 100%; background: var(--paper-bright); }
 .collection-search-icon { flex: 0 0 auto; margin-left: 8px; color: var(--water); }
@@ -1162,6 +1169,7 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 .filter-tray button.category-regional.selected { border-color: #8a4300; background: #8a4300; color: #fff; }
 
 @media (max-width: 859px) {
+  .expedition-header { grid-template-columns: 38px minmax(0,1fr); padding-right: 108px; }
   .map-utility .map-mode-switch { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px; }
   .map-utility .map-mode-switch > button:not(.locate-button) { min-width: 0; }
   .map-utility .map-mode-switch > button:not(.locate-button) span { white-space: nowrap; }
@@ -1178,6 +1186,6 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 }
 
 @media (min-width: 860px) {
-  .expedition-header .global-progress { position: absolute; z-index: 2; top: 7px; right: 10px; bottom: 7px; width: 90px; align-content: center; }
+  .global-progress { top: max(23px,calc(env(safe-area-inset-top) + 23px)); right: max(16px,env(safe-area-inset-right)); }
   .desktop-top-nav { right: 110px; }
 }

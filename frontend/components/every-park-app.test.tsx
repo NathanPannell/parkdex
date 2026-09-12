@@ -603,6 +603,31 @@ describe("Parkdex navigation", () => {
     expect(progress.getAttribute("aria-valuetext")).toBe("100.0% · 3 of 3 places visited");
   });
 
+  it("keeps one top-level global percentage across every view and group-map mode", () => {
+    journal.authenticated = true;
+    journal.visited = new Set([place.id]);
+    groupState.groups = [{ id: "coast", name: "Coast days", places: [place] }];
+    const { container, rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    const assertTopLevelProgress = () => {
+      const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
+      expect(progress.textContent).toBe("33.3%");
+      expect(progress.closest(".expedition-header, .feature-panel")).toBeNull();
+      expect(progress.parentElement?.classList.contains("map-stage")).toBe(true);
+      expect(container.querySelectorAll(".global-progress")).toHaveLength(1);
+    };
+    assertTopLevelProgress();
+    for (const name of ["Places tab", "Groups tab", "Badges tab", "Account tab", "Map tab"]) {
+      fireEvent.click(screen.getByRole("button", { name }));
+      assertTopLevelProgress();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Groups tab" }));
+    groupState.selectedGroupId = "coast";
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "View on map" }));
+    assertTopLevelProgress();
+    expect(screen.getByRole("progressbar", { name: "Parkdex progress" }).classList.contains("group-map-progress")).toBe(true);
+  });
+
   it("groups badges into collected and uncollected sections", () => {
     journal.authenticated = true; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Badges" }));

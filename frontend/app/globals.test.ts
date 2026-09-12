@@ -56,6 +56,18 @@ describe("issue batch responsive CSS", () => {
     expect(ruleBody(".global-progress strong")).toContain("font: 800 23px/1 var(--font-display);");
     expect(css).not.toMatch(/\.global-progress\s*>\s*(?:span|i)/);
   });
+
+  it("pins global progress above every view and reserves mobile header space", () => {
+    const progress = ruleBody(".global-progress");
+    expect(progress).toContain("position: absolute;");
+    expect(progress).toContain("z-index: 15;");
+    expect(progress).toContain("top: max(15px,calc(env(safe-area-inset-top) + 15px));");
+    expect(progress).toContain("right: max(12px,env(safe-area-inset-right));");
+    expect(progress).toContain("width: 92px;");
+    expect(css).toContain(".expedition-header { grid-template-columns: 38px minmax(0,1fr); padding-right: 108px; }");
+    expect(css).toContain(".global-progress { top: max(23px,calc(env(safe-area-inset-top) + 23px)); right: max(16px,env(safe-area-inset-right)); }");
+    expect(css).not.toContain(".expedition-header .global-progress");
+  });
 });
 
 describe("mobile account shelf CSS", () => {
