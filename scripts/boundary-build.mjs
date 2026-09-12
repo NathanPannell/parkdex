@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { provincialNameCorrections } from './place-name-corrections.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
@@ -177,7 +178,7 @@ async function buildProvincial() {
   const collection = await fetchJson(sources.bcParks.data);
   return collection.features.filter((feature) => feature.properties.PROTECTED_LANDS_DESIGNATION === 'PROVINCIAL PARK')
     .map((feature) => {
-      const id = `provincial-${slugify(titleCaseParkName(feature.properties.PROTECTED_LANDS_NAME))}`;
+      const id = provincialNameCorrections.get(String(feature.properties.ADMIN_AREA_SID))?.id ?? `provincial-${slugify(titleCaseParkName(feature.properties.PROTECTED_LANDS_NAME))}`;
       if (!placeById.has(id)) return null;
       return makeFeature(requirePlace(id), feature.geometry, sources.bcParks, feature.properties.ADMIN_AREA_SID);
     }).filter(Boolean);

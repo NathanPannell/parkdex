@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
 import { ParkdexApp } from "./every-park-app";
 
@@ -28,9 +28,167 @@ const groupState = {
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); groupState.groups = []; groupState.selectedGroupId = null; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); groupState.groups = []; groupState.selectedGroupId = null; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
+  it.each([false, true])("restores a bookmarked place after catalogue initialization (visited: %s)", async (wasVisited) => {
+    window.history.replaceState({ framework: "preserved" }, "", `/?view=map&place=${place.id}`);
+    journal.loading = true; journal.places = [];
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(window.location.search).toContain(place.id);
+    expect(screen.queryByText(/no longer in the catalogue/)).toBeNull();
+    journal.loading = false; journal.places = defaultPlaces;
+    journal.visited = new Set(wasVisited ? [place.id] : []);
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(await screen.findByRole("heading", { name: "Forest Park" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: wasVisited ? "Undo visited place" : "Mark as visited" })).toBeTruthy();
+    expect(window.history.state.framework).toBe("preserved");
+  });
+
+  it("restores public views and independent filters through real Back/Forward entries", async () => {
+    journal.authenticated = true;
+    window.history.replaceState({}, "", "/?view=collection&mapQuery=beach&placesQuery=Forest");
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: /Forest Park/ }));
+    expect(window.location.search).toContain(`place=${place.id}`);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("account");
+    act(() => window.history.back());
+    expect(await screen.findByRole("heading", { name: "Forest Park" })).toBeTruthy();
+    act(() => window.history.back());
+    expect(await screen.findByRole("heading", { name: "Places" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Search collection" }) as HTMLInputElement).value).toBe("Forest");
+    expect(new URLSearchParams(window.location.search).get("mapQuery")).toBe("beach");
+    act(() => window.history.forward());
+    expect(await screen.findByRole("heading", { name: "Forest Park" })).toBeTruthy();
+  });
+
+  it("does not add duplicate history for the current tab", () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    const length = window.history.length;
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(window.history.length).toBe(length);
+  });
+
+  it("recovers from an unknown place only after a successful catalogue load", async () => {
+    window.history.replaceState({}, "", "/?place=removed-place");
+    journal.loading = true; journal.places = [];
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(window.location.search).toContain("removed-place");
+    journal.loading = false; journal.loadError = "Offline";
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(window.location.search).toContain("removed-place");
+    journal.loadError = ""; journal.places = defaultPlaces;
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(await screen.findByText(/This place is no longer in the catalogue/)).toBeTruthy();
+    expect(new URLSearchParams(window.location.search).has("place")).toBe(false);
+    expect(screen.getByRole("button", { name: "Search places" })).toBeTruthy();
+  });
+
+  it("auth-gates a direct Groups tab and resumes after account initialization", () => {
+    window.history.replaceState({}, "", "/?view=groups");
+    groupState.groups = [{ id: "private-id", name: "Private camping plan", places: [place] }];
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.getByRole("heading", { name: "Keep your field journal" })).toBeTruthy();
+    expect(screen.queryByText("Private camping plan")).toBeNull();
+    journal.authenticated = true; journal.account = { id: "owner", email: "owner@example.test" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.getByRole("heading", { name: "Groups" })).toBeTruthy();
+    expect(window.location.href).not.toMatch(/private-id|Private/);
+  });
+
+  it.each(["Enter", "Apply"])("keeps a zero-result applied query and category readable after %s", (method) => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "zzzz-no-such-park" } });
+    fireEvent.click(screen.getByRole("button", { name: "Filter places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Provincial" }));
+    if (method === "Enter") fireEvent.keyDown(screen.getByRole("textbox", { name: "Search places" }), { key: "Enter" });
+    else fireEvent.click(screen.getByRole("button", { name: "Apply search" }));
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain("No places match");
+    expect(status.textContent).toContain("zzzz-no-such-park");
+    expect(status.textContent).toContain("Provincial");
+    fireEvent.click(screen.getByRole("button", { name: "Clear map search and filters" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByTestId("park-map").dataset.placeIds).toContain(place.id);
+  });
+
+  it("shows internal browsing and official visitor information as distinct actions", () => {
+    journal.places = [goldstream];
+    window.history.replaceState({}, "", `/?place=${goldstream.id}`);
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.getByRole("link", { name: "Official visitor information" }).getAttribute("href")).toBe("https://bcparks.ca/goldstream-park/");
+    expect(screen.getByRole("link", { name: "Place source" }).getAttribute("href")).toBe(goldstream.sourceUrl);
+    fireEvent.click(screen.getByRole("button", { name: "Browse Provincial Parks" }));
+    expect(screen.getByRole("heading", { name: "Places" })).toBeTruthy();
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("collection");
+  });
+
+  it.each([false, true])("focuses reset entry and return headings without sending email (authenticated: %s)", async (signedIn) => {
+    journal.authenticated = signedIn;
+    if (signedIn) journal.account = { id: "account", email: "ranger@example.test", emailVerified: true };
+    const fetchMock = vi.fn((url: string) => { expect(url).toContain("/auth/config"); return Promise.resolve(new Response(JSON.stringify({ emailEnabled: true, googleEnabled: false }))); });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    if (!signedIn) fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    const origin = screen.getByRole("button", { name: signedIn ? "Reset password by email" : "Forgot password?" });
+    origin.focus(); fireEvent.click(origin);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Reset your password" }));
+    fireEvent.click(screen.getByRole("button", { name: signedIn ? "Back to account" : "Back to log in" }));
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: signedIn ? "Your account" : "Keep your field journal" }));
+    await act(async () => {});
+    expect(fetchMock.mock.calls.every(([url]) => String(url).endsWith("/auth/config"))).toBe(true);
+  });
+
+  it("provides a short focus round trip from the first badge through visible navigation", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    const desktop = screen.getByRole("navigation", { name: "Primary navigation" });
+    desktop.style.display = "none";
+    fireEvent.click(screen.getByRole("button", { name: "Badges" }));
+    const badge = screen.getByRole("button", { name: /Banana Slug Rainwalk/ });
+    badge.focus(); fireEvent.click(badge);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.activeElement).toBe(badge);
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".content-skip")!);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Badges" }));
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".thumb-nav .navigation-skip")!);
+    expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your badges" }));
+  });
+
+  it("announces a successful addition once outside the compact action column", async () => {
+    journal.authenticated = true;
+    const name = "Places to return to with family on long summer weekends and holidays";
+    groupState.groups = [{ id: "wishlist", name: "Wishlist", isWishlist: true, places: [] }, { id: "return-group", name, places: [] }];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe(`Added to ${name}.`);
+    expect(status.closest(".sheet-actions")).toBeNull();
+    expect(groupState.addPlace).toHaveBeenCalledTimes(1);
+    expect(groupState.addPlace).toHaveBeenCalledWith("return-group", place.id);
+    expect(screen.getByRole("button", { name: "Mark as visited" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add this place to Wishlist" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add this place to a group" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close place details" }).closest(".place-sheet-content")).toBeNull();
+  });
+
+  it("spells out the actual regional authorities inside their collection summaries", () => {
+    journal.authenticated = true;
+    journal.places = ["Capital Regional District", "Cowichan Valley Regional District", "Regional District of Nanaimo", "Regional District of Mount Waddington"].map((sourceName, index) => ({ ...place, id: `regional-${index}`, category: "regional", sourceName }));
+    window.history.replaceState({}, "", "/?view=collection");
+    render(<ParkdexApp apiBaseUrl="" />);
+    for (const item of journal.places) expect(screen.getByText(item.sourceName).closest("summary")).toBeTruthy();
+    expect(screen.queryByText(/Comox/)).toBeNull();
+  });
+
   it("renders the authenticated desktop primary navigation beside the brand", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
@@ -156,8 +314,8 @@ describe("Parkdex navigation", () => {
   it("links place categories, collections, and published boundaries from the place card", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    expect(screen.getByRole("button", { name: /Provincial/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /BC Parks/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Browse Provincial places" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Browse Provincial Parks" })).toBeTruthy();
   });
 
   it("keeps the official place source available when boundary geometry fails", () => {
@@ -283,7 +441,6 @@ describe("Parkdex navigation", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Invalid or expired password reset token" }), { status: 400, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
     fireEvent.change(screen.getByLabelText(/^New password/), { target: { value: "a long secure password" } });
     fireEvent.change(screen.getByLabelText("Confirm new password"), { target: { value: "a long secure password" } });
@@ -299,7 +456,6 @@ describe("Parkdex navigation", () => {
     window.history.replaceState({}, "", "/#resetToken=abandoned-token");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: false, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
     render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Back to log in" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Your account" })).toBeTruthy());
@@ -323,7 +479,7 @@ describe("Parkdex navigation", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
     render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
     expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in was cancelled. You can try again.");
-    expect(window.location.search).toBe("");
+    expect(window.location.search).toBe("?view=account");
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
   });
@@ -334,7 +490,7 @@ describe("Parkdex navigation", () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
     render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
     await waitFor(() => expect(journal.authenticateWithGoogle).toHaveBeenCalledWith("google-code", "oauth-state", "verifier"));
-    expect(window.location.search).toBe("");
+    expect(window.location.search).toBe("?view=account");
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
     expect(await screen.findByText("Signed in with Google.")).toBeTruthy();
   });
@@ -565,7 +721,7 @@ describe("Parkdex navigation", () => {
     expect(sheet?.classList.contains("without-photo")).toBe(true);
     expect(sheet?.querySelector(".place-sheet-media > img, .place-sheet-media figure")).toBeNull();
     expect(sheet?.querySelector(".place-sheet-metadata")?.textContent).toContain("North Island");
-    expect(screen.getAllByRole("button", { name: /BC Parks/ })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Browse Provincial Parks" })).toHaveLength(1);
   });
 
   it("preserves a group only for View on map and clears it on ordinary navigation", () => {
