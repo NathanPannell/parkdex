@@ -67,6 +67,7 @@ from backend.app.groups import (
     rename_group_row,
     place_detail_row,
     search_place_rows,
+    lock_account_group_mutations,
 )
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
@@ -344,6 +345,7 @@ def list_groups(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
+    lock_account_group_mutations(conn, identity.account_id)
     ensure_wishlist(conn, identity.account_id)
     conn.commit()
     return list_group_rows(conn, identity.account_id)
@@ -357,6 +359,7 @@ def create_group(
 ):
     identity = require_bearer(conn, authorization)
     name = _group_name(payload.name)
+    lock_account_group_mutations(conn, identity.account_id)
     _group_mutation_limit(conn, identity.account_id)
     try:
         result = create_group_row(conn, identity.account_id, name, payload.placeIds)
@@ -390,6 +393,7 @@ def rename_group(
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
     name = _group_name(payload.name)
+    lock_account_group_mutations(conn, identity.account_id)
     current = group_row(conn, identity.account_id, canonical_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -411,6 +415,7 @@ def delete_group(
 ) -> Response:
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
+    lock_account_group_mutations(conn, identity.account_id)
     current = group_row(conn, identity.account_id, canonical_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -433,6 +438,7 @@ def add_group_places_api(
 ):
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
+    lock_account_group_mutations(conn, identity.account_id)
     _group_mutation_limit(conn, identity.account_id)
     try:
         exists = add_group_places(conn, identity.account_id, canonical_id, payload.placeIds)
@@ -455,6 +461,7 @@ def remove_group_places_api(
 ):
     identity = require_bearer(conn, authorization)
     canonical_id = _record_id(group_id, "Group")
+    lock_account_group_mutations(conn, identity.account_id)
     _group_mutation_limit(conn, identity.account_id)
     if not remove_group_places(conn, identity.account_id, canonical_id, payload.placeIds):
         conn.rollback()
@@ -469,6 +476,7 @@ def get_wishlist(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
+    lock_account_group_mutations(conn, identity.account_id)
     result = ensure_wishlist(conn, identity.account_id)
     conn.commit()
     return result
@@ -481,6 +489,7 @@ def add_wishlist_places(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
+    lock_account_group_mutations(conn, identity.account_id)
     _group_mutation_limit(conn, identity.account_id)
     try:
         wishlist = ensure_wishlist(conn, identity.account_id)
@@ -499,6 +508,7 @@ def remove_wishlist_places(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
+    lock_account_group_mutations(conn, identity.account_id)
     _group_mutation_limit(conn, identity.account_id)
     wishlist = ensure_wishlist(conn, identity.account_id)
     remove_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
@@ -889,6 +899,10 @@ def reset_account_progress(
         "DELETE FROM account_trail_completions WHERE account_id = %s",
         (identity.account_id,),
     )
+    # Groups are progress too. Deleting the account-owned rows clears all memberships
+    # through the foreign key, then recreates the protected singleton in this transaction.
+    conn.execute("DELETE FROM account_groups WHERE account_id = %s", (identity.account_id,))
+    ensure_wishlist(conn, identity.account_id)
     conn.commit()
     return Response(status_code=204)
 

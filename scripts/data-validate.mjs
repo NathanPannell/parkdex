@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hasBalancedNameDelimiters, provincialNameCorrections } from './place-name-corrections.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json'), 'utf8'));
@@ -14,11 +15,17 @@ for (const place of places) {
     if (place[field] === undefined || place[field] === '') throw new Error(`${place.id || place.name}: missing ${field}`);
   }
   if (ids.has(place.id)) throw new Error(`duplicate id: ${place.id}`);
+  if (!hasBalancedNameDelimiters(place.name)) throw new Error(`${place.id}: unmatched display-name delimiter`);
   ids.add(place.id);
   if (!categories.has(place.category)) throw new Error(`${place.id}: invalid category`);
   if (!Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) throw new Error(`${place.id}: invalid coordinate`);
   if (place.latitude < 48.15 || place.latitude > 51.25 || place.longitude < -128.9 || place.longitude > -123) throw new Error(`${place.id}: coordinate outside catalogue extent`);
   if (!URL.canParse(place.sourceUrl) || !place.sourceUrl.startsWith('https://')) throw new Error(`${place.id}: sourceUrl must be HTTPS`);
+}
+
+for (const [sourceId, correction] of provincialNameCorrections) {
+  const place = places.find((item) => item.category === 'provincial' && item.sourceId === sourceId);
+  if (!place || place.id !== correction.id || place.name !== correction.name || !place.description.includes(correction.alias)) throw new Error(`Display correction or stable identity lost for provincial source ${sourceId}`);
 }
 
 const expected = [

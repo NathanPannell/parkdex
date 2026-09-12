@@ -11,6 +11,11 @@ PLACE_COLUMNS = """
 """
 
 
+def lock_account_group_mutations(conn: Connection, account_id: str) -> None:
+    """Serialize every group write with account-wide destructive operations."""
+    conn.execute("SELECT id FROM accounts WHERE id = %s FOR UPDATE", (account_id,))
+
+
 def _place(row: dict) -> dict:
     return {
         "id": row["id"],

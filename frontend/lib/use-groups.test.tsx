@@ -96,4 +96,34 @@ describe("useGroups account isolation", () => {
     expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]);
     expect(result.current.busy).toBe(false);
   });
+
+  it("clears stale groups before reloading the empty Wishlist after a successful reset", async () => {
+    const reload = deferred<Response>();
+    let reads = 0;
+    const request = vi.fn((path: string) => {
+      expect(path).toBe("/api/groups");
+      reads += 1;
+      return reads === 1
+        ? json([{ id: "old-group", name: "Old plans", isWishlist: false, placeIds: [place.id] }])
+        : reload.promise;
+    });
+    const { result } = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request,
+    }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["old-group"]));
+
+    let refreshing!: Promise<void>;
+    act(() => { refreshing = result.current.refreshAfterReset(); });
+    await waitFor(() => expect(result.current.groups).toEqual([]));
+    await act(async () => {
+      reload.resolve(await json([{ id: "new-wishlist", name: "Wishlist", isWishlist: true, placeIds: [] }]));
+      await refreshing;
+    });
+    expect(result.current.groups.map((group) => group.id)).toEqual(["new-wishlist"]);
+    expect(result.current.selectedGroupId).toBeNull();
+  });
 });

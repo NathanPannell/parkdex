@@ -1,4 +1,4 @@
-import type { Place } from "@/lib/places";
+import { matchesPlaceSearch, type Place } from "@/lib/places";
 
 export type VisitFilter = "all" | "visited" | "unseen";
 
@@ -21,13 +21,12 @@ export function collectionFilter(
   visitFilter: VisitFilter,
   visited: ReadonlySet<string>,
 ): Place[] {
-  const needle = search.trim().toLocaleLowerCase();
   return places.filter((place) => {
     if (categories.size && !categories.has(place.category)) return false;
     if (authorities.size && !authorities.has(authorityForPlace(place))) return false;
     if (visitFilter === "visited" && !visited.has(place.id)) return false;
     if (visitFilter === "unseen" && visited.has(place.id)) return false;
-    return !needle || `${place.name} ${place.region} ${authorityForPlace(place)}`.toLocaleLowerCase().includes(needle);
+    return matchesPlaceSearch(place, search, authorityForPlace(place));
   });
 }
 

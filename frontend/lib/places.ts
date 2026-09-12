@@ -20,17 +20,19 @@ export const categoryLabels: Record<PlaceCategory, string> = {
   island: "Major islands",
 };
 
+export const normalizePlaceSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
+export function matchesPlaceSearch(place: Place, query: string, extra = ""): boolean {
+  return normalizePlaceSearch(`${place.name} ${place.region} ${place.description} ${extra}`).includes(normalizePlaceSearch(query.trim()));
+}
+
 export function filterPlaces(
   places: Place[],
   search: string,
   categories: Set<PlaceCategory>,
 ): Place[] {
-  const needle = search.trim().toLocaleLowerCase();
   return places.filter((place) => {
     const inCategory = categories.size === 0 || categories.has(place.category);
-    const inSearch =
-      !needle ||
-      `${place.name} ${place.region} ${place.description}`.toLocaleLowerCase().includes(needle);
+    const inSearch = matchesPlaceSearch(place, search);
     return inCategory && inSearch;
   });
 }

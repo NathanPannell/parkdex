@@ -719,12 +719,12 @@
   },
   {
     "id": "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park",
-    "name": "Hathayim Marine Park [a.k.a. Von Donop Marine Park",
+    "name": "Háthayim Marine Park",
     "category": "provincial",
     "latitude": 50.17642,
     "longitude": -124.960916,
     "region": "Discovery Islands",
-    "description": "A BC provincial park in the Discovery Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
+    "description": "Also known as Von Donop Marine Park. A BC provincial park in the Discovery Islands collection. The map pin represents the largest official park polygon, not an entrance or trailhead.",
     "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
     "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
     "sourceId": "728"

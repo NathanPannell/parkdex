@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
+import { provincialNameCorrections } from './place-name-corrections.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -292,25 +293,26 @@ async function buildProvincial() {
         excluded.push({ name, latitude: point.latitude, longitude: point.longitude, reason: 'outside-supported-islands' });
         return false;
       }
-      const keep = pointInPolygon([point.longitude, point.latitude], mainIslandMask) || nearbyIslandParks.has(name.toUpperCase());
+      const keep = pointInPolygon([point.longitude, point.latitude], mainIslandMask) || nearbyIslandParks.has(name.toUpperCase()) || provincialNameCorrections.has(String(feature.properties.ADMIN_AREA_SID));
       if (!keep) excluded.push({ name, latitude: point.latitude, longitude: point.longitude });
       return keep;
     });
 
   const places = included.map(({ feature, point }) => {
     const p = feature.properties;
-    const name = titleCaseParkName(p.PROTECTED_LANDS_NAME);
+    const correction = provincialNameCorrections.get(String(p.ADMIN_AREA_SID));
+    const name = correction?.name ?? titleCaseParkName(p.PROTECTED_LANDS_NAME);
     if (point.method !== 'centroid') polygonInteriorFallbacks.push({ source: 'BC Parks', name, method: point.method });
     const canonicalName = p.PROTECTED_LANDS_NAME.toUpperCase();
-    const offshoreRegion = parkIslandRegions.get(canonicalName);
+    const offshoreRegion = correction?.region ?? parkIslandRegions.get(canonicalName);
     const onMainIsland = pointInPolygon([point.longitude, point.latitude], mainIslandMask)
       || mainIslandParkNames.has(canonicalName);
     if (!offshoreRegion && !onMainIsland) throw new Error(`Missing explicit island region for ${name}`);
     const region = offshoreRegion || mainIslandRegion(point.latitude);
     return {
-      id: `provincial-${slugify(name)}`, name, category: 'provincial',
+      id: correction?.id ?? `provincial-${slugify(name)}`, name, category: 'provincial',
       latitude: round(point.latitude), longitude: round(point.longitude), region,
-      description: `A BC provincial park in the ${region} collection. The map pin represents the largest official park polygon, not an entrance or trailhead.`,
+      description: `${correction ? `${correction.alias} ` : ''}A BC provincial park in the ${region} collection. The map pin represents the largest official park polygon, not an entrance or trailhead.`,
       sourceUrl: sources.bcParks.page, sourceName: sources.bcParks.name,
       sourceId: String(p.ADMIN_AREA_SID),
     };
