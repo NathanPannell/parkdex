@@ -25,7 +25,7 @@ export function readNavigation(href: string): PublicNavigation {
   const requestedView = params.get("view");
   const view: View = requestedView && ["map", "collection", "groups", "badges", "account"].includes(requestedView) ? requestedView as View : "map";
   const selectedId = params.get("place") || null;
-  const categorySet = (key: string) => new Set(params.getAll(key).filter((value): value is PlaceCategory => value in categoryLabels));
+  const categorySet = (key: string) => new Set(params.getAll(key).filter((value): value is PlaceCategory => Object.hasOwn(categoryLabels, value)));
   const visit = params.get("placesVisited");
   return {
     view: hasAccountCallback(url) ? "account" : selectedId ? "map" : view,

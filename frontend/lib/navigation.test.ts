@@ -14,7 +14,7 @@ describe("public navigation", () => {
   });
 
   it("uses safe defaults for malformed tab, visit and category values", () => {
-    expect(readNavigation("/?view=unknown&mapCategory=nope&placesVisited=never")).toMatchObject({ view: "map", selectedId: null, collectionVisitFilter: "all", mapCategories: new Set() });
+    expect(readNavigation("/?view=unknown&mapCategory=nope&mapCategory=toString&placesVisited=never")).toMatchObject({ view: "map", selectedId: null, collectionVisitFilter: "all", mapCategories: new Set() });
     expect(readNavigation("/?place=removed-id")).toMatchObject({ view: "map", selectedId: "removed-id", mapMode: "discover" });
   });
 

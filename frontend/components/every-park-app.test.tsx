@@ -53,6 +53,7 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: /Forest Park/ }));
     expect(window.location.search).toContain(`place=${place.id}`);
+    expect(screen.getByTestId("park-map").dataset.placeIds).toContain(place.id);
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(new URLSearchParams(window.location.search).get("view")).toBe("account");
     act(() => window.history.back());
