@@ -194,6 +194,32 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: "Close place details" }).closest(".place-sheet-content")).toBeNull();
   });
 
+  it("shows existing group membership and only adds to an empty-circle group", async () => {
+    journal.authenticated = true;
+    groupState.groups = [
+      { id: "wishlist", name: "Wishlist", isWishlist: true, places: [place] },
+      { id: "coast", name: "Coast days", places: [place] },
+      { id: "later", name: "Later trips", places: [] },
+    ];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+
+    const picker = screen.getByRole("dialog", { name: place.name });
+    const member = screen.getByText("Coast days").closest(".group-picker-option")!;
+    const available = screen.getByRole("button", { name: `Add ${place.name} to Later trips` });
+    expect(picker.textContent).not.toContain("Wishlist");
+    expect(member.tagName).toBe("DIV");
+    expect(screen.queryByRole("button", { name: /already in Coast days/ })).toBeNull();
+    expect(member.textContent).toContain("Already added");
+    expect(member.querySelector("svg")?.getAttribute("fill")).toBe("currentColor");
+    expect(available.querySelector("svg")?.getAttribute("fill")).toBe("none");
+
+    fireEvent.click(available);
+    await waitFor(() => expect(groupState.addPlace).toHaveBeenCalledWith("later", place.id));
+    expect(groupState.addPlace).toHaveBeenCalledTimes(1);
+  });
+
   it("spells out the actual regional authorities inside their collection summaries", () => {
     journal.authenticated = true;
     journal.places = ["Capital Regional District", "Cowichan Valley Regional District", "Regional District of Nanaimo", "Regional District of Mount Waddington"].map((sourceName, index) => ({ ...place, id: `regional-${index}`, category: "regional", sourceName }));
@@ -536,7 +562,10 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />); fireEvent.click(screen.getByRole("button", { name: "Places" }));
     expect(screen.getByRole("progressbar", { name: "2 of 3 places collected" }).getAttribute("aria-valuenow")).toBe("2");
     const progress = screen.getByLabelText("Collection progress");
+    expect(progress.textContent).toContain("2 of 3 collected");
+    expect(progress.textContent).not.toContain("%");
     expect(progress.querySelector("li.category-provincial")?.textContent).toContain("1/2");
+    expect(screen.queryByText("tracked", { exact: false })).toBeNull();
     const search = screen.getByRole("textbox", { name: "Search collection" });
     fireEvent.change(search, { target: { value: "Pacific" } });
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
@@ -603,29 +632,35 @@ describe("Parkdex navigation", () => {
     expect(progress.getAttribute("aria-valuetext")).toBe("100.0% · 3 of 3 places visited");
   });
 
-  it("keeps one top-level global percentage across every view and group-map mode", () => {
+  it("keeps the percentage in the header on My Map and hides it everywhere else", () => {
     journal.authenticated = true;
     journal.visited = new Set([place.id]);
     groupState.groups = [{ id: "coast", name: "Coast days", places: [place] }];
     const { container, rerender } = render(<ParkdexApp apiBaseUrl="" />);
-    const assertTopLevelProgress = () => {
+    const assertMyMapProgress = () => {
       const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
       expect(progress.textContent).toBe("33.3%");
-      expect(progress.closest(".expedition-header, .feature-panel")).toBeNull();
-      expect(progress.parentElement?.classList.contains("map-stage")).toBe(true);
+      expect(progress.closest(".expedition-header")).toBeTruthy();
       expect(container.querySelectorAll(".global-progress")).toHaveLength(1);
     };
-    assertTopLevelProgress();
-    for (const name of ["Places tab", "Groups tab", "Badges tab", "Account tab", "Map tab"]) {
+    assertMyMapProgress();
+    fireEvent.click(screen.getByRole("button", { name: "Find places" }));
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+    expect(container.querySelector(".global-progress")?.hasAttribute("hidden")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "My map" }));
+    assertMyMapProgress();
+    for (const name of ["Places tab", "Groups tab", "Badges tab", "Account tab"]) {
       fireEvent.click(screen.getByRole("button", { name }));
-      assertTopLevelProgress();
+      expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Map tab" }));
+    assertMyMapProgress();
     fireEvent.click(screen.getByRole("button", { name: "Groups tab" }));
     groupState.selectedGroupId = "coast";
     rerender(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "View on map" }));
-    assertTopLevelProgress();
-    expect(screen.getByRole("progressbar", { name: "Parkdex progress" }).classList.contains("group-map-progress")).toBe(true);
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+    expect(container.querySelector(".global-progress")).toBeNull();
   });
 
   it("groups badges into collected and uncollected sections", () => {
