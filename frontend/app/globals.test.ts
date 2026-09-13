@@ -52,21 +52,21 @@ describe("issue batch responsive CSS", () => {
     expect(regional).toContain("color: #fff;");
   });
 
-  it("renders global progress as a chunky number without gauge styling", () => {
-    expect(ruleBody(".global-progress strong")).toContain("font: 800 23px/1 var(--font-display);");
+  it("renders global progress as a colorful chunky number without gauge styling", () => {
+    expect(ruleBody(".global-progress strong")).toContain("font: 800 25px/1 var(--font-display);");
+    expect(ruleBody(".global-progress strong span:last-child")).toContain("color: var(--water);");
     expect(css).not.toMatch(/\.global-progress\s*>\s*(?:span|i)/);
   });
 
-  it("pins global progress above every view and reserves mobile header space", () => {
+  it("integrates global progress into the responsive header without a white card", () => {
     const progress = ruleBody(".global-progress");
-    expect(progress).toContain("position: absolute;");
-    expect(progress).toContain("z-index: 15;");
-    expect(progress).toContain("top: max(15px,calc(env(safe-area-inset-top) + 15px));");
-    expect(progress).toContain("right: max(12px,env(safe-area-inset-right));");
-    expect(progress).toContain("width: 92px;");
-    expect(css).toContain(".expedition-header { grid-template-columns: 38px minmax(0,1fr); padding-right: 108px; }");
-    expect(css).toContain(".global-progress { top: max(23px,calc(env(safe-area-inset-top) + 23px)); right: max(16px,env(safe-area-inset-right)); }");
-    expect(css).not.toContain(".expedition-header .global-progress");
+    expect(progress).toContain("position: relative;");
+    expect(progress).toContain("margin-left: auto;");
+    expect(progress).toContain("background: transparent;");
+    expect(progress).toContain("border-bottom: 3px solid var(--lime);");
+    expect(progress).toContain("box-shadow: none;");
+    expect(css).toContain(".expedition-header { grid-template-columns: 38px minmax(0,1fr) auto; padding-right: 11px; }");
+    expect(ruleBody(".global-progress[hidden]")).toContain("display: none;");
   });
 });
 
