@@ -80,6 +80,9 @@ test("normal releases do not recreate or rewrite persistent provider configurati
 
 test("both environments keep independent database and stable-domain settings in Railway IaC", () => {
   assert.match(railwayConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
+  assert.match(railwayConfig, /APP_PUBLIC_URL: preserve\(\)/);
+  assert.match(railwayConfig, /API_PUBLIC_URL: preserve\(\)/);
+  assert.match(railwayConfig, /MCP_PUBLIC_URL: preserve\(\)/);
   assert.match(railwayConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 1);
   assert.match(railwayConfig, /resources: \[api\]/);
