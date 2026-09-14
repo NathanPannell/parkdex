@@ -61,6 +61,11 @@ test("local staging apply requires an exact reviewed candidate", () => {
   assert.match(source, /attested exact reviewed PR head/);
   assert.match(source, /\["APP_COMMIT_SHA", sha\], \["APP_RELEASE_ID", releaseId\]/);
   assert.doesNotMatch(source, /PARKDEX_STAGING_DATABASE_URL|PARKDEX_STAGING_GOOGLE_CLIENT_SECRET/);
+  assert.match(source, /const STAGING_API_HOST = "api-staging-882c\.up\.railway\.app"/);
+  assert.match(source, /Railway staging API must run the migration pre-deploy command/);
+  assert.match(source, /Railway staging API is missing \$\{name\}/);
+  assert.match(source, /if \(preview && !domain\)/);
+  assert.doesNotMatch(source, /RAILWAY_STAGING_ENVIRONMENT_ID \|\| process\.env\.RAILWAY_BASE_ENVIRONMENT_ID/);
 });
 
 test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
