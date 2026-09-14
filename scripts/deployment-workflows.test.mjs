@@ -84,6 +84,9 @@ test("both environments keep independent database and stable-domain settings in 
   assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 1);
   assert.match(railwayConfig, /resources: \[api\]/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
+  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "EMAIL_PROVIDER", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "RESEND_API_KEY", "RESEND_FROM"]) {
+    assert.match(railwayConfig, new RegExp(`${name}: preserve\\(\\)`));
+  }
   assert.doesNotMatch(railwayConfig, /github\("NathanPannell\/every-park"\)|source: repository/);
   assert.match(migrator, /LOCK_TIMEOUT = "5min"/);
   assert.match(migrator, /set_config\('lock_timeout', %s, true\)/);

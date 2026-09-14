@@ -176,6 +176,9 @@ test("persistent Railway IaC preserves the API direct database connection and re
   assert.match(apiConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
   assert.match(apiConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
+  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "EMAIL_PROVIDER", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "RESEND_API_KEY", "RESEND_FROM"]) {
+    assert.match(apiConfig, new RegExp(`${name}: preserve\\(\\)`));
+  }
 });
 
 test("Railway absence is accepted only from a complete non-paginated inventory", () => {
