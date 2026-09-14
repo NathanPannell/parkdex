@@ -11,7 +11,6 @@ export default defineRailway(() => {
       preDeployCommand: ["python -m backend.app.migrate"],
       healthcheckPath: "/health",
       healthcheckTimeout: 60,
-      restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 3,
     },
     env: {
