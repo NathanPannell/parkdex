@@ -10,12 +10,14 @@ Each merge deploy uses one standard Ubuntu job with an eight-minute timeout. At 
 
 Routine releases reuse these resources and never recreate them:
 
-| Target | Frontend | Railway API | Neon branch |
-| --- | --- | --- | --- |
-| staging | `https://staging.parkdex.app` | `https://api-staging-882c.up.railway.app` | `staging` |
-| production | `https://parkdex.app` | `https://api-production-e72df.up.railway.app` | `main` |
+| Target | Frontend | Public MCP | Railway API | Neon branch |
+| --- | --- | --- | --- | --- |
+| staging | `https://staging.parkdex.app` | `https://staging.parkdex.app/mcp` | `https://api-staging-882c.up.railway.app` | `staging` |
+| production | `https://parkdex.app` | `https://parkdex.app/mcp` | `https://api-production-e72df.up.railway.app` | `main` |
 
-The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway pre-deploy command; it does not receive an application-code deployment.
+The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The API's `API_PUBLIC_URL` is the environment's frontend origin and `MCP_PUBLIC_URL` is that origin plus `/mcp`; Vercel proxies the MCP and OAuth routes to the stable Railway API. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway pre-deploy command; it does not receive an application-code deployment.
+
+Keep `parkdex.app` attached directly to the production deployment and redirect `www.parkdex.app` to the apex, never the reverse, because the apex is the production OAuth issuer. The staging alias must point to the verified Vercel Production build so deployment protection cannot replace public MCP/OAuth responses with a Vercel sign-in page.
 
 Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. Staging later assigns `staging.parkdex.app` to the verified deployment; production later promotes the verified deployment to the production domains. The current Hobby setup intentionally uses one Vercel project so both targets follow the identical build path. Keep its Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
