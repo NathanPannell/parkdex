@@ -1,64 +1,98 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
-const ci = readFileSync(".github/workflows/ci.yml", "utf8");
-const cleanup = readFileSync(".github/workflows/preview-cleanup.yml", "utf8");
+const staging = readFileSync(".github/workflows/deploy-staging.yml", "utf8");
+const production = readFileSync(".github/workflows/deploy-production.yml", "utf8");
+const release = readFileSync(".github/workflows/deploy-release.yml", "utf8");
+const railwayConfig = readFileSync(".railway/railway.ts", "utf8");
+const migrator = readFileSync("backend/app/migrate.py", "utf8");
 
-test("deployments are manual and always pin staging", () => {
-  assert.match(ci, /workflow_dispatch:/);
-  assert.match(ci, /options: \[none, deploy-staging, promote-production\]/);
-  assert.match(ci, /git\/ref\/heads\/staging/);
-  assert.doesNotMatch(ci, /^  push:/m);
-  assert.doesNotMatch(ci, /^  pull_request:/m);
-  assert.doesNotMatch(ci, /github\.event_name == 'push' && github\.ref/);
-  assert.doesNotMatch(cleanup, /vercel deploy|railway up|create-branch-action/);
+test("old hosted test, manual release, and preview-cleanup workflows are removed", () => {
+  for (const path of [
+    ".github/workflows/ci.yml",
+    ".github/workflows/hosted-checkpoint.yml",
+    ".github/workflows/preview-cleanup.yml",
+  ]) assert.equal(existsSync(path), false, `${path} should be removed`);
 });
 
-test("merged preview cleanup delegates only to exact external journals", () => {
-  assert.match(cleanup, /github\.event\.pull_request\.merged == true/);
-  assert.match(cleanup, /preview-cleanup-disposition\.mjs/);
-  assert.match(cleanup, /core\.setFailed\(result\.message\)/);
-  assert.match(cleanup, /Merged preview cleanup is unresolved/);
-  assert.match(cleanup, /permissions:\r?\n  contents: read/);
-  assert.doesNotMatch(cleanup, /continue-on-error|RAILWAY_|NEON_|VERCEL_|deployment_id|environment delete|delete-branch-action|vercel remove|npm install/);
+test("staging deploys only the first run of a staging push", () => {
+  assert.match(staging, /push:\r?\n    branches: \[staging\]/);
+  assert.match(staging, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/staging' && github\.run_attempt == 1/);
+  assert.match(staging, /source_sha: \$\{\{ github\.sha \}\}/);
+  assert.match(staging, /uses: \.\/\.github\/workflows\/deploy-release\.yml/);
+  assert.doesNotMatch(staging, /workflow_dispatch:|pull_request:|pull_request_target:|schedule:|workflow_run:|inputs:|runs-on:|resolve-source:/);
 });
 
-test("manual inspections cannot enter release jobs", () => {
-  const releaseGate = ci.match(/  resolve-release:\r?\n    if: (?<gate>.+)/)?.groups?.gate;
-  assert.ok(releaseGate);
-  assert.match(releaseGate, /inputs\.action == 'deploy-staging'/);
-  assert.match(releaseGate, /inputs\.action == 'promote-production'/);
-  assert.doesNotMatch(releaseGate, /inputs\.action != 'none'/);
+test("production deploys only the first run of a main push", () => {
+  assert.match(production, /push:\r?\n    branches: \[main\]/);
+  assert.match(production, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main' && github\.run_attempt == 1/);
+  assert.match(production, /source_sha: \$\{\{ github\.sha \}\}/);
+  assert.match(production, /uses: \.\/\.github\/workflows\/deploy-release\.yml/);
+  assert.doesNotMatch(production, /workflow_dispatch:|pull_request:|pull_request_target:|schedule:|workflow_run:|inputs:|runs-on:|resolve-source:/);
 });
 
-test("staging receives its exact Google settings", () => {
-  const staging = ci.match(/  deploy-staging:\r?\n(?<body>[\s\S]*?)\r?\n  promote-production:/)?.groups?.body;
-  const production = ci.match(/  promote-production:\r?\n(?<body>[\s\S]*)/)?.groups?.body;
-  assert.ok(staging);
-  assert.ok(production);
-  assert.match(staging, /STAGING_GOOGLE_CLIENT_ID: \$\{\{ vars\.STAGING_GOOGLE_CLIENT_ID \}\}/);
-  assert.match(staging, /STAGING_GOOGLE_CLIENT_SECRET: \$\{\{ secrets\.STAGING_GOOGLE_CLIENT_SECRET \}\}/);
-  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set FRONTEND_ORIGINS/);
-  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN" variable set APP_PUBLIC_URL/);
-  assert.match(staging, /"https:\/\/\$STAGING_DOMAIN\/auth\/google\/callback" variable set GOOGLE_REDIRECT_URI/);
-  assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin/);
-  assert.match(staging, /"\$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin/);
-  assert.doesNotMatch(production, /STAGING_GOOGLE_CLIENT|variable set GOOGLE_CLIENT_(?:ID|SECRET)/);
-  assert.doesNotMatch(ci, /https:\/\/localhost/);
+test("staging and production share one hosted job and resolve only long-lived URLs", () => {
+  assert.match(release, /workflow_call:/);
+  assert.match(release, /group: parkdex-release-\$\{\{ inputs\.target \}\}/);
+  assert.match(release, /cancel-in-progress: false/);
+  assert.equal((release.match(/runs-on: ubuntu-24\.04/g) ?? []).length, 1);
+  assert.match(release, /timeout-minutes: 8/);
+  assert.match(release, /ref: \$\{\{ inputs\.source_sha \}\}/);
+  assert.match(release, /https:\/\/api-staging-882c\.up\.railway\.app/);
+  assert.match(release, /https:\/\/api-production-e72df\.up\.railway\.app/);
 });
 
-test("promotion fails closed around one exact staged commit", () => {
-  assert.match(ci, /Verify exact staged frontend and API releases/);
-  assert.match(ci, /git merge-base --is-ancestor/);
-  assert.match(ci, /-F force=false/);
-  assert.match(ci, /meta githubCommitSha="\$EXPECTED_COMMIT_SHA"/);
-  assert.match(ci, /concurrency: \{ group: release-staging, cancel-in-progress: false \}/);
+test("source validation accepts only first-attempt pushes and rejects stale branch releases", () => {
+  assert.match(release, /\[\[ "\$GITHUB_EVENT_NAME" == push \]\]/);
+  assert.match(release, /\[\[ "\$GITHUB_RUN_ATTEMPT" == 1 \]\]/);
+  assert.match(release, /git\/ref\/heads\/\$branch/);
+  assert.match(release, /TARGET_ENVIRONMENT.*production[\s\S]*branch=main; else branch=staging/);
+  assert.match(release, /\[\[ "\$GITHUB_REF" == refs\/heads\/\$branch \]\]/);
+  assert.match(release, /\[\[ "\$GITHUB_SHA" == "\$EXPECTED_COMMIT_SHA" \]\]/);
+  assert.doesNotMatch(release, /refs\/heads\/\$TARGET_ENVIRONMENT/);
+  assert.doesNotMatch(release, /workflow_dispatch|pull_request|candidate|retry/);
+  assert.match(release, /refusing to queue a stale deployment/);
 });
 
-test("Railway waits on provider events and verifies each exact deployment once", () => {
-  const subscriptions = ci.match(/railway up --ci/g) ?? [];
-  assert.equal(subscriptions.length, 4);
-  assert.doesNotMatch(ci, /wait-for-railway-preview-source/);
-  assert.match(ci, /verify-railway-deployments\.sh "\$deployment_message"/);
+test("each provider is queued concurrently and Actions does not wait for provider readiness", () => {
+  assert.match(release, /railway up --detach/);
+  assert.match(release, /vercel deploy --yes --no-wait --prod --skip-domain/);
+  assert.match(release, /api_pid=\$!/);
+  assert.match(release, /worker_pid=\$!/);
+  assert.match(release, /vercel_pid=\$!/);
+  assert.match(release, /parkdex-\$TARGET_ENVIRONMENT-\$EXPECTED_COMMIT_SHA-\$GITHUB_RUN_ID/);
+  assert.match(release, /railway_deployment_message=/);
+  assert.match(release, /vercel_deployment_url=/);
+  assert.match(release, /release_id: \$\{\{ steps\.metadata\.outputs\.release_id \}\}/);
+  assert.match(release, /Release ID: \\`\$RELEASE_ID\\`/);
+  assert.doesNotMatch(release, /railway deployment list|--ci|wait-for-railway|wait-for-worker|verify-railway-deployments|smoke-catalogue|curl --fail|sleep [0-9]/);
+  assert.doesNotMatch(release, /\.status.*SUCCESS|status.*ready|readyState/);
+});
+
+test("normal releases do not recreate or rewrite persistent provider configuration", () => {
+  assert.doesNotMatch(release, /create-branch-action|RAILWAY_BASE_ENVIRONMENT_ID|variable set .*DATABASE_URL|variable set .*FRONTEND_ORIGINS|source disconnect|domain list/);
+  assert.match(release, /variable set "\$name" --stdin --skip-deploys/);
+  assert.match(release, /APP_COMMIT_SHA/);
+  assert.match(release, /APP_RELEASE_ID/);
+  assert.match(release, /vercel deploy --yes --no-wait --prod --skip-domain/);
+});
+
+test("both environments keep independent database and stable-domain settings in Railway IaC", () => {
+  assert.match(railwayConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
+  assert.match(railwayConfig, /APP_RELEASE_ID: preserve\(\)/);
+  assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 2);
+  assert.doesNotMatch(railwayConfig, /github\("NathanPannell\/every-park"\)|source: repository/);
+  assert.match(migrator, /LOCK_TIMEOUT = "5min"/);
+  assert.match(migrator, /set_config\('lock_timeout', %s, true\)/);
+});
+
+test("credentials remain secret references and staging Vercel promotion is explicit", () => {
+  assert.match(release, /RAILWAY_API_TOKEN: \$\{\{ secrets\.RAILWAY_API_TOKEN \}\}/);
+  assert.match(release, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
+  assert.doesNotMatch(staging, /secrets: inherit/);
+  assert.doesNotMatch(production, /secrets: inherit/);
+  assert.match(release, /assign the stable staging domain/);
+  assert.match(release, /promote it to production domains/);
+  assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
 });

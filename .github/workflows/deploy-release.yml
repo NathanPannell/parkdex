@@ -1,0 +1,196 @@
+name: Queue Parkdex release
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Persistent Parkdex target environment
+        required: true
+        type: string
+      source_sha:
+        description: Exact full Git commit SHA to deploy
+        required: true
+        type: string
+    secrets:
+      RAILWAY_API_TOKEN:
+        required: true
+      VERCEL_TOKEN:
+        required: true
+    outputs:
+      source_sha:
+        value: ${{ jobs.deploy.outputs.source_sha }}
+      release_id:
+        value: ${{ jobs.deploy.outputs.release_id }}
+      railway_deployment_message:
+        value: ${{ jobs.deploy.outputs.railway_deployment_message }}
+      railway_api_url:
+        value: ${{ jobs.deploy.outputs.railway_api_url }}
+      vercel_deployment_url:
+        value: ${{ jobs.deploy.outputs.vercel_deployment_url }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: inputs.target == 'staging' || inputs.target == 'production'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: parkdex-release-${{ inputs.target }}
+      cancel-in-progress: false
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ inputs.target == 'production' && 'https://parkdex.app' || 'https://staging.parkdex.app' }}
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      release_id: ${{ steps.metadata.outputs.release_id }}
+      railway_deployment_message: ${{ steps.queue.outputs.railway_deployment_message }}
+      railway_api_url: ${{ steps.queue.outputs.railway_api_url }}
+      vercel_deployment_url: ${{ steps.queue.outputs.vercel_deployment_url }}
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.target }}
+      EXPECTED_COMMIT_SHA: ${{ inputs.source_sha }}
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
+      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      API_URL: ${{ inputs.target == 'staging' && 'https://api-staging-882c.up.railway.app' || 'https://api-production-e72df.up.railway.app' }}
+      FRONTEND_URL: ${{ inputs.target == 'staging' && 'https://staging.parkdex.app' || 'https://parkdex.app' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate merge-only branch SHA
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
+          [[ "$GITHUB_EVENT_NAME" == push ]]
+          [[ "$GITHUB_RUN_ATTEMPT" == 1 ]]
+          if [[ "$TARGET_ENVIRONMENT" == production ]]; then branch=main; else branch=staging; fi
+          [[ "$GITHUB_REF" == refs/heads/$branch ]]
+          [[ "$GITHUB_SHA" == "$EXPECTED_COMMIT_SHA" ]]
+
+          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$branch" --jq '.object.sha')"
+          if [[ "$current_sha" != "$EXPECTED_COMMIT_SHA" ]]; then
+            echo "A newer $branch commit exists; refusing to queue a stale deployment." >&2
+            exit 1
+          fi
+          echo "sha=$EXPECTED_COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install pinned deployment CLIs
+        run: npm install --global @railway/cli@5.47.2 vercel@50.1.3
+
+      - name: Stamp exact release identity on both Railway services
+        env:
+          RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          : "${RAILWAY_API_TOKEN:?RAILWAY_API_TOKEN is required}"
+          : "${RAILWAY_PROJECT_ID:?RAILWAY_PROJECT_ID is required}"
+          : "${RAILWAY_API_SERVICE_ID:?RAILWAY_API_SERVICE_ID is required}"
+          : "${RAILWAY_WORKER_SERVICE_ID:?RAILWAY_WORKER_SERVICE_ID is required}"
+          : "${VERCEL_TOKEN:?VERCEL_TOKEN is required}"
+          : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is required}"
+          : "${VERCEL_PROJECT_ID:?VERCEL_PROJECT_ID is required}"
+          [[ "$API_URL" == https://*.up.railway.app ]]
+          [[ "$FRONTEND_URL" == https://*.parkdex.app || "$FRONTEND_URL" == https://parkdex.app ]]
+
+          railway_set() {
+            local service_id="$1" name="$2" value="$3"
+            printf '%s' "$value" | railway variable set "$name" --stdin --skip-deploys \
+              --service "$service_id" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" >/dev/null
+          }
+          for service_id in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
+            railway_set "$service_id" APP_COMMIT_SHA "$EXPECTED_COMMIT_SHA"
+            railway_set "$service_id" APP_RELEASE_ID "$RELEASE_ID"
+          done
+
+          commit_date="$(git show -s --format=%cI "$EXPECTED_COMMIT_SHA")"
+          sequence="$(git rev-list --first-parent --count "$EXPECTED_COMMIT_SHA")"
+          [[ "$sequence" =~ ^[0-9]+$ ]]
+          version="v1.$((sequence / 1000)).$(printf '%03d' "$((sequence % 1000))")"
+          printf 'commit_date=%s\nversion=%s\nrelease_id=%s\n' "$commit_date" "$version" "$RELEASE_ID" >> "$GITHUB_OUTPUT"
+        id: metadata
+
+      - name: Queue API, worker, and frontend concurrently
+        id: queue
+        env:
+          COMMIT_DATE: ${{ steps.metadata.outputs.commit_date }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          RELEASE_ID: ${{ steps.metadata.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          deployment_message="parkdex-$TARGET_ENVIRONMENT-$EXPECTED_COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          api_log="$RUNNER_TEMP/railway-api.log"
+          worker_log="$RUNNER_TEMP/railway-worker.log"
+          vercel_stdout="$RUNNER_TEMP/vercel.out"
+          vercel_stderr="$RUNNER_TEMP/vercel.err"
+
+          railway up --detach --yes --message "$deployment_message" \
+            --service "$RAILWAY_API_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
+            >"$api_log" 2>&1 & api_pid=$!
+          railway up --detach --yes --message "$deployment_message" \
+            --service "$RAILWAY_WORKER_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
+            >"$worker_log" 2>&1 & worker_pid=$!
+          vercel deploy --yes --no-wait --prod --skip-domain --cwd frontend \
+            --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
+            --build-env "NEXT_PUBLIC_RELEASE_VERSION=$RELEASE_VERSION" \
+            --build-env "NEXT_PUBLIC_COMMIT_SHA=$EXPECTED_COMMIT_SHA" \
+            --build-env "NEXT_PUBLIC_COMMIT_DATE=$COMMIT_DATE" \
+            --meta "githubCommitSha=$EXPECTED_COMMIT_SHA" \
+            --meta "parkdexReleaseId=$RELEASE_ID" \
+            --meta "parkdexEnvironment=$TARGET_ENVIRONMENT" \
+            --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" \
+            >"$vercel_stdout" 2>"$vercel_stderr" & vercel_pid=$!
+
+          api_status=0; worker_status=0; vercel_status=0
+          wait "$api_pid" || api_status=$?
+          wait "$worker_pid" || worker_status=$?
+          wait "$vercel_pid" || vercel_status=$?
+          if (( api_status || worker_status || vercel_status )); then
+            echo 'A provider rejected its asynchronous deployment request.' >&2
+            [[ "$api_status" == 0 ]] || tail -n 30 "$api_log" >&2
+            [[ "$worker_status" == 0 ]] || tail -n 30 "$worker_log" >&2
+            [[ "$vercel_status" == 0 ]] || tail -n 30 "$vercel_stderr" >&2
+            exit 1
+          fi
+
+          vercel_url="$(tr -d '\r' < "$vercel_stdout" | tail -n 1)"
+          [[ "$vercel_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app/?$ ]] || {
+            echo 'Vercel did not return the queued deployment URL.' >&2
+            exit 1
+          }
+          echo "railway_deployment_message=$deployment_message" >> "$GITHUB_OUTPUT"
+          echo "railway_api_url=$API_URL" >> "$GITHUB_OUTPUT"
+          echo "vercel_deployment_url=$vercel_url" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Parkdex $TARGET_ENVIRONMENT deployment queued"
+            echo
+            echo "- Source commit: \`$EXPECTED_COMMIT_SHA\`"
+            echo "- Release ID: \`$RELEASE_ID\`"
+            echo "- Railway API and worker deployment message: \`$deployment_message\`"
+            echo "- Stable Railway API: $API_URL"
+            echo "- Stable frontend after agent-controlled cutover: $FRONTEND_URL"
+            echo "- Vercel deployment URL: $vercel_url"
+            if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
+              echo '- Vercel Production build has domain assignment skipped. After it is READY, assign the stable staging domain and browser-test it.'
+            else
+              echo '- Vercel Production build has domain assignment skipped. After it is READY and the release is verified, promote it to production domains.'
+            fi
+            echo '- This job returns after the three upload/queue clients exit; it does not wait for provider builds, readiness, or smoke tests.'
+          } >> "$GITHUB_STEP_SUMMARY"

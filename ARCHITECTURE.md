@@ -1,49 +1,42 @@
 # Deployment architecture
 
-## Production
+## Persistent environments
+
+Staging and production have the same long-lived topology and the same queue-only deployment implementation:
 
 ```text
-Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon production
-                         Railway worker ──pooled SQL──> Neon production
-                         API migrations ──direct SQL──> Neon production
+Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon branch
+                         Railway worker ────────────> Neon branch
+                         API + worker migrations ──> direct Neon connection
 ```
 
-GitHub Actions owns production deployment after CI. It stamps both Railway services with the commit SHA, deploys them, waits until `/ready` reports that exact SHA and a readable migration table, then deploys Vercel once with the resulting API URL. It writes the actual Vercel production URLs into Railway's exact CORS allowlist, then redeploys the API.
+Production uses `parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. Railway service domains and Neon connection strings remain fixed during ordinary releases.
 
-The production allowlist always retains `https://parkdex.app` and `https://www.parkdex.app` alongside the generated Vercel origins. A manual production job can run only when the workflow ref is `main` and the operator selects the production target.
+## Release behavior
 
-## Staging
+`.github/workflows/deploy-release.yml` is the sole GitHub deployment implementation. Protected-branch merge pushes to `staging` and `main` provide an exact Git SHA and environment name; there are no manual, pull-request, scheduled, or rerunnable Actions deployment paths. One GitHub-hosted job stamps the SHA and release ID, then concurrently runs detached Railway uploads for the API and worker and a no-wait staged Vercel Production deployment. It waits only for those client submissions to finish, not for provider builds or health.
 
-```text
-staging.parkdex.app ──HTTPS──> Railway API (staging) ──pooled SQL──> Neon staging
-                              Railway worker ─────────pooled SQL──> Neon staging
-                              API migrations ─────────direct SQL──> Neon staging
-```
+Before merge, an agent deploys the exact reviewed and locally attested pull-request head from a clean checkout at the current remote `staging` revision. That local path uses the same persistent staging resources and release identity, waits outside GitHub Actions for convergence, and never rewrites stable database, domain, OAuth, or service configuration.
 
-The Neon branch and Railway environment are long-lived and separate from production. The Neon branch has no expiration; its compute scales to zero after five idle minutes to control cost. Pushes to `staging` deploy that exact commit automatically. A manual CI run from a reviewed feature ref can provide the initial feature deployment; the next push to `staging` replaces it normally. CI checks and deployment always use the same checked-out ref.
+Both Vercel targets use `--prod --skip-domain`, so the provider build path is identical. After external verification, the release agent assigns the staging deployment to `staging.parkdex.app` or promotes the production deployment to `parkdex.app`. Vercel and Railway Git auto-deployments stay disabled to prevent duplicate releases.
 
-The workflow disconnects inherited Railway Git sources so a `main` push cannot auto-deploy to staging. It uploads the checked-out source to both Railway services, waits for the exact deployment marker and `/ready` commit, then creates a Vercel preview deployment and moves the stable `staging.parkdex.app` alias to it. Railway trusts only that alias and the current generated staging deployment URL.
+A queue acknowledgment is not evidence that a release is live. Outside GitHub Actions, the release agent verifies the exact Railway API and worker releases, `/ready`, migration readability, Vercel metadata, the stable frontend revision, and a real-browser journey.
 
-## Pull request N
+## Compatibility during convergence
 
-```text
-Vercel preview ──HTTPS──> Railway API (pr-N) ──pooled SQL──> Neon preview/pr-N
-                          Railway worker (pr-N) ──pooled SQL──> same branch
-                          API migrations ──direct SQL────────> same branch
-```
+API, worker, frontend, and database updates can become active in any order. Every release must therefore preserve N/N-1 compatibility:
 
-The workflow creates or reuses deterministic `pr-N` resources. It gives the pooled URL to both services and the direct migration URL only to the API. Vercel Git auto-deployment is disabled, so the workflow creates exactly one frontend preview after the matching API is ready. It then writes that exact preview URL into Railway's CORS allowlist before a final API redeploy.
+- Add schema before code needs it; remove obsolete schema only in a later release.
+- Keep old and new API request/response shapes compatible during the rollout.
+- Keep the worker compatible with both schema versions.
+- Never use an unattended destructive migration.
 
-On close or merge, GitHub Actions deletes the namespaced `pr-N` Railway environment, `preview/pr-N` Neon branch, and recorded Vercel deployment. An explicit namespace check prevents that job from targeting staging. Neon preview branches also expire after seven days as a leak backstop. Fork PRs do not deploy. Same-repository previews deploy only when both the PR author and workflow actor match `TRUSTED_PREVIEW_ACTOR`, the GitHub user that ran the bootstrap.
+The API and worker both invoke `python -m backend.app.migrate` as a Railway pre-deploy command and both receive `DATABASE_URL_UNPOOLED`. The migrator's advisory lock serializes concurrent attempts, and its checksums make already-applied migrations no-ops.
 
-## Credentials and ownership
+## Release ownership and recovery
 
-The local bootstrap identity uses broad credentials only long enough to create one project per provider. It then stores repository automation tokens in GitHub secrets, provider IDs in GitHub variables, and runtime database URLs directly in Railway. Production, staging, and preview reuse the existing provider project and service IDs while keeping environment-specific database URLs in Railway. Broad bootstrap credentials and database URLs are never committed.
+Only one release may be in flight per environment. GitHub Actions concurrency prevents overlapping submission jobs, while the release agent prevents a second release until provider convergence is resolved.
 
-`DATABASE_URL` is the pooled runtime connection in production and staging; each Railway environment stores its own value. `PREVIEW_DATABASE_URL` is the pooled preview connection. The corresponding `*_UNPOOLED` variables are direct migration connections. A preview refuses to fall back to production credentials.
+After a failure, retry the same SHA once when the cause is a diagnosed transient or narrowly scoped deployment problem. Otherwise freeze releases and prepare a last-known-good code rollback plan. Provider rollback never implies database rollback, and persistent Neon branches, Railway environments, and stable domains are not teardown targets.
 
-## Recovery rules
-
-Re-running a failed workflow is safe because staging and PR names are deterministic and migrations are append-only, checksummed, and advisory-locked. A Railway restart reuses the current image; it is not proof that new code deployed. Trust `/ready` only when its `commit` equals the requested Git SHA.
-
-A browser CORS warning paired with HTTP 500 usually means the API failed before middleware produced a normal response. Inspect Railway API and migration logs first, then verify the preview database variables, direct migration URL, and exact `FRONTEND_ORIGINS` value.
+See [Independent staging and production deployments](docs/deployments.md) for the operational sequence.

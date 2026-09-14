@@ -92,6 +92,7 @@ export function buildRailwayServicePatch(apiServiceId, workerServiceId) {
       [workerServiceId]: {
         isCreated: true,
         build: { builder: "DOCKERFILE", dockerfilePath: "backend/Dockerfile.worker", watchPatterns: ["backend/**", "database/**"] },
+        deploy: { preDeployCommand: ["python -m backend.app.migrate"] },
       },
     },
   };
@@ -116,7 +117,7 @@ export function verifyRailwayServicePatchResult(config, apiServiceId, workerServ
   const api = services[apiServiceId];
   const worker = services[workerServiceId];
   if (api?.build?.builder !== "DOCKERFILE" || api?.build?.dockerfilePath !== "backend/Dockerfile.api" || api?.deploy?.healthcheckPath !== "/health" || api?.deploy?.preDeployCommand?.join(" ") !== "python -m backend.app.migrate") throw new Error("Railway API service configuration was not verified");
-  if (worker?.build?.builder !== "DOCKERFILE" || worker?.build?.dockerfilePath !== "backend/Dockerfile.worker") throw new Error("Railway worker service configuration was not verified");
+  if (worker?.build?.builder !== "DOCKERFILE" || worker?.build?.dockerfilePath !== "backend/Dockerfile.worker" || worker?.deploy?.preDeployCommand?.join(" ") !== "python -m backend.app.migrate") throw new Error("Railway worker service configuration was not verified");
   for (const service of [api, worker]) {
     if (service?.source != null || service?.networking != null || service?.configFile != null || Object.keys(service?.variables || {}).length || Object.keys(service?.volumeMounts || {}).length) throw new Error("Railway preview service inherited forbidden configuration");
   }
