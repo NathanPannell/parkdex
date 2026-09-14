@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     frontend_origins: str = Field(
         default="http://localhost:3000", alias="FRONTEND_ORIGINS"
     )
-    check_interval_seconds: int = Field(default=180, alias="CHECK_INTERVAL_SECONDS")
     request_timeout_seconds: float = Field(default=10, alias="REQUEST_TIMEOUT_SECONDS")
     app_commit_sha: str = Field(default="local", alias="APP_COMMIT_SHA")
     app_release_id: str = Field(default="local", alias="APP_RELEASE_ID")
