@@ -6,10 +6,11 @@ Staging and production have the same long-lived topology and the same queue-only
 
 ```text
 Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon branch
+       /mcp + OAuth proxy ────────┘
                           API migrations ──direct SQL──> Neon branch
 ```
 
-Production uses `parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. Railway service domains and Neon connection strings remain fixed during ordinary releases.
+Production uses `parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. The public MCP identities are `https://parkdex.app/mcp` and `https://staging.parkdex.app/mcp`; Vercel proxies the MCP transport and root OAuth/discovery routes to each environment's stable Railway API. Railway service domains and Neon connection strings remain fixed during ordinary releases.
 
 ## Release behavior
 
