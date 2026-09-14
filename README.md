@@ -6,7 +6,7 @@ Parkdex is a field guide and collection game for Vancouver Island parks and near
 
 [Open Parkdex](https://parkdex.app)
 
-Deploy staging or promote it to production with an explicit workflow run. See [Manual deployments](docs/deployments.md) for the commands and safeguards.
+Parkdex uses short, independent provider dispatches followed by agent-owned convergence checks and browser smoke tests. See [deployment operations](docs/deployments.md) for staging and overnight production releases.
 
 ## A growing record of where you've been
 

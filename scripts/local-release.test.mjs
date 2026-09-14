@@ -37,7 +37,7 @@ test("preview planning is unique and provider-free", () => {
 test("apply remains fail-closed before provider commands", () => {
   const result = invoke(["--mode", "preview", "--pr", "321", "--release-id", fixedRelease, "--sha", head, "--apply"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Preview apply requires explicit --sha, --head-ref, and --attestation/);
+  assert.match(result.stderr, /Candidate apply requires explicit --sha, --head-ref, and --attestation/);
 });
 
 test("cleanup requires an explicit durable journal", () => {
@@ -52,10 +52,15 @@ test("cleanup without apply is rejected before journal access", () => {
   assert.match(result.stderr, /Cleanup requires explicit --apply/);
 });
 
-test("local staging apply remains disabled", () => {
+test("local staging apply requires an exact reviewed candidate", () => {
   const result = invoke(["--mode", "staging", "--release-id", fixedRelease, "--sha", head, "--apply"]);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Local staging Apply remains disabled/);
+  assert.match(result.stderr, /Candidate apply requires a valid --pr number/);
+  assert.doesNotMatch(source, /Local staging Apply remains disabled/);
+  assert.match(source, /verifyCandidateAuthorization/);
+  assert.match(source, /attested exact reviewed PR head/);
+  assert.match(source, /\["APP_COMMIT_SHA", sha\], \["APP_RELEASE_ID", releaseId\]/);
+  assert.doesNotMatch(source, /PARKDEX_STAGING_DATABASE_URL|PARKDEX_STAGING_GOOGLE_CLIENT_SECRET/);
 });
 
 test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
@@ -156,6 +161,21 @@ test("preview database identity guards pass", () => {
 test("preview names stay in the conservative Railway-safe subset", () => {
   assert.equal(buildPreviewEnvironmentName(999999, "abcdef0123456789", fixedRelease), "lp-pr-999999-abcdef01-11111111");
   assert.equal(buildPreviewEnvironmentName(999999, "abcdef0123456789", fixedRelease).length, 30);
+});
+
+test("isolated Railway API deployments run the idempotent migration command", () => {
+  const patch = buildRailwayApiServicePatch("api-id");
+  assert.deepEqual(patch.services["api-id"].deploy.preDeployCommand, ["python -m backend.app.migrate"]);
+});
+
+test("persistent Railway IaC preserves the API direct database connection and release identity", () => {
+  const railwayConfig = readFileSync(".railway/railway.ts", "utf8");
+  const apiConfig = railwayConfig.match(/const api = service\("api", \{(?<body>[\s\S]*?)\n  \}\);/)?.groups?.body;
+  assert.ok(apiConfig);
+  assert.match(apiConfig, /preDeployCommand: \["python -m backend\.app\.migrate"\]/);
+  assert.match(apiConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
+  assert.match(apiConfig, /APP_RELEASE_ID: preserve\(\)/);
+  assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
 });
 
 test("Railway absence is accepted only from a complete non-paginated inventory", () => {
