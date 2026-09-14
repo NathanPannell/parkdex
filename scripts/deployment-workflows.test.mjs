@@ -4,6 +4,7 @@ import test from "node:test";
 
 const ci = readFileSync(".github/workflows/ci.yml", "utf8");
 const cleanup = readFileSync(".github/workflows/preview-cleanup.yml", "utf8");
+const railway = readFileSync(".railway/railway.ts", "utf8");
 
 test("deployments are manual and always pin staging", () => {
   assert.match(ci, /workflow_dispatch:/);
@@ -56,9 +57,13 @@ test("promotion fails closed around one exact staged commit", () => {
   assert.match(ci, /concurrency: \{ group: release-staging, cancel-in-progress: false \}/);
 });
 
-test("Railway waits on provider events and verifies each exact deployment once", () => {
+test("Railway waits on provider events and verifies only the API deployment", () => {
   const subscriptions = ci.match(/railway up --ci/g) ?? [];
-  assert.equal(subscriptions.length, 4);
+  assert.equal(subscriptions.length, 2);
+  assert.doesNotMatch(ci, /RAILWAY_WORKER_SERVICE_ID|wait-for-worker-catalogue/);
   assert.doesNotMatch(ci, /wait-for-railway-preview-source/);
   assert.match(ci, /verify-railway-deployments\.sh "\$deployment_message"/);
+  assert.match(railway, /const api = service\("api"/);
+  assert.match(railway, /resources: \[api\]/);
+  assert.doesNotMatch(railway, /service\("worker"|Dockerfile\.worker/);
 });

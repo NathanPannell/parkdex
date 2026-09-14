@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayServiceMutation, buildRailwayServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayServicePatchResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -171,32 +171,32 @@ test("only Railway's exact invalid-name rejection is classified as pre-create", 
   assert.equal(classifyRailwayEnvironmentCreateFailure("not authorized"), "unknown");
 });
 
-test("Railway preview services are created from a sanitized patch", () => {
-  const patch = buildRailwayServicePatch("api-id", "worker-id");
-  assert.deepEqual(Object.keys(patch.services).sort(), ["api-id", "worker-id"]);
+test("only the Railway API is created from a sanitized patch", () => {
+  const patch = buildRailwayApiServicePatch("api-id");
+  assert.deepEqual(Object.keys(patch.services), ["api-id"]);
   assert.equal(patch.services["api-id"].isCreated, true);
-  assert.equal(patch.services["worker-id"].isCreated, true);
+  assert.equal(patch.services["api-id"].build.dockerfilePath, "backend/Dockerfile.api");
   assert.ok(!JSON.stringify(patch).includes("variables"));
   assert.ok(!JSON.stringify(patch).includes("source"));
   assert.ok(!JSON.stringify(patch).includes("networking"));
 });
 
 test("Railway GraphQL patch keeps structured variables on stdin", () => {
-  const request = buildRailwayServiceMutation("environment-id", "api-id", "worker-id");
+  const request = buildRailwayApiServiceMutation("environment-id", "api-id");
   const command = buildRailwayApiCommand(request.query, request.variables);
   assert.deepEqual(command.args.slice(-3), ["--variables", "@-", "--compact"]);
   assert.equal(JSON.parse(command.input).environmentId, "environment-id");
-  assert.deepEqual(Object.keys(JSON.parse(command.input).patch.services).sort(), ["api-id", "worker-id"]);
+  assert.deepEqual(Object.keys(JSON.parse(command.input).patch.services), ["api-id"]);
 });
 
-test("Railway preview service readback rejects copied configuration", () => {
-  const patch = buildRailwayServicePatch("api-id", "worker-id");
-  assert.equal(verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), true);
+test("Railway API readback rejects copied configuration", () => {
+  const patch = buildRailwayApiServicePatch("api-id");
+  assert.equal(verifyRailwayApiServicePatchResult(patch, "api-id"), true);
   patch.services["api-id"].variables = { SECRET: { value: "copied" } };
-  assert.throws(() => verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), /forbidden configuration/);
+  assert.throws(() => verifyRailwayApiServicePatchResult(patch, "api-id"), /forbidden configuration/);
   delete patch.services["api-id"].variables;
   patch.services["extra-id"] = { isCreated: true };
-  assert.throws(() => verifyRailwayServicePatchResult(patch, "api-id", "worker-id"), /identities/);
+  assert.throws(() => verifyRailwayApiServicePatchResult(patch, "api-id"), /identity/);
 });
 
 test("native runtime checks require exact provider identities", () => {
@@ -205,28 +205,26 @@ test("native runtime checks require exact provider identities", () => {
   assert.throws(() => verifyRailwayDeploymentResult([{ id: "deployment-id", status: "FAILED", meta: { cliMessage: message } }], message), /exact successful/);
   assert.equal(verifyReadyPayload({ status: "ready", commit: "commit-sha", release: "release-id" }, "commit-sha", "release-id"), true);
   assert.throws(() => verifyReadyPayload({ status: "ready", commit: "other", release: "release-id" }, "commit-sha", "release-id"), /identity/);
-  assert.equal(workerCatalogueReady("Parkdex catalogue ready commit=commit-sha release=release-id places=195", "commit-sha", "release-id"), true);
-  assert.equal(workerCatalogueReady("Parkdex catalogue ready commit=other release=release-id places=195", "commit-sha", "release-id"), false);
 });
 
 test("Railway empty-environment shim journals, patches, then verifies readback", () => {
   const events = [];
-  const config = buildRailwayServicePatch("api-id", "worker-id");
-  provisionRailwayServiceInstances({
-    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+  const config = buildRailwayApiServicePatch("api-id");
+  provisionRailwayApiService({
+    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id",
     listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
     recordIntent: (intent) => events.push(["intent", intent]),
     commitPatch: (request) => events.push(["patch", request.variables.environmentId]),
     readConfig: () => { events.push(["readback"]); return config; },
   });
   assert.deepEqual(events.map(([event]) => event), ["intent", "patch", "readback"]);
-  assert.deepEqual(events[0][1], { projectId: "project-id", environmentId: "environment-id", serviceIds: ["api-id", "worker-id"] });
+  assert.deepEqual(events[0][1], { projectId: "project-id", environmentId: "environment-id", serviceIds: ["api-id"] });
 });
 
 test("Railway patch failure remains journaled and stops before readback", () => {
   const events = [];
-  assert.throws(() => provisionRailwayServiceInstances({
-    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+  assert.throws(() => provisionRailwayApiService({
+    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id",
     listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
     recordIntent: () => events.push("intent"),
     commitPatch: () => { events.push("patch"); throw new Error("provider rejected patch"); },
@@ -237,8 +235,8 @@ test("Railway patch failure remains journaled and stops before readback", () => 
 
 test("Railway service patch refuses an environment outside the exact project inventory", () => {
   const events = [];
-  assert.throws(() => provisionRailwayServiceInstances({
-    projectId: "project-id", environmentId: "wrong-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id", workerServiceId: "worker-id",
+  assert.throws(() => provisionRailwayApiService({
+    projectId: "project-id", environmentId: "wrong-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id",
     listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
     recordIntent: () => events.push("intent"), commitPatch: () => events.push("patch"), readConfig: () => ({}),
   }), /identity was not verified/);
@@ -271,8 +269,10 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /Preview database migration idempotency/);
   assert.match(source, /Preview database isolation and catalogue gate/);
   assert.match(source, /frontend-creating/);
-  assert.match(source, /railway-services-creating/);
+  assert.match(source, /railway-api-creating/);
+  assert.doesNotMatch(source, /RAILWAY_WORKER_SERVICE_ID|waitForWorkerCatalogue|workerCatalogueReady/);
   assert.match(providerSource, /environmentPatchCommit/);
+  assert.doesNotMatch(providerSource, /workerServiceId|Dockerfile\.worker|workerCatalogueReady/);
   assert.doesNotMatch(source, /service", "source", "disconnect/);
   assert.match(source, /process\.env\.VERCEL_PROJECT_ID/);
   assert.doesNotMatch(source, /"vercel", \["link"/);

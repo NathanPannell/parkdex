@@ -169,7 +169,6 @@ jobs:
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_BASE_ENVIRONMENT_ID: ${{ vars.RAILWAY_BASE_ENVIRONMENT_ID }}
       RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
-      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
       RAILWAY_ENVIRONMENT: staging
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
@@ -215,14 +214,11 @@ jobs:
               --copy "$RAILWAY_BASE_ENVIRONMENT_ID" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL" \
               --service-config "$RAILWAY_API_SERVICE_ID" variables.DATABASE_URL_UNPOOLED.value "$STAGING_DATABASE_URL_UNPOOLED" \
-              --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN" \
-              --service-config "$RAILWAY_WORKER_SERVICE_ID" variables.DATABASE_URL.value "$STAGING_DATABASE_URL"
+              --service-config "$RAILWAY_API_SERVICE_ID" variables.FRONTEND_ORIGINS.value "https://$STAGING_DOMAIN"
           fi
-          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID"
-            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID"
-            railway service source disconnect --service "$service" --environment staging --project "$RAILWAY_PROJECT_ID" >/dev/null
-          done
+          railway_retry "$STAGING_DATABASE_URL" variable set DATABASE_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
+          railway service source disconnect --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID" >/dev/null
           railway_retry "$STAGING_DATABASE_URL_UNPOOLED" variable set DATABASE_URL_UNPOOLED --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$STAGING_DOMAIN" variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
@@ -233,25 +229,18 @@ jobs:
           railway_retry "https://$STAGING_DOMAIN/auth/google/callback" variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "$STAGING_GOOGLE_CLIENT_ID" variable set GOOGLE_CLIENT_ID --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           railway_retry "$STAGING_GOOGLE_CLIENT_SECRET" variable set GOOGLE_CLIENT_SECRET --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
-      - name: Deploy Railway services and wait on provider events
+      - name: Deploy Railway API and wait on provider events
         run: |
           [[ "$(git rev-parse HEAD)" == "$EXPECTED_COMMIT_SHA" ]]
           source_marker=backend/.staging-source-sha
           trap 'rm -f "$source_marker"' EXIT
           deployment_message="staging-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
           printf '%s' "$deployment_message" > "$source_marker"
-          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID" & api_pid=$!
-          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID" & worker_pid=$!
-          wait "$api_pid"
-          wait "$worker_pid"
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment staging --project "$RAILWAY_PROJECT_ID"
           bash scripts/verify-railway-deployments.sh "$deployment_message"
-      - name: Verify staging services
+      - name: Verify staging API
         id: railway
-        run: |
-          bash scripts/wait-for-railway-api.sh & api_pid=$!
-          bash scripts/wait-for-worker-catalogue.sh & worker_pid=$!
-          wait "$api_pid"
-          wait "$worker_pid"
+        run: bash scripts/wait-for-railway-api.sh
       - name: Smoke test staging catalogue
         env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
         run: bash scripts/smoke-catalogue.sh
@@ -275,7 +264,6 @@ jobs:
       RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
-      RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
       RAILWAY_ENVIRONMENT: production
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
@@ -300,11 +288,8 @@ jobs:
           response="$(curl --fail --silent --show-error "https://$domain/ready")"
           [[ "$(jq -r '.status' <<<"$response")" == ready ]]
           [[ "$(jq -r '.commit' <<<"$response")" == "$EXPECTED_COMMIT_SHA" ]]
-      - name: Disconnect production Git sources before updating main
-        run: |
-          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            railway service source disconnect --service "$service" --environment production --project "$RAILWAY_PROJECT_ID" >/dev/null
-          done
+      - name: Disconnect production API Git source before updating main
+        run: railway service source disconnect --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" >/dev/null
       - name: Fast-forward main to the staged commit
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
@@ -316,9 +301,7 @@ jobs:
       - name: Configure production release
         run: |
           source scripts/railway-retry.sh
-          for service in "$RAILWAY_API_SERVICE_ID" "$RAILWAY_WORKER_SERVICE_ID"; do
-            railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$service" --environment production --project "$RAILWAY_PROJECT_ID"
-          done
+          railway_retry "$EXPECTED_COMMIT_SHA" variable set APP_COMMIT_SHA --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app,https://www.parkdex.app' variable set FRONTEND_ORIGINS --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app' variable set APP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           api_domain="$(railway domain list --project "$RAILWAY_PROJECT_ID" --environment production --service "$RAILWAY_API_SERVICE_ID" --json | jq -r '.. | strings | select(test("\\.up\\.railway\\.app$"))' | head -n 1)"
@@ -326,24 +309,17 @@ jobs:
           railway_retry "https://$api_domain" variable set API_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry "https://$api_domain/mcp" variable set MCP_PUBLIC_URL --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           railway_retry 'https://parkdex.app/auth/google/callback' variable set GOOGLE_REDIRECT_URI --stdin --skip-deploys --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
-      - name: Deploy Railway services and wait on provider events
+      - name: Deploy Railway API and wait on provider events
         run: |
           source_marker=backend/.production-source-sha
           trap 'rm -f "$source_marker"' EXIT
           deployment_message="production-source $EXPECTED_COMMIT_SHA run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
           printf '%s' "$deployment_message" > "$source_marker"
-          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" & api_pid=$!
-          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_WORKER_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID" & worker_pid=$!
-          wait "$api_pid"
-          wait "$worker_pid"
+          railway up --ci --yes --message "$deployment_message" --service "$RAILWAY_API_SERVICE_ID" --environment production --project "$RAILWAY_PROJECT_ID"
           bash scripts/verify-railway-deployments.sh "$deployment_message"
-      - name: Verify production services
+      - name: Verify production API
         id: railway
-        run: |
-          bash scripts/wait-for-railway-api.sh & api_pid=$!
-          bash scripts/wait-for-worker-catalogue.sh & worker_pid=$!
-          wait "$api_pid"
-          wait "$worker_pid"
+        run: bash scripts/wait-for-railway-api.sh
       - name: Smoke test production catalogue
         env: { API_URL: "${{ steps.railway.outputs.api_url }}" }
         run: bash scripts/smoke-catalogue.sh
