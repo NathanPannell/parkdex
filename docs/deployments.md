@@ -31,7 +31,7 @@ gh workflow run hosted-checkpoint.yml -R NathanPannell/parkdex --ref staging \
   -f commit_sha="$(git rev-parse HEAD)" -f reason='ready for review'
 ```
 
-The local preview path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates an empty Railway environment, instantiates only the two verified project services with a sanitized variable-free patch, and uses a fresh database inside a schema-only Neon branch so migrations and deterministic catalogue seed data run without parent application data. Owned resources are journaled outside the repository before later mutations; deployment, API, worker, protected Vercel content, source, release, and provider identities are verified.
+The local preview path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates an empty Railway environment, instantiates only the verified API service with a sanitized variable-free patch, and uses a fresh database inside a schema-only Neon branch so migrations and deterministic catalogue seed data run without parent application data. Owned resources are journaled outside the repository before later mutations; API deployment, protected Vercel content, source, release, and provider identities are verified.
 
 Preview `-Apply` must run from a clean checkout at the freshly fetched `origin/staging`. It requires an explicit full source SHA, open PR targeting `staging`, remote head name, and successful full merge-candidate attestation produced by that trusted staging validator. The runner rechecks the attestation, nested evidence hash, current merge tree, remote branch, and PR identity before provider access. The attestation is the reviewed-source gate; an open PR alone is not authorization. Because same-user reviewed source can still read local credential files, `-Apply` is also the operator's explicit deployment decision and must not be used for untrusted code.
 
@@ -48,7 +48,7 @@ $journal = 'C:\Users\me\AppData\Local\Parkdex\release-journal\<release-id>.json'
 pwsh -File scripts/local-release.ps1 -Mode Cleanup -StatePath $journal -Apply
 ```
 
-The isolated proof exercised Neon initialization, Railway/Vercel creation, both service deployments, exact API/worker identity, catalogue isolation, a real-browser map/search/place-details journey, and authoritative cleanup. A Windows shell-boundary failure required the final verification steps to be completed manually on that exact release; the corrected native Node wrapper and protected `vercel curl` path were then accepted from the combined live evidence plus focused synthetic tests, not a second end-to-end provider run.
+The isolated proof exercised Neon initialization, Railway/Vercel creation, API deployment and identity, catalogue isolation, a real-browser map/search/place-details journey, and authoritative cleanup. A Windows shell-boundary failure required the final verification steps to be completed manually on that exact release; the corrected native Node wrapper and protected `vercel curl` path were then accepted from the combined live evidence plus focused synthetic tests, not a second end-to-end provider run.
 
 Successful publication accepts only full merge-candidate evidence and rechecks the remote feature head, current staging base, merge tree, nested evidence hash, and trusted staging copies of the validator and publisher. Its status context includes the staging SHA, so an older success is not a claim about a later staging base; it is informational rather than a fixed branch-protection check.
 
@@ -74,8 +74,8 @@ Promotion pins the latest `staging` commit, reruns the full release checks, veri
 
 GitHub only dispatches workflows that exist on the default branch. This keeps the existing `ci.yml` entry point so the commands work after this change reaches `staging`, but future edits to a new workflow file must first reach `main` before GitHub can dispatch them. A staging-only cleanup-hook change is therefore prepared but inactive until a separately authorized promotion reaches the default branch.
 
-Vercel Git deployments must remain disabled, and Railway API and worker Git sources must be disconnected in both environments. The workflow disconnects Railway sources before its uploads, but the first rollout should confirm the provider settings before merging a change that would otherwise trigger an automatic build.
+Vercel Git deployments must remain disabled, and the Railway API Git source must be disconnected in both environments. The workflow disconnects the API source before its uploads, but the first rollout should confirm the provider settings before merging a change that would otherwise trigger an automatic build.
 
-The September 8, 2026 rollout inspection confirmed that the API and worker have no Git or image source attached in either staging or production, so no source migration was required.
+The September 8, 2026 rollout inspection confirmed that the API has no Git or image source attached in either staging or production, so no source migration was required.
 
 Automatic PR preview creation remains disabled. Explicit attested local previews use their external journal for cleanup; the close-event workflow reports that coordinator-owned cleanup as unresolved rather than guessing provider identities or claiming success.
