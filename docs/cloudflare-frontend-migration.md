@@ -4,7 +4,7 @@ Parkdex can move its frontend to Cloudflare Pages without transferring the `park
 
 ## Target topology
 
-Use two Direct Upload Pages projects so staging and production have independent production deployments and rollback histories:
+Use two Git-integrated Pages projects so staging and production have independent production deployments and rollback histories:
 
 | Environment | Pages project | Production branch | Stable hostname |
 | --- | --- | --- | --- |
@@ -14,6 +14,8 @@ Use two Direct Upload Pages projects so staging and production have independent 
 The apex `parkdex.app` is the canonical production site and OAuth issuer. Redirect `www.parkdex.app` permanently to the apex while preserving the complete path and query string. This keeps the browser's PKCE state, the registered Google callback, and the MCP/OAuth issuer on one origin.
 
 The frontend is a Next.js static export in `frontend/out`. Cloudflare uses `npm run build:cloudflare`, which sets `NEXT_PUBLIC_API_BASE_URL=.` and stamps the provider's exact Git SHA. Browser API requests remain same-origin; a scoped Pages Function forwards `/api/*`, MCP, and OAuth traffic to each project's `API_BASE_URL` environment variable. This makes immutable `pages.dev` previews testable without adding every preview hostname to Railway CORS. Always use the npm scripts; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
+
+Because `frontend/wrangler.jsonc` is checked in, it is authoritative for Pages Functions runtime variables. Keep the staging API origin in its top-level `vars` and `env.preview.vars`; values entered in the Pages setup wizard are not applied when Wrangler configuration is present. Do not put credentials in this file—secrets still belong in Cloudflare's encrypted secret store.
 
 ## Verified local commands
 
@@ -35,13 +37,15 @@ The post-build check verifies the callback page, Cloudflare headers, MapLibre wo
 
 ## Deployment mechanics
 
-Cloudflare Pages cannot promote a preview deployment to production. Preserve Parkdex's verify-before-cutover behavior by building once and treating `frontend/out` as an immutable artifact:
+Cloudflare Pages cannot promote a preview deployment to production. Preserve Parkdex's verify-before-cutover behavior through branch controls and exact-revision verification:
 
-1. Compute and record an artifact digest.
-2. Upload the artifact to a unique preview branch with `--commit-hash`, `--commit-dirty=false`, and a release ID in `--commit-message`.
-3. Verify the immutable `pages.dev` URL, its project/branch/commit metadata, the embedded HTML revision, the API CORS path, and the browser journey.
-4. Re-upload the exact same artifact to the environment project's production branch.
-5. Verify the stable hostname and retain the prior production deployment as the rollback target.
+1. Connect `parkdex-staging` to the repository with `staging` as its production branch and enable previews for non-production branches.
+2. Connect `parkdex-production` with `main` as its production branch and disable its preview builds so feature branches are not built twice.
+3. For each candidate, verify the immutable `pages.dev` URL, project/branch/commit metadata, `parkdex-artifact.json`, the API proxy, and the browser journey.
+4. Merge through the protected branch flow, then verify the new stable staging or production deployment before any DNS change.
+5. Retain the prior production deployment as the rollback target.
+
+During provider bootstrap only, `parkdex-staging` temporarily uses `chore/cloudflare-frontend` as its production branch so the Cloudflare-specific build command exists before the feature is merged. Change it to `staging` immediately after the migration PR lands.
 
 Do not replace the existing Vercel release workflow until both Pages projects and this artifact flow have been exercised successfully.
 
