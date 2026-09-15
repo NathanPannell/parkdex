@@ -65,6 +65,9 @@ test("local staging apply requires an exact reviewed candidate", () => {
   assert.match(source, /Railway staging API must run the migration pre-deploy command/);
   assert.match(source, /Railway staging API is missing \$\{name\}/);
   assert.match(source, /if \(preview && !domain\)/);
+  assert.match(source, /state\.frontendUrl = preview \? vercel\.url : "https:\/\/staging\.parkdex\.app"/);
+  assert.match(source, /verifyBrowserCors\(state\.apiUrl, state\.frontendUrl\)/);
+  assert.doesNotMatch(source, /verifyBrowserCors\(state\.apiUrl, vercel\.url\)/);
   assert.doesNotMatch(source, /RAILWAY_STAGING_ENVIRONMENT_ID \|\| process\.env\.RAILWAY_BASE_ENVIRONMENT_ID/);
 });
 

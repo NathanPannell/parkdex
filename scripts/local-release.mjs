@@ -599,7 +599,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     run("railway", ["up", "--ci", "--yes", "--message", message, "--service", process.env.RAILWAY_API_SERVICE_ID, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { cwd: sourceRoot, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway API deploy" });
     verifyRailwayDeployments(state, process.env.RAILWAY_API_TOKEN, message);
     await waitForRailwayApi(state.apiUrl, sha, releaseId);
-    await verifyBrowserCors(state.apiUrl, vercel.url);
+    await verifyBrowserCors(state.apiUrl, state.frontendUrl);
     await smokeCatalogue(state.apiUrl);
     verifyFrontendContent(sourceRoot, vercel.url);
     if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
