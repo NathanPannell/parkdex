@@ -80,6 +80,9 @@ test("normal releases do not recreate or rewrite persistent provider configurati
 
 test("both environments keep independent database and stable-domain settings in Railway IaC", () => {
   assert.match(railwayConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
+  assert.match(railwayConfig, /APP_PUBLIC_URL: preserve\(\)/);
+  assert.match(railwayConfig, /API_PUBLIC_URL: preserve\(\)/);
+  assert.match(railwayConfig, /MCP_PUBLIC_URL: preserve\(\)/);
   assert.match(railwayConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 1);
   assert.match(railwayConfig, /resources: \[api\]/);
@@ -92,12 +95,13 @@ test("both environments keep independent database and stable-domain settings in 
   assert.match(migrator, /set_config\('lock_timeout', %s, true\)/);
 });
 
-test("credentials remain secret references and staging Vercel promotion is explicit", () => {
+test("credentials remain secret references and exact-domain assignment is explicit", () => {
   assert.match(release, /RAILWAY_API_TOKEN: \$\{\{ secrets\.RAILWAY_API_TOKEN \}\}/);
   assert.match(release, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
   assert.doesNotMatch(staging, /secrets: inherit/);
   assert.doesNotMatch(production, /secrets: inherit/);
   assert.match(release, /assign the stable staging domain/);
-  assert.match(release, /promote it to production domains/);
+  assert.match(release, /assign only parkdex\.app and confirm the staging alias is unchanged/);
+  assert.doesNotMatch(release, /promote it to production domains/);
   assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
 });
