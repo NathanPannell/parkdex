@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
@@ -164,10 +165,44 @@ test("protected Vercel content uses the exact native CLI target on Windows", { s
   }
 });
 
-test("Vercel Preview environment audit retries transient temp cleanup failures", () => {
+test("Vercel provider commands disable detached CLI telemetry and retain bounded cleanup retries", () => {
+  const minimalEnv = source.match(/function minimalEnv\(extra = \{\}\) \{[\s\S]*?\n\}/)?.[0];
+  const vercelEnv = source.match(/function vercelEnv\(token, extra = \{\}\) \{[\s\S]*?\n\}/)?.[0];
+  assert.ok(minimalEnv);
+  assert.ok(vercelEnv);
   const audit = source.match(/function verifyEmptyVercelPreviewEnvironment\(\) \{(?<body>[\s\S]*?)\n\}/)?.groups?.body;
   assert.ok(audit);
   assert.match(audit, /rmSync\(sourceRoot, \{ recursive: true, force: true, maxRetries: 5, retryDelay: 200 \}\)/);
+  const extra = { PARKDEX_ENV_SENTINEL: "preserved", VERCEL_TELEMETRY_DISABLED: "" };
+  const evaluated = { process: { env: process.env }, extra, result: null };
+  runInNewContext(`${minimalEnv}\n${vercelEnv}\nresult = vercelEnv("fixture-token", extra);`, evaluated);
+  assert.equal(extra.VERCEL_TELEMETRY_DISABLED, "");
+  assert.equal(evaluated.result.VERCEL_TOKEN, "fixture-token");
+  assert.equal(evaluated.result.PARKDEX_ENV_SENTINEL, "preserved");
+  assert.equal(evaluated.result.VERCEL_TELEMETRY_DISABLED, "1");
+  if (process.platform !== "win32") return;
+
+  let fixtureRoot;
+  let sourceRoot;
+  try {
+    fixtureRoot = mkdtempSync(join(tmpdir(), "parkdex-vercel-telemetry-fixture-"));
+    sourceRoot = mkdtempSync(join(tmpdir(), "parkdex-vercel-environment-audit-test-"));
+    const capturePath = join(fixtureRoot, "telemetry-environment.txt");
+    mkdirSync(join(sourceRoot, "frontend", ".vercel"), { recursive: true });
+    writeFileSync(join(sourceRoot, "frontend", ".vercel", "project.json"), "{}\n", "utf8");
+    writeFileSync(join(fixtureRoot, "vercel.cmd"), `@echo off\r\n> "%PARKDEX_TELEMETRY_CAPTURE%" echo %VERCEL_TELEMETRY_DISABLED%\r\necho No Environment Variables found\r\n`, "utf8");
+    const fixtureContext = { process: { env: process.env }, extra: { PATH: `${fixtureRoot}${delimiter}${process.env.PATH}`, PARKDEX_TELEMETRY_CAPTURE: capturePath }, result: null };
+    runInNewContext(`${minimalEnv}\n${vercelEnv}\nresult = vercelEnv("fixture-token", extra);`, fixtureContext);
+    const provider = buildProviderProcess("vercel", ["env", "ls", "preview", "--cwd", "frontend", "--no-color"], "win32");
+    const result = spawnSync(provider.executable, provider.args, { cwd: sourceRoot, env: fixtureContext.result, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(capturePath, "utf8").trim(), "1");
+    assert.match(result.stdout, /No Environment Variables found/);
+    assert.doesNotThrow(() => rmSync(sourceRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));
+  } finally {
+    if (sourceRoot) rmSync(sourceRoot, { recursive: true, force: true });
+    if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("preview database identity guards pass", () => {

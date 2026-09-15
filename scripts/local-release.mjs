@@ -99,7 +99,7 @@ function railwayEnv(token, extra = {}) {
 }
 
 function vercelEnv(token, extra = {}) {
-  return minimalEnv({ ...(token ? { VERCEL_TOKEN: token } : {}), ...extra });
+  return minimalEnv({ ...(token ? { VERCEL_TOKEN: token } : {}), ...extra, VERCEL_TELEMETRY_DISABLED: "1" });
 }
 
 function neonCli(root) {
