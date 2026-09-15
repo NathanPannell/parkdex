@@ -164,6 +164,12 @@ test("protected Vercel content uses the exact native CLI target on Windows", { s
   }
 });
 
+test("Vercel Preview environment audit retries transient temp cleanup failures", () => {
+  const audit = source.match(/function verifyEmptyVercelPreviewEnvironment\(\) \{(?<body>[\s\S]*?)\n\}/)?.groups?.body;
+  assert.ok(audit);
+  assert.match(audit, /rmSync\(sourceRoot, \{ recursive: true, force: true, maxRetries: 5, retryDelay: 200 \}\)/);
+});
+
 test("preview database identity guards pass", () => {
   const result = spawnSync("python", ["-m", "pytest", "scripts/verify_preview_database_test.py", "-q"], { cwd: process.cwd(), encoding: "utf8" });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
