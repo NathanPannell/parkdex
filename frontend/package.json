@@ -7,15 +7,19 @@
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
+    "postbuild": "node scripts/copy-cloudflare-files.mjs && node scripts/check-static-export.mjs",
     "prebuild:android": "node scripts/copy-maplibre-worker.mjs",
     "build:android": "node scripts/build-android.mjs",
     "android:sync": "npm run build:android && cap sync android",
     "android:open": "cap open android",
-    "start": "next start",
+    "deploy:cloudflare:staging": "wrangler pages deploy out --project-name parkdex-staging",
+    "deploy:cloudflare:production": "wrangler pages deploy out --project-name parkdex-production",
+    "start": "wrangler pages dev out",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:boundaries": "node scripts/check-boundary-asset.mjs && node scripts/check-display-boundary-asset.mjs",
+    "check:export": "node scripts/check-static-export.mjs",
     "generate:boundary-display": "node scripts/generate-display-boundaries.mjs && node scripts/generate-map-focus-mask.mjs",
     "generate:map-focus": "node scripts/generate-map-focus-mask.mjs",
     "generate:exploration-territories": "node --no-warnings scripts/generate-exploration-territories.mjs",
@@ -49,6 +53,7 @@
     "eslint-config-next": "16.3.4",
     "jsdom": "^29.1.1",
     "typescript": "5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.131.2"
   }
 }

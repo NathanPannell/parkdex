@@ -415,7 +415,7 @@ function AccountView({ apiBaseUrl, googleAuthAllowed, account, authenticated, se
     if (verificationToken) cleanAuthParams(["verificationToken"]);
     async function completeCallback() {
       if (oauthError) {
-        window.sessionStorage.removeItem(GOOGLE_VERIFIER_KEY); cleanAuthParams(["error", "error_description", "state"]);
+        window.sessionStorage.removeItem(GOOGLE_VERIFIER_KEY); cleanAuthParams(["code", "error", "error_description", "state"]);
         throw new Error(oauthError === "access_denied" ? "Google sign-in was cancelled. You can try again." : "Google could not complete sign-in. Please try again.");
       }
       if (code && state) {
