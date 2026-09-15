@@ -7,6 +7,7 @@ export default defineConfig([
   ...nextTypescript,
   globalIgnores([
     ".next/**",
+    ".wrangler/**",
     "out/**",
     "node_modules/**",
     "public/maplibre/**",

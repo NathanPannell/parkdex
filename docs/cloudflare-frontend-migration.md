@@ -9,17 +9,17 @@ Use two Direct Upload Pages projects so staging and production have independent 
 | Environment | Pages project | Production branch | Stable hostname |
 | --- | --- | --- | --- |
 | staging | `parkdex-staging` | `staging` | `staging.parkdex.app` |
-| production | `parkdex-production` | `main` | `www.parkdex.app` |
+| production | `parkdex-production` | `main` | `parkdex.app` |
 
-The apex `parkdex.app` must continue to redirect permanently to `https://www.parkdex.app`, preserving the complete path and query string. This is required for the existing Google OAuth flow: the registered callback arrives at the apex, while the PKCE browser session originates on `www`.
+The apex `parkdex.app` is the canonical production site and OAuth issuer. Redirect `www.parkdex.app` permanently to the apex while preserving the complete path and query string. This keeps the browser's PKCE state, the registered Google callback, and the MCP/OAuth issuer on one origin.
 
-The frontend is a Next.js static export in `frontend/out`. `NEXT_PUBLIC_API_BASE_URL`, release version, Git SHA, and commit date are build-time values. Always use `npm run build`; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
+The frontend is a Next.js static export in `frontend/out`. Cloudflare builds set `NEXT_PUBLIC_API_BASE_URL=.` so browser API requests remain same-origin; a scoped Pages Function forwards `/api/*`, MCP, and OAuth traffic to each project's `API_BASE_URL` environment variable. This makes immutable `pages.dev` previews testable without adding every preview hostname to Railway CORS. Release version, Git SHA, and commit date remain build-time values. Always use `npm run build`; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
 
 ## Verified local commands
 
 ```powershell
 Set-Location frontend
-$env:NEXT_PUBLIC_API_BASE_URL = 'https://api-staging-882c.up.railway.app'
+$env:NEXT_PUBLIC_API_BASE_URL = '.'
 $env:NEXT_PUBLIC_RELEASE_VERSION = '<release-version>'
 $env:NEXT_PUBLIC_COMMIT_SHA = '<full-git-sha>'
 $env:NEXT_PUBLIC_COMMIT_DATE = '<iso-8601-commit-date>'
@@ -54,7 +54,7 @@ Do not replace the existing Vercel release workflow until both Pages projects an
 5. In Vercel's registrar settings, replace the Vercel nameservers with the two nameservers assigned by Cloudflare. Keep frontend DNS records pointing to Vercel during the initial delegation verification.
 6. Verify public delegation, certificates, mail records, API resolution, and the existing Vercel-hosted site.
 7. Cut only `staging.parkdex.app` to `parkdex-staging` and browser-test the map, assets, account/API traffic, callback error path, console, and network.
-8. After staging soaks, cut `www` to `parkdex-production` and enable the apex redirect rule with path and query preservation. Exercise an OAuth cancellation or successful sign-in.
+8. After staging soaks, cut the apex to `parkdex-production` and enable the `www`-to-apex redirect rule with path and query preservation. Exercise an OAuth cancellation or successful sign-in and verify the public MCP metadata and transport root.
 9. Retain the Vercel project and its known-good deployment for 7–14 days before removing aliases or deployment credentials.
 
 Registrar transfer is optional and intentionally excluded from the hosting cutover.
