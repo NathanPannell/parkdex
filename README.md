@@ -22,4 +22,6 @@ Coverage is selective, especially for regional parks. Map pins represent places 
 
 Parkdex runs on Next.js, MapLibre, FastAPI, and PostgreSQL. See the [architecture guide](ARCHITECTURE.md) for the application structure.
 
+The Android app bundles the shared Next.js interface in a Capacitor shell and is built locally. See [Parkdex for Android](frontend/ANDROID.md).
+
 Account email provider setup, environment separation, and preview/testing guidance are in [Account email delivery](docs/account-email.md).

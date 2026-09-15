@@ -1,11 +1,24 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function GoogleCallback({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { code, state, error, error_description: errorDescription } = await searchParams;
-  const query = new URLSearchParams();
-  if (typeof code === "string") query.set("code", code);
-  if (typeof state === "string") query.set("state", state);
-  if (typeof error === "string") query.set("error", error);
-  if (typeof errorDescription === "string") query.set("error_description", errorDescription);
-  redirect(`/?${query}`);
+import { useEffect } from "react";
+
+const CALLBACK_KEYS = ["code", "state", "error", "error_description"] as const;
+
+export function callbackRedirect(search: string): string {
+  const source = new URLSearchParams(search);
+  const target = new URLSearchParams();
+  for (const key of CALLBACK_KEYS) {
+    const values = source.getAll(key);
+    if (values.length === 1) target.set(key, values[0]);
+  }
+  const query = target.toString();
+  return query ? `/?${query}` : "/";
+}
+
+export default function GoogleCallback() {
+  useEffect(() => {
+    window.location.replace(callbackRedirect(window.location.search));
+  }, []);
+
+  return <main className="native-bootstrap" role="status"><p>Finishing Google sign-in…</p></main>;
 }
