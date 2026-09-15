@@ -17,9 +17,9 @@ Routine releases reuse these resources and never recreate them:
 
 The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The API's `API_PUBLIC_URL` is the environment's frontend origin and `MCP_PUBLIC_URL` is that origin plus `/mcp`; Vercel proxies the MCP and OAuth routes to the stable Railway API. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway API pre-deploy command; it does not receive an application-code deployment.
 
-Keep `parkdex.app` attached directly to the production deployment and redirect `www.parkdex.app` to the apex, never the reverse, because the apex is the production OAuth issuer. The staging alias must point to the verified Vercel Production build so deployment protection cannot replace public MCP/OAuth responses with a Vercel sign-in page.
+Keep `parkdex.app` attached directly to the production deployment and redirect `www.parkdex.app` to the apex, never the reverse, because the apex is the production OAuth issuer. The staging alias must point to the verified Vercel Production build and must not be bound to the `staging` Git branch, because Hobby deployment protection would replace public MCP/OAuth responses on a branch domain with a Vercel sign-in page.
 
-Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. Staging later assigns `staging.parkdex.app` to the verified deployment; production later promotes the verified deployment to the production domains. The current Hobby setup intentionally uses one Vercel project so both targets follow the identical build path. Keep its Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
+Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. The release agent assigns only the environment's exact stable domain: `staging.parkdex.app` for staging and `parkdex.app` for production. Because both are production-domain aliases in one Hobby project, never use project-wide Promote, Instant Rollback, `vercel promote`, `vercel rollback`, a promote/rollback API, or `vercel deploy --prod` without `--skip-domain`; those operations can move both environments together. Keep the Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
 The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
 
@@ -67,16 +67,16 @@ Both `staging` and `main` require pull requests for every change, including repo
 
 The one-time rollout that first enables this local staging command cannot pre-deploy itself through the still-disabled script on `origin/staging`. For that rollout only, merge after full local CI and independent review, then treat the first automatic staging deployment as the candidate: verify provider convergence and browser-test the exact merge SHA before publishing the same infrastructure change to `main`.
 
-## Production: merge, verify, promote, stop
+## Production: merge, verify, assign, stop
 
 1. Open and review a pull request containing only the staging-validated release changes against `main`. Confirm staging is healthy and no staging or production release is still in flight.
 2. Record the current production revision and merge the pull request.
 3. The `main` push starts `deploy-production.yml`. It invokes the same queue-only workflow used by staging and exits after the providers accept the exact merged SHA.
 4. The release agent waits locally for the Railway API, migrations, and staged Vercel deployment to report the expected SHA and release ID. Test the immutable Vercel deployment before changing public domains when practical.
-5. Promote that exact staged Vercel deployment, then smoke-test the stable production URL in a real browser:
+5. Record the deployment currently assigned to `staging.parkdex.app`, assign only `parkdex.app` to the exact verified production deployment, and confirm the staging deployment did not change. Keep `www.parkdex.app` configured as a redirect to the apex. Then smoke-test the stable production URL in a real browser:
 
    ```powershell
-   vercel promote <vercel-deployment-url> --cwd frontend --scope <scope> --token $env:VERCEL_TOKEN
+   vercel alias set <vercel-deployment-url> parkdex.app --cwd frontend --scope <scope> --token $env:VERCEL_TOKEN
    ```
 
 6. Verify frontend-to-API traffic, console and network output, and `/ready`. Record the evidence and stop once every check passes.

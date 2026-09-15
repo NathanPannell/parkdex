@@ -18,7 +18,7 @@ Production uses `parkdex.app`, its production Railway environment, and the Neon 
 
 Before merge, an agent deploys the exact reviewed and locally attested pull-request head from a clean checkout at the current remote `staging` revision. That local path uses the same persistent staging resources and release identity, waits outside GitHub Actions for convergence, and never rewrites stable database, domain, OAuth, or service configuration.
 
-Both Vercel targets use `--prod --skip-domain`, so the provider build path is identical. After external verification, the release agent assigns the staging deployment to `staging.parkdex.app` or promotes the production deployment to `parkdex.app`. Vercel and Railway Git auto-deployments stay disabled to prevent duplicate releases.
+Both Vercel targets use `--prod --skip-domain`, so the provider build path is identical. After external verification, the release agent assigns only the target's exact domain: `staging.parkdex.app` for staging or `parkdex.app` for production. The staging domain is deliberately not a Git branch domain so Hobby deployment protection leaves MCP public. Because both stable domains are production-domain aliases in one Vercel project, project-wide promote/rollback operations are prohibited; production assignment must also prove the staging alias stayed unchanged. Vercel and Railway Git auto-deployments stay disabled to prevent duplicate releases.
 
 A queue acknowledgment is not evidence that a release is live. Outside GitHub Actions, the release agent verifies the exact Railway API release, `/ready`, migration readability, Vercel metadata, the stable frontend revision, and a real-browser journey.
 

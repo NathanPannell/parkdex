@@ -95,12 +95,13 @@ test("both environments keep independent database and stable-domain settings in 
   assert.match(migrator, /set_config\('lock_timeout', %s, true\)/);
 });
 
-test("credentials remain secret references and staging Vercel promotion is explicit", () => {
+test("credentials remain secret references and exact-domain assignment is explicit", () => {
   assert.match(release, /RAILWAY_API_TOKEN: \$\{\{ secrets\.RAILWAY_API_TOKEN \}\}/);
   assert.match(release, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
   assert.doesNotMatch(staging, /secrets: inherit/);
   assert.doesNotMatch(production, /secrets: inherit/);
   assert.match(release, /assign the stable staging domain/);
-  assert.match(release, /promote it to production domains/);
+  assert.match(release, /assign only parkdex\.app and confirm the staging alias is unchanged/);
+  assert.doesNotMatch(release, /promote it to production domains/);
   assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
 });

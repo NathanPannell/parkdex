@@ -6,8 +6,12 @@ describe("mcpProxyRewrites", () => {
   it("proxies the MCP transport and complete OAuth surface to the API origin", () => {
     expect(mcpProxyRewrites("https://api-staging.example.test/")).toEqual([
       {
-        source: "/mcp/:path*",
-        destination: "https://api-staging.example.test/mcp/:path*",
+        source: "/mcp",
+        destination: "https://api-staging.example.test/mcp",
+      },
+      {
+        source: "/mcp/:path+",
+        destination: "https://api-staging.example.test/mcp/:path+",
       },
       {
         source: "/authorize",

@@ -1,5 +1,6 @@
 const MCP_PROXY_PATHS = [
-  "/mcp/:path*",
+  "/mcp",
+  "/mcp/:path+",
   "/authorize",
   "/token",
   "/register",
