@@ -13,7 +13,7 @@ Use two Direct Upload Pages projects so staging and production have independent 
 
 The apex `parkdex.app` is the canonical production site and OAuth issuer. Redirect `www.parkdex.app` permanently to the apex while preserving the complete path and query string. This keeps the browser's PKCE state, the registered Google callback, and the MCP/OAuth issuer on one origin.
 
-The frontend is a Next.js static export in `frontend/out`. Cloudflare builds set `NEXT_PUBLIC_API_BASE_URL=.` so browser API requests remain same-origin; a scoped Pages Function forwards `/api/*`, MCP, and OAuth traffic to each project's `API_BASE_URL` environment variable. This makes immutable `pages.dev` previews testable without adding every preview hostname to Railway CORS. Release version, Git SHA, and commit date remain build-time values. Always use `npm run build`; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
+The frontend is a Next.js static export in `frontend/out`. Cloudflare uses `npm run build:cloudflare`, which sets `NEXT_PUBLIC_API_BASE_URL=.` and stamps the provider's exact Git SHA. Browser API requests remain same-origin; a scoped Pages Function forwards `/api/*`, MCP, and OAuth traffic to each project's `API_BASE_URL` environment variable. This makes immutable `pages.dev` previews testable without adding every preview hostname to Railway CORS. Always use the npm scripts; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
 
 ## Verified local commands
 
