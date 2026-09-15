@@ -8,7 +8,7 @@
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
     "build:cloudflare": "node scripts/cloudflare-build.mjs",
-    "postbuild": "node scripts/copy-cloudflare-files.mjs && node scripts/write-static-export-manifest.mjs && node scripts/check-static-export.mjs",
+    "postbuild:cloudflare": "node scripts/copy-cloudflare-files.mjs && node scripts/write-static-export-manifest.mjs && node scripts/check-static-export.mjs",
     "prebuild:android": "node scripts/copy-maplibre-worker.mjs",
     "build:android": "node scripts/build-android.mjs",
     "android:sync": "npm run build:android && cap sync android",

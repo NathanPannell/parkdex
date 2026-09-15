@@ -9,6 +9,7 @@ if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error("Cloudflare build require
 
 const env = {
   ...process.env,
+  PARKDEX_CLOUDFLARE_BUILD: "1",
   NEXT_PUBLIC_API_BASE_URL: ".",
   NEXT_PUBLIC_COMMIT_SHA: commitSha,
   NEXT_PUBLIC_COMMIT_DATE: git("show", "-s", "--format=%cI", commitSha),
@@ -16,6 +17,8 @@ const env = {
 };
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("Cloudflare build must run through npm");
-const result = spawnSync(process.execPath, [npmCli, "run", "build"], { env, stdio: "inherit" });
-if (result.error) throw result.error;
-if (result.status !== 0) process.exit(result.status ?? 1);
+for (const script of ["build", "postbuild:cloudflare"]) {
+  const result = spawnSync(process.execPath, [npmCli, "run", script], { env, stdio: "inherit" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
