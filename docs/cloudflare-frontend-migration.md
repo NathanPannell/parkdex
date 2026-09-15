@@ -15,7 +15,7 @@ The apex `parkdex.app` is the canonical production site and OAuth issuer. Redire
 
 The frontend is a Next.js static export in `frontend/out`. Cloudflare uses `npm run build:cloudflare`, which sets `NEXT_PUBLIC_API_BASE_URL=.` and stamps the provider's exact Git SHA. Browser API requests remain same-origin; a scoped Pages Function forwards `/api/*`, MCP, and OAuth traffic to each project's `API_BASE_URL` environment variable. This makes immutable `pages.dev` previews testable without adding every preview hostname to Railway CORS. Always use the npm scripts; calling `next build` directly skips the MapLibre worker copy and the post-build Pages contract check.
 
-Because `frontend/wrangler.jsonc` is checked in, it is authoritative for Pages Functions runtime variables. Keep the staging API origin in its top-level `vars` and `env.preview.vars`; values entered in the Pages setup wizard are not applied when Wrangler configuration is present. Do not put credentials in this file—secrets still belong in Cloudflare's encrypted secret store.
+Pages project settings are deliberately provider-managed instead of being read from a shared `frontend/wrangler.jsonc`. A shared deployable Wrangler file cannot safely describe two production-class Pages projects because its top-level variables would be applied to both. The intended project settings live in `deploy/cloudflare-pages.json`: each project gets only its own production `API_BASE_URL`, previews remain disabled, Functions fail closed, and the compatibility date is pinned. Keep credentials in Cloudflare's encrypted secret store; the API origins in this manifest are public routing configuration.
 
 ## Verified local commands
 
@@ -39,13 +39,13 @@ The post-build check verifies the callback page, Cloudflare headers, MapLibre wo
 
 Cloudflare Pages cannot promote a preview deployment to production. Preserve Parkdex's verify-before-cutover behavior through branch controls and exact-revision verification:
 
-1. Connect `parkdex-staging` to the repository with `staging` as its production branch and enable previews for non-production branches.
-2. Connect `parkdex-production` with `main` as its production branch and disable its preview builds so feature branches are not built twice.
+1. Connect `parkdex-staging` to the repository with `staging` as its production branch, the staging API origin as its production `API_BASE_URL`, and preview deployments disabled.
+2. Connect `parkdex-production` with `main` as its production branch, the production API origin as its production `API_BASE_URL`, and preview deployments disabled.
 3. For each candidate, verify the immutable `pages.dev` URL, project/branch/commit metadata, `parkdex-artifact.json`, the API proxy, and the browser journey.
 4. Merge through the protected branch flow, then verify the new stable staging or production deployment before any DNS change.
 5. Retain the prior production deployment as the rollback target.
 
-During provider bootstrap only, `parkdex-staging` temporarily uses `chore/cloudflare-frontend` as its production branch so the Cloudflare-specific build command exists before the feature is merged. Change it to `staging` immediately after the migration PR lands.
+During provider bootstrap only, `parkdex-staging` temporarily uses `chore/cloudflare-frontend` as its production branch so the Cloudflare-specific build command exists before the feature is merged. Change it to `staging` immediately after the migration PR lands. Keep the existing isolated Railway/Vercel preview lifecycle during the migration; ordinary Pages previews cannot safely share a persistent staging API with unmerged code.
 
 Do not replace the existing Vercel release workflow until both Pages projects and this artifact flow have been exercised successfully.
 

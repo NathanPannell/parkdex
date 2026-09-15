@@ -4,8 +4,10 @@ function git(...args) {
   return execFileSync("git", args, { encoding: "utf8" }).trim();
 }
 
-const commitSha = process.env.CF_PAGES_COMMIT_SHA?.trim() || git("rev-parse", "HEAD");
+const headSha = git("rev-parse", "HEAD");
+const commitSha = process.env.CF_PAGES_COMMIT_SHA?.trim() || headSha;
 if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error("Cloudflare build requires a full lowercase Git SHA");
+if (commitSha !== headSha) throw new Error(`Cloudflare commit ${commitSha} does not match checked-out HEAD ${headSha}`);
 
 const env = {
   ...process.env,
