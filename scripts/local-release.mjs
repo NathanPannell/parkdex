@@ -146,7 +146,7 @@ function verifyEmptyVercelPreviewEnvironment() {
     const inventory = `${result.stdout || ""}\n${result.stderr || ""}`;
     if (!/No Environment Variables found/.test(inventory)) throw new Error("Vercel Preview environment must contain no configured variables before candidate code can build");
   } finally {
-    rmSync(sourceRoot, { recursive: true, force: true });
+    rmSync(sourceRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }
 
