@@ -77,6 +77,44 @@ export function parseRailwayEnvironmentInventory(payload) {
   return payload.environments;
 }
 
+export function unresolvedPreviewResources(state, { vercelDeployments, railwayEnvironments, neonBranches }) {
+  if (!state || !Array.isArray(vercelDeployments) || !Array.isArray(railwayEnvironments) || !Array.isArray(neonBranches)) {
+    throw new Error("Preview absence inventory was invalid");
+  }
+  const unresolved = [];
+  if (vercelDeployments.length) unresolved.push("Vercel deployment");
+  if (railwayEnvironments.some((environment) => environment.id === state.railwayEnvironmentId || environment.name === state.railwayEnvironment)) {
+    unresolved.push("Railway environment");
+  }
+  if (neonBranches.some((branch) => branch.id === state.neonBranchId || branch.name === state.neonBranch)) {
+    unresolved.push("Neon branch");
+  }
+  return unresolved;
+}
+
+export async function confirmStablePreviewAbsence({ state, readInventories, wait, now = Date.now, delays = [2, 3, 5, 10, 15, 20, 30], minimumGraceMs = 10_000, requiredConsecutive = 3 }) {
+  if (typeof readInventories !== "function" || typeof wait !== "function" || !Number.isFinite(minimumGraceMs) || minimumGraceMs < 0 || !Number.isInteger(requiredConsecutive) || requiredConsecutive < 2) {
+    throw new Error("Preview absence confirmation configuration was invalid");
+  }
+  const startedAt = now();
+  const observations = [];
+  let consecutiveEmpty = 0;
+  let unresolved = ["Vercel deployment", "Railway environment", "Neon branch"];
+  for (const seconds of delays) {
+    await wait(seconds * 1000);
+    const inventories = await readInventories();
+    unresolved = unresolvedPreviewResources(state, inventories);
+    observations.push({ checkedAt: new Date(now()).toISOString(), unresolved: [...unresolved] });
+    consecutiveEmpty = unresolved.length ? 0 : consecutiveEmpty + 1;
+    if (consecutiveEmpty >= requiredConsecutive && now() - startedAt >= minimumGraceMs) {
+      return { observations, consecutiveEmpty, elapsedMs: now() - startedAt };
+    }
+  }
+  const error = new Error(`Cleanup did not verify stable provider absence: ${unresolved.join(", ") || "empty inventories were not stable long enough"}`);
+  Object.defineProperty(error, "unresolved", { value: unresolved, enumerable: false });
+  throw error;
+}
+
 export function classifyRailwayEnvironmentCreateFailure(stderr) {
   return /(?:^|\r?\n)Error in name - Invalid input(?:\r?\n|$)/.test(stderr || "") ? "invalid-name" : "unknown";
 }
