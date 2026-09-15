@@ -50,7 +50,9 @@ const trustedValidatorSha256 = createHash("sha256").update(trustedValidatorSourc
 const output = resolve(arg("--output", join(tmpdir(), `parkdex-merge-candidate-${headSha}-${Date.now()}.json`)));
 const outputRelative = relative(root, output);
 if (!outputRelative.startsWith("..") && outputRelative !== "") throw new Error("Merge evidence must be outside the repository");
-const localOutput = join(tmpdir(), `parkdex-local-ci-${candidateSha}-${Date.now()}.json`);
+const localOutput = resolve(arg("--local-output", join(tmpdir(), `parkdex-local-ci-${candidateSha}-${Date.now()}.json`)));
+const localOutputRelative = relative(root, localOutput);
+if (!localOutputRelative.startsWith("..") && localOutputRelative !== "") throw new Error("Nested local evidence must be outside the repository");
 const worktree = mkdtempSync(join(tmpdir(), "parkdex-merge-candidate-"));
 const validatorDirectory = mkdtempSync(join(tmpdir(), "parkdex-trusted-validator-"));
 const validatorPath = join(validatorDirectory, "local-ci.mjs");

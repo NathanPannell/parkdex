@@ -524,8 +524,6 @@ button { color: inherit; }
 .sheet-actions { display: block; }
 
 .collection-heading { align-items: end; }
-.place-total { display: grid; flex: 0 0 auto; color: var(--muted); font-size: 9px; font-weight: 900; text-align: right; text-transform: uppercase; }
-.place-total strong { color: var(--forest); font: 760 27px/.9 var(--font-display); }
 .category-chips > button { position: relative; padding-left: 28px; border: 1px solid color-mix(in srgb, var(--category-color) 58%, var(--paper)); background: color-mix(in srgb, var(--category-color) 14%, var(--paper-bright)); color: var(--forest); font-size: 11px; }
 .category-chips > button::before { content: ""; position: absolute; left: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--category-color); }
 .category-chips > button.active { border-color: var(--category-color); background: var(--category-color); color: white; }
@@ -710,9 +708,8 @@ button { color: inherit; }
 /* Playful collection and field-journal refinements */
 
 .collection-progress { margin-bottom: 14px; padding: 13px; border-radius: 14px; background: var(--forest); color: var(--paper-bright); box-shadow: 0 7px 19px rgba(23,61,50,.2); }
-.collection-progress header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.collection-progress header { display: flex; align-items: baseline; justify-content: flex-start; gap: 12px; }
 .collection-progress header strong { font-size: 12px; font-weight: 950; }
-.collection-progress header span { color: var(--lime); font: 740 18px var(--font-display); font-variant-numeric: tabular-nums; }
 .collection-progress-track { height: 16px; overflow: hidden; margin-top: 9px; padding: 3px; border-radius: 999px; background: #0e2c24; box-shadow: inset 0 2px 5px rgba(0,0,0,.3); }
 .collection-progress-track > div { display: flex; width: 100%; height: 10px; overflow: hidden; border-radius: inherit; background: #46675c; }
 .collection-progress-track span { display: block; flex: 0 0 auto; min-width: 0; height: 100%; background: var(--category-color); }
@@ -877,10 +874,13 @@ button { color: inherit; }
 .group-picker-label { margin: 0 2px 2px; color: var(--muted); font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
 .group-picker-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 61px; padding: 9px 12px; border: 1px solid #d5dbc8; border-radius: 12px; background: var(--paper-bright); color: var(--forest); cursor: pointer; text-align: left; }
 .group-picker-option:hover { border-color: var(--water); background: #eef3dc; }
+.group-picker-option:disabled { cursor: default; opacity: 1; }
+.group-picker-option.is-member, .group-picker-option.is-member:hover { border-color: #a9c68a; background: #edf3dc; }
 .group-picker-option > span { display: grid; gap: 3px; min-width: 0; }
 .group-picker-option strong { overflow: hidden; font: 700 17px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
 .group-picker-option small { color: var(--muted); font-size: 10px; font-weight: 800; }
 .group-picker-option > svg { color: var(--water); }
+.group-picker-option.is-member small, .group-picker-option.is-member > svg { color: var(--forest-2); }
 .group-picker-empty { margin: 0; padding: 12px; border-radius: 11px; background: #e8eadb; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .group-picker-create { display: grid; gap: 6px; margin-top: 6px; padding-top: 14px; border-top: 1px solid #d5dbc8; }
 .group-picker-create label { color: var(--forest); font-size: 11px; font-weight: 900; }
@@ -1138,23 +1138,25 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 
 /* Issues 76–82: resilient mobile controls, persistent search, and global progress. */
 .global-progress {
-  position: absolute;
-  z-index: 15;
-  top: max(15px,calc(env(safe-area-inset-top) + 15px));
-  right: max(12px,env(safe-area-inset-right));
+  position: relative;
+  z-index: 1;
   display: grid;
-  min-width: 88px;
+  min-width: 80px;
   min-height: 44px;
-  width: 92px;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--paper-bright);
+  margin-left: auto;
+  padding: 0 2px 3px;
+  align-content: center;
+  justify-items: end;
+  border-bottom: 3px solid var(--lime);
+  background: transparent;
   color: var(--forest);
-  box-shadow: var(--soft-shadow);
+  box-shadow: none;
   font-variant-numeric: tabular-nums;
 }
-.global-progress strong { font: 800 23px/1 var(--font-display); letter-spacing: -.03em; }
-.group-map-progress { z-index: 15; }
+.global-progress[hidden] { display: none; }
+.global-progress::after { position: absolute; right: -2px; bottom: -5px; width: 7px; height: 7px; border: 2px solid var(--paper-bright); border-radius: 50%; background: var(--coral); content: ""; }
+.global-progress strong { font: 800 25px/1 var(--font-display); letter-spacing: -.03em; }
+.global-progress strong span:last-child { color: var(--water); font-size: .7em; letter-spacing: -.02em; }
 
 .collection-search-dock { justify-self: stretch; width: 100%; background: var(--paper-bright); }
 .collection-search-icon { flex: 0 0 auto; margin-left: 8px; color: var(--water); }
@@ -1169,7 +1171,7 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 .filter-tray button.category-regional.selected { border-color: #8a4300; background: #8a4300; color: #fff; }
 
 @media (max-width: 859px) {
-  .expedition-header { grid-template-columns: 38px minmax(0,1fr); padding-right: 108px; }
+  .expedition-header { grid-template-columns: 38px minmax(0,1fr) auto; padding-right: 11px; }
   .map-utility .map-mode-switch { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px; }
   .map-utility .map-mode-switch > button:not(.locate-button) { min-width: 0; }
   .map-utility .map-mode-switch > button:not(.locate-button) span { white-space: nowrap; }
@@ -1186,6 +1188,5 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 }
 
 @media (min-width: 860px) {
-  .global-progress { top: max(23px,calc(env(safe-area-inset-top) + 23px)); right: max(16px,env(safe-area-inset-right)); }
   .desktop-top-nav { right: 110px; }
 }

@@ -78,14 +78,71 @@ def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
         assert authorization.status_code == 302
         consent = client.get(authorization.headers["location"])
         assert consent.status_code == 200 and "Create one in Parkdex" in consent.text
-        request_token = re.search(r"name=request value='([^']+)'", consent.text).group(1)
-        csrf = re.search(r"name=csrf value='([^']+)'", consent.text).group(1)
-        assert client.post("/oauth/consent", data={"request": request_token, "csrf": "wrong", "email": EMAIL, "password": PASSWORD, "decision": "allow"}).status_code == 400
-        callback = client.post("/oauth/consent", data={"request": request_token, "csrf": csrf, "email": EMAIL, "password": PASSWORD, "decision": "allow"})
+        assert consent.headers["cache-control"] == "no-store"
+        assert "default-src 'none'" in consent.headers["content-security-policy"]
+        assert consent.headers["referrer-policy"] == "no-referrer"
+        assert consent.headers["x-content-type-options"] == "nosniff"
+        assert 'lang="en"' in consent.text
+        assert 'aria-labelledby="consent-title"' in consent.text
+        assert '<label for="oauth-email">Email</label>' in consent.text
+        assert '<label for="oauth-password">Password</label>' in consent.text
+        assert "Search the Parkdex place catalogue." in consent.text
+        assert "formnovalidate" in consent.text
+        request_token = re.search(r"name=\"request\" value='([^']+)'", consent.text).group(1)
+        csrf = re.search(r"name=\"csrf\" value='([^']+)'", consent.text).group(1)
+        invalid_form = client.post("/oauth/consent", data={"request": request_token, "csrf": "wrong", "email": EMAIL, "password": PASSWORD, "decision": "allow"})
+        assert invalid_form.status_code == 400
+        assert "Connection not completed" in invalid_form.text and "Open Parkdex" in invalid_form.text
+
+        invalid_credentials = client.post("/oauth/consent", data={"request": request_token, "csrf": csrf, "email": EMAIL, "password": "wrong password", "decision": "allow"})
+        assert invalid_credentials.status_code == 200
+        assert 'role="alert"' in invalid_credentials.text
+        assert "Email or password is incorrect." in invalid_credentials.text
+        assert "wrong password" not in invalid_credentials.text
+        retry_csrf = re.search(r"name=\"csrf\" value='([^']+)'", invalid_credentials.text).group(1)
+        callback = client.post("/oauth/consent", data={"request": request_token, "csrf": retry_csrf, "email": EMAIL, "password": PASSWORD, "decision": "allow"})
         assert callback.status_code == 303
         callback_params = parse_qs(urlsplit(callback.headers["location"]).query)
         assert callback_params["state"] == ["state-value"]
         assert callback_params["iss"] == ["http://localhost:8000/"]
+
+        denied_authorization = client.get("/authorize", params={**authorization_params, "state": "denied-state"})
+        denied_consent = client.get(denied_authorization.headers["location"])
+        denied_request = re.search(r"name=\"request\" value='([^']+)'", denied_consent.text).group(1)
+        denied_csrf = re.search(r"name=\"csrf\" value='([^']+)'", denied_consent.text).group(1)
+        denied_callback = client.post("/oauth/consent", data={
+            "request": denied_request, "csrf": denied_csrf, "email": "", "password": "", "decision": "deny",
+        })
+        assert denied_callback.status_code == 303
+        denied_params = parse_qs(urlsplit(denied_callback.headers["location"]).query)
+        assert denied_params["error"] == ["access_denied"]
+        assert denied_params["state"] == ["denied-state"]
+        assert denied_params["iss"] == ["http://localhost:8000/"]
+
+        expired = client.get("/oauth/consent", params={"request": "expired-request"})
+        assert expired.status_code == 400
+        assert "This authorization request has expired or is no longer valid." in expired.text
+        assert "Return to the app that asked to connect" in expired.text
+
+        hostile_name = "<Parkdex QA> " + ("x" * 110)
+        hostile_registration = client.post("/register", json={
+            "client_name": hostile_name,
+            "redirect_uris": ["http://127.0.0.1:17777/callback"],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "scope": "mcp",
+        })
+        assert hostile_registration.status_code == 201
+        hostile_authorization = client.get("/authorize", params={
+            **authorization_params,
+            "client_id": hostile_registration.json()["client_id"],
+            "state": "hostile-name",
+        })
+        hostile_consent = client.get(hostile_authorization.headers["location"])
+        assert hostile_name not in hostile_consent.text
+        assert "&lt;Parkdex QA&gt;" in hostile_consent.text
+        assert "overflow-wrap: anywhere" in hostile_consent.text
 
         token_params = {
             "grant_type": "authorization_code", "client_id": client_id,
@@ -155,7 +212,8 @@ def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
         assert client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}).status_code == 401
 
         oversized = "x" * 16_385
-        assert client.post("/oauth/consent", data={"request": oversized}).status_code == 413
+        oversized_consent = client.post("/oauth/consent", data={"request": oversized})
+        assert oversized_consent.status_code == 413
         assert client.post("/register", content=oversized, headers={"Content-Type": "application/json"}).status_code == 413
 
         too_many_redirects = client.post("/register", json={
@@ -308,8 +366,8 @@ def test_password_reset_serializes_with_consent_and_revokes_the_racing_code(monk
                 "scope": "mcp", "state": "reset-race", "resource": "http://localhost:8000/mcp",
             })
             consent_page = client.get(authorization.headers["location"])
-            request_token = re.search(r"name=request value='([^']+)'", consent_page.text).group(1)
-            csrf = re.search(r"name=csrf value='([^']+)'", consent_page.text).group(1)
+            request_token = re.search(r"name=\"request\" value='([^']+)'", consent_page.text).group(1)
+            csrf = re.search(r"name=\"csrf\" value='([^']+)'", consent_page.text).group(1)
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 conn.execute(
                     "INSERT INTO account_action_tokens (token_hash, account_id, purpose, expires_at) VALUES (%s, %s, 'password_reset', NOW() + INTERVAL '1 hour')",

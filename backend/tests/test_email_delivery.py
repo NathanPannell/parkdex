@@ -5,6 +5,38 @@ from backend.app.email_delivery import EmailDeliveryError, email_delivery_config
 from backend.app.settings import Settings
 
 
+def test_smtp_delivery_sends_plain_text_and_html_alternatives(monkeypatch) -> None:
+    messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            assert (host, port, timeout) == ("smtp.test", 587, 10)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def send_message(self, message):
+            messages.append(message)
+
+    monkeypatch.setattr("smtplib.SMTP", FakeSMTP)
+    settings = Settings(
+        EMAIL_PROVIDER="smtp",
+        SMTP_HOST="smtp.test",
+        SMTP_FROM="Parkdex <test@example.com>",
+        SMTP_USE_TLS=False,
+    )
+
+    send_auth_email(settings, "explorer@example.com", "Subject", "Plain fallback", "<p>HTML email</p>")
+
+    assert len(messages) == 1
+    assert messages[0].get_content_type() == "multipart/alternative"
+    assert messages[0].get_body(preferencelist=("plain",)).get_content().strip() == "Plain fallback"
+    assert messages[0].get_body(preferencelist=("html",)).get_content().strip() == "<p>HTML email</p>"
+
+
 def test_resend_delivery_uses_https_api_and_configured_sender(monkeypatch) -> None:
     calls: list[dict] = []
 
@@ -20,7 +52,13 @@ def test_resend_delivery_uses_https_api_and_configured_sender(monkeypatch) -> No
         RESEND_FROM="Parkdex <test@example.com>",
     )
 
-    send_auth_email(settings, "explorer@example.com", "Verify your Parkdex email", "Use this link")
+    send_auth_email(
+        settings,
+        "explorer@example.com",
+        "Verify your Parkdex email",
+        "Use this link",
+        "<p>Use this link</p>",
+    )
 
     assert calls == [{
         "url": "https://api.resend.test/emails",
@@ -30,6 +68,7 @@ def test_resend_delivery_uses_https_api_and_configured_sender(monkeypatch) -> No
             "to": ["explorer@example.com"],
             "subject": "Verify your Parkdex email",
             "text": "Use this link",
+            "html": "<p>Use this link</p>",
         },
         "timeout": 10,
     }]
