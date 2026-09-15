@@ -21,15 +21,11 @@ Pages project settings are deliberately provider-managed instead of being read f
 
 ```powershell
 Set-Location frontend
-$env:NEXT_PUBLIC_API_BASE_URL = '.'
-$env:NEXT_PUBLIC_RELEASE_VERSION = '<release-version>'
-$env:NEXT_PUBLIC_COMMIT_SHA = '<full-git-sha>'
-$env:NEXT_PUBLIC_COMMIT_DATE = '<iso-8601-commit-date>'
 npm ci
 npm test
 npm run lint
 npm run typecheck
-npm run build
+npm run build:cloudflare
 npm start -- --port 8788
 ```
 

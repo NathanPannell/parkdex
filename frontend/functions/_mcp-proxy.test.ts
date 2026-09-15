@@ -5,9 +5,10 @@ import { apiOrigin, isBackendProxyPath, mcpMetadataOptions, proxyBackendRequest 
 describe("Cloudflare Pages MCP proxy", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("accepts only an HTTP(S) API origin", () => {
+  it("requires HTTPS except for local development", () => {
     expect(apiOrigin("https://api.example.test/")).toBe("https://api.example.test");
-    for (const value of ["", "ftp://api.example.test", "https://user@example.test", "https://api.example.test/v1"]) {
+    expect(apiOrigin("http://localhost:8000")).toBe("http://localhost:8000");
+    for (const value of ["", "http://api.example.test", "ftp://api.example.test", "https://user@example.test", "https://api.example.test/v1"]) {
       expect(() => apiOrigin(value)).toThrow();
     }
   });
@@ -66,5 +67,19 @@ describe("Cloudflare Pages MCP proxy", () => {
     );
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("keeps upstream same-origin redirects on the public Pages origin", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, {
+      status: 307,
+      headers: { Location: "http://api-staging.example.test/mcp?transport=sse" },
+    })));
+
+    const response = await proxyBackendRequest(
+      new Request("https://staging.parkdex.app/mcp/"),
+      "https://api-staging.example.test",
+    );
+
+    expect(response.headers.get("location")).toBe("/mcp?transport=sse");
   });
 });
