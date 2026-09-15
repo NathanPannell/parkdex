@@ -4,6 +4,8 @@ import { useEffect } from "react";
 
 import { buildGoogleCallbackDestination } from "@/lib/google-callback";
 
+export const callbackRedirect = buildGoogleCallbackDestination;
+
 export default function GoogleCallback() {
   useEffect(() => {
     window.location.replace(buildGoogleCallbackDestination(window.location.search));

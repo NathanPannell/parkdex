@@ -2,5 +2,15 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "parkdex-staging",
   "compatibility_date": "2026-09-14",
-  "pages_build_output_dir": "./out"
+  "pages_build_output_dir": "./out",
+  "vars": {
+    "API_BASE_URL": "https://api-staging-882c.up.railway.app"
+  },
+  "env": {
+    "preview": {
+      "vars": {
+        "API_BASE_URL": "https://api-staging-882c.up.railway.app"
+      }
+    }
+  }
 }

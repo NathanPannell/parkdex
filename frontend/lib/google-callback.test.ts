@@ -12,12 +12,12 @@ describe("Google OAuth callback", () => {
 
   it("drops unrelated parameters and repeated values", () => {
     expect(buildGoogleCallbackDestination("?code=first&code=second&next=https%3A%2F%2Fevil.example"))
-      .toBe("/?code=first");
+      .toBe("/");
   });
 
   it("never forwards an authorization code together with an OAuth error", () => {
     expect(buildGoogleCallbackDestination("?code=secret-code&state=signed-state&error=access_denied"))
-      .toBe("/?error=access_denied&state=signed-state");
+      .toBe("/?state=signed-state&error=access_denied");
     expect(buildGoogleCallbackDestination("?error_description=orphaned&state=signed-state"))
       .toBe("/?state=signed-state");
   });
