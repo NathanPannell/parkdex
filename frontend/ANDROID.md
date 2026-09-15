@@ -45,6 +45,8 @@ Keep Gradle tasks scoped to `:app`. Unqualified Android-test tasks also configur
 
 `npm run build:android` defaults to the persistent staging API. Set `NEXT_PUBLIC_API_BASE_URL` to another HTTPS origin before the command to override it. The value must not contain credentials, a path, query, or fragment.
 
+The MCP metadata handlers use the `route.web.ts` extension. The normal web build includes that extension; the Android build excludes it because request-time route handlers and rewrites cannot be bundled into a static export.
+
 ## Staging origin
 
 Bundled Capacitor content uses the secure WebView origin `https://localhost`. The staging API's `FRONTEND_ORIGINS` setting must include both `https://staging.parkdex.app` and `https://localhost` before the installed app can read or update staging data. Keep this as provider configuration rather than hardcoding it into FastAPI.
