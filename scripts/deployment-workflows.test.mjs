@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 const staging = readFileSync(".github/workflows/deploy-staging.yml", "utf8");
@@ -13,7 +13,17 @@ test("old hosted test, manual release, and preview-cleanup workflows are removed
     ".github/workflows/ci.yml",
     ".github/workflows/hosted-checkpoint.yml",
     ".github/workflows/preview-cleanup.yml",
+    "scripts/preview-cleanup-disposition.mjs",
+    "scripts/preview-cleanup-disposition.test.mjs",
   ]) assert.equal(existsSync(path), false, `${path} should be removed`);
+});
+
+test("the workflow directory contains only the three merge deployment files", () => {
+  assert.deepEqual(readdirSync(".github/workflows").sort(), ["deploy-production.yml", "deploy-release.yml", "deploy-staging.yml"]);
+  for (const [name, workflow] of [["deploy-staging.yml", staging], ["deploy-production.yml", production]]) {
+    assert.doesNotMatch(workflow, /pull_request(?:_target)?:|workflow_dispatch:|schedule:|workflow_run:/, `${name} must stay merge-only`);
+  }
+  assert.doesNotMatch(release, /pull_request(?:_target)?:|workflow_dispatch:|schedule:|workflow_run:/);
 });
 
 test("staging deploys only the first run of a staging push", () => {

@@ -4,10 +4,13 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
+const previewWrapperSource = readFileSync("scripts/preview-pr.ps1", "utf8");
+const teardownWrapperSource = readFileSync("scripts/teardown-preview-pr.ps1", "utf8");
+const mergeCandidateSource = readFileSync("scripts/merge-candidate.mjs", "utf8");
 const fixedRelease = "11111111-1111-4111-8111-111111111111";
 const head = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 
@@ -311,9 +314,105 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.match(source, /refs\/remotes\/origin\/staging/);
   assert.match(source, /parkdex\.merge-candidate\/v1/);
   assert.match(source, /trustedValidatorSha256/);
-  assert.match(source, /Preview pull request identity did not match/);
+  assert.match(source, /Pull request identity did not match the requested local release source/);
   assert.match(source, /Cleanup provider project identities do not match/);
   assert.doesNotMatch(source, /expectedSha !== actualSha/);
   assert.ok(source.indexOf("atomicJournal(journalPath, state)") < source.lastIndexOf("createNeonBranch(root, state, journalPath)"));
   assert.doesNotMatch(source, /npm(?:\.cmd)?[^\n]*run[^\n]*build/);
+});
+
+test("agent preview entry point requires an open same-repository draft PR", () => {
+  assert.match(previewWrapperSource, /isDraft,isCrossRepository/);
+  assert.match(previewWrapperSource, /\$pr\.isDraft -ne \$true/);
+  assert.match(previewWrapperSource, /\$pr\.isCrossRepository -ne \$false/);
+  assert.match(previewWrapperSource, /\$pr\.baseRefName -ne 'staging'/);
+  assert.match(previewWrapperSource, /current origin\/staging revision/);
+  assert.match(previewWrapperSource, /--suite all/);
+  assert.match(source, /requireDraft: mode === "preview"/);
+  assert.match(source, /pr\.isCrossRepository !== false/);
+});
+
+test("preview evidence and journals use durable external per-PR paths", () => {
+  assert.match(previewWrapperSource, /Parkdex\\preview-pr/);
+  assert.match(previewWrapperSource, /journals\\pr-\$PullRequest/);
+  assert.match(previewWrapperSource, /evidence\\pr-\$PullRequest/);
+  assert.match(previewWrapperSource, /active\\pr-\$PullRequest\.json/);
+  assert.match(previewWrapperSource, /Write-NewJsonFile \$activePath/);
+  assert.match(previewWrapperSource, /already has an active local preview record/);
+  assert.match(previewWrapperSource, /FileMode\]::OpenOrCreate/);
+  assert.match(previewWrapperSource, /FileShare\]::None/);
+  assert.match(previewWrapperSource, /abandoned-no-journal/);
+  assert.match(previewWrapperSource, /owner =/);
+  assert.match(teardownWrapperSource, /FileMode\]::OpenOrCreate/);
+  assert.match(teardownWrapperSource, /requested journal is not the active release/);
+  assert.match(teardownWrapperSource, /active\.releaseId -ne \$journal\.releaseId/);
+  assert.match(teardownWrapperSource, /merge-gate=blocked-no-active-record/);
+  assert.match(mergeCandidateSource, /--local-output/);
+  assert.match(mergeCandidateSource, /Nested local evidence must be outside the repository/);
+});
+
+test("preview output gives agents the exact browser and teardown handoff", () => {
+  assert.match(previewWrapperSource, /preview-url=/);
+  assert.match(previewWrapperSource, /api-url=/);
+  assert.match(previewWrapperSource, /journal=/);
+  assert.match(previewWrapperSource, /teardown-command=/);
+  assert.match(previewWrapperSource, /Google OAuth and outbound email are disabled/);
+  assert.match(previewWrapperSource, /failed-needs-teardown/);
+  assert.match(teardownWrapperSource, /Retry this exact command; do not merge while cleanup is incomplete/);
+});
+
+test("provider absence requires every exact preview inventory to be empty", () => {
+  const state = {
+    vercelDeploymentId: "dpl_exact",
+    railwayEnvironmentId: "railway-exact",
+    railwayEnvironment: "lp-pr-1-abcdef01-11111111",
+    neonBranchId: "neon-exact",
+    neonBranch: "preview/lp-pr-1-abcdef01-11111111",
+  };
+  assert.deepEqual(unresolvedPreviewResources(state, { vercelDeployments: [], railwayEnvironments: [], neonBranches: [] }), []);
+  assert.deepEqual(unresolvedPreviewResources(state, { vercelDeployments: [{ id: "dpl_exact" }], railwayEnvironments: [], neonBranches: [] }), ["Vercel deployment"]);
+  assert.deepEqual(unresolvedPreviewResources(state, { vercelDeployments: [], railwayEnvironments: [{ id: "other", name: state.railwayEnvironment }], neonBranches: [] }), ["Railway environment"]);
+  assert.deepEqual(unresolvedPreviewResources(state, { vercelDeployments: [], railwayEnvironments: [], neonBranches: [{ id: "other", name: state.neonBranch }] }), ["Neon branch"]);
+  assert.throws(() => unresolvedPreviewResources(state, { vercelDeployments: null, railwayEnvironments: [], neonBranches: [] }), /inventory was invalid/);
+  assert.match(source, /confirmStablePreviewAbsence/);
+  assert.match(source, /exactNeonBranchInventory/);
+  assert.match(source, /inspectVercelDeploymentById/);
+  assert.ok(source.indexOf("await verifyPreviewResourcesAbsent(root, state, journalPath)") < source.indexOf('status: "cleaned", cleanedAt'));
+  assert.doesNotMatch(source, /state\.status === "cleaned"/);
+  assert.match(teardownWrapperSource, /absenceVerification\.vercel\.absent/);
+  assert.match(teardownWrapperSource, /absenceVerification\.railway\.absent/);
+  assert.match(teardownWrapperSource, /absenceVerification\.neon\.absent/);
+});
+
+test("absence confirmation rejects transient emptiness before delayed provider visibility", async () => {
+  const state = { railwayEnvironmentId: "railway-exact", railwayEnvironment: "preview", neonBranchId: "neon-exact", neonBranch: "preview/branch" };
+  let elapsed = 0;
+  let reads = 0;
+  const empty = { vercelDeployments: [], railwayEnvironments: [], neonBranches: [] };
+  const delayed = { vercelDeployments: [{ id: "dpl_delayed" }], railwayEnvironments: [], neonBranches: [] };
+  const inventories = [empty, empty, delayed, empty, empty, empty];
+  const result = await confirmStablePreviewAbsence({
+    state,
+    delays: [1, 1, 1, 1, 1, 1],
+    minimumGraceMs: 0,
+    requiredConsecutive: 3,
+    now: () => elapsed,
+    wait: async (milliseconds) => { elapsed += milliseconds; },
+    readInventories: async () => inventories[reads++],
+  });
+  assert.equal(reads, 6);
+  assert.equal(result.consecutiveEmpty, 3);
+  assert.deepEqual(result.observations[2].unresolved, ["Vercel deployment"]);
+});
+
+test("preview configuration never copies application integration credentials", () => {
+  const previewVariables = source.match(/const variables = preview\s*\? (?<preview>\[\[[\s\S]*?\]\])\s*: \[\["APP_COMMIT_SHA"/)?.groups?.preview;
+  assert.ok(previewVariables);
+  assert.doesNotMatch(previewVariables, /GOOGLE|EMAIL|SMTP|RESEND/);
+  assert.match(providerSource, /inherited forbidden configuration/);
+  assert.match(source, /Vercel Preview environment must contain no configured variables/);
+  assert.match(source, /enforceEmptyVercelPreview: preview/);
+  assert.match(source, /process\.env\.NEON_PARENT_BRANCH !== "staging"/);
+  assert.match(source, /matches\[0\]\.target !== "preview"/);
+  assert.match(source, /"remove", state\.vercelDeploymentId, "--safe", "--yes"/);
 });

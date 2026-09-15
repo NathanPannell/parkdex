@@ -41,29 +41,42 @@ Do not start another release to an environment while an earlier one is unresolve
 
 Both `staging` and `main` require pull requests for every change, including repository administrators. Force pushes and branch deletion are disabled. The deployment entry workflows have no `workflow_dispatch`, `pull_request`, `schedule`, or `workflow_run` trigger, and a rerun is rejected before runner allocation. Consequently, a deployment can start only from the first run of a protected-branch merge push. Docs-only merges intentionally deploy because there are no path filters.
 
-## Staging: validate locally, deploy, browser-test, then merge
+Opening a draft PR, pushing another commit to it, creating a local preview, browser-testing it, and tearing it down consume no GitHub-hosted runner minutes. Provider build/runtime quotas still apply to the Vercel, Railway, and Neon resources while the preview exists.
 
-1. Start from an issue or prompt, create a feature branch from `staging`, and open a same-repository pull request targeting `staging`.
-2. Run the full validation locally and complete code review. Do not expose provider credentials to unreviewed code.
-3. From a separate clean checkout whose `HEAD` is the current `origin/staging`, build a full merge-candidate attestation and deploy the exact reviewed PR head to persistent staging:
+## Draft PR: validate, preview, browser-test, and tear down
+
+1. Start from `staging`, implement the change locally, and run the complete suite before pushing:
 
    ```powershell
-   $featureRef = '<feature-branch>'
-   $pullRequest = 123
-   git fetch --no-tags origin staging $featureRef
-   $candidateSha = git rev-parse "origin/$featureRef"
-   $evidence = Join-Path $env:TEMP "parkdex-merge-candidate-$candidateSha.json"
-   node scripts/merge-candidate.mjs --base origin/staging --head $candidateSha --head-ref $featureRef --suite all --output $evidence
-   pwsh -File scripts/local-release.ps1 -Mode Staging -PullRequest $pullRequest -CommitSha $candidateSha -HeadRef $featureRef -AttestationPath $evidence -Apply
+   $candidateSha = git rev-parse HEAD
+   node scripts/local-ci.mjs --sha $candidateSha --suite all
    ```
 
-   The local session must be authenticated to Railway and Vercel and must provide the exact project, API service, staging-environment, organization, and Vercel project identifiers. Persistent staging requires `RAILWAY_STAGING_ENVIRONMENT_ID`; the preview-only `RAILWAY_BASE_ENVIRONMENT_ID` is not a fallback. Before mutating anything, the command verifies the API migration command, pooled and direct database variables, absent Git source, and the exact stable staging API domain. The staging command changes only `APP_COMMIT_SHA` and `APP_RELEASE_ID`; it preserves stable provider configuration.
-4. The local command waits until the Railway API deployment, `/ready`, and immutable Vercel deployment prove the exact SHA and release ID, then assigns `staging.parkdex.app`. Record the external release journal and exact provider identities in the task ledger.
-5. Browser-test `https://staging.parkdex.app`, exercising the affected journey and inspecting console and network failures. Report `OK` only for the exact tested SHA.
-6. Reconfirm that the PR head and base have not changed, then merge the PR into `staging`.
-7. The protected `staging` merge push queues the resulting merge SHA. The release agent repeats convergence verification, assigns only the verified Vercel deployment to the staging domain, and smoke-tests the merged revision before declaring staging complete.
+2. Push the feature branch and open a **draft**, same-repository PR targeting `staging`. Pushing or updating the draft does not run Actions. This local path is only for branches authored or reviewed by the trusted operator/agent; local tests and Vercel builds are not sandboxes for hostile contributor code.
+3. Use a separate clean checkout whose `HEAD` is the current `origin/staging`. Authenticate the local CLIs, provide the exact provider identifiers listed below, and preview the draft PR:
 
-The one-time rollout that first enables this local staging command cannot pre-deploy itself through the still-disabled script on `origin/staging`. For that rollout only, merge after full local CI and independent review, then treat the first automatic staging deployment as the candidate: verify provider convergence and browser-test the exact merge SHA before publishing the same infrastructure change to `main`.
+   ```powershell
+   pwsh -File scripts/preview-pr.ps1 -PullRequest 123 -Apply
+   ```
+
+   The wrapper obtains the head ref and SHA from GitHub, requires an open same-repository draft based on `staging`, refuses a second active preview for that PR, and rebuilds the full synthetic merge-candidate attestation. Only after validation succeeds does it invoke the provider engine. Keep the printed journal path; the active record and evidence live below `%LOCALAPPDATA%\Parkdex\preview-pr`, outside the repository.
+
+4. The script creates one isolated, seven-day-expiring Neon schema branch and fresh database, one empty Railway environment with only the API service, and one immutable Vercel Preview deployment. It waits locally for migrations, provider builds, `/ready`, CORS, catalogue/read-write isolation, and frontend content. The Vercel project is required to have zero configured Preview environment variables before the candidate build starts. Vercel may still expose platform system variables; do not use this path for untrusted code or grant those variables external cloud trust.
+5. Browser-test the printed immutable preview URL. Exercise the affected journey, guest/catalogue/collection behavior, responsive behavior when relevant, and console/network failures. Google OAuth is a known limitation because its callback URL is not registered for ephemeral deployments. Outbound email is also disabled. These limitations are not preview acceptance failures.
+6. The same agent tears down the exact journal after testing, including after a failed preview:
+
+   ```powershell
+   pwsh -File scripts/teardown-preview-pr.ps1 -PullRequest 123 -Apply
+   # Recovery when the active pointer is unavailable:
+   pwsh -File scripts/teardown-preview-pr.ps1 -PullRequest 123 -StatePath '<exact-journal-path>' -Apply
+   ```
+
+   The teardown takes an exclusive per-PR lifecycle lock, binds the active record to the exact journal, verifies ownership before deletion, attempts all three providers, and waits through a grace window for three consecutive empty inventories. It reports `status=cleaned` only after the Vercel deployment, Railway environment, and Neon branch are stably absent. If it exits nonzero, retry the exact command and do not merge. Journal-only recovery without the active record does not open the merge gate. Neon expiry is a backstop, not a substitute for teardown; Railway and Vercel have no automatic cleanup backstop.
+7. Reconfirm the draft PR head is the browser-tested SHA, mark it ready, complete review, and merge it into `staging`. The merge push is the first GitHub Actions event: it queues the normal persistent staging release. The release agent then verifies provider convergence and browser-smoke-tests `https://staging.parkdex.app` for the merge SHA.
+
+Required local configuration is `RAILWAY_PROJECT_ID`, `RAILWAY_BASE_ENVIRONMENT_ID`, `RAILWAY_API_SERVICE_ID`, `NEON_ORG_ID`, `NEON_PROJECT_ID`, `NEON_PARENT_BRANCH=staging`, `VERCEL_SCOPE`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_NAME`, and `VERCEL_PROJECT_ID`, plus authenticated Railway, Neon, Vercel, and GitHub CLIs. Provider tokens may be supplied as local environment variables but are never written to GitHub, candidate evidence, the repository, or the preview environment.
+
+The one-time rollout that first adds these wrappers cannot execute `scripts/preview-pr.ps1` from the trusted `origin/staging` harness because the script is not there yet. For this rollout only, require full local CI and independent review, merge to `staging`, and verify the first automatic staging deployment. Every subsequent application PR uses the isolated preview lifecycle above.
 
 ## Production: merge, verify, promote, stop
 
