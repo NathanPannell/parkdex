@@ -2,6 +2,7 @@ import "@fontsource-variable/fraunces";
 import "@fontsource-variable/nunito-sans";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Metadata, Viewport } from "next";
+import { NativeRuntime } from "@/components/native-runtime";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,5 +26,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: "#173d32", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><NativeRuntime enabled={process.env.PARKDEX_ANDROID_BUILD === "1"}>{children}</NativeRuntime></body></html>;
 }

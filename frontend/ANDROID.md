@@ -2,7 +2,7 @@
 
 Parkdex uses Capacitor to bundle the existing Next.js interface into a native Android shell. The website and Android app share the same React components, TypeScript modules, API contracts, and data model.
 
-This first build is an internal staging app. It supports the existing guest and email/password journeys. Google sign-in, native location, App Links, native secure credential storage, camera access, geofencing, release signing, and store distribution are intentionally deferred.
+This first build is an internal staging app. It supports the existing guest and email/password journeys plus the field-facing native capabilities needed by visit claims. Google sign-in and App Links/OAuth remain web-only in this scope. Background geofences, background location, notifications, release signing, and store distribution are intentionally deferred.
 
 ## Local requirements
 
@@ -50,6 +50,16 @@ The MCP metadata handlers use the `route.web.ts` extension. The normal web build
 ## Staging origin
 
 Bundled Capacitor content uses the secure WebView origin `https://localhost`. The staging API's `FRONTEND_ORIGINS` setting must include both `https://staging.parkdex.app` and `https://localhost` before the installed app can read or update staging data. Keep this as provider configuration rather than hardcoding it into FastAPI.
+
+## Native field behavior
+
+- `@capacitor/geolocation` requests foreground `ACCESS_COARSE_LOCATION` and `ACCESS_FINE_LOCATION`. Android approximate permission is accepted and its reported accuracy is preserved; denial, disabled services, and timeouts map to clear UI states. The app does not request background location or register silent geofences. Boundary eligibility remains foreground and server-authoritative.
+- `@capacitor/camera` uses the rear camera's `takePhoto` API with orientation correction and a 2048-pixel bound. Captures are returned as uploadable `File` objects, are not saved to the gallery, and do not request broad media permissions. A successful `App` `appRestoredResult` is queued so a process-death camera result is consumed by the next photo request. Once the user confirms a photo, it is copied to the app-private Capacitor Filesystem `Data` directory before the claim request, closing both the ambiguous-response and failed-upload windows. It can be retried after navigation or an app restart; it is keyed to the account id, removed on success/discard, and cleared when that account signs out or changes. If filesystem cleanup is temporarily unavailable, the previous owner key is retained in the running app and a visible retry action remains until cleanup succeeds; a server-confirmed photo similarly retries local-copy removal without offering a duplicate upload.
+- The Android Back listener gives the React UI a cancelable `parkdex:back` event first, then navigates browser history or minimizes the root activity. Capacitor System Bars uses native inset handling and the app viewport is `cover`; existing layout offsets use the safe-area insets.
+- Journal and outbox values use Capacitor Preferences. Photo retry bytes never use Preferences; they use the app-private Filesystem `Data` directory. Account bearer tokens and the guest collection key are routed through the allow-listed `SecureCredentials` plugin, which encrypts values with AES-GCM under a non-exportable Android Keystore key and stores the ciphertext in `getNoBackupFilesDir()`. Android backup and device-transfer rules exclude app data. Legacy browser keys are migrated only after a read-back verification.
+- The FileProvider exposes only the camera capture directory under the app's external `Pictures/` files path. No broad external-storage or gallery path is configured.
+
+The native bridge is initialized only for `PARKDEX_ANDROID_BUILD=1`; normal Next.js server/static builds keep browser storage, browser location, and the web file-input camera path.
 
 ## Source control
 

@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: "Parkdex",
   webDir: "out",
   backgroundColor: "#173d32",
+  android: {
+    loggingBehavior: "none",
+  },
   server: {
     hostname: "localhost",
     androidScheme: "https",

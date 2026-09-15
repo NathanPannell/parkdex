@@ -39,6 +39,13 @@ Verify in Railway that the API shows `python -m backend.app.migrate` as its pre-
 
 Do not start another release to an environment while an earlier one is unresolved. GitHub concurrency serializes only the short queueing jobs; it cannot serialize provider builds after the workflow exits.
 
+Location-claim enforcement is intentionally a two-release convergence. Follow the adjacent-version
+runbook in [Location claims and private visit postcards](claims.md#adjacent-version-rollout): ship
+the claim-aware API and clients with `VISIT_CLAIM_ENFORCEMENT=compatible`, wait until that client
+is N-1 (including the minimum supported Android APK), then change the persistent environment to
+`required` in a later release. Enabling `required` during the first rollout breaks every old
+client's only visit-creation path and violates the compatibility contract above.
+
 ## Branch and trigger controls
 
 Both `staging` and `main` require pull requests for every change, including repository administrators. Force pushes and branch deletion are disabled. The deployment entry workflows have no `workflow_dispatch`, `pull_request`, `schedule`, or `workflow_run` trigger, and a rerun is rejected before runner allocation. Consequently, a deployment can start only from the first run of a protected-branch merge push. Docs-only merges intentionally deploy because there are no path filters.

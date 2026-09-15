@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- @capacitor/camera's Ion flow creates visit-photo capture files in cacheDir. -->
+    <cache-path name="camera_cache" path="." />
+</paths>

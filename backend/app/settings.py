@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -50,6 +50,51 @@ class Settings(BaseSettings):
     resend_api_key: str | None = Field(default=None, alias="RESEND_API_KEY")
     resend_api_url: str = Field(default="https://api.resend.com/emails", alias="RESEND_API_URL")
     resend_from: str = Field(default="Parkdex <no-reply@parkdex.app>", alias="RESEND_FROM")
+    app_environment: Literal["local", "test", "preview", "staging", "production"] = Field(
+        default="production", alias="APP_ENVIRONMENT"
+    )
+    claim_test_mode: bool = Field(default=False, alias="CLAIM_TEST_MODE")
+    visit_claim_enforcement: Literal["compatible", "required"] = Field(
+        default="compatible", alias="VISIT_CLAIM_ENFORCEMENT"
+    )
+    photo_storage_backend: Literal["auto", "r2", "filesystem", "memory"] = Field(
+        default="auto", alias="PHOTO_STORAGE_BACKEND"
+    )
+    photo_storage_path: str = Field(
+        default=".photo-objects", alias="PHOTO_STORAGE_PATH"
+    )
+    r2_endpoint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("R2_ENDPOINT", "R2_S3_ENDPOINT"),
+    )
+    r2_bucket: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("R2_BUCKET", "R2_BUCKET_NAME"),
+    )
+    r2_access_key_id: str | None = Field(
+        default=None, alias="R2_ACCESS_KEY_ID"
+    )
+    r2_secret_access_key: str | None = Field(
+        default=None, alias="R2_SECRET_ACCESS_KEY"
+    )
+    r2_region: str = Field(default="auto", alias="R2_REGION")
+
+    @model_validator(mode="after")
+    def prevent_production_claim_fixtures(self):
+        if self.claim_test_mode and not self.claim_test_fixtures_enabled:
+            raise ValueError(
+                "CLAIM_TEST_MODE is only allowed in non-deployed local/test environments"
+            )
+        return self
+
+    @property
+    def claim_test_fixtures_enabled(self) -> bool:
+        railway_name = (self.railway_environment_name or "").strip()
+        return (
+            self.claim_test_mode
+            and self.app_environment in {"local", "test"}
+            and not railway_name
+        )
 
     @property
     def is_preview(self) -> bool:
@@ -86,7 +131,14 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        return [value.strip() for value in self.frontend_origins.split(",") if value.strip()]
+        origins: list[str] = []
+        seen: set[str] = set()
+        for value in (*self.frontend_origins.split(","), "https://localhost"):
+            origin = value.strip()
+            if origin and origin not in seen:
+                origins.append(origin)
+                seen.add(origin)
+        return origins
 
 
 @lru_cache
