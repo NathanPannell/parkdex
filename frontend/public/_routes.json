@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "include": [
+    "/api/*",
+    "/mcp",
+    "/mcp/*",
+    "/authorize",
+    "/token",
+    "/register",
+    "/revoke",
+    "/oauth/consent",
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-protected-resource/mcp"
+  ],
+  "exclude": []
+}

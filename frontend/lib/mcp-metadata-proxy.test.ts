@@ -14,16 +14,12 @@ describe("MCP metadata proxy", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await proxyMcpMetadata(
-      new Request(
-        "https://staging.parkdex.app/.well-known/oauth-protected-resource/mcp?version=1",
-      ),
+      new Request("https://staging.parkdex.app/.well-known/oauth-protected-resource/mcp?version=1"),
       "https://api-staging.example.test",
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL(
-        "https://api-staging.example.test/.well-known/oauth-protected-resource/mcp?version=1",
-      ),
+      new URL("https://api-staging.example.test/.well-known/oauth-protected-resource/mcp?version=1"),
       {
         headers: { Accept: "application/json" },
         cache: "no-store",

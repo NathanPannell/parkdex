@@ -2,3 +2,5 @@
 .env*.local
 public/maplibre/
 out/
+.wrangler/
+.dev.vars*

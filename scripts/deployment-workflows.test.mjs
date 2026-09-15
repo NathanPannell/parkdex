@@ -7,6 +7,8 @@ const production = readFileSync(".github/workflows/deploy-production.yml", "utf8
 const release = readFileSync(".github/workflows/deploy-release.yml", "utf8");
 const railwayConfig = readFileSync(".railway/railway.ts", "utf8");
 const migrator = readFileSync("backend/app/migrate.py", "utf8");
+const cloudflarePages = JSON.parse(readFileSync("deploy/cloudflare-pages.json", "utf8"));
+const frontendPackage = JSON.parse(readFileSync("frontend/package.json", "utf8"));
 
 test("old hosted test, manual release, and preview-cleanup workflows are removed", () => {
   for (const path of [
@@ -114,4 +116,29 @@ test("credentials remain secret references and exact-domain assignment is explic
   assert.match(release, /assign only parkdex\.app and confirm the staging alias is unchanged/);
   assert.doesNotMatch(release, /promote it to production domains/);
   assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
+});
+
+test("Cloudflare Pages projects are isolated and Git-integrated", () => {
+  assert.equal(existsSync("frontend/wrangler.jsonc"), false, "a shared deployable Wrangler config could route production to staging");
+  assert.equal(cloudflarePages.$schema, "parkdex.cloudflare-pages/v1");
+  assert.equal(cloudflarePages.repository, "NathanPannell/parkdex");
+  assert.equal(cloudflarePages.rootDirectory, "frontend");
+  assert.equal(cloudflarePages.buildCommand, "npm run build:cloudflare");
+  assert.equal(cloudflarePages.buildOutputDirectory, "out");
+  assert.equal(cloudflarePages.previewDeployments, "none");
+  assert.equal(cloudflarePages.failOpen, false);
+  assert.deepEqual(cloudflarePages.projects, {
+    "parkdex-staging": {
+      productionBranch: "staging",
+      apiBaseUrl: "https://api-staging-882c.up.railway.app",
+    },
+    "parkdex-production": {
+      productionBranch: "main",
+      apiBaseUrl: "https://api-production-e72df.up.railway.app",
+    },
+  });
+  assert.equal(frontendPackage.scripts["deploy:cloudflare:staging"], undefined);
+  assert.equal(frontendPackage.scripts["deploy:cloudflare:production"], undefined);
+  assert.match(frontendPackage.scripts.start, /wrangler pages dev out/);
+  assert.match(frontendPackage.scripts.start, /API_BASE_URL=http:\/\/localhost:8000/);
 });

@@ -3,13 +3,14 @@ import type { NextConfig } from "next";
 import { mcpProxyRewrites } from "./lib/mcp-proxy-rewrites";
 
 const isAndroidBuild = process.env.PARKDEX_ANDROID_BUILD === "1";
+const isCloudflareBuild = process.env.PARKDEX_CLOUDFLARE_BUILD === "1";
+const isStaticBuild = isAndroidBuild || isCloudflareBuild;
 const sharedPageExtensions = ["js", "jsx", "ts", "tsx"];
-
 const nextConfig: NextConfig = {
-  pageExtensions: isAndroidBuild
+  pageExtensions: isStaticBuild
     ? sharedPageExtensions
     : [...sharedPageExtensions, "web.ts"],
-  ...(isAndroidBuild
+  ...(isStaticBuild
     ? { output: "export" as const, images: { unoptimized: true } }
     : {
         rewrites() {
