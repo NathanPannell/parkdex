@@ -1,16 +1,16 @@
 # Parkdex MCP server
 
-Parkdex exposes a public, authenticated MCP server from its Railway API at `https://<railway-api-domain>/mcp`. It uses the official MCP Python SDK v2 Streamable HTTP transport and OAuth 2.1 authorization-code flow with PKCE. Any Parkdex account with a password can authorize an MCP client without sharing credentials with that client.
+Parkdex exposes a public, authenticated MCP server through the Parkdex site domain. Production uses `https://parkdex.app/mcp`; staging uses `https://staging.parkdex.app/mcp`. Vercel proxies the MCP transport, OAuth, and discovery routes to the matching Railway API without exposing the provider hostname as the MCP identity. The server uses the official MCP Python SDK v2 Streamable HTTP transport and OAuth 2.1 authorization-code flow with PKCE. Any Parkdex account with a password can authorize an MCP client without sharing credentials with that client.
 
 ## Connect
 
 Add this remote MCP server URL to an MCP client:
 
 ```text
-https://<railway-api-domain>/mcp
+https://parkdex.app/mcp
 ```
 
-The client discovers Parkdex's OAuth metadata, dynamically registers, and opens the Parkdex authorization page. Sign in there and approve access. Access is account-scoped, revocable, and never grants the MCP client access to Parkdex's REST session endpoints.
+Use `https://staging.parkdex.app/mcp` instead when testing against staging. The client discovers Parkdex's OAuth metadata, dynamically registers, and opens the Parkdex authorization page on the same Parkdex origin. Sign in there and approve access. Access is account-scoped, revocable, and never grants the MCP client access to Parkdex's REST session endpoints.
 
 Google-only accounts must first use **Set password** in Parkdex Account settings. Local development uses the same endpoint at `http://localhost:8000/mcp` with `API_PUBLIC_URL=http://localhost:8000` and `MCP_PUBLIC_URL=http://localhost:8000/mcp`.
 
