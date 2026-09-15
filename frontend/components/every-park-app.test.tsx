@@ -537,6 +537,17 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
   });
 
+  it("omits deferred native features from the Android build while keeping email accounts", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: true }), { headers: { "Content-Type": "application/json" } }))));
+    render(<ParkdexApp apiBaseUrl="https://api.example.test" googleAuthAllowed={false} geolocationAllowed={false} />);
+    expect(screen.queryByRole("button", { name: "Show my current location" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.getByRole("heading", { name: "Keep your field journal" })).toBeTruthy();
+    expect(screen.getByLabelText("Email")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull());
+    expect(screen.queryByText("Google sign-in unavailable")).toBeNull();
+  });
+
   it("completes Google PKCE sign-in and clears one-use callback values", async () => {
     window.sessionStorage.setItem("parkdex:google-code-verifier:v1", "verifier");
     window.history.replaceState({}, "", "/?code=google-code&state=oauth-state");

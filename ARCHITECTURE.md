@@ -12,6 +12,19 @@ Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon bran
 
 Production uses `parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. The public MCP identities are `https://parkdex.app/mcp` and `https://staging.parkdex.app/mcp`; Vercel proxies the MCP transport and root OAuth/discovery routes to each environment's stable Railway API. Railway service domains and Neon connection strings remain fixed during ordinary releases.
 
+## Android client
+
+The Android app is a Capacitor shell containing a mobile-only static export of the same Next.js interface deployed to Vercel:
+
+```text
+Capacitor Android app ──HTTPS──> Railway API ──pooled SQL──> Neon branch
+        bundled Next.js UI
+```
+
+The normal web build remains server-capable. `PARKDEX_ANDROID_BUILD=1` enables static export and unoptimized local images only for the bundled Android build. The first internal APK targets the persistent staging API and uses email/password authentication; native OAuth callbacks, secure credential storage, device capabilities, geofencing, release signing, and store distribution are separate milestones.
+
+Android builds and emulator verification run locally. Repository workflows do not build or publish Android artifacts.
+
 ## Release behavior
 
 `.github/workflows/deploy-release.yml` is the sole GitHub deployment implementation. Protected-branch merge pushes to `staging` and `main` provide an exact Git SHA and environment name; there are no manual, pull-request, scheduled, or rerunnable Actions deployment paths. One GitHub-hosted job stamps the SHA and release ID, then concurrently runs a detached Railway API upload and a no-wait staged Vercel Production deployment. It waits only for those client submissions to finish, not for provider builds or health.
