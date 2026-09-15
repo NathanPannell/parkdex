@@ -1,6 +1,6 @@
 # Account email delivery
 
-Parkdex account verification and password-reset messages use the backend's explicitly selected provider. The links in those messages are built from `APP_PUBLIC_URL`; the frontend's `NEXT_PUBLIC_API_BASE_URL` only selects the API and is configured separately.
+Parkdex account verification and password-reset messages use the backend's explicitly selected provider. Each message includes a responsive, branded HTML body and an equivalent plain-text fallback. The links in those messages are built from `APP_PUBLIC_URL`; the frontend's `NEXT_PUBLIC_API_BASE_URL` only selects the API and is configured separately.
 
 ## Resend
 

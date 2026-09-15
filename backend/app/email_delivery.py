@@ -38,14 +38,20 @@ def email_delivery_configured(settings: Settings) -> bool:
     return True
 
 
-def send_auth_email(settings: Settings, recipient: str, subject: str, text: str) -> None:
+def send_auth_email(settings: Settings, recipient: str, subject: str, text: str, html: str | None = None) -> None:
     ensure_email_delivery(settings)
     if settings.email_provider == "resend":
         try:
             response = httpx.post(
                 settings.resend_api_url,
                 headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-                json={"from": settings.resend_from, "to": [recipient], "subject": subject, "text": text},
+                json={
+                    "from": settings.resend_from,
+                    "to": [recipient],
+                    "subject": subject,
+                    "text": text,
+                    **({"html": html} if html else {}),
+                },
                 timeout=10,
             )
             response.raise_for_status()
@@ -57,6 +63,8 @@ def send_auth_email(settings: Settings, recipient: str, subject: str, text: str)
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(text)
+    if html:
+        message.add_alternative(html, subtype="html")
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
         if settings.smtp_use_tls:
             smtp.starttls(context=ssl.create_default_context())

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -25,7 +25,7 @@ function run(command, args, options = {}) {
   });
   if (result.error || result.status !== 0) {
     const error = new Error(`${options.label || command} failed with exit ${result.status ?? "spawn"}`);
-    Object.defineProperty(error, "providerStderr", { value: sanitizeProviderDiagnostic(result.stderr), enumerable: false });
+    Object.defineProperty(error, "providerStderr", { value: sanitizeProviderDiagnostic(`${result.stderr || ""}\n${result.stdout || ""}`), enumerable: false });
     throw error;
   }
   return (result.stdout || "").trim();
@@ -70,7 +70,7 @@ function trustedHarness(root) {
   return harnessSha;
 }
 
-function verifyCandidateAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath) {
+function verifyCandidateAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath, { requireDraft = false } = {}) {
   if (!/^[A-Za-z0-9._/-]+$/.test(headRef || "") || headRef.startsWith("/") || headRef.includes("..")) throw new Error("Candidate apply requires a safe --head-ref");
   const resolved = resolve(attestationPath);
   const relativePath = relative(root, resolved);
@@ -80,8 +80,8 @@ function verifyCandidateAuthorization(root, harnessSha, sourceSha, pullRequest, 
   if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || canonicalGithubRepositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
   git(root, ["fetch", "--no-tags", "origin", `+refs/heads/${headRef}:refs/remotes/origin/${headRef}`]);
   if (git(root, ["rev-parse", `refs/remotes/origin/${headRef}`]) !== sourceSha) throw new Error("Preview source no longer matches the attested remote head");
-  const pr = parseJson(run("gh", ["pr", "view", String(pullRequest), "--repo", REPOSITORY, "--json", "number,state,baseRefName,headRefName,headRefOid"], { env: minimalEnv(), label: "GitHub pull request identity" }), "GitHub pull request identity");
-  if (pr.number !== pullRequest || pr.state !== "OPEN" || pr.baseRefName !== "staging" || pr.headRefName !== headRef || pr.headRefOid !== sourceSha) throw new Error("Preview pull request identity did not match the requested source");
+  const pr = parseJson(run("gh", ["pr", "view", String(pullRequest), "--repo", REPOSITORY, "--json", "number,state,isDraft,isCrossRepository,baseRefName,headRefName,headRefOid"], { env: minimalEnv(), label: "GitHub pull request identity" }), "GitHub pull request identity");
+  if (pr.number !== pullRequest || pr.state !== "OPEN" || pr.isCrossRepository !== false || pr.baseRefName !== "staging" || pr.headRefName !== headRef || pr.headRefOid !== sourceSha || (requireDraft && pr.isDraft !== true)) throw new Error("Pull request identity did not match the requested local release source");
   const treeSha = git(root, ["merge-tree", "--write-tree", harnessSha, sourceSha]).split(/\s+/).find((item) => /^[0-9a-f]{40}$/.test(item));
   if (!treeSha || treeSha !== evidence.treeSha) throw new Error("Preview merge tree no longer matches the attestation");
   if (git(root, ["rev-parse", `${evidence.candidateSha}^{tree}`]) !== treeSha || git(root, ["show", "-s", "--format=%P", evidence.candidateSha]) !== `${harnessSha} ${sourceSha}`) throw new Error("Preview candidate commit does not bind the exact merge tree and parents");
@@ -99,7 +99,7 @@ function railwayEnv(token, extra = {}) {
 }
 
 function vercelEnv(token, extra = {}) {
-  return minimalEnv({ ...(token ? { VERCEL_TOKEN: token } : {}), ...extra });
+  return minimalEnv({ ...(token ? { VERCEL_TOKEN: token } : {}), ...extra, VERCEL_TELEMETRY_DISABLED: "1" });
 }
 
 function neonCli(root) {
@@ -118,7 +118,39 @@ function neonAnnotations(payload) {
   return payload?.annotation?.value || payload?.branch?.annotation_value || payload?.branch?.annotations || payload?.annotation_value || payload?.annotations || {};
 }
 
-function providerPreflight(root, preview) {
+function exactNeonBranchInventory(root, state) {
+  const base = `/projects/${process.env.NEON_PROJECT_ID}`;
+  if (!state.neonBranchId) {
+    const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
+    if (!Array.isArray(listing.branches)) throw new Error("Neon branch inventory was incomplete");
+    return listing.branches.filter((branch) => branch.name === state.neonBranch);
+  }
+  try {
+    const data = neonApi(root, `${base}/branches/${state.neonBranchId}`);
+    const branch = data.branch || data;
+    if (branch.id !== state.neonBranchId || branch.name !== state.neonBranch) throw new Error("Neon exact branch identity was not verified");
+    return [branch];
+  } catch (error) {
+    if (/(?:HTTP[^\n]*404|not found|does not exist)/i.test(error.providerStderr || "")) return [];
+    throw error;
+  }
+}
+
+function verifyEmptyVercelPreviewEnvironment() {
+  const sourceRoot = mkdtempSync(join(tmpdir(), "parkdex-vercel-environment-audit-"));
+  try {
+    bindVercelProject(sourceRoot);
+    const provider = buildProviderProcess("vercel", ["env", "ls", "preview", "--cwd", "frontend", "--no-color", ...vercelScopeArgs()]);
+    const result = spawnSync(provider.executable, provider.args, { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    if (result.error || result.status !== 0) throw new Error("Vercel Preview environment inventory failed");
+    const inventory = `${result.stdout || ""}\n${result.stderr || ""}`;
+    if (!/No Environment Variables found/.test(inventory)) throw new Error("Vercel Preview environment must contain no configured variables before candidate code can build");
+  } finally {
+    rmSync(sourceRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+}
+
+function providerPreflight(root, preview, { enforceEmptyVercelPreview = false } = {}) {
   run("railway", ["whoami"], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway authentication" });
   const railwayProjects = parseJson(run("railway", ["list", "--json"], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway project inventory" }), "Railway project inventory");
   const railwayMatches = railwayProjects.filter((project) => project.id === process.env.RAILWAY_PROJECT_ID && project.deletedAt == null);
@@ -147,6 +179,7 @@ function providerPreflight(root, preview) {
   }
 
   if (preview) {
+    if (process.env.NEON_PARENT_BRANCH !== "staging") throw new Error("Preview Neon parent must be the isolated staging branch");
     run(process.execPath, [neonCli(root), "me", "--output", "json", "--analytics", "false"], { cwd: root, env: minimalEnv(), label: "Neon authentication" });
     const neonProjects = neonApi(root, "/projects", { query: { limit: 100, org_id: process.env.NEON_ORG_ID } });
     if ((neonProjects.projects || []).filter((project) => project.id === process.env.NEON_PROJECT_ID).length !== 1) throw new Error("Neon project identity was not verified");
@@ -155,6 +188,7 @@ function providerPreflight(root, preview) {
   run("vercel", ["whoami"], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel authentication" });
   const vercelProjects = parseJson(run("vercel", ["project", "ls", "--json", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel project inventory" }), "Vercel project inventory");
   if ((vercelProjects.projects || []).filter((project) => project.id === process.env.VERCEL_PROJECT_ID && project.name === process.env.VERCEL_PROJECT_NAME).length !== 1) throw new Error("Vercel project identity was not verified");
+  if (enforceEmptyVercelPreview) verifyEmptyVercelPreviewEnvironment();
 }
 
 async function createNeonBranch(root, state, journalPath) {
@@ -291,18 +325,30 @@ function listVercelReleases(sha, releaseId, environment) {
   }).filter((item) => item.name === process.env.VERCEL_PROJECT_NAME && /^dpl_[A-Za-z0-9]+$/.test(item.id || ""));
 }
 
+function inspectVercelDeploymentById(deploymentId, { allowMissing = false } = {}) {
+  if (!/^dpl_[A-Za-z0-9]+$/.test(deploymentId || "")) throw new Error("Vercel deployment ID was invalid");
+  const provider = buildProviderProcess("vercel", ["inspect", deploymentId, "--json", ...vercelScopeArgs()]);
+  const result = spawnSync(provider.executable, provider.args, { env: vercelEnv(process.env.VERCEL_TOKEN), encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  if (result.error || result.status !== 0) {
+    const diagnostic = sanitizeProviderDiagnostic(`${result.stderr || ""}\n${result.stdout || ""}`);
+    if (allowMissing && /Can't find the deployment/.test(diagnostic)) return null;
+    throw new Error("Vercel deployment inspection failed");
+  }
+  return parseJson(result.stdout, "Vercel deployment inspect");
+}
+
 function findVercelRelease(sha, releaseId, environment) {
   const matches = listVercelReleases(sha, releaseId, environment);
   if (matches.length !== 1 || !matches[0].url) throw new Error("Vercel deployment could not be recovered exactly");
   return matches[0].url;
 }
 
-function verifyVercelDeployment(url, sha, releaseId, environment) {
+function verifyVercelDeployment(url, sha, releaseId, environment, expectedTarget) {
   const parsed = new URL(url);
   const host = parsed.host;
   if (parsed.protocol !== "https:" || !/^[a-zA-Z0-9][a-zA-Z0-9-]*\.vercel\.app$/.test(host)) throw new Error("Vercel returned an invalid deployment URL");
   const matches = listVercelReleases(sha, releaseId, environment).filter((item) => new URL(item.url).host === host);
-  if (matches.length !== 1 || matches[0].readyState !== "READY") {
+  if (matches.length !== 1 || matches[0].readyState !== "READY" || matches[0].target !== expectedTarget) {
     throw new Error("Vercel deployment identity was not verified");
   }
   return { id: matches[0].id, url: new URL(matches[0].url).origin };
@@ -394,11 +440,58 @@ function verifyFrontendContent(sourceRoot, frontendUrl) {
   }
 }
 
+async function verifyPreviewResourcesAbsent(root, state, journalPath) {
+  const context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
+  try {
+    const hasUnresolvedCreateIntent = Boolean(
+      (state.resourceIntent?.vercel && !state.vercelDeploymentId)
+      || (state.resourceIntent?.railway && !state.railwayEnvironmentId)
+      || (state.resourceIntent?.neon && !state.neonBranchId)
+    );
+    const confirmation = await confirmStablePreviewAbsence({
+      state,
+      minimumGraceMs: hasUnresolvedCreateIntent ? 30_000 : 10_000,
+      wait,
+      readInventories: async () => {
+        const exactVercel = state.vercelDeploymentId ? inspectVercelDeploymentById(state.vercelDeploymentId, { allowMissing: true }) : null;
+        const vercelDeployments = state.vercelDeploymentId ? (exactVercel ? [exactVercel] : []) : listVercelReleases(state.commitSha, state.releaseId, state.railwayEnvironment);
+        const railwayEnvironments = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN);
+        const neonBranches = exactNeonBranchInventory(root, state);
+        return { vercelDeployments, railwayEnvironments, neonBranches };
+      },
+    });
+    const verifiedAt = new Date().toISOString();
+    updateJournal(journalPath, state, {
+      absenceVerification: {
+        verifiedAt,
+        observations: confirmation.observations,
+        consecutiveEmptyInventories: confirmation.consecutiveEmpty,
+        elapsedMs: confirmation.elapsedMs,
+        vercel: { deploymentId: state.vercelDeploymentId || null, absent: true },
+        railway: { environmentId: state.railwayEnvironmentId || null, environmentName: state.railwayEnvironment, absent: true },
+        neon: { branchId: state.neonBranchId || null, branchName: state.neonBranch, absent: true },
+      },
+      status: "cleanup-verified-absent",
+    });
+    return verifiedAt;
+  } catch (error) {
+    const unresolved = error.unresolved || ["provider inventory verification"];
+    const cleanup = { ...(state.cleanup || {}) };
+    if (unresolved.includes("Vercel deployment")) cleanup.vercel = false;
+    if (unresolved.includes("Railway environment")) cleanup.railway = false;
+    if (unresolved.includes("Neon branch")) cleanup.neon = false;
+    updateJournal(journalPath, state, { cleanup, cleanupRemaining: unresolved, status: "cleanup-incomplete" });
+    throw error;
+  } finally {
+    rmSync(context, { recursive: true, force: true });
+  }
+}
+
 async function cleanup(root, journalPath) {
   if (!journalPath || !existsSync(journalPath)) throw new Error("Cleanup requires an explicit existing --journal path");
   const state = parseJson(readFileSync(journalPath, "utf8"), "Release journal");
-  if (!["parkdex.local-release/v3", "parkdex.local-release/v4"].includes(state.schema) || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
-    throw new Error("Release journal is not an active owned preview");
+  if (!["parkdex.local-release/v3", "parkdex.local-release/v4"].includes(state.schema) || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}`) {
+    throw new Error("Release journal is not an owned preview");
   }
   requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
   if (state.providerProjects && (state.providerProjects.railway !== process.env.RAILWAY_PROJECT_ID || state.providerProjects.neon !== process.env.NEON_PROJECT_ID || state.providerProjects.vercel !== process.env.VERCEL_PROJECT_ID || state.providerProjects.vercelOrg !== process.env.VERCEL_ORG_ID)) throw new Error("Cleanup provider project identities do not match the release journal");
@@ -449,19 +542,23 @@ async function cleanup(root, journalPath) {
     if (matches.length > 1) throw new Error("Multiple Vercel deployments matched the journal identity");
     if (matches.length === 1) updateJournal(journalPath, state, { vercelDeploymentId: matches[0].id, status: "cleanup-recovered" });
   }
+  const deletionErrors = [];
   if (state.vercelDeploymentId && !state.cleanup?.vercel) {
-    const matches = listVercelReleases(state.commitSha, state.releaseId, state.railwayEnvironment).filter((item) => item.id === state.vercelDeploymentId);
-    if (matches.length === 0 && state.cleanupIntent?.vercel) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
-    else if (matches.length !== 1) throw new Error("Vercel cleanup ownership verification failed");
-    else {
-      updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), vercel: true } });
-      run("vercel", ["remove", state.vercelDeploymentId, "--yes", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deployment delete" });
-    }
-    updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
+    try {
+      const matches = listVercelReleases(state.commitSha, state.releaseId, state.railwayEnvironment).filter((item) => item.id === state.vercelDeploymentId);
+      if (matches.length === 0 && state.cleanupIntent?.vercel) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
+      else if (matches.length !== 1 || matches[0].target !== "preview") throw new Error("Vercel cleanup ownership verification failed");
+      else {
+        updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), vercel: true } });
+        run("vercel", ["remove", state.vercelDeploymentId, "--safe", "--yes", ...vercelScopeArgs()], { env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deployment delete" });
+      }
+      updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), vercel: true } });
+    } catch (error) { deletionErrors.push(`Vercel: ${error.message}`); }
   }
   if (state.railwayEnvironmentId && !state.cleanup?.railway) {
-    const context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
+    let context;
     try {
+      context = railwayContext(process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_BASE_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
       const matches = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN).filter((item) => item.id === state.railwayEnvironmentId && item.name === state.railwayEnvironment);
       if (matches.length === 0 && state.cleanupIntent?.railway) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), railway: true } });
       else if (matches.length !== 1) throw new Error("Railway cleanup ownership verification failed");
@@ -469,31 +566,36 @@ async function cleanup(root, journalPath) {
         updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), railway: true } });
         run("railway", ["environment", "delete", state.railwayEnvironmentId, "--yes"], { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway environment delete" });
       }
-    } finally { rmSync(context, { recursive: true, force: true }); }
-    updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), railway: true } });
+      updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), railway: true } });
+    } catch (error) { deletionErrors.push(`Railway: ${error.message}`); }
+    finally { if (context) rmSync(context, { recursive: true, force: true }); }
   }
   if (state.neonBranchId && !state.cleanup?.neon) {
-    const base = `/projects/${process.env.NEON_PROJECT_ID}`;
-    const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
-    const matches = (listing.branches || []).filter((branch) => branch.id === state.neonBranchId && branch.name === state.neonBranch);
-    if (matches.length === 0 && state.cleanupIntent?.neon) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
-    else if (matches.length !== 1) throw new Error("Neon cleanup ownership verification failed");
-    else {
-      const data = neonApi(root, `${base}/branches/${state.neonBranchId}`);
-      const branch = data.branch || data;
-      const annotations = neonAnnotations(data);
-      if (annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon cleanup ownership verification failed");
-      updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), neon: true } });
-      neonApi(root, `${base}/branches/${state.neonBranchId}`, { method: "DELETE" });
-    }
-    updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
+    try {
+      const base = `/projects/${process.env.NEON_PROJECT_ID}`;
+      const listing = neonApi(root, `${base}/branches`, { query: { limit: 1000 } });
+      const matches = (listing.branches || []).filter((branch) => branch.id === state.neonBranchId && branch.name === state.neonBranch);
+      if (matches.length === 0 && state.cleanupIntent?.neon) updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
+      else if (matches.length !== 1) throw new Error("Neon cleanup ownership verification failed");
+      else {
+        const data = neonApi(root, `${base}/branches/${state.neonBranchId}`);
+        const branch = data.branch || data;
+        const annotations = neonAnnotations(data);
+        if (annotations["parkdex-release-id"] !== state.releaseId || annotations["parkdex-commit"] !== state.commitSha || annotations["parkdex-environment"] !== state.railwayEnvironment) throw new Error("Neon cleanup ownership verification failed");
+        updateJournal(journalPath, state, { cleanupIntent: { ...(state.cleanupIntent || {}), neon: true } });
+        neonApi(root, `${base}/branches/${state.neonBranchId}`, { method: "DELETE" });
+      }
+      updateJournal(journalPath, state, { cleanup: { ...(state.cleanup || {}), neon: true } });
+    } catch (error) { deletionErrors.push(`Neon: ${error.message}`); }
   }
-  const unresolved = [];
-  if (state.resourceIntent?.vercel && !state.cleanup?.vercel) unresolved.push("Vercel deployment");
-  if ((state.resourceIntent?.railway || state.resourceIntent?.railwayServices || state.resourceIntent?.railwayDomain) && !state.cleanup?.railway) unresolved.push("Railway environment");
-  if (state.resourceIntent?.neon && !state.cleanup?.neon) unresolved.push("Neon branch");
-  if (unresolved.length) throw new Error(`Cleanup could not authoritatively resolve: ${unresolved.join(", ")}`);
-  updateJournal(journalPath, state, { status: "cleaned", cleanedAt: new Date().toISOString() });
+  let absenceVerifiedAt;
+  try {
+    absenceVerifiedAt = await verifyPreviewResourcesAbsent(root, state, journalPath);
+  } catch (error) {
+    updateJournal(journalPath, state, { deletionErrors: [...deletionErrors, `Verification: ${error.message}`], status: "cleanup-incomplete" });
+    throw error;
+  }
+  updateJournal(journalPath, state, { status: "cleaned", cleanedAt: new Date().toISOString(), absenceVerifiedAt });
   console.log(`local-release cleanup=success journal=${journalPath}`);
 }
 
@@ -513,7 +615,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
   const common = ["RAILWAY_PROJECT_ID", "RAILWAY_API_SERVICE_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"];
   requireEnv(preview ? [...common, "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "NEON_PARENT_BRANCH"] : common);
   if (!preview && !persistentStagingEnvironmentId) throw new Error("Missing required environment variable: RAILWAY_STAGING_ENVIRONMENT_ID");
-  providerPreflight(root, preview);
+  providerPreflight(root, preview, { enforceEmptyVercelPreview: preview });
   atomicJournal(journalPath, state);
   const metadata = releaseMetadata(root, sha);
   const sourceRoot = mkdtempSync(join(tmpdir(), "parkdex-release-source-"));
@@ -579,7 +681,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
       deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
     }
     if (!deploymentUrl) deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
-    const vercel = await verifyVercelDeployment(deploymentUrl, sha, releaseId, railwayEnvironment);
+    const vercel = await verifyVercelDeployment(deploymentUrl, sha, releaseId, railwayEnvironment, preview ? "preview" : "production");
     state.frontendUrl = preview ? vercel.url : "https://staging.parkdex.app";
     updateJournal(journalPath, state, { vercelDeploymentId: vercel.id, frontendUrl: state.frontendUrl, apiUrl: state.apiUrl, status: "frontend-created" });
     const variables = preview
@@ -643,7 +745,7 @@ if (mode === "cleanup") {
 } else if (flag("--apply")) {
   if (!value("--sha") || !value("--attestation") || !value("--head-ref")) throw new Error("Candidate apply requires explicit --sha, --head-ref, and --attestation");
   const harnessSha = trustedHarness(root);
-  const authorization = verifyCandidateAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"));
+  const authorization = verifyCandidateAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"), { requireDraft: mode === "preview" });
   await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, harnessSha, authorization);
 } else {
   await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, actualSha, null);
