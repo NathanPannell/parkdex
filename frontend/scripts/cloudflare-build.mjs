@@ -17,7 +17,7 @@ const env = {
 };
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("Cloudflare build must run through npm");
-for (const script of ["build", "postbuild:cloudflare"]) {
+for (const script of ["build", "process:cloudflare"]) {
   const result = spawnSync(process.execPath, [npmCli, "run", script], { env, stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
