@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayServiceInstances, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload, workerCatalogueReady } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -14,6 +14,7 @@ const value = (name, fallback = "") => {
 };
 const flag = (name) => process.argv.includes(name);
 const REPOSITORY = "NathanPannell/parkdex";
+const STAGING_API_HOST = "api-staging-882c.up.railway.app";
 
 function run(command, args, options = {}) {
   const provider = buildProviderProcess(command, args);
@@ -69,11 +70,11 @@ function trustedHarness(root) {
   return harnessSha;
 }
 
-function verifyPreviewAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath) {
-  if (!/^[A-Za-z0-9._/-]+$/.test(headRef || "") || headRef.startsWith("/") || headRef.includes("..")) throw new Error("Preview apply requires a safe --head-ref");
+function verifyCandidateAuthorization(root, harnessSha, sourceSha, pullRequest, headRef, attestationPath) {
+  if (!/^[A-Za-z0-9._/-]+$/.test(headRef || "") || headRef.startsWith("/") || headRef.includes("..")) throw new Error("Candidate apply requires a safe --head-ref");
   const resolved = resolve(attestationPath);
   const relativePath = relative(root, resolved);
-  if (!relativePath.startsWith("..") || !existsSync(resolved)) throw new Error("Preview attestation must be an existing file outside the repository");
+  if (!relativePath.startsWith("..") || !existsSync(resolved)) throw new Error("Candidate attestation must be an existing file outside the repository");
   const evidenceText = readFileSync(resolved, "utf8");
   const evidence = parseJson(evidenceText, "Merge-candidate attestation");
   if (evidence.schema !== "parkdex.merge-candidate/v1" || evidence.status !== "success" || evidence.headSha !== sourceSha || evidence.baseRef !== "refs/heads/staging" || evidence.baseSha !== harnessSha || evidence.remoteBaseSha !== harnessSha || evidence.validatorRef !== harnessSha || evidence.suite !== "all" || canonicalGithubRepositorySlug(evidence.repository) !== REPOSITORY.toLowerCase()) throw new Error("Merge-candidate attestation identity was incomplete");
@@ -124,10 +125,26 @@ function providerPreflight(root, preview) {
   if (railwayMatches.length !== 1) throw new Error("Railway project identity was not verified");
   const railwayProject = railwayMatches[0];
   const serviceIds = new Set((railwayProject.services?.edges || []).map((edge) => edge.node?.id));
-  if (!serviceIds.has(process.env.RAILWAY_API_SERVICE_ID) || !serviceIds.has(process.env.RAILWAY_WORKER_SERVICE_ID)) throw new Error("Railway service identities were not verified");
+  if (!serviceIds.has(process.env.RAILWAY_API_SERVICE_ID)) throw new Error("Railway API service identity was not verified");
   const environmentId = preview ? process.env.RAILWAY_BASE_ENVIRONMENT_ID : process.env.RAILWAY_STAGING_ENVIRONMENT_ID;
   const environment = (railwayProject.environments?.edges || []).map((edge) => edge.node).find((item) => item?.id === environmentId);
   if (!environment || environment.name !== "staging") throw new Error("Railway staging/base environment identity was not verified");
+
+  if (!preview) {
+    const context = railwayContext(process.env.RAILWAY_PROJECT_ID, environmentId, process.env.RAILWAY_API_TOKEN);
+    try {
+      const config = parseJson(run("railway", ["environment", "config", "--environment", environmentId, "--json"], { cwd: context, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway staging configuration" }), "Railway staging configuration");
+      const serviceConfig = config.services?.[process.env.RAILWAY_API_SERVICE_ID];
+      if (!serviceConfig || serviceConfig.source != null) throw new Error("Railway staging API must exist without a Git source");
+      if (serviceConfig.deploy?.preDeployCommand?.join(" ") !== "python -m backend.app.migrate") throw new Error("Railway staging API must run the migration pre-deploy command");
+      for (const name of ["DATABASE_URL", "DATABASE_URL_UNPOOLED"]) {
+        if (!Object.hasOwn(serviceConfig.variables || {}, name)) throw new Error(`Railway staging API is missing ${name}`);
+      }
+    } finally { rmSync(context, { recursive: true, force: true }); }
+    const domains = parseJson(run("railway", ["domain", "list", "--project", process.env.RAILWAY_PROJECT_ID, "--environment", environmentId, "--service", process.env.RAILWAY_API_SERVICE_ID, "--json"], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway staging domain list" }), "Railway staging domains");
+    const generatedDomains = [...new Set(JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/g) || [])];
+    if (generatedDomains.length !== 1 || generatedDomains[0] !== STAGING_API_HOST) throw new Error("Railway staging API domain identity was not verified");
+  }
 
   if (preview) {
     run(process.execPath, [neonCli(root), "me", "--output", "json", "--analytics", "false"], { cwd: root, env: minimalEnv(), label: "Neon authentication" });
@@ -219,25 +236,24 @@ function listRailwayEnvironments(cwd, token) {
   return parseRailwayEnvironmentInventory(payload);
 }
 
-function createRailwayServiceInstances(cwd, state, journalPath, token) {
-  provisionRailwayServiceInstances({
+function createRailwayApiService(cwd, state, journalPath, token) {
+  provisionRailwayApiService({
     projectId: process.env.RAILWAY_PROJECT_ID,
     environmentId: state.railwayEnvironmentId,
     environmentName: state.railwayEnvironment,
     apiServiceId: process.env.RAILWAY_API_SERVICE_ID,
-    workerServiceId: process.env.RAILWAY_WORKER_SERVICE_ID,
     listEnvironments: () => listRailwayEnvironments(cwd, token),
     recordIntent: (intent) => updateJournal(journalPath, state, {
       resourceIntent: { ...(state.resourceIntent || {}), railwayServices: intent },
-      status: "railway-services-creating",
+      status: "railway-api-creating",
     }),
     commitPatch: ({ query, variables }) => {
       const command = buildRailwayApiCommand(query, variables);
-      return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview service create" });
+      return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview API create" });
     },
-    readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview service inventory" }), "Railway preview service inventory"),
+    readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview API inventory" }), "Railway preview API inventory"),
   });
-  updateJournal(journalPath, state, { status: "railway-services-created" });
+  updateJournal(journalPath, state, { status: "railway-api-created" });
 }
 
 function setRailwayVariable(name, value, service, environment, project, token) {
@@ -326,10 +342,8 @@ async function fetchJson(url, options = {}) {
 }
 
 function verifyRailwayDeployments(state, token, message) {
-  for (const service of [process.env.RAILWAY_API_SERVICE_ID, process.env.RAILWAY_WORKER_SERVICE_ID]) {
-    const deployments = parseJson(run("railway", ["deployment", "list", "--json", "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(token), label: "Railway deployment list" }), "Railway deployment list");
-    verifyRailwayDeploymentResult(deployments, message);
-  }
+  const deployments = parseJson(run("railway", ["deployment", "list", "--json", "--service", process.env.RAILWAY_API_SERVICE_ID, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { env: railwayEnv(token), label: "Railway API deployment list" }), "Railway API deployment list");
+  verifyRailwayDeploymentResult(deployments, message);
 }
 
 async function waitForRailwayApi(apiUrl, commitSha, releaseId) {
@@ -342,17 +356,6 @@ async function waitForRailwayApi(apiUrl, commitSha, releaseId) {
     } catch {}
   }
   throw new Error("Railway API never reported the exact local release ready");
-}
-
-async function waitForWorkerCatalogue(state, token, commitSha, releaseId) {
-  for (const seconds of [0, 2, 4, 8, 12, 20, 30, 30, 30]) {
-    if (seconds) await wait(seconds * 1000);
-    try {
-      const logs = run("railway", ["logs", "--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_WORKER_SERVICE_ID, "--lines", "200"], { env: railwayEnv(token), label: "Railway worker logs" });
-      if (workerCatalogueReady(logs, commitSha, releaseId)) return;
-    } catch {}
-  }
-  throw new Error("Railway worker did not report the exact non-empty catalogue");
 }
 
 async function smokeCatalogue(apiUrl) {
@@ -397,7 +400,7 @@ async function cleanup(root, journalPath) {
   if (!["parkdex.local-release/v3", "parkdex.local-release/v4"].includes(state.schema) || state.mode !== "preview" || !/^lp-pr-[0-9]{1,6}-[0-9a-f]{8}-[0-9a-f]{8}$/.test(state.railwayEnvironment || "") || state.neonBranch !== `preview/${state.railwayEnvironment}` || state.status === "cleaned") {
     throw new Error("Release journal is not an active owned preview");
   }
-  requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
+  requireEnv(["RAILWAY_PROJECT_ID", "RAILWAY_BASE_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"]);
   if (state.providerProjects && (state.providerProjects.railway !== process.env.RAILWAY_PROJECT_ID || state.providerProjects.neon !== process.env.NEON_PROJECT_ID || state.providerProjects.vercel !== process.env.VERCEL_PROJECT_ID || state.providerProjects.vercelOrg !== process.env.VERCEL_ORG_ID)) throw new Error("Cleanup provider project identities do not match the release journal");
   providerPreflight(root, true);
   if (!state.railwayEnvironmentId) {
@@ -497,17 +500,19 @@ async function cleanup(root, journalPath) {
 async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harnessSha, sourceAuthorization) {
   const preview = mode === "preview";
   const railwayEnvironment = preview ? buildPreviewEnvironmentName(pullRequest, sha, releaseId) : "staging";
+  const persistentStagingEnvironmentId = process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null;
   const neonBranch = preview ? `preview/${railwayEnvironment}` : null;
   const expiresAt = preview ? new Date(Date.now() + 7 * 86400_000).toISOString().replace(/\.\d{3}Z$/, "Z") : null;
-  const state = { schema: "parkdex.local-release/v4", mode, status: "planned", releaseId, harnessSha, commitSha: sha, sourceAuthorization, providerProjects: { railway: process.env.RAILWAY_PROJECT_ID || null, neon: preview ? process.env.NEON_PROJECT_ID || null : null, vercel: process.env.VERCEL_PROJECT_ID || null, vercelOrg: process.env.VERCEL_ORG_ID || null }, pullRequest: preview ? pullRequest : null, railwayEnvironment, railwayEnvironmentId: preview ? null : process.env.RAILWAY_STAGING_ENVIRONMENT_ID || null, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  const safety = preview ? ["trusted clean staging harness", "attested exact source SHA", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] : ["clean exact staging SHA", "persistent staging only", "manual production boundary"];
+  const state = { schema: "parkdex.local-release/v4", mode, status: "planned", releaseId, harnessSha, commitSha: sha, sourceAuthorization, providerProjects: { railway: process.env.RAILWAY_PROJECT_ID || null, neon: preview ? process.env.NEON_PROJECT_ID || null : null, vercel: process.env.VERCEL_PROJECT_ID || null, vercelOrg: process.env.VERCEL_ORG_ID || null }, pullRequest: pullRequest || null, railwayEnvironment, railwayEnvironmentId: preview ? null : persistentStagingEnvironmentId, neonBranch, neonBranchId: null, neonEndpointId: null, neonDatabaseId: null, neonDatabaseName: null, vercelDeploymentId: null, vercelOrgId: null, frontendUrl: null, apiUrl: null, expiresAt, resourceIntent: {}, cleanupIntent: {}, cleanup: {}, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const safety = preview ? ["trusted clean staging harness", "attested exact source SHA", "no environment copy", "journal before mutation", "exact source and release id", "provider-owned cleanup"] : ["trusted clean staging harness", "attested exact reviewed PR head", "persistent staging only", "preserve provider configuration", "manual production boundary"];
   const plan = { mode, harnessSha, commitSha: sha, releaseId, railwayEnvironment, neonBranch, journalPath, apply: flag("--apply"), safety };
   if (!flag("--apply")) { console.log(JSON.stringify(plan, null, 2)); return; }
   if (!value("--sha")) throw new Error("--apply requires an explicit full --sha");
   if (resolve(journalPath).startsWith(`${resolve(root)}\\`) || resolve(journalPath).startsWith(`${resolve(root)}/`)) throw new Error("Release journals must be stored outside the repository");
   if (existsSync(journalPath)) throw new Error("Refusing to overwrite an existing release journal");
-  const common = ["RAILWAY_PROJECT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"];
-  requireEnv(preview ? [...common, "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "NEON_PARENT_BRANCH"] : [...common, "RAILWAY_STAGING_ENVIRONMENT_ID", "PARKDEX_STAGING_DATABASE_URL", "PARKDEX_STAGING_DATABASE_URL_UNPOOLED", "PARKDEX_STAGING_GOOGLE_CLIENT_ID", "PARKDEX_STAGING_GOOGLE_CLIENT_SECRET"]);
+  const common = ["RAILWAY_PROJECT_ID", "RAILWAY_API_SERVICE_ID", "VERCEL_SCOPE", "VERCEL_ORG_ID", "VERCEL_PROJECT_NAME", "VERCEL_PROJECT_ID"];
+  requireEnv(preview ? [...common, "RAILWAY_BASE_ENVIRONMENT_ID", "NEON_ORG_ID", "NEON_PROJECT_ID", "NEON_PARENT_BRANCH"] : common);
+  if (!preview && !persistentStagingEnvironmentId) throw new Error("Missing required environment variable: RAILWAY_STAGING_ENVIRONMENT_ID");
   providerPreflight(root, preview);
   atomicJournal(journalPath, state);
   const metadata = releaseMetadata(root, sha);
@@ -525,8 +530,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
       run("python", [join(sourceRoot, "scripts", "verify_preview_database.py"), "--phase", "migrated"], { cwd: sourceRoot, env: minimalEnv(databaseEnv), label: "Preview database isolation and catalogue gate" });
       updateJournal(journalPath, state, { status: "database-verified" });
     }
-    else database = { pooled: process.env.PARKDEX_STAGING_DATABASE_URL, direct: process.env.PARKDEX_STAGING_DATABASE_URL_UNPOOLED };
-    const context = railwayContext(process.env.RAILWAY_PROJECT_ID, preview ? process.env.RAILWAY_BASE_ENVIRONMENT_ID : process.env.RAILWAY_STAGING_ENVIRONMENT_ID, process.env.RAILWAY_API_TOKEN);
+    const context = railwayContext(process.env.RAILWAY_PROJECT_ID, preview ? process.env.RAILWAY_BASE_ENVIRONMENT_ID : persistentStagingEnvironmentId, process.env.RAILWAY_API_TOKEN);
     try {
       const environments = listRailwayEnvironments(context, process.env.RAILWAY_API_TOKEN);
       if (preview) {
@@ -547,19 +551,20 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
         if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified");
         state.railwayEnvironmentId = matches[0].id;
         updateJournal(journalPath, state, { railwayEnvironmentId: matches[0].id, status: "railway-created" });
-        createRailwayServiceInstances(context, state, journalPath, process.env.RAILWAY_API_TOKEN);
+        createRailwayApiService(context, state, journalPath, process.env.RAILWAY_API_TOKEN);
       } else if (!environments.some((item) => item.id === state.railwayEnvironmentId && item.name === "staging")) throw new Error("Railway staging environment identity was not verified");
     } finally { rmSync(context, { recursive: true, force: true }); }
     const railwayArgs = ["--project", process.env.RAILWAY_PROJECT_ID, "--environment", state.railwayEnvironmentId, "--service", process.env.RAILWAY_API_SERVICE_ID, "--json"];
     let domains = parseJson(run("railway", ["domain", "list", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain list" }), "Railway domains");
-    let domain = JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/)?.[0];
-    if (!domain) {
+    const generatedDomains = [...new Set(JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/g) || [])];
+    let domain = preview ? generatedDomains[0] : STAGING_API_HOST;
+    if (preview && !domain) {
       updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), railwayDomain: { environmentId: state.railwayEnvironmentId, serviceId: process.env.RAILWAY_API_SERVICE_ID } }, status: "railway-domain-creating" });
       run("railway", ["domain", "--port", "8080", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain create" });
       domains = parseJson(run("railway", ["domain", "list", ...railwayArgs], { env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway domain list" }), "Railway domains");
       domain = JSON.stringify(domains).match(/[a-zA-Z0-9][a-zA-Z0-9-]*\.up\.railway\.app/)?.[0];
     }
-    if (!domain) throw new Error("Railway API domain was not verified");
+    if (!domain || (!preview && generatedDomains.length !== 1)) throw new Error("Railway API domain was not verified");
     state.apiUrl = `https://${domain}`;
     updateJournal(journalPath, state, { status: "frontend-creating" });
     const vercelLink = bindVercelProject(sourceRoot);
@@ -567,7 +572,8 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     let deploymentUrl;
     try {
       updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), vercel: { projectId: process.env.VERCEL_PROJECT_ID, commitSha: sha, releaseId, environment: railwayEnvironment } }, status: "vercel-creating" });
-      const deployOutput = run("vercel", ["deploy", "--yes", "--target", "preview", "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
+      const targetArgs = preview ? ["--target", "preview"] : ["--prod"];
+      const deployOutput = run("vercel", ["deploy", "--yes", ...targetArgs, "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
       deploymentUrl = deployOutput.split(/\r?\n/).findLast((line) => /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(line.trim()))?.trim();
     } catch {
       deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
@@ -576,27 +582,23 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     const vercel = await verifyVercelDeployment(deploymentUrl, sha, releaseId, railwayEnvironment);
     state.frontendUrl = preview ? vercel.url : "https://staging.parkdex.app";
     updateJournal(journalPath, state, { vercelDeploymentId: vercel.id, frontendUrl: state.frontendUrl, apiUrl: state.apiUrl, status: "frontend-created" });
-    const services = [process.env.RAILWAY_API_SERVICE_ID, process.env.RAILWAY_WORKER_SERVICE_ID];
-    const dbName = preview ? "PREVIEW_DATABASE_URL" : "DATABASE_URL";
-    const directName = preview ? "PREVIEW_DATABASE_URL_UNPOOLED" : "DATABASE_URL_UNPOOLED";
-    for (const service of services) {
-      for (const [name, val] of [[dbName, database.pooled], [directName, database.direct], ["RAILWAY_ENVIRONMENT_NAME", railwayEnvironment], ["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]]) setRailwayVariable(name, val, service, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
-    }
-    for (const [name, val] of [
+    const variables = preview
+      ? [["PREVIEW_DATABASE_URL", database.pooled], ["PREVIEW_DATABASE_URL_UNPOOLED", database.direct], ["RAILWAY_ENVIRONMENT_NAME", railwayEnvironment], ["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]]
+      : [["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]];
+    for (const [name, val] of variables) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
+    if (preview) for (const [name, val] of [
       ["FRONTEND_ORIGINS", state.frontendUrl],
       ["APP_PUBLIC_URL", state.frontendUrl],
       ["API_PUBLIC_URL", state.apiUrl],
       ["MCP_PUBLIC_URL", `${state.apiUrl}/mcp`],
     ]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
-    if (!preview) for (const [name, val] of [["GOOGLE_CLIENT_ID", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_ID], ["GOOGLE_CLIENT_SECRET", process.env.PARKDEX_STAGING_GOOGLE_CLIENT_SECRET], ["GOOGLE_REDIRECT_URI", "https://staging.parkdex.app/auth/google/callback"]]) setRailwayVariable(name, val, process.env.RAILWAY_API_SERVICE_ID, state.railwayEnvironmentId, process.env.RAILWAY_PROJECT_ID, process.env.RAILWAY_API_TOKEN);
     updateJournal(journalPath, state, { status: "configured" });
     const message = `local-release ${releaseId} commit ${sha}`;
     const marker = join(sourceRoot, "backend", ".local-release-source-sha");
     writeFileSync(marker, `${sha} ${releaseId}`, "utf8");
-    for (const service of services) run("railway", ["up", "--ci", "--yes", "--message", message, "--service", service, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { cwd: sourceRoot, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway deploy" });
+    run("railway", ["up", "--ci", "--yes", "--message", message, "--service", process.env.RAILWAY_API_SERVICE_ID, "--environment", state.railwayEnvironmentId, "--project", process.env.RAILWAY_PROJECT_ID], { cwd: sourceRoot, env: railwayEnv(process.env.RAILWAY_API_TOKEN), label: "Railway API deploy" });
     verifyRailwayDeployments(state, process.env.RAILWAY_API_TOKEN, message);
     await waitForRailwayApi(state.apiUrl, sha, releaseId);
-    await waitForWorkerCatalogue(state, process.env.RAILWAY_API_TOKEN, sha, releaseId);
     await verifyBrowserCors(state.apiUrl, vercel.url);
     await smokeCatalogue(state.apiUrl);
     verifyFrontendContent(sourceRoot, vercel.url);
@@ -627,22 +629,21 @@ if (git(root, ["status", "--porcelain"])) throw new Error("Refusing a dirty work
 const mode = value("--mode", "staging").toLowerCase();
 if (!["preview", "staging", "cleanup"].includes(mode)) throw new Error("--mode must be preview, staging, or cleanup");
 const pullRequest = Number(value("--pr", "0"));
-if (mode === "preview" && (!Number.isInteger(pullRequest) || pullRequest < 1 || pullRequest > 999999)) throw new Error("Preview requires a valid --pr number");
+if (mode !== "cleanup" && flag("--apply") && (!Number.isInteger(pullRequest) || pullRequest < 1 || pullRequest > 999999)) throw new Error("Candidate apply requires a valid --pr number");
 const releaseId = value("--release-id", randomUUID());
 if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(releaseId)) throw new Error("--release-id must be a version-4 UUID");
 const defaultRoot = process.env.LOCALAPPDATA || tmpdir();
 const journalPath = resolve(value("--journal", join(defaultRoot, "Parkdex", "release-journal", `${releaseId}.json`)));
 
 if (mode === "cleanup" && !flag("--apply")) throw new Error("Cleanup requires explicit --apply");
-if (flag("--apply") && mode === "staging") throw new Error("Local staging Apply remains disabled; use the reviewed manual staging workflow");
 if (mode === "cleanup") {
   if (!value("--journal") || !existsSync(journalPath)) throw new Error("Cleanup requires its exact existing release journal");
   trustedHarness(root);
   await cleanup(root, journalPath);
 } else if (flag("--apply")) {
-  if (!value("--sha") || !value("--attestation") || !value("--head-ref")) throw new Error("Preview apply requires explicit --sha, --head-ref, and --attestation");
+  if (!value("--sha") || !value("--attestation") || !value("--head-ref")) throw new Error("Candidate apply requires explicit --sha, --head-ref, and --attestation");
   const harnessSha = trustedHarness(root);
-  const authorization = verifyPreviewAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"));
+  const authorization = verifyCandidateAuthorization(root, harnessSha, expectedSha, pullRequest, value("--head-ref"), value("--attestation"));
   await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, harnessSha, authorization);
 } else {
   await deploy(root, mode, expectedSha, journalPath, releaseId, pullRequest, actualSha, null);

@@ -1,81 +1,88 @@
-# Manual deployments
+# Independent staging and production deployments
 
-Routine validation runs locally against an exact commit and can publish a separate `local-ci` commit status. Hosted validation is an explicit checkpoint; pull requests and pushes do not start the heavy CI, Android, preview, or deployment paths automatically.
+Parkdex uses short GitHub Actions merge deployments and long-lived provider resources. The only automatic deployment events are protected-branch merge pushes to `staging` and `main`. A workflow run validates one immutable Git SHA, stamps that SHA and a release ID on the Railway API, starts the API and Vercel uploads concurrently, and exits as soon as both providers accept the requests. It never polls builds, waits for `/ready`, or runs browser smoke tests.
 
-Run exact-commit validation from a clean feature checkout. Run merge validation only through the scripts in a separate clean checkout whose `HEAD` is the current `origin/staging`; the command rejects a feature-controlled harness:
+The release agent owns everything after queueing: it waits outside GitHub Actions for provider convergence, verifies the exact revision, performs the Vercel domain cutover, browser-tests the stable URL, and then stops. A successful Actions run means **queued**, not **live**.
 
-```bash
-node scripts/local-ci.mjs --sha "$(git rev-parse HEAD)" --suite all
-FEATURE_REF=<feature-branch>
-FEATURE_SHA="$(git rev-parse "origin/$FEATURE_REF")"
-node scripts/merge-candidate.mjs --base origin/staging --head "$FEATURE_SHA" --head-ref "$FEATURE_REF" --suite all
-```
+Each merge deploy uses one standard Ubuntu job with an eight-minute timeout. At 6-12 deployments per week, the hard-ceiling forecast is about 208-416 runner-minutes per month after the repository becomes private. GitHub Actions budgets are account-level and monetary rather than an exact per-repository minute counter, so the workflow shape and release cadence are the enforcement mechanism for the 500-minute project target.
 
-The local runner removes provider credentials from child processes, uses local PostgreSQL, writes a sanitized attestation outside the repository, and never changes a GitHub check by itself. This is credential separation, not a security sandbox: same-user code can still read local credential files, so run it only against reviewed commits and keep untrusted feature PRs out of credentialed release sessions. Publish a status separately only after reviewing the attestation, using a credential that is not present in the test process:
+## Persistent topology
 
-```bash
-export PARKDEX_STATUS_TOKEN='[set outside the test process]'
-node scripts/github-status.mjs \
-  --repository NathanPannell/parkdex \
-  --sha "$FEATURE_SHA" \
-  --head-ref <feature-branch> \
-  --state success \
-  --attestation <external-attestation-path> \
-  --target-url https://github.com/NathanPannell/parkdex/actions
-```
+Routine releases reuse these resources and never recreate them:
 
-Run the hosted checkpoint only for an explicit review milestone:
+| Target | Frontend | Railway API | Neon branch |
+| --- | --- | --- | --- |
+| staging | `https://staging.parkdex.app` | `https://api-staging-882c.up.railway.app` | `staging` |
+| production | `https://parkdex.app` | `https://api-production-e72df.up.railway.app` | `main` |
 
-```bash
-gh workflow run hosted-checkpoint.yml -R NathanPannell/parkdex --ref staging \
-  -f commit_sha="$(git rev-parse HEAD)" -f reason='ready for review'
-```
+The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway API pre-deploy command; it does not receive an application-code deployment.
 
-The local preview path uses a unique `lp-pr-<number>-<sha>-<release>` namespace within Railway's conservative 30-character lowercase alphanumeric-and-hyphen subset, creates an empty Railway environment, instantiates only the two verified project services with a sanitized variable-free patch, and uses a fresh database inside a schema-only Neon branch so migrations and deterministic catalogue seed data run without parent application data. Owned resources are journaled outside the repository before later mutations; deployment, API, worker, protected Vercel content, source, release, and provider identities are verified.
+Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. Staging later assigns `staging.parkdex.app` to the verified deployment; production later promotes the verified deployment to the production domains. The current Hobby setup intentionally uses one Vercel project so both targets follow the identical build path. Keep its Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
-Preview `-Apply` must run from a clean checkout at the freshly fetched `origin/staging`. It requires an explicit full source SHA, open PR targeting `staging`, remote head name, and successful full merge-candidate attestation produced by that trusted staging validator. The runner rechecks the attestation, nested evidence hash, current merge tree, remote branch, and PR identity before provider access. The attestation is the reviewed-source gate; an open PR alone is not authorization. Because same-user reviewed source can still read local credential files, `-Apply` is also the operator's explicit deployment decision and must not be used for untrusted code.
+The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
+
+Before the first independent release, apply the reviewed Railway configuration once to each existing environment. Review each plan before applying it; do not use `--confirm-destructive`:
 
 ```powershell
-$featureRef = '<feature-branch>'
-$pullRequest = 123
-$featureSha = git rev-parse "origin/$featureRef"
-$evidence = Join-Path $env:TEMP "parkdex-merge-candidate-$featureSha.json"
-node scripts/merge-candidate.mjs --base origin/staging --head $featureSha --head-ref $featureRef --suite all --output $evidence
-pwsh -File scripts/local-release.ps1 -Mode Preview -PullRequest $pullRequest -CommitSha $featureSha -HeadRef $featureRef -AttestationPath $evidence -Apply
-
-# Cleanup remains journal-owned even after the PR closes or its head changes.
-$journal = 'C:\Users\me\AppData\Local\Parkdex\release-journal\<release-id>.json'
-pwsh -File scripts/local-release.ps1 -Mode Cleanup -StatePath $journal -Apply
+foreach ($environment in @('staging', 'production')) {
+  railway link --project $env:RAILWAY_PROJECT_ID --environment $environment
+  railway config plan
+  railway config apply --yes
+  railway config plan --detailed-exit-code
+  if ($LASTEXITCODE -ne 0) { throw "Railway configuration still differs in $environment" }
+}
 ```
 
-The isolated proof exercised Neon initialization, Railway/Vercel creation, both service deployments, exact API/worker identity, catalogue isolation, a real-browser map/search/place-details journey, and authoritative cleanup. A Windows shell-boundary failure required the final verification steps to be completed manually on that exact release; the corrected native Node wrapper and protected `vercel curl` path were then accepted from the combined live evidence plus focused synthetic tests, not a second end-to-end provider run.
+Verify in Railway that the API shows `python -m backend.app.migrate` as its pre-deploy command and has a `DATABASE_URL_UNPOOLED` variable before starting the release. The value must remain provider-managed and must not be copied into GitHub or logs.
 
-Successful publication accepts only full merge-candidate evidence and rechecks the remote feature head, current staging base, merge tree, nested evidence hash, and trusted staging copies of the validator and publisher. Its status context includes the staging SHA, so an older success is not a claim about a later staging base; it is informational rather than a fixed branch-protection check.
+Do not start another release to an environment while an earlier one is unresolved. GitHub concurrency serializes only the short queueing jobs; it cannot serialize provider builds after the workflow exits.
 
-Local staging `-Apply` remains disabled because the persistent staging mutation path was not covered by the isolated preview proof. Use the reviewed manual GitHub staging workflow below; it targets the existing exact `staging` Railway environment and never creates or copies one. Production remains reachable only through its separate manual promotion gate.
+## Branch and trigger controls
 
-Preview creation is not automatic. The close-event workflow has no access to external release journals, so it makes no provider calls and fails visibly until the authorized coordinator completes exact journal-owned cleanup and verifies every recorded resource absent.
+Both `staging` and `main` require pull requests for every change, including repository administrators. Force pushes and branch deletion are disabled. The deployment entry workflows have no `workflow_dispatch`, `pull_request`, `schedule`, or `workflow_run` trigger, and a rerun is rejected before runner allocation. Consequently, a deployment can start only from the first run of a protected-branch merge push. Docs-only merges intentionally deploy because there are no path filters.
 
-Deploy the latest `staging` commit to the persistent staging environment:
+## Staging: validate locally, deploy, browser-test, then merge
 
-```bash
-gh workflow run ci.yml -R NathanPannell/parkdex --ref staging -f action=deploy-staging
-```
+1. Start from an issue or prompt, create a feature branch from `staging`, and open a same-repository pull request targeting `staging`.
+2. Run the full validation locally and complete code review. Do not expose provider credentials to unreviewed code.
+3. From a separate clean checkout whose `HEAD` is the current `origin/staging`, build a full merge-candidate attestation and deploy the exact reviewed PR head to persistent staging:
 
-The staging GitHub environment supplies `STAGING_GOOGLE_CLIENT_ID` as a variable and `STAGING_GOOGLE_CLIENT_SECRET` as a secret. The deployment writes those credentials only to the staging API, with `https://staging.parkdex.app/auth/google/callback` as the callback.
+   ```powershell
+   $featureRef = '<feature-branch>'
+   $pullRequest = 123
+   git fetch --no-tags origin staging $featureRef
+   $candidateSha = git rev-parse "origin/$featureRef"
+   $evidence = Join-Path $env:TEMP "parkdex-merge-candidate-$candidateSha.json"
+   node scripts/merge-candidate.mjs --base origin/staging --head $candidateSha --head-ref $featureRef --suite all --output $evidence
+   pwsh -File scripts/local-release.ps1 -Mode Staging -PullRequest $pullRequest -CommitSha $candidateSha -HeadRef $featureRef -AttestationPath $evidence -Apply
+   ```
 
-After that run succeeds and staging has been reviewed, promote the same release to production:
+   The local session must be authenticated to Railway and Vercel and must provide the exact project, API service, staging-environment, organization, and Vercel project identifiers. Persistent staging requires `RAILWAY_STAGING_ENVIRONMENT_ID`; the preview-only `RAILWAY_BASE_ENVIRONMENT_ID` is not a fallback. Before mutating anything, the command verifies the API migration command, pooled and direct database variables, absent Git source, and the exact stable staging API domain. The staging command changes only `APP_COMMIT_SHA` and `APP_RELEASE_ID`; it preserves stable provider configuration.
+4. The local command waits until the Railway API deployment, `/ready`, and immutable Vercel deployment prove the exact SHA and release ID, then assigns `staging.parkdex.app`. Record the external release journal and exact provider identities in the task ledger.
+5. Browser-test `https://staging.parkdex.app`, exercising the affected journey and inspecting console and network failures. Report `OK` only for the exact tested SHA.
+6. Reconfirm that the PR head and base have not changed, then merge the PR into `staging`.
+7. The protected `staging` merge push queues the resulting merge SHA. The release agent repeats convergence verification, assigns only the verified Vercel deployment to the staging domain, and smoke-tests the merged revision before declaring staging complete.
 
-```bash
-gh workflow run ci.yml -R NathanPannell/parkdex --ref staging -f action=promote-production
-```
+The one-time rollout that first enables this local staging command cannot pre-deploy itself through the still-disabled script on `origin/staging`. For that rollout only, merge after full local CI and independent review, then treat the first automatic staging deployment as the candidate: verify provider convergence and browser-test the exact merge SHA before publishing the same infrastructure change to `main`.
 
-Promotion pins the latest `staging` commit, reruns the full release checks, verifies that exact commit is live in the staging frontend and API, and fails if `staging` changes during the run. It then fast-forwards `main` without force and deploys that commit to production. If `main` is not an ancestor of `staging`, reconcile the branches through a pull request before retrying.
+## Production: merge, verify, promote, stop
 
-GitHub only dispatches workflows that exist on the default branch. This keeps the existing `ci.yml` entry point so the commands work after this change reaches `staging`, but future edits to a new workflow file must first reach `main` before GitHub can dispatch them. A staging-only cleanup-hook change is therefore prepared but inactive until a separately authorized promotion reaches the default branch.
+1. Open and review a pull request containing only the staging-validated release changes against `main`. Confirm staging is healthy and no staging or production release is still in flight.
+2. Record the current production revision and merge the pull request.
+3. The `main` push starts `deploy-production.yml`. It invokes the same queue-only workflow used by staging and exits after the providers accept the exact merged SHA.
+4. The release agent waits locally for the Railway API, migrations, and staged Vercel deployment to report the expected SHA and release ID. Test the immutable Vercel deployment before changing public domains when practical.
+5. Promote that exact staged Vercel deployment, then smoke-test the stable production URL in a real browser:
 
-Vercel Git deployments must remain disabled, and Railway API and worker Git sources must be disconnected in both environments. The workflow disconnects Railway sources before its uploads, but the first rollout should confirm the provider settings before merging a change that would otherwise trigger an automatic build.
+   ```powershell
+   vercel promote <vercel-deployment-url> --cwd frontend --scope <scope> --token $env:VERCEL_TOKEN
+   ```
 
-The September 8, 2026 rollout inspection confirmed that the API and worker have no Git or image source attached in either staging or production, so no source migration was required.
+6. Verify frontend-to-API traffic, console and network output, and `/ready`. Record the evidence and stop once every check passes.
 
-Automatic PR preview creation remains disabled. Explicit attested local previews use their external journal for cleanup; the close-event workflow reports that coordinator-owned cleanup as unresolved rather than guessing provider identities or claiming success.
+## Retry and rollback
+
+- GitHub workflow reruns are intentionally blocked. If a provider rejected the merge upload, diagnose it and retry only that provider from the trusted local release session using the same SHA and environment, or merge a narrow corrective commit.
+- If exactly one provider failed after accepting the request, retry only that provider with the same SHA and environment. Use at most one diagnosed transient retry before reassessing.
+- If a small configuration or release-command correction is obvious, fix it, queue the same SHA again, and repeat the complete verification.
+- If application behavior, schema compatibility, or provider state is ambiguous, stop new releases and prepare a rollback plan naming the last-known-good SHA, the exact Vercel and Railway targets, database compatibility assumptions, and smoke checks.
+- Never automatically reverse a migration, restore Neon, delete a persistent environment, or recreate its stable domain as a recovery shortcut.

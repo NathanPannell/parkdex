@@ -11,8 +11,6 @@ if [[ "$1 $2" == "deployment list" ]]; then
   printf '[{"meta":{"cliMessage":"expected message"},"status":"%s"}]\n' "${MOCK_RAILWAY_STATUS:-SUCCESS}"
 elif [[ "$1 $2" == "domain list" ]]; then
   printf '["test.up.railway.app"]\n'
-elif [[ "$1" == logs ]]; then
-  printf 'Parkdex catalogue ready commit=%s release=%s places=1\n' "$EXPECTED_COMMIT_SHA" "${MOCK_RELEASE_ID:-local}"
 else
   exit 1
 fi
@@ -72,7 +70,7 @@ chmod +x "$test_dir/railway" "$test_dir/vercel" "$test_dir/curl"
 
 export PATH="$test_dir:$PATH"
 export RAILWAY_PROJECT_ID=p RAILWAY_ENVIRONMENT=staging
-export RAILWAY_API_SERVICE_ID=api RAILWAY_WORKER_SERVICE_ID=worker
+export RAILWAY_API_SERVICE_ID=api
 
 MOCK_RAILWAY_STATUS=SUCCESS bash "$repo/scripts/verify-railway-deployments.sh" 'expected message'
 if MOCK_RAILWAY_STATUS=FAILED bash "$repo/scripts/verify-railway-deployments.sh" 'expected message' 2>/dev/null; then
@@ -123,10 +121,5 @@ grep -q '^api_url=https://test.up.railway.app$' "$GITHUB_OUTPUT"
 [[ "$(cat "$MOCK_CURL_COUNT")" == 2 ]]
 
 rm -f "$MOCK_CURL_COUNT" "$GITHUB_OUTPUT"
-export EXPECTED_RELEASE_ID=release-123 MOCK_RELEASE_ID=release-123 WORKER_VERIFY_DELAYS=0
+export EXPECTED_RELEASE_ID=release-123 MOCK_RELEASE_ID=release-123
 bash "$repo/scripts/wait-for-railway-api.sh"
-bash "$repo/scripts/wait-for-worker-catalogue.sh"
-if MOCK_RELEASE_ID=wrong bash "$repo/scripts/wait-for-worker-catalogue.sh" 2>/dev/null; then
-  echo 'Worker with the wrong release id was accepted.' >&2
-  exit 1
-fi

@@ -1,28 +1,7 @@
-import { defineRailway, github, preserve, project, service } from "railway/iac";
+import { defineRailway, preserve, project, service } from "railway/iac";
 
 export default defineRailway(() => {
-  const repository = github("NathanPannell/every-park");
-
-  const worker = service("worker", {
-    source: repository,
-    build: {
-      builder: "DOCKERFILE",
-      dockerfilePath: "backend/Dockerfile.worker",
-      watchPatterns: ["backend/**", "database/**"],
-    },
-    deploy: {
-      restartPolicyType: "ON_FAILURE",
-      restartPolicyMaxRetries: 5,
-    },
-    env: {
-      DATABASE_URL: preserve(),
-      APP_COMMIT_SHA: preserve(),
-    },
-    replicas: { "us-west2": 1 },
-  });
-
   const api = service("api", {
-    source: repository,
     build: {
       builder: "DOCKERFILE",
       dockerfilePath: "backend/Dockerfile.api",
@@ -32,19 +11,28 @@ export default defineRailway(() => {
       preDeployCommand: ["python -m backend.app.migrate"],
       healthcheckPath: "/health",
       healthcheckTimeout: 60,
-      restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 3,
     },
     env: {
+      API_PUBLIC_URL: preserve(),
       DATABASE_URL: preserve(),
       DATABASE_URL_UNPOOLED: preserve(),
+      APP_PUBLIC_URL: preserve(),
+      EMAIL_PROVIDER: preserve(),
       FRONTEND_ORIGINS: preserve(),
+      GOOGLE_CLIENT_ID: preserve(),
+      GOOGLE_CLIENT_SECRET: preserve(),
+      GOOGLE_REDIRECT_URI: preserve(),
+      MCP_PUBLIC_URL: preserve(),
+      RESEND_API_KEY: preserve(),
+      RESEND_FROM: preserve(),
       APP_COMMIT_SHA: preserve(),
+      APP_RELEASE_ID: preserve(),
     },
     replicas: { "us-west2": 1 },
   });
 
   return project("every-park", {
-    resources: [worker, api],
+    resources: [api],
   });
 });
