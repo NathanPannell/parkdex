@@ -12,6 +12,7 @@ if (commitSha !== headSha) throw new Error(`Cloudflare commit ${commitSha} does 
 const env = {
   ...process.env,
   PARKDEX_CLOUDFLARE_BUILD: "1",
+  PARKDEX_CATALOGUE_SCOPE: process.env.CF_PAGES_BRANCH?.trim() === "staging" ? "staging" : "canonical",
   NEXT_PUBLIC_API_BASE_URL: ".",
   NEXT_PUBLIC_COMMIT_SHA: commitSha,
   NEXT_PUBLIC_COMMIT_DATE: git("show", "-s", "--format=%cI", commitSha),

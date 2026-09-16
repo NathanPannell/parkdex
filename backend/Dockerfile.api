@@ -6,6 +6,9 @@ COPY backend/requirements.txt /workspace/backend/requirements.txt
 RUN pip install --no-cache-dir -r /workspace/backend/requirements.txt
 COPY backend /workspace/backend
 COPY database /workspace/database
+COPY data/boundaries.geojson /workspace/data/boundaries.geojson
+COPY data/staging-field-boundaries.geojson /workspace/data/staging-field-boundaries.geojson
+COPY data/staging-field-places.json /workspace/data/staging-field-places.json
 
 CMD ["sh", "-c", "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 

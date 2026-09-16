@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Place } from "./places";
-import { useGroups } from "./use-groups";
+import { registerNativePlatformStorage, resetPlatformStorageForTests, type KeyValueStore } from "./platform-storage";
+import { accountGroupsCacheKey, accountGroupsOutboxKey, useGroups } from "./use-groups";
 
 const place: Place = {
   id: "park-1",
@@ -26,13 +27,54 @@ function json(body: unknown) {
   }));
 }
 
+function failed(status: number, detail: string) {
+  return Promise.resolve(new Response(JSON.stringify({ detail }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  }));
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
 
-afterEach(cleanup);
+function setOnline(value: boolean) {
+  Object.defineProperty(window.navigator, "onLine", { configurable: true, value });
+}
+
+function memoryStore(initial: Record<string, string> = {}): KeyValueStore & { values: Map<string, string> } {
+  const values = new Map(Object.entries(initial));
+  return {
+    values,
+    getItem: vi.fn(async (key) => values.get(key) ?? null),
+    setItem: vi.fn(async (key, value) => { values.set(key, value); }),
+    removeItem: vi.fn(async (key) => { values.delete(key); }),
+  };
+}
+
+function setNative() {
+  Object.defineProperty(globalThis, "Capacitor", {
+    configurable: true,
+    value: { isNativePlatform: () => true },
+  });
+}
+
+beforeEach(() => {
+  resetPlatformStorageForTests();
+  Reflect.deleteProperty(globalThis, "Capacitor");
+  window.localStorage.clear();
+  setOnline(true);
+});
+
+afterEach(() => {
+  cleanup();
+  resetPlatformStorageForTests();
+  Reflect.deleteProperty(globalThis, "Capacitor");
+  window.localStorage.clear();
+  setOnline(true);
+});
 
 describe("useGroups account isolation", () => {
   it("discards a list response from the previous account", async () => {
@@ -125,5 +167,234 @@ describe("useGroups account isolation", () => {
     });
     expect(result.current.groups.map((group) => group.id)).toEqual(["new-wishlist"]);
     expect(result.current.selectedGroupId).toBeNull();
+  });
+});
+
+describe("useGroups offline groups", () => {
+  it("restores native async cache and outbox state after a runtime restart", async () => {
+    const credentials = memoryStore();
+    const journal = memoryStore({
+      [accountGroupsCacheKey("account-a")]: JSON.stringify([{ id: "wishlist", name: "Wishlist", isWishlist: true, placeIds: [] }]),
+    });
+    setNative();
+    registerNativePlatformStorage(async () => ({ credentials, journal }));
+    setOnline(false);
+    const request = vi.fn(() => json([]));
+    const first = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request,
+    }));
+    await waitFor(() => expect(first.result.current.groups.map((group) => group.id)).toEqual(["wishlist"]));
+    await act(() => first.result.current.addPlace("wishlist", place.id));
+    expect(first.result.current.pendingMemberships).toBe(1);
+    first.unmount();
+
+    resetPlatformStorageForTests();
+    registerNativePlatformStorage(async () => ({ credentials, journal }));
+    const restarted = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request,
+    }));
+
+    await waitFor(() => expect(restarted.result.current.groups[0]?.places).toEqual([place]));
+    expect(restarted.result.current.pendingMemberships).toBe(1);
+    expect(request).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(accountGroupsOutboxKey("account-a"))).toBeNull();
+    expect(JSON.parse(journal.values.get(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({
+      wishlist: { "park-1": expect.objectContaining({ included: true }) },
+    });
+  });
+
+  it("hydrates the last account snapshot, including Wishlist, while offline", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([
+      { id: "wishlist", name: "Wishlist", isWishlist: true, placeIds: [place.id] },
+      { id: "coast", name: "Coastal plans", placeIds: [] },
+    ]));
+    setOnline(false);
+    const request = vi.fn(() => json([]));
+    const { result } = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request,
+    }));
+
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["wishlist", "coast"]));
+    expect(request).not.toHaveBeenCalled();
+    expect(result.current.groups.map((group) => group.id)).toEqual(["wishlist", "coast"]);
+    expect(result.current.groups[0].places).toEqual([place]);
+    expect(result.current.offline).toBe(true);
+    expect(result.current.syncStatus).toBe("offline");
+  });
+
+  it("optimistically queues add/remove and persists one final desired state", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([
+      { id: "coast", name: "Coastal plans", placeIds: [] },
+    ]));
+    setOnline(false);
+    const { result } = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request: vi.fn(() => json([])),
+    }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["coast"]));
+
+    await act(async () => {
+      await result.current.addPlace("coast", place.id);
+      await result.current.removePlace("coast", place.id);
+    });
+    expect(result.current.groups[0].places).toEqual([]);
+    expect(result.current.pendingMemberships).toBe(1);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({
+      coast: { "park-1": expect.objectContaining({ included: false }) },
+    });
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsCacheKey("account-a")) ?? "null")[0].placeIds).toEqual([]);
+    expect(result.current.syncMessage).toMatch(/waiting to sync/i);
+  });
+
+  it("keeps cached groups and pending memberships isolated across account switches", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "a", name: "A", placeIds: [place.id] }]));
+    window.localStorage.setItem(accountGroupsCacheKey("account-b"), JSON.stringify([{ id: "b", name: "B", placeIds: [] }]));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ a: { "park-1": { included: true, revision: 1 } } }));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-b"), JSON.stringify({ b: { "park-1": { included: false, revision: 1 } } }));
+    setOnline(false);
+    const { result, rerender } = renderHook(
+      ({ identityKey }) => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey, places: [place], request: vi.fn(() => json([])) }),
+      { initialProps: { identityKey: "account-a" } },
+    );
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["a"]));
+    expect(result.current.pendingMemberships).toBe(1);
+
+    rerender({ identityKey: "account-b" });
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["b"]));
+    expect(result.current.groups[0].places).toEqual([]);
+    expect(result.current.pendingMemberships).toBe(1);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null").a["park-1"].included).toBe(true);
+  });
+
+  it("drains a persisted membership on startup and removes it after acknowledgement", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ coast: { "park-1": { included: true, revision: 1 } } }));
+    const request = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/groups/coast/places") return json({ id: "coast", name: "Coastal plans", placeIds: [place.id] });
+      expect(init?.cache).toBe("no-store");
+      return json([{ id: "coast", name: "Coastal plans", placeIds: [] }]);
+    });
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/groups/coast/places", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(result.current.pendingMemberships).toBe(0));
+    expect(result.current.groups[0].places).toEqual([place]);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({});
+  });
+
+  it("retains a failed membership for a later retry", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+    setOnline(false);
+    const request = vi.fn((path: string) => path === "/api/groups/coast/places"
+      ? Promise.resolve(new Response(JSON.stringify({ detail: "temporarily unavailable" }), { status: 503, headers: { "Content-Type": "application/json" } }))
+      : json([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(result.current.groups.length).toBe(1));
+    await act(async () => { await result.current.addPlace("coast", place.id); });
+    expect(result.current.pendingMemberships).toBe(1);
+
+    setOnline(true);
+    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/groups/coast/places", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(result.current.pendingMemberships).toBe(1));
+    expect(result.current.syncStatus).toBe("error");
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null").coast["park-1"].included).toBe(true);
+  });
+
+  it("drops a permanently invalid membership and reconciles a group deleted elsewhere", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ coast: { "park-1": { included: false, revision: 1 } } }));
+    const request = vi.fn((path: string) => path === "/api/groups/coast/places"
+      ? failed(404, "Group not found")
+      : json([]));
+
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/groups/coast/places", expect.objectContaining({ method: "DELETE" })));
+    await waitFor(() => expect(result.current.pendingMemberships).toBe(0));
+    await waitFor(() => expect(result.current.groups).toEqual([]));
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({});
+    expect(request.mock.calls.filter(([path]) => path === "/api/groups")).toHaveLength(2);
+  });
+
+  it("drops an invalid-place membership rather than retrying it forever", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ coast: { "park-1": { included: true, revision: 1 } } }));
+    const request = vi.fn((path: string) => path === "/api/groups/coast/places"
+      ? failed(400, "One or more places were not found or are inactive")
+      : json([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/groups/coast/places", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(result.current.pendingMemberships).toBe(0));
+    await waitFor(() => expect(result.current.groups[0]?.places).toEqual([]));
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({});
+  });
+
+  it("refreshes after a rename discovers that the group was deleted elsewhere", async () => {
+    let groupReads = 0;
+    const request = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/groups/coast" && init?.method === "PATCH") return failed(404, "Group not found");
+      groupReads += 1;
+      return json(groupReads === 1 ? [{ id: "coast", name: "Coastal plans", placeIds: [] }] : []);
+    });
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["coast"]));
+
+    await act(async () => {
+      await expect(result.current.rename("coast", "New name")).rejects.toMatchObject({ status: 404 });
+    });
+
+    expect(result.current.groups).toEqual([]);
+    expect(request.mock.calls.filter(([path]) => path === "/api/groups")).toHaveLength(2);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsCacheKey("account-a")) ?? "null")).toEqual([]);
+  });
+
+  it("treats deleting an already-deleted group as success after reconciliation", async () => {
+    let groupReads = 0;
+    const request = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/groups/coast" && init?.method === "DELETE") return failed(404, "Group not found");
+      groupReads += 1;
+      return json(groupReads === 1 ? [{ id: "coast", name: "Coastal plans", placeIds: [] }] : []);
+    });
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["coast"]));
+
+    await act(async () => { await result.current.remove("coast"); });
+
+    expect(result.current.groups).toEqual([]);
+    expect(result.current.pendingMemberships).toBe(0);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsCacheKey("account-a")) ?? "null")).toEqual([]);
+  });
+
+  it("does not refresh or queue an invalid create request", async () => {
+    const request = vi.fn((path: string, init?: RequestInit) => path === "/api/groups" && init?.method === "POST"
+      ? failed(422, "Wishlist is reserved for the protected account group")
+      : json([{ id: "wishlist", name: "Wishlist", isWishlist: true, placeIds: [] }]));
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["wishlist"]));
+
+    await act(async () => {
+      await expect(result.current.create("Wishlist", [])).rejects.toMatchObject({ status: 422 });
+    });
+
+    expect(request.mock.calls.filter(([path, init]) => path === "/api/groups" && !init?.method)).toHaveLength(1);
+    expect(result.current.pendingMemberships).toBe(0);
+    expect(JSON.parse(window.localStorage.getItem(accountGroupsOutboxKey("account-a")) ?? "null")).toEqual({});
   });
 });

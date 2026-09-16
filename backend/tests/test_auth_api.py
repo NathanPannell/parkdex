@@ -34,6 +34,12 @@ def test_accounts_are_isolated_and_guest_progress_import_is_idempotent() -> None
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", (list(ACCOUNT_EMAILS),))
         conn.execute("DELETE FROM visits WHERE owner_hash = %s", (guest_hash,))
         conn.execute("DELETE FROM guest_trail_completions WHERE owner_hash = %s", (guest_hash,))
+        # Preserve coverage for importing legacy guest progress without
+        # reopening arbitrary guest visit creation as a claim bypass.
+        conn.execute(
+            "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s)",
+            (guest_hash, TEST_PLACE),
+        )
         conn.commit()
 
     try:
@@ -232,6 +238,16 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             first_headers = bearer(first.json()["token"])
             second_headers = bearer(second.json()["token"])
 
+            # This suite exercises the grandfathered visit update contract;
+            # geofenced creation itself is covered by test_claim_api.py.
+            with psycopg.connect(database_url) as conn:
+                conn.execute(
+                    "INSERT INTO account_visits (account_id, place_id) "
+                    "SELECT id, %s FROM accounts WHERE email = %s",
+                    (place_id, emails[0]),
+                )
+                conn.commit()
+
             checked = client.put(
                 f"/api/visits/{place_id}", headers=first_headers, json={"visited": True}
             )
@@ -284,11 +300,12 @@ def test_authenticated_visit_and_trail_flow_is_idempotent_and_isolated() -> None
             assert final["visitedIds"] == []
             assert final["completedTrailIds"] == ["juan_de_fuca_trail"]
 
-            client.put(
+            rejected_guest_creation = client.put(
                 f"/api/visits/{place_id}",
                 headers={"X-Collection-Key": guest_key},
                 json={"visited": True},
             )
+            assert rejected_guest_creation.status_code == 409
             assert client.get("/api/auth/me", headers=first_headers).json()["visitedIds"] == []
             assert client.get("/api/auth/me", headers=second_headers).json()["visitedIds"] == []
     finally:

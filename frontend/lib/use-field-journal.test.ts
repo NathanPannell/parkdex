@@ -3,6 +3,9 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const nativeCamera = vi.hoisted(() => ({ clearRestoredCameraPhoto: vi.fn() }));
+vi.mock("./capacitor-native-capabilities", () => nativeCamera);
+
 import { ACCOUNT_TOKEN_KEY } from "./account";
 import { JOURNAL_STORAGE, accountPendingKey } from "./field-journal-state";
 import { useFieldJournal } from "./use-field-journal";
@@ -22,6 +25,27 @@ const PLACE = {
   sourceName: "Test",
   sourceId: null,
 };
+const CLAIM_CONFIRMATION = {
+  placeId: PLACE.id,
+  visited: true as const,
+  visitedCount: 1,
+  visitedAt: "2026-09-08T12:00:00Z",
+  claim: {
+    claimedAt: "2026-09-08T12:00:00Z",
+    capturedAt: "2026-09-08T12:00:00Z",
+    coordinates: { latitude: 49, longitude: -124 },
+    accuracyMeters: 8,
+    boundaryVersion: "v1",
+    matchKind: "exact" as const,
+    distanceMeters: 0,
+    hasPhoto: false,
+  },
+};
+const CLAIM_VISIT = {
+  placeId: CLAIM_CONFIRMATION.placeId,
+  visitedAt: CLAIM_CONFIRMATION.visitedAt,
+  claim: CLAIM_CONFIRMATION.claim,
+};
 
 function json(data: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(data), {
@@ -31,7 +55,13 @@ function json(data: unknown, status = 200) {
 }
 
 function catalogue(visitedIds: string[] = [], completedTrailIds: string[] = []) {
-  return { places: [PLACE], visitedIds, completedTrailIds, coverageNote: "Coverage" };
+  return {
+    places: [PLACE],
+    visitedIds,
+    completedTrailIds,
+    coverageNote: "Coverage",
+    visitClaims: { supported: true, enforcement: "required" as const },
+  };
 }
 
 function deferred<T>() {
@@ -41,6 +71,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
+  nativeCamera.clearRestoredCameraPhoto.mockReset();
   window.localStorage.clear();
   window.localStorage.setItem(JOURNAL_STORAGE.collectionKey, KEY);
 });
@@ -52,6 +83,49 @@ afterEach(() => {
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("falls back to legacy account writes when the previous API has no claim capability", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const visitWrites: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) {
+        visitWrites.push(init ?? {});
+        return json({ placeId: PLACE.id, visited: true, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z" });
+      }
+      return json({ places: [PLACE], visitedIds: [], completedTrailIds: [], coverageNote: "Old API" });
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.visitClaimMode).toBe("legacy");
+    expect(result.current.recommendClaim).toBeUndefined();
+    expect(result.current.createClaim).toBeUndefined();
+
+    await act(() => result.current.toggleVisit(PLACE.id));
+    expect(visitWrites).toHaveLength(1);
+    expect(JSON.parse(String(visitWrites[0].body))).toEqual({ visited: true });
+  });
+
+  it.each(["compatible", "required"] as const)("exposes claim methods only for an API advertising %s mode", async (enforcement) => {
+    vi.stubGlobal("fetch", vi.fn(() => json({ ...catalogue(), visitClaims: { supported: true, enforcement } })));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.visitClaimMode).toBe(enforcement);
+    expect(result.current.recommendClaim).toBeTypeOf("function");
+    expect(result.current.createClaim).toBeTypeOf("function");
+  });
+
+  it("fails closed for a present but unrecognized claim capability", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json({ ...catalogue(), visitClaims: { supported: true, enforcement: "future-mode" } })));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.visitClaimMode).toBe("unknown");
+    expect(result.current.recommendClaim).toBeUndefined();
+    expect(result.current.createClaim).toBeUndefined();
+  });
+
   it("records a server visit timestamp immediately and clears it when undone", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       if (String(url).endsWith(`/api/visits/${PLACE.id}`)) {
@@ -344,5 +418,397 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.account).toBeNull();
     expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBeNull();
     expect(result.current.syncMessage).toBe("Your session expired. Sign in again to continue syncing your account.");
+  });
+
+  it("waits for the startup capability before exposing a claim", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const accountSnapshot = deferred<Response>();
+    const catalogueSnapshot = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return accountSnapshot.promise;
+      if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
+      if (path.endsWith("/api/places")) return catalogueSnapshot.promise;
+      return json({});
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    expect(result.current.visitClaimMode).toBe("unknown");
+    expect(result.current.createClaim).toBeUndefined();
+
+    await act(async () => {
+      accountSnapshot.resolve(await json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places`, expect.anything()));
+    await act(async () => {
+      catalogueSnapshot.resolve(await json(catalogue()));
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.visitClaimMode).toBe("required");
+    await act(() => result.current.createClaim!({ recommendationToken: "signed", expectedPlaceId: PLACE.id }));
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id]).toEqual(CLAIM_VISIT);
+  });
+
+  it("does not expose claim methods while the catalogue capability is in flight", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const catalogueSnapshot = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
+      if (path.endsWith("/api/places")) return catalogueSnapshot.promise;
+      return json({});
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places`, expect.anything()));
+    expect(result.current.createClaim).toBeUndefined();
+    await act(async () => { catalogueSnapshot.resolve(await json(catalogue())); });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.createClaim).toBeTypeOf("function");
+    await act(() => result.current.createClaim!({ recommendationToken: "signed", expectedPlaceId: PLACE.id }));
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitTimestamps[PLACE.id]).toBe(CLAIM_VISIT.visitedAt);
+    expect(result.current.visitMetadata[PLACE.id]).toEqual(CLAIM_VISIT);
+  });
+
+  it("durably rolls back location_claim_required so an offline restart stays unvisited", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
+        return json({ detail: { code: "location_claim_required", message: "A current location claim is required" } }, 409);
+      }
+      return json(catalogue());
+    }));
+
+    const mounted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(mounted.result.current.loading).toBe(false));
+    await act(() => mounted.result.current.toggleVisit(PLACE.id));
+
+    const saved = JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}");
+    expect(mounted.result.current.visited.has(PLACE.id)).toBe(false);
+    expect(mounted.result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    expect(saved.visitedIds).toEqual([]);
+    expect(saved.visits).toEqual([]);
+    mounted.unmount();
+
+    const restarted = renderHook(() => useFieldJournal({ apiBaseUrl: "" }));
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.visited.has(PLACE.id)).toBe(false);
+    expect(restarted.result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("rolls back a pre-upgrade account queue during startup and clears it durably", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [CLAIM_VISIT],
+    }));
+    // Boolean entries were written by the pre-revision outbox format.
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({ [PLACE.id]: true }));
+    const writes: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) {
+        writes.push(init ?? {});
+        return json({ detail: { code: "location_claim_required", message: "A current location claim is required" } }, 409);
+      }
+      return json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(writes).toHaveLength(1));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}"))
+      .toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}")).toMatchObject({
+      visitedIds: [],
+      visits: [],
+    });
+  });
+
+  it("does not let a stale guest claim-required queue block guest import", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([PLACE.id]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitMetadata, JSON.stringify({ [PLACE.id]: CLAIM_VISIT }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitPending, JSON.stringify({ [PLACE.id]: true }));
+    let importStarted = false;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) {
+        expect(new Headers(init?.headers).get("X-Collection-Key")).toBe(KEY);
+        return json({ detail: { code: "location_claim_required", message: "A current location claim is required" } }, 409);
+      }
+      if (path.endsWith("/api/account/import-guest")) {
+        importStarted = true;
+        return json({ importedVisitCount: 0, importedTrailCount: 0, visitedIds: [], completedTrailIds: [], visits: [] });
+      }
+      return json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.importGuest());
+
+    expect(importStarted).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisited) ?? "[]")).toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitMetadata) ?? "{}")).toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitPending) ?? "{}")).toEqual({});
+  });
+
+  it("clears claim and photo metadata before persisting an offline visit removal", async () => {
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([PLACE.id]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitTimestamps, JSON.stringify({ [PLACE.id]: CLAIM_VISIT.visitedAt }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitMetadata, JSON.stringify({ [PLACE.id]: CLAIM_VISIT }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: "" }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(() => result.current.toggleVisit(PLACE.id));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitTimestamps[PLACE.id]).toBeUndefined();
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisited) ?? "[]")).toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitTimestamps) ?? "{}")).toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.guestVisitMetadata) ?? "{}")).toEqual({});
+
+    const restarted = renderHook(() => useFieldJournal({ apiBaseUrl: "" }));
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    expect(restarted.result.current.visited.has(PLACE.id)).toBe(false);
+    expect(restarted.result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("does not resurrect a guest postcard when a crash leaves the removal outbox ahead of metadata", async () => {
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([PLACE.id]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitTimestamps, JSON.stringify({ [PLACE.id]: CLAIM_VISIT.visitedAt }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitMetadata, JSON.stringify({ [PLACE.id]: CLAIM_VISIT }));
+    // Simulate the crash window after the pending removal was written but
+    // before the visit snapshot/metadata write completed.
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitPending, JSON.stringify({ [PLACE.id]: { visited: false, revision: 2 } }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: "" }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("does not resurrect an account postcard when a crash leaves the removal outbox ahead of metadata", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visitTimestamps: { [PLACE.id]: CLAIM_VISIT.visitedAt },
+      visits: [CLAIM_VISIT],
+    }));
+    // Simulate the same crash window for the account-scoped outbox.
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({
+      [PLACE.id]: { visited: false, revision: 2 },
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: "" }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("keeps stale account metadata filtered when refresh and catalogue responses still include a removed visit", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visitTimestamps: { [PLACE.id]: CLAIM_VISIT.visitedAt },
+      visits: [CLAIM_VISIT],
+    }));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({
+      [PLACE.id]: { visited: false, revision: 2 },
+    }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) {
+        return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      }
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) {
+        expect(JSON.parse(String(init?.body))).toEqual({ visited: false });
+        return json({ placeId: PLACE.id, visited: false, visitedCount: 0, visitedAt: null });
+      }
+      return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}"))
+      .toEqual({}));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("filters stale guest metadata when an expired account switches to guest", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "expired-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([PLACE.id]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitTimestamps, JSON.stringify({ [PLACE.id]: CLAIM_VISIT.visitedAt }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitMetadata, JSON.stringify({ [PLACE.id]: CLAIM_VISIT }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitPending, JSON.stringify({
+      [PLACE.id]: { visited: false, revision: 2 },
+    }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ detail: "Invalid authentication credentials" }, 401);
+      return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.authenticated).toBe(false);
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("filters stale account metadata when switching into an account with a pending removal", async () => {
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({
+      [PLACE.id]: { visited: false, revision: 2 },
+    }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/login")) {
+        return json({
+          token: "account-token",
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          account: ACCOUNT,
+          visitedIds: [PLACE.id],
+          completedTrailIds: [],
+          visits: [CLAIM_VISIT],
+        });
+      }
+      if (path.endsWith(`/api/visits/${PLACE.id}`)) {
+        expect(JSON.parse(String(init?.body))).toEqual({ visited: false });
+        return json({ placeId: PLACE.id, visited: false, visitedCount: 0, visitedAt: null });
+      }
+      return json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
+
+    expect(result.current.authenticated).toBe(true);
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("rejects stale claim and photo completions after an account switch and clears restored camera work", async () => {
+    const otherAccount = { id: "account-two", email: "other@example.com" };
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-one-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] }));
+    const claimResponse = deferred<Response>();
+    const photoResponse = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/claims")) return claimResponse.promise;
+      if (path.endsWith("/photo") && init?.method === "PUT") return photoResponse.promise;
+      if (path.endsWith("/api/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
+      if (path.endsWith("/api/auth/login")) return json({ token: "account-two-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
+      return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let pendingClaim!: Promise<unknown>;
+    let pendingPhoto!: Promise<unknown>;
+    act(() => {
+      pendingClaim = result.current.createClaim!({ recommendationToken: "signed", expectedPlaceId: PLACE.id });
+      pendingPhoto = result.current.uploadVisitPhoto!(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" }));
+    });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/claims`, expect.anything()));
+    await act(() => result.current.logout());
+    await act(() => result.current.authenticate("login", otherAccount.email, "password123"));
+
+    await act(async () => {
+      claimResponse.resolve(await json(CLAIM_CONFIRMATION));
+      photoResponse.resolve(new Response(null, { status: 204 }));
+      await expect(pendingClaim).rejects.toThrow("journal changed");
+      await expect(pendingPhoto).rejects.toThrow("journal changed");
+    });
+
+    expect(result.current.account).toEqual(otherAccount);
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not send claim or photo requests for a logged-out guest", async () => {
+    const fetchMock = vi.fn((url: string | URL | Request) => String(url).endsWith("/api/places") ? json(catalogue()) : json(catalogue()));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const location = { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() };
+
+    await expect(result.current.recommendClaim!({ location })).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    await expect(result.current.createClaim!({ recommendationToken: "token", expectedPlaceId: PLACE.id })).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    await expect(result.current.uploadVisitPhoto!(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" }))).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    await expect(result.current.loadVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    await expect(result.current.removeVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("claim-recommendations") || String(url).includes("/api/claims") || String(url).includes("/photo"))).toBe(false);
+  });
+
+  it("persists an account claim and updates its private photo flag through authenticated APIs", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const recommendation = { status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: PLACE.id, matchKind: "exact", distanceMeters: 0 } };
+    const confirmation = { placeId: PLACE.id, visited: true, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z", claim: { claimedAt: "2026-09-08T12:00:00Z", capturedAt: "2026-09-08T12:00:00Z", coordinates: { latitude: 49, longitude: -124 }, accuracyMeters: 8, boundaryVersion: "v1", matchKind: "exact", distanceMeters: 0, hasPhoto: false } };
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url); calls.push({ path, init });
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/claim-recommendations")) return json(recommendation);
+      if (path.endsWith("/api/claims")) return json(confirmation);
+      if (path.endsWith("/photo") && init?.method === "PUT") return Promise.resolve(new Response(null, { status: 204 }));
+      if (path.endsWith("/photo") && init?.method === "DELETE") return Promise.resolve(new Response(null, { status: 204 }));
+      if (path.endsWith("/photo")) return Promise.resolve(new Response(new Blob(["photo"], { type: "image/jpeg" }), { headers: { "Content-Type": "image/jpeg" } }));
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    const location = { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() };
+    await act(async () => {
+      await result.current.recommendClaim!({ location });
+      await result.current.createClaim!({ recommendationToken: "signed", expectedPlaceId: PLACE.id });
+    });
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id].claim?.hasPhoto).toBe(false);
+    const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
+    await act(() => result.current.uploadVisitPhoto!(PLACE.id, photo));
+    expect(result.current.visitMetadata[PLACE.id].claim?.hasPhoto).toBe(true);
+    await expect(result.current.loadVisitPhoto!(PLACE.id)).resolves.toBeInstanceOf(Blob);
+    await act(() => result.current.removeVisitPhoto!(PLACE.id));
+    expect(result.current.visitMetadata[PLACE.id].claim?.hasPhoto).toBe(false);
+    const claimRequest = calls.find(({ path }) => path.endsWith("/api/claims"));
+    expect(new Headers(claimRequest?.init?.headers).get("Authorization")).toBe("Bearer account-token");
+    expect(JSON.parse(String(claimRequest?.init?.body))).toEqual({ recommendationToken: "signed", expectedPlaceId: PLACE.id });
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}").visits[0].claim.hasPhoto).toBe(false);
   });
 });

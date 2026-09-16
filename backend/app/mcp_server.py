@@ -24,6 +24,7 @@ from backend.app.db import connection
 from backend.app.mcp_oauth import MAX_CONSENT_BODY_BYTES, MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
 from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, lock_account_group_mutations, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 from backend.app.schemas import Group, PlaceSearchResult, SearchPlace
+from backend.app.settings import get_settings
 
 KEYRING_SERVICE, SESSION_ENV, EMAIL_ENV, ORIGIN_ENV = "parkdex-mcp-session", "PARKDEX_SESSION_TOKEN", "PARKDEX_ACCOUNT_EMAIL", "PARKDEX_API_ORIGIN"
 MAX_TIMEOUT_SECONDS = 20.0
@@ -102,6 +103,8 @@ def _group_output(value):
     return Group.model_validate(value).model_dump(by_alias=True, mode="json")
 def _place_output(value):
     return SearchPlace.model_validate(value).model_dump(by_alias=True, mode="json")
+def _include_staging_field_places():
+    return get_settings().staging_field_places_enabled
 
 mcp=MCPServer("Parkdex Groups",description="Search Parkdex places and manage private account-owned groups, including Wishlist.",instructions="Authentication is required. Wishlist is the protected account group named Wishlist.")
 
@@ -112,7 +115,7 @@ def search_places(visited:bool|None=None,type:PlaceType|None=None,category:Place
     if type and category and type!=category: raise ValueError("type and category must match")
     if (latitude is None)!=(longitude is None) or (radius_km is not None and latitude is None): raise ValueError("latitude and longitude are required together; radius requires both")
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: rows,total=search_place_rows(conn,account_id,visited=visited,category=selected,query=query,latitude=latitude,longitude=longitude,radius_km=radius_km,limit=limit,offset=offset)
+        with contextmanager(connection)() as conn: rows,total=search_place_rows(conn,account_id,visited=visited,category=selected,query=query,latitude=latitude,longitude=longitude,radius_km=radius_km,limit=limit,offset=offset,include_staging_field_places=_include_staging_field_places())
         return PlaceSearchResult(places=rows,total=total,limit=limit,offset=offset).model_dump(by_alias=True,mode="json")
     with _local_client() as client:
         params={"visited":visited,"type":selected,"query":query,"latitude":latitude,"longitude":longitude,"radius_km":radius_km,"limit":limit,"offset":offset}; return client.request("GET","/api/places/search",params={k:v for k,v in params.items() if v is not None})
@@ -120,7 +123,7 @@ def search_places(visited:bool|None=None,type:PlaceType|None=None,category:Place
 def get_place_details(place_id:Annotated[str,Field(min_length=1,max_length=200)])->dict:
     """Read one active place and this account's visit state."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: result=place_detail_row(conn,account_id,place_id)
+        with contextmanager(connection)() as conn: result=place_detail_row(conn,account_id,place_id,include_staging_field_places=_include_staging_field_places())
         if result is None: raise ValueError("Place not found")
         return _place_output(result)
     with _local_client() as client: return client.request("GET",f"/api/places/{place_id}")
@@ -128,13 +131,13 @@ def get_place_details(place_id:Annotated[str,Field(min_length=1,max_length=200)]
 def list_groups()->list:
     """Read all private groups, including Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); ensure_wishlist(conn,account_id); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id)]
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); ensure_wishlist(conn,account_id,include_staging_field_places=_include_staging_field_places()); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id,include_staging_field_places=_include_staging_field_places())]
     with _local_client() as client: return client.request("GET","/api/groups")
 @mcp.tool(annotations=READ_ONLY)
 def get_group(group_id:GroupId)->dict:
     """Read one private group and its places."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: result=group_row(conn,account_id,group_id)
+        with contextmanager(connection)() as conn: result=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
         if result is None: raise ValueError("Group not found")
         return _group_output(result)
     with _local_client() as client: return client.request("GET",f"/api/groups/{group_id}")
@@ -142,7 +145,7 @@ def get_group(group_id:GroupId)->dict:
 def create_group(name:GroupName,place_ids:OptionalPlaceIds=None)->dict:
     """Create a private group. This writes group data."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or []); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or [],include_staging_field_places=_include_staging_field_places()); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("POST","/api/groups",json={"name":name,"placeIds":place_ids or []})
 @mcp.tool(annotations=WRITE)
 def rename_group(group_id:GroupId,name:GroupName)->dict:
@@ -150,9 +153,9 @@ def rename_group(group_id:GroupId,name:GroupName)->dict:
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id)
-            current=group_row(conn,account_id,group_id)
+            current=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
             if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
-            _mutation_limit(conn,account_id); rename_group_row(conn,account_id,group_id,_name(name)); conn.commit(); return _group_output(group_row(conn,account_id,group_id))
+            _mutation_limit(conn,account_id); rename_group_row(conn,account_id,group_id,_name(name)); conn.commit(); return _group_output(group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places()))
     with _local_client() as client: return client.request("PATCH",f"/api/groups/{group_id}",json={"name":name})
 @mcp.tool(annotations=DELETE)
 def delete_group(group_id:GroupId)->dict:
@@ -160,7 +163,7 @@ def delete_group(group_id:GroupId)->dict:
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id)
-            current=group_row(conn,account_id,group_id)
+            current=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
             if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
             _mutation_limit(conn,account_id); delete_group_row(conn,account_id,group_id); conn.commit(); return {"deleted":True,"group_id":group_id}
     with _local_client() as client: client.request("DELETE",f"/api/groups/{group_id}"); return {"deleted":True,"group_id":group_id}
@@ -168,8 +171,9 @@ def _change_places(group_id,place_ids,remove):
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); fn=remove_group_places if remove else add_group_places
-            if not fn(conn,account_id,group_id,place_ids): raise ValueError("Group not found")
-            conn.commit(); return _group_output(group_row(conn,account_id,group_id))
+            kwargs={"include_staging_field_places":_include_staging_field_places()} if not remove else {}
+            if not fn(conn,account_id,group_id,place_ids,**kwargs): raise ValueError("Group not found")
+            conn.commit(); return _group_output(group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places()))
     with _local_client() as client: return client.request("DELETE" if remove else "POST",f"/api/groups/{group_id}/places",json={"placeIds":place_ids})
 @mcp.tool(annotations=WRITE)
 def add_places_to_group(group_id:GroupId,place_ids:PlaceIds)->dict:
@@ -183,7 +187,7 @@ def remove_places_from_group(group_id:GroupId,place_ids:PlaceIds)->dict:
 def get_wishlist()->dict:
     """Read the protected group named Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); result=ensure_wishlist(conn,account_id); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); result=ensure_wishlist(conn,account_id,include_staging_field_places=_include_staging_field_places()); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("GET","/api/wishlist")
 
 class RestartableHostedMCP:
