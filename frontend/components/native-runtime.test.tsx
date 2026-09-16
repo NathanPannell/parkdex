@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const app = vi.hoisted(() => ({ addListener: vi.fn(), minimizeApp: vi.fn() }));
+const app = vi.hoisted(() => ({ addListener: vi.fn(), getState: vi.fn(), minimizeApp: vi.fn() }));
 const systemBars = vi.hoisted(() => ({ setStyle: vi.fn() }));
 const storage = vi.hoisted(() => ({ getPlatformStorage: vi.fn(), registerNativePlatformStorage: vi.fn() }));
+const native = vi.hoisted(() => ({ publishNativeAppState: vi.fn(), registerNativeCapabilities: vi.fn(() => vi.fn()) }));
 
 vi.mock("@capacitor/app", () => ({ App: app }));
 vi.mock("@capacitor/core", () => ({
@@ -22,7 +23,7 @@ vi.mock("@/lib/capacitor-native-capabilities", () => ({
   createCapacitorNativeCapabilities: vi.fn(() => ({ getCurrentLocation: vi.fn(), getPhoto: vi.fn() })),
   queueRestoredCameraPhoto: vi.fn(),
 }));
-vi.mock("@/lib/native-capabilities", () => ({ registerNativeCapabilities: vi.fn(() => vi.fn()) }));
+vi.mock("@/lib/native-capabilities", () => native);
 
 import { NativeRuntime } from "./native-runtime";
 
@@ -30,7 +31,10 @@ beforeEach(() => {
   storage.getPlatformStorage.mockReset();
   systemBars.setStyle.mockReset();
   app.addListener.mockReset();
+  app.getState.mockReset();
+  app.getState.mockResolvedValue({ isActive: true });
   app.minimizeApp.mockReset();
+  native.publishNativeAppState.mockReset();
 });
 
 afterEach(cleanup);
@@ -55,5 +59,53 @@ describe("NativeRuntime", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("Secure storage is locked.");
     expect(screen.queryByText("Journal ready")).toBeNull();
+  });
+
+  it("forwards native lifecycle events and removes every location listener on unmount", async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const removals = new Map<string, ReturnType<typeof vi.fn>>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockImplementation((event: string, callback: (...args: unknown[]) => void) => {
+      listeners.set(event, callback);
+      const remove = vi.fn();
+      removals.set(event, remove);
+      return Promise.resolve({ remove });
+    });
+
+    const rendered = render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(listeners.has("appStateChange") && listeners.has("pause") && listeners.has("resume")).toBe(true));
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(1));
+    listeners.get("appStateChange")?.({ isActive: false });
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false);
+    listeners.get("appStateChange")?.({ isActive: true });
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true);
+    listeners.get("pause")?.();
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false);
+    listeners.get("resume")?.();
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true);
+    rendered.unmount();
+    await waitFor(() => {
+      expect(removals.get("appStateChange")).toHaveBeenCalledTimes(1);
+      expect(removals.get("pause")).toHaveBeenCalledTimes(1);
+      expect(removals.get("resume")).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps native location fail-closed until the initial app state resolves", async () => {
+    const state = Promise.withResolvers<{ isActive: boolean }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.getState.mockReturnValue(state.promise);
+    app.addListener.mockResolvedValue({ remove: vi.fn() });
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    expect(native.publishNativeAppState).toHaveBeenNthCalledWith(1, false);
+    expect(native.publishNativeAppState).not.toHaveBeenCalledWith(true);
+    state.resolve({ isActive: false });
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false));
   });
 });

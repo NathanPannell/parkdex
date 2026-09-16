@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const camera = vi.hoisted(() => ({ takePhoto: vi.fn() }));
 const geolocation = vi.hoisted(() => ({
   checkPermissions: vi.fn(),
+  clearWatch: vi.fn(),
   getCurrentPosition: vi.fn(),
   requestPermissions: vi.fn(),
+  watchPosition: vi.fn(),
 }));
 
 vi.mock("@capacitor/camera", () => ({ Camera: camera, CameraDirection: { Rear: "REAR" } }));
@@ -23,8 +25,11 @@ beforeEach(() => {
   vi.restoreAllMocks();
   camera.takePhoto.mockReset();
   geolocation.checkPermissions.mockReset();
+  geolocation.clearWatch.mockReset();
+  geolocation.clearWatch.mockResolvedValue(undefined);
   geolocation.getCurrentPosition.mockReset();
   geolocation.requestPermissions.mockReset();
+  geolocation.watchPosition.mockReset();
   clearRestoredCameraPhoto();
 });
 
@@ -97,6 +102,91 @@ describe("Capacitor native capabilities", () => {
       timeoutMs: 1,
       maxAgeMs: 0,
     })).rejects.toMatchObject({ code: "timeout" } satisfies Partial<LocationCapabilityError>);
+  });
+
+  it("streams high-accuracy foreground locations faster than 30 seconds and clears the native watch", async () => {
+    geolocation.checkPermissions.mockResolvedValue({ location: "granted" });
+    geolocation.watchPosition.mockImplementation(async (_options, callback) => {
+      callback({
+        coords: { latitude: 49.09187, longitude: -123.06009, accuracy: 6 },
+        timestamp: 1_780_000_000_002,
+      });
+      return "watch-1";
+    });
+    const onLocation = vi.fn();
+    const onError = vi.fn();
+
+    const stop = createCapacitorNativeCapabilities().watchLocation?.({
+      highAccuracy: true,
+      timeoutMs: 30_000,
+      maxAgeMs: 5_000,
+      updateIntervalMs: 5_000,
+      minimumUpdateIntervalMs: 2_000,
+    }, onLocation, onError);
+    await vi.waitFor(() => expect(onLocation).toHaveBeenCalledOnce());
+
+    expect(geolocation.watchPosition).toHaveBeenCalledWith({
+      enableHighAccuracy: true,
+      timeout: 30_000,
+      maximumAge: 5_000,
+      interval: 5_000,
+      minimumUpdateInterval: 2_000,
+    }, expect.any(Function));
+    expect(onLocation).toHaveBeenCalledWith({
+      latitude: 49.09187,
+      longitude: -123.06009,
+      accuracyMeters: 6,
+      capturedAtEpochMs: 1_780_000_000_002,
+    });
+    expect(onError).not.toHaveBeenCalled();
+
+    stop?.();
+    expect(geolocation.clearWatch).toHaveBeenCalledWith({ id: "watch-1" });
+  });
+
+  it("clears a native watch that resolves after its lifecycle has already stopped", async () => {
+    geolocation.checkPermissions.mockResolvedValue({ location: "granted" });
+    let resolveWatch!: (id: string) => void;
+    geolocation.watchPosition.mockReturnValue(new Promise((resolve) => { resolveWatch = resolve; }));
+
+    const stop = createCapacitorNativeCapabilities().watchLocation?.({
+      highAccuracy: true,
+      timeoutMs: 30_000,
+      maxAgeMs: 0,
+      updateIntervalMs: 30_000,
+    }, vi.fn());
+    await vi.waitFor(() => expect(geolocation.watchPosition).toHaveBeenCalledOnce());
+    stop?.();
+    resolveWatch("late-watch");
+    await vi.waitFor(() => expect(geolocation.clearWatch).toHaveBeenCalledWith({ id: "late-watch" }));
+  });
+
+  it("reports permission and native watch failures through the foreground callback", async () => {
+    geolocation.checkPermissions.mockResolvedValueOnce({ location: "denied" });
+    geolocation.requestPermissions.mockResolvedValueOnce({ location: "denied" });
+    const denied = vi.fn();
+    createCapacitorNativeCapabilities().watchLocation?.({
+      highAccuracy: true,
+      timeoutMs: 30_000,
+      maxAgeMs: 0,
+      updateIntervalMs: 30_000,
+    }, vi.fn(), denied);
+    await vi.waitFor(() => expect(denied).toHaveBeenCalledWith(expect.objectContaining({ code: "permission-denied" })));
+
+    geolocation.checkPermissions.mockResolvedValueOnce({ location: "granted" });
+    geolocation.watchPosition.mockImplementationOnce(async (_options, callback) => {
+      callback(null, { code: "OS-PLUG-GLOC-0010" });
+      return "watch-error";
+    });
+    const timedOut = vi.fn();
+    const stop = createCapacitorNativeCapabilities().watchLocation?.({
+      highAccuracy: true,
+      timeoutMs: 30_000,
+      maxAgeMs: 0,
+      updateIntervalMs: 30_000,
+    }, vi.fn(), timedOut);
+    await vi.waitFor(() => expect(timedOut).toHaveBeenCalledWith(expect.objectContaining({ code: "timeout" })));
+    stop?.();
   });
 
   it("returns an uploadable File, does not save to the gallery, and treats cancellation as no selection", async () => {

@@ -5,6 +5,9 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import {
   LocationCapabilityError,
   type NativeCapabilities,
+  type LocationRequestOptions,
+  type LocationSample,
+  type LocationWatchOptions,
   type PhotoAsset,
 } from "./native-capabilities";
 import { createNativePhotoRetryStore } from "./photo-retry";
@@ -77,6 +80,39 @@ function hasLocationPermission(permission: { location?: string; coarseLocation?:
   return permission.location === "granted" || permission.coarseLocation === "granted";
 }
 
+async function locationPermission() {
+  const currentPermission = await Geolocation.checkPermissions();
+  // Android may retain only the coarse grant. Ask for the precise `location`
+  // grant because boundary claims benefit from GPS-level accuracy.
+  const permission = currentPermission.location === "granted"
+    ? currentPermission
+    : await Geolocation.requestPermissions({ permissions: ["location"] });
+  if (!hasLocationPermission(permission)) {
+    throw new LocationCapabilityError("permission-denied", "Location permission was denied.");
+  }
+  return permission;
+}
+
+function locationSample(position: {
+  coords: { latitude: number; longitude: number; accuracy: number };
+  timestamp: number;
+}): LocationSample {
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracyMeters: position.coords.accuracy,
+    capturedAtEpochMs: position.timestamp,
+  };
+}
+
+function preciseLocationOptions(options: LocationRequestOptions, precise: boolean) {
+  return {
+    enableHighAccuracy: options.highAccuracy && precise,
+    timeout: options.timeoutMs,
+    maximumAge: options.maxAgeMs,
+  };
+}
+
 function isMediaResult(value: unknown): value is MediaResult {
   return typeof value === "object" && value !== null
     && typeof (value as { webPath?: unknown }).webPath === "string";
@@ -114,31 +150,49 @@ export function createCapacitorNativeCapabilities(): NativeCapabilities {
   return {
     async getCurrentLocation(options) {
       try {
-        const currentPermission = await Geolocation.checkPermissions();
-        // Android may retain only the coarse grant. Ask for the precise `location`
-        // grant before sampling because boundary claims require GPS-level accuracy.
-        const permission = currentPermission.location === "granted"
-          ? currentPermission
-          : await Geolocation.requestPermissions({ permissions: ["location"] });
-        if (!hasLocationPermission(permission)) {
-          throw new LocationCapabilityError("permission-denied", "Location permission was denied.");
-        }
-        const position = await Geolocation.getCurrentPosition({
-          // Do not ask Android for precise GPS when the user granted approximate only.
-          enableHighAccuracy: options.highAccuracy && permission.location === "granted",
-          timeout: options.timeoutMs,
-          maximumAge: options.maxAgeMs,
-        });
-        return {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyMeters: position.coords.accuracy,
-          capturedAtEpochMs: position.timestamp,
-        };
+        const permission = await locationPermission();
+        const position = await Geolocation.getCurrentPosition(
+          preciseLocationOptions(options, permission.location === "granted"),
+        );
+        return locationSample(position);
       } catch (error) {
         if (error instanceof LocationCapabilityError) throw error;
         throw locationError(error);
       }
+    },
+
+    watchLocation(options: LocationWatchOptions, onLocation, onError) {
+      let active = true;
+      let watchId: string | undefined;
+
+      void locationPermission().then((permission) => {
+        if (!active) return undefined;
+        return Geolocation.watchPosition({
+          ...preciseLocationOptions(options, permission.location === "granted"),
+          interval: Math.min(options.updateIntervalMs, 30_000),
+          minimumUpdateInterval: options.minimumUpdateIntervalMs,
+        }, (position, error) => {
+          if (!active) return;
+          if (error) {
+            onError?.(locationError(error));
+          } else if (position) {
+            onLocation(locationSample(position));
+          }
+        });
+      }).then((id) => {
+        if (!id) return;
+        if (active) watchId = id;
+        else void Geolocation.clearWatch({ id }).catch(() => undefined);
+      }).catch((error: unknown) => {
+        if (!active) return;
+        onError?.(error instanceof LocationCapabilityError ? error : locationError(error));
+      });
+
+      return () => {
+        if (!active) return;
+        active = false;
+        if (watchId) void Geolocation.clearWatch({ id: watchId }).catch(() => undefined);
+      };
     },
 
     async getPhoto() {

@@ -96,6 +96,7 @@ export type FieldJournal = {
   resetProgress: () => Promise<void>;
   recommendClaim?: (input: ClaimRecommendationInput) => Promise<ClaimRecommendation>;
   createClaim?: (input: { recommendationToken: string; expectedPlaceId: string }) => Promise<ClaimConfirmation>;
+  reconcileClaim?: (placeId: string) => Promise<ClaimConfirmation | null>;
   uploadVisitPhoto?: (placeId: string, file: File) => Promise<void>;
   loadVisitPhoto?: (placeId: string) => Promise<Blob>;
   removeVisitPhoto?: (placeId: string) => Promise<void>;
@@ -916,6 +917,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const currentClaimIdentity = useCallback((): Extract<Identity, { kind: "account" }> => {
     if (!apiBaseUrl) throw new Error("Claims are unavailable while the field guide is offline.");
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
     storage();
     const identity = identityRef.current;
     if (identity.kind !== "account") throw new Error("Sign in to manage visit claims and private photos.");
@@ -991,6 +993,45 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       throw error;
     }
   }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, persistCurrentOwner, updateProgress]);
+
+  const reconcileClaim = useCallback(async (placeId: string): Promise<ClaimConfirmation | null> => {
+    const identity = currentClaimIdentity();
+    const capturedEpoch = epochRef.current.capture();
+    const mutationCheckpoint = visitMutationsRef.current.checkpoint();
+    try {
+      const session = await loadAccount(apiBaseUrl, identity.token);
+      assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this claim. Try again.");
+      const sessionTimestamps = timestampsFor(session.visits);
+      const sessionVisited = accountVisitOutboxRef.current.applyTo(session.visitedIds);
+      const rebased = visitMutationsRef.current.rebase(
+        sessionVisited,
+        sessionTimestamps,
+        metadataFor(session.visits, sessionVisited, sessionTimestamps),
+        mutationCheckpoint,
+      );
+      identityRef.current = { ...identity, account: session.account };
+      setAccount(session.account);
+      updateProgress(
+        rebased.visited,
+        accountTrailOutboxRef.current.applyTo(session.completedTrailIds),
+        rebased.timestamps,
+        rebased.metadata,
+      );
+      await persistAccount();
+      const visit = rebased.metadata[placeId];
+      if (!visit?.claim) return null;
+      return {
+        placeId,
+        visited: true,
+        visitedCount: rebased.visited.size,
+        visitedAt: visit.visitedAt,
+        claim: visit.claim,
+      };
+    } catch (error) {
+      handleOwnerError(error, identity, capturedEpoch);
+      throw error;
+    }
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, persistAccount, updateProgress]);
 
   const updatePhotoFlag = useCallback(async (identity: Identity, capturedEpoch: number, placeId: string, hasPhoto: boolean) => {
     assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this photo update finished. Refresh your journal before trying again.");
@@ -1118,6 +1159,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     resetProgress,
     recommendClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? recommendClaim : undefined,
     createClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? createClaim : undefined,
+    reconcileClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? reconcileClaim : undefined,
     uploadVisitPhoto: visitClaimMode === "compatible" || visitClaimMode === "required" ? uploadVisitPhoto : undefined,
     loadVisitPhoto: visitClaimMode === "compatible" || visitClaimMode === "required" ? loadVisitPhoto : undefined,
     removeVisitPhoto: visitClaimMode === "compatible" || visitClaimMode === "required" ? removeVisitPhoto : undefined,

@@ -1201,6 +1201,26 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 }
 
 /* Private boundary claims and visit postcards. */
+.in-park-banner { position: absolute; z-index: 15; top: calc(max(8px, env(safe-area-inset-top)) + 76px); left: 50%; display: grid; grid-template-columns: 40px minmax(0,1fr) auto; width: min(560px, calc(100vw - 24px)); min-height: 68px; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 15px; background: var(--forest); color: var(--paper-bright); box-shadow: 0 8px 24px rgba(16,48,40,.28); transform: translateX(-50%); }
+.in-park-marker { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; background: var(--lime); color: var(--forest); }
+.in-park-copy { min-width: 0; }
+.in-park-copy strong { display: block; overflow: hidden; font: 750 16px/1.15 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
+.in-park-copy p { margin: 3px 0 0; color: #dce8e1; font-size: 10px; line-height: 1.35; }
+.in-park-claim, .in-park-actions button { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 7px; padding: 0 16px; border: 0; border-radius: 11px; background: var(--lime); color: var(--forest); cursor: pointer; font-size: 11px; font-weight: 950; }
+.in-park-claim:disabled, .in-park-actions button:disabled { cursor: wait; opacity: .64; }
+.in-park-actions { display: flex; align-items: center; gap: 6px; }
+.in-park-actions .in-park-discard { width: 48px; padding: 0; background: #e7eadb; }
+.in-park-banner .pulse { animation: in-park-pulse 1.1s ease-in-out infinite; }
+@keyframes in-park-pulse { 50% { transform: scale(.88); opacity: .7; } }
+
+@media (max-width: 520px) {
+  .in-park-banner { grid-template-columns: 36px minmax(0,1fr) auto; top: calc(max(8px, env(safe-area-inset-top)) + 70px); gap: 8px; padding: 9px; }
+  .in-park-marker { width: 36px; height: 36px; }
+  .in-park-claim { padding-inline: 13px; }
+  .in-park-actions { grid-column: 2 / -1; width: 100%; }
+  .in-park-actions button:not(.in-park-discard) { flex: 1; }
+}
+
 .claim-owner-gate { display: grid; gap: 5px; margin-top: 16px; padding: 13px; border: 1px solid #d5d9c8; border-radius: 14px; background: #f0f2e6; color: var(--forest); }
 .claim-owner-gate strong { font: 720 16px/1.1 var(--font-display); }
 .claim-owner-gate p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
@@ -1262,6 +1282,7 @@ nav .navigation-skip:focus { position: absolute; z-index: 20; right: 0; bottom: 
 .visit-postcard > p { margin: 7px 0 0; color: #783426; font-size: 9px; line-height: 1.35; }
 
 @media (prefers-reduced-motion: reduce) {
+  .in-park-banner .pulse { animation: none; }
   .visit-postcard, .visit-postcard:hover, .visit-postcard:focus-visible, .visit-postcard:focus-within { transition: box-shadow .15s ease-out; transform: none; }
   .postcard-face { transform: none; }
   .postcard-gloss, .visit-postcard:hover .postcard-gloss, .visit-postcard:focus-visible .postcard-gloss, .visit-postcard:focus-within .postcard-gloss { opacity: .16; transition: none; }

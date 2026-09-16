@@ -16,17 +16,57 @@ export type LocationSample = {
   capturedAtEpochMs: number;
 };
 
+export type LocationRequestOptions = {
+  highAccuracy: true;
+  timeoutMs: number;
+  maxAgeMs: number;
+};
+
+export type LocationWatchOptions = LocationRequestOptions & {
+  /** Preferred cadence while the app is open. Native GPS may report sooner. */
+  updateIntervalMs: number;
+  /** Do not emit native samples more frequently than this interval. */
+  minimumUpdateIntervalMs?: number;
+};
+
+export type StopLocationWatch = () => void;
+
+/** NativeRuntime mirrors Capacitor App lifecycle changes through this DOM event. */
+export const NATIVE_APP_STATE_EVENT = "parkdex:native-app-state";
+let nativeAppActive = true;
+
+export function publishNativeAppState(isActive: boolean) {
+  nativeAppActive = isActive;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(NATIVE_APP_STATE_EVENT, { detail: { isActive } }));
+  }
+}
+
+export function currentNativeAppState() {
+  return nativeAppActive;
+}
+
+export const FOREGROUND_LOCATION_WATCH_OPTIONS: LocationWatchOptions = {
+  highAccuracy: true,
+  timeoutMs: 30_000,
+  maxAgeMs: 5_000,
+  updateIntervalMs: 5_000,
+  minimumUpdateIntervalMs: 2_000,
+};
+
 export type PhotoAsset = {
   file: File;
   mimeType: string;
 };
 
 export type NativeCapabilities = {
-  getCurrentLocation(options: {
-    highAccuracy: true;
-    timeoutMs: number;
-    maxAgeMs: number;
-  }): Promise<LocationSample>;
+  getCurrentLocation(options: LocationRequestOptions): Promise<LocationSample>;
+  /** Foreground-only location updates. The returned function immediately stops the watch. */
+  watchLocation?(
+    options: LocationWatchOptions,
+    onLocation: (location: LocationSample) => void,
+    onError?: (error: LocationCapabilityError) => void,
+  ): StopLocationWatch;
   getPhoto(): Promise<PhotoAsset | null>;
   /** App-private binary storage for a photo whose upload needs a later retry. */
   photoRetry?: PhotoRetryStore;
@@ -74,6 +114,35 @@ function browserPhoto(): Promise<PhotoAsset | null> {
   });
 }
 
+function pollLocation(
+  provider: Pick<NativeCapabilities, "getCurrentLocation">,
+  options: LocationWatchOptions,
+  onLocation: (location: LocationSample) => void,
+  onError?: (error: LocationCapabilityError) => void,
+): StopLocationWatch {
+  let active = true;
+  let nextPoll: ReturnType<typeof setTimeout> | undefined;
+  const poll = async () => {
+    try {
+      const location = await provider.getCurrentLocation(options);
+      if (active) onLocation(location);
+    } catch (error) {
+      if (active) {
+        onError?.(error instanceof LocationCapabilityError
+          ? error
+          : new LocationCapabilityError("unavailable", "Location is unavailable."));
+      }
+    } finally {
+      if (active) nextPoll = setTimeout(poll, Math.min(options.updateIntervalMs, 30_000));
+    }
+  };
+  void poll();
+  return () => {
+    active = false;
+    if (nextPoll !== undefined) clearTimeout(nextPoll);
+  };
+}
+
 const browserCapabilities: NativeCapabilities = {
   getCurrentLocation(options) {
     if (!navigator.geolocation) {
@@ -96,6 +165,30 @@ const browserCapabilities: NativeCapabilities = {
       );
     });
   },
+  watchLocation(options, onLocation, onError) {
+    if (!navigator.geolocation) {
+      onError?.(new LocationCapabilityError("unavailable", "Location is unavailable."));
+      return () => undefined;
+    }
+    if (typeof navigator.geolocation.watchPosition !== "function") {
+      return pollLocation(browserCapabilities, options, onLocation, onError);
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords, timestamp }) => onLocation({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracyMeters: coords.accuracy,
+        capturedAtEpochMs: timestamp,
+      }),
+      (error) => onError?.(browserLocationError(error)),
+      {
+        enableHighAccuracy: options.highAccuracy,
+        timeout: options.timeoutMs,
+        maximumAge: options.maxAgeMs,
+      },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  },
   getPhoto: browserPhoto,
   photoRetry: createBrowserPhotoRetryStore(),
 };
@@ -111,6 +204,22 @@ export function registerNativeCapabilities(provider: NativeCapabilities): () => 
   return () => {
     if (activeCapabilities === provider) activeCapabilities = browserCapabilities;
   };
+}
+
+/**
+ * Start foreground updates using the active platform provider. Older injected
+ * providers fall back to a bounded poll so existing test and embed integrations
+ * retain the same contract.
+ */
+export function watchCurrentLocation(
+  options: LocationWatchOptions,
+  onLocation: (location: LocationSample) => void,
+  onError?: (error: LocationCapabilityError) => void,
+): StopLocationWatch {
+  if (activeCapabilities.watchLocation) {
+    return activeCapabilities.watchLocation(options, onLocation, onError);
+  }
+  return pollLocation(activeCapabilities, options, onLocation, onError);
 }
 
 /** Remove all durable retry photos for an account owner (including on logout). */

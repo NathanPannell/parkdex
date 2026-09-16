@@ -10,7 +10,7 @@ import {
   queueRestoredCameraPhoto,
 } from "@/lib/capacitor-native-capabilities";
 import { dispatchNativeBack, hasNativeBackHistory } from "@/lib/native-back";
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { publishNativeAppState, registerNativeCapabilities } from "@/lib/native-capabilities";
 import {
   getPlatformStorage,
   registerNativePlatformStorage,
@@ -62,6 +62,13 @@ export function NativeRuntime({
     if (!enabled) return;
     let active = true;
     let removeCameraRestore = async () => {};
+    let removeAppState = async () => {};
+    let removePause = async () => {};
+    let removeResume = async () => {};
+    let lifecycleRevision = 0;
+    // Native startup is fail-closed: automatic GPS stays off until Capacitor
+    // confirms that the Activity is active.
+    publishNativeAppState(false);
     ensureNativeStorageRegistered();
     const unregisterCapabilities = registerNativeCapabilities(nativeCapabilities);
 
@@ -86,11 +93,48 @@ export function NativeRuntime({
       if (active) removeCameraRestore = remove;
       else await remove();
     }).catch(() => undefined);
+    const appStateRegistration = App.addListener("appStateChange", ({ isActive }) => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishNativeAppState(isActive);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removeAppState = remove;
+      else await remove();
+    });
+    const pauseRegistration = App.addListener("pause", () => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishNativeAppState(false);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removePause = remove;
+      else await remove();
+    });
+    const resumeRegistration = App.addListener("resume", () => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishNativeAppState(true);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removeResume = remove;
+      else await remove();
+    });
+    void Promise.allSettled([appStateRegistration, pauseRegistration, resumeRegistration]).then(async () => {
+      const snapshotRevision = lifecycleRevision;
+      try {
+        const { isActive } = await App.getState();
+        if (active && lifecycleRevision === snapshotRevision) publishNativeAppState(isActive);
+      } catch { /* Keep automatic location off until a lifecycle event arrives. */ }
+    });
 
     return () => {
       active = false;
       unregisterCapabilities();
       void removeCameraRestore();
+      void removeAppState();
+      void removePause();
+      void removeResume();
     };
   }, [attempt, enabled, nativeCapabilities]);
 

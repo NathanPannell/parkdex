@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { ParkMap } from "@/components/park-map";
 import { PlaceImage } from "@/components/place-image";
 import { ClaimVisitPanel } from "@/components/claim-visit-panel";
+import { ClaimFlowBanner } from "@/components/claim-flow-banner";
 import { VisitPostcard } from "@/components/visit-postcard";
 import { confirmPasswordReset, loadAuthConfig, requestGoogleAuthorization, requestPasswordReset, type Account, type AuthConfig } from "@/lib/account";
 import { achievements, newlyEarnedAchievementIds, type Achievement } from "@/lib/achievements";
@@ -14,13 +15,14 @@ import badgeImages from "@/lib/badge-images.json";
 import type { BoundaryLoadState } from "@/lib/boundaries";
 import type { ClaimConfirmation, ClaimRecommendation } from "@/lib/claims-client";
 import { authorityForPlace, collectionFilter, groupByAuthority, type VisitFilter } from "@/lib/collection";
-import { formatDistance, modeForSelection, nearestUnseenParks, type Coordinates } from "@/lib/discovery";
+import { formatDistance, modeForSelection, nearestUnseenParks } from "@/lib/discovery";
 import { clearPhotoRetryOwner, type LocationSample } from "@/lib/native-capabilities";
 import { addNativeBackConsumer } from "@/lib/native-back";
 import { getPlaceImage } from "@/lib/place-images";
 import { categoryLabels, matchesPlaceSearch, type Place, type PlaceCategory } from "@/lib/places";
 import { RELEASE_METADATA } from "@/lib/release";
 import { useFieldJournal } from "@/lib/use-field-journal";
+import { useLiveClaimRecommendation, useLiveLocation } from "@/lib/use-live-location";
 import type { Visit } from "@/lib/account";
 import { useGroups } from "@/lib/use-groups";
 
@@ -62,9 +64,9 @@ function useDialogFocus(onClose?: () => void) {
   return ref;
 }
 
-export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAllowed = true }: { apiBaseUrl: string; googleAuthAllowed?: boolean; geolocationAllowed?: boolean }) {
+export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAllowed = true, automaticLocationAllowed = false }: { apiBaseUrl: string; googleAuthAllowed?: boolean; geolocationAllowed?: boolean; automaticLocationAllowed?: boolean }) {
   const journal = useFieldJournal({ apiBaseUrl });
-  const { places, visited, visitTimestamps, visitMetadata, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, visitClaimMode, toggleVisit, retrySync, authenticate: completeAuth, authenticateWithGoogle, requestEmailVerification, confirmEmailVerification, logout: signOut, importGuest, resetProgress, recommendClaim, createClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto, authenticatedRequest } = journal;
+  const { places, visited, visitTimestamps, visitMetadata, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, visitClaimMode, toggleVisit, retrySync, authenticate: completeAuth, authenticateWithGoogle, requestEmailVerification, confirmEmailVerification, logout: signOut, importGuest, resetProgress, recommendClaim, createClaim, reconcileClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto, authenticatedRequest } = journal;
   const { state: navigation, update: updateNavigation, set: setNavigation } = usePublicNavigation();
   const { selectedId, mapSearch, mapCategories, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, view, mapMode } = navigation;
   const setMapSearch = (value: React.SetStateAction<string>) => setNavigation("mapSearch", value);
@@ -75,10 +77,14 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const setMapMode = (value: React.SetStateAction<"explored" | "discover">) => setNavigation("mapMode", value);
   const [mapSearchDraft, setMapSearchDraft] = useState("");
   const [navigationNotice, setNavigationNotice] = useState("");
-  const [location, setLocation] = useState<(Coordinates & { accuracyMeters?: number | null; heading?: number | null }) | null>(null), [locationStatus, setLocationStatus] = useState<"idle" | "locating" | "ready" | "denied" | "unavailable">("idle");
+  const [recoveryActive, setRecoveryActive] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.hash.slice(1)).has("resetToken"));
+  const locationSessionKey = authenticated ? account?.id ?? "account-loading" : "guest";
+  const [manualLocationSession, setManualLocationSession] = useState<string | null>(null);
+  const locationEnabled = geolocationAllowed && !recoveryActive && ((automaticLocationAllowed && authenticated) || manualLocationSession === locationSessionKey);
+  const { location, status: liveLocationStatus } = useLiveLocation(locationEnabled);
+  const locationStatus = liveLocationStatus === "starting" ? "locating" : liveLocationStatus;
   const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const [progressHoldCount, setProgressHoldCount] = useState<number | null>(null);
-  const [recoveryActive, setRecoveryActive] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.hash.slice(1)).has("resetToken"));
   const [viewRevision, setViewRevision] = useState(0), [resetViewRequest, setResetViewRequest] = useState(0);
   const groupsState = useGroups({ apiBaseUrl, authenticated: authenticated && !recoveryActive, identityKey: account?.id ?? "", places, request: authenticatedRequest });
   const selectedGroup = authenticated && !recoveryActive ? groupsState.groups.find((group) => group.id === groupsState.selectedGroupId) ?? null : null;
@@ -93,8 +99,16 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const visitedPlaceCount = useMemo(() => places.filter((place) => visited.has(place.id)).length, [places, visited]);
   const badgeList = useMemo(() => achievements({ places, visited, visitTimestamps }), [places, visited, visitTimestamps]);
   const earnedBadges = badgeList.filter((badge) => badge.earned).length, selected = places.find((place) => place.id === selectedId) ?? null;
-  const claimFunctionsAvailable = [recommendClaim, createClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto].every((value) => typeof value === "function");
+  const claimFunctionsAvailable = [recommendClaim, createClaim, reconcileClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto].every((value) => typeof value === "function");
   const claimsAvailable = authenticated && claimFunctionsAvailable;
+  const liveClaim = useLiveClaimRecommendation({
+    enabled: claimsAvailable && !recoveryActive,
+    sessionKey: account?.id ?? "guest",
+    location,
+    recommend: recommendClaim,
+  });
+  const clearLiveClaim = liveClaim.clear;
+  const [claimFlow, setClaimFlow] = useState<{ placeId: string; recommendation: Extract<ClaimRecommendation, { status: "recommended" }> } | null>(null);
   const legacyVisitCreationAvailable = authenticated && (
     visitClaimMode === "legacy" || (visitClaimMode === undefined && !claimFunctionsAvailable)
   );
@@ -110,6 +124,18 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
     return selected && !candidates.some((place) => place.id === selected.id) ? [...candidates, selected] : candidates;
   }, [selectedGroup, mapMode, places, mapFiltered, selected]);
   const nearby = useMemo(() => location ? nearestUnseenParks(places, visited, location) : [], [location, places, visited]);
+  const liveRecommendation = liveClaim.recommendation?.status === "recommended" ? liveClaim.recommendation : null;
+  const displayedRecommendation = claimFlow?.recommendation ?? liveRecommendation;
+  const liveClaimPlace = displayedRecommendation ? places.find((place) => place.id === displayedRecommendation.candidate.placeId) ?? null : null;
+
+  useEffect(() => {
+    queueMicrotask(() => setClaimFlow(null));
+  }, [account?.id, authenticated]);
+
+  useEffect(() => {
+    if (!liveRecommendation || claimFlow?.placeId === liveRecommendation.candidate.placeId) return;
+    if (visited.has(liveRecommendation.candidate.placeId)) clearLiveClaim();
+  }, [claimFlow?.placeId, clearLiveClaim, liveRecommendation, visited]);
 
   useEffect(() => {
     if (previousPhotoOwnerRef.current === photoOwnerKey && !photoOwnerCleanupFailedRef.current) return;
@@ -158,9 +184,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   }
 
   function requestLocation() {
-    if (!navigator.geolocation) { setLocationStatus("unavailable"); setShowNearby(true); return; }
-    setLocationStatus("locating"); setShowNearby(true); updateNavigation({ mapMode: "discover", view: "map", selectedId: null }, "push"); setShowFilters(false);
-    navigator.geolocation.getCurrentPosition(({ coords }) => { setLocation({ latitude: coords.latitude, longitude: coords.longitude, accuracyMeters: coords.accuracy, heading: coords.heading }); setLocationStatus("ready"); }, (error) => setLocationStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"), { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+    setManualLocationSession(locationSessionKey); setShowNearby(true); updateNavigation({ mapMode: "discover", view: "map", selectedId: null }, "push"); setShowFilters(false);
   }
   function resetMapFilters() { updateNavigation({ mapSearch: "", mapCategories: new Set() }); setMapSearchDraft(""); }
   function resetCollectionFilters() { updateNavigation({ collectionSearch: "", collectionCategories: new Set(), collectionAuthorities: new Set(), collectionVisitFilter: "all" }); }
@@ -208,6 +232,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   return <main className="app-shell"><div className="skip-controls"><button onClick={focusNavigation}>Skip to navigation</button><button onClick={focusContent}>Skip to content</button></div><section className={`map-stage view-${view} ${groupMapMode ? "group-map-mode" : ""}`} aria-label="Parkdex explorer">
     <div id={view === "map" ? "primary-content" : undefined} className="map-content-target" tabIndex={-1} aria-label="Map" /><ParkMap places={mapPlaces} visited={visited} selectedId={selectedId} selectedIds={groupSelectedIds} resetViewRequest={resetViewRequest} showResetControl={view === "map"} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} mode={selectedGroup ? "discover" : mapMode} currentLocation={location} />
     {!groupMapMode && <header className="expedition-header"><div className="brand-mark"><Trees size={22} /></div><div className="brand-copy"><h1>Parkdex</h1><p>A completionist map of Vancouver Island</p></div><nav className="desktop-top-nav" aria-label="Primary navigation"><Nav active={view === "map"} click={() => navigate("map")} icon={<MapIcon size={18} />} label="Map" ariaName="Map tab" />{authenticated && <Nav active={view === "collection"} click={() => navigate("collection")} icon={<Trees size={18} />} label="Places" ariaName="Places tab" />}{authenticated && <Nav active={view === "groups"} click={() => navigate("groups")} icon={<MapPin size={18} />} label="Groups" ariaName="Groups tab" />}{authenticated && <Nav active={view === "badges"} click={() => navigate("badges")} icon={<Award size={18} />} label="Badges" ariaName="Badges tab" />}<Nav active={view === "account"} click={() => navigate("account")} icon={<UserRound size={18} />} label="Account" ariaName="Account tab" /><button className="navigation-skip" onClick={focusContent}>Skip to content</button></nav><GlobalProgress value={globalProgressCount} total={places.length} hidden={view !== "map" || mapMode !== "explored"} /></header>}
+    {claimsAvailable && liveClaimPlace && displayedRecommendation && recommendClaim && createClaim && reconcileClaim && uploadVisitPhoto && <ClaimFlowBanner place={liveClaimPlace} recommendation={displayedRecommendation} ownerKey={photoOwnerKey} busy={transitionBusy} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadVisitPhoto} onClaimed={celebrateClaim} onFlowActiveChange={(placeId) => setClaimFlow(placeId ? { placeId, recommendation: displayedRecommendation } : null)} onClearRecommendation={clearLiveClaim} />}
     {groupMapMode && <button className="group-map-exit" onClick={() => navigate("groups")}><ArrowLeft size={17} />Back to group</button>}
     {view === "map" && !groupMapMode && !selected && <><div className={`map-utility ${searchExpanded ? "search-open" : ""}`} role="toolbar" aria-label="Map utilities"><div className="map-mode-switch"><button className={mapMode === "explored" ? "active" : ""} onClick={() => { setMapMode("explored"); setShowNearby(false); }}><Trees size={16} /><span>My map</span></button><button className={mapMode === "discover" ? "active" : ""} onClick={() => setMapMode("discover")}><Compass size={16} /><span>Find places</span></button>{geolocationAllowed && <button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={19} className={locationStatus === "locating" ? "spin" : ""} /></button>}</div><div className={`search-dock ${searchExpanded ? "expanded" : "collapsed"}`}>
         <button className="search-toggle" onClick={() => { if (searchExpanded) applyMapSearch(); else { setMapSearchDraft(mapSearch); setMapMode("discover"); setSearchExpanded(true); } }} aria-label={searchExpanded ? "Apply search" : "Search places"}><Search size={20} />{!searchExpanded && (mapSearch.trim() || mapCategories.size > 0) && <span className="active-filter-dot" aria-label="Map filter active" />}</button>
@@ -272,7 +297,7 @@ function PlaceDetail({ place, visit, visited, busy, authenticated, claimsAvailab
       {feedback && <p className={`place-action-feedback ${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"}>{feedback.text}</p>}
       {hasImage && <PlaceMetadata place={place} boundaryState={boundaryState} openCollection={openCollection} />}
       <p className="place-description">{place.description}</p>
-      {(claimsAvailable || (!authenticated && typeof recommendClaim === "function")) && recommendClaim && createClaim && uploadPhoto && loadPhoto && removePhoto && <ClaimVisitPanel authenticated={authenticated} place={place} visit={visit} busy={busy} recommendClaim={recommendClaim} createClaim={createClaim} uploadPhoto={uploadPhoto} loadPhoto={loadPhoto} removePhoto={removePhoto} onClaimed={onClaimed} ownerKey={ownerKey} onOpenPlace={onOpenPlace} placeNameForId={(placeId) => groupsState.groups.flatMap((group) => group.places).find((candidate) => candidate.id === placeId)?.name} />}
+      {((visit?.claim && claimsAvailable) || (!authenticated && typeof recommendClaim === "function")) && recommendClaim && createClaim && uploadPhoto && loadPhoto && removePhoto && <ClaimVisitPanel authenticated={authenticated} place={place} visit={visit} busy={busy} recommendClaim={recommendClaim} createClaim={createClaim} uploadPhoto={uploadPhoto} loadPhoto={loadPhoto} removePhoto={removePhoto} onClaimed={onClaimed} ownerKey={ownerKey} onOpenPlace={onOpenPlace} />}
     </div>
   </article>;
 }
