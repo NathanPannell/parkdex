@@ -54,6 +54,9 @@ class Settings(BaseSettings):
         default="production", alias="APP_ENVIRONMENT"
     )
     claim_test_mode: bool = Field(default=False, alias="CLAIM_TEST_MODE")
+    enable_staging_field_places: bool = Field(
+        default=False, alias="ENABLE_STAGING_FIELD_PLACES"
+    )
     visit_claim_enforcement: Literal["compatible", "required"] = Field(
         default="compatible", alias="VISIT_CLAIM_ENFORCEMENT"
     )
@@ -87,6 +90,15 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def require_exact_staging_field_place_environment(self):
+        if self.enable_staging_field_places and not self.staging_field_places_enabled:
+            raise ValueError(
+                "ENABLE_STAGING_FIELD_PLACES requires APP_ENVIRONMENT=staging "
+                "and RAILWAY_ENVIRONMENT_NAME=staging"
+            )
+        return self
+
     @property
     def claim_test_fixtures_enabled(self) -> bool:
         railway_name = (self.railway_environment_name or "").strip()
@@ -94,6 +106,16 @@ class Settings(BaseSettings):
             self.claim_test_mode
             and self.app_environment in {"local", "test"}
             and not railway_name
+        )
+
+    @property
+    def staging_field_places_enabled(self) -> bool:
+        """Fail closed unless the field overlay is explicitly on in staging."""
+
+        return (
+            self.enable_staging_field_places
+            and self.app_environment == "staging"
+            and self.railway_environment_name == "staging"
         )
 
     @property

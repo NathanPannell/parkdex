@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -17,6 +18,9 @@ from shapely.validation import make_valid
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BOUNDARY_PATH = PROJECT_ROOT / "data" / "boundaries.geojson"
+STAGING_FIELD_BOUNDARY_PATH = (
+    PROJECT_ROOT / "data" / "staging-field-boundaries.geojson"
+)
 MAX_ACCURACY_METERS = 50.0
 MIN_BOUNDARY_TOLERANCE_METERS = 10.0
 MAX_SAMPLE_AGE_SECONDS = 60.0
@@ -56,36 +60,74 @@ class _Boundary:
 
 
 class BoundaryRegistry:
-    def __init__(self, path: Path = BOUNDARY_PATH):
-        payload = path.read_bytes()
-        document = json.loads(payload)
-        if document.get("type") != "FeatureCollection":
-            raise RuntimeError("Canonical boundary data is not a FeatureCollection")
+    def __init__(
+        self,
+        path: Path = BOUNDARY_PATH,
+        *,
+        overlay_path: Path | None = None,
+    ):
+        payloads = [path.read_bytes()]
+        if overlay_path is not None:
+            payloads.append(overlay_path.read_bytes())
         project = Transformer.from_crs("EPSG:4326", "EPSG:3005", always_xy=True).transform
         boundaries: list[_Boundary] = []
         seen: set[str] = set()
-        for feature in document.get("features", []):
-            properties = feature.get("properties") or {}
-            place_id = properties.get("id")
-            category = properties.get("category")
-            if not isinstance(place_id, str) or not place_id or place_id in seen:
-                raise RuntimeError("Canonical boundary data has a missing or duplicate place id")
-            if category not in {"national", "provincial", "regional", "island"}:
-                raise RuntimeError(f"Canonical boundary {place_id} has an invalid category")
-            projected = transform(project, shape(feature.get("geometry")))
-            if not projected.is_valid:
-                repaired = make_valid(projected)
-                polygonal = [item for item in getattr(repaired, "geoms", [repaired]) if isinstance(item, (Polygon, MultiPolygon))]
-                projected = unary_union(polygonal) if polygonal else GeometryCollection()
-            if projected.is_empty or not projected.is_valid or projected.area <= 0:
-                raise RuntimeError(f"Canonical boundary {place_id} is invalid")
-            seen.add(place_id)
-            boundaries.append(_Boundary(place_id, category == "island", projected, projected.area))
+        for payload in payloads:
+            document = json.loads(payload)
+            if document.get("type") != "FeatureCollection":
+                raise RuntimeError("Boundary data is not a FeatureCollection")
+            for feature in document.get("features", []):
+                properties = feature.get("properties") or {}
+                place_id = properties.get("id")
+                category = properties.get("category")
+                if not isinstance(place_id, str) or not place_id or place_id in seen:
+                    raise RuntimeError(
+                        "Boundary data has a missing or duplicate place id"
+                    )
+                if category not in {
+                    "national",
+                    "provincial",
+                    "regional",
+                    "island",
+                }:
+                    raise RuntimeError(
+                        f"Boundary {place_id} has an invalid category"
+                    )
+                projected = transform(project, shape(feature.get("geometry")))
+                if not projected.is_valid:
+                    repaired = make_valid(projected)
+                    polygonal = [
+                        item
+                        for item in getattr(repaired, "geoms", [repaired])
+                        if isinstance(item, (Polygon, MultiPolygon))
+                    ]
+                    projected = (
+                        unary_union(polygonal) if polygonal else GeometryCollection()
+                    )
+                if projected.is_empty or not projected.is_valid or projected.area <= 0:
+                    raise RuntimeError(f"Boundary {place_id} is invalid")
+                seen.add(place_id)
+                boundaries.append(
+                    _Boundary(
+                        place_id,
+                        category == "island",
+                        projected,
+                        projected.area,
+                    )
+                )
         if not boundaries:
-            raise RuntimeError("Canonical boundary data is empty")
+            raise RuntimeError("Boundary data is empty")
         self.boundaries = tuple(boundaries)
         self.place_ids = frozenset(seen)
-        self.version = hashlib.sha256(payload).hexdigest()
+        if len(payloads) == 1:
+            # Preserve the deployed canonical version when the overlay is off.
+            self.version = hashlib.sha256(payloads[0]).hexdigest()
+        else:
+            digest = hashlib.sha256(b"parkdex-boundary-overlay-v1\0")
+            for payload in payloads:
+                digest.update(len(payload).to_bytes(8, "big"))
+                digest.update(payload)
+            self.version = digest.hexdigest()
         self._project = Transformer.from_crs("EPSG:4326", "EPSG:3005", always_xy=True)
 
     def recommend(self, sample: LocationSample, excluded_place_ids: Iterable[str] = ()) -> Candidate | None:
@@ -173,11 +215,14 @@ def recommendation_token_hash(token: str) -> str | None:
     return hashlib.sha256(token.encode("ascii")).hexdigest()
 
 
-_registry: BoundaryRegistry | None = None
-
-
-def get_boundary_registry() -> BoundaryRegistry:
-    global _registry
-    if _registry is None:
-        _registry = BoundaryRegistry()
-    return _registry
+@lru_cache(maxsize=2)
+def get_boundary_registry(
+    include_staging_field_places: bool,
+) -> BoundaryRegistry:
+    return BoundaryRegistry(
+        overlay_path=(
+            STAGING_FIELD_BOUNDARY_PATH
+            if include_staging_field_places
+            else None
+        )
+    )

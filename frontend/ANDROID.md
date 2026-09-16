@@ -43,7 +43,7 @@ With an emulator or device connected, build and run the app-scoped instrumentati
 
 Keep Gradle tasks scoped to `:app`. Unqualified Android-test tasks also configure generated Capacitor library test variants that do not contain Parkdex tests.
 
-`npm run build:android` defaults to the persistent staging API. Set `NEXT_PUBLIC_API_BASE_URL` to another HTTPS origin before the command to override it. The value must not contain credentials, a path, query, or fragment.
+`npm run build:android` defaults to the persistent staging API and staging catalogue scope, including the Bell Park field-verification boundary. Set `NEXT_PUBLIC_API_BASE_URL` to another HTTPS origin before the command to override it. The value must not contain credentials, a path, query, or fragment. Set `PARKDEX_CATALOGUE_SCOPE=canonical` explicitly when producing a canonical Android bundle.
 
 The MCP metadata handlers use the `route.web.ts` extension. The normal web build includes that extension; the Android build excludes it because request-time route handlers and rewrites cannot be bundled into a static export.
 

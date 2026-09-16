@@ -135,11 +135,20 @@ jobs:
           vercel_stdout="$RUNNER_TEMP/vercel.out"
           vercel_stderr="$RUNNER_TEMP/vercel.err"
 
+          if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
+            mkdir -p frontend/catalogue-build-data
+            cp data/boundaries.geojson data/places.json data/vancouver-island-focus.geojson \
+              data/staging-field-boundaries.geojson data/staging-field-places.json \
+              frontend/catalogue-build-data/
+          fi
+
           railway up --detach --yes --message "$deployment_message" \
             --service "$RAILWAY_API_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
             >"$api_log" 2>&1 & api_pid=$!
           vercel deploy --yes --no-wait --prod --skip-domain --cwd frontend \
             --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
+            --build-env "PARKDEX_CATALOGUE_SCOPE=${{ inputs.target == 'staging' && 'staging' || 'canonical' }}" \
+            --build-env "PARKDEX_KEEP_SCOPED_ASSETS=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --build-env "NEXT_PUBLIC_RELEASE_VERSION=$RELEASE_VERSION" \
             --build-env "NEXT_PUBLIC_COMMIT_SHA=$EXPECTED_COMMIT_SHA" \
             --build-env "NEXT_PUBLIC_COMMIT_DATE=$COMMIT_DATE" \

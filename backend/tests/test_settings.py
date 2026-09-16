@@ -3,6 +3,55 @@ import pytest
 from backend.app.settings import Settings
 
 
+def test_staging_field_places_require_the_exact_triple_gate() -> None:
+    settings = Settings(
+        _env_file=None,
+        ENABLE_STAGING_FIELD_PLACES=True,
+        APP_ENVIRONMENT="staging",
+        RAILWAY_ENVIRONMENT_NAME="staging",
+    )
+    assert settings.staging_field_places_enabled is True
+
+
+@pytest.mark.parametrize(
+    ("app_environment", "railway_name"),
+    [
+        ("local", "staging"),
+        ("test", "staging"),
+        ("preview", "staging"),
+        ("production", "staging"),
+        ("staging", None),
+        ("staging", ""),
+        ("staging", "pr-42"),
+        ("staging", "production"),
+        ("staging", "staging-us"),
+        ("staging", "STAGING"),
+        ("staging", " staging "),
+    ],
+)
+def test_staging_field_place_flag_rejects_every_mismatched_environment(
+    app_environment,
+    railway_name,
+) -> None:
+    with pytest.raises(ValueError, match="requires APP_ENVIRONMENT=staging"):
+        Settings(
+            _env_file=None,
+            ENABLE_STAGING_FIELD_PLACES=True,
+            APP_ENVIRONMENT=app_environment,
+            RAILWAY_ENVIRONMENT_NAME=railway_name,
+        )
+
+
+def test_disabled_staging_field_places_never_enable_from_environment_names() -> None:
+    settings = Settings(
+        _env_file=None,
+        ENABLE_STAGING_FIELD_PLACES=False,
+        APP_ENVIRONMENT="staging",
+        RAILWAY_ENVIRONMENT_NAME="staging",
+    )
+    assert settings.staging_field_places_enabled is False
+
+
 @pytest.mark.parametrize("app_environment", ["local", "test"])
 @pytest.mark.parametrize("railway_name", [None, "", "  "])
 def test_claim_test_mode_is_allowed_only_off_platform_locally(

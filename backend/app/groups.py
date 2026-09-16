@@ -4,6 +4,11 @@ from typing import Iterable
 
 from psycopg import Connection
 
+from backend.app.staging_field_places import (
+    place_visibility_clause,
+    place_visibility_params,
+)
+
 
 PLACE_COLUMNS = """
     p.id, p.name, p.category, p.latitude, p.longitude, p.region, p.description,
@@ -31,7 +36,13 @@ def _place(row: dict) -> dict:
     }
 
 
-def group_row(conn: Connection, account_id: str, group_id: str) -> dict | None:
+def group_row(
+    conn: Connection,
+    account_id: str,
+    group_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> dict | None:
     row = conn.execute(
         """
         SELECT id, name, is_wishlist, created_at, updated_at
@@ -46,11 +57,12 @@ def group_row(conn: Connection, account_id: str, group_id: str) -> dict | None:
         f"""
         SELECT {PLACE_COLUMNS}
         FROM account_group_places tp
-        JOIN places p ON p.id = tp.place_id AND p.active
+        JOIN places p ON p.id = tp.place_id
+            AND {place_visibility_clause("p")}
         WHERE tp.group_id = %s
         ORDER BY tp.added_at, tp.place_id
         """,
-        (group_id,),
+        (*place_visibility_params(include_staging_field_places), group_id),
     ).fetchall()
     return {
         "id": str(row["id"]),
@@ -63,7 +75,12 @@ def group_row(conn: Connection, account_id: str, group_id: str) -> dict | None:
     }
 
 
-def list_group_rows(conn: Connection, account_id: str) -> list[dict]:
+def list_group_rows(
+    conn: Connection,
+    account_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id FROM account_groups
@@ -72,11 +89,29 @@ def list_group_rows(conn: Connection, account_id: str) -> list[dict]:
         """,
         (account_id,),
     ).fetchall()
-    return [group for row in rows if (group := group_row(conn, account_id, str(row["id"]))) is not None]
+    return [
+        group
+        for row in rows
+        if (
+            group := group_row(
+                conn,
+                account_id,
+                str(row["id"]),
+                include_staging_field_places=include_staging_field_places,
+            )
+        )
+        is not None
+    ]
 
 
 def create_group_row(
-    conn: Connection, account_id: str, name: str, place_ids: Iterable[str], *, is_wishlist: bool = False
+    conn: Connection,
+    account_id: str,
+    name: str,
+    place_ids: Iterable[str],
+    *,
+    is_wishlist: bool = False,
+    include_staging_field_places: bool = False,
 ) -> dict:
     row = conn.execute(
         """
@@ -86,8 +121,19 @@ def create_group_row(
         """,
         (account_id, name.strip(), is_wishlist),
     ).fetchone()
-    add_group_places(conn, account_id, str(row["id"]), place_ids)
-    return group_row(conn, account_id, str(row["id"]))
+    add_group_places(
+        conn,
+        account_id,
+        str(row["id"]),
+        place_ids,
+        include_staging_field_places=include_staging_field_places,
+    )
+    return group_row(
+        conn,
+        account_id,
+        str(row["id"]),
+        include_staging_field_places=include_staging_field_places,
+    )
 
 
 def rename_group_row(conn: Connection, account_id: str, group_id: str, name: str) -> bool:
@@ -111,7 +157,12 @@ def delete_group_row(conn: Connection, account_id: str, group_id: str) -> bool:
 
 
 def add_group_places(
-    conn: Connection, account_id: str, group_id: str, place_ids: Iterable[str]
+    conn: Connection,
+    account_id: str,
+    group_id: str,
+    place_ids: Iterable[str],
+    *,
+    include_staging_field_places: bool = False,
 ) -> bool:
     if conn.execute(
         "SELECT 1 FROM account_groups WHERE id = %s AND account_id = %s",
@@ -121,7 +172,9 @@ def add_group_places(
     ids = list(dict.fromkeys(place_ids))
     if ids:
         rows = conn.execute(
-            "SELECT id FROM places WHERE active AND id = ANY(%s)", (ids,)
+            f"SELECT id FROM places WHERE {place_visibility_clause()} "
+            "AND id = ANY(%s)",
+            (*place_visibility_params(include_staging_field_places), ids),
         ).fetchall()
         active_ids = {row["id"] for row in rows}
         missing = [place_id for place_id in ids if place_id not in active_ids]
@@ -163,7 +216,12 @@ def remove_group_places(
     return True
 
 
-def ensure_wishlist(conn: Connection, account_id: str) -> dict:
+def ensure_wishlist(
+    conn: Connection,
+    account_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> dict:
     """Create the singleton lazily; the partial unique index serializes races."""
     row = conn.execute(
         """
@@ -174,7 +232,12 @@ def ensure_wishlist(conn: Connection, account_id: str) -> dict:
         """,
         (account_id,),
     ).fetchone()
-    return group_row(conn, account_id, str(row["id"]))
+    return group_row(
+        conn,
+        account_id,
+        str(row["id"]),
+        include_staging_field_places=include_staging_field_places,
+    )
 
 
 def search_place_rows(
@@ -189,9 +252,12 @@ def search_place_rows(
     radius_km: float | None = None,
     limit: int = 25,
     offset: int = 0,
+    include_staging_field_places: bool = False,
 ) -> tuple[list[dict], int]:
-    clauses = ["p.active"]
-    where_params: list = []
+    clauses = [place_visibility_clause("p")]
+    where_params: list = list(
+        place_visibility_params(include_staging_field_places)
+    )
     if category:
         clauses.append("p.category = %s")
         where_params.append(category)
@@ -242,14 +308,24 @@ def search_place_rows(
     return rows, count_row["total"]
 
 
-def place_detail_row(conn: Connection, account_id: str, place_id: str) -> dict | None:
+def place_detail_row(
+    conn: Connection,
+    account_id: str,
+    place_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> dict | None:
     row = conn.execute(
         f"""
         SELECT {PLACE_COLUMNS},
                EXISTS (SELECT 1 FROM account_visits av WHERE av.account_id = %s AND av.place_id = p.id) AS visited
         FROM places p
-        WHERE p.id = %s AND p.active
+        WHERE p.id = %s AND {place_visibility_clause("p")}
         """,
-        (account_id, place_id),
+        (
+            account_id,
+            place_id,
+            *place_visibility_params(include_staging_field_places),
+        ),
     ).fetchone()
     return row

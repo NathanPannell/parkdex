@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { runNextBuild } from "./run-next-build.mjs";
 
 const stagingApiUrl = "https://api-staging-882c.up.railway.app";
 const apiBaseUrl = new URL(process.env.NEXT_PUBLIC_API_BASE_URL || stagingApiUrl);
@@ -11,16 +10,10 @@ if (apiBaseUrl.username || apiBaseUrl.password || apiBaseUrl.pathname !== "/" ||
   throw new Error("NEXT_PUBLIC_API_BASE_URL must be an HTTPS origin without credentials, a path, query, or fragment.");
 }
 
-const nextBin = fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url));
-const result = spawnSync(process.execPath, [nextBin, "build"], {
-  cwd: process.cwd(),
-  env: {
-    ...process.env,
-    NEXT_PUBLIC_API_BASE_URL: apiBaseUrl.origin,
-    PARKDEX_ANDROID_BUILD: "1",
-  },
-  stdio: "inherit",
+const result = await runNextBuild({
+  ...process.env,
+  NEXT_PUBLIC_API_BASE_URL: apiBaseUrl.origin,
+  PARKDEX_ANDROID_BUILD: "1",
+  PARKDEX_CATALOGUE_SCOPE: process.env.PARKDEX_CATALOGUE_SCOPE?.trim() || "staging",
 });
-
-if (result.error) throw result.error;
-process.exit(result.status ?? 1);
+process.exit(result);

@@ -11,10 +11,8 @@ import {
   weightedDistanceScore,
   weightedTerritoryConstraint,
 } from "../lib/exploration-geometry.ts";
+import { readCatalogueSource, readScopedBoundaryCollection } from "./catalogue-scope.mjs";
 
-const catalogueUrl = new URL("../../data/places.json", import.meta.url);
-const canonicalBoundariesUrl = new URL("../../data/boundaries.geojson", import.meta.url);
-const mainIslandUrl = new URL("../../data/vancouver-island-focus.geojson", import.meta.url);
 const outputUrl = new URL("../public/data/exploration-territories.v1.geojson", import.meta.url);
 const CIRCLE_STEPS = 192;
 const EXPLORATION_PARK_PADDING_METERS = 180;
@@ -28,11 +26,38 @@ const EXCURSION_IDS = new Set([
   "provincial-wallace-island-marine-park",
 ]);
 
-const [places, canonical, mainIsland] = await Promise.all([
-  readFile(fileURLToPath(catalogueUrl), "utf8").then(JSON.parse),
-  readFile(fileURLToPath(canonicalBoundariesUrl), "utf8").then(JSON.parse),
-  readFile(fileURLToPath(mainIslandUrl), "utf8").then(JSON.parse),
+const [canonicalPlaces, scoped, mainIsland] = await Promise.all([
+  readCatalogueSource("places.json").then(JSON.parse),
+  readScopedBoundaryCollection(),
+  readCatalogueSource("vancouver-island-focus.geojson").then(JSON.parse),
 ]);
+
+function validateStagingPlaces(value) {
+  if (!Array.isArray(value)) throw new Error("data/staging-field-places.json must be an array");
+  const seen = new Set();
+  for (const place of value) {
+    if (!place || typeof place !== "object" || typeof place.id !== "string") throw new Error("Staging catalogue place is missing an id");
+    if (!scoped.stagingIds.has(place.id)) throw new Error(`Staging catalogue place ${place.id} has no staging boundary`);
+    if (seen.has(place.id)) throw new Error(`Staging catalogue place ${place.id} is duplicated`);
+    seen.add(place.id);
+    if (!["national", "provincial", "regional", "island"].includes(place.category)) throw new Error(`Staging catalogue place ${place.id} has an unsupported category`);
+    if (![place.latitude, place.longitude].every(Number.isFinite)) throw new Error(`Staging catalogue place ${place.id} has no finite representative point`);
+    for (const field of ["name", "region", "description", "sourceUrl", "sourceName"]) {
+      if (typeof place[field] !== "string" || !place[field].trim()) throw new Error(`Staging catalogue place ${place.id} is missing ${field}`);
+    }
+  }
+  if (seen.size !== scoped.stagingIds.size) {
+    const missing = [...scoped.stagingIds].filter((id) => !seen.has(id));
+    throw new Error(`Staging catalogue places are missing boundary ids: ${missing.join(", ")}`);
+  }
+  return value;
+}
+
+const stagingPlaces = scoped.scope === "staging"
+  ? validateStagingPlaces(JSON.parse(await readCatalogueSource("staging-field-places.json")))
+  : [];
+const places = [...canonicalPlaces, ...stagingPlaces];
+const canonical = scoped.collection;
 
 function exteriorPolygons(feature) {
   if (feature.geometry.type === "Polygon") return [[feature.geometry.coordinates[0]]];
@@ -56,7 +81,18 @@ function paddedLandFeature(feature) {
 const nearbyIslands = canonical.features.filter((feature) => feature.properties?.category === "island");
 const excursionParks = canonical.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
 if (excursionParks.length !== EXCURSION_IDS.size) throw new Error("Exploration territory excursion geometry is incomplete");
-const landInputs = [mainIsland, ...nearbyIslands.map(paddedLandFeature), ...excursionParks.map(paddedLandFeature)]
+// Staging-only boundaries are treated as excursion footprints as well. This
+// keeps Bell Park's staged geometry inside the exploration scope without
+// hard-coding a synthetic id that may change with the fixture.
+const landFeatures = new Map([
+  ...nearbyIslands.map((feature) => [feature.properties?.id, feature]),
+  ...excursionParks.map((feature) => [feature.properties?.id, feature]),
+  ...canonical.features.filter((feature) => scoped.stagingIds.has(feature.properties?.id))
+    .map((feature) => [feature.properties?.id, feature]),
+]);
+const landInputs = [mainIsland, ...landFeatures.values()].map((feature) => (
+  feature === mainIsland ? feature : paddedLandFeature(feature)
+))
   .flatMap(exteriorPolygons);
 const land = polygonClipping.union(landInputs[0], ...landInputs.slice(1));
 
@@ -372,7 +408,8 @@ const asset = {
     edgeSegmentCount: uniqueSegments.size,
     coastEdgeSegmentCount,
     interiorEdgeSegmentCount,
-    landSource: "canonical-boundaries-independent-padded",
+    ...(scoped.scope === "staging" ? { catalogueScope: scoped.scope } : {}),
+    landSource: scoped.scope === "canonical" ? "canonical-boundaries-independent-padded" : "scoped-boundaries-independent-padded",
     explorationPaddingMeters: {
       park: EXPLORATION_PARK_PADDING_METERS,
       island: EXPLORATION_ISLAND_PADDING_METERS,

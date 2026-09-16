@@ -228,7 +228,7 @@ test("persistent Railway IaC preserves the API direct database connection and re
   assert.match(apiConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
   assert.match(apiConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
-  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "EMAIL_PROVIDER", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "RESEND_API_KEY", "RESEND_FROM"]) {
+  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "APP_ENVIRONMENT", "EMAIL_PROVIDER", "ENABLE_STAGING_FIELD_PLACES", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "PHOTO_STORAGE_BACKEND", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_REGION", "RESEND_API_KEY", "RESEND_FROM"]) {
     assert.match(apiConfig, new RegExp(`${name}: preserve\\(\\)`));
   }
 });

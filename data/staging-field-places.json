@@ -1,0 +1,14 @@
+[
+  {
+    "id": "regional-bell-park",
+    "name": "Bell Park",
+    "category": "regional",
+    "latitude": 49.0918726,
+    "longitude": -123.0600868,
+    "region": "Lower Mainland",
+    "description": "A City of Delta developed municipal park included only for staging field verification. The pin is a reviewed interior point in the official GIS polygon, not an entrance or trailhead.",
+    "sourceUrl": "https://www.delta.ca/parks-recreation/parks-trails/park-and-amenity-search/bell-park",
+    "sourceName": "City of Delta",
+    "sourceId": "1001484"
+  }
+]

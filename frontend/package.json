@@ -6,7 +6,7 @@
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
-    "build": "next build",
+    "build": "node scripts/build.mjs",
     "build:cloudflare": "node scripts/cloudflare-build.mjs",
     "process:cloudflare": "node scripts/copy-cloudflare-files.mjs && node scripts/write-static-export-manifest.mjs && node scripts/check-static-export.mjs",
     "prebuild:android": "node scripts/copy-maplibre-worker.mjs",

@@ -98,7 +98,7 @@ def test_multipolygon_parts_and_real_canonical_asset_are_loaded(tmp_path):
         ],
     )
     assert registry.recommend(sample(49.05, -123.85)).place_id == "multi"
-    canonical = get_boundary_registry()
+    canonical = get_boundary_registry(False)
     assert len(canonical.place_ids) > 0
     assert len(canonical.version) == 64
     assert all(boundary.area_meters_2 > 0 for boundary in canonical.boundaries)

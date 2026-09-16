@@ -7,16 +7,18 @@ MIGRATION_DIR = ROOT / "database" / "migrations"
 
 def test_claim_migrations_follow_current_schema_and_are_additive():
     names = sorted(path.name for path in MIGRATION_DIR.glob("*.sql"))
-    assert names[-4:] == [
+    assert names[-5:] == [
         "0015_create_location_claims.sql",
         "0016_add_visit_postcard_object_storage.sql",
         "0017_schedule_photo_deletion_retries.sql",
         "0018_bind_claim_recommendations_to_session.sql",
+        "0019_add_staging_field_place_scope.sql",
     ]
-    claims = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
-    photos = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
-    retries = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
-    sessions = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
+    claims = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
+    photos = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
+    retries = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
+    sessions = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
+    field_scope = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
     assert "account_id UUID NOT NULL" in claims
     assert "consumed_at TIMESTAMPTZ" in claims
     assert "FOREIGN KEY (account_id, place_id)" in claims
@@ -50,6 +52,9 @@ def test_claim_migrations_follow_current_schema_and_are_additive():
     assert "REFERENCES account_sessions(token_hash)" in sessions
     assert "ON DELETE CASCADE" in sessions
     assert "claim_recommendations_session_hash_idx" in sessions
+    assert "ADD COLUMN IF NOT EXISTS field_test_scope TEXT" in field_scope
+    assert "field_test_scope = 'staging' AND active = FALSE" in field_scope
+    assert "places_field_test_scope_idx" in field_scope
 
 
 def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
@@ -60,6 +65,7 @@ def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
         "0016_add_visit_postcard_object_storage.sql",
         "0017_schedule_photo_deletion_retries.sql",
         "0018_bind_claim_recommendations_to_session.sql",
+        "0019_add_staging_field_place_scope.sql",
     ):
         sql = (MIGRATION_DIR / name).read_text(encoding="utf-8").upper()
         assert "DROP TABLE" not in sql

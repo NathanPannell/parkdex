@@ -8,6 +8,7 @@ const release = readFileSync(".github/workflows/deploy-release.yml", "utf8");
 const railwayConfig = readFileSync(".railway/railway.ts", "utf8");
 const migrator = readFileSync("backend/app/migrate.py", "utf8");
 const cloudflarePages = JSON.parse(readFileSync("deploy/cloudflare-pages.json", "utf8"));
+const cloudflareBuild = readFileSync("frontend/scripts/cloudflare-build.mjs", "utf8");
 const frontendPackage = JSON.parse(readFileSync("frontend/package.json", "utf8"));
 
 test("old hosted test, manual release, and preview-cleanup workflows are removed", () => {
@@ -78,6 +79,12 @@ test("the API and frontend are queued concurrently without waiting for provider 
   assert.match(release, /vercel_deployment_url=/);
   assert.match(release, /release_id: \$\{\{ steps\.metadata\.outputs\.release_id \}\}/);
   assert.match(release, /Release ID: \\`\$RELEASE_ID\\`/);
+  assert.match(release, /if \[\[ "\$TARGET_ENVIRONMENT" == staging \]\]; then[\s\S]*frontend\/catalogue-build-data/);
+  for (const name of ["boundaries.geojson", "places.json", "vancouver-island-focus.geojson", "staging-field-boundaries.geojson", "staging-field-places.json"]) {
+    assert.match(release, new RegExp(`data/${name.replaceAll(".", "\\.")}`));
+  }
+  assert.match(release, /--build-env "PARKDEX_CATALOGUE_SCOPE=\$\{\{ inputs\.target == 'staging' && 'staging' \|\| 'canonical' \}\}"/);
+  assert.match(release, /--build-env "PARKDEX_KEEP_SCOPED_ASSETS=\$\{\{ inputs\.target == 'staging' && '1' \|\| '0' \}\}"/);
   assert.doesNotMatch(release, /railway deployment list|--ci|wait-for-railway|wait-for-worker|verify-railway-deployments|smoke-catalogue|curl --fail|sleep [0-9]/);
   assert.doesNotMatch(release, /\.status.*SUCCESS|status.*ready|readyState/);
 });
@@ -99,7 +106,7 @@ test("both environments keep independent database and stable-domain settings in 
   assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 1);
   assert.match(railwayConfig, /resources: \[api\]/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
-  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "EMAIL_PROVIDER", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "RESEND_API_KEY", "RESEND_FROM"]) {
+  for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "APP_ENVIRONMENT", "EMAIL_PROVIDER", "ENABLE_STAGING_FIELD_PLACES", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "PHOTO_STORAGE_BACKEND", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_REGION", "RESEND_API_KEY", "RESEND_FROM"]) {
     assert.match(railwayConfig, new RegExp(`${name}: preserve\\(\\)`));
   }
   assert.doesNotMatch(railwayConfig, /github\("NathanPannell\/every-park"\)|source: repository/);
@@ -139,6 +146,7 @@ test("Cloudflare Pages projects are isolated and Git-integrated", () => {
   });
   assert.equal(frontendPackage.scripts["deploy:cloudflare:staging"], undefined);
   assert.equal(frontendPackage.scripts["deploy:cloudflare:production"], undefined);
+  assert.match(cloudflareBuild, /PARKDEX_CATALOGUE_SCOPE: process\.env\.CF_PAGES_BRANCH\?\.trim\(\) === "staging" \? "staging" : "canonical"/);
   assert.match(frontendPackage.scripts.start, /wrangler pages dev out/);
   assert.match(frontendPackage.scripts.start, /API_BASE_URL=http:\/\/localhost:8000/);
 });
