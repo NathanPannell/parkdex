@@ -9,6 +9,7 @@ import {
   assertEmulatorSerial,
   bellParkReady,
   distanceLabels,
+  evaluateDumpedPoll,
   fieldReadyFromCheckpoints,
   locateButtonCenter,
   locationUnavailable,
@@ -20,6 +21,7 @@ import {
   parseR2ContractOutput,
   photoPostcardReady,
   railwayContractCommand,
+  retryActionDue,
   sanitizeText,
   stagingBuildEnvironment,
   summarizeDurations,
@@ -64,6 +66,35 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
 test("computes deterministic nearest-rank timing summaries", () => {
   assert.deepEqual(summarizeDurations([]), { count: 0, minMs: null, medianMs: null, p95Ms: null, maxMs: null });
   assert.deepEqual(summarizeDurations([9000, 1000, 4000, 2000]), { count: 4, minMs: 1000, medianMs: 2000, p95Ms: 9000, maxMs: 9000 });
+});
+
+test("replays edge-triggered emulator fixes only at the bounded retry cadence", () => {
+  assert.equal(retryActionDue(1_999, 0, 2_000), false);
+  assert.equal(retryActionDue(2_000, 0, 2_000), true);
+  assert.equal(retryActionDue(4_100, 2_000, 2_000), true);
+  assert.throws(() => retryActionDue(1, 0, 0), /positive interval/);
+});
+
+test("a hierarchy dump crossing the deadline cannot match or schedule another injection", () => {
+  let predicateCalls = 0;
+  const expiredAfterDump = evaluateDumpedPoll({
+    clock: () => 30_000,
+    deadlineMs: 30_000,
+    lastRetryAt: 27_000,
+    retryEnabled: true,
+  }, () => { predicateCalls += 1; return true; }, "ready XML");
+  assert.deepEqual(expiredAfterDump, { expired: true, matched: false, retry: false });
+  assert.equal(predicateCalls, 0);
+
+  const times = [29_999, 30_000];
+  const expiredDuringPredicate = evaluateDumpedPoll({
+    clock: () => times.shift(),
+    deadlineMs: 30_000,
+    lastRetryAt: 27_000,
+    retryEnabled: true,
+  }, () => { predicateCalls += 1; return true; }, "ready XML");
+  assert.deepEqual(expiredDuringPredicate, { expired: true, matched: false, retry: false });
+  assert.equal(predicateCalls, 1);
 });
 
 test("sanitizes credentials and validates bounded numeric arguments", () => {

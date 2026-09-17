@@ -118,6 +118,29 @@ export function summarizeDurations(values) {
   };
 }
 
+export function retryActionDue(nowMs, lastAttemptMs, intervalMs = 2_000) {
+  if (![nowMs, lastAttemptMs, intervalMs].every(Number.isFinite) || intervalMs < 1) {
+    throw new Error("Retry scheduling requires finite timestamps and a positive interval");
+  }
+  return nowMs - lastAttemptMs >= intervalMs;
+}
+
+export function evaluateDumpedPoll({ clock = Date.now, deadlineMs, lastRetryAt, retryIntervalMs = 2_000, retryEnabled = false }, predicate, value) {
+  const afterDumpMs = clock();
+  if (afterDumpMs >= deadlineMs) return { expired: true, matched: false, retry: false };
+  const matchedValue = predicate(value);
+  const matched = Boolean(matchedValue);
+  const afterPredicateMs = clock();
+  if (afterPredicateMs >= deadlineMs) return { expired: true, matched: false, retry: false };
+  return {
+    expired: false,
+    matched,
+    value: matchedValue,
+    retry: !matched && retryEnabled && retryActionDue(afterPredicateMs, lastRetryAt, retryIntervalMs),
+    observedAtMs: afterPredicateMs,
+  };
+}
+
 export function sanitizeText(value) {
   return String(value)
     .replace(/("(?:(?:r2|aws)[_-]?)?(?:authorization|token|password|api[_-]?key|access[_-]?key(?:[_-]?id)?|secret(?:[_-]?access)?[_-]?key)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
@@ -338,15 +361,34 @@ function dumpHierarchy(context) {
   return xml;
 }
 
-function waitFor(context, predicate, deadline, label) {
+function waitFor(context, predicate, deadline, label, { retryAction, retryIntervalMs = 2_000 } = {}) {
   let lastXml = "";
+  let lastRetryAt = Date.now();
   while (Date.now() < deadline) {
+    let retry = false;
     try {
       lastXml = dumpHierarchy(context);
-      const result = predicate(lastXml);
-      if (result) return { value: result, xml: lastXml };
+      const decision = evaluateDumpedPoll({
+        deadlineMs: deadline,
+        lastRetryAt,
+        retryIntervalMs,
+        retryEnabled: Boolean(retryAction),
+      }, predicate, lastXml);
+      if (decision.expired) break;
+      if (decision.matched) return { value: decision.value, xml: lastXml };
+      retry = decision.retry;
     } catch {
       // The hierarchy can be unavailable briefly while the Activity starts.
+      const now = Date.now();
+      if (now >= deadline) break;
+      retry = Boolean(retryAction) && retryActionDue(now, lastRetryAt, retryIntervalMs);
+    }
+    // The dump and predicate can both consume meaningful time. Never replay a
+    // provider event after the fixed trial deadline.
+    if (Date.now() >= deadline) break;
+    if (retryAction && retry) {
+      retryAction();
+      lastRetryAt = Date.now();
     }
     sleep(300);
   }
@@ -486,7 +528,9 @@ function runColdStartTrial(context, index) {
   // Emulator geo fixes are edge-triggered. Inject after the foreground watch
   // exists instead of assuming a pre-launch fix will be replayed.
   spoof(context, BELL);
-  const ready = waitFor(context, bellParkReady, deadline, "Bell Park nearby result");
+  const ready = waitFor(context, bellParkReady, deadline, "Bell Park nearby result", {
+    retryAction: () => spoof(context, BELL),
+  });
   const elapsedMs = Date.now() - started;
   if (elapsedMs > context.timeoutMs) throw new Error(`Trial ${index} exceeded ${context.timeoutMs}ms`);
   return {
@@ -506,7 +550,9 @@ function runMotionCheck(context, baselineXml) {
     if (!bellParkReady(xml)) return false;
     const after = distanceLabels(xml);
     return after.length > 0 && JSON.stringify(after) !== JSON.stringify(before) ? after : false;
-  }, started + context.timeoutMs, "motion-driven nearby distance update");
+  }, started + context.timeoutMs, "motion-driven nearby distance update", {
+    retryAction: () => spoof(context, MOTION),
+  });
   return { elapsedMs: Date.now() - started, before, after: moved.value };
 }
 
@@ -530,7 +576,9 @@ function runProviderRecovery(context) {
     const recovered = waitFor(context, (xml) => {
       lastXml = xml;
       return bellParkReady(xml);
-    }, restoredAt + context.timeoutMs, "automatic provider recovery");
+    }, restoredAt + context.timeoutMs, "automatic provider recovery", {
+      retryAction: () => spoof(context, BELL),
+    });
     return {
       unavailableObserved: true,
       recoveredWithoutRestart: true,
