@@ -13,6 +13,8 @@ import {
 import { createNativePhotoRetryStore } from "./photo-retry";
 
 type PluginError = { code?: unknown; message?: unknown };
+const LOCATION_BOOTSTRAP_TIMEOUT_MS = 12_000;
+const LOCATION_BOOTSTRAP_MAX_AGE_MS = 60_000;
 
 function pluginError(error: unknown): PluginError {
   return typeof error === "object" && error !== null ? error as PluginError : {};
@@ -164,11 +166,28 @@ export function createCapacitorNativeCapabilities(): NativeCapabilities {
     watchLocation(options: LocationWatchOptions, onLocation, onError) {
       let active = true;
       let watchId: string | undefined;
+      let newestTimestamp = 0;
+      const publishLocation = (position: { coords: { latitude: number; longitude: number; accuracy: number }; timestamp: number }) => {
+        const sample = locationSample(position);
+        if (sample.capturedAtEpochMs < newestTimestamp) return;
+        newestTimestamp = sample.capturedAtEpochMs;
+        onLocation(sample);
+      };
 
       void locationPermission().then((permission) => {
         if (!active) return undefined;
+        const positionOptions = preciseLocationOptions(options, permission.location === "granted");
+        // Show a recent cached fix immediately while the continuous provider
+        // warms up. Claim eligibility still rejects samples older than 20s.
+        void Geolocation.getCurrentPosition({
+          ...positionOptions,
+          timeout: Math.min(positionOptions.timeout, LOCATION_BOOTSTRAP_TIMEOUT_MS),
+          maximumAge: Math.max(positionOptions.maximumAge, LOCATION_BOOTSTRAP_MAX_AGE_MS),
+        }).then((position) => {
+          if (active) publishLocation(position);
+        }).catch(() => undefined);
         return Geolocation.watchPosition({
-          ...preciseLocationOptions(options, permission.location === "granted"),
+          ...positionOptions,
           interval: Math.min(options.updateIntervalMs, 30_000),
           minimumUpdateInterval: options.minimumUpdateIntervalMs,
         }, (position, error) => {
@@ -176,7 +195,7 @@ export function createCapacitorNativeCapabilities(): NativeCapabilities {
           if (error) {
             onError?.(locationError(error));
           } else if (position) {
-            onLocation(locationSample(position));
+            publishLocation(position);
           }
         });
       }).then((id) => {

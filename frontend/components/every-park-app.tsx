@@ -33,6 +33,7 @@ import { getVisitorInformation } from "@/lib/visitor-information";
 const categories = Object.keys(categoryLabels) as PlaceCategory[];
 type BadgeImage = { src: string; alt: string; creator: string; license: string; licenseUrl: string; sourceUrl: string; species: string };
 type ShelfItem = { id: string; name: string; kind: "badge" | "place"; image?: string; date?: string };
+type LocationIdentity = "guest" | `account:${string}`;
 const imageMap = badgeImages as Record<string, BadgeImage>;
 const GOOGLE_VERIFIER_KEY = "parkdex:google-code-verifier:v1";
 const formatDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(date) : "Date unavailable"; };
@@ -78,10 +79,12 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const [mapSearchDraft, setMapSearchDraft] = useState("");
   const [navigationNotice, setNavigationNotice] = useState("");
   const [recoveryActive, setRecoveryActive] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.hash.slice(1)).has("resetToken"));
-  const locationSessionKey = authenticated ? account?.id ?? "account-loading" : "guest";
-  const [manualLocationSession, setManualLocationSession] = useState<string | null>(null);
-  const locationEnabled = geolocationAllowed && !recoveryActive && ((automaticLocationAllowed && authenticated) || manualLocationSession === locationSessionKey);
-  const { location, status: liveLocationStatus } = useLiveLocation(locationEnabled);
+  const locationIdentity: LocationIdentity | null = loading ? null : authenticated && account?.id ? `account:${account.id}` : "guest";
+  const [manualLocationScope, setManualLocationScope] = useState<"pending" | LocationIdentity | null>(null);
+  const [locationAttempt, setLocationAttempt] = useState(0);
+  const manualLocationEnabled = manualLocationScope === "pending" || (locationIdentity !== null && manualLocationScope === locationIdentity);
+  const locationEnabled = geolocationAllowed && !recoveryActive && ((automaticLocationAllowed && authenticated) || manualLocationEnabled);
+  const { location, status: liveLocationStatus } = useLiveLocation(locationEnabled, locationAttempt);
   const locationStatus = liveLocationStatus === "starting" ? "locating" : liveLocationStatus;
   const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const [progressHoldCount, setProgressHoldCount] = useState<number | null>(null);
@@ -127,6 +130,14 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const liveRecommendation = liveClaim.recommendation?.status === "recommended" ? liveClaim.recommendation : null;
   const displayedRecommendation = claimFlow?.recommendation ?? liveRecommendation;
   const liveClaimPlace = displayedRecommendation ? places.find((place) => place.id === displayedRecommendation.candidate.placeId) ?? null : null;
+
+  useEffect(() => {
+    if (!locationIdentity) return;
+    queueMicrotask(() => setManualLocationScope((current) => {
+      if (current === "pending") return locationIdentity;
+      return current && current !== locationIdentity ? null : current;
+    }));
+  }, [locationIdentity]);
 
   useEffect(() => {
     queueMicrotask(() => setClaimFlow(null));
@@ -184,7 +195,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   }
 
   function requestLocation() {
-    setManualLocationSession(locationSessionKey); setShowNearby(true); updateNavigation({ mapMode: "discover", view: "map", selectedId: null }, "push"); setShowFilters(false);
+    setManualLocationScope(locationIdentity ?? "pending"); setLocationAttempt((current) => current + 1); setShowNearby(true); updateNavigation({ mapMode: "discover", view: "map", selectedId: null }, "push"); setShowFilters(false);
   }
   function resetMapFilters() { updateNavigation({ mapSearch: "", mapCategories: new Set() }); setMapSearchDraft(""); }
   function resetCollectionFilters() { updateNavigation({ collectionSearch: "", collectionCategories: new Set(), collectionAuthorities: new Set(), collectionVisitFilter: "all" }); }

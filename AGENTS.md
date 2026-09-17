@@ -10,3 +10,4 @@
 - Keep staging and production long-lived and isolated. Do not recreate Neon branches, Railway environments, or stable domains during ordinary releases. Keep migrations additive and N/N-1 compatible; never automatically roll back Neon.
 - Preserve legacy browser storage keys and API compatibility when changing branding or progress data.
 - Keep frontend static imports within `frontend/`; load repository-root test fixtures at test runtime.
+- For Android location changes, cover Locate Me during inactive native startup, initial auth hydration, retry after watcher failure, lifecycle snapshot ordering (including rejected or hung newer snapshots), and account transitions. Verify the exact synced debug APK on an emulator before delivery.

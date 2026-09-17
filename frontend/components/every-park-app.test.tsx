@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { publishNativeAppState, registerNativeCapabilities, type LocationSample } from "@/lib/native-capabilities";
 import { dispatchNativeBack } from "@/lib/native-back";
 import { createBrowserPhotoRetryStore } from "@/lib/photo-retry";
 import { ParkdexApp } from "./every-park-app";
@@ -32,10 +32,10 @@ let restoreNative: () => void = () => undefined;
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
 
-afterEach(() => { cleanup(); restoreNative(); restoreNative = () => undefined; vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
   it("clears an expired Google callback without a verifier and leaves navigation usable", async () => {
@@ -293,6 +293,79 @@ describe("Parkdex navigation", () => {
     const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
     expect(watchLocation).not.toHaveBeenCalled();
     rerender(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a manual location request alive through native startup and account hydration", async () => {
+    let publish: ((location: LocationSample) => void) | undefined;
+    const watchLocation = vi.fn((_options, onLocation: (location: LocationSample) => void) => {
+      publish = onLocation;
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    publishNativeAppState(false);
+    journal.loading = true;
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    expect(await screen.findByText("Finding your location…")).toBeTruthy();
+    expect(watchLocation).not.toHaveBeenCalled();
+
+    act(() => publishNativeAppState(true));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: 49, longitude: -124, accuracyMeters: 6, capturedAtEpochMs: Date.now() }));
+    expect(await screen.findByText("Forest Park")).toBeTruthy();
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+
+    journal.authenticated = true;
+    journal.account = null;
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    journal.loading = false;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
+
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+  });
+
+  it("restarts automatic Android tracking when Locate Me is tapped", async () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(2));
+  });
+
+  it("clears manual location when the authoritative account changes", async () => {
+    let publish: ((location: LocationSample) => void) | undefined;
+    const stop = vi.fn();
+    const watchLocation = vi.fn((_options, onLocation: (location: LocationSample) => void) => {
+      publish = onLocation;
+      return stop;
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    journal.authenticated = true;
+    journal.account = { id: "owner-a", email: "a@example.test" };
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: 49, longitude: -124, accuracyMeters: 6, capturedAtEpochMs: Date.now() }));
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+
+    journal.authenticated = false;
+    journal.account = null;
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    await waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId("park-map").dataset.currentLocation).toBe(""));
+
+    journal.authenticated = true;
+    journal.account = { id: "owner-b", email: "b@example.test" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
     expect(watchLocation).toHaveBeenCalledTimes(1);
   });
 

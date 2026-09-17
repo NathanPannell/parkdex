@@ -17,7 +17,7 @@ function statusFor(error: unknown): LiveLocationStatus {
 }
 
 /** Keep the foreground map location moving at native-provider cadence, with a browser-safe polling fallback. */
-export function useLiveLocation(enabled = true) {
+export function useLiveLocation(enabled = true, restartKey = 0) {
   const [location, setLocation] = useState<LocationSample | null>(null);
   const [status, setStatus] = useState<LiveLocationStatus>(enabled ? "starting" : "idle");
   const [error, setError] = useState("");
@@ -50,7 +50,7 @@ export function useLiveLocation(enabled = true) {
       queueMicrotask(() => {
         if (generationRef.current !== generation) return;
         setLocation(null);
-        setStatus("idle");
+        setStatus(enabled ? "starting" : "idle");
         setError("");
       });
       return;
@@ -71,7 +71,7 @@ export function useLiveLocation(enabled = true) {
     return watchCurrentLocation(FOREGROUND_LOCATION_WATCH_OPTIONS, (sample) => {
       if (generationRef.current === generation) accept(sample);
     }, fail);
-  }, [accept, enabled, foreground]);
+  }, [accept, enabled, foreground, restartKey]);
 
   return { location, status, error };
 }

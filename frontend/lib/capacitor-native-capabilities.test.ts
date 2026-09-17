@@ -28,6 +28,7 @@ beforeEach(() => {
   geolocation.clearWatch.mockReset();
   geolocation.clearWatch.mockResolvedValue(undefined);
   geolocation.getCurrentPosition.mockReset();
+  geolocation.getCurrentPosition.mockRejectedValue(new Error("No cached location"));
   geolocation.requestPermissions.mockReset();
   geolocation.watchPosition.mockReset();
   clearRestoredCameraPhoto();
@@ -106,6 +107,10 @@ describe("Capacitor native capabilities", () => {
 
   it("streams high-accuracy foreground locations faster than 30 seconds and clears the native watch", async () => {
     geolocation.checkPermissions.mockResolvedValue({ location: "granted" });
+    geolocation.getCurrentPosition.mockResolvedValue({
+      coords: { latitude: 49.09186, longitude: -123.06008, accuracy: 9 },
+      timestamp: 1_780_000_000_001,
+    });
     geolocation.watchPosition.mockImplementation(async (_options, callback) => {
       callback({
         coords: { latitude: 49.09187, longitude: -123.06009, accuracy: 6 },
@@ -125,6 +130,12 @@ describe("Capacitor native capabilities", () => {
     }, onLocation, onError);
     await vi.waitFor(() => expect(onLocation).toHaveBeenCalledOnce());
 
+    expect(geolocation.getCurrentPosition).toHaveBeenCalledWith({
+      enableHighAccuracy: true,
+      timeout: 12_000,
+      maximumAge: 60_000,
+    });
+
     expect(geolocation.watchPosition).toHaveBeenCalledWith({
       enableHighAccuracy: true,
       timeout: 30_000,
@@ -142,6 +153,32 @@ describe("Capacitor native capabilities", () => {
 
     stop?.();
     expect(geolocation.clearWatch).toHaveBeenCalledWith({ id: "watch-1" });
+  });
+
+  it("publishes a cached fix while a live watch is still warming up", async () => {
+    geolocation.checkPermissions.mockResolvedValue({ location: "granted" });
+    geolocation.getCurrentPosition.mockResolvedValue({
+      coords: { latitude: 49.09186, longitude: -123.06008, accuracy: 9 },
+      timestamp: 1_780_000_000_001,
+    });
+    geolocation.watchPosition.mockResolvedValue("watch-warming");
+    const onLocation = vi.fn();
+
+    const stop = createCapacitorNativeCapabilities().watchLocation?.({
+      highAccuracy: true,
+      timeoutMs: 30_000,
+      maxAgeMs: 5_000,
+      updateIntervalMs: 5_000,
+      minimumUpdateIntervalMs: 2_000,
+    }, onLocation);
+
+    await vi.waitFor(() => expect(onLocation).toHaveBeenCalledWith({
+      latitude: 49.09186,
+      longitude: -123.06008,
+      accuracyMeters: 9,
+      capturedAtEpochMs: 1_780_000_000_001,
+    }));
+    stop?.();
   });
 
   it("clears a native watch that resolves after its lifecycle has already stopped", async () => {

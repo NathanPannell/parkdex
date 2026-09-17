@@ -95,10 +95,28 @@ describe("useLiveLocation", () => {
     const watchLocation = vi.fn(() => vi.fn());
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
     publishNativeAppState(false);
-    renderHook(() => useLiveLocation(true));
+    const { result } = renderHook(() => useLiveLocation(true));
     expect(watchLocation).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.status).toBe("starting"));
     act(() => publishNativeAppState(true));
     await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+  });
+
+  it("restarts an already-enabled foreground watch when the user retries", async () => {
+    const stops: Array<ReturnType<typeof vi.fn>> = [];
+    const watchLocation = vi.fn(() => {
+      const stop = vi.fn();
+      stops.push(stop);
+      return stop;
+    });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    const { rerender } = renderHook(({ retry }) => useLiveLocation(true, retry), { initialProps: { retry: 0 } });
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+
+    rerender({ retry: 1 });
+
+    await waitFor(() => expect(stops[0]).toHaveBeenCalledTimes(1));
+    expect(watchLocation).toHaveBeenCalledTimes(2);
   });
 });
 

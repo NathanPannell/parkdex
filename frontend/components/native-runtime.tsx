@@ -66,6 +66,8 @@ export function NativeRuntime({
     let removePause = async () => {};
     let removeResume = async () => {};
     let lifecycleRevision = 0;
+    let snapshotSequence = 0;
+    let publishedSnapshotSequence = 0;
     // Native startup is fail-closed: automatic GPS stays off until Capacitor
     // confirms that the Activity is active.
     publishNativeAppState(false);
@@ -120,13 +122,22 @@ export function NativeRuntime({
       if (active) removeResume = remove;
       else await remove();
     });
-    void Promise.allSettled([appStateRegistration, pauseRegistration, resumeRegistration]).then(async () => {
+    const reconcileAppState = async () => {
       const snapshotRevision = lifecycleRevision;
+      const sequence = ++snapshotSequence;
       try {
         const { isActive } = await App.getState();
-        if (active && lifecycleRevision === snapshotRevision) publishNativeAppState(isActive);
+        if (active && lifecycleRevision === snapshotRevision && sequence > publishedSnapshotSequence) {
+          publishedSnapshotSequence = sequence;
+          publishNativeAppState(isActive);
+        }
       } catch { /* Keep automatic location off until a lifecycle event arrives. */ }
-    });
+    };
+    // Read state immediately after listener registration begins so slow plugin
+    // promises cannot strand GPS. Reconcile once more after they settle to
+    // close the snapshot/subscription gap without overriding a newer event.
+    void reconcileAppState();
+    void Promise.allSettled([appStateRegistration, pauseRegistration, resumeRegistration]).then(reconcileAppState);
 
     return () => {
       active = false;

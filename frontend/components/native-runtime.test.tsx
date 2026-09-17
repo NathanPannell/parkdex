@@ -76,7 +76,7 @@ describe("NativeRuntime", () => {
     const rendered = render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
     expect(await screen.findByText("Journal ready")).toBeTruthy();
     await waitFor(() => expect(listeners.has("appStateChange") && listeners.has("pause") && listeners.has("resume")).toBe(true));
-    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
     listeners.get("appStateChange")?.({ isActive: false });
     expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false);
     listeners.get("appStateChange")?.({ isActive: true });
@@ -105,7 +105,87 @@ describe("NativeRuntime", () => {
     expect(native.publishNativeAppState).toHaveBeenNthCalledWith(1, false);
     expect(native.publishNativeAppState).not.toHaveBeenCalledWith(true);
     state.resolve({ isActive: false });
-    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false));
+  });
+
+  it("resolves the initial app state without waiting for listener registration", async () => {
+    const listener = Promise.withResolvers<{ remove: ReturnType<typeof vi.fn> }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockReturnValue(listener.promise);
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true));
+    listener.resolve({ remove: vi.fn() });
+  });
+
+  it("reconciles a lifecycle transition that occurs while listeners attach", async () => {
+    const listener = Promise.withResolvers<{ remove: ReturnType<typeof vi.fn> }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockReturnValue(listener.promise);
+    app.getState.mockResolvedValueOnce({ isActive: true }).mockResolvedValueOnce({ isActive: false });
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true));
+    listener.resolve({ remove: vi.fn() });
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false));
+  });
+
+  it("does not let an older lifecycle snapshot overwrite a newer result", async () => {
+    const firstState = Promise.withResolvers<{ isActive: boolean }>();
+    const secondState = Promise.withResolvers<{ isActive: boolean }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockResolvedValue({ remove: vi.fn() });
+    app.getState.mockReturnValueOnce(firstState.promise).mockReturnValueOnce(secondState.promise);
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
+    secondState.resolve({ isActive: false });
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false));
+    firstState.resolve({ isActive: true });
+    await Promise.resolve();
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false);
+  });
+
+  it("uses the first lifecycle snapshot when the later reconciliation rejects", async () => {
+    const firstState = Promise.withResolvers<{ isActive: boolean }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockResolvedValue({ remove: vi.fn() });
+    app.getState.mockReturnValueOnce(firstState.promise).mockRejectedValueOnce(new Error("state unavailable"));
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
+    firstState.resolve({ isActive: true });
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true));
+  });
+
+  it("uses the first lifecycle snapshot while the later reconciliation is still pending", async () => {
+    const firstState = Promise.withResolvers<{ isActive: boolean }>();
+    const secondState = Promise.withResolvers<{ isActive: boolean }>();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockResolvedValue({ remove: vi.fn() });
+    app.getState.mockReturnValueOnce(firstState.promise).mockReturnValueOnce(secondState.promise);
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+
+    expect(await screen.findByText("Journal ready")).toBeTruthy();
+    await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
+    firstState.resolve({ isActive: true });
+    await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true));
   });
 });
