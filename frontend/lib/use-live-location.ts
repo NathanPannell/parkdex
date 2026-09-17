@@ -51,6 +51,7 @@ export function useLiveLocation(enabled = true, restartKey = 0, generationKey: s
   const foreground = documentVisible && nativeActive;
 
   useEffect(() => {
+    let subscribed = true;
     const updateVisibility = () => {
       const visible = document.visibilityState !== "hidden";
       if (!visible) setClaimLocationFresh(false);
@@ -63,7 +64,17 @@ export function useLiveLocation(enabled = true, restartKey = 0, generationKey: s
     };
     document.addEventListener("visibilitychange", updateVisibility);
     window.addEventListener(NATIVE_APP_STATE_EVENT, updateNativeState);
+    // Runtime startup may publish between this hook's render and subscription.
+    // Re-read both stores after subscribing so that single resume is not lost.
+    queueMicrotask(() => {
+      if (!subscribed) return;
+      updateVisibility();
+      const active = currentNativeAppState();
+      if (!active) setClaimLocationFresh(false);
+      setNativeActive(active);
+    });
     return () => {
+      subscribed = false;
       document.removeEventListener("visibilitychange", updateVisibility);
       window.removeEventListener(NATIVE_APP_STATE_EVENT, updateNativeState);
     };
@@ -142,7 +153,7 @@ export function useLiveLocation(enabled = true, restartKey = 0, generationKey: s
       });
       return;
     }
-    if (!foreground) {
+    if (!foreground || !currentNativeAppState() || document.visibilityState === "hidden") {
       queueMicrotask(() => {
         if (generationRef.current !== generation) return;
         const nextStatus = locationRef.current ? "ready" : "starting";

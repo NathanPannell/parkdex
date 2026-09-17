@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { useLayoutEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./account";
@@ -26,6 +27,30 @@ afterEach(() => {
 });
 
 describe("useLiveLocation", () => {
+  it("recovers a native startup event published between render and subscription", async () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    publishNativeAppState(false);
+    renderHook(() => {
+      const location = useLiveLocation(true);
+      useLayoutEffect(() => publishNativeAppState(true), []);
+      return location;
+    });
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not start a watch when native pause occurs between render and subscription", async () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    renderHook(() => {
+      const location = useLiveLocation(true);
+      useLayoutEffect(() => publishNativeAppState(false), []);
+      return location;
+    });
+    await act(async () => { await Promise.resolve(); });
+    expect(watchLocation).not.toHaveBeenCalled();
+  });
+
   it("publishes foreground watch fixes and stops the provider on cleanup", () => {
     let publish: ((next: LocationSample) => void) | undefined;
     const stop = vi.fn();
