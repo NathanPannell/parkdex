@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { registerNativeCapabilities, RestoredPhotoAwaitingAdoptionError } from "@/lib/native-capabilities";
+import { normalizeVisitPhoto } from "@/lib/photo-processing";
 import { ClaimFlowBanner } from "./claim-flow-banner";
+
+vi.mock("@/lib/photo-processing", () => ({
+  isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
+  normalizeVisitPhoto: vi.fn(async (photo) => photo),
+}));
 
 const place = { id: "regional-bell-park", name: "Bell Park", category: "regional" as const, latitude: 49.0918726, longitude: -123.0600868, region: "Delta", description: "Neighbourhood park", sourceUrl: "https://example.test", sourceName: "City of Delta" };
 const location = { latitude: place.latitude, longitude: place.longitude, accuracyMeters: 6, capturedAtEpochMs: Date.now() };
@@ -12,6 +18,10 @@ const recommendation = { status: "recommended" as const, recommendationToken: "i
 const confirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-16T12:00:00Z", claim: { claimedAt: "2026-09-16T12:00:00Z", capturedAt: "2026-09-16T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 6, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };
 let restore: () => void = () => undefined;
 
+beforeEach(() => {
+  vi.mocked(normalizeVisitPhoto).mockClear();
+  vi.mocked(normalizeVisitPhoto).mockImplementation(async (photo) => photo);
+});
 afterEach(() => { cleanup(); restore(); vi.restoreAllMocks(); });
 
 function setup(
@@ -47,12 +57,31 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.onClaimed).not.toHaveBeenCalled();
   });
 
+  it("prompts before adopting the exact restored camera attempt", async () => {
+    const photo = new File(["restored"], "restored.jpg", { type: "image/jpeg" });
+    const handlers = setup(photo);
+    handlers.getPhoto
+      .mockRejectedValueOnce(new RestoredPhotoAwaitingAdoptionError("restored-attempt-a"))
+      .mockResolvedValueOnce({ file: photo, mimeType: photo.type });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    expect(await screen.findByText(/recovered camera photo is waiting/i)).toBeTruthy();
+    expect(handlers.createClaim).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Claim + photo" }));
+    await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
+    expect(handlers.getPhoto).toHaveBeenNthCalledWith(2, expect.objectContaining({ captureAttemptId: "restored-attempt-a" }));
+  });
+
   it("persists the accepted photo, revalidates location, claims, uploads, then reports the postcard", async () => {
     const photo = new File(["photo"], "bell-park.jpg", { type: "image/jpeg" });
     const handlers = setup(photo);
     fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
-    expect(handlers.retry.save).toHaveBeenCalledWith("account:user-1", place.id, { file: photo, mimeType: photo.type });
+    expect(handlers.getPhoto).toHaveBeenCalledWith(expect.objectContaining({ ownerKey: "account:user-1", placeId: place.id, captureAttemptId: expect.any(String) }));
+    expect(handlers.retry.save).toHaveBeenNthCalledWith(1, "account:user-1", place.id, { file: photo, mimeType: photo.type }, { rawStaging: true });
+    expect(handlers.retry.save).toHaveBeenNthCalledWith(2, "account:user-1", place.id, { file: photo, mimeType: photo.type });
+    expect(handlers.getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ requirePrecise: true }));
     expect(handlers.recommendClaim).toHaveBeenCalledWith({ location });
     expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "fresh", expectedPlaceId: place.id });
     expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo);
@@ -73,6 +102,22 @@ describe("ClaimFlowBanner", () => {
     expect(uploadPhoto).toHaveBeenCalledTimes(2);
   });
 
+  it("shows the active upload stage and reconciles before retrying an ambiguous upload", async () => {
+    const photo = new File(["photo"], "bell-park.jpg", { type: "image/jpeg" });
+    const uploadResult = Promise.withResolvers<void>();
+    const uploadPhoto = vi.fn().mockReturnValueOnce(uploadResult.promise).mockResolvedValue(undefined);
+    const handlers = setup(photo, uploadPhoto);
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    expect(await screen.findByRole("button", { name: "Uploading photo…" })).toBeTruthy();
+    uploadResult.reject(new Error("Photo upload paused after 30 seconds."));
+    expect(await screen.findByText(/retry photo is saved/i)).toBeTruthy();
+    handlers.reconcileClaim.mockResolvedValueOnce({ ...confirmation, claim: { ...confirmation.claim, hasPhoto: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Retry photo" }));
+    await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(expect.objectContaining({ claim: expect.objectContaining({ hasPhoto: true }) })));
+    expect(handlers.reconcileClaim).toHaveBeenCalledWith(place.id);
+    expect(uploadPhoto).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps an accepted photo and retries a failed pre-claim check without reopening the camera", async () => {
     const photo = new File(["photo"], "bell-park.jpg", { type: "image/jpeg" });
     const handlers = setup(photo);
@@ -83,7 +128,7 @@ describe("ClaimFlowBanner", () => {
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
     expect(handlers.getPhoto).toHaveBeenCalledTimes(1);
     expect(handlers.getCurrentLocation).toHaveBeenCalledTimes(2);
-    expect(handlers.retry.save).toHaveBeenCalledTimes(1);
+    expect(handlers.retry.save).toHaveBeenCalledTimes(2);
   });
 
   it("pauses after persisting the photo when an account transition starts", async () => {
@@ -92,7 +137,7 @@ describe("ClaimFlowBanner", () => {
     const handlers = setup(photo);
     handlers.getCurrentLocation.mockReturnValueOnce(locationResult.promise);
     fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
-    await waitFor(() => expect(handlers.retry.save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(handlers.retry.save.mock.calls.length).toBeGreaterThanOrEqual(1));
     handlers.rerenderBusy(true);
     locationResult.resolve(location);
     expect(await screen.findByText(/Your photo is saved.*account change completes/)).toBeTruthy();
@@ -108,8 +153,25 @@ describe("ClaimFlowBanner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry claim" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
     expect(handlers.getPhoto).not.toHaveBeenCalled();
+    expect(handlers.retry.save).toHaveBeenCalledWith("account:user-1", place.id, { file: photo, mimeType: photo.type });
     expect(handlers.reconcileClaim).toHaveBeenCalledWith(place.id);
     expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo);
+  });
+
+  it("uploads a prepared persisted JPEG byte-identically without recompressing on hydration or claim retry", async () => {
+    const photo = new File(["already-prepared-jpeg"], "bell-park.jpg", { type: "image/jpeg" });
+    const handlers = setup(null, undefined, {
+      load: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type, processingState: "prepared" }),
+    });
+    expect(await screen.findByRole("button", { name: "Retry claim" })).toBeTruthy();
+    expect(normalizeVisitPhoto).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry claim" }));
+    await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
+
+    expect(normalizeVisitPhoto).not.toHaveBeenCalled();
+    expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo);
+    expect(handlers.retry.save).not.toHaveBeenCalled();
   });
 
   it("blocks camera capture while durable-photo recovery is still pending", async () => {
@@ -145,6 +207,37 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.retry.remove).not.toHaveBeenCalled();
   });
 
+  it("durably saves accepted camera bytes before normalization and retries normalization without reopening the camera", async () => {
+    const original = new File(["original-camera-bytes"], "original.jpg", { type: "image/jpeg" });
+    vi.mocked(normalizeVisitPhoto).mockRejectedValueOnce(new Error("decoder unavailable"));
+    const handlers = setup(original);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+
+    expect(await screen.findByText(/accepted photo is saved/i)).toBeTruthy();
+    expect(handlers.retry.save).toHaveBeenCalledTimes(1);
+    expect(handlers.retry.save).toHaveBeenCalledWith("account:user-1", place.id, { file: original, mimeType: "image/jpeg" }, { rawStaging: true });
+    expect(handlers.createClaim).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry claim" }));
+    await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
+    expect(handlers.getPhoto).toHaveBeenCalledTimes(1);
+    expect(handlers.retry.save).toHaveBeenCalledTimes(2);
+  });
+
+  it("stages a camera capture larger than 8 MiB before replacing it with the bounded JPEG", async () => {
+    const raw = new File([new Uint8Array(9 * 1024 * 1024)], "large-camera.jpg", { type: "image/jpeg" });
+    const normalized = new File(["bounded"], "large-camera.jpg", { type: "image/jpeg" });
+    vi.mocked(normalizeVisitPhoto).mockResolvedValueOnce({ file: normalized, mimeType: "image/jpeg" });
+    const handlers = setup(raw);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
+
+    expect(handlers.retry.save).toHaveBeenNthCalledWith(1, "account:user-1", place.id, { file: raw, mimeType: "image/jpeg" }, { rawStaging: true });
+    expect(handlers.retry.save).toHaveBeenNthCalledWith(2, "account:user-1", place.id, { file: normalized, mimeType: "image/jpeg" });
+    expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, normalized);
+  });
+
   it("reconciles a committed claim whose response was lost before uploading the saved photo", async () => {
     const photo = new File(["photo"], "bell-park.jpg", { type: "image/jpeg" });
     const reconcileClaim = vi.fn().mockResolvedValue(confirmation);
@@ -171,15 +264,15 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.onClaimed).toHaveBeenCalledTimes(1);
   });
 
-  it("dismisses stale eligibility when the fresh post-camera check is outside the park", async () => {
+  it("retains the accepted photo when the fresh post-camera check is outside the park", async () => {
     const photo = new File(["photo"], "bell-park.jpg", { type: "image/jpeg" });
     const handlers = setup(photo);
     handlers.recommendClaim.mockResolvedValueOnce({ status: "no_candidate" });
     fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
     expect(await screen.findByText(/could not confirm that you are still in this park/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry claim" })).toBeTruthy();
     expect(handlers.createClaim).not.toHaveBeenCalled();
-    expect(handlers.retry.remove).toHaveBeenCalledWith("account:user-1", place.id);
+    expect(handlers.retry.remove).not.toHaveBeenCalled();
     expect(handlers.onClearRecommendation).toHaveBeenCalledTimes(1);
   });
 });

@@ -37,7 +37,10 @@ beforeEach(() => {
   native.publishNativeAppState.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("NativeRuntime", () => {
   it("renders after storage opens even when optional native integrations fail", async () => {
@@ -107,6 +110,25 @@ describe("NativeRuntime", () => {
     state.resolve({ isActive: false });
     await waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(native.publishNativeAppState).toHaveBeenLastCalledWith(false));
+  });
+
+  it("reconciles again when a slow Android launch initially reports inactive", async () => {
+    vi.useFakeTimers();
+    storage.getPlatformStorage.mockResolvedValue({});
+    systemBars.setStyle.mockResolvedValue(undefined);
+    app.addListener.mockResolvedValue({ remove: vi.fn() });
+    app.getState
+      .mockResolvedValueOnce({ isActive: false })
+      .mockResolvedValueOnce({ isActive: false })
+      .mockResolvedValueOnce({ isActive: true });
+
+    render(<NativeRuntime enabled><p>Journal ready</p></NativeRuntime>);
+    await vi.waitFor(() => expect(app.getState).toHaveBeenCalledTimes(2));
+    expect(native.publishNativeAppState).not.toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(250);
+    await vi.waitFor(() => expect(app.getState).toHaveBeenCalledTimes(3));
+    expect(native.publishNativeAppState).toHaveBeenLastCalledWith(true);
+    vi.useRealTimers();
   });
 
   it("resolves the initial app state without waiting for listener registration", async () => {

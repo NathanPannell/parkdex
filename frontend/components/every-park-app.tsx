@@ -8,6 +8,7 @@ import { ParkMap } from "@/components/park-map";
 import { PlaceImage } from "@/components/place-image";
 import { ClaimVisitPanel } from "@/components/claim-visit-panel";
 import { ClaimFlowBanner } from "@/components/claim-flow-banner";
+import { FieldDiagnosticRegion } from "@/components/field-diagnostic-region";
 import { VisitPostcard } from "@/components/visit-postcard";
 import { confirmPasswordReset, loadAuthConfig, requestGoogleAuthorization, requestPasswordReset, type Account, type AuthConfig } from "@/lib/account";
 import { achievements, newlyEarnedAchievementIds, type Achievement } from "@/lib/achievements";
@@ -80,12 +81,15 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const [navigationNotice, setNavigationNotice] = useState("");
   const [recoveryActive, setRecoveryActive] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.hash.slice(1)).has("resetToken"));
   const locationIdentity: LocationIdentity | null = loading ? null : authenticated && account?.id ? `account:${account.id}` : "guest";
+  const locationGenerationKey = authenticated && account?.id ? `account:${account.id}` : authenticated ? "account:current" : "guest";
   const [manualLocationScope, setManualLocationScope] = useState<"pending" | LocationIdentity | null>(null);
   const [locationAttempt, setLocationAttempt] = useState(0);
   const manualLocationEnabled = manualLocationScope === "pending" || (locationIdentity !== null && manualLocationScope === locationIdentity);
   const locationEnabled = geolocationAllowed && !recoveryActive && ((automaticLocationAllowed && authenticated) || manualLocationEnabled);
-  const { location, status: liveLocationStatus } = useLiveLocation(locationEnabled, locationAttempt);
+  const { location, status: liveLocationStatus, claimLocationFresh, preciseLocationRequired, requestPreciseLocation } = useLiveLocation(locationEnabled, locationAttempt, locationGenerationKey);
   const locationStatus = liveLocationStatus === "starting" ? "locating" : liveLocationStatus;
+  const [preciseLocationBusy, setPreciseLocationBusy] = useState(false);
+  const [preciseLocationMessage, setPreciseLocationMessage] = useState("");
   const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const [progressHoldCount, setProgressHoldCount] = useState<number | null>(null);
   const [viewRevision, setViewRevision] = useState(0), [resetViewRequest, setResetViewRequest] = useState(0);
@@ -107,7 +111,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const liveClaim = useLiveClaimRecommendation({
     enabled: claimsAvailable && !recoveryActive,
     sessionKey: account?.id ?? "guest",
-    location,
+    location: claimLocationFresh ? location : null,
     recommend: recommendClaim,
   });
   const clearLiveClaim = liveClaim.clear;
@@ -130,6 +134,11 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   const liveRecommendation = liveClaim.recommendation?.status === "recommended" ? liveClaim.recommendation : null;
   const displayedRecommendation = claimFlow?.recommendation ?? liveRecommendation;
   const liveClaimPlace = displayedRecommendation ? places.find((place) => place.id === displayedRecommendation.candidate.placeId) ?? null : null;
+  const approximateClaimLocation = Boolean(
+    claimsAvailable
+    && (preciseLocationRequired || (location && claimLocationFresh && location.accuracyMeters > 50))
+    && !displayedRecommendation
+  );
 
   useEffect(() => {
     if (!locationIdentity) return;
@@ -197,6 +206,21 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   function requestLocation() {
     setManualLocationScope(locationIdentity ?? "pending"); setLocationAttempt((current) => current + 1); setShowNearby(true); updateNavigation({ mapMode: "discover", view: "map", selectedId: null }, "push"); setShowFilters(false);
   }
+  async function enablePreciseLocation() {
+    if (preciseLocationBusy) return;
+    setPreciseLocationBusy(true);
+    setPreciseLocationMessage("");
+    try {
+      const precise = await requestPreciseLocation();
+      if (precise.accuracyMeters > 50) {
+        setPreciseLocationMessage(`Precise access is on, but this fix is still ±${Math.round(precise.accuracyMeters)} m. Move into open sky and try again.`);
+      }
+    } catch (error) {
+      setPreciseLocationMessage(error instanceof Error ? error.message : "Precise location is still unavailable. Check Parkdex location access in Android settings, then try again.");
+    } finally {
+      setPreciseLocationBusy(false);
+    }
+  }
   function resetMapFilters() { updateNavigation({ mapSearch: "", mapCategories: new Set() }); setMapSearchDraft(""); }
   function resetCollectionFilters() { updateNavigation({ collectionSearch: "", collectionCategories: new Set(), collectionAuthorities: new Set(), collectionVisitFilter: "all" }); }
   function toggleSet<T>(setter: React.Dispatch<React.SetStateAction<Set<T>>>, value: T) { setter((current) => { const next = new Set(current); if (next.has(value)) next.delete(value); else next.add(value); return next; }); }
@@ -243,6 +267,8 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   return <main className="app-shell"><div className="skip-controls"><button onClick={focusNavigation}>Skip to navigation</button><button onClick={focusContent}>Skip to content</button></div><section className={`map-stage view-${view} ${groupMapMode ? "group-map-mode" : ""}`} aria-label="Parkdex explorer">
     <div id={view === "map" ? "primary-content" : undefined} className="map-content-target" tabIndex={-1} aria-label="Map" /><ParkMap places={mapPlaces} visited={visited} selectedId={selectedId} selectedIds={groupSelectedIds} resetViewRequest={resetViewRequest} showResetControl={view === "map"} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} mode={selectedGroup ? "discover" : mapMode} currentLocation={location} />
     {!groupMapMode && <header className="expedition-header"><div className="brand-mark"><Trees size={22} /></div><div className="brand-copy"><h1>Parkdex</h1><p>A completionist map of Vancouver Island</p></div><nav className="desktop-top-nav" aria-label="Primary navigation"><Nav active={view === "map"} click={() => navigate("map")} icon={<MapIcon size={18} />} label="Map" ariaName="Map tab" />{authenticated && <Nav active={view === "collection"} click={() => navigate("collection")} icon={<Trees size={18} />} label="Places" ariaName="Places tab" />}{authenticated && <Nav active={view === "groups"} click={() => navigate("groups")} icon={<MapPin size={18} />} label="Groups" ariaName="Groups tab" />}{authenticated && <Nav active={view === "badges"} click={() => navigate("badges")} icon={<Award size={18} />} label="Badges" ariaName="Badges tab" />}<Nav active={view === "account"} click={() => navigate("account")} icon={<UserRound size={18} />} label="Account" ariaName="Account tab" /><button className="navigation-skip" onClick={focusContent}>Skip to content</button></nav><GlobalProgress value={globalProgressCount} total={places.length} hidden={view !== "map" || mapMode !== "explored"} /></header>}
+    <FieldDiagnosticRegion />
+    {view === "map" && approximateClaimLocation && <aside className="in-park-banner precise-location-banner" role={preciseLocationMessage ? "alert" : "status"} aria-live="polite"><span className="in-park-marker"><LocateFixed size={21} /></span><div className="in-park-copy"><strong>Improve location to claim parks</strong><p>{preciseLocationMessage || (preciseLocationRequired ? "Precise location access changed. Enable it again to check park boundaries." : `Your pin is approximate (±${Math.round(location?.accuracyMeters ?? 0)} m). Precise location is needed to check park boundaries.`)}</p></div><button className="in-park-claim" type="button" disabled={preciseLocationBusy} onClick={() => void enablePreciseLocation()}>{preciseLocationBusy ? "Checking…" : "Enable precise location"}</button></aside>}
     {claimsAvailable && liveClaimPlace && displayedRecommendation && recommendClaim && createClaim && reconcileClaim && uploadVisitPhoto && <ClaimFlowBanner place={liveClaimPlace} recommendation={displayedRecommendation} ownerKey={photoOwnerKey} busy={transitionBusy} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadVisitPhoto} onClaimed={celebrateClaim} onFlowActiveChange={(placeId) => setClaimFlow(placeId ? { placeId, recommendation: displayedRecommendation } : null)} onClearRecommendation={clearLiveClaim} />}
     {groupMapMode && <button className="group-map-exit" onClick={() => navigate("groups")}><ArrowLeft size={17} />Back to group</button>}
     {view === "map" && !groupMapMode && !selected && <><div className={`map-utility ${searchExpanded ? "search-open" : ""}`} role="toolbar" aria-label="Map utilities"><div className="map-mode-switch"><button className={mapMode === "explored" ? "active" : ""} onClick={() => { setMapMode("explored"); setShowNearby(false); }}><Trees size={16} /><span>My map</span></button><button className={mapMode === "discover" ? "active" : ""} onClick={() => setMapMode("discover")}><Compass size={16} /><span>Find places</span></button>{geolocationAllowed && <button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={19} className={locationStatus === "locating" ? "spin" : ""} /></button>}</div><div className={`search-dock ${searchExpanded ? "expanded" : "collapsed"}`}>

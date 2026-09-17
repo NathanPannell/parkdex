@@ -1,6 +1,6 @@
 import { createBrowserPhotoRetryStore, type PhotoRetryStore } from "./photo-retry";
 
-export type LocationErrorCode = "permission-denied" | "unavailable" | "timeout";
+export type LocationErrorCode = "permission-denied" | "precise-required" | "unavailable" | "timeout";
 
 export class LocationCapabilityError extends Error {
   constructor(readonly code: LocationErrorCode, message: string) {
@@ -20,6 +20,8 @@ export type LocationRequestOptions = {
   highAccuracy: true;
   timeoutMs: number;
   maxAgeMs: number;
+  /** Prompt for Android precise access when an accuracy-sensitive action needs it. */
+  requirePrecise?: boolean;
 };
 
 export type LocationWatchOptions = LocationRequestOptions & {
@@ -49,7 +51,9 @@ export function currentNativeAppState() {
 export const FOREGROUND_LOCATION_WATCH_OPTIONS: LocationWatchOptions = {
   highAccuracy: true,
   timeoutMs: 30_000,
-  maxAgeMs: 5_000,
+  // A provisional cached fix gets the pin on screen while GPS warms up. Claim
+  // eligibility applies its own, much stricter 20-second freshness limit.
+  maxAgeMs: 5 * 60_000,
   updateIntervalMs: 5_000,
   minimumUpdateIntervalMs: 2_000,
 };
@@ -57,7 +61,28 @@ export const FOREGROUND_LOCATION_WATCH_OPTIONS: LocationWatchOptions = {
 export type PhotoAsset = {
   file: File;
   mimeType: string;
+  /** Missing on legacy entries and therefore treated as unprocessed source bytes. */
+  processingState?: "raw" | "prepared";
 };
+
+/** Identity of the claim that launched an external camera Activity. */
+export type PhotoCaptureScope = {
+  ownerKey: string;
+  placeId: string;
+  captureAttemptId: string;
+};
+
+export function createPhotoCaptureAttemptId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `camera-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export class RestoredPhotoAwaitingAdoptionError extends Error {
+  constructor(readonly captureAttemptId: string) {
+    super("A recovered camera photo is waiting. Tap again to use that photo for this park.");
+    this.name = "RestoredPhotoAwaitingAdoptionError";
+  }
+}
 
 export type NativeCapabilities = {
   getCurrentLocation(options: LocationRequestOptions): Promise<LocationSample>;
@@ -67,7 +92,7 @@ export type NativeCapabilities = {
     onLocation: (location: LocationSample) => void,
     onError?: (error: LocationCapabilityError) => void,
   ): StopLocationWatch;
-  getPhoto(): Promise<PhotoAsset | null>;
+  getPhoto(scope: PhotoCaptureScope): Promise<PhotoAsset | null>;
   /** App-private binary storage for a photo whose upload needs a later retry. */
   photoRetry?: PhotoRetryStore;
   openExternalAuth?(url: string): Promise<void>;
@@ -83,7 +108,8 @@ function browserLocationError(error: GeolocationPositionError): LocationCapabili
   return new LocationCapabilityError("unavailable", "Location is unavailable.");
 }
 
-function browserPhoto(): Promise<PhotoAsset | null> {
+function browserPhoto(scope: PhotoCaptureScope): Promise<PhotoAsset | null> {
+  void scope;
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -100,13 +126,13 @@ function browserPhoto(): Promise<PhotoAsset | null> {
     const handleFocus = () => {
       window.setTimeout(() => {
         const file = input.files?.[0];
-        finish(file ? { file, mimeType: file.type || "application/octet-stream" } : null);
+        finish(file ? { file, mimeType: file.type || "application/octet-stream", processingState: "raw" } : null);
       });
     };
 
     input.addEventListener("change", () => {
       const file = input.files?.[0];
-      finish(file ? { file, mimeType: file.type || "application/octet-stream" } : null);
+      finish(file ? { file, mimeType: file.type || "application/octet-stream", processingState: "raw" } : null);
     }, { once: true });
     input.addEventListener("cancel", () => finish(null), { once: true });
     window.addEventListener("focus", handleFocus, { once: true });

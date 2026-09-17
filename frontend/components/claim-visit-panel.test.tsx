@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Visit } from "@/lib/account";
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { LocationCapabilityError, registerNativeCapabilities } from "@/lib/native-capabilities";
 import { ClaimVisitPanel } from "./claim-visit-panel";
 
 const place = { id: "provincial-juan-de-fuca-park", name: "Forest Park", category: "provincial" as const, latitude: 49, longitude: -124, region: "South Island", description: "Forest", sourceUrl: "https://example.test", sourceName: "BC Parks" };
@@ -16,7 +16,17 @@ let restore: () => void = () => undefined;
 afterEach(() => { cleanup(); restore(); vi.restoreAllMocks(); });
 
 function props() {
-  return { authenticated: true, place, busy: false, recommendClaim: vi.fn().mockResolvedValue(recommendation), createClaim: vi.fn().mockResolvedValue(confirmation), uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined) };
+  return { authenticated: true, place, busy: false, ownerKey: "account:user-1", recommendClaim: vi.fn().mockResolvedValue(recommendation), createClaim: vi.fn().mockResolvedValue(confirmation), uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined) };
+}
+
+function photoRetry() {
+  return { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined) };
+}
+
+async function clickCamera() {
+  const button = screen.getByRole("button", { name: "Take an optional visit photo" }) as HTMLButtonElement;
+  await waitFor(() => expect(button.disabled).toBe(false));
+  fireEvent.click(button);
 }
 
 describe("ClaimVisitPanel", () => {
@@ -41,22 +51,24 @@ describe("ClaimVisitPanel", () => {
   });
 
   it("directs approximate-location users to enable precise access", async () => {
-    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ ...location, accuracyMeters: 1_200 }), getPhoto: vi.fn() });
+    const getCurrentLocation = vi.fn().mockRejectedValue(new LocationCapabilityError("precise-required", "Precise location is required to claim a park. Turn on precise location for Parkdex in Android settings, then try again."));
+    restore = registerNativeCapabilities({ getCurrentLocation, getPhoto: vi.fn() });
     const handlers = props();
-    handlers.recommendClaim.mockRejectedValue({ code: "location_accuracy_too_low", message: "Location accuracy is too low" });
     render(<ClaimVisitPanel {...handlers} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
 
     expect(await screen.findByText(/Turn on Precise location for Parkdex in Android settings/i)).toBeTruthy();
+    expect(getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ requirePrecise: true }));
+    expect(handlers.recommendClaim).not.toHaveBeenCalled();
   });
 
   it("requires explicit confirmation before a recovered photo can attach", async () => {
     const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry: photoRetry() });
     const handlers = props(); render(<ClaimVisitPanel {...handlers} />);
-    fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" }));
+    await clickCamera();
     expect(await screen.findByRole("button", { name: "Use photo" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
     const claimButton = await screen.findByRole("button", { name: "Claim this park" });
@@ -68,7 +80,7 @@ describe("ClaimVisitPanel", () => {
   it("keeps the confirmed visit when photo upload fails and offers retry", async () => {
     const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry: photoRetry() });
     const handlers = props(); handlers.uploadPhoto.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
     function Parent() {
       const [selected, setSelected] = useState(place);
@@ -77,7 +89,7 @@ describe("ClaimVisitPanel", () => {
       return <><button onClick={openClaimedOther}>Open claimed Goldstream</button><ClaimVisitPanel {...handlers} place={selected} visit={visit} onClaimed={(created) => setVisit(created)} /></>;
     }
     render(<Parent />);
-    fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" })); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
+    await clickCamera(); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); await screen.findByText("You’re here, claim this park now"); fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
     expect(await screen.findByText(/visit is saved, but the photo did not upload/i)).toBeTruthy(); expect(screen.getByLabelText(/Inspect postcard/)).toBeTruthy(); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Open claimed Goldstream" }));
@@ -101,10 +113,10 @@ describe("ClaimVisitPanel", () => {
     const otherPlace = { ...place, id: "provincial-goldstream-park", name: "Goldstream Provincial Park" };
     const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") }); Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry: photoRetry() });
     const handlers = props(); handlers.recommendClaim.mockResolvedValue({ ...recommendation, candidate: { ...recommendation.candidate, placeId: otherPlace.id } });
     function Parent() { const [selected, setSelected] = useState(place); return <ClaimVisitPanel {...handlers} place={selected} placeNameForId={(id) => id === otherPlace.id ? otherPlace.name : undefined} onOpenPlace={() => setSelected(otherPlace)} />; }
-    render(<Parent />); fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" })); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
+    render(<Parent />); await clickCamera(); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); fireEvent.click(await screen.findByRole("button", { name: `Open ${otherPlace.name}` }));
     const claimButton = screen.getByRole("button", { name: "Claim this park" }) as HTMLButtonElement; expect(claimButton.disabled).toBe(true); expect(screen.getByText(`Use this photo for ${otherPlace.name}?`)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Use photo" })); expect(claimButton.disabled).toBe(false); expect(handlers.uploadPhoto).not.toHaveBeenCalled();
@@ -114,10 +126,10 @@ describe("ClaimVisitPanel", () => {
     const photo = new File(["photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
-    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }) });
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry: photoRetry() });
     const handlers = props();
     const { rerender } = render(<ClaimVisitPanel {...handlers} ownerKey="account:first" />);
-    fireEvent.click(screen.getByRole("button", { name: "Take an optional visit photo" }));
+    await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
     expect(await screen.findByRole("button", { name: "Claim this park" })).toBeTruthy();

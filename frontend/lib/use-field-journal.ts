@@ -375,7 +375,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const switchToGuest = useCallback(async (message = "") => {
     epochRef.current.advance();
     visitMutationsRef.current.reset();
-    clearRestoredCameraPhoto();
+    await clearRestoredCameraPhoto();
     const target = storage();
     noteStorageFailure(await removeStored(target, ACCOUNT_TOKEN_KEY));
     noteStorageFailure(await removeStored(target, JOURNAL_STORAGE.accountSnapshot));
@@ -770,7 +770,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     await hydrateAccountOutboxes(session.account.id);
     const identity: Identity = { kind: "account", token: session.token, account: session.account };
     visitMutationsRef.current.reset();
-    clearRestoredCameraPhoto();
+    await clearRestoredCameraPhoto(`account:${session.account.id}`);
     identityRef.current = identity;
     noteStorageFailure(await writeRawStored(storage(), ACCOUNT_TOKEN_KEY, session.token));
     setAuthenticated(true);
