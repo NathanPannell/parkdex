@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { LocationCapabilityError, publishNativeAppState, registerNativeCapabilities, type LocationSample } from "@/lib/native-capabilities";
 import { dispatchNativeBack } from "@/lib/native-back";
 import { createBrowserPhotoRetryStore } from "@/lib/photo-retry";
 import { ParkdexApp } from "./every-park-app";
@@ -32,10 +32,14 @@ let restoreNative: () => void = () => undefined;
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
+vi.mock("@/lib/photo-processing", () => ({
+  isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
+  normalizeVisitPhoto: vi.fn(async (photo) => photo),
+}));
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
 
-afterEach(() => { cleanup(); restoreNative(); restoreNative = () => undefined; vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
   it("clears an expired Google callback without a verifier and leaves navigation usable", async () => {
@@ -276,6 +280,99 @@ describe("Parkdex navigation", () => {
     expect(toolbar.contains(screen.getByRole("button", { name: "Search places" }))).toBe(true);
   });
 
+  it("starts signed-out location only after the user requests Near Me", async () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(watchLocation).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+  });
+
+  it("automatically tracks only a signed-in Android-build session", () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(watchLocation).not.toHaveBeenCalled();
+    rerender(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a manual location request alive through native startup and account hydration", async () => {
+    let publish: ((location: LocationSample) => void) | undefined;
+    const watchLocation = vi.fn((_options, onLocation: (location: LocationSample) => void) => {
+      publish = onLocation;
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    publishNativeAppState(false);
+    journal.loading = true;
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    expect(await screen.findByText("Finding your location…")).toBeTruthy();
+    expect(watchLocation).not.toHaveBeenCalled();
+
+    act(() => publishNativeAppState(true));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: 49, longitude: -124, accuracyMeters: 6, capturedAtEpochMs: Date.now() }));
+    expect(await screen.findByText("Forest Park")).toBeTruthy();
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+
+    journal.authenticated = true;
+    journal.account = null;
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    journal.loading = false;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
+
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+  });
+
+  it("does not tear down an automatic Android watch that is still warming when Locate Me is tapped", async () => {
+    const watchLocation = vi.fn(() => vi.fn());
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+  });
+
+  it("clears manual location when the authoritative account changes", async () => {
+    let publish: ((location: LocationSample) => void) | undefined;
+    const stop = vi.fn();
+    const watchLocation = vi.fn((_options, onLocation: (location: LocationSample) => void) => {
+      publish = onLocation;
+      return stop;
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
+    journal.authenticated = true;
+    journal.account = { id: "owner-a", email: "a@example.test" };
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: 49, longitude: -124, accuracyMeters: 6, capturedAtEpochMs: Date.now() }));
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
+
+    journal.authenticated = false;
+    journal.account = null;
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    await waitFor(() => expect(stop).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId("park-map").dataset.currentLocation).toBe(""));
+
+    journal.authenticated = true;
+    journal.account = { id: "owner-b", email: "b@example.test" };
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(watchLocation).toHaveBeenCalledTimes(1);
+  });
+
   it("resets active feature tabs without leaving them", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
@@ -314,7 +411,7 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("dialog", { name: "Banana Slug Rainwalk" })).toBeNull();
   });
 
-  it("dismisses Near Me after a delayed location timeout", () => {
+  it("dismisses Near Me after a delayed location timeout", async () => {
     let failLocation: PositionErrorCallback = () => undefined;
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => { failLocation = failure; } } });
     render(<ParkdexApp apiBaseUrl="" />);
@@ -322,17 +419,17 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
     expect(screen.getByRole("dialog", { name: "Near Me" })).toBeTruthy();
     act(() => failLocation({ code: 3, message: "Timed out", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
-    expect(screen.getByText("Your location is unavailable right now. Search the map instead.")).toBeTruthy();
+    expect(await screen.findByText("Your location is unavailable right now. Search the map instead.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close nearby places" }));
     expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
   });
 
-  it("dismisses Near Me while the browser location request is still pending", () => {
+  it("dismisses Near Me while the browser location request is still pending", async () => {
     let failLocation: PositionErrorCallback = () => undefined;
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => { failLocation = failure; } } });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(screen.getByText("Finding your location…")).toBeTruthy();
+    expect(await screen.findByText("Finding your location…")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close nearby places" }));
     expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
     act(() => failLocation({ code: 3, message: "Timed out", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
@@ -723,11 +820,11 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("link", { name: /OpenStreetMap contributors/ }).getAttribute("href")).toBe("https://www.openstreetmap.org/copyright");
   });
 
-  it("renders nearby places with the same category row treatment as Places", () => {
+  it("renders nearby places with the same category row treatment as Places", async () => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 49, longitude: -124, accuracy: 5, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) }, timestamp: Date.now(), toJSON: () => ({}) }) } });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    const row = screen.getByRole("button", { name: /Forest Park/ });
+    const row = await screen.findByRole("button", { name: /Forest Park/ });
     expect(row.classList.contains("place-row")).toBe(true);
     expect(row.classList.contains("category-provincial")).toBe(true);
   });
@@ -794,6 +891,7 @@ describe("Parkdex navigation", () => {
       visitClaimMode: "required",
       recommendClaim: vi.fn(),
       createClaim: vi.fn(),
+      reconcileClaim: vi.fn(),
       uploadVisitPhoto: vi.fn(),
       loadVisitPhoto: vi.fn(),
       removeVisitPhoto: vi.fn(),
@@ -867,28 +965,130 @@ describe("Parkdex navigation", () => {
     expect(groupState.selectGroup).toHaveBeenCalledWith(null);
   });
 
-  it("keeps account claims behind fresh location and explicit confirmation", async () => {
+  it("automatically offers an in-park claim and creates the postcard only after a photo is accepted", async () => {
     const confirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z", claim: { claimedAt: "2026-09-08T12:00:00Z", capturedAt: "2026-09-08T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 8, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };
     journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
     const createClaim = vi.fn().mockImplementation(async () => { (journal as Record<string, unknown>).visitMetadata = { [place.id]: confirmation }; journal.visited = new Set([place.id]); return confirmation; });
     Object.assign(journal, {
       visitClaimMode: "compatible",
       visitMetadata: {},
       recommendClaim: vi.fn().mockResolvedValue({ status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact", distanceMeters: 0 } }),
       createClaim,
+      reconcileClaim: vi.fn().mockResolvedValue(null),
       uploadVisitPhoto: vi.fn().mockResolvedValue(undefined),
       loadVisitPhoto: vi.fn().mockResolvedValue(new Blob(["photo"])),
       removeVisitPhoto: vi.fn().mockResolvedValue(undefined),
     });
-    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue(null) });
-    render(<ParkdexApp apiBaseUrl="" />);
+    const photo = new File(["photo"], "forest.jpg", { type: "image/jpeg" });
+    const photoRetry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined) };
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry });
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(await screen.findByText("You’re in Forest Park")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     expect(screen.queryByRole("button", { name: "Mark as visited" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    expect(await screen.findByRole("button", { name: "Claim this park" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
+    expect(screen.queryByRole("button", { name: "Check if I can claim a park" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Take an optional visit photo" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
     await waitFor(() => expect(createClaim).toHaveBeenCalledWith({ recommendationToken: "signed", expectedPlaceId: place.id }));
     expect(await screen.findByRole("article", { name: /Inspect postcard from Forest Park/ })).toBeTruthy();
+  });
+
+  it("offers an explicit precise-location upgrade before enabling an approximate-only claim", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    const recommendation = { status: "recommended" as const, recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact" as const, distanceMeters: 0 } };
+    const recommendClaim = vi.fn().mockResolvedValue(recommendation);
+    Object.assign(journal, {
+      visitClaimMode: "compatible",
+      visitMetadata: {},
+      recommendClaim,
+      createClaim: vi.fn(),
+      reconcileClaim: vi.fn().mockResolvedValue(null),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn(),
+      removeVisitPhoto: vi.fn(),
+    });
+    const approximate = { latitude: place.latitude + 0.01, longitude: place.longitude + 0.01, accuracyMeters: 1_200, capturedAtEpochMs: Date.now() };
+    const precise = { latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() };
+    const getCurrentLocation = vi.fn().mockResolvedValue(precise);
+    const watchCallbacks: Array<(sample: LocationSample) => void> = [];
+    const watchErrors: Array<((reason: LocationCapabilityError) => void) | undefined> = [];
+    const watchLocation = vi.fn((_options, onLocation: (sample: LocationSample) => void, onError?: (reason: LocationCapabilityError) => void) => {
+      watchCallbacks.push(onLocation);
+      watchErrors.push(onError);
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation, getPhoto: vi.fn(), watchLocation });
+
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    act(() => watchCallbacks[0](approximate));
+
+    const upgrade = await screen.findByRole("button", { name: "Enable precise location" });
+    expect(screen.getByText(/Your pin is approximate/)).toBeTruthy();
+    expect(recommendClaim).not.toHaveBeenCalled();
+    expect(getCurrentLocation.mock.calls.some(([options]) => options.requirePrecise === true)).toBe(false);
+
+    fireEvent.click(upgrade);
+
+    await waitFor(() => expect(getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ requirePrecise: true, maxAgeMs: 0 })));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(2));
+    expect(watchLocation.mock.calls[1][0]).toEqual(expect.objectContaining({ requirePrecise: true }));
+    act(() => watchCallbacks[1](precise));
+    await waitFor(() => expect(recommendClaim).toHaveBeenCalledWith({ location: precise }));
+    act(() => {
+      watchCallbacks[0]({ ...approximate, capturedAtEpochMs: Date.now() });
+      watchCallbacks[1]({ ...approximate, capturedAtEpochMs: Date.now() });
+    });
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe(`${precise.latitude},${precise.longitude}`);
+    expect(recommendClaim).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Enable precise location" })).toBeNull());
+
+    act(() => watchErrors[1]?.(new LocationCapabilityError(
+      "precise-required",
+      "Precise location is required to claim a park. Turn on precise location for Parkdex in Android settings, then try again.",
+    )));
+
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe(`${precise.latitude},${precise.longitude}`);
+    expect(await screen.findByText(/Precise location access changed/)).toBeTruthy();
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(3));
+    expect(watchLocation.mock.calls[2][0]).toEqual(expect.objectContaining({ requirePrecise: undefined }));
+    const movedCoarse = { ...approximate, latitude: approximate.latitude + 0.001, capturedAtEpochMs: Date.now() };
+    act(() => watchCallbacks[2](movedCoarse));
+    expect(screen.getByTestId("park-map").dataset.currentLocation).toBe(`${movedCoarse.latitude},${movedCoarse.longitude}`);
+    expect(screen.getByText(/Precise location access changed/)).toBeTruthy();
+    expect(recommendClaim).toHaveBeenCalledTimes(1);
+    expect(getCurrentLocation).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Enable precise location" }));
+    await waitFor(() => expect(getCurrentLocation).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps a failed post-camera location check and accepted photo visible until discarded", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    const recommendation = { status: "recommended" as const, recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact" as const, distanceMeters: 0 } };
+    const createClaim = vi.fn();
+    Object.assign(journal, {
+      visitClaimMode: "compatible",
+      visitMetadata: {},
+      recommendClaim: vi.fn().mockResolvedValueOnce(recommendation).mockResolvedValueOnce({ status: "no_candidate" }),
+      createClaim,
+      reconcileClaim: vi.fn().mockResolvedValue(null),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn(),
+      removeVisitPhoto: vi.fn(),
+    });
+    const photo = new File(["photo"], "forest.jpg", { type: "image/jpeg" });
+    const photoRetry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined) };
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry });
+
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    expect(await screen.findByText("You’re in Forest Park")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    expect(await screen.findByText(/could not confirm that you are still in this park/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard saved photo" }));
+    await waitFor(() => expect(screen.queryByText(/could not confirm that you are still in this park/)).toBeNull());
+    expect(createClaim).not.toHaveBeenCalled();
   });
 
   it("hides map utilities behind a detail card with three named actions", () => {
@@ -1082,7 +1282,7 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
   });
 
-  it("shows account place photography and filters visited parks from Nearby", () => {
+  it("shows account place photography and filters visited parks from Nearby", async () => {
     journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test" }; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     const location = { latitude: 49, longitude: -124, accuracy: 5, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) };
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: location, timestamp: Date.now(), toJSON: () => ({}) }) } });
@@ -1092,7 +1292,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Map" }));
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
     expect(screen.getByRole("heading", { name: "Near Me" })).toBeTruthy();
-    expect(screen.getByText("Closest places you have not visited yet")).toBeTruthy();
+    expect(await screen.findByText("Closest places you have not visited yet")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Forest Park/ })).toBeNull();
   });
 

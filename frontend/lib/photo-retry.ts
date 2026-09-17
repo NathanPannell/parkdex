@@ -1,12 +1,14 @@
 import type { Directory, Encoding, FilesystemPlugin } from "@capacitor/filesystem";
 import type { PhotoAsset } from "./native-capabilities";
 
-/** The server rejects larger inputs; keep the local retry bounded as well. */
+/** Normalized retry inputs remain bounded independently from raw camera staging. */
 export const MAX_PHOTO_RETRY_BYTES = 8 * 1024 * 1024;
+export const MAX_RAW_PHOTO_STAGING_BYTES = 32 * 1024 * 1024;
 
 const ROOT_DIRECTORY = "parkdex-photo-retry-v1";
 const PHOTO_FILE = "photo.bin";
 const METADATA_FILE = "metadata.json";
+const NATIVE_SLOTS = ["slot-a", "slot-b"] as const;
 const DATABASE_NAME = "parkdex-photo-retry-v1";
 const DATABASE_VERSION = 1;
 const DATABASE_STORE = "photos";
@@ -14,7 +16,12 @@ const DATABASE_STORE = "photos";
 type PhotoRetryMetadata = {
   mimeType: string;
   fileName: string;
+  processingState?: "raw" | "prepared";
+  generation?: number;
+  version?: number;
 };
+
+export type PhotoRetrySaveOptions = { rawStaging?: boolean };
 
 type StoredBrowserPhoto = {
   key: string;
@@ -23,10 +30,11 @@ type StoredBrowserPhoto = {
   blob: Blob;
   fileName: string;
   mimeType: string;
+  processingState?: "raw" | "prepared";
 };
 
 export type PhotoRetryStore = {
-  save(ownerKey: string, placeId: string, photo: PhotoAsset): Promise<void | boolean>;
+  save(ownerKey: string, placeId: string, photo: PhotoAsset, options?: PhotoRetrySaveOptions): Promise<void | boolean>;
   load(ownerKey: string, placeId: string): Promise<PhotoAsset | null>;
   remove(ownerKey: string, placeId: string): Promise<void>;
   clearOwner(ownerKey: string): Promise<void>;
@@ -67,8 +75,9 @@ function normalizedMimeType(photo: PhotoAsset) {
   return candidate.startsWith("image/") ? candidate : "image/jpeg";
 }
 
-function assertSaveable(photo: PhotoAsset) {
-  if (!photo.file || photo.file.size > MAX_PHOTO_RETRY_BYTES) {
+function assertSaveable(photo: PhotoAsset, options?: PhotoRetrySaveOptions) {
+  const maximumBytes = options?.rawStaging ? MAX_RAW_PHOTO_STAGING_BYTES : MAX_PHOTO_RETRY_BYTES;
+  if (!photo.file || photo.file.size > maximumBytes) {
     throw new Error("The photo is too large to keep for retry.");
   }
 }
@@ -121,7 +130,7 @@ function queueMutations(store: PhotoRetryStore): PhotoRetryStore {
     return result;
   };
   return {
-    save: (ownerKey, placeId, photo) => serial(() => store.save(ownerKey, placeId, photo)),
+    save: (ownerKey, placeId, photo, options) => serial(() => store.save(ownerKey, placeId, photo, options)),
     load: (ownerKey, placeId) => serial(() => store.load(ownerKey, placeId)),
     remove: (ownerKey, placeId) => serial(() => store.remove(ownerKey, placeId)),
     clearOwner: (ownerKey) => serial(() => store.clearOwner(ownerKey)),
@@ -131,9 +140,9 @@ function queueMutations(store: PhotoRetryStore): PhotoRetryStore {
 function memoryPhotoRetryStore(): PhotoRetryStore {
   const photos = new Map<string, StoredBrowserPhoto>();
   return queueMutations({
-    async save(ownerKey, placeId, photo) {
+    async save(ownerKey, placeId, photo, options) {
       requireDurableOwner(ownerKey);
-      assertSaveable(photo);
+      assertSaveable(photo, options);
       const mimeType = normalizedMimeType(photo);
       photos.set(entryKey(ownerKey, placeId), {
         key: entryKey(ownerKey, placeId),
@@ -142,6 +151,7 @@ function memoryPhotoRetryStore(): PhotoRetryStore {
         blob: photo.file.slice(0, photo.file.size, mimeType),
         fileName: safeFileName(photo.file.name, mimeType),
         mimeType,
+        processingState: photo.processingState ?? "raw",
       });
     },
     async load(ownerKey, placeId) {
@@ -149,7 +159,7 @@ function memoryPhotoRetryStore(): PhotoRetryStore {
       const saved = photos.get(entryKey(ownerKey, placeId));
       if (!saved) return null;
       const blob = saved.blob.slice(0, saved.blob.size, saved.mimeType);
-      return { file: new File([blob], saved.fileName, { type: saved.mimeType }), mimeType: saved.mimeType };
+      return { file: new File([blob], saved.fileName, { type: saved.mimeType }), mimeType: saved.mimeType, processingState: saved.processingState === "prepared" ? "prepared" : "raw" };
     },
     async remove(ownerKey, placeId) {
       if (!isDurablePhotoOwner(ownerKey)) return;
@@ -212,9 +222,9 @@ function indexedDbPhotoRetryStore(indexedDb: IDBFactory): PhotoRetryStore {
   }));
 
   return queueMutations({
-    async save(ownerKey, placeId, photo) {
+    async save(ownerKey, placeId, photo, options) {
       requireDurableOwner(ownerKey);
-      assertSaveable(photo);
+      assertSaveable(photo, options);
       const mimeType = normalizedMimeType(photo);
       await request<void>((store, setResult, reject) => {
         const result = store.put({
@@ -224,6 +234,7 @@ function indexedDbPhotoRetryStore(indexedDb: IDBFactory): PhotoRetryStore {
           blob: photo.file.slice(0, photo.file.size, mimeType),
           fileName: safeFileName(photo.file.name, mimeType),
           mimeType,
+          processingState: photo.processingState ?? "raw",
         } satisfies StoredBrowserPhoto);
         result.onerror = () => reject(result.error);
         result.onsuccess = () => setResult();
@@ -238,7 +249,7 @@ function indexedDbPhotoRetryStore(indexedDb: IDBFactory): PhotoRetryStore {
       }).then((saved) => {
         if (!saved) return null;
         const blob = saved.blob.slice(0, saved.blob.size, saved.mimeType);
-        return { file: new File([blob], saved.fileName, { type: saved.mimeType }), mimeType: saved.mimeType };
+        return { file: new File([blob], saved.fileName, { type: saved.mimeType }), mimeType: saved.mimeType, processingState: saved.processingState === "prepared" ? "prepared" : "raw" };
       });
     },
     async remove(ownerKey, placeId) {
@@ -276,8 +287,11 @@ export function createBrowserPhotoRetryStore(): PhotoRetryStore {
 
 function nativePhotoRetryStore(filesystem: Pick<FilesystemPlugin, "readFile" | "writeFile" | "deleteFile" | "rmdir">, directory: Directory, utf8: Encoding): PhotoRetryStore {
   const pathFor = (ownerKey: string, placeId: string, fileName: string) => `${entryDirectory(ownerKey, placeId)}/${fileName}`;
-  const metadataFor = (ownerKey: string, placeId: string) => pathFor(ownerKey, placeId, METADATA_FILE);
-  const photoFor = (ownerKey: string, placeId: string) => pathFor(ownerKey, placeId, PHOTO_FILE);
+  const legacyMetadataFor = (ownerKey: string, placeId: string) => pathFor(ownerKey, placeId, METADATA_FILE);
+  const legacyPhotoFor = (ownerKey: string, placeId: string) => pathFor(ownerKey, placeId, PHOTO_FILE);
+  const slotPathFor = (ownerKey: string, placeId: string, slot: typeof NATIVE_SLOTS[number], fileName: string) => pathFor(ownerKey, placeId, `${slot}/${fileName}`);
+  const slotMetadataFor = (ownerKey: string, placeId: string, slot: typeof NATIVE_SLOTS[number]) => slotPathFor(ownerKey, placeId, slot, METADATA_FILE);
+  const slotPhotoFor = (ownerKey: string, placeId: string, slot: typeof NATIVE_SLOTS[number]) => slotPathFor(ownerKey, placeId, slot, PHOTO_FILE);
   const deleteIfPresent = async (path: string) => {
     try {
       await filesystem.deleteFile({ path, directory });
@@ -285,80 +299,130 @@ function nativePhotoRetryStore(filesystem: Pick<FilesystemPlugin, "readFile" | "
       if (!isMissingFilesystemError(error)) throw error;
     }
   };
+  const removePair = async (photoPath: string, metadataPath: string) => {
+    await deleteIfPresent(photoPath);
+    await deleteIfPresent(metadataPath);
+  };
   const removeEntry = async (ownerKey: string, placeId: string) => {
-    await deleteIfPresent(photoFor(ownerKey, placeId));
-    await deleteIfPresent(metadataFor(ownerKey, placeId));
+    await removePair(legacyPhotoFor(ownerKey, placeId), legacyMetadataFor(ownerKey, placeId));
+    for (const slot of NATIVE_SLOTS) {
+      await removePair(slotPhotoFor(ownerKey, placeId, slot), slotMetadataFor(ownerKey, placeId, slot));
+    }
     try {
       await filesystem.rmdir({ path: entryDirectory(ownerKey, placeId), directory, recursive: true });
     } catch (error) {
       if (!isMissingFilesystemError(error)) throw error;
     }
   };
+  const parseMetadata = (result: { data: string | Blob }, requireVersion: boolean): PhotoRetryMetadata | null => {
+    try {
+      const parsed = JSON.parse(typeof result.data === "string" ? result.data : "") as Partial<PhotoRetryMetadata>;
+      if (typeof parsed.mimeType !== "string" || !parsed.mimeType.startsWith("image/") || typeof parsed.fileName !== "string") return null;
+      if (requireVersion && (![2, 3].includes(Number(parsed.version)) || !Number.isSafeInteger(parsed.generation) || Number(parsed.generation) < 1)) return null;
+      return {
+        mimeType: parsed.mimeType,
+        fileName: parsed.fileName,
+        processingState: parsed.version === 3 && parsed.processingState === "prepared" ? "prepared" : "raw",
+        generation: parsed.generation,
+        version: parsed.version,
+      };
+    } catch {
+      return null;
+    }
+  };
+  const readMetadata = async (path: string, requireVersion: boolean) => {
+    try {
+      return parseMetadata(await filesystem.readFile({ path, directory, encoding: utf8 }), requireVersion);
+    } catch (error) {
+      if (isMissingFilesystemError(error)) return null;
+      throw error;
+    }
+  };
+  const readCandidate = async (
+    photoPath: string,
+    metadataPath: string,
+    requireVersion: boolean,
+  ): Promise<{ asset: PhotoAsset; generation: number } | null> => {
+    const metadata = await readMetadata(metadataPath, requireVersion);
+    if (!metadata) {
+      await removePair(photoPath, metadataPath).catch(() => undefined);
+      return null;
+    }
+    let content: { data: string | Blob };
+    try {
+      content = await filesystem.readFile({ path: photoPath, directory });
+    } catch (error) {
+      if (isMissingFilesystemError(error)) {
+        await removePair(photoPath, metadataPath).catch(() => undefined);
+        return null;
+      }
+      throw error;
+    }
+    try {
+      const blob = asBlob(content.data, metadata.mimeType);
+      if (blob.size > MAX_RAW_PHOTO_STAGING_BYTES) throw new Error("The saved photo is too large to retry.");
+      return {
+        asset: { file: new File([blob], metadata.fileName, { type: metadata.mimeType }), mimeType: metadata.mimeType, processingState: metadata.processingState ?? "raw" },
+        generation: metadata.generation ?? 0,
+      };
+    } catch {
+      await removePair(photoPath, metadataPath).catch(() => undefined);
+      return null;
+    }
+  };
 
   return queueMutations({
-    async save(ownerKey, placeId, photo) {
+    async save(ownerKey, placeId, photo, options) {
       requireDurableOwner(ownerKey);
-      assertSaveable(photo);
+      assertSaveable(photo, options);
       const mimeType = normalizedMimeType(photo);
-      const photoPath = photoFor(ownerKey, placeId);
-      const metadataPath = metadataFor(ownerKey, placeId);
+      const committed = [] as Array<{ slot: typeof NATIVE_SLOTS[number]; generation: number }>;
+      for (const slot of NATIVE_SLOTS) {
+        const metadata = await readMetadata(slotMetadataFor(ownerKey, placeId, slot), true);
+        if (metadata) committed.push({ slot, generation: metadata.generation ?? 0 });
+      }
+      const active = committed.sort((left, right) => right.generation - left.generation)[0];
+      const targetSlot = active?.slot === "slot-a" ? "slot-b" : "slot-a";
+      const nextGeneration = (active?.generation ?? 0) + 1;
+      const photoPath = slotPhotoFor(ownerKey, placeId, targetSlot);
+      const metadataPath = slotMetadataFor(ownerKey, placeId, targetSlot);
       try {
         await filesystem.writeFile({ path: photoPath, directory, data: await base64For(photo.file), recursive: true });
         await filesystem.writeFile({
           path: metadataPath,
           directory,
-          data: JSON.stringify({ mimeType, fileName: safeFileName(photo.file.name, mimeType) } satisfies PhotoRetryMetadata),
+          data: JSON.stringify({ mimeType, fileName: safeFileName(photo.file.name, mimeType), processingState: photo.processingState ?? "raw", generation: nextGeneration, version: 3 } satisfies PhotoRetryMetadata),
           encoding: utf8,
           recursive: true,
         });
       } catch (error) {
-        await removeEntry(ownerKey, placeId).catch(() => undefined);
+        // The target slot is not committed until its metadata write succeeds.
+        // Removing only that slot preserves the previously committed photo.
+        await removePair(photoPath, metadataPath).catch(() => undefined);
         throw error;
       }
+      for (const slot of NATIVE_SLOTS) {
+        if (slot !== targetSlot) await removePair(slotPhotoFor(ownerKey, placeId, slot), slotMetadataFor(ownerKey, placeId, slot)).catch(() => undefined);
+      }
+      await removePair(legacyPhotoFor(ownerKey, placeId), legacyMetadataFor(ownerKey, placeId)).catch(() => undefined);
     },
     async load(ownerKey, placeId) {
       if (!isDurablePhotoOwner(ownerKey)) return null;
-      const metadataPath = metadataFor(ownerKey, placeId);
-      const photoPath = photoFor(ownerKey, placeId);
-      let metadata: PhotoRetryMetadata;
-      let metadataResult: { data: string | Blob };
-      try {
-        metadataResult = await filesystem.readFile({ path: metadataPath, directory, encoding: utf8 });
-      } catch (error) {
-        if (isMissingFilesystemError(error)) {
-          // A photo without its metadata is an interrupted two-file write. It
-          // is not a usable retry, so remove the orphaned binary as well.
-          await removeEntry(ownerKey, placeId);
-          return null;
+      const candidates = [] as Array<{ slot: typeof NATIVE_SLOTS[number]; asset: PhotoAsset; generation: number }>;
+      for (const slot of NATIVE_SLOTS) {
+        const candidate = await readCandidate(slotPhotoFor(ownerKey, placeId, slot), slotMetadataFor(ownerKey, placeId, slot), true);
+        if (candidate) candidates.push({ slot, ...candidate });
+      }
+      const selected = candidates.sort((left, right) => right.generation - left.generation)[0];
+      if (selected) {
+        for (const candidate of candidates) {
+          if (candidate.slot !== selected.slot) await removePair(slotPhotoFor(ownerKey, placeId, candidate.slot), slotMetadataFor(ownerKey, placeId, candidate.slot)).catch(() => undefined);
         }
-        throw error;
+        await removePair(legacyPhotoFor(ownerKey, placeId), legacyMetadataFor(ownerKey, placeId)).catch(() => undefined);
+        return selected.asset;
       }
-      try {
-        const parsed = JSON.parse(typeof metadataResult.data === "string" ? metadataResult.data : "") as Partial<PhotoRetryMetadata>;
-        if (typeof parsed.mimeType !== "string" || !parsed.mimeType.startsWith("image/") || typeof parsed.fileName !== "string") throw new Error("Invalid photo retry metadata.");
-        metadata = { mimeType: parsed.mimeType, fileName: parsed.fileName };
-      } catch {
-        await removeEntry(ownerKey, placeId);
-        return null;
-      }
-      let content: { data: string | Blob };
-      try {
-        content = await filesystem.readFile({ path: photoPath, directory });
-      } catch (error) {
-        if (isMissingFilesystemError(error)) {
-          await deleteIfPresent(metadataPath);
-          return null;
-        }
-        throw error;
-      }
-      try {
-        const blob = asBlob(content.data, metadata.mimeType);
-        if (blob.size > MAX_PHOTO_RETRY_BYTES) throw new Error("The saved photo is too large to retry.");
-        return { file: new File([blob], metadata.fileName, { type: metadata.mimeType }), mimeType: metadata.mimeType };
-      } catch {
-        await removeEntry(ownerKey, placeId);
-        return null;
-      }
+      const legacy = await readCandidate(legacyPhotoFor(ownerKey, placeId), legacyMetadataFor(ownerKey, placeId), false);
+      return legacy?.asset ?? null;
     },
     async remove(ownerKey, placeId) {
       if (!isDurablePhotoOwner(ownerKey)) return;

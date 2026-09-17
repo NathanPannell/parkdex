@@ -155,6 +155,7 @@ class R2ObjectStorage:
             )
         try:
             import boto3
+            from botocore.config import Config
         except ImportError as exc:
             raise ObjectStorageConfigurationError(
                 "R2 object storage requires the boto3 package"
@@ -166,6 +167,11 @@ class R2ObjectStorage:
                 aws_access_key_id=access_key_id,
                 aws_secret_access_key=secret_access_key,
                 region_name=region or "auto",
+                config=Config(
+                    connect_timeout=5,
+                    read_timeout=15,
+                    retries={"mode": "standard", "total_max_attempts": 3},
+                ),
             )
         except Exception as exc:
             raise ObjectStorageConfigurationError(

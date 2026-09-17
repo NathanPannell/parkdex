@@ -31,6 +31,17 @@ export type ClaimConfirmation = {
 /** Claims and private photos are account-owned. Guest collection keys are never sent here. */
 export type ClaimOwner = { kind: "account"; token: string };
 
+export const PHOTO_UPLOAD_TIMEOUT_MS = 30_000;
+
+export class PhotoUploadTimeoutError extends Error {
+  readonly code = "photo_upload_timeout";
+
+  constructor(readonly timeoutMs: number) {
+    super(`Photo upload paused after ${Math.round(timeoutMs / 1_000)} seconds.`);
+    this.name = "PhotoUploadTimeoutError";
+  }
+}
+
 function ownerHeaders(owner: ClaimOwner): Record<string, string> {
   return { Authorization: `Bearer ${owner.token}` };
 }
@@ -82,14 +93,24 @@ export async function createClaimRequest(
   }), "Could not claim this park right now.");
 }
 
-export async function uploadVisitPhotoRequest(apiBaseUrl: string, owner: ClaimOwner, placeId: string, file: File): Promise<void> {
+export async function uploadVisitPhotoRequest(apiBaseUrl: string, owner: ClaimOwner, placeId: string, file: File, timeoutMs = PHOTO_UPLOAD_TIMEOUT_MS): Promise<void> {
   const body = new FormData();
   body.append("photo", file);
-  await parseResponse<void>(await fetch(`${apiBaseUrl}/api/visits/${encodeURIComponent(placeId)}/photo`, {
-    method: "PUT",
-    headers: ownerHeaders(owner),
-    body,
-  }), "Could not upload this visit photo.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await parseResponse<void>(await fetch(`${apiBaseUrl}/api/visits/${encodeURIComponent(placeId)}/photo`, {
+      method: "PUT",
+      headers: ownerHeaders(owner),
+      body,
+      signal: controller.signal,
+    }), "Could not upload this visit photo.");
+  } catch (error) {
+    if (controller.signal.aborted) throw new PhotoUploadTimeoutError(timeoutMs);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function loadVisitPhotoRequest(apiBaseUrl: string, owner: ClaimOwner, placeId: string): Promise<Blob> {

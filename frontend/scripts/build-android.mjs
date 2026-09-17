@@ -13,6 +13,8 @@ if (apiBaseUrl.username || apiBaseUrl.password || apiBaseUrl.pathname !== "/" ||
 const result = await runNextBuild({
   ...process.env,
   NEXT_PUBLIC_API_BASE_URL: apiBaseUrl.origin,
+  NEXT_PUBLIC_FIELD_DIAGNOSTICS: process.env.NEXT_PUBLIC_FIELD_DIAGNOSTICS?.trim()
+    || (process.env.PARKDEX_CATALOGUE_SCOPE?.trim() === "canonical" ? "0" : "1"),
   PARKDEX_ANDROID_BUILD: "1",
   PARKDEX_CATALOGUE_SCOPE: process.env.PARKDEX_CATALOGUE_SCOPE?.trim() || "staging",
 });

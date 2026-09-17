@@ -34,6 +34,7 @@ import {
 import { cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Place } from "@/lib/places";
+import { distanceKm } from "@/lib/discovery";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
 const BOUNDARY_DISPLAY_DATA_URL = "/data/boundaries-display.v1.geojson";
@@ -291,6 +292,8 @@ export function ParkMap({
   const resetOverviewRef = useRef<(() => void) | null>(null);
   const handledResetRequestRef = useRef(resetViewRequest);
   const viewDiffersRef = useRef(false);
+  const displayedLocationRef = useRef<MapLocation | null>(currentLocation);
+  const locationAnimationRef = useRef(0);
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
@@ -552,7 +555,38 @@ export function ParkMap({
 
   useEffect(() => {
     const source = mapRef.current?.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(locationData(currentLocation));
+    if (!source) return;
+    window.cancelAnimationFrame(locationAnimationRef.current);
+    const previous = displayedLocationRef.current;
+    if (!currentLocation || !previous) {
+      displayedLocationRef.current = currentLocation;
+      source.setData(locationData(currentLocation));
+      return;
+    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const jumpMeters = distanceKm(previous, currentLocation) * 1000;
+    const plausibleMove = jumpMeters <= Math.max(500, (previous.accuracyMeters ?? 0) + (currentLocation.accuracyMeters ?? 0) + 100);
+    if (reduceMotion || !plausibleMove) {
+      displayedLocationRef.current = currentLocation;
+      source.setData(locationData(currentLocation));
+      return;
+    }
+    const startedAt = performance.now();
+    const durationMs = 900;
+    const animate = (now: number) => {
+      const linear = Math.min(1, (now - startedAt) / durationMs);
+      const progress = 1 - (1 - linear) ** 3;
+      const frame = {
+        ...currentLocation,
+        latitude: previous.latitude + (currentLocation.latitude - previous.latitude) * progress,
+        longitude: previous.longitude + (currentLocation.longitude - previous.longitude) * progress,
+      };
+      displayedLocationRef.current = frame;
+      source.setData(locationData(frame));
+      if (linear < 1) locationAnimationRef.current = window.requestAnimationFrame(animate);
+    };
+    locationAnimationRef.current = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(locationAnimationRef.current);
   }, [currentLocation]);
 
   useEffect(() => {

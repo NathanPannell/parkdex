@@ -115,6 +115,7 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.visitClaimMode).toBe(enforcement);
     expect(result.current.recommendClaim).toBeTypeOf("function");
     expect(result.current.createClaim).toBeTypeOf("function");
+    expect(result.current.reconcileClaim).toBeTypeOf("function");
   });
 
   it("fails closed for a present but unrecognized claim capability", async () => {
@@ -773,6 +774,30 @@ describe("useFieldJournal identity and progress races", () => {
     await expect(result.current.loadVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
     await expect(result.current.removeVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("claim-recommendations") || String(url).includes("/api/claims") || String(url).includes("/photo"))).toBe(false);
+  });
+
+  it("reconciles a claim that committed when the create response was lost", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    let accountLoads = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) {
+        accountLoads += 1;
+        return accountLoads === 1
+          ? json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] })
+          : json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      }
+      return json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let recovered: unknown = null;
+    await act(async () => { recovered = await result.current.reconcileClaim!(PLACE.id); });
+    expect(recovered).toEqual(CLAIM_CONFIRMATION);
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id]).toEqual(CLAIM_VISIT);
   });
 
   it("persists an account claim and updates its private photo flag through authenticated APIs", async () => {
