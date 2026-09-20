@@ -305,7 +305,7 @@ def settle_photo_object_deletions(
     database references.  That preserves the transactional outbox guarantee if
     the process exits after commit.  Successful provider deletes remove their
     tombstones immediately; failures retain the existing exponential retry
-    schedule for the short-lived cleanup job.
+    schedule for the manual cleanup command.
     """
 
     pending_keys = sorted(set(keys))
@@ -369,7 +369,7 @@ def settle_photo_object_deletions(
                 record_outcomes(conn)
     except Exception as exc:
         # The original tombstones remain durable and due when outcome recording
-        # fails, so the scheduled job can safely retry every provider operation.
+        # fails, so the manual cleanup command can safely retry every provider operation.
         logger.warning(
             "Could not record private photo deletion outcomes (%s)",
             type(exc).__name__,
@@ -383,7 +383,7 @@ def process_photo_deletion_outbox(limit: int = PHOTO_DELETION_BATCH_SIZE) -> int
     Claim due rows in one short transaction, release the pool connection before
     touching object storage, then persist the outcomes in another short
     transaction.  Object deletion is idempotent, so a worker crash after the
-    provider call is safely retried when the pre-computed backoff becomes due.
+    provider call is safely retried by a later manual run when the backoff becomes due.
     """
 
     try:

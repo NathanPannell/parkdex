@@ -23,8 +23,6 @@ on:
         value: ${{ jobs.deploy.outputs.release_id }}
       railway_deployment_message:
         value: ${{ jobs.deploy.outputs.railway_deployment_message }}
-      railway_photo_cleanup_deployment_message:
-        value: ${{ jobs.deploy.outputs.railway_photo_cleanup_deployment_message }}
       railway_api_url:
         value: ${{ jobs.deploy.outputs.railway_api_url }}
       vercel_deployment_url:
@@ -48,7 +46,6 @@ jobs:
       source_sha: ${{ steps.source.outputs.sha }}
       release_id: ${{ steps.metadata.outputs.release_id }}
       railway_deployment_message: ${{ steps.queue.outputs.railway_deployment_message }}
-      railway_photo_cleanup_deployment_message: ${{ steps.queue.outputs.railway_photo_cleanup_deployment_message }}
       railway_api_url: ${{ steps.queue.outputs.railway_api_url }}
       vercel_deployment_url: ${{ steps.queue.outputs.vercel_deployment_url }}
     env:
@@ -99,7 +96,6 @@ jobs:
       - name: Stamp exact release identity on Railway API
         env:
           RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
-          RAILWAY_PHOTO_CLEANUP_SERVICE_ID: ${{ vars.RAILWAY_PHOTO_CLEANUP_SERVICE_ID }}
         run: |
           set -euo pipefail
           : "${RAILWAY_API_TOKEN:?RAILWAY_API_TOKEN is required}"
@@ -118,10 +114,6 @@ jobs:
           }
           railway_set "$RAILWAY_API_SERVICE_ID" APP_COMMIT_SHA "$EXPECTED_COMMIT_SHA"
           railway_set "$RAILWAY_API_SERVICE_ID" APP_RELEASE_ID "$RELEASE_ID"
-          if [[ -n "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" ]]; then
-            railway_set "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" APP_COMMIT_SHA "$EXPECTED_COMMIT_SHA"
-            railway_set "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" APP_RELEASE_ID "$RELEASE_ID"
-          fi
 
           commit_date="$(git show -s --format=%cI "$EXPECTED_COMMIT_SHA")"
           sequence="$(git rev-list --first-parent --count "$EXPECTED_COMMIT_SHA")"
@@ -136,12 +128,10 @@ jobs:
           COMMIT_DATE: ${{ steps.metadata.outputs.commit_date }}
           RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
           RELEASE_ID: ${{ steps.metadata.outputs.release_id }}
-          RAILWAY_PHOTO_CLEANUP_SERVICE_ID: ${{ vars.RAILWAY_PHOTO_CLEANUP_SERVICE_ID }}
         run: |
           set -euo pipefail
           deployment_message="parkdex-$TARGET_ENVIRONMENT-$EXPECTED_COMMIT_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           api_log="$RUNNER_TEMP/railway-api.log"
-          cleanup_log="$RUNNER_TEMP/railway-photo-cleanup.log"
           vercel_stdout="$RUNNER_TEMP/vercel.out"
           vercel_stderr="$RUNNER_TEMP/vercel.err"
 
@@ -155,14 +145,6 @@ jobs:
           railway up --detach --yes --message "$deployment_message" \
             --service "$RAILWAY_API_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
             >"$api_log" 2>&1 & api_pid=$!
-          cleanup_pid=""
-          cleanup_deployment_message=""
-          if [[ -n "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" ]]; then
-            cleanup_deployment_message="$deployment_message-photo-cleanup"
-            railway up --detach --yes --message "$cleanup_deployment_message" \
-              --service "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
-              >"$cleanup_log" 2>&1 & cleanup_pid=$!
-          fi
           vercel deploy --yes --no-wait --prod --skip-domain --cwd frontend \
             --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
             --build-env "PARKDEX_CATALOGUE_SCOPE=${{ inputs.target == 'staging' && 'staging' || 'canonical' }}" \
@@ -176,14 +158,12 @@ jobs:
             --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID" \
             >"$vercel_stdout" 2>"$vercel_stderr" & vercel_pid=$!
 
-          api_status=0; cleanup_status=0; vercel_status=0
+          api_status=0; vercel_status=0
           wait "$api_pid" || api_status=$?
-          if [[ -n "$cleanup_pid" ]]; then wait "$cleanup_pid" || cleanup_status=$?; fi
           wait "$vercel_pid" || vercel_status=$?
-          if (( api_status || cleanup_status || vercel_status )); then
+          if (( api_status || vercel_status )); then
             echo 'A provider rejected its asynchronous deployment request.' >&2
             [[ "$api_status" == 0 ]] || tail -n 30 "$api_log" >&2
-            [[ "$cleanup_status" == 0 ]] || tail -n 30 "$cleanup_log" >&2
             [[ "$vercel_status" == 0 ]] || tail -n 30 "$vercel_stderr" >&2
             exit 1
           fi
@@ -194,7 +174,6 @@ jobs:
             exit 1
           }
           echo "railway_deployment_message=$deployment_message" >> "$GITHUB_OUTPUT"
-          echo "railway_photo_cleanup_deployment_message=$cleanup_deployment_message" >> "$GITHUB_OUTPUT"
           echo "railway_api_url=$API_URL" >> "$GITHUB_OUTPUT"
           echo "vercel_deployment_url=$vercel_url" >> "$GITHUB_OUTPUT"
 
@@ -204,9 +183,6 @@ jobs:
             echo "- Source commit: \`$EXPECTED_COMMIT_SHA\`"
             echo "- Release ID: \`$RELEASE_ID\`"
             echo "- Railway API deployment message: \`$deployment_message\`"
-            if [[ -n "$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" ]]; then
-              echo "- Railway photo cleanup deployment message: \`$deployment_message-photo-cleanup\`"
-            fi
             echo "- Stable Railway API: $API_URL"
             echo "- Stable frontend after agent-controlled cutover: $FRONTEND_URL"
             echo "- Vercel deployment URL: $vercel_url"

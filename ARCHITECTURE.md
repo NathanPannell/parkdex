@@ -8,7 +8,6 @@ Staging and production have the same long-lived topology and the same queue-only
 Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon branch
        /mcp + OAuth proxy ────────┘
                           API migrations ──direct SQL──> Neon branch
-Hourly Railway photo cleanup ──pooled SQL──> Neon branch
 ```
 
 Production uses `parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. The public MCP identities are `https://parkdex.app/mcp` and `https://staging.parkdex.app/mcp`; Vercel proxies the MCP transport and root OAuth/discovery routes to each environment's stable Railway API. Railway service domains and Neon connection strings remain fixed during ordinary releases.
@@ -48,7 +47,7 @@ API, frontend, and database updates can become active in any order. Every releas
 - Keep old and new API request/response shapes compatible during the rollout.
 - Never use an unattended destructive migration.
 
-The API invokes `python -m backend.app.migrate` as a Railway pre-deploy command and receives `DATABASE_URL_UNPOOLED`. The migrator's advisory lock serializes concurrent attempts, and its checksums make already-applied migrations no-ops. A separate hourly Railway cron service runs `python -m backend.app.photo_cleanup`, processes one bounded retry batch, closes its pooled connection, and exits. It has no healthcheck, replica, or long-lived process.
+The API invokes `python -m backend.app.migrate` as a Railway pre-deploy command and receives `DATABASE_URL_UNPOOLED`. The migrator's advisory lock serializes concurrent attempts, and its checksums make already-applied migrations no-ops. Photo objects are deleted immediately after their database tombstone commits. Failed object deletions remain recorded and can be retried manually with `python -m backend.app.photo_cleanup`; there is no recurring cleanup service.
 
 ## Release ownership and recovery
 
