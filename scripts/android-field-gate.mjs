@@ -474,9 +474,11 @@ function waitForWithScroll(context, predicate, deadline, label) {
       const result = predicate(lastXml);
       if (result) return { value: result, xml: lastXml };
       // The postcard deliberately consumes drag gestures for its tilt effect,
-      // so a centre-screen swipe can leave the Account page stationary. Page
-      // Down scrolls the focused WebView without competing with that control.
+      // so Page Down is the primary scroll action. A following swipe covers
+      // the empty-postcard layout, where the WebView may not yet hold keyboard
+      // focus and therefore ignores Page Down.
       adb(context, ["shell", "input", "keyevent", "KEYCODE_PAGE_DOWN"]);
+      adb(context, ["shell", "input", "swipe", "540", "1900", "540", "650", "350"]);
     } catch {
       // The hierarchy can be unavailable briefly during WebView navigation.
     }
