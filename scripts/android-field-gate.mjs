@@ -783,6 +783,10 @@ function runPhotoJourney(context, apk) {
 
     const ready = waitForAccountPostcard(context, Date.now() + context.photoTimeoutMs);
 
+    // The first-visit badge can mount again after the postcard readback has
+    // already passed. Clear that modal at the cleanup boundary so it cannot
+    // absorb the following Account scroll/tap sequence.
+    navigateToAccountHandlingBadge(context, Date.now() + context.photoTimeoutMs, "postcard cleanup Account navigation");
     tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "progress reset action");
     tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "progress reset confirmation");
     const cleanupResult = waitFor(context, (xml) => /Your first boundary claim will become a postcard here/i.test(xml) && !/Inspect postcard from Bell Park/i.test(xml), Date.now() + context.photoTimeoutMs, "photo journey cleanup");
