@@ -170,6 +170,26 @@ export function verifyReadyPayload(payload, commitSha, releaseId) {
   return true;
 }
 
+export function catalogueVisitedIds(payload) {
+  if (!Array.isArray(payload?.visitedIds)) throw new Error("Preview catalogue visitedIds contract was not verified");
+  return payload.visitedIds;
+}
+
+export function verifyGuestVisitRejection(status, payload) {
+  if (status !== 409 || payload?.detail?.code !== "location_claim_required") {
+    throw new Error("Preview guest visit enforcement was not verified");
+  }
+  return true;
+}
+
+export function verifyUnvisitedCatalogues(placeId, payloads) {
+  if (!placeId || !Array.isArray(payloads) || payloads.length < 1) throw new Error("Preview catalogue isolation inputs were invalid");
+  for (const payload of payloads) {
+    if (catalogueVisitedIds(payload).includes(placeId)) throw new Error("Preview visit isolation was not verified");
+  }
+  return true;
+}
+
 export function provisionRailwayApiService({ projectId, environmentId, environmentName, apiServiceId, listEnvironments, recordIntent, commitPatch, readConfig }) {
   const matches = listEnvironments().filter((environment) => environment.id === environmentId && environment.name === environmentName);
   if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified before service creation");

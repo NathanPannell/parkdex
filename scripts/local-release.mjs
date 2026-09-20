@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalGithubRepositorySlug, validateNestedLocalEvidence } from "./evidence-validation.mjs";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyReadyPayload } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildVercelCurlArgs, catalogueVisitedIds, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, verifyCorsHeaders, verifyGuestVisitRejection, verifyRailwayDeploymentResult, verifyReadyPayload, verifyUnvisitedCatalogues } from "./provider-command.mjs";
 
 const value = (name, fallback = "") => {
   const index = process.argv.indexOf(name);
@@ -410,15 +410,16 @@ async function smokeCatalogue(apiUrl) {
   const catalogue = await fetchJson(`${apiUrl}/api/places`);
   const placeId = catalogue?.places?.[0]?.id;
   if (!placeId || catalogue.places.length < 1) throw new Error("Preview catalogue was empty");
+  catalogueVisitedIds(catalogue);
   const visit = (key, visited) => fetchJson(`${apiUrl}/api/visits/${encodeURIComponent(placeId)}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Collection-Key": key }, body: JSON.stringify({ visited }) });
-  const collection = (key) => fetchJson(`${apiUrl}/api/places`, { headers: key ? { "X-Collection-Key": key } : {} });
+  const guestCollection = (key) => fetchJson(`${apiUrl}/api/places`, { headers: key ? { "X-Collection-Key": key } : {} });
   try {
-    const visited = await visit(collectionKey, true);
-    if (visited?.visited !== true || visited?.placeId !== placeId) throw new Error("Preview visit write was not verified");
-    if (!(await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit read was not verified");
-    if ((await collection()).visitedIds?.includes(placeId) || (await collection(secondCollectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit isolation was not verified");
-    await visit(collectionKey, false);
-    if ((await collection(collectionKey)).visitedIds?.includes(placeId)) throw new Error("Preview visit cleanup was not verified");
+    const cleared = await visit(collectionKey, false);
+    if (cleared?.visited !== false || cleared?.placeId !== placeId) throw new Error("Preview visit cleanup was not verified");
+    // Guest creation is deliberately forbidden after location claims launched.
+    const rejected = await fetch(`${apiUrl}/api/visits/${encodeURIComponent(placeId)}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Collection-Key": collectionKey }, body: JSON.stringify({ visited: true }), signal: AbortSignal.timeout(20_000) });
+    verifyGuestVisitRejection(rejected.status, await rejected.json());
+    verifyUnvisitedCatalogues(placeId, await Promise.all([guestCollection(), guestCollection(collectionKey), guestCollection(secondCollectionKey)]));
   } finally {
     try { await visit(collectionKey, false); } catch {}
   }

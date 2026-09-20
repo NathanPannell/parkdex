@@ -5,7 +5,7 @@ import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, catalogueVisitedIds, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyGuestVisitRejection, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload, verifyUnvisitedCatalogues } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -462,4 +462,15 @@ test("preview configuration never copies application integration credentials", (
   assert.match(source, /process\.env\.NEON_PARENT_BRANCH !== "staging"/);
   assert.match(source, /matches\[0\]\.target !== "preview"/);
   assert.match(source, /"remove", state\.vercelDeploymentId, "--safe", "--yes"/);
+});
+
+test("preview smoke honors guest location-claim enforcement", () => {
+  assert.deepEqual(catalogueVisitedIds({ visitedIds: ["park"] }), ["park"]);
+  assert.throws(() => catalogueVisitedIds({}), /visitedIds contract/);
+  assert.equal(verifyGuestVisitRejection(409, { detail: { code: "location_claim_required" } }), true);
+  assert.throws(() => verifyGuestVisitRejection(200, {}), /guest visit enforcement/);
+  assert.equal(verifyUnvisitedCatalogues("park", [{ visitedIds: [] }, { visitedIds: ["other"] }]), true);
+  assert.throws(() => verifyUnvisitedCatalogues("park", [{ visitedIds: ["park"] }]), /visit isolation/);
+  assert.throws(() => verifyUnvisitedCatalogues("park", [{}]), /visitedIds contract/);
+  assert.doesNotMatch(source, /api\/auth\/register/);
 });
