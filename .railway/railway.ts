@@ -60,6 +60,8 @@ export default defineRailway(() => {
       R2_ACCESS_KEY_ID: api.env.R2_ACCESS_KEY_ID,
       R2_SECRET_ACCESS_KEY: api.env.R2_SECRET_ACCESS_KEY,
       R2_REGION: api.env.R2_REGION,
+      APP_COMMIT_SHA: preserve(),
+      APP_RELEASE_ID: preserve(),
     },
   });
 
