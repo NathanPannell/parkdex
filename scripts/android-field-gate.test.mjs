@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertEmulatorSerial,
   bellParkReady,
+  catalogueUnavailable,
   distanceLabels,
   evaluateDumpedPoll,
   fieldReadyFromCheckpoints,
@@ -16,7 +17,11 @@ import {
   labelledNodeCenter,
   isFieldReadyProfile,
   manualCleanupFailure,
+  networkStartupRecoveryReady,
+  offlineCatalogueOracle,
   parseAdbDevices,
+  parseAirplaneMode,
+  parseAppPid,
   parseArgs,
   parseR2ContractOutput,
   photoPostcardReady,
@@ -54,6 +59,12 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.equal(bellParkReady(`${xml}<node text="Finding your location: Location pin is ready"/>`), true);
   assert.equal(locationUnavailable('<node text="Your location is unavailable right now."/>'), true);
   assert.equal(locationUnavailable(xml), false);
+  assert.equal(catalogueUnavailable('<node text="Could not load the field guide."/>'), true);
+  assert.equal(catalogueUnavailable('<node content-desc="TypeError: Failed to fetch"/>'), true);
+  assert.equal(catalogueUnavailable(xml), false);
+  assert.equal(offlineCatalogueOracle('<node text="Could not load the field guide."/>'), "unavailable");
+  assert.equal(offlineCatalogueOracle(xml), "unexpected-ready");
+  assert.equal(offlineCatalogueOracle('<node text="Loading"/>'), null);
   assert.deepEqual(labelledNodeCenter('<node text="Claim + photo" bounds="[10,20][110,80]"/>', [/Claim \+ photo/]), { x: 60, y: 50 });
   assert.deepEqual(labelledNodeCenter('<node text="" content-desc="Shutter" bounds="[0,2010][1080,2340]"/>', [/Shutter/]), { x: 540, y: 2175 });
   assert.deepEqual(labelledNodeCenter('<node text="Map" clickable="false" bounds="[0,0][100,100]"/><node text="Map" clickable="true" enabled="true" bounds="[800,1800][1000,2000]"/>', [/^Map$/]), { x: 900, y: 1900 });
@@ -62,6 +73,33 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   const androidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Remove photo from Bell Park"/>';
   assert.equal(photoPostcardReady(androidWebViewPostcard), true);
   assert.equal(photoPostcardReady(`${postcard}<node text="Photo unavailable"/>`), false);
+});
+
+test("parses deterministic emulator connectivity and process oracles", () => {
+  assert.equal(parseAirplaneMode("enabled\r\n"), true);
+  assert.equal(parseAirplaneMode("disabled\n"), false);
+  assert.throws(() => parseAirplaneMode("unknown"), /Unexpected emulator airplane-mode state/);
+  assert.equal(parseAppPid("12345\n"), "12345");
+  assert.throws(() => parseAppPid("123 456"), /Could not resolve/);
+  assert.throws(() => parseAppPid(""), /Could not resolve/);
+});
+
+test("requires complete in-place network startup recovery evidence", () => {
+  const recovery = {
+    initialCatalogueUnavailableObserved: true,
+    recoveredWithoutRestart: true,
+    activityPidStable: true,
+    networkRestored: true,
+    offlineHoldMs: 31_000,
+    elapsedAfterRestoreMs: 1200,
+    distances: ["0.0 km"],
+  };
+  assert.equal(networkStartupRecoveryReady(recovery), true);
+  assert.equal(networkStartupRecoveryReady({ ...recovery, initialCatalogueUnavailableObserved: false }), false);
+  assert.equal(networkStartupRecoveryReady({ ...recovery, activityPidStable: false }), false);
+  assert.equal(networkStartupRecoveryReady({ ...recovery, networkRestored: false }), false);
+  assert.equal(networkStartupRecoveryReady({ ...recovery, offlineHoldMs: Number.NaN }), false);
+  assert.equal(networkStartupRecoveryReady({ ...recovery, distances: [] }), false);
 });
 
 test("computes deterministic nearest-rank timing summaries", () => {
@@ -192,6 +230,15 @@ test("field-ready evidence rejects repository mutations and overwritten APKs", (
       PARKDEX_CATALOGUE_SCOPE: "staging",
       NEXT_PUBLIC_FIELD_DIAGNOSTICS: "1",
     },
+    networkStartupRecovery: {
+      initialCatalogueUnavailableObserved: true,
+      recoveredWithoutRestart: true,
+      activityPidStable: true,
+      networkRestored: true,
+      offlineHoldMs: 31_000,
+      elapsedAfterRestoreMs: 1500,
+      distances: ["0.0 km"],
+    },
     checkpoints: [
       repository("start"),
       repository("after-sync"),
@@ -202,6 +249,11 @@ test("field-ready evidence rejects repository mutations and overwritten APKs", (
     ],
   };
   assert.equal(fieldReadyFromCheckpoints(evidence), true);
+  assert.equal(fieldReadyFromCheckpoints({ ...evidence, networkStartupRecovery: undefined }), false);
+  assert.equal(fieldReadyFromCheckpoints({
+    ...evidence,
+    networkStartupRecovery: { ...evidence.networkStartupRecovery, recoveredWithoutRestart: false },
+  }), false);
   assert.equal(fieldReadyFromCheckpoints({ ...evidence, stagingBaseSha: "" }), false);
   assert.equal(fieldReadyFromCheckpoints({
     ...evidence,

@@ -205,7 +205,7 @@ async function responseError(response: Response, fallback: string): Promise<ApiE
   return new ApiError(message, response.status, code);
 }
 
-const CATALOGUE_BOOT_RETRY_DELAYS_MS = [250, 750, 2_000, 4_000] as const;
+const CATALOGUE_BOOT_RETRY_DELAYS_MS = [250, 750, 2_000, 4_000, 8_000, 16_000] as const;
 
 function retryableCatalogueFailure(error: unknown) {
   return !(error instanceof ApiError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status));

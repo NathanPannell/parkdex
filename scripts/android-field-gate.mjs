@@ -16,6 +16,7 @@ const MOTION = { longitude: -123.0695, latitude: 49.0965 };
 // measured TTFF in the attestation so regressions remain visible.
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PHOTO_TIMEOUT_MS = 60_000;
+const NETWORK_STARTUP_TIMEOUT_MS = 45_000;
 const FIELD_BUILD_ENVIRONMENT = Object.freeze({
   NEXT_PUBLIC_API_BASE_URL: "https://api-staging-882c.up.railway.app",
   PARKDEX_CATALOGUE_SCOPE: "staging",
@@ -92,6 +93,42 @@ export function bellParkReady(xml) {
 
 export function locationUnavailable(xml) {
   return /(?:text|content-desc)="[^"]*(?:location is unavailable|could not get your location|location tracking did not become active)[^"]*"/i.test(String(xml));
+}
+
+export function catalogueUnavailable(xml) {
+  return /(?:text|content-desc)="[^"]*(?:could not load the field guide|failed to fetch|field guide is offline)[^"]*"/i.test(String(xml));
+}
+
+export function offlineCatalogueOracle(xml) {
+  if (bellParkReady(xml)) return "unexpected-ready";
+  if (catalogueUnavailable(xml)) return "unavailable";
+  return null;
+}
+
+export function parseAirplaneMode(output) {
+  const value = String(output).trim().toLowerCase();
+  if (value === "enabled") return true;
+  if (value === "disabled") return false;
+  throw new Error(`Unexpected emulator airplane-mode state: ${sanitizeText(value || "empty")}`);
+}
+
+export function parseAppPid(output) {
+  const value = String(output).trim();
+  if (!/^\d+$/.test(value)) throw new Error("Could not resolve the Parkdex Activity process");
+  return value;
+}
+
+export function networkStartupRecoveryReady(evidence) {
+  return evidence?.initialCatalogueUnavailableObserved === true
+    && evidence?.recoveredWithoutRestart === true
+    && evidence?.activityPidStable === true
+    && evidence?.networkRestored === true
+    && Number.isFinite(evidence?.offlineHoldMs)
+    && evidence.offlineHoldMs >= 0
+    && Number.isFinite(evidence?.elapsedAfterRestoreMs)
+    && evidence.elapsedAfterRestoreMs >= 0
+    && Array.isArray(evidence?.distances)
+    && evidence.distances.length > 0;
 }
 
 export function pinOracle(xml) {
@@ -174,13 +211,13 @@ export function isFieldReadyProfile(options, workingTreeClean) {
 const REQUIRED_REPOSITORY_PHASES = ["start", "after-sync", "after-assemble", "after-connected-tests", "before-install", "final"];
 const REQUIRED_APK_PHASES = ["after-assemble", "after-connected-tests", "before-install", "final"];
 
-export function fieldReadyFromCheckpoints({ profileReady, commitSha, treeSha, stagingBaseSha, apkSha, checkpoints, r2Contract, buildEnvironment }) {
+export function fieldReadyFromCheckpoints({ profileReady, commitSha, treeSha, stagingBaseSha, apkSha, checkpoints, r2Contract, buildEnvironment, networkStartupRecovery }) {
   const railwayIdentityMatches = r2Contract?.railwayIdentity?.projectId === RAILWAY_IDENTITY.projectId
     && r2Contract?.railwayIdentity?.environmentId === RAILWAY_IDENTITY.environmentId
     && r2Contract?.railwayIdentity?.serviceId === RAILWAY_IDENTITY.serviceId;
   const stagingBuildMatches = Object.entries(FIELD_BUILD_ENVIRONMENT)
     .every(([name, value]) => buildEnvironment?.[name] === value);
-  if (!profileReady || !commitSha || !treeSha || !stagingBaseSha || !apkSha || r2Contract?.status !== "success" || !railwayIdentityMatches || !stagingBuildMatches) return false;
+  if (!profileReady || !commitSha || !treeSha || !stagingBaseSha || !apkSha || r2Contract?.status !== "success" || !railwayIdentityMatches || !stagingBuildMatches || !networkStartupRecoveryReady(networkStartupRecovery)) return false;
   const byPhase = new Map((checkpoints || []).map((checkpoint) => [checkpoint.phase, checkpoint]));
   if (!REQUIRED_REPOSITORY_PHASES.every((phase) => byPhase.has(phase))) return false;
   if (!REQUIRED_APK_PHASES.every((phase) => byPhase.has(phase))) return false;
@@ -542,6 +579,76 @@ function setLocationEnabled(context, enabled) {
   adb(context, ["shell", "cmd", "location", "set-location-enabled", enabled ? "true" : "false"]);
 }
 
+function setAirplaneMode(context, enabled) {
+  adb(context, ["shell", "cmd", "connectivity", "airplane-mode", enabled ? "enable" : "disable"]);
+  const actual = parseAirplaneMode(adb(context, ["shell", "cmd", "connectivity", "airplane-mode"]).stdout);
+  if (actual !== enabled) throw new Error(`Emulator airplane mode did not ${enabled ? "enable" : "disable"}`);
+}
+
+function appPid(context) {
+  return parseAppPid(adb(context, ["shell", "pidof", PACKAGE]).stdout);
+}
+
+function runNetworkStartupRecovery(context) {
+  adb(context, ["shell", "am", "force-stop", PACKAGE], { allowFailure: true });
+  adb(context, ["shell", "pm", "clear", PACKAGE]);
+  grantLocation(context);
+  setLocationEnabled(context, true);
+  let lastXml = "";
+  let launchPid = "";
+  try {
+    // Airplane mode is an emulator-wide, observable connectivity transition.
+    // Unlike Wi-Fi/data toggles, it also cuts the emulator's virtual Ethernet
+    // path while leaving ADB available for the recovery oracle.
+    setAirplaneMode(context, true);
+    const offlineStartedAt = Date.now();
+    adb(context, ["shell", "am", "start", "-W", "-S", "-n", ACTIVITY], { timeoutMs: context.timeoutMs });
+    launchPid = appPid(context);
+    const unavailable = waitFor(context, (xml) => {
+      lastXml = xml;
+      return offlineCatalogueOracle(xml);
+    }, offlineStartedAt + NETWORK_STARTUP_TIMEOUT_MS, "fresh-install catalogue failure while offline");
+    lastXml = unavailable.xml;
+    if (unavailable.value === "unexpected-ready") {
+      throw new Error("Fresh Parkdex data loaded while emulator networking was disabled");
+    }
+    const offlineHoldMs = Date.now() - offlineStartedAt;
+
+    const restoredAt = Date.now();
+    setAirplaneMode(context, false);
+    spoof(context, BELL);
+    const locate = waitFor(context, (xml) => locateButtonCenter(xml), restoredAt + NETWORK_STARTUP_TIMEOUT_MS, "Locate Me button after network restore");
+    adb(context, ["shell", "input", "tap", String(locate.value.x), String(locate.value.y)]);
+    spoof(context, BELL);
+    const recovered = waitFor(context, (xml) => {
+      lastXml = xml;
+      return bellParkReady(xml);
+    }, restoredAt + NETWORK_STARTUP_TIMEOUT_MS, "automatic catalogue recovery after network restore", {
+      retryAction: () => spoof(context, BELL),
+    });
+    const recoveredPid = appPid(context);
+    if (recoveredPid !== launchPid) throw new Error("Parkdex restarted instead of recovering its first-launch catalogue in place");
+    return {
+      initialCatalogueUnavailableObserved: true,
+      offlineOracle: "fresh-install-field-guide-error",
+      offlineHoldMs,
+      recoveredWithoutRestart: true,
+      activityPidStable: true,
+      networkRestored: true,
+      elapsedAfterRestoreMs: Date.now() - restoredAt,
+      distances: distanceLabels(recovered.xml),
+      xml: recovered.xml,
+    };
+  } catch (error) {
+    error.lastXml = error.lastXml || lastXml;
+    throw error;
+  } finally {
+    // Never leave the shared emulator disconnected, even when a UI oracle or
+    // process-stability assertion fails partway through this checkpoint.
+    setAirplaneMode(context, false);
+  }
+}
+
 function runColdStartTrial(context, index) {
   adb(context, ["shell", "pm", "clear", PACKAGE]);
   grantLocation(context);
@@ -823,6 +930,24 @@ export function main(argv = process.argv.slice(2)) {
     adb(context, ["install", "-t", artifactApk]);
     adb(context, ["shell", "pm", "clear", PACKAGE]);
 
+    try {
+      const recovery = runNetworkStartupRecovery(context);
+      lastXml = recovery.xml;
+      attestation.networkStartupRecovery = {
+        initialCatalogueUnavailableObserved: recovery.initialCatalogueUnavailableObserved,
+        offlineOracle: recovery.offlineOracle,
+        offlineHoldMs: recovery.offlineHoldMs,
+        recoveredWithoutRestart: recovery.recoveredWithoutRestart,
+        activityPidStable: recovery.activityPidStable,
+        networkRestored: recovery.networkRestored,
+        elapsedAfterRestoreMs: recovery.elapsedAfterRestoreMs,
+        distances: recovery.distances,
+      };
+    } catch (error) {
+      captureFailure(context, evidenceDirectory, "network-startup-recovery", error.lastXml || lastXml);
+      throw error;
+    }
+
     for (let trial = 1; trial <= options.trials; trial += 1) {
       try {
         const result = runColdStartTrial(context, trial);
@@ -870,6 +995,7 @@ export function main(argv = process.argv.slice(2)) {
       checkpoints: attestation.checkpoints,
       r2Contract: attestation.r2Contract,
       buildEnvironment: attestation.buildEnvironment,
+      networkStartupRecovery: attestation.networkStartupRecovery,
     });
     if (fieldReadyProfile && !attestation.fieldReady) throw new Error("Final repository, APK, or R2 evidence did not satisfy field-ready requirements");
   } catch (error) {

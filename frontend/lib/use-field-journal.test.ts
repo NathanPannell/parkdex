@@ -104,6 +104,30 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.loadError).toBe("");
   });
 
+  it("keeps bounded boot recovery active through a slow Android reconnect", async () => {
+    vi.useFakeTimers();
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(() => {
+      catalogueAttempts += 1;
+      return catalogueAttempts < 6 ? Promise.reject(new TypeError("network still starting")) : json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    expect(catalogueAttempts).toBe(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(14_999); });
+    expect(catalogueAttempts).toBe(5);
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(catalogueAttempts).toBe(6);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.places).toEqual([PLACE]);
+  });
+
   it("cancels the failed guest retry and refreshes the catalogue for the account that signs in", async () => {
     let guestCatalogueAttempts = 0;
     let accountCatalogueAttempts = 0;
