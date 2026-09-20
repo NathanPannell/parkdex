@@ -205,6 +205,27 @@ async function responseError(response: Response, fallback: string): Promise<ApiE
   return new ApiError(message, response.status, code);
 }
 
+const CATALOGUE_BOOT_RETRY_DELAYS_MS = [250, 750, 2_000, 4_000] as const;
+
+function retryableCatalogueFailure(error: unknown) {
+  return !(error instanceof ApiError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status));
+}
+
+function waitForCatalogueRetry(delayMs: number) {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("online", finish);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, delayMs);
+    window.addEventListener("online", finish, { once: true });
+  });
+}
+
 function isLocationClaimRequired(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 409 && error.code === "location_claim_required";
 }
@@ -229,6 +250,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const epochRef = useRef(new IdentityEpoch());
   const transitionRef = useRef(false);
   const identityRef = useRef<Identity>({ kind: "guest", collectionKey: "" });
+  const mountedRef = useRef(true);
+  const placesRef = useRef(places);
+  const catalogueReadyRef = useRef(false);
+  const catalogueNeedsRecoveryRef = useRef(false);
   const visitedRef = useRef(visited);
   const trailsRef = useRef(completedTrails);
   const visitTimestampsRef = useRef(visitTimestamps);
@@ -267,6 +292,16 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setCompletedTrails(nextTrails);
     setVisitTimestamps(nextVisitTimestamps);
     setVisitMetadata(nextVisitMetadata);
+  }, []);
+
+  const updatePlaces = useCallback((nextPlaces: Place[]) => {
+    placesRef.current = nextPlaces;
+    setPlaces(nextPlaces);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
   const persistGuest = useCallback(async () => {
@@ -532,6 +567,73 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
   }, [drainIdentity, storage]);
 
+  const refreshCatalogue = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
+    const identity = identityRef.current;
+    if (!apiBaseUrl || (identity.kind === "guest" && !identity.collectionKey)) return false;
+    const catalogueEpoch = epochRef.current.capture();
+    const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
+    const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
+    const visitCheckpoint = visitBox.checkpoint();
+    const trailCheckpoint = trailBox.checkpoint();
+    const visitMutationCheckpoint = visitMutationsRef.current.checkpoint();
+    const headers: Record<string, string> = identity.kind === "account"
+      ? { Authorization: `Bearer ${identity.token}` }
+      : { "X-Collection-Key": identity.collectionKey };
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/places`, { cache: "no-store", headers });
+      if (!response.ok) throw await responseError(response, "Could not load the field guide.");
+      const payload = await response.json() as CataloguePayload;
+      if (!isActive() || !epochRef.current.isCurrent(catalogueEpoch) || !sameOwner(identityRef.current, identity)) return false;
+      const snapshotVisited = visitBox.applyTo(payload.visitedIds, visitCheckpoint);
+      const nextTrails = trailBox.applyTo(payload.completedTrailIds ?? [], trailCheckpoint);
+      updatePlaces(payload.places);
+      setCoverageNote(payload.coverageNote);
+      setVisitClaimMode(visitClaimModeFor(payload));
+      const payloadTimestamps = timestampsFor(payload.visits);
+      const rebasedVisits = visitMutationsRef.current.rebase(
+        snapshotVisited,
+        payloadTimestamps,
+        metadataFor(payload.visits, snapshotVisited, payloadTimestamps),
+        visitMutationCheckpoint,
+      );
+      updateProgress(rebasedVisits.visited, nextTrails, rebasedVisits.timestamps, rebasedVisits.metadata);
+      noteStorageFailure(await writeStored(storage(), JOURNAL_STORAGE.places, payload.places));
+      if (identity.kind === "guest") await persistGuest(); else await persistAccount();
+      if (isActive() && epochRef.current.isCurrent(catalogueEpoch) && sameOwner(identityRef.current, identity)) {
+        catalogueReadyRef.current = true;
+        catalogueNeedsRecoveryRef.current = false;
+        setLoadError("");
+      }
+      return true;
+    } catch (error) {
+      if (!isActive() || !epochRef.current.isCurrent(catalogueEpoch) || !sameOwner(identityRef.current, identity)) return false;
+      if (identity.kind === "account" && error instanceof ApiError && error.status === 401) {
+        catalogueNeedsRecoveryRef.current = false;
+        expireAccount(catalogueEpoch);
+        return false;
+      }
+      catalogueNeedsRecoveryRef.current = retryableCatalogueFailure(error);
+      throw error;
+    }
+  }, [apiBaseUrl, expireAccount, noteStorageFailure, persistAccount, persistGuest, storage, updatePlaces, updateProgress]);
+
+  const refreshCatalogueWithRetry = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
+    let lastError: unknown;
+    const retryEpoch = epochRef.current.capture();
+    const isCurrent = () => isActive() && epochRef.current.isCurrent(retryEpoch);
+    for (let attempt = 0; attempt <= CATALOGUE_BOOT_RETRY_DELAYS_MS.length; attempt += 1) {
+      if (!isCurrent()) return false;
+      try {
+        return await refreshCatalogue(isCurrent);
+      } catch (error) {
+        lastError = error;
+        if (!retryableCatalogueFailure(error) || attempt === CATALOGUE_BOOT_RETRY_DELAYS_MS.length) throw error;
+        await waitForCatalogueRetry(CATALOGUE_BOOT_RETRY_DELAYS_MS[attempt]);
+      }
+    }
+    throw lastError;
+  }, [refreshCatalogue]);
+
   useEffect(() => {
     let active = true;
     const epoch = epochRef.current;
@@ -590,7 +692,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         identityRef.current = { kind: "guest", collectionKey };
       }
 
-      if (cachedPlaces.length) setPlaces(cachedPlaces);
+      if (cachedPlaces.length) updatePlaces(cachedPlaces);
       setAuthenticated(Boolean(savedToken));
       setAccount(savedToken ? cachedAccount?.account ?? null : null);
       updateProgress(initialVisited, initialTrails, initialVisitTimestamps, initialVisitMetadata);
@@ -638,44 +740,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         }
       }
 
-      const identity = identityRef.current;
-      const catalogueEpoch = epochRef.current.capture();
-      const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
-      const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
-      const visitCheckpoint = visitBox.checkpoint();
-      const trailCheckpoint = trailBox.checkpoint();
-      const visitMutationCheckpoint = visitMutationsRef.current.checkpoint();
-      const headers: Record<string, string> = identity.kind === "account"
-        ? { Authorization: `Bearer ${identity.token}` }
-        : { "X-Collection-Key": identity.collectionKey };
       try {
-        const response = await fetch(`${apiBaseUrl}/api/places`, { cache: "no-store", headers });
-        if (!response.ok) throw await responseError(response, "Could not load the field guide.");
-        const payload = await response.json() as CataloguePayload;
-        if (!active || !epochRef.current.isCurrent(catalogueEpoch)) return;
-        const snapshotVisited = visitBox.applyTo(payload.visitedIds, visitCheckpoint);
-        const nextTrails = trailBox.applyTo(payload.completedTrailIds ?? [], trailCheckpoint);
-        setPlaces(payload.places);
-        setCoverageNote(payload.coverageNote);
-        setVisitClaimMode(visitClaimModeFor(payload));
-        const payloadTimestamps = timestampsFor(payload.visits);
-         const rebasedVisits = visitMutationsRef.current.rebase(
-           snapshotVisited,
-           payloadTimestamps,
-           metadataFor(payload.visits, snapshotVisited, payloadTimestamps),
-           visitMutationCheckpoint,
-         );
-        updateProgress(rebasedVisits.visited, nextTrails, rebasedVisits.timestamps, rebasedVisits.metadata);
-        noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.places, payload.places));
-        if (identity.kind === "guest") await persistGuest(); else await persistAccount();
-        setLoadError("");
+        if (cachedPlaces.length || identityRef.current.kind === "account") await refreshCatalogue(() => active);
+        else await refreshCatalogueWithRetry(() => active);
       } catch (error) {
-        if (!active || !epochRef.current.isCurrent(catalogueEpoch)) return;
-        if (identity.kind === "account" && error instanceof ApiError && error.status === 401) {
-          expireAccount(catalogueEpoch);
-        } else {
-          setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
-        }
+        if (!active) return;
+        setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
       } finally {
         if (active) setLoading(false);
       }
@@ -688,7 +758,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     });
 
     return () => { active = false; epoch.advance(); };
-  }, [apiBaseUrl, expireAccount, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, persistAccount, persistGuest, storage, switchToGuest, updateProgress]);
+  }, [apiBaseUrl, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, refreshCatalogue, refreshCatalogueWithRetry, storage, switchToGuest, updatePlaces, updateProgress]);
 
   useEffect(() => {
     if (loading) return;
@@ -701,6 +771,19 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     window.addEventListener("online", resume);
     return () => window.removeEventListener("online", resume);
   }, [retrySync]);
+
+  useEffect(() => {
+    if (loading) return;
+    const recover = () => {
+      if (catalogueReadyRef.current && !catalogueNeedsRecoveryRef.current) return;
+      void refreshCatalogueWithRetry().catch((error) => {
+        if (!mountedRef.current) return;
+        setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+      });
+    };
+    window.addEventListener("online", recover);
+    return () => window.removeEventListener("online", recover);
+  }, [loading, refreshCatalogueWithRetry]);
 
   const toggle = useCallback(async (kind: "visits" | "trails", id: string) => {
     if (transitionRef.current) return;
@@ -793,7 +876,14 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         setSyncMessage("Your account checkoffs are saved on this device and waiting to sync.");
       }
     }
-  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, storage, updateProgress]);
+    if (!catalogueReadyRef.current || catalogueNeedsRecoveryRef.current) {
+      void refreshCatalogueWithRetry(() => mountedRef.current && epochRef.current.isCurrent(capturedEpoch)).catch((error) => {
+        if (mountedRef.current && epochRef.current.isCurrent(capturedEpoch)) {
+          setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+        }
+      });
+    }
+  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, refreshCatalogueWithRetry, storage, updateProgress]);
 
   const authenticate = useCallback(async (mode: "login" | "register", email: string, password: string) => {
     if (transitionRef.current) return;

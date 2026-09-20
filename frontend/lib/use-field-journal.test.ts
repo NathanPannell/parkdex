@@ -86,6 +86,83 @@ afterEach(() => {
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("retries a fresh guest catalogue as soon as the native network reports online", async () => {
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      if (!String(url).endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      catalogueAttempts += 1;
+      return catalogueAttempts === 1 ? Promise.reject(new TypeError("network not ready")) : json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(catalogueAttempts).toBe(1));
+    act(() => window.dispatchEvent(new Event("online")));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(catalogueAttempts).toBe(2);
+    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.loadError).toBe("");
+  });
+
+  it("cancels the failed guest retry and refreshes the catalogue for the account that signs in", async () => {
+    let guestCatalogueAttempts = 0;
+    let accountCatalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/login")) {
+        return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
+      }
+      if (!path.endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
+        accountCatalogueAttempts += 1;
+        return json(catalogue([PLACE.id]));
+      }
+      guestCatalogueAttempts += 1;
+      return Promise.reject(new TypeError("guest network not ready"));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(guestCatalogueAttempts).toBe(1));
+    await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
+    act(() => window.dispatchEvent(new Event("online")));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(accountCatalogueAttempts).toBe(1));
+    expect(guestCatalogueAttempts).toBe(1);
+    expect(result.current.authenticated).toBe(true);
+    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
+  it("keeps a cached guest catalogue immediately available while offline", async () => {
+    window.localStorage.setItem(JOURNAL_STORAGE.places, JSON.stringify([PLACE]));
+    const fetchMock = vi.fn(() => Promise.reject(new TypeError("offline")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.loadError).toBe("Showing your saved field guide offline.");
+  });
+
+  it("does not continue a pending boot retry after unmount", async () => {
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(() => {
+      catalogueAttempts += 1;
+      return Promise.reject(new TypeError("network not ready"));
+    }));
+
+    const mounted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(catalogueAttempts).toBe(1));
+    mounted.unmount();
+    act(() => window.dispatchEvent(new Event("online")));
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+
+    expect(catalogueAttempts).toBe(1);
+  });
+
   it("falls back to legacy account writes when the previous API has no claim capability", async () => {
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
     window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
@@ -202,14 +279,22 @@ describe("useFieldJournal identity and progress races", () => {
 
   it("ignores a guest catalogue response that arrives after login", async () => {
     const lateCatalogue = deferred<Response>();
-    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+    let accountCatalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
-      if (path.endsWith("/api/places")) return lateCatalogue.promise;
+      if (path.endsWith("/api/places")) {
+        if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
+          accountCatalogueAttempts += 1;
+          return json(catalogue([PLACE.id]));
+        }
+        return lateCatalogue.promise;
+      }
       return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
     }));
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
 
     await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
+    await waitFor(() => expect(accountCatalogueAttempts).toBe(1));
     expect(result.current.visited.has(PLACE.id)).toBe(true);
     await act(async () => { lateCatalogue.resolve(await json(catalogue())); });
     expect(result.current.authenticated).toBe(true);
