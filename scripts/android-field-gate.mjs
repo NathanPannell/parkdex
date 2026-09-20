@@ -473,7 +473,10 @@ function waitForWithScroll(context, predicate, deadline, label) {
       lastXml = dumpHierarchy(context);
       const result = predicate(lastXml);
       if (result) return { value: result, xml: lastXml };
-      adb(context, ["shell", "input", "swipe", "540", "1900", "540", "650", "350"]);
+      // The postcard deliberately consumes drag gestures for its tilt effect,
+      // so a centre-screen swipe can leave the Account page stationary. Page
+      // Down scrolls the focused WebView without competing with that control.
+      adb(context, ["shell", "input", "keyevent", "KEYCODE_PAGE_DOWN"]);
     } catch {
       // The hierarchy can be unavailable briefly during WebView navigation.
     }
