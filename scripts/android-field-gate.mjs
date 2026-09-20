@@ -16,7 +16,12 @@ const MOTION = { longitude: -123.0695, latitude: 49.0965 };
 // measured TTFF in the attestation so regressions remain visible.
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_PHOTO_TIMEOUT_MS = 60_000;
-const NETWORK_STARTUP_TIMEOUT_MS = 45_000;
+const NETWORK_OFFLINE_FAILURE_TIMEOUT_MS = 45_000;
+// Android's virtual Ethernet and WebView can take longer than the application
+// retry schedule to agree that connectivity has returned. This remains a
+// bounded, measured recovery oracle; ordinary cold-start TTFF is still held to
+// the tighter DEFAULT_TIMEOUT_MS budget below.
+const NETWORK_RECOVERY_TIMEOUT_MS = 60_000;
 const FIELD_BUILD_ENVIRONMENT = Object.freeze({
   NEXT_PUBLIC_API_BASE_URL: "https://api-staging-882c.up.railway.app",
   PARKDEX_CATALOGUE_SCOPE: "staging",
@@ -607,7 +612,7 @@ function runNetworkStartupRecovery(context) {
     const unavailable = waitFor(context, (xml) => {
       lastXml = xml;
       return offlineCatalogueOracle(xml);
-    }, offlineStartedAt + NETWORK_STARTUP_TIMEOUT_MS, "fresh-install catalogue failure while offline");
+    }, offlineStartedAt + NETWORK_OFFLINE_FAILURE_TIMEOUT_MS, "fresh-install catalogue failure while offline");
     lastXml = unavailable.xml;
     if (unavailable.value === "unexpected-ready") {
       throw new Error("Fresh Parkdex data loaded while emulator networking was disabled");
@@ -617,13 +622,13 @@ function runNetworkStartupRecovery(context) {
     const restoredAt = Date.now();
     setAirplaneMode(context, false);
     spoof(context, BELL);
-    const locate = waitFor(context, (xml) => locateButtonCenter(xml), restoredAt + NETWORK_STARTUP_TIMEOUT_MS, "Locate Me button after network restore");
+    const locate = waitFor(context, (xml) => locateButtonCenter(xml), restoredAt + NETWORK_RECOVERY_TIMEOUT_MS, "Locate Me button after network restore");
     adb(context, ["shell", "input", "tap", String(locate.value.x), String(locate.value.y)]);
     spoof(context, BELL);
     const recovered = waitFor(context, (xml) => {
       lastXml = xml;
       return bellParkReady(xml);
-    }, restoredAt + NETWORK_STARTUP_TIMEOUT_MS, "automatic catalogue recovery after network restore", {
+    }, restoredAt + NETWORK_RECOVERY_TIMEOUT_MS, "automatic catalogue recovery after network restore", {
       retryAction: () => spoof(context, BELL),
     });
     const recoveredPid = appPid(context);
