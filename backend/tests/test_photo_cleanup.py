@@ -1,7 +1,5 @@
-import asyncio
 import inspect
 import os
-from threading import Event, get_ident
 
 import psycopg
 from fastapi.testclient import TestClient
@@ -13,6 +11,7 @@ from backend.app.object_storage import (
 )
 
 import backend.app.main as api
+import backend.app.photo_cleanup as photo_cleanup
 
 
 class Result:
@@ -80,7 +79,170 @@ def test_enqueue_photo_deletions_is_deduplicated_and_idempotent():
     assert "ON CONFLICT (object_key) DO NOTHING" in inserts[0][0]
 
 
-def test_photo_deletion_worker_selects_only_due_work_in_fair_order(monkeypatch):
+def test_one_shot_deletion_batch_exits_without_loading_storage_when_queue_is_empty(
+    monkeypatch,
+):
+    conn = FakeConnection([])
+
+    def unexpected_storage():
+        raise AssertionError("an empty cleanup batch must not load object storage")
+
+    monkeypatch.setattr(api, "connection", connection_factory(conn))
+    monkeypatch.setattr(api, "photo_storage", unexpected_storage)
+
+    assert api.process_photo_deletion_outbox() == 0
+    claims = [
+        statement
+        for statement in conn.statements
+        if statement[0].startswith("WITH due AS")
+    ]
+    assert len(claims) == 1
+    assert conn.commits == 0
+
+
+def test_targeted_deletion_removes_objects_and_tombstones_immediately(monkeypatch):
+    conn = FakeConnection([])
+    deleted = []
+
+    class Storage:
+        def delete(self, key):
+            deleted.append(key)
+
+    monkeypatch.setattr(api, "connection", connection_factory(conn))
+    monkeypatch.setattr(api, "photo_storage", lambda: Storage())
+
+    assert api.settle_photo_object_deletions(
+        ["postcards/two.jpg", "postcards/one.jpg", "postcards/two.jpg"]
+    ) == 2
+    assert deleted == ["postcards/one.jpg", "postcards/two.jpg"]
+    tombstone_deletes = [
+        statement
+        for statement in conn.statements
+        if statement[0].startswith("DELETE FROM photo_object_deletions")
+    ]
+    assert tombstone_deletes == [
+        (
+            "DELETE FROM photo_object_deletions WHERE object_key = ANY(%s)",
+            (["postcards/one.jpg", "postcards/two.jpg"],),
+        )
+    ]
+    assert conn.commits == 1
+
+
+def test_targeted_deletion_failure_retains_tombstone_with_retry_backoff(monkeypatch):
+    conn = FakeConnection([])
+
+    class Storage:
+        def delete(self, key):
+            raise ObjectStorageError(f"provider unavailable for {key}")
+
+    monkeypatch.setattr(api, "connection", connection_factory(conn))
+    monkeypatch.setattr(api, "photo_storage", lambda: Storage())
+
+    assert api.settle_photo_object_deletions(["postcards/retry.jpg"]) == 0
+    assert not any(
+        statement[0].startswith("DELETE FROM photo_object_deletions")
+        for statement in conn.statements
+    )
+    retry_updates = [
+        statement
+        for statement in conn.statements
+        if statement[0].startswith("UPDATE photo_object_deletions")
+    ]
+    assert len(retry_updates) == 1
+    retry_sql, retry_params = retry_updates[0]
+    assert "attempt_count = attempt_count + 1" in retry_sql
+    assert "next_attempt_at = NOW() + make_interval" in retry_sql
+    assert "WHERE object_key = %s" in retry_sql
+    assert retry_params == (
+        api.PHOTO_DELETION_RETRY_MAX_SECONDS,
+        api.PHOTO_DELETION_RETRY_BASE_SECONDS,
+        api.PHOTO_DELETION_RETRY_MAX_EXPONENT,
+        "ObjectStorageError",
+        "postcards/retry.jpg",
+    )
+    assert conn.commits == 1
+
+
+def test_targeted_deletion_can_record_outcome_on_request_connection(monkeypatch):
+    conn = FakeConnection([])
+
+    class Storage:
+        def delete(self, _key):
+            return None
+
+    def unexpected_connection():
+        raise AssertionError("request-scoped cleanup must not check out another connection")
+        yield
+
+    monkeypatch.setattr(api, "connection", unexpected_connection)
+    monkeypatch.setattr(api, "photo_storage", lambda: Storage())
+
+    assert api.settle_photo_object_deletions(
+        ["postcards/request.jpg"], outcome_conn=conn
+    ) == 1
+    assert conn.commits == 1
+
+
+def test_photo_cleanup_command_closes_pool_after_one_batch(monkeypatch):
+    events = []
+    monkeypatch.setattr(photo_cleanup, "open_pool", lambda: events.append("open"))
+    monkeypatch.setattr(
+        photo_cleanup,
+        "process_photo_deletion_outbox",
+        lambda: events.append("process"),
+    )
+    monkeypatch.setattr(photo_cleanup, "close_pool", lambda: events.append("close"))
+
+    assert photo_cleanup.main() == 0
+    assert events == ["open", "process", "close"]
+
+
+def test_photo_cleanup_command_closes_pool_when_batch_raises(monkeypatch):
+    events = []
+
+    def fail_batch():
+        events.append("process")
+        raise RuntimeError("unexpected cleanup failure")
+
+    monkeypatch.setattr(photo_cleanup, "open_pool", lambda: events.append("open"))
+    monkeypatch.setattr(photo_cleanup, "process_photo_deletion_outbox", fail_batch)
+    monkeypatch.setattr(photo_cleanup, "close_pool", lambda: events.append("close"))
+
+    try:
+        photo_cleanup.main()
+    except RuntimeError as exc:
+        assert str(exc) == "unexpected cleanup failure"
+    else:
+        raise AssertionError("cleanup failure should be propagated to the cron runner")
+    assert events == ["open", "process", "close"]
+
+
+def test_photo_cleanup_command_closes_partially_opened_pool(monkeypatch):
+    events = []
+
+    def fail_open():
+        events.append("open")
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(photo_cleanup, "open_pool", fail_open)
+    monkeypatch.setattr(
+        photo_cleanup,
+        "process_photo_deletion_outbox",
+        lambda: events.append("unexpected process"),
+    )
+    monkeypatch.setattr(photo_cleanup, "close_pool", lambda: events.append("close"))
+
+    try:
+        photo_cleanup.main()
+    except RuntimeError as exc:
+        assert str(exc) == "database unavailable"
+    else:
+        raise AssertionError("pool-open failure should be reported to the cron runner")
+    assert events == ["open", "close"]
+
+
+def test_one_shot_deletion_batch_selects_only_due_work_in_fair_order(monkeypatch):
     events = []
     conn = FakeConnection([{"object_key": "postcards/opaque.jpg"}])
 
@@ -117,7 +279,7 @@ def test_photo_deletion_worker_selects_only_due_work_in_fair_order(monkeypatch):
     assert conn.commits == 2
 
 
-def test_photo_deletion_worker_treats_missing_object_as_success(monkeypatch):
+def test_one_shot_deletion_batch_treats_missing_object_as_success(monkeypatch):
     conn = FakeConnection([{"object_key": "postcards/missing.jpg"}])
 
     class Storage:
@@ -137,7 +299,7 @@ def test_photo_deletion_worker_treats_missing_object_as_success(monkeypatch):
     assert conn.commits == 2
 
 
-def test_photo_deletion_worker_retains_and_backs_off_failed_tombstone(monkeypatch):
+def test_one_shot_deletion_batch_retains_and_backs_off_failed_tombstone(monkeypatch):
     conn = FakeConnection([{"object_key": "postcards/opaque.jpg"}])
 
     class Storage:
@@ -165,7 +327,7 @@ def test_photo_deletion_worker_retains_and_backs_off_failed_tombstone(monkeypatc
     assert conn.commits == 2
 
 
-def test_photo_deletion_worker_backs_off_batch_when_storage_is_unavailable(
+def test_one_shot_deletion_batch_backs_off_when_storage_is_unavailable(
     monkeypatch,
 ):
     keys = ["postcards/one.jpg", "postcards/two.jpg"]
@@ -240,7 +402,7 @@ def test_failed_oldest_deletion_yields_to_new_due_work():
             assert poison_retry > database_now
 
             # The old poison row is no longer due, so the newly queued object
-            # cannot be starved by it even with a one-row worker batch.
+            # cannot be starved by it even with a one-row cleanup batch.
             assert api.process_photo_deletion_outbox(limit=1) == 1
             assert storage.calls == [poison_key, fresh_key]
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
@@ -272,14 +434,14 @@ def test_failed_oldest_deletion_yields_to_new_due_work():
                 conn.commit()
 
 
-def test_failed_upload_cleanup_only_persists_work_for_background_worker(monkeypatch):
+def test_failed_upload_cleanup_persists_then_attempts_targeted_deletion(monkeypatch):
     conn = FakeConnection([])
-    process_calls = []
+    settle_calls = []
     monkeypatch.setattr(api, "connection", connection_factory(conn))
     monkeypatch.setattr(
         api,
-        "process_photo_deletion_outbox",
-        lambda: process_calls.append("unexpected request-path drain"),
+        "settle_photo_object_deletions",
+        lambda keys: settle_calls.append(keys),
     )
     api.persist_failed_upload_cleanup(
         "00000000-0000-0000-0000-000000000001", "postcards/new.jpg"
@@ -289,7 +451,7 @@ def test_failed_upload_cleanup_only_persists_work_for_background_worker(monkeypa
         for statement in conn.statements
     )
     assert conn.commits == 1
-    assert process_calls == []
+    assert settle_calls == [["postcards/new.jpg"]]
 
 
 def test_user_facing_mutations_never_drain_global_deletion_work_inline():
@@ -308,66 +470,3 @@ def test_photo_upload_handler_uses_fastapi_sync_threadpool():
     assert "photo.file.read" in source
     assert "normalize_photo(raw)" in source
     assert "storage.put" in source
-
-
-def test_photo_deletion_worker_runs_off_loop_survives_error_and_stops(monkeypatch):
-    first_call = Event()
-    second_call = Event()
-    worker_threads = []
-
-    def process():
-        worker_threads.append(get_ident())
-        if len(worker_threads) == 1:
-            first_call.set()
-            raise RuntimeError("unexpected iteration failure")
-        second_call.set()
-        return 0
-
-    monkeypatch.setattr(api, "process_photo_deletion_outbox", process)
-    monkeypatch.setattr(api, "PHOTO_DELETION_RETRY_INTERVAL_SECONDS", 0.01)
-
-    async def exercise():
-        event_loop_thread = get_ident()
-        stop_event = asyncio.Event()
-        worker = asyncio.create_task(api.photo_deletion_worker(stop_event))
-        for event in (first_call, second_call):
-            while not event.is_set():
-                await asyncio.sleep(0.005)
-        stop_event.set()
-        await asyncio.wait_for(worker, timeout=1)
-        return event_loop_thread
-
-    event_loop_thread = asyncio.run(exercise())
-    assert len(worker_threads) >= 2
-    assert all(thread != event_loop_thread for thread in worker_threads)
-
-
-def test_photo_deletion_worker_waits_for_inflight_thread_before_stopping(monkeypatch):
-    started = Event()
-    release = Event()
-    finished = Event()
-
-    def process():
-        started.set()
-        assert release.wait(timeout=1)
-        finished.set()
-        return 0
-
-    monkeypatch.setattr(api, "process_photo_deletion_outbox", process)
-
-    async def exercise():
-        stop_event = asyncio.Event()
-        worker = asyncio.create_task(api.photo_deletion_worker(stop_event))
-        while not started.is_set():
-            await asyncio.sleep(0.005)
-        stop_event.set()
-        await asyncio.sleep(0)
-        assert not worker.done()
-        release.set()
-        await asyncio.wait_for(worker, timeout=1)
-
-    try:
-        asyncio.run(exercise())
-    finally:
-        release.set()
-    assert finished.is_set()
