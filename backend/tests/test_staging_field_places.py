@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
+import inspect
 import json
 import os
 from pathlib import Path
@@ -343,9 +344,6 @@ def test_lifespan_orders_pool_sync_registry_then_id_validation(monkeypatch) -> N
         events.append(("registry", enabled))
         return SimpleNamespace(place_ids=frozenset({PLACE_ID}))
 
-    async def fake_worker(stop_event):
-        await stop_event.wait()
-
     class FakeMcp:
         @asynccontextmanager
         async def lifespan(self):
@@ -360,7 +358,6 @@ def test_lifespan_orders_pool_sync_registry_then_id_validation(monkeypatch) -> N
     monkeypatch.setattr(api, "connection", fake_connection)
     monkeypatch.setattr(api, "sync_staging_field_places", fake_sync)
     monkeypatch.setattr(api, "get_boundary_registry", fake_registry)
-    monkeypatch.setattr(api, "photo_deletion_worker", fake_worker)
     monkeypatch.setattr(api, "mcp_http_app", FakeMcp())
 
     async def exercise():
@@ -376,6 +373,7 @@ def test_lifespan_orders_pool_sync_registry_then_id_validation(monkeypatch) -> N
         "commit",
     ]
     assert events[-1] == "close"
+    assert "photo_deletion_worker" not in inspect.getsource(api.lifespan)
 
 
 def test_enabled_staging_startup_lists_and_recommends_bell(monkeypatch) -> None:

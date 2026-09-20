@@ -1,6 +1,6 @@
 # Independent staging and production deployments
 
-Parkdex uses short GitHub Actions merge deployments and long-lived provider resources. The only automatic deployment events are protected-branch merge pushes to `staging` and `main`. A workflow run validates one immutable Git SHA, stamps that SHA and a release ID on the Railway API, starts the API and Vercel uploads concurrently, and exits as soon as both providers accept the requests. It never polls builds, waits for `/ready`, or runs browser smoke tests.
+Parkdex uses short GitHub Actions merge deployments and long-lived provider resources. The only automatic deployment events are protected-branch merge pushes to `staging` and `main`. A workflow run validates one immutable Git SHA, stamps that SHA and a release ID on the Railway API, starts the API and Vercel uploads concurrently, and exits as soon as the providers accept the requests. It never polls builds, waits for `/ready`, or runs browser smoke tests.
 
 The release agent owns everything after queueing: it waits outside GitHub Actions for provider convergence, verifies the exact revision, performs the Vercel domain cutover, browser-tests the stable URL, and then stops. A successful Actions run means **queued**, not **live**.
 
@@ -21,7 +21,7 @@ Keep `parkdex.app` attached directly to the production deployment and redirect `
 
 Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. The release agent assigns only the environment's exact stable domain: `staging.parkdex.app` for staging and `parkdex.app` for production. Because both are production-domain aliases in one Hobby project, never use project-wide Promote, Instant Rollback, `vercel promote`, `vercel rollback`, a promote/rollback API, or `vercel deploy --prod` without `--skip-domain`; those operations can move both environments together. Keep the Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
-The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
+The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Photo objects are deleted immediately after their database tombstone commits. A failed object deletion remains recorded for manual retry with `python -m backend.app.photo_cleanup`; there is no recurring cleanup service. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
 
 Before the first independent release, apply the reviewed Railway configuration once to each existing environment. Review each plan before applying it; do not use `--confirm-destructive`:
 

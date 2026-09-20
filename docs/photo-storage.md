@@ -16,7 +16,7 @@ This fits the current Cloudflare Pages → Railway → Neon architecture while a
 4. Railway writes that canonical JPEG to R2 under a wholly random `postcards/<nonce>.jpg` key containing no owner or place identifier.
 5. In the same owner-scoped update, Neon records the object key, media type, dimensions, byte length, SHA-256 digest, and update time.
 6. Reads remain authenticated and are streamed through Railway with `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`.
-7. Replacement writes the new object first, then atomically commits the new metadata and a deletion-outbox row for the old key. Removal atomically clears metadata and records the same durable tombstone before returning. The cleanup worker performs idempotent object deletes after commit and retains failures for retry.
+7. Replacement writes the new object first, then atomically commits the new metadata and a deletion-outbox row for the old key. Removal atomically clears metadata and records the same durable tombstone. The request immediately attempts the idempotent object delete after commit, removes successful tombstones, and retains failures for manual retry with `python -m backend.app.photo_cleanup`. No recurring service polls the outbox.
 
 Before sending a claim that includes a confirmed photo, Android first copies the bounded photo into the app-private data directory, scoped to the authenticated account and place. That closes the claim-response-loss window as well as the ordinary failed-upload path: the retry survives navigation and process restart, is removed after a successful upload, and is cleared when that account signs out. Browser development builds use same-origin IndexedDB when available. Photo bytes are never stored in Preferences or the system gallery.
 
@@ -42,7 +42,7 @@ Railway API environments require:
 - Never retain the original upload, EXIF/IPTC/XMP data, or GPS metadata.
 - Limit the pilot to one canonical photo per claimed visit, 8 MB input, and 1 MB normalized output.
 - Object keys contain no email, account ID, place name, coordinates, or other user data.
-- Commit a durable deletion intent when a photo, visit, or account is deleted. The worker schedules due retries with capped exponential backoff so one failing object cannot starve newer removals; an operational orphan audit remains required before general availability.
+- Commit a durable deletion intent when a photo, visit, or account is deleted. The immediate delete path records failures with capped exponential backoff metadata so a manual cleanup batch cannot let one failing object starve newer removals; an operational orphan audit remains required before general availability.
 - R2 lifecycle rules should remove abandoned quarantine objects after 24 hours once direct uploads are introduced.
 
 ## Later hardening

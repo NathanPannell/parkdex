@@ -1,5 +1,5 @@
 export function buildNeonApiCommand(cli, path, { method = "GET", query = {}, body } = {}) {
-  const args = [cli, "api", path, "--method", method, "--output", "json", "--analytics", "false"];
+  const args = [cli, "api", path, "--method", method, "--output", "json"];
   for (const [name, value] of Object.entries(query)) args.push("--query", `${name}=${value}`);
   if (body !== undefined) args.push("--data=-");
   return { args, input: body === undefined ? undefined : JSON.stringify(body) };
@@ -166,6 +166,26 @@ export function verifyRailwayDeploymentResult(deployments, message) {
 export function verifyReadyPayload(payload, commitSha, releaseId) {
   if (payload?.status !== "ready" || payload?.commit !== commitSha || payload?.release !== releaseId) {
     throw new Error("Railway API readiness identity did not match the local release");
+  }
+  return true;
+}
+
+export function catalogueVisitedIds(payload) {
+  if (!Array.isArray(payload?.visitedIds)) throw new Error("Preview catalogue visitedIds contract was not verified");
+  return payload.visitedIds;
+}
+
+export function verifyGuestVisitRejection(status, payload) {
+  if (status !== 409 || payload?.detail?.code !== "location_claim_required") {
+    throw new Error("Preview guest visit enforcement was not verified");
+  }
+  return true;
+}
+
+export function verifyUnvisitedCatalogues(placeId, payloads) {
+  if (!placeId || !Array.isArray(payloads) || payloads.length < 1) throw new Error("Preview catalogue isolation inputs were invalid");
+  for (const payload of payloads) {
+    if (catalogueVisitedIds(payload).includes(placeId)) throw new Error("Preview visit isolation was not verified");
   }
   return true;
 }

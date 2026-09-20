@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager, contextmanager
 import hashlib
 import logging
@@ -114,7 +113,6 @@ CLAIM_RECOMMENDATION_GLOBAL_LIMIT = 5_000
 PHOTO_UPLOAD_ACCOUNT_LIMIT = 30
 PHOTO_UPLOAD_GLOBAL_LIMIT = 2_000
 CLAIM_ABUSE_WINDOW = timedelta(minutes=15)
-PHOTO_DELETION_RETRY_INTERVAL_SECONDS = 60
 PHOTO_DELETION_BATCH_SIZE = 100
 PHOTO_DELETION_RETRY_BASE_SECONDS = 30
 PHOTO_DELETION_RETRY_MAX_SECONDS = 60 * 60
@@ -298,13 +296,94 @@ def enqueue_photo_object_deletions(
         )
 
 
+def settle_photo_object_deletions(
+    keys: list[str], *, outcome_conn: Connection | None = None
+) -> int:
+    """Attempt queued object deletions now, leaving only failures for retry.
+
+    Callers first enqueue the keys in the same transaction that removes their
+    database references.  That preserves the transactional outbox guarantee if
+    the process exits after commit.  Successful provider deletes remove their
+    tombstones immediately; failures retain the existing exponential retry
+    schedule for the manual cleanup command.
+    """
+
+    pending_keys = sorted(set(keys))
+    if not pending_keys:
+        return 0
+
+    deleted_keys: list[str] = []
+    failed: dict[str, str] = {}
+    try:
+        storage = photo_storage()
+    except Exception as exc:
+        error_type = type(exc).__name__
+        failed = {key: error_type for key in pending_keys}
+        logger.warning("Private photo cleanup storage unavailable (%s)", error_type)
+    else:
+        for key in pending_keys:
+            try:
+                storage.delete(key)
+            except ObjectStorageNotFound:
+                deleted_keys.append(key)
+            except Exception as exc:
+                failed[key] = type(exc).__name__
+            else:
+                deleted_keys.append(key)
+
+    def record_outcomes(conn: Connection) -> None:
+        if deleted_keys:
+            conn.execute(
+                "DELETE FROM photo_object_deletions WHERE object_key = ANY(%s)",
+                (deleted_keys,),
+            )
+        for key, error_type in failed.items():
+            conn.execute(
+                """
+                UPDATE photo_object_deletions
+                SET attempt_count = attempt_count + 1,
+                    last_attempted_at = NOW(),
+                    next_attempt_at = NOW() + make_interval(
+                        secs => LEAST(%s, %s * POWER(
+                            2, LEAST(attempt_count, %s)
+                        ))::INTEGER
+                    ),
+                    last_error = %s
+                WHERE object_key = %s
+                """,
+                (
+                    PHOTO_DELETION_RETRY_MAX_SECONDS,
+                    PHOTO_DELETION_RETRY_BASE_SECONDS,
+                    PHOTO_DELETION_RETRY_MAX_EXPONENT,
+                    error_type,
+                    key,
+                ),
+            )
+        conn.commit()
+
+    try:
+        if outcome_conn is not None:
+            record_outcomes(outcome_conn)
+        else:
+            with contextmanager(connection)() as conn:
+                record_outcomes(conn)
+    except Exception as exc:
+        # The original tombstones remain durable and due when outcome recording
+        # fails, so the manual cleanup command can safely retry every provider operation.
+        logger.warning(
+            "Could not record private photo deletion outcomes (%s)",
+            type(exc).__name__,
+        )
+    return len(deleted_keys)
+
+
 def process_photo_deletion_outbox(limit: int = PHOTO_DELETION_BATCH_SIZE) -> int:
     """Best-effort one durable cleanup batch; failures remain queued for retry.
 
     Claim due rows in one short transaction, release the pool connection before
     touching object storage, then persist the outcomes in another short
     transaction.  Object deletion is idempotent, so a worker crash after the
-    provider call is safely retried when the pre-computed backoff becomes due.
+    provider call is safely retried by a later manual run when the backoff becomes due.
     """
 
     try:
@@ -391,7 +470,7 @@ def process_photo_deletion_outbox(limit: int = PHOTO_DELETION_BATCH_SIZE) -> int
 
 
 def persist_failed_upload_cleanup(account_id: str, object_key: str) -> None:
-    """Durably queue an uploaded object when its metadata transaction fails."""
+    """Delete an unreferenced upload now, retaining a durable retry on failure."""
 
     try:
         with contextmanager(connection)() as conn:
@@ -411,29 +490,7 @@ def persist_failed_upload_cleanup(account_id: str, object_key: str) -> None:
                 type(cleanup_exc).__name__,
             )
         return
-
-
-async def photo_deletion_worker(stop_event: asyncio.Event) -> None:
-    """Drain durable deletion work without blocking the server event loop."""
-
-    while not stop_event.is_set():
-        try:
-            await asyncio.to_thread(process_photo_deletion_outbox)
-        except Exception as exc:
-            # process_photo_deletion_outbox is deliberately defensive, but keep
-            # the long-lived worker alive if a test hook or future regression
-            # unexpectedly escapes that boundary.
-            logger.warning(
-                "Private photo deletion worker iteration failed (%s)",
-                type(exc).__name__,
-            )
-        try:
-            await asyncio.wait_for(
-                stop_event.wait(),
-                timeout=PHOTO_DELETION_RETRY_INTERVAL_SECONDS,
-            )
-        except TimeoutError:
-            pass
+    settle_photo_object_deletions([object_key])
 
 
 mcp_http_app = build_hosted_mcp_app(
@@ -445,8 +502,6 @@ mcp_http_app = build_hosted_mcp_app(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    deletion_worker: asyncio.Task | None = None
-    deletion_worker_stop: asyncio.Event | None = None
     try:
         open_pool()
         include_staging_field_places = settings.staging_field_places_enabled
@@ -474,16 +529,9 @@ async def lifespan(_: FastAPI):
                     f"{sorted(missing)[:5]}"
                 )
             conn.commit()
-        deletion_worker_stop = asyncio.Event()
-        deletion_worker = asyncio.create_task(
-            photo_deletion_worker(deletion_worker_stop)
-        )
         async with mcp_http_app.lifespan():
             yield
     finally:
-        if deletion_worker is not None and deletion_worker_stop is not None:
-            deletion_worker_stop.set()
-            await deletion_worker
         close_pool()
 
 
@@ -1359,6 +1407,8 @@ def update_visit(
             ).fetchone()
         visited_at = row["visited_at"]
     conn.commit()
+    if isinstance(identity, AccountIdentity):
+        settle_photo_object_deletions(photo_keys, outcome_conn=conn)
     return {
         "place_id": place_id,
         "visited": payload.visited,
@@ -1491,6 +1541,8 @@ def put_visit_photo(
         # The object must not survive a failed DB write or a concurrent undo.
         persist_failed_upload_cleanup(identity.account_id, object_key)
         raise
+    if old_key and old_key != object_key:
+        settle_photo_object_deletions([old_key])
     return {
         "place_id": place_id,
         "photo": {
@@ -1572,6 +1624,7 @@ def delete_visit_photo(
             conn, identity.account_id, [object_key]
         )
         conn.commit()
+    settle_photo_object_deletions([object_key])
     return Response(status_code=204)
 
 
@@ -1913,6 +1966,7 @@ def reset_account_progress(
     conn.execute("DELETE FROM account_groups WHERE account_id = %s", (identity.account_id,))
     ensure_wishlist(conn, identity.account_id)
     conn.commit()
+    settle_photo_object_deletions(photo_keys, outcome_conn=conn)
     return Response(status_code=204)
 
 

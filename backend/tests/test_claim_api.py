@@ -559,9 +559,13 @@ def test_photo_delete_commits_metadata_and_retries_provider_failure():
                     (object_key,),
                 ).fetchone()
                 assert queued is not None
+                attempt_count, next_attempt_at = queued
+                assert attempt_count == 1
+                assert next_attempt_at > datetime.now(timezone.utc)
             assert storage.get(object_key)
 
-            # Provider failure is owned by the durable worker, not the request.
+            # The request tries the targeted object immediately and durably
+            # backs it off. The one-shot retry job cannot select it again yet.
             assert api.process_photo_deletion_outbox() == 0
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 attempt_count, next_attempt_at = conn.execute(
@@ -569,7 +573,7 @@ def test_photo_delete_commits_metadata_and_retries_provider_failure():
                     "FROM photo_object_deletions WHERE object_key = %s",
                     (object_key,),
                 ).fetchone()
-                assert attempt_count >= 1
+                assert attempt_count == 1
                 assert next_attempt_at > datetime.now(timezone.utc)
 
             storage.fail_deletes = False
@@ -645,6 +649,12 @@ def test_photo_get_releases_single_pool_connection_before_object_read_and_delete
                 files={"photo": ("visit.png", photo_bytes(), "image/png")},
             )
             assert uploaded.status_code == 200, uploaded.text
+            with pool.connection() as conn:
+                object_key = conn.execute(
+                    "SELECT photo_object_key FROM account_visit_claims "
+                    "WHERE account_id = %s AND place_id = %s",
+                    (registered["account"]["id"], place_id),
+                ).fetchone()["photo_object_key"]
 
             storage.block_reads = True
             with ThreadPoolExecutor(max_workers=1) as executor:
@@ -678,7 +688,9 @@ def test_photo_get_releases_single_pool_connection_before_object_read_and_delete
                     (registered["account"]["id"],),
                 ).fetchone()["count"]
             assert photo_key is None
-            assert queued == 1
+            assert queued == 0
+            with pytest.raises(ObjectStorageNotFound):
+                storage.get(object_key)
     finally:
         release_read.set()
         pool.close()

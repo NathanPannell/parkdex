@@ -5,7 +5,7 @@ import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
-import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload } from "./provider-command.mjs";
+import { buildNeonApiCommand, buildPreviewEnvironmentName, buildProviderProcess, buildRailwayApiCommand, buildRailwayApiServiceMutation, buildRailwayApiServicePatch, buildVercelCurlArgs, catalogueVisitedIds, classifyRailwayEnvironmentCreateFailure, confirmStablePreviewAbsence, finalizeReleaseSourceCleanup, parseRailwayEnvironmentInventory, provisionRailwayApiService, sanitizeProviderDiagnostic, unresolvedPreviewResources, verifyCorsHeaders, verifyGuestVisitRejection, verifyRailwayDeploymentResult, verifyRailwayApiServicePatchResult, verifyReadyPayload, verifyUnvisitedCatalogues } from "./provider-command.mjs";
 
 const source = readFileSync("scripts/local-release.mjs", "utf8");
 const providerSource = readFileSync("scripts/provider-command.mjs", "utf8");
@@ -80,6 +80,12 @@ test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
   assert.ok(command.args.includes("--data=-"));
   assert.ok(!command.args.includes("-"));
   assert.deepEqual(JSON.parse(command.input), { branch: { name: "preview/test" } });
+});
+
+test("Neon commands avoid the analytics shutdown crash on Windows", () => {
+  const command = buildNeonApiCommand("neon-cli.mjs", "/projects");
+  assert.doesNotMatch(command.args.join(" "), /--analytics/);
+  assert.doesNotMatch(source, /"me", "--output", "json", "--analytics"/);
 });
 
 test("provider diagnostics redact connection values at the call boundary", () => {
@@ -228,6 +234,8 @@ test("persistent Railway IaC preserves the API direct database connection and re
   assert.match(apiConfig, /DATABASE_URL_UNPOOLED: preserve\(\)/);
   assert.match(apiConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
+  assert.doesNotMatch(railwayConfig, /service\("photo-cleanup"|cronSchedule|photo_cleanup/);
+  assert.match(railwayConfig, /resources: \[api\]/);
   for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "APP_ENVIRONMENT", "EMAIL_PROVIDER", "ENABLE_STAGING_FIELD_PLACES", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "PHOTO_STORAGE_BACKEND", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_REGION", "RESEND_API_KEY", "RESEND_FROM"]) {
     assert.match(apiConfig, new RegExp(`${name}: preserve\\(\\)`));
   }
@@ -456,4 +464,15 @@ test("preview configuration never copies application integration credentials", (
   assert.match(source, /process\.env\.NEON_PARENT_BRANCH !== "staging"/);
   assert.match(source, /matches\[0\]\.target !== "preview"/);
   assert.match(source, /"remove", state\.vercelDeploymentId, "--safe", "--yes"/);
+});
+
+test("preview smoke honors guest location-claim enforcement", () => {
+  assert.deepEqual(catalogueVisitedIds({ visitedIds: ["park"] }), ["park"]);
+  assert.throws(() => catalogueVisitedIds({}), /visitedIds contract/);
+  assert.equal(verifyGuestVisitRejection(409, { detail: { code: "location_claim_required" } }), true);
+  assert.throws(() => verifyGuestVisitRejection(200, {}), /guest visit enforcement/);
+  assert.equal(verifyUnvisitedCatalogues("park", [{ visitedIds: [] }, { visitedIds: ["other"] }]), true);
+  assert.throws(() => verifyUnvisitedCatalogues("park", [{ visitedIds: ["park"] }]), /visit isolation/);
+  assert.throws(() => verifyUnvisitedCatalogues("park", [{}]), /visitedIds contract/);
+  assert.doesNotMatch(source, /api\/auth\/register/);
 });

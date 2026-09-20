@@ -47,7 +47,7 @@ API, frontend, and database updates can become active in any order. Every releas
 - Keep old and new API request/response shapes compatible during the rollout.
 - Never use an unattended destructive migration.
 
-The API invokes `python -m backend.app.migrate` as a Railway pre-deploy command and receives `DATABASE_URL_UNPOOLED`. The migrator's advisory lock serializes concurrent attempts, and its checksums make already-applied migrations no-ops.
+The API invokes `python -m backend.app.migrate` as a Railway pre-deploy command and receives `DATABASE_URL_UNPOOLED`. The migrator's advisory lock serializes concurrent attempts, and its checksums make already-applied migrations no-ops. Photo objects are deleted immediately after their database tombstone commits. Failed object deletions remain recorded and can be retried manually with `python -m backend.app.photo_cleanup`; there is no recurring cleanup service.
 
 ## Release ownership and recovery
 
