@@ -180,7 +180,7 @@ function providerPreflight(root, preview, { enforceEmptyVercelPreview = false } 
 
   if (preview) {
     if (process.env.NEON_PARENT_BRANCH !== "staging") throw new Error("Preview Neon parent must be the isolated staging branch");
-    run(process.execPath, [neonCli(root), "me", "--output", "json", "--analytics", "false"], { cwd: root, env: minimalEnv(), label: "Neon authentication" });
+    run(process.execPath, [neonCli(root), "me", "--output", "json"], { cwd: root, env: minimalEnv(), label: "Neon authentication" });
     const neonProjects = neonApi(root, "/projects", { query: { limit: 100, org_id: process.env.NEON_ORG_ID } });
     if ((neonProjects.projects || []).filter((project) => project.id === process.env.NEON_PROJECT_ID).length !== 1) throw new Error("Neon project identity was not verified");
   }

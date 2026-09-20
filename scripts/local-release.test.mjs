@@ -82,6 +82,12 @@ test("Neon JSON body uses the CLI stdin sentinel as one argument", () => {
   assert.deepEqual(JSON.parse(command.input), { branch: { name: "preview/test" } });
 });
 
+test("Neon commands avoid the analytics shutdown crash on Windows", () => {
+  const command = buildNeonApiCommand("neon-cli.mjs", "/projects");
+  assert.doesNotMatch(command.args.join(" "), /--analytics/);
+  assert.doesNotMatch(source, /"me", "--output", "json", "--analytics"/);
+});
+
 test("provider diagnostics redact connection values at the call boundary", () => {
   const safe = sanitizeProviderDiagnostic('{"value":"sensitive","url":"postgresql://owner:password@example.neon.tech/app","token":"long-lived-token"}');
   assert.doesNotMatch(safe, /sensitive|password|long-lived-token/);
