@@ -1,5 +1,5 @@
 export function buildNeonApiCommand(cli, path, { method = "GET", query = {}, body } = {}) {
-  const args = [cli, "api", path, "--method", method, "--output", "json", "--analytics", "false"];
+  const args = [cli, "api", path, "--method", method, "--output", "json"];
   for (const [name, value] of Object.entries(query)) args.push("--query", `${name}=${value}`);
   if (body !== undefined) args.push("--data=-");
   return { args, input: body === undefined ? undefined : JSON.stringify(body) };
