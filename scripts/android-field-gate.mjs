@@ -564,8 +564,14 @@ function navigateToAccountHandlingBadge(context, deadline, description) {
   while (Date.now() < deadline) {
     try {
       lastXml = dumpHierarchy(context);
+      const nearby = labelledNodeCenter(lastXml, [/^Close nearby places$/i]);
       const badge = labelledNodeCenter(lastXml, [/^Claim my badge$/i]);
-      if (badge) {
+      if (nearby) {
+        // A failed location/claim attempt can leave the modal open. Its
+        // backdrop blocks bottom navigation even though UIAutomator still
+        // reports the Account node as clickable.
+        adb(context, ["shell", "input", "tap", String(nearby.x), String(nearby.y)]);
+      } else if (badge) {
         adb(context, ["shell", "input", "tap", String(badge.x), String(badge.y)]);
       } else if (accountViewVisible(lastXml)) {
         return lastXml;
