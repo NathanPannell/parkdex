@@ -40,32 +40,7 @@ export default defineRailway(() => {
     replicas: { "us-west2": 1 },
   });
 
-  const photoCleanup = service("photo-cleanup", {
-    build: {
-      builder: "DOCKERFILE",
-      dockerfilePath: "backend/Dockerfile.api",
-      watchPatterns: ["backend/**", "database/**"],
-    },
-    deploy: {
-      startCommand: "python -m backend.app.photo_cleanup",
-      cronSchedule: "0 * * * *",
-      restartPolicyType: "NEVER",
-    },
-    env: {
-      APP_ENVIRONMENT: api.env.APP_ENVIRONMENT,
-      DATABASE_URL: api.env.DATABASE_URL,
-      PHOTO_STORAGE_BACKEND: api.env.PHOTO_STORAGE_BACKEND,
-      R2_ENDPOINT: api.env.R2_ENDPOINT,
-      R2_BUCKET: api.env.R2_BUCKET,
-      R2_ACCESS_KEY_ID: api.env.R2_ACCESS_KEY_ID,
-      R2_SECRET_ACCESS_KEY: api.env.R2_SECRET_ACCESS_KEY,
-      R2_REGION: api.env.R2_REGION,
-      APP_COMMIT_SHA: preserve(),
-      APP_RELEASE_ID: preserve(),
-    },
-  });
-
   return project("every-park", {
-    resources: [api, photoCleanup],
+    resources: [api],
   });
 });

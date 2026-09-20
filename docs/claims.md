@@ -61,9 +61,9 @@ metadata. Reads and deletes are authenticated API operations with `Cache-Control
 no-store`; the API never returns an R2 URL. A failed database update cleans up a newly uploaded
 object. Object keys are wholly random and contain no account, place, or coordinate identifier.
 Replacements and removals commit the new metadata plus a durable deletion intent before touching
-the old object. The request immediately attempts the idempotent delete after commit. An hourly,
-short-lived Railway cron service retries durable failures with due-time ordering and capped
-backoff, then closes its database pool and exits, so an idle API never polls Neon. A confirmed
+the old object. The request immediately attempts the idempotent delete after commit. Durable
+failures retain due-time ordering and capped backoff metadata for manual retry with
+`python -m backend.app.photo_cleanup`; no recurring service polls Neon. A confirmed
 Android photo is written to account/place-scoped app-private storage before its claim is sent, so
 both an ambiguous claim response and a failed upload can recover after a restart; the copy is
 cleared after upload success or when that account signs out.
