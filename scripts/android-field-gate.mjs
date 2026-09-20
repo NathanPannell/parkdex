@@ -174,13 +174,13 @@ export function isFieldReadyProfile(options, workingTreeClean) {
 const REQUIRED_REPOSITORY_PHASES = ["start", "after-sync", "after-assemble", "after-connected-tests", "before-install", "final"];
 const REQUIRED_APK_PHASES = ["after-assemble", "after-connected-tests", "before-install", "final"];
 
-export function fieldReadyFromCheckpoints({ profileReady, commitSha, treeSha, apkSha, checkpoints, r2Contract, buildEnvironment }) {
+export function fieldReadyFromCheckpoints({ profileReady, commitSha, treeSha, stagingBaseSha, apkSha, checkpoints, r2Contract, buildEnvironment }) {
   const railwayIdentityMatches = r2Contract?.railwayIdentity?.projectId === RAILWAY_IDENTITY.projectId
     && r2Contract?.railwayIdentity?.environmentId === RAILWAY_IDENTITY.environmentId
     && r2Contract?.railwayIdentity?.serviceId === RAILWAY_IDENTITY.serviceId;
   const stagingBuildMatches = Object.entries(FIELD_BUILD_ENVIRONMENT)
     .every(([name, value]) => buildEnvironment?.[name] === value);
-  if (!profileReady || !commitSha || !treeSha || !apkSha || r2Contract?.status !== "success" || !railwayIdentityMatches || !stagingBuildMatches) return false;
+  if (!profileReady || !commitSha || !treeSha || !stagingBaseSha || !apkSha || r2Contract?.status !== "success" || !railwayIdentityMatches || !stagingBuildMatches) return false;
   const byPhase = new Map((checkpoints || []).map((checkpoint) => [checkpoint.phase, checkpoint]));
   if (!REQUIRED_REPOSITORY_PHASES.every((phase) => byPhase.has(phase))) return false;
   if (!REQUIRED_APK_PHASES.every((phase) => byPhase.has(phase))) return false;
@@ -316,6 +316,24 @@ function run(command, args, { cwd, env, encoding = "utf8", allowFailure = false,
 
 function git(root, args) {
   return run("git", args, { cwd: root }).stdout.trim();
+}
+
+function currentRemoteStagingSha(root) {
+  const output = run("git", ["ls-remote", "--exit-code", "origin", "refs/heads/staging"], {
+    cwd: root,
+    timeoutMs: 30_000,
+  }).stdout.trim();
+  const match = /^([0-9a-f]{40})\s+refs\/heads\/staging$/m.exec(output);
+  if (!match) throw new Error("Could not resolve the current remote staging revision");
+  return match[1];
+}
+
+function assertCurrentStagingIntegrated(root, expectedSha) {
+  const remoteSha = currentRemoteStagingSha(root);
+  if (remoteSha !== expectedSha) {
+    throw new Error("Remote staging advanced during the field gate; integrate it and rerun the exact-APK gate");
+  }
+  run("git", ["merge-base", "--is-ancestor", remoteSha, "HEAD"], { cwd: root });
 }
 
 function repositoryCheckpoint(root, phase, apkPath) {
@@ -688,6 +706,8 @@ export function main(argv = process.argv.slice(2)) {
   const commitSha = git(root, ["rev-parse", "HEAD"]);
   const treeSha = git(root, ["rev-parse", "HEAD^{tree}"]);
   const fieldReadyProfile = isFieldReadyProfile(options, !worktreeStatus);
+  const stagingBaseSha = currentRemoteStagingSha(root);
+  if (fieldReadyProfile) assertCurrentStagingIntegrated(root, stagingBaseSha);
   const initialCheckpoint = repositoryCheckpoint(root, "start");
   const androidBuildEnvironment = stagingBuildEnvironment(process.env);
   const attestation = {
@@ -695,6 +715,7 @@ export function main(argv = process.argv.slice(2)) {
     status: "failure",
     commitSha,
     treeSha,
+    stagingBaseSha,
     workingTreeClean: !worktreeStatus,
     profile: fieldReadyProfile ? "full-field-release" : "development",
     fieldReady: false,
@@ -779,6 +800,7 @@ export function main(argv = process.argv.slice(2)) {
     attestation.checkpoints.push(beforeInstall);
     if (fieldReadyProfile) {
       assertExactCheckpoint(beforeInstall, attestation, assembledApkSha);
+      assertCurrentStagingIntegrated(root, stagingBaseSha);
       if (sha256(apk) !== assembledApkSha) throw new Error("Build APK no longer matches the field candidate before install");
     }
     // This is the authoritative field APK digest: calculated at the install
@@ -822,12 +844,16 @@ export function main(argv = process.argv.slice(2)) {
     }
     const finalCheckpoint = repositoryCheckpoint(root, "final", artifactApk);
     attestation.checkpoints.push(finalCheckpoint);
-    if (fieldReadyProfile) assertExactCheckpoint(finalCheckpoint, attestation, attestation.apkSha256);
+    if (fieldReadyProfile) {
+      assertExactCheckpoint(finalCheckpoint, attestation, attestation.apkSha256);
+      assertCurrentStagingIntegrated(root, stagingBaseSha);
+    }
     attestation.status = "success";
     attestation.fieldReady = fieldReadyFromCheckpoints({
       profileReady: fieldReadyProfile,
       commitSha,
       treeSha,
+      stagingBaseSha,
       apkSha: attestation.apkSha256,
       checkpoints: attestation.checkpoints,
       r2Contract: attestation.r2Contract,

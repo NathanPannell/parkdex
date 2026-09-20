@@ -153,6 +153,7 @@ test("marks only the clean default full journey as field-ready", () => {
 test("field-ready evidence rejects repository mutations and overwritten APKs", () => {
   const commitSha = "a".repeat(40);
   const treeSha = "b".repeat(40);
+  const stagingBaseSha = "c".repeat(40);
   const apkSha = "c".repeat(64);
   const repository = (phase) => ({ phase, commitSha, treeSha, clean: true });
   const apk = (phase) => ({ ...repository(phase), apkSha });
@@ -160,6 +161,7 @@ test("field-ready evidence rejects repository mutations and overwritten APKs", (
     profileReady: true,
     commitSha,
     treeSha,
+    stagingBaseSha,
     apkSha,
     r2Contract: {
       status: "success",
@@ -184,6 +186,7 @@ test("field-ready evidence rejects repository mutations and overwritten APKs", (
     ],
   };
   assert.equal(fieldReadyFromCheckpoints(evidence), true);
+  assert.equal(fieldReadyFromCheckpoints({ ...evidence, stagingBaseSha: "" }), false);
   assert.equal(fieldReadyFromCheckpoints({
     ...evidence,
     checkpoints: evidence.checkpoints.map((item) => item.phase === "after-sync" ? { ...item, clean: false } : item),
