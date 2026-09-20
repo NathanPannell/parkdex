@@ -128,6 +128,90 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.places).toEqual([PLACE]);
   });
 
+  it("continues finite timed recovery after every boot attempt fails without an online event", async () => {
+    vi.useFakeTimers();
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(() => {
+      catalogueAttempts += 1;
+      return catalogueAttempts < 8 ? Promise.reject(new TypeError("network still unavailable")) : json(catalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+    expect(catalogueAttempts).toBe(7);
+    expect(result.current.loading).toBe(false);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_999); });
+    expect(catalogueAttempts).toBe(7);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+
+    expect(catalogueAttempts).toBe(8);
+    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.loadError).toBe("");
+  });
+
+  it("cancels post-error timed recovery on unmount", async () => {
+    vi.useFakeTimers();
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(() => {
+      catalogueAttempts += 1;
+      return Promise.reject(new TypeError("offline"));
+    }));
+
+    const mounted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+    expect(catalogueAttempts).toBe(7);
+    expect(mounted.result.current.loading).toBe(false);
+
+    mounted.unmount();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(catalogueAttempts).toBe(7);
+  });
+
+  it("discards a guest post-error schedule when account identity takes over", async () => {
+    vi.useFakeTimers();
+    let guestCatalogueAttempts = 0;
+    let accountCatalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/login")) {
+        return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
+      }
+      if (!path.endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
+        accountCatalogueAttempts += 1;
+        return json(catalogue([PLACE.id]));
+      }
+      guestCatalogueAttempts += 1;
+      return Promise.reject(new TypeError("guest offline"));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    for (let turn = 0; turn < 20 && guestCatalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
+    expect(guestCatalogueAttempts).toBe(7);
+    expect(result.current.loading).toBe(false);
+
+    await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
+    for (let turn = 0; turn < 20 && accountCatalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+
+    expect(guestCatalogueAttempts).toBe(7);
+    expect(accountCatalogueAttempts).toBe(1);
+    expect(result.current.authenticated).toBe(true);
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
   it("cancels the failed guest retry and refreshes the catalogue for the account that signs in", async () => {
     let guestCatalogueAttempts = 0;
     let accountCatalogueAttempts = 0;

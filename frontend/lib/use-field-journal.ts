@@ -206,6 +206,7 @@ async function responseError(response: Response, fallback: string): Promise<ApiE
 }
 
 const CATALOGUE_BOOT_RETRY_DELAYS_MS = [250, 750, 2_000, 4_000, 8_000, 16_000] as const;
+const CATALOGUE_POST_ERROR_RETRY_AT_MS = [2_000, 5_000, 10_000, 20_000] as const;
 
 function retryableCatalogueFailure(error: unknown) {
   return !(error instanceof ApiError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status));
@@ -223,6 +224,26 @@ function waitForCatalogueRetry(delayMs: number) {
     };
     const timer = window.setTimeout(finish, delayMs);
     window.addEventListener("online", finish, { once: true });
+  });
+}
+
+function waitForAbortableDelay(delayMs: number, signal: AbortSignal) {
+  return new Promise<boolean>((resolve) => {
+    if (signal.aborted) {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const finish = (completed: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      resolve(completed);
+    };
+    const abort = () => finish(false);
+    const timer = window.setTimeout(() => finish(true), delayMs);
+    signal.addEventListener("abort", abort, { once: true });
   });
 }
 
@@ -254,6 +275,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const placesRef = useRef(places);
   const catalogueReadyRef = useRef(false);
   const catalogueNeedsRecoveryRef = useRef(false);
+  const catalogueBackgroundRequestRef = useRef<{ epoch: number; promise: Promise<boolean> } | null>(null);
+  const cataloguePostErrorRecoveryRef = useRef<{ epoch: number; controller: AbortController; promise: Promise<void> } | null>(null);
   const visitedRef = useRef(visited);
   const trailsRef = useRef(completedTrails);
   const visitTimestampsRef = useRef(visitTimestamps);
@@ -301,7 +324,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      cataloguePostErrorRecoveryRef.current?.controller.abort();
+    };
   }, []);
 
   const persistGuest = useCallback(async () => {
@@ -602,6 +628,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       if (isActive() && epochRef.current.isCurrent(catalogueEpoch) && sameOwner(identityRef.current, identity)) {
         catalogueReadyRef.current = true;
         catalogueNeedsRecoveryRef.current = false;
+        cataloguePostErrorRecoveryRef.current?.controller.abort();
         setLoadError("");
       }
       return true;
@@ -633,6 +660,46 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
     throw lastError;
   }, [refreshCatalogue]);
+
+  const runBackgroundCatalogueRecovery = useCallback((withBootRetries: boolean, isActive: () => boolean = () => mountedRef.current) => {
+    const requestEpoch = epochRef.current.capture();
+    const existing = catalogueBackgroundRequestRef.current;
+    if (existing?.epoch === requestEpoch) return existing.promise;
+    const promise = (withBootRetries ? refreshCatalogueWithRetry(isActive) : refreshCatalogue(isActive)).finally(() => {
+      if (catalogueBackgroundRequestRef.current?.promise === promise) catalogueBackgroundRequestRef.current = null;
+    });
+    catalogueBackgroundRequestRef.current = { epoch: requestEpoch, promise };
+    return promise;
+  }, [refreshCatalogue, refreshCatalogueWithRetry]);
+
+  const startPostErrorCatalogueRecovery = useCallback(() => {
+    if (!apiBaseUrl || !mountedRef.current || !catalogueNeedsRecoveryRef.current) return;
+    const recoveryEpoch = epochRef.current.capture();
+    const existing = cataloguePostErrorRecoveryRef.current;
+    if (existing?.epoch === recoveryEpoch && !existing.controller.signal.aborted) return;
+    existing?.controller.abort();
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const promise = (async () => {
+      for (const retryAtMs of CATALOGUE_POST_ERROR_RETRY_AT_MS) {
+        const remainingDelay = Math.max(0, retryAtMs - (Date.now() - startedAt));
+        if (!await waitForAbortableDelay(remainingDelay, controller.signal)) return;
+        const isCurrent = () => mountedRef.current
+          && !controller.signal.aborted
+          && epochRef.current.isCurrent(recoveryEpoch);
+        if (!isCurrent() || !catalogueNeedsRecoveryRef.current) return;
+        try {
+          if (await runBackgroundCatalogueRecovery(false, isCurrent)) return;
+        } catch (error) {
+          if (!isCurrent() || !retryableCatalogueFailure(error)) return;
+          setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+        }
+      }
+    })().finally(() => {
+      if (cataloguePostErrorRecoveryRef.current?.promise === promise) cataloguePostErrorRecoveryRef.current = null;
+    });
+    cataloguePostErrorRecoveryRef.current = { epoch: recoveryEpoch, controller, promise };
+  }, [apiBaseUrl, runBackgroundCatalogueRecovery]);
 
   useEffect(() => {
     let active = true;
@@ -776,14 +843,19 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (loading) return;
     const recover = () => {
       if (catalogueReadyRef.current && !catalogueNeedsRecoveryRef.current) return;
-      void refreshCatalogueWithRetry().catch((error) => {
+      void runBackgroundCatalogueRecovery(true).catch((error) => {
         if (!mountedRef.current) return;
         setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+        startPostErrorCatalogueRecovery();
       });
     };
     window.addEventListener("online", recover);
     return () => window.removeEventListener("online", recover);
-  }, [loading, refreshCatalogueWithRetry]);
+  }, [loading, runBackgroundCatalogueRecovery, startPostErrorCatalogueRecovery]);
+
+  useEffect(() => {
+    if (!loading) startPostErrorCatalogueRecovery();
+  }, [loading, startPostErrorCatalogueRecovery]);
 
   const toggle = useCallback(async (kind: "visits" | "trails", id: string) => {
     if (transitionRef.current) return;
@@ -877,13 +949,14 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       }
     }
     if (!catalogueReadyRef.current || catalogueNeedsRecoveryRef.current) {
-      void refreshCatalogueWithRetry(() => mountedRef.current && epochRef.current.isCurrent(capturedEpoch)).catch((error) => {
+      void runBackgroundCatalogueRecovery(true, () => mountedRef.current && epochRef.current.isCurrent(capturedEpoch)).catch((error) => {
         if (mountedRef.current && epochRef.current.isCurrent(capturedEpoch)) {
           setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+          startPostErrorCatalogueRecovery();
         }
       });
     }
-  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, refreshCatalogueWithRetry, storage, updateProgress]);
+  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, runBackgroundCatalogueRecovery, startPostErrorCatalogueRecovery, storage, updateProgress]);
 
   const authenticate = useCallback(async (mode: "login" | "register", email: string, password: string) => {
     if (transitionRef.current) return;
