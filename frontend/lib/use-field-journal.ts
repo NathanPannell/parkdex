@@ -41,6 +41,7 @@ import {
   type ClaimRecommendationInput,
 } from "./claims-client";
 import { clearRestoredCameraPhoto } from "./capacitor-native-capabilities";
+import { clearPhotoRetryOwner } from "./native-capabilities";
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
 import { createCollectionKey, type Place } from "./places";
 import { VisitOutbox } from "./visit-outbox";
@@ -1103,6 +1104,11 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         accountTrailOutboxRef.current.clearAndWait(),
       ]);
       await persistAccountOutboxes(identity.account.id);
+      // Reset is deliberately local-first. If the device cannot remove the
+      // account's private retry/camera state, do not reset the server and then
+      // report success while a failed upload can still rehydrate on restart.
+      await clearPhotoRetryOwner(`account:${identity.account.id}`);
+      await clearRestoredCameraPhoto();
       await resetAccountProgress(apiBaseUrl, identity.token);
       if (!epochRef.current.isCurrent(capturedEpoch)) return;
       visitMutationsRef.current.reset();

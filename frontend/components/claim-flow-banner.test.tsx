@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { registerNativeCapabilities, RestoredPhotoAwaitingAdoptionError } from "@/lib/native-capabilities";
@@ -42,7 +42,8 @@ function setup(
   const props = { place, recommendation, ownerKey: "account:user-1", recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onFlowActiveChange, onClearRecommendation };
   const rendered = render(<ClaimFlowBanner {...props} busy={false} />);
   const rerenderBusy = (busy: boolean) => rendered.rerender(<ClaimFlowBanner {...props} busy={busy} />);
-  return { retry, getPhoto, getCurrentLocation, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onFlowActiveChange, onClearRecommendation, rerenderBusy };
+  const rerenderReset = (resetSignal: number) => rendered.rerender(<ClaimFlowBanner {...props} busy={false} resetSignal={resetSignal} />);
+  return { retry, getPhoto, getCurrentLocation, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onFlowActiveChange, onClearRecommendation, rerenderBusy, rerenderReset };
 }
 
 describe("ClaimFlowBanner", () => {
@@ -156,6 +157,57 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.retry.save).toHaveBeenCalledWith("account:user-1", place.id, { file: photo, mimeType: photo.type });
     expect(handlers.reconcileClaim).toHaveBeenCalledWith(place.id);
     expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo);
+  });
+
+  it("invalidates a hydrated retry flow when the account reset completes", async () => {
+    const photo = new File(["saved-photo"], "bell-park.jpg", { type: "image/jpeg" });
+    const load = vi.fn().mockResolvedValueOnce({ file: photo, mimeType: photo.type }).mockResolvedValueOnce(null);
+    const handlers = setup(null, undefined, { load });
+    expect(await screen.findByRole("button", { name: "Retry claim" })).toBeTruthy();
+    handlers.rerenderReset(1);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry claim" })).toBeNull());
+    expect(handlers.onFlowActiveChange).toHaveBeenCalledWith(null);
+    expect(handlers.onClearRecommendation).toHaveBeenCalled();
+  });
+
+  it("does not rehydrate a retry photo whose storage read finishes after reset", async () => {
+    const photo = new File(["saved-photo"], "bell-park.jpg", { type: "image/jpeg" });
+    let resolveOldLoad!: (value: { file: File; mimeType: string }) => void;
+    const oldLoad = new Promise<{ file: File; mimeType: string }>((resolve) => { resolveOldLoad = resolve; });
+    const load = vi.fn().mockReturnValueOnce(oldLoad).mockResolvedValueOnce(null);
+    const save = vi.fn();
+    const handlers = setup(null, undefined, { load, save });
+
+    handlers.rerenderReset(1);
+    await act(async () => { resolveOldLoad({ file: photo, mimeType: photo.type }); });
+
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Retry claim" })).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    expect(handlers.onFlowActiveChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("marks a durable retry read active until storage proves there is no saved photo", async () => {
+    let resolveLoad!: (value: null) => void;
+    const load = vi.fn(() => new Promise<null>((resolve) => { resolveLoad = resolve; }));
+    const handlers = setup(null, undefined, { load });
+
+    await waitFor(() => expect(handlers.onFlowActiveChange).toHaveBeenCalledWith(place.id));
+    await act(async () => { resolveLoad(null); });
+    await waitFor(() => expect(handlers.onFlowActiveChange).toHaveBeenLastCalledWith(null));
+  });
+
+  it("re-enables account recovery when a durable retry read hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      const handlers = setup(null, undefined, { load: vi.fn(() => new Promise(() => undefined)) });
+      expect(handlers.onFlowActiveChange).toHaveBeenCalledWith(place.id);
+      await act(async () => { await vi.advanceTimersByTimeAsync(8_000); });
+      expect(screen.getByText(/could not safely check for an existing photo/i)).toBeTruthy();
+      expect(handlers.onFlowActiveChange).toHaveBeenLastCalledWith(null);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uploads a prepared persisted JPEG byte-identically without recompressing on hydration or claim retry", async () => {

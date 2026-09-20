@@ -524,6 +524,20 @@ describe("Parkdex navigation", () => {
     expect(groupState.refreshAfterReset).not.toHaveBeenCalled();
   });
 
+  it("closes a committed reset and reports local group cleanup separately", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    groupState.refreshAfterReset.mockRejectedValueOnce(new Error("Private device storage could not clear the saved groups."));
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
+
+    await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Reset all progress?" })).toBeNull());
+    expect((await screen.findByRole("status")).textContent).toContain("Progress was reset, but saved group data still needs cleanup");
+  });
+
   it("clears collection restrictions when opening global map search", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
@@ -992,6 +1006,38 @@ describe("Parkdex navigation", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
     await waitFor(() => expect(createClaim).toHaveBeenCalledWith({ recommendationToken: "signed", expectedPlaceId: place.id }));
     expect(await screen.findByRole("article", { name: /Inspect postcard from Forest Park/ })).toBeTruthy();
+  });
+
+  it("keeps account reset disabled while a camera claim owns private retry state", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    Object.assign(journal, {
+      visitClaimMode: "compatible",
+      visitMetadata: {},
+      recommendClaim: vi.fn().mockResolvedValue({ status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact", distanceMeters: 0 } }),
+      createClaim: vi.fn(),
+      reconcileClaim: vi.fn().mockResolvedValue(null),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn(),
+      removeVisitPhoto: vi.fn(),
+    });
+    let resolvePhoto!: (photo: null) => void;
+    const getPhoto = vi.fn(() => new Promise<null>((resolve) => { resolvePhoto = resolve; }));
+    const photoRetry = { save: vi.fn(), load: vi.fn().mockResolvedValue(null), remove: vi.fn(), clearOwner: vi.fn() };
+    restoreNative = registerNativeCapabilities({
+      getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }),
+      getPhoto,
+      photoRetry,
+    });
+
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    await waitFor(() => expect(getPhoto).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect((screen.getByRole("button", { name: "Reset my progress" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { resolvePhoto(null); });
+    await waitFor(() => expect((screen.getByRole("button", { name: "Reset my progress" }) as HTMLButtonElement).disabled).toBe(false));
   });
 
   it("offers an explicit precise-location upgrade before enabling an approximate-only claim", async () => {

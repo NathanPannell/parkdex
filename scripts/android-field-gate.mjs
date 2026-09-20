@@ -328,6 +328,15 @@ function currentRemoteStagingSha(root) {
   return match[1];
 }
 
+export function resolveStagingBaseSha(root, fieldReadyProfile, resolveRemoteSha = currentRemoteStagingSha) {
+  if (!fieldReadyProfile) return null;
+  const stagingBaseSha = resolveRemoteSha(root);
+  if (!/^[0-9a-f]{40}$/.test(stagingBaseSha)) {
+    throw new Error("Could not resolve the current remote staging revision");
+  }
+  return stagingBaseSha;
+}
+
 function assertCurrentStagingIntegrated(root, expectedSha) {
   const remoteSha = currentRemoteStagingSha(root);
   if (remoteSha !== expectedSha) {
@@ -706,7 +715,10 @@ export function main(argv = process.argv.slice(2)) {
   const commitSha = git(root, ["rev-parse", "HEAD"]);
   const treeSha = git(root, ["rev-parse", "HEAD^{tree}"]);
   const fieldReadyProfile = isFieldReadyProfile(options, !worktreeStatus);
-  const stagingBaseSha = currentRemoteStagingSha(root);
+  // Development gates are intentionally runnable with an offline checkout.
+  // Only the exact full-field profile binds the APK to the current remote
+  // staging revision and rechecks that revision at the install/final edges.
+  const stagingBaseSha = resolveStagingBaseSha(root, fieldReadyProfile);
   if (fieldReadyProfile) assertCurrentStagingIntegrated(root, stagingBaseSha);
   const initialCheckpoint = repositoryCheckpoint(root, "start");
   const androidBuildEnvironment = stagingBuildEnvironment(process.env);

@@ -22,9 +22,12 @@ type Props = {
   onClaimed: (confirmation: ClaimConfirmation) => void;
   onFlowActiveChange: (placeId: string | null) => void;
   onClearRecommendation: () => void;
+  /** Incremented after account progress reset to invalidate any in-flight claim. */
+  resetSignal?: number;
 };
 
 const EXPIRY_SAFETY_MS = 8_000;
+const RETRY_HYDRATION_TIMEOUT_MS = 8_000;
 type WorkStage = "camera" | "processing" | "saving" | "location" | "claim" | "upload" | "cleanup";
 
 const STAGE_LABELS: Record<WorkStage, string> = {
@@ -58,7 +61,7 @@ function failureFacts(error: unknown): FieldDiagnosticFact[] {
   ];
 }
 
-export function ClaimFlowBanner({ place, recommendation, ownerKey, busy, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onFlowActiveChange, onClearRecommendation }: Props) {
+export function ClaimFlowBanner({ place, recommendation, ownerKey, busy, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onFlowActiveChange, onClearRecommendation, resetSignal = 0 }: Props) {
   const [working, setWorking] = useState(false);
   const [workStage, setWorkStage] = useState<WorkStage | null>(null);
   const [message, setMessage] = useState("");
@@ -86,10 +89,34 @@ export function ClaimFlowBanner({ place, recommendation, ownerKey, busy, recomme
   const [hydrationAttempt, setHydrationAttempt] = useState(0);
   const hydrationStatus = hydration.key === hydrationKey ? hydration.status : "loading";
 
-  useEffect(() => () => { operationRef.current += 1; }, []);
+  useEffect(() => () => {
+    operationRef.current += 1;
+    // The parent uses this flag to keep account reset actions out of an
+    // active claim. Clear it when the banner leaves the tree as well, such as
+    // after location drift or navigation away from the map.
+    onFlowActiveChangeRef.current(null);
+  }, []);
   useEffect(() => { onFlowActiveChangeRef.current = onFlowActiveChange; }, [onFlowActiveChange]);
   useEffect(() => { busyRef.current = busy; }, [busy]);
   useEffect(() => { restoredCaptureAttemptRef.current = null; }, [hydrationKey]);
+  useEffect(() => {
+    if (resetSignal === 0) return;
+    // Reset Everything owns the account boundary. Invalidate work that may
+    // still be awaiting the camera, location, claim, or upload so a late
+    // completion cannot re-open this flow after the account was cleared.
+    operationRef.current += 1;
+    workingRef.current = false;
+    restoredCaptureAttemptRef.current = null;
+    queueMicrotask(() => {
+      setWorking(false);
+      setWorkStage(null);
+      setRetry(null);
+      setMessage("");
+      setTerminalError(false);
+    });
+    onFlowActiveChangeRef.current(null);
+    onClearRecommendation();
+  }, [onClearRecommendation, resetSignal]);
 
   useEffect(() => {
     if (!isDurablePhotoOwner(ownerKey) || !retryStore) {
@@ -97,11 +124,23 @@ export function ClaimFlowBanner({ place, recommendation, ownerKey, busy, recomme
       return;
     }
     let active = true;
-    void retryStore.load(ownerKey, place.id).then(async (photo) => {
+    // Treat the durable read as active claim work. Reset/sign-out controls stay
+    // disabled until this read settles, so clearOwner cannot race a queued
+    // normalization save and accidentally resurrect a discarded photo.
+    onFlowActiveChangeRef.current(place.id);
+    let hydrationTimeout: ReturnType<typeof setTimeout> | undefined;
+    const boundedLoad = Promise.race([
+      retryStore.load(ownerKey, place.id),
+      new Promise<never>((_, reject) => {
+        hydrationTimeout = setTimeout(() => reject(new Error("Private photo recovery timed out.")), RETRY_HYDRATION_TIMEOUT_MS);
+      }),
+    ]);
+    void boundedLoad.then(async (photo) => {
       if (!active) return;
       if (!photo) {
         setHydration({ key: hydrationKey, status: "ready" });
         setMessage("");
+        onFlowActiveChangeRef.current(null);
         return;
       }
       let retryPhoto = photo;
@@ -126,9 +165,15 @@ export function ClaimFlowBanner({ place, recommendation, ownerKey, busy, recomme
       if (!active) return;
       setHydration({ key: hydrationKey, status: "failed" });
       setMessage("Parkdex could not safely check for an existing photo. Retry before taking another one.");
+      onFlowActiveChangeRef.current(null);
+    }).finally(() => {
+      if (hydrationTimeout) clearTimeout(hydrationTimeout);
     });
-    return () => { active = false; };
-  }, [hydrationAttempt, hydrationKey, ownerKey, place.id, retryStore]);
+    return () => {
+      active = false;
+      if (hydrationTimeout) clearTimeout(hydrationTimeout);
+    };
+  }, [hydrationAttempt, hydrationKey, ownerKey, place.id, resetSignal, retryStore]);
 
   async function persist(photo: PhotoAsset, rawStaging = false) {
     if (!isDurablePhotoOwner(ownerKey) || !retryStore) throw new Error("Private photo storage is not ready. Wait for your account to finish loading, then try again.");

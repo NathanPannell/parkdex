@@ -21,6 +21,7 @@ import {
   parseR2ContractOutput,
   photoPostcardReady,
   railwayContractCommand,
+  resolveStagingBaseSha,
   retryActionDue,
   sanitizeText,
   stagingBuildEnvironment,
@@ -148,6 +149,21 @@ test("marks only the clean default full journey as field-ready", () => {
   assert.equal(isFieldReadyProfile({ ...release, skipR2Contract: true }, true), false);
   assert.equal(isFieldReadyProfile({ ...release, trials: 1 }, true), false);
   assert.equal(isFieldReadyProfile({ ...release, timeoutMs: 15_000 }, true), false);
+});
+
+test("development gates do not resolve live staging, while field-ready gates record its exact revision", () => {
+  const stagingSha = "a".repeat(40);
+  const calls = [];
+  const resolve = (root) => {
+    calls.push(root);
+    return stagingSha;
+  };
+
+  assert.equal(resolveStagingBaseSha("offline-checkout", false, resolve), null);
+  assert.deepEqual(calls, []);
+  assert.equal(resolveStagingBaseSha("field-checkout", true, resolve), stagingSha);
+  assert.deepEqual(calls, ["field-checkout"]);
+  assert.throws(() => resolveStagingBaseSha("field-checkout", true, () => "not-a-sha"), /current remote staging revision/);
 });
 
 test("field-ready evidence rejects repository mutations and overwritten APKs", () => {

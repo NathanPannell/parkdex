@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nativeCamera = vi.hoisted(() => ({ clearRestoredCameraPhoto: vi.fn() }));
 vi.mock("./capacitor-native-capabilities", () => nativeCamera);
+const nativePhoto = vi.hoisted(() => ({ clearPhotoRetryOwner: vi.fn() }));
+vi.mock("./native-capabilities", () => nativePhoto);
 
 import { ACCOUNT_TOKEN_KEY } from "./account";
 import { JOURNAL_STORAGE, accountPendingKey } from "./field-journal-state";
@@ -72,6 +74,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   nativeCamera.clearRestoredCameraPhoto.mockReset();
+  nativePhoto.clearPhotoRetryOwner.mockReset();
   window.localStorage.clear();
   window.localStorage.setItem(JOURNAL_STORAGE.collectionKey, KEY);
 });
@@ -348,6 +351,58 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.syncMessage).toBe("Your progress has been reset.");
     act(() => vi.advanceTimersByTime(1));
     expect(result.current.syncMessage).toBe("");
+  });
+
+  it("clears account photo retry and restored camera state before resetting remote progress", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    const resetCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/account/progress")) {
+        resetCalls.push("remote");
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      return json(catalogue());
+    }));
+    nativePhoto.clearPhotoRetryOwner.mockImplementation(async () => { resetCalls.push("photo"); });
+    nativeCamera.clearRestoredCameraPhoto.mockImplementation(async () => { resetCalls.push("camera"); });
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { await result.current.resetProgress(); });
+
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
+    expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalledWith();
+    expect(resetCalls).toEqual(["photo", "camera", "remote"]);
+    expect(result.current.syncMessage).toBe("Your progress has been reset.");
+  });
+
+  it("does not reset remote progress or report success when local photo cleanup fails", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
+    let remoteResetCalled = false;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/account/progress")) {
+        remoteResetCalled = true;
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      return json(catalogue());
+    }));
+    nativePhoto.clearPhotoRetryOwner.mockRejectedValueOnce(new Error("Private photo storage is busy."));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let failure!: Promise<void>;
+    await act(async () => { failure = result.current.resetProgress(); await failure.catch(() => undefined); });
+    await expect(failure).rejects.toThrow("Private photo storage is busy.");
+
+    expect(remoteResetCalled).toBe(false);
+    expect(nativeCamera.clearRestoredCameraPhoto).not.toHaveBeenCalled();
+    expect(result.current.syncMessage).toBe("Private photo storage is busy.");
   });
 
   it("does not mark signed-in account A verified when confirming account B's token", async () => {
