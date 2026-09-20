@@ -68,12 +68,16 @@ test("source validation accepts only first-attempt pushes and rejects stale bran
   assert.match(release, /refusing to queue a stale deployment/);
 });
 
-test("the API and frontend are queued concurrently without waiting for provider readiness", () => {
+test("the API, optional cleanup cron, and frontend are queued concurrently without waiting for provider readiness", () => {
   assert.match(release, /railway up --detach/);
   assert.match(release, /vercel deploy --yes --no-wait --prod --skip-domain/);
   assert.match(release, /api_pid=\$!/);
+  assert.match(release, /cleanup_pid=\$!/);
   assert.match(release, /vercel_pid=\$!/);
   assert.doesNotMatch(release, /RAILWAY_WORKER_SERVICE_ID|worker_pid|wait-for-worker/);
+  assert.match(release, /RAILWAY_PHOTO_CLEANUP_SERVICE_ID/);
+  assert.match(release, /if \[\[ -n "\$RAILWAY_PHOTO_CLEANUP_SERVICE_ID" \]\]/);
+  assert.match(release, /--service "\$RAILWAY_PHOTO_CLEANUP_SERVICE_ID"/);
   assert.match(release, /parkdex-\$TARGET_ENVIRONMENT-\$EXPECTED_COMMIT_SHA-\$GITHUB_RUN_ID/);
   assert.match(release, /railway_deployment_message=/);
   assert.match(release, /vercel_deployment_url=/);
@@ -104,7 +108,13 @@ test("both environments keep independent database and stable-domain settings in 
   assert.match(railwayConfig, /MCP_PUBLIC_URL: preserve\(\)/);
   assert.match(railwayConfig, /APP_RELEASE_ID: preserve\(\)/);
   assert.equal((railwayConfig.match(/preDeployCommand: \["python -m backend\.app\.migrate"\]/g) ?? []).length, 1);
-  assert.match(railwayConfig, /resources: \[api\]/);
+  assert.match(railwayConfig, /const photoCleanup = service\("photo-cleanup"/);
+  assert.match(railwayConfig, /startCommand: "python -m backend\.app\.photo_cleanup"/);
+  assert.match(railwayConfig, /cronSchedule: "0 \* \* \* \*"/);
+  assert.match(railwayConfig, /restartPolicyType: "NEVER"/);
+  assert.match(railwayConfig, /DATABASE_URL: api\.env\.DATABASE_URL/);
+  assert.match(railwayConfig, /R2_SECRET_ACCESS_KEY: api\.env\.R2_SECRET_ACCESS_KEY/);
+  assert.match(railwayConfig, /resources: \[api, photoCleanup\]/);
   assert.doesNotMatch(railwayConfig, /service\("worker"|Dockerfile\.worker/);
   for (const name of ["API_PUBLIC_URL", "APP_PUBLIC_URL", "APP_ENVIRONMENT", "EMAIL_PROVIDER", "ENABLE_STAGING_FIELD_PLACES", "FRONTEND_ORIGINS", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "MCP_PUBLIC_URL", "PHOTO_STORAGE_BACKEND", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_REGION", "RESEND_API_KEY", "RESEND_FROM"]) {
     assert.match(railwayConfig, new RegExp(`${name}: preserve\\(\\)`));

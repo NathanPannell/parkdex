@@ -1,6 +1,6 @@
 # Independent staging and production deployments
 
-Parkdex uses short GitHub Actions merge deployments and long-lived provider resources. The only automatic deployment events are protected-branch merge pushes to `staging` and `main`. A workflow run validates one immutable Git SHA, stamps that SHA and a release ID on the Railway API, starts the API and Vercel uploads concurrently, and exits as soon as both providers accept the requests. It never polls builds, waits for `/ready`, or runs browser smoke tests.
+Parkdex uses short GitHub Actions merge deployments and long-lived provider resources. The only automatic deployment events are protected-branch merge pushes to `staging` and `main`. A workflow run validates one immutable Git SHA, stamps that SHA and a release ID on the Railway API and configured photo-cleanup cron service, starts their uploads and the Vercel upload concurrently, and exits as soon as the providers accept the requests. It never polls builds, waits for `/ready`, or runs browser smoke tests.
 
 The release agent owns everything after queueing: it waits outside GitHub Actions for provider convergence, verifies the exact revision, performs the Vercel domain cutover, browser-tests the stable URL, and then stops. A successful Actions run means **queued**, not **live**.
 
@@ -10,18 +10,18 @@ Each merge deploy uses one standard Ubuntu job with an eight-minute timeout. At 
 
 Routine releases reuse these resources and never recreate them:
 
-| Target | Frontend | Public MCP | Railway API | Neon branch |
-| --- | --- | --- | --- | --- |
-| staging | `https://staging.parkdex.app` | `https://staging.parkdex.app/mcp` | `https://api-staging-882c.up.railway.app` | `staging` |
-| production | `https://parkdex.app` | `https://parkdex.app/mcp` | `https://api-production-e72df.up.railway.app` | `main` |
+| Target | Frontend | Public MCP | Railway API | Railway cron | Neon branch |
+| --- | --- | --- | --- | --- | --- |
+| staging | `https://staging.parkdex.app` | `https://staging.parkdex.app/mcp` | `https://api-staging-882c.up.railway.app` | `photo-cleanup` hourly | `staging` |
+| production | `https://parkdex.app` | `https://parkdex.app/mcp` | `https://api-production-e72df.up.railway.app` | `photo-cleanup` hourly once configured | `main` |
 
-The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The API's `API_PUBLIC_URL` is the environment's frontend origin and `MCP_PUBLIC_URL` is that origin plus `/mcp`; Vercel proxies the MCP and OAuth routes to the stable Railway API. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway API pre-deploy command; it does not receive an application-code deployment.
+The Railway environments retain their pooled and direct Neon URLs, CORS origins, public URLs, OAuth settings, and other application secrets. The API's `API_PUBLIC_URL` is the environment's frontend origin and `MCP_PUBLIC_URL` is that origin plus `/mcp`; Vercel proxies the MCP and OAuth routes to the stable Railway API. The cleanup service receives its pooled Neon and R2 settings through Railway references to the API variables, not copied secret values. The deploy workflow updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID`. Neon receives migrations through the Railway API pre-deploy command; it does not receive an application-code deployment.
 
 Keep `parkdex.app` attached directly to the production deployment and redirect `www.parkdex.app` to the apex, never the reverse, because the apex is the production OAuth issuer. The staging alias must point to the verified Vercel Production build and must not be bound to the `staging` Git branch, because Hobby deployment protection would replace public MCP/OAuth responses on a branch domain with a Vercel sign-in page.
 
 Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. The release agent assigns only the environment's exact stable domain: `staging.parkdex.app` for staging and `parkdex.app` for production. Because both are production-domain aliases in one Hobby project, never use project-wide Promote, Instant Rollback, `vercel promote`, `vercel rollback`, a promote/rollback API, or `vercel deploy --prod` without `--skip-domain`; those operations can move both environments together. Keep the Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
-The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
+The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. The separate `photo-cleanup` service has no pre-deploy migration or healthcheck; once per hour it runs one bounded outbox batch, closes its pool, and exits. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
 
 Before the first independent release, apply the reviewed Railway configuration once to each existing environment. Review each plan before applying it; do not use `--confirm-destructive`:
 
@@ -36,6 +36,8 @@ foreach ($environment in @('staging', 'production')) {
 ```
 
 Verify in Railway that the API shows `python -m backend.app.migrate` as its pre-deploy command and has a `DATABASE_URL_UNPOOLED` variable before starting the release. The value must remain provider-managed and must not be copied into GitHub or logs.
+
+After first applying the cleanup service in an environment, store its service ID as the protected environment variable `RAILWAY_PHOTO_CLEANUP_SERVICE_ID`. Until that variable exists, the shared release workflow deliberately skips the cleanup upload so an environment can be bootstrapped without breaking unrelated releases.
 
 Do not start another release to an environment while an earlier one is unresolved. GitHub concurrency serializes only the short queueing jobs; it cannot serialize provider builds after the workflow exits.
 
