@@ -130,7 +130,7 @@ describe("recent postcard marker projection", () => {
 
     expect(projectPostcardMarker(map, place)).toBeNull();
     state.y += 1;
-    expect(projectPostcardMarker(map, place)).toEqual({ left: 200, top: 208 });
+    expect(projectPostcardMarker(map, place)).toEqual({ left: 200, top: 248 });
     state.x = POSTCARD_MARKER_FOOTPRINT.halfWidth - 1;
     expect(projectPostcardMarker(map, place)).toBeNull();
   });

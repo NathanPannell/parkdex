@@ -62,7 +62,7 @@ export const POSTCARD_MARKER_MIN_ZOOM = 11;
  */
 export const POSTCARD_MARKER_FOOTPRINT = {
   halfWidth: 76,
-  height: 180,
+  height: 220,
   anchorGap: 28,
 } as const;
 

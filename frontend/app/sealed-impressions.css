@@ -149,7 +149,10 @@ html, body { overflow-x: clip; }
 .map-postcard-marker { position: absolute; z-index: 3; width: 108px; transform: translate(-50%, calc(-100% - 28px)); color: var(--impression-ink); }
 .map-postcard-marker__print { cursor: pointer; transform: rotate(-7deg); }
 .map-postcard-marker__print:focus-visible { outline: 3px solid var(--impression-pine); outline-offset: 6px; }
-.map-postcard-marker .impression-print-caption h3 { font-size: 12px; line-height: 1.1; }
+.map-postcard-marker .impression-print--compact .impression-print-caption h3 { font-size: 12px; line-height: 1.1; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: clip; }
+.map-postcard-marker .impression-print--compact .impression-print-placeholder { padding: 6px; gap: 4px; }
+.map-postcard-marker .impression-print--compact .impression-print-placeholder .impression-seal { width: 48px; height: 48px; }
+.map-postcard-marker .impression-print-placeholder > span { display: none; }
 .map-postcard-marker .impression-print-caption time { font-size: 6px; padding-right: 20px; }
 .map-postcard-marker .impression-print-seal { width: 42px; height: 42px; }
 .map-postcard-marker .impression-seal-geometry { top: 6px; width: 17px; height: 17px; }
