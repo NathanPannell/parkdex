@@ -17,6 +17,9 @@ describe("mobile map toolbar CSS", () => {
     expect(css).toMatch(/\.map-utility \.map-mode-switch \.locate-button,[\s\S]*?width: 44px;[\s\S]*?height: 44px;/);
     expect(css).toContain("white-space: nowrap;");
     expect(css).not.toMatch(/\.map-utility[^\{]*\{[^}]*96px/);
+    expect(css).toContain(".thumb-nav.guest { grid-template-columns: repeat(3,1fr); }");
+    expect(css).toContain(".thumb-nav.guest { grid-template-columns: repeat(3,minmax(0,1fr)); }");
+    expect(css).not.toContain(".thumb-nav.guest { grid-template-columns: repeat(2,minmax(0,1fr)); }");
   });
 
   it("keeps higher-specificity collapsed and expanded rules aligned at 44px", () => {
@@ -100,13 +103,15 @@ describe("staging design audit responsive contracts", () => {
     expect(css).toMatch(/\.wishlist-group-card \{[^}]*background: var\(--coral\);[^}]*color: #102d25;/);
     expect(css).toContain(".wishlist-group-card small { color: #102d25;");
     expect(css).toContain(".place-sheet-media .sheet-actions { grid-template-columns: minmax(0,1fr) 52px auto;");
+    expect(css).toContain(".place-sheet-media .sheet-actions:not(:has(.visit-button)) { grid-template-columns: 52px minmax(72px,1fr);");
+    expect(css).toContain("font: 900 12px/1 var(--font-body);");
     expect(css).toContain(".place-sheet-media .sheet-actions .group-quick-action > span { display: inline;");
   });
 
   it("gives details, badges, catalogue search, and shelves responsive space", () => {
     expect(ruleBody(".place-sheet")).toContain("max-height: min(620px, calc(100dvh - 48px));");
     expect(css).toContain(".place-sheet:has(.sheet-actions:empty) .sheet-actions { display: none; }");
-    expect(css).toContain("calc(100dvh - 156px - var(--connection-status-height,34px))");
+    expect(css).toContain("calc(100dvh - 164px - var(--connection-status-height,34px))");
     expect(css).toContain("grid-template-rows: minmax(180px,34dvh) minmax(0,1fr);");
     expect(css).toContain(".feature-collection .category-chips { flex-wrap: wrap;");
     expect(css).toContain(".collection-view.has-query .collection-progress");
