@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  accountNavigationTarget,
   assertEmulatorSerial,
   bellParkReady,
   catalogueUnavailable,
@@ -31,6 +32,7 @@ import {
   resolveStagingBaseSha,
   retryActionDue,
   sanitizeText,
+  sealedClaimCenter,
   stagingBuildEnvironment,
   summarizeDurations,
   validateRailwayProjectDir,
@@ -86,6 +88,23 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.equal(photoReviewReady(review), true);
   assert.equal(photoReviewReady('<node text="Keep this one?"/><node text="Save" clickable="true" bounds="[20,700][500,780]"/>'), false);
   assert.equal(photoReviewReady('<node text="Save my visit" clickable="true" bounds="[20,700][500,780]"/>'), false);
+});
+
+test("dismisses blocking dialogs before retrying Account navigation", () => {
+  const accountButton = '<node text="Account" clickable="true" bounds="[849,2099][1042,2242]"/>';
+  const arrivalClose = '<node content-desc="Close sealed impression" clickable="true" bounds="[893,193][1017,320]"/>';
+  assert.deepEqual(accountNavigationTarget(`${accountButton}${arrivalClose}`), {
+    kind: "dismiss-arrival", center: { x: 955, y: 257 },
+  });
+  assert.deepEqual(accountNavigationTarget(accountButton), {
+    kind: "navigate", center: { x: 946, y: 2171 },
+  });
+  assert.equal(accountNavigationTarget(`${accountButton}<node text="Close nearby places" bounds="[1,1][3,3]"/>`).kind, "dismiss-nearby");
+  assert.equal(accountNavigationTarget(`${accountButton}<node text="Claim my badge" bounds="[1,1][3,3]"/>`).kind, "dismiss-badge");
+  assert.deepEqual(accountNavigationTarget('<node text="Account" resource-id="primary-content"/>'), { kind: "ready" });
+  const claim = '<node text="Claim + photo" clickable="true" bounds="[10,20][110,80]"/>';
+  assert.equal(sealedClaimCenter(claim), null);
+  assert.deepEqual(sealedClaimCenter(`${arrivalClose}${claim}`), { x: 60, y: 50 });
 });
 
 test("parses deterministic emulator connectivity and process oracles", () => {

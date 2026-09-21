@@ -550,6 +550,25 @@ function accountViewVisible(xml) {
   return /text="Account"[^>]*resource-id="primary-content"/.test(String(xml));
 }
 
+export function accountNavigationTarget(xml) {
+  for (const [kind, labels] of [
+    ["dismiss-arrival", [/^Close sealed impression$/i]],
+    ["dismiss-nearby", [/^Close nearby places$/i]],
+    ["dismiss-badge", [/^Claim my badge$/i]],
+  ]) {
+    const center = labelledNodeCenter(xml, labels);
+    if (center) return { kind, center };
+  }
+  if (accountViewVisible(xml)) return { kind: "ready" };
+  const center = labelledNodeCenter(xml, [/^Account$/i]);
+  return center ? { kind: "navigate", center } : null;
+}
+
+export function sealedClaimCenter(xml) {
+  if (!labelledNodeCenter(xml, [/^Close sealed impression$/i])) return null;
+  return labelledNodeCenter(xml, [/^Claim \+ photo$/i]);
+}
+
 function waitForAccountPostcard(context, deadline) {
   let lastXml = "";
   let collectionRequested = false;
@@ -606,26 +625,16 @@ function waitForAccountPostcard(context, deadline) {
   throw error;
 }
 
-function navigateToAccountHandlingBadge(context, deadline, description) {
+function navigateToAccountHandlingOverlays(context, deadline, description) {
   let lastXml = "";
   while (Date.now() < deadline) {
     try {
       lastXml = dumpHierarchy(context);
-      const nearby = labelledNodeCenter(lastXml, [/^Close nearby places$/i]);
-      const badge = labelledNodeCenter(lastXml, [/^Claim my badge$/i]);
-      if (nearby) {
-        // A failed location/claim attempt can leave the modal open. Its
-        // backdrop blocks bottom navigation even though UIAutomator still
-        // reports the Account node as clickable.
-        adb(context, ["shell", "input", "tap", String(nearby.x), String(nearby.y)]);
-      } else if (badge) {
-        adb(context, ["shell", "input", "tap", String(badge.x), String(badge.y)]);
-      } else if (accountViewVisible(lastXml)) {
-        return lastXml;
-      } else {
-        const account = labelledNodeCenter(lastXml, [/^Account$/i]);
-        if (account) adb(context, ["shell", "input", "tap", String(account.x), String(account.y)]);
-      }
+      const target = accountNavigationTarget(lastXml);
+      if (target?.kind === "ready") return lastXml;
+      // The arrival, nearby, and badge dialogs can cover bottom navigation
+      // even while UIAutomator reports its Account button as clickable.
+      if (target?.center) adb(context, ["shell", "input", "tap", String(target.center.x), String(target.center.y)]);
     } catch {
       // Retry during native/WebView transitions.
     }
@@ -803,13 +812,18 @@ function runPhotoJourney(context, apk) {
   let result = null;
   let primaryFailure = null;
   try {
-    tapLabel(context, [/^Account$/i], Date.now() + context.photoTimeoutMs, "Account navigation");
+    navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "Account navigation");
     waitFor(context, (xml) => String(xml).includes(context.qaAccountEmail) && /Sign out/i.test(xml), Date.now() + context.photoTimeoutMs, "expected signed-in QA account");
     verifiedQaAccount = true;
     tapLabel(context, [/^Map$/i], Date.now() + context.timeoutMs, "Map navigation");
+    // Closing the first arrival to verify Account suppresses that park's
+    // invitation until departure in this app session. Relaunch with the
+    // verified session intact so Camera exercises a fresh sealed arrival.
+    adb(context, ["shell", "am", "force-stop", PACKAGE]);
+    adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
     spoof(context, BELL);
     const locationAction = waitFor(context, (xml) => {
-      const claim = labelledNodeCenter(xml, [/^Claim \+ photo$/i]);
+      const claim = sealedClaimCenter(xml);
       if (claim) return { kind: "claim", center: claim };
       const locate = locateButtonCenter(xml);
       return locate ? { kind: "locate", center: locate } : false;
@@ -818,7 +832,9 @@ function runPhotoJourney(context, apk) {
     if (locationAction.value.kind === "locate") {
       adb(context, ["shell", "input", "tap", String(locationAction.value.center.x), String(locationAction.value.center.y)]);
       spoof(context, BELL);
-      claimXml = tapLabel(context, [/^Claim \+ photo$/i], Date.now() + context.photoTimeoutMs, "Bell Park Claim + photo action");
+      const sealedClaim = waitFor(context, sealedClaimCenter, Date.now() + context.photoTimeoutMs, "Bell Park sealed Claim + photo action");
+      claimXml = sealedClaim.xml;
+      adb(context, ["shell", "input", "tap", String(sealedClaim.value.x), String(sealedClaim.value.y)]);
     } else {
       adb(context, ["shell", "input", "tap", String(locationAction.value.center.x), String(locationAction.value.center.y)]);
     }
@@ -833,7 +849,7 @@ function runPhotoJourney(context, apk) {
     // The first-visit badge can mount again after the postcard readback has
     // already passed. Clear that modal at the cleanup boundary so it cannot
     // absorb the following Account scroll/tap sequence.
-    navigateToAccountHandlingBadge(context, Date.now() + context.photoTimeoutMs, "postcard cleanup Account navigation");
+    navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "postcard cleanup Account navigation");
     tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "progress reset action");
     tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "progress reset confirmation");
     const cleanupResult = waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "photo journey cleanup");
@@ -857,7 +873,7 @@ function runPhotoJourney(context, apk) {
       try {
         adb(context, ["shell", "am", "force-stop", PACKAGE]);
         adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
-        navigateToAccountHandlingBadge(context, Date.now() + context.photoTimeoutMs, "cleanup Account navigation");
+        navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "cleanup Account navigation");
         tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "cleanup progress reset action");
         tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "cleanup progress reset confirmation");
         waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "failed photo journey cleanup");
