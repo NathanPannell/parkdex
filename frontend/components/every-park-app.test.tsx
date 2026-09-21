@@ -516,6 +516,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
     expect(screen.getByRole("dialog", { name: "Reset all progress?" })).toBeTruthy();
+    expect(screen.getByText(/all visited places, earned badges, groups, Wishlist saves, and private visit photos/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Keep my progress" }));
     expect(journal.resetProgress).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
@@ -620,6 +621,22 @@ describe("Parkdex navigation", () => {
     expect(screen.getByText(/Filters:/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Clear active Places filters" }));
     expect(screen.queryByText(/Filters:/)).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Search collection" }) as HTMLInputElement).value).toBe("Forest");
+  });
+
+  it("keeps a zero-result Places query when clearing its active filters", () => {
+    journal.authenticated = true;
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Places" }));
+    fireEvent.click(screen.getByRole("button", { name: "National" }));
+    const search = screen.getByRole("textbox", { name: "Search collection" });
+    fireEvent.change(search, { target: { value: "zzzz-no-such-park" } });
+    expect(screen.getByText("No places match.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect((search as HTMLInputElement).value).toBe("zzzz-no-such-park");
+    expect(screen.getByRole("button", { name: "Clear search" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect((search as HTMLInputElement).value).toBe("");
   });
 
   it("does not apply Places filters to an unfiltered map", () => {
