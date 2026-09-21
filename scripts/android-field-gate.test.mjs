@@ -25,6 +25,8 @@ import {
   parseArgs,
   parseR2ContractOutput,
   photoPostcardReady,
+  photoJourneyCleanupReady,
+  photoReviewReady,
   railwayContractCommand,
   resolveStagingBaseSha,
   retryActionDue,
@@ -68,11 +70,22 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.deepEqual(labelledNodeCenter('<node text="Claim + photo" bounds="[10,20][110,80]"/>', [/Claim \+ photo/]), { x: 60, y: 50 });
   assert.deepEqual(labelledNodeCenter('<node text="" content-desc="Shutter" bounds="[0,2010][1080,2340]"/>', [/Shutter/]), { x: 540, y: 2175 });
   assert.deepEqual(labelledNodeCenter('<node text="Map" clickable="false" bounds="[0,0][100,100]"/><node text="Map" clickable="true" enabled="true" bounds="[800,1800][1000,2000]"/>', [/^Map$/]), { x: 900, y: 1900 });
-  const postcard = '<node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Remove photo from Bell Park" bounds="[1,1][2,2]"/>';
+  const postcard = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo" clickable="true" enabled="true" bounds="[1,1][2,2]"/>';
   assert.equal(photoPostcardReady(postcard), true);
-  const androidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Remove photo from Bell Park"/>';
-  assert.equal(photoPostcardReady(androidWebViewPostcard), true);
+  const collectionOnly = '<node content-desc="Postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/>';
+  assert.equal(photoPostcardReady(collectionOnly), false);
+  const placeQualifiedRemove = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo from Bell Park" bounds="[1,1][2,2]"/>';
+  assert.equal(photoPostcardReady(placeQualifiedRemove), false);
+  const oldAndroidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Private visit photo from Bell Park"/><node text="Remove photo from Bell Park"/>';
+  assert.equal(photoPostcardReady(oldAndroidWebViewPostcard), false);
   assert.equal(photoPostcardReady(`${postcard}<node text="Photo unavailable"/>`), false);
+  const emptyCollection = '<node text="Your first boundary claim will become a postcard here."/>';
+  assert.equal(photoJourneyCleanupReady(emptyCollection), true);
+  assert.equal(photoJourneyCleanupReady(`${emptyCollection}<node content-desc="Postcard from Bell Park"/>`), false);
+  const review = '<node text="Keep this one?" bounds="[20,300][500,360]"/><node text="Save my visit" clickable="true" enabled="true" bounds="[20,700][500,780]"/>';
+  assert.equal(photoReviewReady(review), true);
+  assert.equal(photoReviewReady('<node text="Keep this one?"/><node text="Save" clickable="true" bounds="[20,700][500,780]"/>'), false);
+  assert.equal(photoReviewReady('<node text="Save my visit" clickable="true" bounds="[20,700][500,780]"/>'), false);
 });
 
 test("parses deterministic emulator connectivity and process oracles", () => {

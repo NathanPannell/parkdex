@@ -39,7 +39,7 @@ vi.mock("@/lib/photo-processing", () => ({
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); });
 
-afterEach(() => { cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
   it("clears an expired Google callback without a verifier and leaves navigation usable", async () => {
@@ -979,33 +979,106 @@ describe("Parkdex navigation", () => {
     expect(groupState.selectGroup).toHaveBeenCalledWith(null);
   });
 
-  it("automatically offers an in-park claim and creates the postcard only after a photo is accepted", async () => {
+  it("keeps the native camera handoff in review before saving a postcard", async () => {
     const confirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z", claim: { claimedAt: "2026-09-08T12:00:00Z", capturedAt: "2026-09-08T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 8, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };
     journal.authenticated = true;
     journal.account = { id: "owner", email: "owner@example.test" };
     const createClaim = vi.fn().mockImplementation(async () => { (journal as Record<string, unknown>).visitMetadata = { [place.id]: confirmation }; journal.visited = new Set([place.id]); return confirmation; });
+    const uploadVisitPhoto = vi.fn().mockResolvedValue(undefined);
     Object.assign(journal, {
       visitClaimMode: "compatible",
       visitMetadata: {},
       recommendClaim: vi.fn().mockResolvedValue({ status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact", distanceMeters: 0 } }),
       createClaim,
       reconcileClaim: vi.fn().mockResolvedValue(null),
-      uploadVisitPhoto: vi.fn().mockResolvedValue(undefined),
+      uploadVisitPhoto,
       loadVisitPhoto: vi.fn().mockResolvedValue(new Blob(["photo"])),
       removeVisitPhoto: vi.fn().mockResolvedValue(undefined),
     });
     const photo = new File(["photo"], "forest.jpg", { type: "image/jpeg" });
     const photoRetry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined) };
-    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry });
+    let publish: ((sample: LocationSample) => void) | undefined;
+    const watchLocation = vi.fn((_options: unknown, onLocation: (sample: LocationSample) => void) => {
+      publish = onLocation;
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry, watchLocation });
     render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
-    expect(await screen.findByText("You’re in Forest Park")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    expect(screen.queryByRole("button", { name: "Mark as visited" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Check if I can claim a park" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Take an optional visit photo" })).toBeNull();
-    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+    expect(await screen.findByRole("button", { name: "Claim + photo" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Claim + photo" }));
+    expect(await screen.findByText("Keep this one?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Retake photo/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save my visit" })).toBeTruthy();
+    expect(createClaim).not.toHaveBeenCalled();
+    expect(uploadVisitPhoto).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
     await waitFor(() => expect(createClaim).toHaveBeenCalledWith({ recommendationToken: "signed", expectedPlaceId: place.id }));
-    expect(await screen.findByRole("article", { name: /Inspect postcard from Forest Park/ })).toBeTruthy();
+    await waitFor(() => expect(uploadVisitPhoto).toHaveBeenCalledWith(place.id, photo));
+    expect(await screen.findByRole("heading", { name: "You were here." })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Back to (?:my )?map/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /See my collection|Back to (?:my )?account/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Claim my badge" })).toBeNull();
+  });
+
+  it("keeps a dismissed arrival hidden until the server confirms departure", async () => {
+    vi.useFakeTimers();
+    try {
+      journal.authenticated = true;
+      journal.account = { id: "owner", email: "owner@example.test" };
+      const recommendation = { status: "recommended" as const, recommendationToken: "signed", expiresAt: new Date(Date.now() + 120_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact" as const, distanceMeters: 0 } };
+      const recommendClaim = vi.fn()
+        .mockResolvedValueOnce(recommendation)
+        .mockResolvedValueOnce({ status: "none" as const })
+        .mockResolvedValueOnce(recommendation);
+      Object.assign(journal, {
+        visitClaimMode: "compatible",
+        visitMetadata: {},
+        recommendClaim,
+        createClaim: vi.fn(),
+        reconcileClaim: vi.fn().mockResolvedValue(null),
+        uploadVisitPhoto: vi.fn(),
+        loadVisitPhoto: vi.fn(),
+        removeVisitPhoto: vi.fn(),
+      });
+      const watchLocation = vi.fn((_options: unknown, onLocation: (sample: LocationSample) => void) => {
+        return vi.fn(() => { void onLocation; });
+      });
+      const photoRetry = { save: vi.fn(), load: vi.fn().mockResolvedValue(null), remove: vi.fn(), clearOwner: vi.fn().mockResolvedValue(undefined) };
+      restoreNative = registerNativeCapabilities({
+        getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }),
+        getPhoto: vi.fn(),
+        photoRetry,
+        watchLocation,
+      });
+      render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(watchLocation).toHaveBeenCalledTimes(1);
+      const publish = watchLocation.mock.calls[0][1] as (sample: LocationSample) => void;
+      act(() => publish({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(screen.getByRole("button", { name: "Claim + photo" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+      expect(screen.queryByRole("button", { name: "Claim + photo" })).toBeNull();
+      expect(recommendClaim).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("button", { name: "Claim + photo" })).toBeNull();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_500); });
+      act(() => publish({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(recommendClaim).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("button", { name: "Claim + photo" })).toBeNull();
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_500); });
+      act(() => publish({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(recommendClaim).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole("button", { name: "Claim + photo" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps account reset disabled while a camera claim owns private retry state", async () => {
@@ -1038,6 +1111,66 @@ describe("Parkdex navigation", () => {
 
     await act(async () => { resolvePhoto(null); });
     await waitFor(() => expect((screen.getByRole("button", { name: "Reset my progress" }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("puts the postcard collection before badges and clears the map receipt on reset", async () => {
+    const confirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z", claim: { claimedAt: "2026-09-08T12:00:00Z", capturedAt: "2026-09-08T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 8, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    const uploadVisitPhoto = vi.fn().mockResolvedValue(undefined);
+    const createClaim = vi.fn().mockImplementation(async () => {
+      (journal as Record<string, unknown>).visitMetadata = { [place.id]: confirmation };
+      journal.visited = new Set([place.id]);
+      journal.visitTimestamps = { [place.id]: confirmation.visitedAt };
+      return confirmation;
+    });
+    Object.assign(journal, {
+      visitClaimMode: "compatible",
+      visitMetadata: {},
+      recommendClaim: vi.fn().mockResolvedValue({ status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact", distanceMeters: 0 } }),
+      createClaim,
+      reconcileClaim: vi.fn().mockResolvedValue(null),
+      uploadVisitPhoto,
+      loadVisitPhoto: vi.fn().mockResolvedValue(new Blob(["photo"])),
+      removeVisitPhoto: vi.fn().mockResolvedValue(undefined),
+    });
+    journal.resetProgress.mockImplementation(async () => {
+      journal.visited = new Set();
+      journal.visitTimestamps = {};
+      (journal as Record<string, unknown>).visitMetadata = {};
+      journal.syncMessage = "Your progress has been reset.";
+    });
+    const photo = new File(["photo"], "forest.jpg", { type: "image/jpeg" });
+    const photoRetry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined) };
+    let publish: ((sample: LocationSample) => void) | undefined;
+    const watchLocation = vi.fn((_options: unknown, onLocation: (sample: LocationSample) => void) => {
+      publish = onLocation;
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry, watchLocation });
+
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+    expect(await screen.findByRole("button", { name: "Claim + photo" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Claim + photo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save my visit" }));
+    expect(await screen.findByRole("heading", { name: "You were here." })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Back to (?:my )?map/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Back to (?:my )?map/i }));
+    expect(await screen.findByRole("button", { name: "Open your postcard" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    const postcards = await screen.findByRole("region", { name: "Visit postcards" });
+    const badges = screen.getByRole("heading", { name: "Badges" });
+    expect(Boolean(postcards.compareDocumentPosition(badges) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset my progress" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset everything" }));
+    await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByLabelText("0 postcards")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    expect(screen.queryByRole("button", { name: "Open your postcard" })).toBeNull();
   });
 
   it("offers an explicit precise-location upgrade before enabling an approximate-only claim", async () => {
@@ -1117,7 +1250,7 @@ describe("Parkdex navigation", () => {
     Object.assign(journal, {
       visitClaimMode: "compatible",
       visitMetadata: {},
-      recommendClaim: vi.fn().mockResolvedValueOnce(recommendation).mockResolvedValueOnce({ status: "no_candidate" }),
+      recommendClaim: vi.fn().mockResolvedValueOnce(recommendation).mockResolvedValueOnce({ status: "none" }),
       createClaim,
       reconcileClaim: vi.fn().mockResolvedValue(null),
       uploadVisitPhoto: vi.fn(),
@@ -1129,9 +1262,11 @@ describe("Parkdex navigation", () => {
     restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type }), photoRetry });
 
     render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
-    expect(await screen.findByText("You’re in Forest Park")).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
-    expect(await screen.findByText(/could not confirm that you are still in this park/)).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Claim + photo" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Claim + photo" }));
+    expect(await screen.findByRole("heading", { name: "Keep this one?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not confirm that you are still in this park/);
     fireEvent.click(screen.getByRole("button", { name: "Discard saved photo" }));
     await waitFor(() => expect(screen.queryByText(/could not confirm that you are still in this park/)).toBeNull());
     expect(createClaim).not.toHaveBeenCalled();

@@ -84,10 +84,27 @@ export function labelledNodeCenter(xml, labels) {
 export function photoPostcardReady(xml, placeName = "Bell Park") {
   const text = String(xml);
   const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return (new RegExp(`Private visit photo from ${escaped}`, "i").test(text)
-      || new RegExp(`Inspect postcard from ${escaped}`, "i").test(text))
-    && new RegExp(`Remove photo from ${escaped}`, "i").test(text)
+  return new RegExp(`(?:text|content-desc)="Private postcard from ${escaped}"`, "i").test(text)
+    && new RegExp(`(?:text|content-desc)="Private visit photo from ${escaped}"`, "i").test(text)
+    && Boolean(labelledNodeCenter(text, [/^Remove photo$/i]))
     && !/Photo unavailable|Loading private photo/i.test(text);
+}
+
+export function photoJourneyCleanupReady(xml, placeName = "Bell Park") {
+  const text = String(xml);
+  const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return /Your first boundary claim will become a postcard here/i.test(text)
+    && !new RegExp(`(?:text|content-desc)="(?:Postcard|Private postcard) from ${escaped}"`, "i").test(text);
+}
+
+function photoReviewSaveCenter(xml) {
+  const text = String(xml);
+  if (!/(?:text|content-desc)="Keep this one\?"/i.test(text)) return null;
+  return labelledNodeCenter(text, [/^Save my visit$/i]);
+}
+
+export function photoReviewReady(xml) {
+  return Boolean(photoReviewSaveCenter(xml));
 }
 
 export function bellParkReady(xml) {
@@ -535,20 +552,48 @@ function accountViewVisible(xml) {
 
 function waitForAccountPostcard(context, deadline) {
   let lastXml = "";
+  let collectionRequested = false;
+  let postcardRequested = false;
   while (Date.now() < deadline) {
     try {
       lastXml = dumpHierarchy(context);
+      const seeCollection = labelledNodeCenter(lastXml, [/^See my collection$/i]);
+      if (seeCollection) {
+        adb(context, ["shell", "input", "tap", String(seeCollection.x), String(seeCollection.y)]);
+        collectionRequested = true;
+        sleep(500);
+        continue;
+      }
+      const backToMap = labelledNodeCenter(lastXml, [/^Back to map$/i]);
+      if (backToMap) {
+        adb(context, ["shell", "input", "tap", String(backToMap.x), String(backToMap.y)]);
+        sleep(500);
+        continue;
+      }
       const badge = labelledNodeCenter(lastXml, [/^Claim my badge$/i]);
       if (badge) {
         adb(context, ["shell", "input", "tap", String(badge.x), String(badge.y)]);
         sleep(500);
         continue;
       }
-      if (photoPostcardReady(lastXml)) return { xml: lastXml };
-      if (!accountViewVisible(lastXml)) {
-        const account = labelledNodeCenter(lastXml, [/^Account$/i]);
-        if (account) adb(context, ["shell", "input", "tap", String(account.x), String(account.y)]);
-      } else if (!/class="android\.app\.Dialog"/.test(lastXml)) {
+      if (collectionRequested && !postcardRequested) {
+        const viewPostcard = labelledNodeCenter(lastXml, [/^View Bell Park postcard$/i]);
+        if (viewPostcard) {
+          adb(context, ["shell", "input", "tap", String(viewPostcard.x), String(viewPostcard.y)]);
+          postcardRequested = true;
+          sleep(500);
+          continue;
+        }
+      }
+      if (postcardRequested && photoPostcardReady(lastXml)) {
+        const closePostcard = labelledNodeCenter(lastXml, [/^Close postcard$/i]);
+        if (closePostcard) {
+          adb(context, ["shell", "input", "tap", String(closePostcard.x), String(closePostcard.y)]);
+          sleep(500);
+          return { xml: lastXml };
+        }
+      }
+      if (collectionRequested && !postcardRequested && !/class="android\.app\.Dialog"/.test(lastXml)) {
         adb(context, ["shell", "input", "swipe", "540", "1900", "540", "650", "350"]);
       }
     } catch {
@@ -779,7 +824,9 @@ function runPhotoJourney(context, apk) {
     }
 
     const shutterXml = tapLabel(context, [/Shutter/i, /Take photo/i], Date.now() + context.photoTimeoutMs, "camera shutter");
-    tapLabel(context, [/^Done$/i, /Use photo/i, /^Save$/i], Date.now() + context.photoTimeoutMs, "camera acceptance");
+    tapLabel(context, [/^Done$/i, /^Use photo$/i], Date.now() + context.photoTimeoutMs, "native camera acceptance");
+    const review = waitFor(context, photoReviewSaveCenter, Date.now() + context.photoTimeoutMs, "Parkdex photo review");
+    adb(context, ["shell", "input", "tap", String(review.value.x), String(review.value.y)]);
 
     const ready = waitForAccountPostcard(context, Date.now() + context.photoTimeoutMs);
 
@@ -789,7 +836,7 @@ function runPhotoJourney(context, apk) {
     navigateToAccountHandlingBadge(context, Date.now() + context.photoTimeoutMs, "postcard cleanup Account navigation");
     tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "progress reset action");
     tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "progress reset confirmation");
-    const cleanupResult = waitFor(context, (xml) => /Your first boundary claim will become a postcard here/i.test(xml) && !/Inspect postcard from Bell Park/i.test(xml), Date.now() + context.photoTimeoutMs, "photo journey cleanup");
+    const cleanupResult = waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "photo journey cleanup");
     cleaned = true;
     result = {
       completed: true,
@@ -797,8 +844,9 @@ function runPhotoJourney(context, apk) {
       cleanup: true,
       cameraOracle: /Shutter|Take photo/i.test(shutterXml),
       claimOracle: /Claim \+ photo/i.test(claimXml),
+      reviewOracle: photoReviewReady(review.xml),
       postcardOracle: photoPostcardReady(ready.xml),
-      cleanupOracle: /Your first boundary claim will become a postcard here/i.test(cleanupResult.xml),
+      cleanupOracle: photoJourneyCleanupReady(cleanupResult.xml),
     };
   } catch (error) {
     primaryFailure = error;
@@ -812,7 +860,7 @@ function runPhotoJourney(context, apk) {
         navigateToAccountHandlingBadge(context, Date.now() + context.photoTimeoutMs, "cleanup Account navigation");
         tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "cleanup progress reset action");
         tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "cleanup progress reset confirmation");
-        waitFor(context, (xml) => /Your first boundary claim will become a postcard here/i.test(xml), Date.now() + context.photoTimeoutMs, "failed photo journey cleanup");
+        waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "failed photo journey cleanup");
       } catch (cleanupError) {
         primaryFailure = manualCleanupFailure(primaryFailure ?? cleanupError);
       }

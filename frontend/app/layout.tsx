@@ -4,6 +4,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Metadata, Viewport } from "next";
 import { NativeRuntime } from "@/components/native-runtime";
 import "./globals.css";
+import "./impression-tokens.css";
+import "./sealed-impressions.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://parkdex.app"),
