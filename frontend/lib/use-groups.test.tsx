@@ -171,6 +171,20 @@ describe("useGroups account isolation", () => {
 });
 
 describe("useGroups offline groups", () => {
+  it("uses one cached-state notice after a transport failure and clears it after retry", async () => {
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
+    const request = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockImplementation(() => json([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+    await waitFor(() => expect(result.current.syncStatus).toBe("offline"));
+    expect(result.current.groups[0].places).toEqual([place]);
+    expect(result.current.error).toBe("");
+    expect(result.current.syncMessage).toBe("Showing your saved groups offline.");
+    await act(() => result.current.retry());
+    expect(result.current.offline).toBe(false);
+    expect(result.current.syncStatus).toBe("idle");
+    expect(result.current.syncMessage).toBe("");
+  });
+
   it("restores native async cache and outbox state after a runtime restart", async () => {
     const credentials = memoryStore();
     const journal = memoryStore({

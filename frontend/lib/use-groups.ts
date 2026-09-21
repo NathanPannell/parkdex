@@ -1,5 +1,6 @@
 "use client";
 
+import { networkErrorMessage } from "./network-error";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readStored, removeStored, writeStored } from "./field-journal-state";
 import type { Place } from "./places";
@@ -41,7 +42,7 @@ type GroupState = {
 };
 
 function messageFor(error: unknown) {
-  return error instanceof Error ? error.message : "Groups are unavailable right now. Please try again.";
+  return networkErrorMessage(error, "load your groups");
 }
 
 function browserIsOffline() {
@@ -348,7 +349,9 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       const nowOffline = isOfflineFailure(caught);
       setOffline(nowOffline);
       setSyncStatus(nowOffline ? "offline" : "error");
-      setError(messageFor(caught));
+      // The offline notice already explains cached state and owns its retry.
+      // Keep genuine API/storage failures in the separate actionable alert.
+      setError(nowOffline ? "" : messageFor(caught));
       setSyncMessage(nowOffline
         ? outbox.hasPending() ? "Your group changes are saved on this device and waiting to sync." : cached.length ? "Showing your saved groups offline." : "Your groups are unavailable offline."
         : "");
