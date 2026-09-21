@@ -810,9 +810,9 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       try {
         if (cachedPlaces.length || identityRef.current.kind === "account") await refreshCatalogue(() => active);
         else await refreshCatalogueWithRetry(() => active);
-      } catch (error) {
+      } catch {
         if (!active) return;
-        setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
+        setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : "Could not load the field guide. Check your connection and try again.");
       } finally {
         if (active) setLoading(false);
       }
@@ -966,13 +966,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setTransitionBusy(true);
     const capturedEpoch = epochRef.current.advance();
     try {
-      let session;
-      try {
-        session = await authenticateAccount(apiBaseUrl, mode, email, password);
-      } catch (error) {
-        setSyncMessage(error instanceof Error ? error.message : "Could not sign in.");
-        throw error;
-      }
+      // Authentication errors belong to the submitting form, not global sync status.
+      const session = await authenticateAccount(apiBaseUrl, mode, email, password);
       await adoptAccountSession(session, capturedEpoch);
     } finally {
       transitionRef.current = false;

@@ -86,6 +86,21 @@ afterEach(() => {
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("keeps a failed sign-in scoped to its caller rather than global sync feedback", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      if (String(url).endsWith("/api/auth/login")) return Promise.reject(new TypeError("Failed to fetch"));
+      return json(catalogue());
+    }));
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await expect(result.current.authenticate("login", ACCOUNT.email, "invalid")).rejects.toThrow("Check your connection");
+    });
+    expect(result.current.syncMessage).toBe("");
+    expect(result.current.transitionBusy).toBe(false);
+    expect(result.current.authenticated).toBe(false);
+  });
+
   it("retries a fresh guest catalogue as soon as the native network reports online", async () => {
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {

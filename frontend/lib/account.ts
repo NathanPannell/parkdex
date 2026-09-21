@@ -1,3 +1,5 @@
+import { networkErrorMessage } from "./network-error";
+
 export type Account = { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean };
 export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
 export type VisitClaim = {
@@ -47,12 +49,17 @@ function jsonRequest(method: "POST", body?: unknown, token?: string): RequestIni
 }
 
 export async function authenticate(apiBaseUrl: string, mode: "register" | "login", email: string, password: string): Promise<AccountSession> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/${mode}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  return parseResponse<AccountSession>(response);
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    return await parseResponse<AccountSession>(response);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new Error(networkErrorMessage(error, mode === "login" ? "log in" : "create your account"));
+  }
 }
 
 export async function loadAuthConfig(apiBaseUrl: string): Promise<AuthConfig> {

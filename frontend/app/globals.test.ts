@@ -75,3 +75,44 @@ describe("mobile account shelf CSS", () => {
     expect(css).toMatch(/\.account-shelf header > button \{[\s\S]*?min-height: 44px;/);
   });
 });
+
+describe("staging design audit responsive contracts", () => {
+  it("covers fractional widths continuously at the desktop breakpoint", () => {
+    expect(css).toContain("@media (width < 860px)");
+    expect(css).toContain("@media (min-width: 860px)");
+    expect(css).toContain(".desktop-top-nav { display: none; }");
+    expect(css).not.toContain("@media (max-width: 859px)");
+    expect(css).not.toContain("@media (min-width: 859px)");
+  });
+
+  it("moves connection feedback into a reserved, nonblocking status lane", () => {
+    const note = ruleBody(".connection-note, .sync-note");
+    expect(note).toContain("z-index: 14;");
+    expect(note).toContain("min-height: 34px;");
+    expect(css).toContain(".connection-note { pointer-events: none; }");
+    expect(css).toContain(".connection-status > .sync-note { pointer-events: auto; }");
+    expect(css).toContain(".map-stage:has(.connection-status) .search-results");
+    expect(css).toContain("var(--connection-status-height,34px)");
+    expect(css).not.toContain("connection-status-stack");
+  });
+
+  it("keeps coral Wishlist text readable and preserves useful phone actions", () => {
+    expect(css).toMatch(/\.wishlist-group-card \{[^}]*background: var\(--coral\);[^}]*color: #102d25;/);
+    expect(css).toContain(".wishlist-group-card small { color: #102d25;");
+    expect(css).toContain(".place-sheet-media .sheet-actions { grid-template-columns: minmax(0,1fr) 52px auto;");
+    expect(css).toContain(".place-sheet-media .sheet-actions .group-quick-action > span { display: inline;");
+  });
+
+  it("gives details, badges, catalogue search, and shelves responsive space", () => {
+    expect(ruleBody(".place-sheet")).toContain("max-height: min(620px, calc(100dvh - 48px));");
+    expect(css).toContain(".place-sheet:has(.sheet-actions:empty) .sheet-actions { display: none; }");
+    expect(css).toContain("calc(100dvh - 156px - var(--connection-status-height,34px))");
+    expect(css).toContain("grid-template-rows: minmax(180px,34dvh) minmax(0,1fr);");
+    expect(css).toContain(".feature-collection .category-chips { flex-wrap: wrap;");
+    expect(css).toContain(".collection-view.has-query .collection-progress");
+    expect(css).toContain(".collection-filter-summary button { display: inline-flex; min-height: 44px;");
+    expect(css).toContain(".release-diagnostics summary { display: inline-flex; min-height: 44px;");
+    expect(css).toContain("-webkit-line-clamp: 2;");
+    expect(css).toContain("text-overflow: ellipsis; white-space: nowrap;");
+  });
+});
