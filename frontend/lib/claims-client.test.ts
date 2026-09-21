@@ -5,6 +5,7 @@ import {
   recommendClaimRequest,
   removeVisitPhotoRequest,
   uploadVisitPhotoRequest,
+  PhotoUploadTimeoutError,
 } from "./claims-client";
 
 const API = "https://api.example.test";
@@ -62,5 +63,19 @@ describe("claims client", () => {
     const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify({ detail: { code: "claim_recommendation_expired", message: "Recommendation expired" } }), { status: 409, headers: { "Content-Type": "application/json" } })));
     vi.stubGlobal("fetch", fetchMock);
     await expect(createClaimRequest(API, account, { recommendationToken: "signed", expectedPlaceId: "park" })).rejects.toMatchObject({ status: 409, code: "claim_recommendation_expired", message: "Recommendation expired" });
+  });
+
+  it("aborts a stalled photo upload at the bounded deadline with a safe typed error", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = uploadVisitPhotoRequest(API, account, "park", new File(["photo"], "visit.jpg", { type: "image/jpeg" }), 30_000);
+    const rejection = expect(pending).rejects.toBeInstanceOf(PhotoUploadTimeoutError);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await rejection;
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(true);
+    vi.useRealTimers();
   });
 });

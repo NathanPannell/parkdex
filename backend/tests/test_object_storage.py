@@ -7,6 +7,7 @@ from backend.app.object_storage import (
     MemoryObjectStorage,
     ObjectStorageConfigurationError,
     ObjectStorageNotFound,
+    R2ObjectStorage,
     object_storage_from_settings,
 )
 from backend.app.settings import Settings
@@ -98,3 +99,56 @@ def test_allowed_origins_include_capacitor_origin_once():
         "https://staging.parkdex.app",
         "https://localhost",
     ]
+
+
+def test_r2_client_uses_bounded_network_timeouts_and_retries(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def put_object(self, **options):
+            captured["put"] = options
+
+        def get_object(self, **options):
+            captured["get"] = options
+            return {"Body": type("Body", (), {"read": lambda self: b"stored"})()}
+
+        def delete_object(self, **options):
+            captured["delete"] = options
+
+    def fake_client(name, **options):
+        captured["name"] = name
+        captured.update(options)
+        return FakeClient()
+
+    monkeypatch.setattr("boto3.client", fake_client)
+    store = R2ObjectStorage(
+        endpoint="https://r2.example.test",
+        bucket="private-postcards",
+        access_key_id="key",
+        secret_access_key="secret",
+    )
+
+    assert store.bucket == "private-postcards"
+    assert captured["name"] == "s3"
+    config = captured["config"]
+    assert config.connect_timeout == 5
+    assert config.read_timeout == 15
+    assert config.retries == {"mode": "standard", "total_max_attempts": 3}
+    store.put("postcards/opaque.jpg", b"stored", "image/jpeg")
+    assert store.get("postcards/opaque.jpg") == b"stored"
+    store.delete("postcards/opaque.jpg")
+    assert captured["put"] == {
+        "Bucket": "private-postcards",
+        "Key": "postcards/opaque.jpg",
+        "Body": b"stored",
+        "ContentType": "image/jpeg",
+        "CacheControl": "private, no-store",
+    }
+    assert captured["get"] == {
+        "Bucket": "private-postcards",
+        "Key": "postcards/opaque.jpg",
+    }
+    assert captured["delete"] == {
+        "Bucket": "private-postcards",
+        "Key": "postcards/opaque.jpg",
+    }
