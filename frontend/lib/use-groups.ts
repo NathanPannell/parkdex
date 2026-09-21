@@ -564,6 +564,13 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     const accountId = identityKey;
     epochRef.current += 1;
     const epoch = epochRef.current;
+    // The account reset has already committed on the server. Clear private
+    // in-memory group state before device cleanup so a storage failure cannot
+    // leave deleted groups visible or make the completed reset look undone.
+    setCurrentGroups([], accountId);
+    setSelectedGroupId(null);
+    setPendingMemberships(0);
+    setBusy(false);
     const outbox = outboxOwnerRef.current === accountId ? outboxRef.current : await hydrateOutbox(accountId, epoch);
     if (!outbox || epoch !== epochRef.current) return;
     await outbox.clearAndWait();
@@ -573,12 +580,8 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
         throw new Error("Private device storage could not clear the saved groups.");
       }
     }
-    setCurrentGroups([], accountId);
-    setSelectedGroupId(null);
     setError("");
     setSyncMessage("");
-    setPendingMemberships(0);
-    setBusy(false);
     await load();
   }, [hydrateOutbox, identityKey, load, persistOutbox, setCurrentGroups, storage]);
 

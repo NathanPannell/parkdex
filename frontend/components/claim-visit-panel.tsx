@@ -5,7 +5,7 @@ import { Camera, Check, LocateFixed, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiError, Visit } from "@/lib/account";
 import type { ClaimConfirmation, ClaimRecommendation } from "@/lib/claims-client";
-import { clearPhotoRetryOwner, getNativeCapabilities, LocationCapabilityError, type LocationSample, type PhotoAsset } from "@/lib/native-capabilities";
+import { clearPhotoRetryOwner, createPhotoCaptureAttemptId, getNativeCapabilities, LocationCapabilityError, RestoredPhotoAwaitingAdoptionError, type LocationSample, type PhotoAsset } from "@/lib/native-capabilities";
 import { isDurablePhotoOwner } from "@/lib/photo-retry";
 import type { Place } from "@/lib/places";
 import { VisitPostcard } from "./visit-postcard";
@@ -29,7 +29,7 @@ type Props = {
 
 const claimMessage = (error: unknown) => {
   const code = (error as ApiError)?.code;
-  if (error instanceof LocationCapabilityError) return error.code === "permission-denied" ? "Location permission is off. Allow it for Parkdex, then try again." : error.code === "timeout" ? "Your location took too long. Move into open sky and try again." : "Your location is unavailable. Check location services and try again.";
+  if (error instanceof LocationCapabilityError) return error.code === "permission-denied" ? "Location permission is off. Allow it for Parkdex, then try again." : error.code === "precise-required" ? error.message : error.code === "timeout" ? "Your location took too long. Move into open sky and try again." : "Your location is unavailable. Check location services and try again.";
   if (code === "location_accuracy_too_low") return "Your location is too broad to confirm this boundary. Turn on Precise location for Parkdex in Android settings, then move into open sky and try again.";
   if (code === "location_stale") return "That location sample is too old. Refresh your location to continue.";
   if (code === "claim_recommendation_expired") return "This recommendation expired. Refresh your location and confirm the park again.";
@@ -59,6 +59,7 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
   const ownerRef = useRef(ownerKey);
   const operationEpochRef = useRef(0);
   const photoLoadEpochRef = useRef(0);
+  const restoredCaptureAttemptRef = useRef<string | null>(null);
   const candidateMatches = recommendation?.status === "recommended" && recommendation.candidate.placeId === place.id;
   const photoConfirmed = photoConfirmedFor === place.id;
   const expired = recommendation?.status === "recommended" && recommendationExpired;
@@ -72,6 +73,7 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
   const recommendationText = useMemo(() => recommendation?.status === "none" ? "No eligible park boundary matches this location." : "", [recommendation]);
 
   useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
+  useEffect(() => { restoredCaptureAttemptRef.current = null; }, [ownerKey, place.id]);
   useEffect(() => {
     if (ownerRef.current === ownerKey && !ownerCleanupFailedRef.current) return;
     const previousOwner = ownerRef.current;
@@ -164,14 +166,23 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
     photoLoadEpochRef.current += 1;
     setMessage("");
     try {
-      const photo = await getNativeCapabilities().getPhoto();
+      if (!ownerKey) throw new Error("Your account is still loading. Wait a moment, then try the camera again.");
+      const photo = await getNativeCapabilities().getPhoto({
+        ownerKey,
+        placeId: place.id,
+        captureAttemptId: restoredCaptureAttemptRef.current ?? createPhotoCaptureAttemptId(),
+      });
+      restoredCaptureAttemptRef.current = null;
       if (!photo || operationEpochRef.current !== operationEpoch) return;
       if (uploadRetry) await removePhotoRetry(uploadRetry.placeId);
       if (photoPreview) URL.revokeObjectURL(photoPreview);
       setUploadRetry(null);
       setPendingPhoto(photo); setPhotoConfirmedFor(null); setPhotoPreview(URL.createObjectURL(photo.file));
     } catch (error) {
-      if (operationEpochRef.current === operationEpoch) setMessage(error instanceof Error ? error.message : "Could not open the camera.");
+      if (operationEpochRef.current === operationEpoch) {
+        if (error instanceof RestoredPhotoAwaitingAdoptionError) restoredCaptureAttemptRef.current = error.captureAttemptId;
+        setMessage(error instanceof Error ? error.message : "Could not open the camera.");
+      }
     }
   }
 
@@ -220,7 +231,7 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
     const operationEpoch = operationEpochRef.current;
     setWorking(true); setMessage(""); setRecommendation(null); setRecommendationExpired(false);
     try {
-      const location = await getNativeCapabilities().getCurrentLocation({ highAccuracy: true, timeoutMs: 12000, maxAgeMs: 0 });
+      const location = await getNativeCapabilities().getCurrentLocation({ highAccuracy: true, timeoutMs: 12000, maxAgeMs: 0, requirePrecise: true });
       if (operationEpochRef.current !== operationEpoch) return;
       setSample(location);
       const result = await recommendClaim({ location });

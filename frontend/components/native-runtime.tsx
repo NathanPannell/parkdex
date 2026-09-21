@@ -10,7 +10,7 @@ import {
   queueRestoredCameraPhoto,
 } from "@/lib/capacitor-native-capabilities";
 import { dispatchNativeBack, hasNativeBackHistory } from "@/lib/native-back";
-import { registerNativeCapabilities } from "@/lib/native-capabilities";
+import { publishNativeAppState, registerNativeCapabilities } from "@/lib/native-capabilities";
 import {
   getPlatformStorage,
   registerNativePlatformStorage,
@@ -62,6 +62,18 @@ export function NativeRuntime({
     if (!enabled) return;
     let active = true;
     let removeCameraRestore = async () => {};
+    let removeAppState = async () => {};
+    let removePause = async () => {};
+    let removeResume = async () => {};
+    let lifecycleRevision = 0;
+    let snapshotSequence = 0;
+    let publishedSnapshotSequence = 0;
+    let startupReconcileAttempt = 0;
+    let startupReconcileTimer: ReturnType<typeof setTimeout> | undefined;
+    let startupConfirmedActive = false;
+    // Native startup is fail-closed: automatic GPS stays off until Capacitor
+    // confirms that the Activity is active.
+    publishNativeAppState(false);
     ensureNativeStorageRegistered();
     const unregisterCapabilities = registerNativeCapabilities(nativeCapabilities);
 
@@ -86,11 +98,82 @@ export function NativeRuntime({
       if (active) removeCameraRestore = remove;
       else await remove();
     }).catch(() => undefined);
+    const publishActivityState = (isActive: boolean) => {
+      if (isActive) {
+        startupConfirmedActive = true;
+        if (startupReconcileTimer !== undefined) clearTimeout(startupReconcileTimer);
+        startupReconcileTimer = undefined;
+      }
+      publishNativeAppState(isActive);
+    };
+    const appStateRegistration = App.addListener("appStateChange", ({ isActive }) => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishActivityState(isActive);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removeAppState = remove;
+      else await remove();
+    });
+    const pauseRegistration = App.addListener("pause", () => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishActivityState(false);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removePause = remove;
+      else await remove();
+    });
+    const resumeRegistration = App.addListener("resume", () => {
+      if (!active) return;
+      lifecycleRevision += 1;
+      publishActivityState(true);
+    }).then(async (listener) => {
+      const remove = async () => listener.remove();
+      if (active) removeResume = remove;
+      else await remove();
+    });
+    const startupReconcileDelays = [250, 500, 1_000, 2_000, 3_000, 4_000, 4_000];
+    const scheduleStartupReconcile = () => {
+      if (!active || startupConfirmedActive || startupReconcileTimer !== undefined || startupReconcileAttempt >= startupReconcileDelays.length) return;
+      const delay = startupReconcileDelays[startupReconcileAttempt];
+      startupReconcileAttempt += 1;
+      startupReconcileTimer = setTimeout(() => {
+        startupReconcileTimer = undefined;
+        void reconcileAppState();
+      }, delay);
+    };
+    const reconcileAppState = async () => {
+      const snapshotRevision = lifecycleRevision;
+      const sequence = ++snapshotSequence;
+      try {
+        const { isActive } = await App.getState();
+        if (active && lifecycleRevision === snapshotRevision && sequence > publishedSnapshotSequence) {
+          publishedSnapshotSequence = sequence;
+          publishActivityState(isActive);
+          if (!isActive) scheduleStartupReconcile();
+        }
+      } catch {
+        // Keep automatic location off, but retry while the WebView is visibly
+        // starting. Slow Android launches can miss the one resume event that
+        // occurred before JavaScript attached its listeners.
+        scheduleStartupReconcile();
+      }
+    };
+    // Read state immediately after listener registration begins so slow plugin
+    // promises cannot strand GPS. Reconcile once more after they settle to
+    // close the snapshot/subscription gap without overriding a newer event.
+    void reconcileAppState();
+    void Promise.allSettled([appStateRegistration, pauseRegistration, resumeRegistration]).then(reconcileAppState);
 
     return () => {
       active = false;
+      if (startupReconcileTimer !== undefined) clearTimeout(startupReconcileTimer);
       unregisterCapabilities();
       void removeCameraRestore();
+      void removeAppState();
+      void removePause();
+      void removeResume();
     };
   }, [attempt, enabled, nativeCapabilities]);
 

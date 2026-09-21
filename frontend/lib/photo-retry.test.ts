@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Directory, Encoding } from "@capacitor/filesystem";
 import { IDBFactory, IDBDatabase } from "fake-indexeddb";
-import { createBrowserPhotoRetryStore, createNativePhotoRetryStore, MAX_PHOTO_RETRY_BYTES } from "./photo-retry";
+import { createBrowserPhotoRetryStore, createNativePhotoRetryStore, MAX_PHOTO_RETRY_BYTES, MAX_RAW_PHOTO_STAGING_BYTES } from "./photo-retry";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -28,6 +28,18 @@ describe("photo retry storage", () => {
     await expect(store.load("account:first", "place-a")).resolves.toBeNull();
     await expect(store.load("account:first", "place-b")).resolves.toMatchObject({ mimeType: "image/jpeg" });
     await expect(store.load("account:second", "place-a")).resolves.toMatchObject({ mimeType: "image/jpeg" });
+  });
+
+  it("round-trips prepared state while legacy unmarked entries remain raw", async () => {
+    const store = createBrowserPhotoRetryStore();
+    const prepared = photo("prepared bytes");
+
+    await store.save("account:first", "prepared", { ...prepared, processingState: "prepared" });
+    await store.save("account:first", "legacy", photo("legacy bytes"));
+
+    await expect(store.load("account:first", "prepared")).resolves.toMatchObject({ processingState: "prepared" });
+    await expect(store.load("account:first", "prepared").then((value) => value?.file.text())).resolves.toBe("prepared bytes");
+    await expect(store.load("account:first", "legacy")).resolves.toMatchObject({ processingState: "raw" });
   });
 
   it("clears one account without exposing guest or temporary owners", async () => {
@@ -114,12 +126,58 @@ describe("photo retry storage", () => {
     await store.save("account:first", "place-a", photo());
 
     expect([...files.keys()]).toEqual(expect.arrayContaining([
-      "parkdex-photo-retry-v1/account%3Afirst/place-a/photo.bin",
-      "parkdex-photo-retry-v1/account%3Afirst/place-a/metadata.json",
+      "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/photo.bin",
+      "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/metadata.json",
     ]));
     await expect(store.load("account:first", "place-a").then((value) => value?.file.text())).resolves.toBe("private photo");
     await store.remove("account:first", "place-a");
     expect(files).toHaveLength(0);
+  });
+
+  it("allows a bounded raw camera staging copy larger than the normalized retry limit", async () => {
+    const store = createBrowserPhotoRetryStore();
+    const raw = new File([new Uint8Array(MAX_PHOTO_RETRY_BYTES + 1)], "raw-camera.jpg", { type: "image/jpeg" });
+
+    await expect(store.save("account:first", "place-a", { file: raw, mimeType: raw.type })).rejects.toThrow(/too large/i);
+    await expect(store.save("account:first", "place-a", { file: raw, mimeType: raw.type }, { rawStaging: true })).resolves.toBeUndefined();
+    await expect(store.load("account:first", "place-a").then((value) => value?.file.size)).resolves.toBe(MAX_PHOTO_RETRY_BYTES + 1);
+
+    const beyondStaging = new File([new Uint8Array(MAX_RAW_PHOTO_STAGING_BYTES + 1)], "too-large.jpg", { type: "image/jpeg" });
+    await expect(store.save("account:first", "place-b", { file: beyondStaging, mimeType: beyondStaging.type }, { rawStaging: true })).rejects.toThrow(/too large/i);
+  });
+
+  it("keeps the committed native raw copy when replacement metadata fails", async () => {
+    const files = new Map<string, { data: string; encoding?: Encoding }>();
+    let failReplacementMetadata = false;
+    const filesystem = {
+      writeFile: vi.fn(async ({ path, data, encoding }: { path: string; data: string; encoding?: Encoding }) => {
+        if (failReplacementMetadata && path.endsWith("/slot-b/metadata.json")) throw new Error("metadata write failed");
+        files.set(path, { data, encoding });
+        return { uri: `file://${path}` };
+      }),
+      readFile: vi.fn(async ({ path }: { path: string }) => {
+        const saved = files.get(path);
+        if (!saved) throw new Error("not found");
+        return { data: saved.data };
+      }),
+      deleteFile: vi.fn(async ({ path }: { path: string }) => {
+        if (!files.has(path)) throw new Error("not found");
+        files.delete(path);
+      }),
+      rmdir: vi.fn(async ({ path }: { path: string }) => { for (const key of files.keys()) if (key === path || key.startsWith(`${path}/`)) files.delete(key); }),
+    };
+    const store = createNativePhotoRetryStore(filesystem as never, Directory.Data, Encoding.UTF8);
+
+    await store.save("account:first", "place-a", photo("raw accepted bytes"), { rawStaging: true });
+    failReplacementMetadata = true;
+    await expect(store.save("account:first", "place-a", photo("normalized bytes"))).rejects.toThrow("metadata write failed");
+
+    await expect(store.load("account:first", "place-a").then((value) => value?.file.text())).resolves.toBe("raw accepted bytes");
+    expect([...files.keys()]).toEqual(expect.arrayContaining([
+      "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/photo.bin",
+      "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/metadata.json",
+    ]));
+    expect([...files.keys()].some((path) => path.includes("/slot-b/"))).toBe(false);
   });
 
   it("removes an interrupted photo-only write when native metadata is missing", async () => {
@@ -135,7 +193,7 @@ describe("photo retry storage", () => {
       rmdir: vi.fn(async ({ path }: { path: string }) => { for (const key of files.keys()) if (key === path || key.startsWith(`${path}/`)) files.delete(key); }),
     };
     const store = createNativePhotoRetryStore(filesystem as never, Directory.Data, Encoding.UTF8);
-    const photoPath = "parkdex-photo-retry-v1/account%3Afirst/place-a/photo.bin";
+    const photoPath = "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/photo.bin";
     files.set(photoPath, { data: "interrupted-binary" });
 
     await expect(store.load("account:first", "place-a")).resolves.toBeNull();
@@ -167,7 +225,7 @@ describe("photo retry storage", () => {
       }),
     };
     const store = createNativePhotoRetryStore(filesystem as never, Directory.Data, Encoding.UTF8);
-    const photoPath = "parkdex-photo-retry-v1/account%3Afirst/place-a/photo.bin";
+    const photoPath = "parkdex-photo-retry-v1/account%3Afirst/place-a/slot-a/photo.bin";
 
     await store.save("account:first", "place-a", photo());
     readFailure = new Error("temporarily unavailable");
