@@ -1413,6 +1413,32 @@ describe("Parkdex navigation", () => {
     await waitFor(() => expect(groupState.selectGroup).toHaveBeenCalledWith("coast"));
   });
 
+  it("keeps group detail scroll through Back, Forward, and Back", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    groupState.groups = [{ id: "coast", name: "Coast days", places: [place] }];
+    groupState.selectedGroupId = "coast";
+    window.history.replaceState({ framework: "preserved" }, "", "/?view=map");
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Groups" }));
+    groupState.selectGroup.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "View on map" }));
+    act(() => window.history.back());
+    await waitFor(() => expect(groupState.selectGroup).toHaveBeenCalledWith("coast"));
+    const panel = document.querySelector<HTMLElement>(".feature-panel");
+    expect(panel).toBeTruthy();
+    Object.defineProperty(panel, "scrollTop", { configurable: true, value: 617, writable: true });
+    fireEvent.scroll(panel!);
+    expect(window.history.state.parkdexGroup).toMatchObject({ groupId: "coast", accountId: "account-1", scrollTop: 617 });
+    groupState.selectGroup.mockClear();
+    act(() => window.history.forward());
+    await waitFor(() => expect(new URL(window.location.href).searchParams.get("view")).toBe("map"));
+    act(() => window.history.back());
+    await waitFor(() => expect(groupState.selectGroup).toHaveBeenCalledWith("coast"));
+    await waitFor(() => expect(HTMLElement.prototype.scrollTo).toHaveBeenCalledWith({ top: 617 }));
+    expect(window.history.state.framework).toBe("preserved");
+  });
+
   it("starts renamed collections closed and keeps search results in their collection", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
