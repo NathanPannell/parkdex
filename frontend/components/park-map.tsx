@@ -55,6 +55,16 @@ const BOUNDARY_VISIBLE_LAYERS = [
  * place source has expanded its clusters, while the wide map remains quiet.
  */
 export const POSTCARD_MARKER_MIN_ZOOM = 11;
+/**
+ * Approximate the compact print's rendered footprint, including its seal and
+ * dismiss control. The map anchor stays at the visit coordinate; these
+ * bounds only decide whether the complete marker can be reached on screen.
+ */
+export const POSTCARD_MARKER_FOOTPRINT = {
+  halfWidth: 76,
+  height: 180,
+  anchorGap: 28,
+} as const;
 
 export type RecentPostcard = {
   place: Place;
@@ -322,10 +332,11 @@ export function projectPostcardMarker(map: MapLibreMap, place: Pick<Place, "long
     const point = map.project([place.longitude, place.latitude]);
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
 
-    // Leave a small allowance for the print's edge so a card that is just
-    // beyond the canvas never becomes a floating, unreachable overlay.
-    const margin = 28;
-    if (point.x < -margin || point.x > width + margin || point.y < -margin || point.y > height + margin) return null;
+    const { halfWidth, height: markerHeight, anchorGap } = POSTCARD_MARKER_FOOTPRINT;
+    // The print is translated up from its coordinate by its full height and
+    // the stem gap. Hide it when that footprint would be clipped at an edge,
+    // which prevents an offscreen card from remaining keyboard-focusable.
+    if (point.x < halfWidth || point.x > width - halfWidth || point.y < markerHeight + anchorGap || point.y > height + anchorGap) return null;
     return { left: point.x, top: point.y };
   } catch {
     // MapLibre can be between remove() and the next React cleanup during a

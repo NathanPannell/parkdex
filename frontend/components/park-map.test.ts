@@ -7,6 +7,7 @@ import {
   loadPostcardPhotoUrl,
   postcardMarkerCoordinates,
   postcardPhotoKey,
+  POSTCARD_MARKER_FOOTPRINT,
   POSTCARD_MARKER_MIN_ZOOM,
   projectPostcardMarker,
   type MapCameraSnapshot,
@@ -117,6 +118,21 @@ describe("recent postcard marker projection", () => {
     expect(projectPostcardMarker(map, place)).toBeNull();
     state.x = 180;
     expect(projectPostcardMarker(map, place)).toEqual({ left: 180, top: 300 });
+  });
+
+  it("hides edge anchors when the compact print footprint would be clipped", () => {
+    const state = { x: 200, y: POSTCARD_MARKER_FOOTPRINT.height + POSTCARD_MARKER_FOOTPRINT.anchorGap - 1 };
+    const map = {
+      getZoom: () => POSTCARD_MARKER_MIN_ZOOM,
+      getContainer: () => ({ clientWidth: 400, clientHeight: 600 }),
+      project: () => ({ x: state.x, y: state.y }),
+    } as unknown as MapLibreMap;
+
+    expect(projectPostcardMarker(map, place)).toBeNull();
+    state.y += 1;
+    expect(projectPostcardMarker(map, place)).toEqual({ left: 200, top: 208 });
+    state.x = POSTCARD_MARKER_FOOTPRINT.halfWidth - 1;
+    expect(projectPostcardMarker(map, place)).toBeNull();
   });
 });
 
