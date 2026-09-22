@@ -21,7 +21,7 @@ const journal = {
   account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
   authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
-  logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined),
+  logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined), deleteAccount: vi.fn(async () => ({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false })),
 };
 const groupState = {
   groups: [] as Array<{ id: string; name: string; isWishlist?: boolean; places: Place[] }>, selectedGroupId: null as string | null,
@@ -39,7 +39,7 @@ vi.mock("@/lib/photo-processing", () => ({
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
-afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.syncMessage = ""; journal.storageUnavailable = false; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.syncMessage = ""; journal.storageUnavailable = false; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
   it("shows exactly three primary destinations and keeps settings inside My Dex", () => {
@@ -583,6 +583,56 @@ describe("Parkdex navigation", () => {
     await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(groupState.refreshAfterReset).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("keeps account deletion distinct from progress reset and waits for server confirmation", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    journal.deleteAccount.mockResolvedValueOnce({ deleted: true as const, photoCleanupPending: false, localCleanupPending: true });
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "My Dex" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("button", { name: "Reset my progress" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete your account?" });
+    const confirmation = screen.getByLabelText(/type DELETE to continue/i);
+    expect(screen.queryByText("DELETE_ACCOUNT")).toBeNull();
+    expect(journal.deleteAccount).not.toHaveBeenCalled();
+    fireEvent.change(confirmation, { target: { value: "DELETE" } });
+    fireEvent.click(dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!);
+    await waitFor(() => expect(journal.deleteAccount).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("heading", { name: "Account deleted" })).toBeTruthy();
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/device data still needs cleanup/i),
+    ]));
+  });
+
+  it("opens the deletion intent after sign-in without consuming unrelated URL state", async () => {
+    journal.authenticated = true;
+    journal.account = { id: "account-1", email: "ranger@example.test" };
+    window.history.replaceState({ framework: "preserved" }, "", "/?view=account&action=delete-account&retain=1#flow=oauth");
+    const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
+    expect(await screen.findByRole("dialog", { name: "Delete your account?" })).toBeTruthy();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("action")).toBeNull();
+    expect(params.get("retain")).toBe("1");
+    expect(params.get("view")).toBe("account");
+    expect(window.location.hash).toBe("#flow=oauth");
+    expect(window.history.state.framework).toBe("preserved");
+    fireEvent.click(screen.getByRole("button", { name: "Keep my account" }));
+    expect(screen.queryByRole("dialog", { name: "Delete your account?" })).toBeNull();
+    rerender(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.queryByRole("dialog", { name: "Delete your account?" })).toBeNull();
+    expect(new URLSearchParams(window.location.search).get("action")).toBeNull();
+    expect(journal.deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it("starts a guest deletion deep link in Log in mode with a focused prompt", () => {
+    window.history.replaceState({}, "", "/?view=account&action=delete-account");
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.getByText("Sign in to delete your account. You’ll confirm the deletion next.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Log in" }).some((button) => button.classList.contains("active"))).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "Delete your account?" })).toBeNull();
   });
 
   it("does not clear the group cache when account reset fails", async () => {

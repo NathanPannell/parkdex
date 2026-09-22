@@ -7,18 +7,20 @@ MIGRATION_DIR = ROOT / "database" / "migrations"
 
 def test_claim_migrations_follow_current_schema_and_are_additive():
     names = sorted(path.name for path in MIGRATION_DIR.glob("*.sql"))
-    assert names[-5:] == [
+    assert names[-6:] == [
         "0015_create_location_claims.sql",
         "0016_add_visit_postcard_object_storage.sql",
         "0017_schedule_photo_deletion_retries.sql",
         "0018_bind_claim_recommendations_to_session.sql",
         "0019_add_staging_field_place_scope.sql",
+        "0020_create_account_deletion_receipts.sql",
     ]
-    claims = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
-    photos = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
-    retries = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
-    sessions = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
-    field_scope = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
+    claims = (MIGRATION_DIR / names[-6]).read_text(encoding="utf-8")
+    photos = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
+    retries = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
+    sessions = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
+    field_scope = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
+    deletion = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
     assert "account_id UUID NOT NULL" in claims
     assert "consumed_at TIMESTAMPTZ" in claims
     assert "FOREIGN KEY (account_id, place_id)" in claims
@@ -55,6 +57,15 @@ def test_claim_migrations_follow_current_schema_and_are_additive():
     assert "ADD COLUMN IF NOT EXISTS field_test_scope TEXT" in field_scope
     assert "field_test_scope = 'staging' AND active = FALSE" in field_scope
     assert "places_field_test_scope_idx" in field_scope
+    assert "CREATE TABLE account_deletion_receipts" in deletion
+    assert "request_hash CHAR(64) PRIMARY KEY" in deletion
+    assert "photo_cleanup_pending BOOLEAN NOT NULL" in deletion
+    assert "expires_at TIMESTAMPTZ NOT NULL" in deletion
+    assert "expires_at <= created_at + INTERVAL '24 hours'" in deletion
+    assert "account_deletion_receipts_expiry_idx" in deletion
+    assert "account_deletion_request_hash CHAR(64)" in deletion
+    assert "REFERENCES account_deletion_receipts(request_hash) ON DELETE SET NULL" in deletion
+    assert "photo_object_deletions_account_deletion_receipt_idx" in deletion
 
 
 def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
@@ -66,6 +77,7 @@ def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
         "0017_schedule_photo_deletion_retries.sql",
         "0018_bind_claim_recommendations_to_session.sql",
         "0019_add_staging_field_place_scope.sql",
+        "0020_create_account_deletion_receipts.sql",
     ):
         sql = (MIGRATION_DIR / name).read_text(encoding="utf-8").upper()
         assert "DROP TABLE" not in sql

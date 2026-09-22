@@ -9,7 +9,7 @@ const nativePhoto = vi.hoisted(() => ({ clearPhotoRetryOwner: vi.fn() }));
 vi.mock("./native-capabilities", () => nativePhoto);
 
 import { ACCOUNT_TOKEN_KEY } from "./account";
-import { JOURNAL_STORAGE, accountPendingKey } from "./field-journal-state";
+import { JOURNAL_STORAGE, accountPendingKey, importedGuestKey } from "./field-journal-state";
 import { useFieldJournal } from "./use-field-journal";
 
 const API = "https://api.example.test";
@@ -611,6 +611,200 @@ describe("useFieldJournal identity and progress races", () => {
     expect(remoteResetCalled).toBe(false);
     expect(nativeCamera.clearRestoredCameraPhoto).not.toHaveBeenCalled();
     expect(result.current.syncMessage).toBe("Private photo storage is busy.");
+  });
+
+  it("deletes owner-bound account state while preserving the separate guest journal", async () => {
+    const guestPlace = "guest-park";
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([guestPlace]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitTimestamps, JSON.stringify({ [guestPlace]: "2026-09-01T00:00:00Z" }));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestTrails, JSON.stringify(["guest-trail"]));
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: ["account-trail"], visits: [CLAIM_VISIT] }));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({ [PLACE.id]: { visited: true, revision: 4 } }));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "trails"), JSON.stringify({ trail: { visited: true, revision: 2 } }));
+    window.localStorage.setItem(importedGuestKey(ACCOUNT.id), "7");
+    let requestId = "";
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: ["account-trail"], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/account") && init?.method === "DELETE") {
+        requestId = JSON.parse(String(init.body)).requestId;
+        return json({ deleted: true, photoCleanupPending: false });
+      }
+      if (path.endsWith("/api/places")) return json({ ...catalogue([PLACE.id], ["account-trail"]), visits: [CLAIM_VISIT] });
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let deletion: unknown;
+    await act(async () => { deletion = await result.current.deleteAccount(); });
+
+    expect(deletion).toEqual({ deleted: true, photoCleanupPending: false });
+    expect(result.current.authenticated).toBe(false);
+    expect(result.current.account).toBeNull();
+    expect(result.current.visited).toEqual(new Set([guestPlace]));
+    expect(result.current.completedTrails).toEqual(new Set(["guest-trail"]));
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBeNull();
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot)).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "null")).toEqual({});
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "trails")) ?? "null")).toEqual({});
+    expect(window.localStorage.getItem(importedGuestKey(ACCOUNT.id))).toBeNull();
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountDeletion)).toBeNull();
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
+    expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the same deletion request after a lost response and never treats 401 as success", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] }));
+    let deletionAttempts = 0;
+    const requestIds: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/account") && init?.method === "DELETE") {
+        deletionAttempts += 1;
+        requestIds.push(JSON.parse(String(init.body)).requestId);
+        if (deletionAttempts === 1) return Promise.reject(new TypeError("connection lost after the request was sent"));
+        return json({ detail: "Session is no longer valid." }, 401);
+      }
+      if (path.endsWith("/api/places")) return json(catalogue([PLACE.id]));
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { await expect(result.current.deleteAccount()).rejects.toThrow("Could not reach Parkdex"); });
+    const pendingAfterLoss = JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountDeletion) ?? "null");
+    expect(pendingAfterLoss).toMatchObject({ accountId: ACCOUNT.id, requestId: expect.any(String) });
+    expect(pendingAfterLoss.confirmed).toBeUndefined();
+    await act(async () => { await expect(result.current.deleteAccount()).rejects.toMatchObject({ status: 401 }); });
+
+    expect(deletionAttempts).toBe(2);
+    expect(requestIds[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(requestIds[1]).toBe(requestIds[0]);
+    expect(result.current.authenticated).toBe(true);
+    expect(result.current.account).toEqual(ACCOUNT);
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBe("account-token");
+    expect(nativePhoto.clearPhotoRetryOwner).not.toHaveBeenCalled();
+    expect(nativeCamera.clearRestoredCameraPhoto).not.toHaveBeenCalled();
+  });
+
+  it("replays one pending deletion request on boot and then clears the owner session", async () => {
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] }));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({ [PLACE.id]: { visited: true, revision: 1 } }));
+    window.localStorage.setItem(JOURNAL_STORAGE.accountDeletion, JSON.stringify({ accountId: ACCOUNT.id, requestId }));
+    let deletionAttempts = 0;
+    let accountLoads = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/account") && init?.method === "DELETE") {
+        deletionAttempts += 1;
+        expect(JSON.parse(String(init.body))).toEqual({ confirm: "DELETE_ACCOUNT", requestId });
+        return json({ deleted: true, photoCleanupPending: true });
+      }
+      if (path.endsWith("/api/auth/me")) {
+        accountLoads += 1;
+        return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] });
+      }
+      if (path.endsWith("/api/places")) return json(catalogue());
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(deletionAttempts).toBe(1);
+    expect(accountLoads).toBe(0);
+    expect(result.current.authenticated).toBe(false);
+    expect(result.current.account).toBeNull();
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBeNull();
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountDeletion)).toBeNull();
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
+    expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse another account's pending deletion intent", async () => {
+    const otherAccount = { id: "account-two", email: "other@example.com" };
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-two-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: otherAccount, visitedIds: [], completedTrailIds: [] }));
+    window.localStorage.setItem(JOURNAL_STORAGE.accountDeletion, JSON.stringify({ accountId: ACCOUNT.id, requestId: "11111111-1111-4111-8111-111111111111" }));
+    const fetchMock = vi.fn((url: string | URL | Request, _init?: RequestInit) => {
+      void _init;
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/places")) return json(catalogue());
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { await expect(result.current.deleteAccount()).rejects.toThrow("Another account deletion"); });
+
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/api/account") && init?.method === "DELETE")).toBe(false);
+    expect(result.current.account).toEqual(otherAccount);
+    expect(result.current.authenticated).toBe(true);
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBe("account-two-token");
+  });
+
+  it("does not clear the current account's camera or retry state while recovering another owner", async () => {
+    const otherAccount = { id: "account-two", email: "other@example.com" };
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-two-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: otherAccount, visitedIds: [], completedTrailIds: [] }));
+    window.localStorage.setItem(JOURNAL_STORAGE.accountDeletion, JSON.stringify({ accountId: ACCOUNT.id, requestId: "11111111-1111-4111-8111-111111111111", confirmed: true, photoCleanupPending: false }));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({ old: { visited: true, revision: 1 } }));
+    window.localStorage.setItem(accountPendingKey(otherAccount.id, "visits"), JSON.stringify({ current: { visited: true, revision: 2 } }));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/places")) return json(catalogue());
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.account).toEqual(otherAccount);
+    expect(result.current.authenticated).toBe(true);
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(otherAccount.id, "visits")) ?? "null")).toEqual({ current: { visited: true, revision: 2 } });
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "null")).toEqual({});
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountDeletion)).toBeNull();
+    expect(nativeCamera.clearRestoredCameraPhoto).not.toHaveBeenCalled();
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
+  });
+
+  it("rejects a photo completion that returns after account deletion", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] }));
+    const photoResponse = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places")) return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+      if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "PUT") return photoResponse.promise;
+      if (path.endsWith("/api/account") && init?.method === "DELETE") return json({ deleted: true, photoCleanupPending: false });
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let pendingPhoto!: Promise<void>;
+    act(() => { pendingPhoto = result.current.uploadVisitPhoto!(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" })); });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/visits/${PLACE.id}/photo`, expect.anything()));
+
+    await act(async () => { await result.current.deleteAccount(); });
+    await act(async () => {
+      photoResponse.resolve(new Response(null, { status: 204 }));
+      await expect(pendingPhoto).rejects.toThrow("journal changed");
+    });
+    expect(result.current.authenticated).toBe(false);
+    expect(result.current.account).toBeNull();
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
   });
 
   it("does not mark signed-in account A verified when confirming account B's token", async () => {

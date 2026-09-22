@@ -15,6 +15,7 @@ export const JOURNAL_STORAGE = {
   guestTrailPending: "every-park:trail-pending:v1",
   guestRevision: "every-park:guest-revision:v1",
   accountSnapshot: "every-park:account-snapshot:v1",
+  accountDeletion: "every-park:account-deletion:v1",
 } as const;
 
 export type PendingSnapshot = Record<string, PendingVisit | boolean>;
