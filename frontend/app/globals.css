@@ -798,7 +798,6 @@ button { color: inherit; }
   .map-utility.search-open { grid-template-columns: 1fr; }
   .feature-badges { background: #f2edda; }
 }
-@media (min-width: 860px) { .feature-collection .collection-view { height: calc(100% - 70px); } }
 
 /* Groups: compact place collections that keep the map in view. */
 .feature-groups { overflow-y: auto; }

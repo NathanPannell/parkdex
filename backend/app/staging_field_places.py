@@ -38,8 +38,8 @@ def load_staging_field_places(
     source_path: Path = STAGING_FIELD_PLACES_PATH,
 ) -> tuple[dict, ...]:
     document = json.loads(source_path.read_bytes())
-    if not isinstance(document, list) or not document:
-        raise RuntimeError("Staging field-place data must be a non-empty array")
+    if not isinstance(document, list):
+        raise RuntimeError("Staging field-place data must be an array")
 
     required = {
         "id",

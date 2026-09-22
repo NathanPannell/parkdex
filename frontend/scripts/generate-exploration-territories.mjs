@@ -81,9 +81,8 @@ function paddedLandFeature(feature) {
 const nearbyIslands = canonical.features.filter((feature) => feature.properties?.category === "island");
 const excursionParks = canonical.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
 if (excursionParks.length !== EXCURSION_IDS.size) throw new Error("Exploration territory excursion geometry is incomplete");
-// Staging-only boundaries are treated as excursion footprints as well. This
-// keeps Bell Park's staged geometry inside the exploration scope without
-// hard-coding a synthetic id that may change with the fixture.
+// Staging-only boundaries are treated as excursion footprints as well,
+// without hard-coding ids that may change with the field fixture.
 const landFeatures = new Map([
   ...nearbyIslands.map((feature) => [feature.properties?.id, feature]),
   ...excursionParks.map((feature) => [feature.properties?.id, feature]),

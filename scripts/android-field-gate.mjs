@@ -9,8 +9,8 @@ import { spawnSync } from "node:child_process";
 
 const PACKAGE = "app.parkdex.debug";
 const ACTIVITY = `${PACKAGE}/app.parkdex.MainActivity`;
-const BELL = { longitude: -123.0600868, latitude: 49.0918726 };
-const MOTION = { longitude: -123.0695, latitude: 49.0965 };
+const QA_PARK = Object.freeze({ longitude: -123.542431, latitude: 48.475557 });
+const MOTION = { longitude: -123.542431, latitude: 48.480557 };
 // This budget includes a full cold Activity/WebView launch before the native
 // watch can receive the emulator's edge-triggered location fix. Keep the
 // measured TTFF in the attestation so regressions remain visible.
@@ -94,7 +94,7 @@ export function onboardingSkipCenter(xml) {
   return labelledNodeCenter(xml, ONBOARDING_SKIP_LABELS);
 }
 
-export function photoPostcardReady(xml, placeName = "Bell Park") {
+export function photoPostcardReady(xml, placeName = "Goldstream Park") {
   const text = String(xml);
   const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(?:text|content-desc)="Private postcard from ${escaped}"`, "i").test(text)
@@ -103,7 +103,7 @@ export function photoPostcardReady(xml, placeName = "Bell Park") {
     && !/Photo unavailable|Loading private photo/i.test(text);
 }
 
-export function photoJourneyCleanupReady(xml, placeName = "Bell Park") {
+export function photoJourneyCleanupReady(xml, placeName = "Goldstream Park") {
   const text = String(xml);
   const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return /(?:Your first boundary claim will become a postcard here|Your first postcard will appear in your Collection after a boundary claim)/i.test(text)
@@ -120,9 +120,10 @@ export function photoReviewReady(xml) {
   return Boolean(photoReviewSaveCenter(xml));
 }
 
-export function bellParkReady(xml) {
+export function qaParkReady(xml, placeName = "Goldstream Park") {
   const text = String(xml);
-  return /(?:text|content-desc)="[^"]*Bell Park[^"]*"/.test(text)
+  const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:text|content-desc)="[^"]*${escaped}[^"]*"`, "i").test(text)
     && distanceLabels(text).length > 0;
 }
 
@@ -135,7 +136,7 @@ export function catalogueUnavailable(xml) {
 }
 
 export function offlineCatalogueOracle(xml) {
-  if (bellParkReady(xml)) return "unexpected-ready";
+  if (qaParkReady(xml)) return "unexpected-ready";
   if (catalogueUnavailable(xml)) return "unavailable";
   return null;
 }
@@ -644,10 +645,10 @@ export function sealedClaimCenter(xml) {
 export function openSealedArrivalCamera(context, {
   wait = waitFor,
   tap = (center) => adb(context, ["shell", "input", "tap", String(center.x), String(center.y)]),
-  injectLocation = () => spoof(context, BELL),
+  injectLocation = () => spoof(context, QA_PARK),
   now = Date.now,
 } = {}) {
-  const sealedClaim = wait(context, sealedClaimCenter, now() + context.photoTimeoutMs, "Bell Park sealed Claim + photo action", {
+  const sealedClaim = wait(context, sealedClaimCenter, now() + context.photoTimeoutMs, "Goldstream Park sealed Claim + photo action", {
     retryAction: injectLocation,
   });
   tap(sealedClaim.value);
@@ -678,7 +679,7 @@ function waitForAccountPostcard(context, deadline) {
       // success flow has already returned there, use its explicit postcard
       // action before checking the My Dex collection.
       if (!collectionRequested) {
-        const openPostcard = labelledNodeCenter(lastXml, [/^Open your postcard$/i, /^Open your Bell Park postcard$/i]);
+        const openPostcard = labelledNodeCenter(lastXml, [/^Open your postcard$/i, /^Open your Goldstream Park postcard$/i]);
         if (openPostcard) {
           adb(context, ["shell", "input", "tap", String(openPostcard.x), String(openPostcard.y)]);
           collectionRequested = true;
@@ -699,7 +700,7 @@ function waitForAccountPostcard(context, deadline) {
         continue;
       }
       if (collectionRequested && !postcardRequested && (accountViewVisible(lastXml) || /(?:text|content-desc)="My Dex"/i.test(lastXml))) {
-        const viewPostcard = labelledNodeCenter(lastXml, [/^View Bell Park postcard$/i]);
+        const viewPostcard = labelledNodeCenter(lastXml, [/^View Goldstream Park postcard$/i]);
         if (viewPostcard) {
           adb(context, ["shell", "input", "tap", String(viewPostcard.x), String(viewPostcard.y)]);
           postcardRequested = true;
@@ -723,7 +724,7 @@ function waitForAccountPostcard(context, deadline) {
     }
     sleep(500);
   }
-  const error = new Error("Timed out waiting for uploaded Bell Park postcard readback");
+  const error = new Error("Timed out waiting for uploaded Goldstream Park postcard readback");
   error.lastXml = lastXml;
   throw error;
 }
@@ -789,15 +790,15 @@ function runNetworkStartupRecovery(context) {
 
     const restoredAt = Date.now();
     setAirplaneMode(context, false);
-    spoof(context, BELL);
+    spoof(context, QA_PARK);
     const locate = waitFor(context, (xml) => locateButtonCenter(xml), restoredAt + NETWORK_RECOVERY_TIMEOUT_MS, "Locate Me button after network restore");
     adb(context, ["shell", "input", "tap", String(locate.value.x), String(locate.value.y)]);
-    spoof(context, BELL);
+    spoof(context, QA_PARK);
     const recovered = waitFor(context, (xml) => {
       lastXml = xml;
-      return bellParkReady(xml);
+      return qaParkReady(xml);
     }, restoredAt + NETWORK_RECOVERY_TIMEOUT_MS, "automatic catalogue recovery after network restore", {
-      retryAction: () => spoof(context, BELL),
+      retryAction: () => spoof(context, QA_PARK),
     });
     const recoveredPid = appPid(context);
     if (recoveredPid !== launchPid) throw new Error("Parkdex restarted instead of recovering its first-launch catalogue in place");
@@ -825,7 +826,7 @@ function runNetworkStartupRecovery(context) {
 function runColdStartTrial(context, index) {
   adb(context, ["shell", "pm", "clear", PACKAGE]);
   grantLocation(context);
-  spoof(context, BELL);
+  spoof(context, QA_PARK);
   adb(context, ["logcat", "-c"], { allowFailure: true });
   const started = Date.now();
   adb(context, ["shell", "am", "start", "-W", "-S", "-n", ACTIVITY], { timeoutMs: context.timeoutMs });
@@ -834,9 +835,9 @@ function runColdStartTrial(context, index) {
   adb(context, ["shell", "input", "tap", String(locate.value.x), String(locate.value.y)]);
   // Emulator geo fixes are edge-triggered. Inject after the foreground watch
   // exists instead of assuming a pre-launch fix will be replayed.
-  spoof(context, BELL);
-  const ready = waitFor(context, bellParkReady, deadline, "Bell Park nearby result", {
-    retryAction: () => spoof(context, BELL),
+  spoof(context, QA_PARK);
+  const ready = waitFor(context, qaParkReady, deadline, "Goldstream Park nearby result", {
+    retryAction: () => spoof(context, QA_PARK),
   });
   const elapsedMs = Date.now() - started;
   if (elapsedMs > context.timeoutMs) throw new Error(`Trial ${index} exceeded ${context.timeoutMs}ms`);
@@ -854,7 +855,7 @@ function runMotionCheck(context, baselineXml) {
   spoof(context, MOTION);
   const started = Date.now();
   const moved = waitFor(context, (xml) => {
-    if (!bellParkReady(xml)) return false;
+    if (!qaParkReady(xml)) return false;
     const after = distanceLabels(xml);
     return after.length > 0 && JSON.stringify(after) !== JSON.stringify(before) ? after : false;
   }, started + context.timeoutMs, "motion-driven nearby distance update", {
@@ -879,12 +880,12 @@ function runProviderRecovery(context) {
     lastXml = unavailable.xml;
     const restoredAt = Date.now();
     setLocationEnabled(context, true);
-    spoof(context, BELL);
+    spoof(context, QA_PARK);
     const recovered = waitFor(context, (xml) => {
       lastXml = xml;
-      return bellParkReady(xml);
+      return qaParkReady(xml);
     }, restoredAt + context.timeoutMs, "automatic provider recovery", {
-      retryAction: () => spoof(context, BELL),
+      retryAction: () => spoof(context, QA_PARK),
     });
     return {
       unavailableObserved: true,
@@ -906,7 +907,7 @@ function runPhotoJourney(context, apk) {
   adb(context, ["install", "-r", "-t", apk]);
   grantLocation(context);
   setLocationEnabled(context, true);
-  spoof(context, BELL);
+  spoof(context, QA_PARK);
   adb(context, ["shell", "am", "force-stop", PACKAGE]);
   adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
 
@@ -925,7 +926,7 @@ function runPhotoJourney(context, apk) {
     // verified session intact so Camera exercises a fresh sealed arrival.
     adb(context, ["shell", "am", "force-stop", PACKAGE]);
     adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
-    spoof(context, BELL);
+    spoof(context, QA_PARK);
     // Authenticated Android starts its location watch automatically. Wait for
     // the actual arrival before tapping: Locate can occupy the same screen
     // coordinates as Claim + photo while the sheet mounts.

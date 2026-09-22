@@ -10,6 +10,9 @@ import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
 
 export type GroupSyncStatus = "idle" | "syncing" | "offline" | "error";
 
+const GROUPS_FETCH_RETRY_INITIAL_DELAY_MS = 1_000;
+const GROUPS_FETCH_RETRY_MAX_DELAY_MS = 30_000;
+
 /** Versioned account-scoped keys keep cached private data separate from guest data. */
 export function accountGroupsCacheKey(accountId: string) {
   return `every-park:account-groups:${encodeURIComponent(accountId)}:v1`;
@@ -23,6 +26,7 @@ type GroupState = {
   groups: Group[];
   selectedGroupId: string | null;
   loading: boolean;
+  retrying: boolean;
   error: string;
   busy: boolean;
   /** True when the browser/API is currently unable to reach the groups service. */
@@ -103,6 +107,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [offline, setOffline] = useState(browserIsOffline);
@@ -117,7 +122,24 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const outboxRef = useRef(new GroupOutbox());
   const outboxOwnerRef = useRef("");
   const storageRef = useRef<KeyValueStore | null>(null);
+  const fetchRetryTimerRef = useRef<{ handle: number; resolve: () => void } | null>(null);
   useEffect(() => { requestRef.current = request; }, [request]);
+
+  const cancelFetchRetry = useCallback(() => {
+    const timer = fetchRetryTimerRef.current;
+    if (!timer) return;
+    fetchRetryTimerRef.current = null;
+    window.clearTimeout(timer.handle);
+    timer.resolve();
+  }, []);
+
+  const waitForFetchRetry = useCallback((delay: number) => new Promise<void>((resolve) => {
+    const handle = window.setTimeout(() => {
+      if (fetchRetryTimerRef.current?.handle === handle) fetchRetryTimerRef.current = null;
+      resolve();
+    }, delay);
+    fetchRetryTimerRef.current = { handle, resolve };
+  }), []);
 
   const storage = useCallback(async () => {
     if (storageRef.current) return storageRef.current;
@@ -282,6 +304,8 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     const accountId = identityKey;
     const currentRequest = requestRef.current;
     const epoch = ++epochRef.current;
+    cancelFetchRetry();
+    setRetrying(false);
     if (!authenticated || !accountId) {
       setCurrentGroups([], accountId);
       setSelectedGroupId(null);
@@ -294,6 +318,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       setOffline(browserIsOffline());
       return;
     }
+    setLoading(Boolean(apiBaseUrl && !browserIsOffline() && currentRequest));
 
     let outbox: GroupOutbox;
     let cached: Group[];
@@ -332,12 +357,50 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     }
 
     const checkpoint = outbox.checkpoint();
+    let hadFetchFailure = false;
     try {
-      const next = await listGroups(currentRequest);
+      let next: Group[];
+      let retryAttempt = 0;
+      while (true) {
+        try {
+          next = await listGroups(currentRequest);
+          break;
+        } catch {
+          if (epoch !== epochRef.current) return;
+          if (!hadFetchFailure) {
+            hadFetchFailure = true;
+            setRetrying(true);
+            setLoading(false);
+          }
+          if (browserIsOffline()) {
+            setOffline(true);
+            setSyncStatus("offline");
+            setSyncMessage(outbox.hasPending()
+              ? "Your collection changes are saved on this device and waiting to sync."
+              : cached.length ? "Showing your saved collections offline." : "Your collections are unavailable offline.");
+          } else if (outbox.hasPending()) {
+            setOffline(false);
+            setSyncStatus("syncing");
+            setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
+          } else {
+            setOffline(false);
+            setSyncStatus("idle");
+            setSyncMessage("");
+          }
+          const delay = Math.min(
+            GROUPS_FETCH_RETRY_INITIAL_DELAY_MS * 2 ** retryAttempt,
+            GROUPS_FETCH_RETRY_MAX_DELAY_MS,
+          );
+          retryAttempt += 1;
+          await waitForFetchRetry(delay);
+          if (epoch !== epochRef.current) return;
+        }
+      }
       if (epoch !== epochRef.current) return;
       const rebased = outbox.applyTo(next, checkpoint);
       setCurrentGroups(rebased, accountId);
       setSelectedGroupId((current) => current && rebased.some((group) => group.id === current) ? current : null);
+      setRetrying(false);
       if (!await persistSnapshot(accountId, rebased) || !await persistOutbox(accountId, outbox)) {
         throw new Error("Private device storage could not save your collections.");
       }
@@ -349,8 +412,8 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       const nowOffline = isOfflineFailure(caught);
       setOffline(nowOffline);
       setSyncStatus(nowOffline ? "offline" : "error");
-      // The offline notice already explains cached state and owns its retry.
-      // Keep genuine API/storage failures in the separate actionable alert.
+      // Collection list requests retry above. Errors here come from persisting
+      // the successful response or syncing queued changes and stay actionable.
       setError(nowOffline ? "" : messageFor(caught));
       setSyncMessage(nowOffline
         ? outbox.hasPending() ? "Your collection changes are saved on this device and waiting to sync." : cached.length ? "Showing your saved collections offline." : "Your collections are unavailable offline."
@@ -361,12 +424,12 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
         setBusy(false);
       }
     }
-  }, [apiBaseUrl, authenticated, drainOutbox, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, setCurrentGroups, storage]);
+  }, [apiBaseUrl, authenticated, cancelFetchRetry, drainOutbox, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, setCurrentGroups, storage, waitForFetchRetry]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => { window.clearTimeout(timer); epochRef.current += 1; };
-  }, [load]);
+    return () => { window.clearTimeout(timer); epochRef.current += 1; cancelFetchRetry(); setRetrying(false); };
+  }, [cancelFetchRetry, load]);
 
   useEffect(() => {
     const becameOffline = () => {
@@ -567,6 +630,12 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     const accountId = identityKey;
     epochRef.current += 1;
     const epoch = epochRef.current;
+    cancelFetchRetry();
+    setRetrying(false);
+    setLoading(true);
+    setError("");
+    setSyncStatus("idle");
+    setSyncMessage("");
     // The account reset has already committed on the server. Clear private
     // in-memory group state before device cleanup so a storage failure cannot
     // leave deleted groups visible or make the completed reset look undone.
@@ -574,19 +643,22 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     setSelectedGroupId(null);
     setPendingMemberships(0);
     setBusy(false);
-    const outbox = outboxOwnerRef.current === accountId ? outboxRef.current : await hydrateOutbox(accountId, epoch);
-    if (!outbox || epoch !== epochRef.current) return;
-    await outbox.clearAndWait();
-    if (accountId) {
-      const target = await storage();
-      if (!await removeStored(target, accountGroupsCacheKey(accountId)) || !await persistOutbox(accountId, outbox)) {
-        throw new Error("Private device storage could not clear the saved collections.");
+    try {
+      const outbox = outboxOwnerRef.current === accountId ? outboxRef.current : await hydrateOutbox(accountId, epoch);
+      if (!outbox || epoch !== epochRef.current) return;
+      await outbox.clearAndWait();
+      if (accountId) {
+        const target = await storage();
+        if (!await removeStored(target, accountGroupsCacheKey(accountId)) || !await persistOutbox(accountId, outbox)) {
+          throw new Error("Private device storage could not clear the saved collections.");
+        }
       }
+    } catch (caught) {
+      if (epoch === epochRef.current) setLoading(false);
+      throw caught;
     }
-    setError("");
-    setSyncMessage("");
     await load();
-  }, [hydrateOutbox, identityKey, load, persistOutbox, setCurrentGroups, storage]);
+  }, [cancelFetchRetry, hydrateOutbox, identityKey, load, persistOutbox, setCurrentGroups, storage]);
 
   const hydratedGroups = useMemo(() => hydrate(groups), [groups, hydrate]);
   // Until the new identity's effect has hydrated its cache/server response,
@@ -598,6 +670,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     groups: visibleGroups,
     selectedGroupId: visibleSelectedGroupId,
     loading,
+    retrying,
     error,
     busy,
     offline,
@@ -612,5 +685,5 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     remove,
     addPlace,
     removePlace,
-  }), [addPlace, busy, create, error, load, loading, offline, pendingMemberships, refreshAfterReset, remove, removePlace, rename, syncMessage, syncStatus, visibleGroups, visibleSelectedGroupId]);
+  }), [addPlace, busy, create, error, load, loading, offline, pendingMemberships, refreshAfterReset, remove, removePlace, rename, retrying, syncMessage, syncStatus, visibleGroups, visibleSelectedGroupId]);
 }

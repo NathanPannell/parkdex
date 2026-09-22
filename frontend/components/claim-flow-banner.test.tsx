@@ -12,7 +12,7 @@ vi.mock("@/lib/photo-processing", () => ({
   normalizeVisitPhoto: vi.fn(async (photo) => photo),
 }));
 
-const place = { id: "regional-bell-park", name: "Bell Park", category: "regional" as const, latitude: 49.0918726, longitude: -123.0600868, region: "Delta", description: "Neighbourhood park", sourceUrl: "https://example.test", sourceName: "City of Delta" };
+const place = { id: "provincial-goldstream-park", name: "Goldstream Park", category: "provincial" as const, latitude: 48.475557, longitude: -123.542431, region: "South Island", description: "A BC provincial park in the South Island collection. The map pin represents the largest official park polygon, not an entrance or trailhead.", sourceUrl: "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas", sourceName: "BC Parks / DataBC", sourceId: "705" };
 const location = { latitude: place.latitude, longitude: place.longitude, accuracyMeters: 6, capturedAtEpochMs: Date.now() };
 const recommendation = { status: "recommended" as const, recommendationToken: "initial", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact" as const, distanceMeters: 0 } };
 const confirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-16T12:00:00Z", claim: { claimedAt: "2026-09-16T12:00:00Z", capturedAt: "2026-09-16T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 6, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };

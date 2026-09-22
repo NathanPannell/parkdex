@@ -19,26 +19,22 @@ describe("catalogue build scope", () => {
     expect(resolveCatalogueScope(" STAGING ")).toBe("staging");
   });
 
-  it("keeps canonical data separate from the explicit Bell Park staging overlay", async () => {
+  it("keeps the staging catalogue canonical when its field overlay is empty", async () => {
     const canonical = await readScopedBoundaryCollection("canonical");
     const staging = await readScopedBoundaryCollection("staging");
+    expect(canonical.collection.features.some((feature) => feature.properties.id === "provincial-bellhouse-park")).toBe(true);
+    expect(staging.collection.features.some((feature) => feature.properties.id === "provincial-bellhouse-park")).toBe(true);
     expect(canonical.collection.features.some((feature) => feature.properties.id === "regional-bell-park")).toBe(false);
-    expect(staging.collection.features.some((feature) => feature.properties.id === "regional-bell-park")).toBe(true);
-    expect(staging.stagingIds).toEqual(new Set(["regional-bell-park"]));
-    expect(staging.collection.features.length).toBe(canonical.collection.features.length + 1);
+    expect(staging.collection.features.some((feature) => feature.properties.id === "regional-bell-park")).toBe(false);
+    expect(staging.stagingIds).toEqual(new Set());
+    expect(staging.collection.features.length).toBe(canonical.collection.features.length);
     expect(boundarySourceDescription(canonical.scope)).toBe("data/boundaries.geojson");
     expect(boundarySourceDescription(staging.scope)).toBe("data/boundaries.geojson + data/staging-field-boundaries.geojson");
   });
 
-  it("uses the reviewed staging place representative rather than a boundary-derived point", async () => {
+  it("contains no staging place records", async () => {
     const places = JSON.parse(await readFile(fileURLToPath(new URL("../../data/staging-field-places.json", import.meta.url)), "utf8"));
-    expect(places).toEqual([expect.objectContaining({
-      id: "regional-bell-park",
-      name: "Bell Park",
-      latitude: 49.0918726,
-      longitude: -123.0600868,
-      sourceName: "City of Delta",
-    })]);
+    expect(places).toEqual([]);
   });
 
   it("rejects an overlay that silently replaces a canonical boundary", () => {
