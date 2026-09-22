@@ -7,8 +7,10 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PRODUCTION_API_BASE_URL = "https://api-production-e72df.up.railway.app";
+export const INTERNAL_STAGING_API_BASE_URL = "https://api-staging-882c.up.railway.app";
 export const PRODUCTION_CATALOGUE_SCOPE = "canonical";
 export const PRODUCTION_FIELD_DIAGNOSTICS = "0";
+export const RELEASE_TARGETS = Object.freeze(["production", "internal-staging"]);
 export const RELEASE_PROPERTY_NAMES = Object.freeze([
   "PARKDEX_RELEASE_KEYSTORE_FILE",
   "PARKDEX_RELEASE_KEYSTORE_PASSWORD",
@@ -34,12 +36,17 @@ function usage() {
 Preparation validates a production Android release without building. Add --build
 to sync the static bundle and assemble the signed release AAB.
 
+The default target is production. Use --target internal-staging only for an
+explicit signed internal candidate. Internal-staging version names must include
+the literal internal-staging label.
+
 Required inputs may be supplied as options or PARKDEX_RELEASE_* environment
 variables. Signing passwords must come from the environment or an external
 Gradle properties file; they are never accepted as command-line arguments.
 
 Options:
-  --api-base-url <url>             Exact production API origin
+  --target <target>                production (default) or internal-staging
+  --api-base-url <url>             Exact API origin for the selected target
   --version-code <integer>         New Play versionCode
   --version-name <name>            New Play versionName
   --previous-version-code <int>    Last uploaded Play versionCode
@@ -53,6 +60,7 @@ Options:
 export function parseArgs(argv) {
   const options = { build: false };
   const valueOptions = new Set([
+    "--target",
     "--api-base-url",
     "--version-code",
     "--version-name",
@@ -173,18 +181,34 @@ function parseNonNegativeInteger(value, label, { maximum = VERSION_CODE_MAX } = 
   return parsed;
 }
 
-export function assertProductionApiBaseUrl(value) {
-  const normalized = requireText(value, "The production API origin");
+export function assertReleaseTarget(value) {
+  const target = nonEmpty(value) || "production";
+  if (!RELEASE_TARGETS.includes(target)) {
+    throw new Error(`--target must be one of: ${RELEASE_TARGETS.join(", ")}.`);
+  }
+  return target;
+}
+
+export function assertReleaseApiBaseUrl(value, target = "production") {
+  const releaseTarget = assertReleaseTarget(target);
+  const expectedApi = releaseTarget === "internal-staging"
+    ? INTERNAL_STAGING_API_BASE_URL
+    : PRODUCTION_API_BASE_URL;
+  const normalized = requireText(value, `The ${releaseTarget} API origin`);
   let parsed;
   try {
     parsed = new URL(normalized);
   } catch {
-    throw new Error("The production API origin must be a valid URL.");
+    throw new Error(`The ${releaseTarget} API origin must be a valid URL.`);
   }
-  if (parsed.origin !== PRODUCTION_API_BASE_URL || parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
-    throw new Error(`The release API must be the exact HTTPS production origin ${PRODUCTION_API_BASE_URL}.`);
+  if (parsed.origin !== expectedApi || parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    throw new Error(`The release API must be the exact HTTPS ${releaseTarget} origin ${expectedApi}.`);
   }
   return parsed.origin;
+}
+
+export function assertProductionApiBaseUrl(value) {
+  return assertReleaseApiBaseUrl(value, "production");
 }
 
 function assertPinnedBuildEnvironment(environment) {
@@ -220,8 +244,14 @@ export function resolveReleaseConfig(options = {}, { environment = process.env, 
   const properties = privateProperties.values;
   assertPinnedBuildEnvironment(environment);
 
-  const apiBaseUrl = assertProductionApiBaseUrl(
+  const target = assertReleaseTarget(options.target);
+  const inheritedTarget = nonEmpty(environment.PARKDEX_ANDROID_RELEASE_TARGET);
+  if (inheritedTarget && assertReleaseTarget(inheritedTarget) !== target) {
+    throw new Error(`PARKDEX_ANDROID_RELEASE_TARGET must match --target ${target}.`);
+  }
+  const apiBaseUrl = assertReleaseApiBaseUrl(
     options.api_base_url || environment.PARKDEX_RELEASE_API_BASE_URL,
+    target,
   );
   const versionCode = parsePositiveInteger(
     valueFrom(options, environment, properties, "version_code")
@@ -240,6 +270,9 @@ export function resolveReleaseConfig(options = {}, { environment = process.env, 
     valueFrom(options, environment, properties, "version_name")
       || valueFrom({}, environment, properties, "PARKDEX_ANDROID_VERSION_NAME"),
   );
+  if (target === "internal-staging" && !versionName.toLowerCase().includes("internal-staging")) {
+    throw new Error("Internal-staging version names must include the literal internal-staging label.");
+  }
 
   const keystoreFile = assertKeystorePath(
     valueFrom({}, environment, properties, "PARKDEX_RELEASE_KEYSTORE_FILE"),
@@ -259,6 +292,7 @@ export function resolveReleaseConfig(options = {}, { environment = process.env, 
   );
 
   return Object.freeze({
+    target,
     apiBaseUrl,
     catalogueScope: PRODUCTION_CATALOGUE_SCOPE,
     fieldDiagnostics: PRODUCTION_FIELD_DIAGNOSTICS,
@@ -356,6 +390,7 @@ function provenanceBase(config, identity, mode) {
     status: mode === "build" ? "artifact-built" : "prepared",
     productionVerified: false,
     verificationStatus: "pending",
+    target: config.target,
     commitSha: identity.commitSha,
     treeSha: identity.treeSha,
     apiBaseUrl: config.apiBaseUrl,
@@ -378,6 +413,7 @@ function buildEnvironment(config, environment, { includeSigning = true } = {}) {
     NEXT_PUBLIC_FIELD_DIAGNOSTICS: config.fieldDiagnostics,
     PARKDEX_ANDROID_BUILD: "1",
     PARKDEX_ANDROID_RELEASE: "1",
+    PARKDEX_ANDROID_RELEASE_TARGET: config.target,
     PARKDEX_ANDROID_VERSION_CODE: String(config.versionCode),
     PARKDEX_ANDROID_VERSION_NAME: config.versionName,
     PARKDEX_CATALOGUE_SCOPE: config.catalogueScope,
@@ -458,6 +494,7 @@ export async function main(argv = process.argv.slice(2), { repositoryRoot = REPO
     status: mode === "build" ? "artifact-built" : "prepared",
     productionVerified: false,
     verificationStatus: "pending",
+    target: config.target,
     apiBaseUrl: config.apiBaseUrl,
     catalogueScope: config.catalogueScope,
     fieldDiagnostics: config.fieldDiagnostics,

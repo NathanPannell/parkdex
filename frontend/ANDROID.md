@@ -79,7 +79,9 @@ The R2 contract creates one random private object, verifies its bytes, deletes i
 
 ## Google Play release preparation
 
-The Google Play path is explicit and separate from the debug and staging path. The repository-owned release command requires the exact production API origin, canonical catalogue, disabled field diagnostics, a new version code, and a version name. It also requires release signing values from the process environment or a private properties file outside the repository. A missing value fails before any build task starts. The release Gradle configuration has no debug-signing fallback.
+The Google Play path is explicit and separate from the debug and staging path. The repository-owned release command defaults to the production target and requires its exact API origin, canonical catalogue, disabled field diagnostics, a new version code, and a version name. It also requires release signing values from the process environment or a private properties file outside the repository. A missing value fails before any build task starts. The release Gradle configuration has no debug-signing fallback.
+
+Use `--target internal-staging` only for a signed internal candidate when production is not yet verified. That target accepts only `https://api-staging-882c.up.railway.app`, keeps the canonical catalogue and diagnostics disabled, and requires the literal `internal-staging` label in `PARKDEX_ANDROID_VERSION_NAME`. The target is recorded in the provenance output and remains `productionVerified: false`.
 
 The first command validates the release inputs without running Next.js, Capacitor, or Gradle. It writes no repository files and reports `productionVerified: false`:
 
@@ -97,7 +99,7 @@ $env:PARKDEX_RELEASE_KEY_ALIAS = "parkdex-upload"
 $env:PARKDEX_RELEASE_KEYSTORE_PASSWORD = $secureStorePassword
 $env:PARKDEX_RELEASE_KEY_PASSWORD = $secureKeyPassword
 
-npm run android:release-prep -- --provenance "C:\private\parkdex-android-release-prep.json"
+npm run android:release-prep -- --target production --provenance "C:\private\parkdex-android-release-prep.json"
 ```
 
 `PARKDEX_RELEASE_KEYSTORE_FILE`, `PARKDEX_RELEASE_KEYSTORE_PASSWORD`, `PARKDEX_RELEASE_KEY_ALIAS`, and `PARKDEX_RELEASE_KEY_PASSWORD` are the signing names consumed by Gradle. `PARKDEX_RELEASE_PROPERTIES_FILE` may point to a private external properties file containing those names. The command injects signing values only into the Gradle process. The frontend sync receives the public release settings but never receives signing passwords. Keep the keystore and properties file outside the checkout; the command rejects paths inside it, including symlinked paths.
@@ -105,10 +107,18 @@ npm run android:release-prep -- --provenance "C:\private\parkdex-android-release
 After the non-building preparation passes, add `--build` to sync the static Android content and create the signed release bundle:
 
 ```powershell
-npm run android:release-prep -- --build --provenance "C:\private\parkdex-android-release.json"
+npm run android:release-prep -- --target production --build --provenance "C:\private\parkdex-android-release.json"
 ```
 
-The expected artifact is `frontend/android/app/build/outputs/bundle/release/app-release.aab`. The command records its SHA-256, source commit, Git tree, version values, production API, canonical scope, and diagnostics setting in the external provenance JSON. `status=artifact-built` still reports `productionVerified=false`; a bundle is a release candidate until the merged source, artifact, manifest, page-size, signing, Play App Signing, and production checks below have been completed. The command must be rerun with a version code greater than the exact code already uploaded to Play. The version name is always supplied explicitly for each release.
+The expected artifact is `frontend/android/app/build/outputs/bundle/release/app-release.aab`. The command records its SHA-256, target, source commit, Git tree, version values, target API, canonical scope, and diagnostics setting in the external provenance JSON. `status=artifact-built` still reports `productionVerified=false`; a bundle is a release candidate until the merged source, artifact, manifest, page-size, signing, Play App Signing, and production checks below have been completed. The command must be rerun with a version code greater than the exact code already uploaded to Play. The version name is always supplied explicitly for each release.
+
+For an internal staging candidate, keep the same signing variables loaded privately and use a clearly labeled version name:
+
+```powershell
+$env:PARKDEX_RELEASE_API_BASE_URL = "https://api-staging-882c.up.railway.app"
+$env:PARKDEX_ANDROID_VERSION_NAME = "1.0.0-internal-staging"
+npm run android:release-prep -- --target internal-staging --build --provenance "C:\private\parkdex-android-internal-staging.json"
+```
 
 Before uploading, retain the following evidence with the external provenance record:
 

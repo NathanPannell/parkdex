@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { afterEach, describe, it } from "node:test";
 
 import {
+  INTERNAL_STAGING_API_BASE_URL,
   PRODUCTION_API_BASE_URL,
   frontendReleaseEnvironment,
   gradleReleaseEnvironment,
@@ -81,6 +82,37 @@ describe("android release preparation", () => {
     assert.throws(() => resolveReleaseConfig({}, badDiagnostics), /NEXT_PUBLIC_FIELD_DIAGNOSTICS=0/);
   });
 
+  it("allows only an explicitly targeted internal-staging candidate with a visible label", () => {
+    const staging = fixtureEnvironment({
+      PARKDEX_RELEASE_API_BASE_URL: INTERNAL_STAGING_API_BASE_URL,
+      PARKDEX_ANDROID_VERSION_NAME: "1.0.1-internal-staging",
+    });
+    const config = resolveReleaseConfig({ target: "internal-staging" }, staging);
+    assert.equal(config.target, "internal-staging");
+    assert.equal(config.apiBaseUrl, INTERNAL_STAGING_API_BASE_URL);
+    assert.equal(config.versionName, "1.0.1-internal-staging");
+    assert.equal(frontendReleaseEnvironment(config).PARKDEX_ANDROID_RELEASE_TARGET, "internal-staging");
+
+    const missingLabel = fixtureEnvironment({
+      PARKDEX_RELEASE_API_BASE_URL: INTERNAL_STAGING_API_BASE_URL,
+    });
+    assert.throws(
+      () => resolveReleaseConfig({ target: "internal-staging" }, missingLabel),
+      /literal internal-staging label/,
+    );
+
+    const productionApi = fixtureEnvironment({
+      PARKDEX_ANDROID_VERSION_NAME: "1.0.1-internal-staging",
+    });
+    assert.throws(
+      () => resolveReleaseConfig({ target: "internal-staging" }, productionApi),
+      /exact HTTPS internal-staging origin https:\/\/api-staging-882c\.up\.railway\.app/,
+    );
+
+    const unknownTarget = fixtureEnvironment();
+    assert.throws(() => resolveReleaseConfig({ target: "staging" }, unknownTarget), /--target must be one of/);
+  });
+
   it("does not put signing secrets in the frontend build environment", () => {
     const fixture = fixtureEnvironment();
     const config = resolveReleaseConfig({}, fixture);
@@ -97,6 +129,7 @@ describe("android release preparation", () => {
   it("parses explicit preparation and build options", () => {
     assert.deepEqual(parseArgs([
       "--build",
+      "--target", "production",
       "--api-base-url", PRODUCTION_API_BASE_URL,
       "--version-code", "2",
       "--version-name", "1.0.1",
@@ -104,6 +137,7 @@ describe("android release preparation", () => {
       "--properties-file", "C:\\private\\release.properties",
     ]), {
       build: true,
+      target: "production",
       api_base_url: PRODUCTION_API_BASE_URL,
       version_code: "2",
       version_name: "1.0.1",
