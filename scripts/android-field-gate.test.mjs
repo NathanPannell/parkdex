@@ -21,6 +21,7 @@ import {
   networkStartupRecoveryReady,
   onboardingSkipCenter,
   offlineCatalogueOracle,
+  openSealedArrivalCamera,
   parseAdbDevices,
   parseAirplaneMode,
   parseAppPid,
@@ -123,6 +124,39 @@ test("dismisses blocking dialogs before retrying Account navigation", () => {
   const modernClaim = '<node text="Log visit + photo" clickable="true" bounds="[10,20][110,80]"/>';
   assert.deepEqual(sealedClaimCenter(`${arrivalClose}${modernClaim}`), { x: 60, y: 50 });
   assert.equal(sealedClaimCenter(`<node text="Log visit + photo" clickable="true" bounds="[10,20][110,80]"/>`), null);
+});
+
+test("waits for the sealed arrival when Locate and Claim occupy overlapping screen space", () => {
+  const locate = '<node content-desc="Show my current location" clickable="true" bounds="[783,1923][910,2050]"/>';
+  const close = '<node content-desc="Close sealed impression" clickable="true" bounds="[893,193][1017,320]"/>';
+  const claim = '<node text="Claim + photo" clickable="true" bounds="[77,1956][1006,2096]"/>';
+  const camera = '<node content-desc="Shutter" clickable="true" bounds="[0,2010][1080,2340]"/>';
+  const arrival = `${locate}${close}${claim}`;
+  const context = { photoTimeoutMs: 60_000 };
+  const taps = [];
+  let locationInjections = 0;
+
+  // The Locate center is inside the later Claim button. A stale Locate tap
+  // would launch Camera before the gate has observed the sealed arrival.
+  assert.deepEqual(locateButtonCenter(locate), { x: 847, y: 1987 });
+  const observedXml = openSealedArrivalCamera(context, {
+    now: () => 1_000,
+    injectLocation: () => { locationInjections += 1; },
+    tap: (center) => { taps.push(center); },
+    wait: (receivedContext, predicate, deadline, label, { retryAction }) => {
+      assert.equal(receivedContext, context);
+      assert.equal(deadline, 61_000);
+      assert.equal(label, "Bell Park sealed Claim + photo action");
+      assert.equal(predicate(locate), null);
+      assert.equal(predicate(camera), null);
+      assert.deepEqual(taps, []);
+      retryAction();
+      return { value: predicate(arrival), xml: arrival };
+    },
+  });
+  assert.equal(observedXml, arrival);
+  assert.equal(locationInjections, 1);
+  assert.deepEqual(taps, [{ x: 542, y: 2026 }]);
 });
 
 test("parses deterministic emulator connectivity and process oracles", () => {

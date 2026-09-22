@@ -768,14 +768,23 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const refreshCatalogueWithRetry = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
     let lastError: unknown;
     const retryEpoch = epochRef.current.capture();
-    const isCurrent = () => isActive() && epochRef.current.isCurrent(retryEpoch);
+    const retryIdentity = identityRef.current;
+    const isCurrent = () => isActive()
+      && epochRef.current.isCurrent(retryEpoch)
+      && sameOwner(identityRef.current, retryIdentity);
     for (let attempt = 0; attempt <= CATALOGUE_BOOT_RETRY_DELAYS_MS.length; attempt += 1) {
       if (!isCurrent()) return false;
       try {
         return await refreshCatalogue(isCurrent);
       } catch (error) {
+        if (!isCurrent()) return false;
         lastError = error;
         if (!retryableCatalogueFailure(error) || attempt === CATALOGUE_BOOT_RETRY_DELAYS_MS.length) throw error;
+        if (isCurrent() && (window.navigator.onLine === false || attempt >= 2)) {
+          setLoadError(placesRef.current.length
+            ? "Showing your saved field guide offline."
+            : "Could not load the field guide. Reconnecting…");
+        }
         await waitForCatalogueRetry(CATALOGUE_BOOT_RETRY_DELAYS_MS[attempt]);
       }
     }
