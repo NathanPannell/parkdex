@@ -211,7 +211,7 @@ describe("Parkdex navigation", () => {
     groupState.groups = [{ id: "wishlist", name: "Wishlist", isWishlist: true, places: [] }, { id: "return-group", name, places: [] }];
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Collection" }));
     fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
     const status = await screen.findByRole("status");
     expect(status.textContent).toBe(`Added to ${name}.`);
@@ -220,7 +220,7 @@ describe("Parkdex navigation", () => {
     expect(groupState.addPlace).toHaveBeenCalledWith("return-group", place.id);
     expect(screen.getByRole("button", { name: "Mark as visited" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add this place to Wishlist" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add this place to a group" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to Collection" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close place details" }).closest(".place-sheet-content")).toBeNull();
   });
 
@@ -233,7 +233,7 @@ describe("Parkdex navigation", () => {
     ];
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Collection" }));
 
     const picker = screen.getByRole("dialog", { name: place.name });
     const member = screen.getByText("Coast days").closest(".group-picker-option")!;
@@ -1045,7 +1045,7 @@ describe("Parkdex navigation", () => {
     groupState.groups = [{ id: "coast", name: "Coast days", places: [place] }];
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Collection" }));
     expect(screen.getByRole("dialog", { name: "Forest Park" })).toBeTruthy();
 
     act(() => { expect(dispatchNativeBack()).toBe(false); });
@@ -1360,7 +1360,7 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("toolbar", { name: "Map utilities" })).toBeNull();
     expect(screen.getByRole("button", { name: "Mark as visited" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add this place to Wishlist" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Add this place to a group" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to Collection" })).toBeTruthy();
   });
 
   it("creates a name-only group and uses a styled delete confirmation", async () => {
@@ -1450,7 +1450,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(wishlistToggle);
     await waitFor(() => expect(groupState.addPlace).toHaveBeenCalledWith("wishlist", place.id));
 
-    fireEvent.click(screen.getByRole("button", { name: "Add this place to a group" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Collection" }));
     expect((screen.getByRole("button", { name: "Create group" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /Coast days/ }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText("Reconnect to create a group. You can still save this place to an existing group.")).toBeTruthy();
