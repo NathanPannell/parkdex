@@ -8,6 +8,19 @@ const ruleBody = (selector: string) => {
   expect(match, `missing CSS rule: ${selector}`).toBeTruthy();
   return match?.[1] ?? "";
 };
+const relativeLuminance = (hex: string) => hex.match(/[0-9a-f]{2}/gi)?.map((part) => {
+  const channel = Number.parseInt(part, 16) / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}) as number[];
+const contrastRatio = (foreground: string, background: string) => {
+  const luminance = (hex: string) => {
+    const [red, green, blue] = relativeLuminance(hex);
+    return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue);
+  };
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+};
 
 describe("mobile map toolbar CSS", () => {
   it("reserves fixed square Locate and Search controls beside resilient mode labels", () => {
@@ -17,6 +30,9 @@ describe("mobile map toolbar CSS", () => {
     expect(css).toMatch(/\.map-utility \.map-mode-switch \.locate-button,[\s\S]*?width: 44px;[\s\S]*?height: 44px;/);
     expect(css).toContain("white-space: nowrap;");
     expect(css).not.toMatch(/\.map-utility[^\{]*\{[^}]*96px/);
+    expect(css).toContain(".thumb-nav.guest { grid-template-columns: repeat(3,1fr); }");
+    expect(css).toContain(".thumb-nav.guest { grid-template-columns: repeat(3,minmax(0,1fr)); }");
+    expect(css).not.toContain(".thumb-nav.guest { grid-template-columns: repeat(2,minmax(0,1fr)); }");
   });
 
   it("keeps higher-specificity collapsed and expanded rules aligned at 44px", () => {
@@ -73,5 +89,71 @@ describe("issue batch responsive CSS", () => {
 describe("mobile account shelf CSS", () => {
   it("keeps See all at a touch-friendly height", () => {
     expect(css).toMatch(/\.account-shelf header > button \{[\s\S]*?min-height: 44px;/);
+  });
+});
+
+describe("staging design audit responsive contracts", () => {
+  it("covers fractional widths continuously at the desktop breakpoint", () => {
+    expect(css).toContain("@media (width < 860px)");
+    expect(css).toContain("@media (min-width: 860px)");
+    expect(css).toContain(".desktop-top-nav { display: none; }");
+    expect(css).not.toContain("@media (max-width: 859px)");
+    expect(css).not.toContain("@media (min-width: 859px)");
+  });
+
+  it("keeps the mobile dock, search, and filter surfaces on the same ten-pixel rails", () => {
+    expect(css).toContain(".thumb-nav { right: 10px; left: 10px;");
+    expect(css).toContain(".search-results, .filter-tray { top: auto; right: 10px; bottom: calc(194px + env(safe-area-inset-bottom)); left: 10px; width: auto;");
+    expect(css).not.toContain(".thumb-nav { right: 24px; left: auto; width: 500px; }");
+  });
+
+  it("moves connection feedback into a reserved, nonblocking status lane", () => {
+    const note = ruleBody(".connection-note, .sync-note");
+    expect(note).toContain("z-index: 14;");
+    expect(note).toContain("min-height: 34px;");
+    expect(css).toContain(".connection-note { pointer-events: none; }");
+    expect(css).toContain(".connection-status > .sync-note { pointer-events: auto; }");
+    expect(css).toContain(".map-stage:has(.connection-status) .search-results");
+    expect(css).toContain("var(--connection-status-height,34px)");
+    expect(css).not.toContain("connection-status-stack");
+  });
+
+  it("keeps Wishlist white text readable on its darkened heart-red surface", () => {
+    expect(css).toMatch(/\.wishlist-group-card \{[^}]*background: #b93632;[^}]*color: #fff8ed;/);
+    expect(css).toContain(".wishlist-group-icon { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 15px; background: rgba(255,255,255,.22); }");
+    expect(css).toContain(".wishlist-group-card small { color: #fff0e1;");
+    expect(css).toContain(".wishlist-group-card > svg { color: #fff0e1; }");
+    expect(contrastRatio("#fff8ed", "#b93632")).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#fff0e1", "#b93632")).toBeGreaterThanOrEqual(4.5);
+    expect(css).toContain(".place-sheet-media .sheet-actions { grid-template-columns: minmax(0,1fr) 52px auto;");
+    expect(css).toContain(".place-sheet-media .sheet-actions:not(:has(.visit-button)) { grid-template-columns: 52px minmax(0,1fr);");
+    expect(css).toContain("font: 900 12px/1 var(--font-body);");
+    expect(css).toContain(".place-sheet-media .sheet-actions .group-quick-action > span { display: inline;");
+    expect(css).toContain(".place-sheet-media .sheet-actions:has(.visit-button) .group-quick-action { grid-column: 1 / -1; width: 100%; min-width: 0; }");
+    expect(css).toContain(".place-sheet-media .sheet-actions:has(.visit-button) { grid-template-columns: 148px; }");
+    expect(css).toContain(".place-sheet-media .sheet-actions:has(.visit-button) .group-quick-action { width: 148px; min-width: 148px;");
+    expect(css).toContain("button:not(.group-quick-action) > span { display: none; }");
+  });
+
+  it("keeps the offline filter tray bottom-anchored while reserving the status lane", () => {
+    expect(css).toContain(".filter-tray { position: absolute;");
+    expect(css).toContain("overflow-y: auto;");
+    expect(css).toContain(".filter-tray { max-height: min(46dvh,calc(100dvh - 274px - env(safe-area-inset-top) - env(safe-area-inset-bottom))); }");
+    expect(css).toContain(".map-stage:has(.connection-status) .filter-tray { top: auto; right: 10px; bottom: calc(194px + env(safe-area-inset-bottom)); left: 10px;");
+    expect(css).toContain("max-height: min(46dvh,calc(100dvh - 274px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--connection-status-height,34px)))");
+    expect(css).not.toContain(".map-stage:has(.connection-status) .filter-tray { top: calc(");
+  });
+
+  it("gives details, badges, catalogue search, and shelves responsive space", () => {
+    expect(ruleBody(".place-sheet")).toContain("max-height: min(620px, calc(100dvh - 48px));");
+    expect(css).toContain(".place-sheet:has(.sheet-actions:empty) .sheet-actions { display: none; }");
+    expect(css).toContain("calc(100dvh - 164px - var(--connection-status-height,34px))");
+    expect(css).toContain("grid-template-rows: minmax(180px,34dvh) minmax(0,1fr);");
+    expect(css).toContain(".feature-collection .category-chips { flex-wrap: wrap;");
+    expect(css).toContain(".collection-view.has-query .collection-progress");
+    expect(css).toContain(".collection-filter-summary button { display: inline-flex; min-height: 44px;");
+    expect(css).toContain(".release-diagnostics summary { display: inline-flex; min-height: 44px;");
+    expect(css).toContain("-webkit-line-clamp: 2;");
+    expect(css).toContain("text-overflow: ellipsis; white-space: nowrap;");
   });
 });

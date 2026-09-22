@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset } from "./account";
+import { ApiError, authenticate, completeGoogleAuthorization, confirmPasswordReset, requestPasswordReset } from "./account";
 
 const API = "https://api.example.test";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("account security requests", () => {
+  it("turns transport failures into recovery guidance while preserving API validation", async () => {
+    vi.stubGlobal("navigator", { onLine: false });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(authenticate(API, "login", "ranger@example.test", "invalid")).rejects.toThrow("You are offline. Reconnect to log in.");
+    vi.stubGlobal("navigator", { onLine: true });
+    await expect(authenticate(API, "login", "ranger@example.test", "invalid")).rejects.toThrow("Check your connection and try again.");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Email or password is incorrect." }), { status: 401 })));
+    await expect(authenticate(API, "login", "ranger@example.test", "invalid")).rejects.toBeInstanceOf(ApiError);
+  });
+
   it("keeps password reset requests enumeration-safe and accepts no-content responses", async () => {
     const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(null, { status: 202 })));
     vi.stubGlobal("fetch", fetchMock);
