@@ -23,6 +23,8 @@ export const GUEST_MIGRATION_RESULT_TYPE = "parkdex-guest-migration-result";
 type GuestMigrationKey = (typeof GUEST_MIGRATION_KEYS)[number];
 type GuestMigrationValues = Partial<Record<GuestMigrationKey, string>>;
 
+const COLLECTION_KEY_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
+
 export type GuestMigrationStatus =
   | "ignored"
   | "imported"
@@ -98,6 +100,33 @@ function restoreStorage(storage: GuestMigrationStorage, previous: Map<GuestMigra
   }
 }
 
+function isEmptyStoredGuestValue(key: GuestMigrationKey, value: string | null): boolean {
+  if (value === null || value === "") return true;
+
+  if (key === "every-park:collection-key:v1") {
+    // Hydration creates this identity before the guest has progress. The API's
+    // catalogue GET only reads rows for it; progress mutations create rows.
+    return COLLECTION_KEY_PATTERN.test(value);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return false;
+  }
+
+  if (key === "every-park:visited:v1" || key === "every-park:trails:v1") {
+    return Array.isArray(parsed) && parsed.length === 0;
+  }
+  if (key === "every-park:guest-revision:v1") return parsed === 0;
+  return isPlainRecord(parsed) && Object.keys(parsed).length === 0;
+}
+
+function hasExistingGuestProgress(previous: Map<GuestMigrationKey, string | null>): boolean {
+  return GUEST_MIGRATION_KEYS.some((key) => !isEmptyStoredGuestValue(key, previous.get(key) ?? null));
+}
+
 export function receiveGuestMigrationMessage({
   origin,
   source,
@@ -128,7 +157,7 @@ export function receiveGuestMigrationMessage({
     return { status: "storage-error" };
   }
 
-  if ([...previous.values()].some((value) => value !== null && value.length > 0)) {
+  if (hasExistingGuestProgress(previous)) {
     return { status: "conflict" };
   }
 

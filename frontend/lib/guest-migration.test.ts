@@ -79,6 +79,27 @@ describe("guest progress migration receiver", () => {
     expect(storage.getItem("every-park:collection-key:v1")).toBeNull();
   });
 
+  it("reuses a freshly initialized destination identity when its persisted guest shell is empty", () => {
+    const storage = makeStorage({
+      "every-park:collection-key:v1": "d".repeat(43),
+      "every-park:visited:v1": "[]",
+      "every-park:visit-timestamps:v1": "{}",
+      "every-park:visit-metadata:v1": "{}",
+      "every-park:trails:v1": "[]",
+      "every-park:pending:v1": "{}",
+      "every-park:trail-pending:v1": "{}",
+    });
+
+    const result = receive(transfer({
+      "every-park:collection-key:v1": "s".repeat(43),
+      "every-park:visited:v1": '["old-park"]',
+    }), storage);
+
+    expect(result.status).toBe("imported");
+    expect(storage.getItem("every-park:collection-key:v1")).toBe("s".repeat(43));
+    expect(storage.getItem("every-park:visited:v1")).toBe('["old-park"]');
+  });
+
   it("rejects account credentials, unknown keys, malformed versions, and oversized messages", () => {
     expect(receive(transfer({ "every-park:account-token:v1": "secret" })).status).toBe("invalid");
     expect(receive(transfer({ "every-park:collection-key:v1": "key", unexpected: "value" })).status).toBe("invalid");
@@ -97,6 +118,32 @@ describe("guest progress migration receiver", () => {
     expect(result.status).toBe("conflict");
     expect(storage.getItem("every-park:visited:v1")).toBe('["new-park"]');
     expect(storage.getItem("every-park:collection-key:v1")).toBeNull();
+  });
+
+  it("keeps a destination identity if its revision proves prior guest use even after progress was undone", () => {
+    const storage = makeStorage({
+      "every-park:collection-key:v1": "d".repeat(43),
+      "every-park:visited:v1": "[]",
+      "every-park:trails:v1": "[]",
+      "every-park:guest-revision:v1": "2",
+    });
+
+    const result = receive(transfer({ "every-park:collection-key:v1": "s".repeat(43) }), storage);
+
+    expect(result.status).toBe("conflict");
+    expect(storage.getItem("every-park:collection-key:v1")).toBe("d".repeat(43));
+  });
+
+  it("treats malformed destination snapshots as conflicts instead of assuming they are empty", () => {
+    const storage = makeStorage({
+      "every-park:collection-key:v1": "d".repeat(43),
+      "every-park:visited:v1": "not-json",
+    });
+
+    const result = receive(transfer({ "every-park:collection-key:v1": "s".repeat(43) }), storage);
+
+    expect(result.status).toBe("conflict");
+    expect(storage.getItem("every-park:collection-key:v1")).toBe("d".repeat(43));
   });
 
   it("rolls back partial writes when the browser storage write cannot be verified", () => {

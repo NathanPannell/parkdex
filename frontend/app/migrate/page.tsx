@@ -86,7 +86,7 @@ export default function GuestProgressMigrationPage() {
       {status === "unavailable" && <p>Start this transfer from the Parkdex landing page. Your saved progress has not been changed.</p>}
       {status === "imported" && <p>Your guest progress is saved here. Opening Parkdex…</p>}
       {status === "conflict" && (
-        <p>This app already has guest progress in this browser. The transfer stopped to protect it. Keep the original Parkdex page open while you decide which copy to use.</p>
+        <p>This app already has guest progress, or its saved state could not be confirmed empty. The transfer stopped to protect it. Keep the original Parkdex page open while you decide which copy to use.</p>
       )}
       {status === "invalid" && <p>The transfer did not pass its safety checks. Your original progress is still on the Parkdex landing page.</p>}
       {status === "oversized" && <p>The saved progress is too large for this transfer. Your original progress remains on the Parkdex landing page.</p>}
