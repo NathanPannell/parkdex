@@ -7,3 +7,28 @@
   Cache-Control: no-store
   Referrer-Policy: no-referrer
   X-Robots-Tag: noindex
+
+/migrate
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex
+
+/migrate/
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex
+
+/migrate/*
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex
+
+/migrate.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex
+
+/migrate/index.html
+  Cache-Control: no-store
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex

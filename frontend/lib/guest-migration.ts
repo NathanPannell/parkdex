@@ -1,0 +1,146 @@
+export const GUEST_MIGRATION_KEYS = [
+  "every-park:collection-key:v1",
+  "every-park:visited:v1",
+  "every-park:visit-timestamps:v1",
+  "every-park:visit-metadata:v1",
+  "every-park:trails:v1",
+  "every-park:pending:v1",
+  "every-park:trail-pending:v1",
+  "every-park:guest-revision:v1",
+] as const;
+
+export const GUEST_MIGRATION_MAX_BYTES = 256 * 1024;
+
+export const GUEST_MIGRATION_ORIGIN_PAIRS = [
+  { sourceOrigin: "https://parkdex.app", targetOrigin: "https://web.parkdex.app" },
+  { sourceOrigin: "https://staging.parkdex.app", targetOrigin: "https://staging.web.parkdex.app" },
+] as const;
+
+export const GUEST_MIGRATION_READY_TYPE = "parkdex-guest-migration-ready";
+export const GUEST_MIGRATION_TRANSFER_TYPE = "parkdex-guest-migration-transfer";
+export const GUEST_MIGRATION_RESULT_TYPE = "parkdex-guest-migration-result";
+
+type GuestMigrationKey = (typeof GUEST_MIGRATION_KEYS)[number];
+type GuestMigrationValues = Partial<Record<GuestMigrationKey, string>>;
+
+export type GuestMigrationStatus =
+  | "ignored"
+  | "imported"
+  | "conflict"
+  | "invalid"
+  | "oversized"
+  | "storage-error";
+
+export type GuestMigrationStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export type GuestMigrationResult = {
+  status: GuestMigrationStatus;
+  keys?: GuestMigrationKey[];
+};
+
+export function guestMigrationPairForAppOrigin(appOrigin: string) {
+  return GUEST_MIGRATION_ORIGIN_PAIRS.find((pair) => pair.targetOrigin === appOrigin) ?? null;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function validateGuestMigrationPayload(payload: unknown):
+  | { status: "valid"; values: GuestMigrationValues }
+  | { status: "invalid" | "oversized" } {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(payload);
+  } catch {
+    return { status: "invalid" };
+  }
+  if (new TextEncoder().encode(serialized).byteLength > GUEST_MIGRATION_MAX_BYTES) {
+    return { status: "oversized" };
+  }
+
+  if (!isPlainRecord(payload)) return { status: "invalid" };
+  const messageKeys = Object.keys(payload);
+  if (
+    messageKeys.length !== 3
+    || !messageKeys.includes("type")
+    || !messageKeys.includes("version")
+    || !messageKeys.includes("values")
+    || payload.type !== GUEST_MIGRATION_TRANSFER_TYPE
+    || payload.version !== 1
+    || !isPlainRecord(payload.values)
+  ) {
+    return { status: "invalid" };
+  }
+
+  const values = payload.values;
+  const keys = Object.keys(values);
+  const allowedKeys = new Set<string>(GUEST_MIGRATION_KEYS);
+  if (keys.length === 0 || keys.some((key) => !allowedKeys.has(key))) {
+    return { status: "invalid" };
+  }
+  if (keys.some((key) => typeof values[key] !== "string")) {
+    return { status: "invalid" };
+  }
+
+  return { status: "valid", values: values as GuestMigrationValues };
+}
+
+function restoreStorage(storage: GuestMigrationStorage, previous: Map<GuestMigrationKey, string | null>) {
+  for (const [key, value] of previous) {
+    try {
+      if (value === null) storage.removeItem(key);
+      else storage.setItem(key, value);
+    } catch {
+      // Best effort rollback after a browser storage failure.
+    }
+  }
+}
+
+export function receiveGuestMigrationMessage({
+  origin,
+  source,
+  expectedOrigin,
+  expectedSource,
+  payload,
+  storage,
+}: {
+  origin: string;
+  source: unknown;
+  expectedOrigin: string;
+  expectedSource: unknown;
+  payload: unknown;
+  storage: GuestMigrationStorage;
+}): GuestMigrationResult {
+  if (!expectedSource || origin !== expectedOrigin || source !== expectedSource) {
+    return { status: "ignored" };
+  }
+
+  const parsed = validateGuestMigrationPayload(payload);
+  if (parsed.status !== "valid") return { status: parsed.status };
+
+  const keys = Object.keys(parsed.values) as GuestMigrationKey[];
+  const previous = new Map<GuestMigrationKey, string | null>();
+  try {
+    for (const key of GUEST_MIGRATION_KEYS) previous.set(key, storage.getItem(key));
+  } catch {
+    return { status: "storage-error" };
+  }
+
+  if ([...previous.values()].some((value) => value !== null && value.length > 0)) {
+    return { status: "conflict" };
+  }
+
+  try {
+    for (const key of keys) storage.setItem(key, parsed.values[key] as string);
+    if (keys.some((key) => storage.getItem(key) !== parsed.values[key])) {
+      throw new Error("Guest progress could not be verified after writing.");
+    }
+  } catch {
+    restoreStorage(storage, previous);
+    return { status: "storage-error" };
+  }
+
+  return { status: "imported", keys };
+}

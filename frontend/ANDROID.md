@@ -135,7 +135,7 @@ The MCP metadata handlers use the `route.web.ts` extension. The normal web build
 
 ## Staging origin
 
-Bundled Capacitor content uses the secure WebView origin `https://localhost`. The staging API's `FRONTEND_ORIGINS` setting must include both `https://staging.parkdex.app` and `https://localhost` before the installed app can read or update staging data. Keep this as provider configuration rather than hardcoding it into FastAPI.
+Bundled Capacitor content uses the secure WebView origin `https://localhost`. The staging API's `FRONTEND_ORIGINS` setting must include both `https://staging.web.parkdex.app` and `https://localhost` before the installed app can read or update staging data. Keep this as provider configuration rather than hardcoding it into FastAPI.
 
 ## Native field behavior
 

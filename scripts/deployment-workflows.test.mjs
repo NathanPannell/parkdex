@@ -119,8 +119,8 @@ test("credentials remain secret references and exact-domain assignment is explic
   assert.match(release, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
   assert.doesNotMatch(staging, /secrets: inherit/);
   assert.doesNotMatch(production, /secrets: inherit/);
-  assert.match(release, /assign the stable staging domain/);
-  assert.match(release, /assign only parkdex\.app and confirm the staging alias is unchanged/);
+  assert.match(release, /assign staging\.web\.parkdex\.app/);
+  assert.match(release, /assign only web\.parkdex\.app and confirm the staging alias is unchanged/);
   assert.doesNotMatch(release, /promote it to production domains/);
   assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
 });
@@ -147,6 +147,9 @@ test("Cloudflare Pages projects are isolated and Git-integrated", () => {
   assert.equal(frontendPackage.scripts["deploy:cloudflare:staging"], undefined);
   assert.equal(frontendPackage.scripts["deploy:cloudflare:production"], undefined);
   assert.match(cloudflareBuild, /PARKDEX_CATALOGUE_SCOPE: process\.env\.CF_PAGES_BRANCH\?\.trim\(\) === "staging" \? "staging" : "canonical"/);
+  assert.match(cloudflareBuild, /NEXT_PUBLIC_APP_URL: appOrigin/);
+  assert.match(cloudflareBuild, /https:\/\/staging\.web\.parkdex\.app/);
+  assert.match(cloudflareBuild, /https:\/\/web\.parkdex\.app/);
   assert.match(frontendPackage.scripts.start, /wrangler pages dev out/);
   assert.match(frontendPackage.scripts.start, /API_BASE_URL=http:\/\/localhost:8000/);
 });

@@ -38,9 +38,9 @@ describe("Cloudflare Pages MCP proxy", () => {
   it("proxies the original path, query, method, and body to the fixed API origin", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("upstream", { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);
-    const request = new Request("https://staging.parkdex.app/register?version=1", {
+    const request = new Request("https://staging.web.parkdex.app/register?version=1", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Host: "staging.parkdex.app" },
+      headers: { "Content-Type": "application/json", Host: "staging.web.parkdex.app" },
       body: '{"client":"test"}',
     });
 
@@ -62,7 +62,7 @@ describe("Cloudflare Pages MCP proxy", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"issuer":"https://staging.parkdex.app/"}')));
     const response = await proxyBackendRequest(
-      new Request("https://staging.parkdex.app/.well-known/oauth-authorization-server"),
+      new Request("https://staging.web.parkdex.app/.well-known/oauth-authorization-server"),
       "https://api-staging.example.test",
     );
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
@@ -76,7 +76,7 @@ describe("Cloudflare Pages MCP proxy", () => {
     })));
 
     const response = await proxyBackendRequest(
-      new Request("https://staging.parkdex.app/mcp/"),
+      new Request("https://staging.web.parkdex.app/mcp/"),
       "https://api-staging.example.test",
     );
 

@@ -22,7 +22,7 @@ export function hasAccountCallback(url: URL): boolean {
 }
 
 export function readNavigation(href: string): PublicNavigation {
-  const url = new URL(href, "https://parkdex.app"), params = url.searchParams;
+  const url = new URL(href, "https://web.parkdex.app"), params = url.searchParams;
   const requestedView = params.get("view");
   const view: View = requestedView && ["map", "collection", "groups", "badges", "account"].includes(requestedView) ? requestedView as View : "map";
   const selectedId = params.get("place") || null;
@@ -46,7 +46,7 @@ const publicKeys = ["view", "place", "detail", "mode", "mapQuery", "mapCategory"
 
 /** Only public catalogue navigation belongs in the address. Private group context stays in memory. */
 export function navigationUrl(currentHref: string, state: PublicNavigation): string {
-  const url = new URL(currentHref, "https://parkdex.app");
+  const url = new URL(currentHref, "https://web.parkdex.app");
   publicKeys.forEach((key) => url.searchParams.delete(key));
   url.searchParams.set("view", state.view);
   if (state.selectedId) url.searchParams.set("place", state.selectedId);
