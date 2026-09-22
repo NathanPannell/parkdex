@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  accountNavigationTarget,
   assertEmulatorSerial,
   bellParkReady,
   catalogueUnavailable,
@@ -19,16 +20,20 @@ import {
   manualCleanupFailure,
   networkStartupRecoveryReady,
   offlineCatalogueOracle,
+  openSealedArrivalCamera,
   parseAdbDevices,
   parseAirplaneMode,
   parseAppPid,
   parseArgs,
   parseR2ContractOutput,
   photoPostcardReady,
+  photoJourneyCleanupReady,
+  photoReviewReady,
   railwayContractCommand,
   resolveStagingBaseSha,
   retryActionDue,
   sanitizeText,
+  sealedClaimCenter,
   stagingBuildEnvironment,
   summarizeDurations,
   validateRailwayProjectDir,
@@ -68,11 +73,72 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.deepEqual(labelledNodeCenter('<node text="Claim + photo" bounds="[10,20][110,80]"/>', [/Claim \+ photo/]), { x: 60, y: 50 });
   assert.deepEqual(labelledNodeCenter('<node text="" content-desc="Shutter" bounds="[0,2010][1080,2340]"/>', [/Shutter/]), { x: 540, y: 2175 });
   assert.deepEqual(labelledNodeCenter('<node text="Map" clickable="false" bounds="[0,0][100,100]"/><node text="Map" clickable="true" enabled="true" bounds="[800,1800][1000,2000]"/>', [/^Map$/]), { x: 900, y: 1900 });
-  const postcard = '<node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Remove photo from Bell Park" bounds="[1,1][2,2]"/>';
+  const postcard = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo" clickable="true" enabled="true" bounds="[1,1][2,2]"/>';
   assert.equal(photoPostcardReady(postcard), true);
-  const androidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Remove photo from Bell Park"/>';
-  assert.equal(photoPostcardReady(androidWebViewPostcard), true);
+  const collectionOnly = '<node content-desc="Postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/>';
+  assert.equal(photoPostcardReady(collectionOnly), false);
+  const placeQualifiedRemove = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo from Bell Park" bounds="[1,1][2,2]"/>';
+  assert.equal(photoPostcardReady(placeQualifiedRemove), false);
+  const oldAndroidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Private visit photo from Bell Park"/><node text="Remove photo from Bell Park"/>';
+  assert.equal(photoPostcardReady(oldAndroidWebViewPostcard), false);
   assert.equal(photoPostcardReady(`${postcard}<node text="Photo unavailable"/>`), false);
+  const emptyCollection = '<node text="Your first boundary claim will become a postcard here."/>';
+  assert.equal(photoJourneyCleanupReady(emptyCollection), true);
+  assert.equal(photoJourneyCleanupReady(`${emptyCollection}<node content-desc="Postcard from Bell Park"/>`), false);
+  const review = '<node text="Keep this one?" bounds="[20,300][500,360]"/><node text="Save my visit" clickable="true" enabled="true" bounds="[20,700][500,780]"/>';
+  assert.equal(photoReviewReady(review), true);
+  assert.equal(photoReviewReady('<node text="Keep this one?"/><node text="Save" clickable="true" bounds="[20,700][500,780]"/>'), false);
+  assert.equal(photoReviewReady('<node text="Save my visit" clickable="true" bounds="[20,700][500,780]"/>'), false);
+});
+
+test("dismisses blocking dialogs before retrying Account navigation", () => {
+  const accountButton = '<node text="Account" clickable="true" bounds="[849,2099][1042,2242]"/>';
+  const arrivalClose = '<node content-desc="Close sealed impression" clickable="true" bounds="[893,193][1017,320]"/>';
+  assert.deepEqual(accountNavigationTarget(`${accountButton}${arrivalClose}`), {
+    kind: "dismiss-arrival", center: { x: 955, y: 257 },
+  });
+  assert.deepEqual(accountNavigationTarget(accountButton), {
+    kind: "navigate", center: { x: 946, y: 2171 },
+  });
+  assert.equal(accountNavigationTarget(`${accountButton}<node text="Close nearby places" bounds="[1,1][3,3]"/>`).kind, "dismiss-nearby");
+  assert.equal(accountNavigationTarget(`${accountButton}<node text="Claim my badge" bounds="[1,1][3,3]"/>`).kind, "dismiss-badge");
+  assert.deepEqual(accountNavigationTarget('<node text="Account" resource-id="primary-content"/>'), { kind: "ready" });
+  const claim = '<node text="Claim + photo" clickable="true" bounds="[10,20][110,80]"/>';
+  assert.equal(sealedClaimCenter(claim), null);
+  assert.deepEqual(sealedClaimCenter(`${arrivalClose}${claim}`), { x: 60, y: 50 });
+});
+
+test("waits for the sealed arrival when Locate and Claim occupy overlapping screen space", () => {
+  const locate = '<node content-desc="Show my current location" clickable="true" bounds="[783,1923][910,2050]"/>';
+  const close = '<node content-desc="Close sealed impression" clickable="true" bounds="[893,193][1017,320]"/>';
+  const claim = '<node text="Claim + photo" clickable="true" bounds="[77,1956][1006,2096]"/>';
+  const camera = '<node content-desc="Shutter" clickable="true" bounds="[0,2010][1080,2340]"/>';
+  const arrival = `${locate}${close}${claim}`;
+  const context = { photoTimeoutMs: 60_000 };
+  const taps = [];
+  let locationInjections = 0;
+
+  // The Locate center is inside the later Claim button. A stale Locate tap
+  // would launch Camera before the gate has observed the sealed arrival.
+  assert.deepEqual(locateButtonCenter(locate), { x: 847, y: 1987 });
+  const observedXml = openSealedArrivalCamera(context, {
+    now: () => 1_000,
+    injectLocation: () => { locationInjections += 1; },
+    tap: (center) => { taps.push(center); },
+    wait: (receivedContext, predicate, deadline, label, { retryAction }) => {
+      assert.equal(receivedContext, context);
+      assert.equal(deadline, 61_000);
+      assert.equal(label, "Bell Park sealed Claim + photo action");
+      assert.equal(predicate(locate), null);
+      assert.equal(predicate(camera), null);
+      assert.deepEqual(taps, []);
+      retryAction();
+      return { value: predicate(arrival), xml: arrival };
+    },
+  });
+  assert.equal(observedXml, arrival);
+  assert.equal(locationInjections, 1);
+  assert.deepEqual(taps, [{ x: 542, y: 2026 }]);
 });
 
 test("parses deterministic emulator connectivity and process oracles", () => {

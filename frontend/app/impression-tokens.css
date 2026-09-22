@@ -1,0 +1,21 @@
+/* Sealed Impressions extends Parkdex's existing brand. */
+:root {
+  --impression-paper: var(--paper-bright);
+  --impression-ink: var(--forest);
+  --impression-pine: var(--forest-2);
+  --impression-mint: #e3eedf;
+  --impression-mist: #f0f5eb;
+  --impression-muted: #50685c;
+  --impression-line: #c3d2c0;
+  --impression-sun: #f5d979;
+  --impression-dark: #11281f;
+  --impression-glass: #fffaf0f2;
+  --impression-shadow: #173d3226;
+  --impression-clear: transparent;
+  --impression-warning: #743c20;
+  --impression-warning-paper: #fff0d9;
+  --impression-font-ui: var(--font-body);
+  --impression-font-place: var(--font-display);
+  --impression-ease: cubic-bezier(.2,.8,.2,1);
+  --impression-radius: 32px;
+}
