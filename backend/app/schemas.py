@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -257,6 +258,18 @@ class AccountState(BaseModel):
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
     visits: list[Visit]
     completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
+
+
+class AccountDeletionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    confirm: Literal["DELETE_ACCOUNT"]
+    request_id: UUID = Field(alias="requestId")
+
+
+class AccountDeletionResult(BaseModel):
+    deleted: Literal[True]
+    photo_cleanup_pending: bool = Field(serialization_alias="photoCleanupPending")
 
 
 class GuestImportResult(BaseModel):

@@ -31,6 +31,15 @@ from backend.app.auth import (
     require_bearer,
     verify_password,
 )
+from backend.app.account_deletion import (
+    account_deletion_receipt,
+    account_deletion_receipt_hash,
+    account_deletion_result,
+    delete_account_rows,
+    enqueue_photo_object_deletions,
+    purge_expired_account_deletion_receipts,
+    update_account_deletion_receipt,
+)
 from backend.app.auth_emails import AuthEmail, password_reset_email, verification_email
 from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
@@ -59,6 +68,8 @@ from backend.app.google_oauth import authorization_url, exchange_and_verify
 from backend.app.mcp_server import build_hosted_mcp_app
 from backend.app.schemas import (
     AccountState,
+    AccountDeletionRequest,
+    AccountDeletionResult,
     AuthResult,
     ClaimRecommendationRequest,
     ClaimRecommendationResponse,
@@ -280,22 +291,6 @@ def photo_storage_error(exc: Exception) -> HTTPException:
     )
 
 
-def enqueue_photo_object_deletions(
-    conn: Connection, account_id: str, keys: list[str]
-) -> None:
-    """Persist object cleanup in the same transaction that removes metadata."""
-
-    for key in sorted(set(keys)):
-        conn.execute(
-            """
-            INSERT INTO photo_object_deletions (object_key, account_id)
-            VALUES (%s, %s)
-            ON CONFLICT (object_key) DO NOTHING
-            """,
-            (key, account_id),
-        )
-
-
 def settle_photo_object_deletions(
     keys: list[str], *, outcome_conn: Connection | None = None
 ) -> int:
@@ -469,12 +464,17 @@ def process_photo_deletion_outbox(limit: int = PHOTO_DELETION_BATCH_SIZE) -> int
         return 0
 
 
-def persist_failed_upload_cleanup(account_id: str, object_key: str) -> None:
-    """Delete an unreferenced upload now, retaining a durable retry on failure."""
+def persist_failed_upload_cleanup(_account_id: str, object_key: str) -> None:
+    """Delete an unreferenced upload now, retaining a durable retry on failure.
+
+    The account may have been deleted while the object was being uploaded, so
+    this orphan cleanup intent deliberately leaves ``account_id`` NULL.  The
+    outbox is designed to survive that account cascade.
+    """
 
     try:
         with contextmanager(connection)() as conn:
-            enqueue_photo_object_deletions(conn, account_id, [object_key])
+            enqueue_photo_object_deletions(conn, None, [object_key])
             conn.commit()
     except Exception as exc:
         # If the database itself is unavailable, a direct idempotent delete is
@@ -1931,6 +1931,109 @@ def finish_google_oauth(payload: GoogleCallback):
     with contextmanager(connection)() as conn:
         account = conn.execute("SELECT id, email, password_hash FROM accounts WHERE id = %s", (account["id"],)).fetchone()
     return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True, "has_password": bool(account.get("password_hash"))}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
+
+
+@app.delete("/api/account", response_model=AccountDeletionResult)
+def delete_account(
+    payload: AccountDeletionRequest,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> dict[str, object]:
+    """Delete the authenticated account and retain only a retry receipt.
+
+    The receipt lookup happens before bearer validation so a client can safely
+    retry an otherwise successful delete after losing its response.  It is
+    keyed by a one-way combination of the exact bearer and request id, so a
+    different or malformed bearer still receives the normal authentication
+    error.
+    """
+
+    purged = purge_expired_account_deletion_receipts(conn)
+    if purged:
+        conn.commit()
+
+    request_hash = account_deletion_receipt_hash(authorization, payload.request_id)
+    receipt = account_deletion_receipt(conn, request_hash)
+    if receipt is not None:
+        return account_deletion_result(
+            photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+        )
+
+    identity = require_bearer(conn, authorization)
+    try:
+        identity = revalidate_locked_account_identity(conn, identity, authorization)
+    except HTTPException:
+        # A concurrent delete can revoke the session before this request
+        # reaches the account lock.  Only the exact private receipt can turn
+        # that lost-response race into a successful retry.
+        receipt = account_deletion_receipt(conn, request_hash)
+        if receipt is not None:
+            return account_deletion_result(
+                photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+            )
+        raise
+
+    # Recheck after waiting for the account lock in case another request
+    # committed a receipt while this request was queued.
+    receipt = account_deletion_receipt(conn, request_hash)
+    if receipt is not None:
+        return account_deletion_result(
+            photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+        )
+
+    try:
+        deleted = delete_account_rows(
+            conn,
+            identity.account_id,
+            request_hash=request_hash,
+        )
+    except LookupError:
+        # The account lock/revalidation normally makes this unreachable.  If a
+        # database failover races the request, preserve the idempotent retry
+        # behavior when the committed receipt is available.
+        conn.rollback()
+        receipt = account_deletion_receipt(conn, request_hash)
+        if receipt is not None:
+            return account_deletion_result(
+                photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+            )
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn.commit()
+    photo_cleanup_pending = bool(deleted.photo_keys)
+    if deleted.photo_keys:
+        try:
+            settle_photo_object_deletions(list(deleted.photo_keys), outcome_conn=conn)
+            remaining = conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM photo_object_deletions
+                WHERE object_key = ANY(%s)
+                """,
+                (list(deleted.photo_keys),),
+            ).fetchone()
+            photo_cleanup_pending = bool(remaining and remaining["count"])
+            update_account_deletion_receipt(
+                conn,
+                request_hash,
+                photo_cleanup_pending=photo_cleanup_pending,
+            )
+            conn.commit()
+        except Exception as exc:
+            # The database deletion and outbox commit already succeeded.  Keep
+            # the conservative pending state if immediate object cleanup or
+            # receipt refinement cannot complete in this request.
+            logger.warning(
+                "Could not finalize account deletion photo state (%s)",
+                type(exc).__name__,
+            )
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            photo_cleanup_pending = True
+
+    return account_deletion_result(photo_cleanup_pending=photo_cleanup_pending)
 
 
 @app.delete("/api/account/progress", status_code=204)

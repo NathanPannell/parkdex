@@ -8,12 +8,14 @@ import {
   authenticate as authenticateAccount,
   completeGoogleAuthorization,
   confirmEmailVerification as confirmAccountEmailVerification,
+  deleteAccount as deleteAccountRequest,
   importGuestProgress,
   loadAccount,
   logout as logoutAccount,
   requestEmailVerification as requestAccountEmailVerification,
   resetAccountProgress,
   type Account,
+  type AccountDeletionResponse,
   type AccountSession,
   type Visit,
 } from "./account";
@@ -69,6 +71,29 @@ type AccountSnapshot = {
   visits?: Visit[];
 };
 
+type AccountDeletionIntent = {
+  accountId: string;
+  requestId: string;
+  confirmed?: boolean;
+  photoCleanupPending?: boolean;
+};
+
+export type AccountDeletionResult = AccountDeletionResponse & {
+  /** Local device cleanup may need a later retry after server deletion succeeds. */
+  localCleanupPending?: boolean;
+};
+
+type SwitchToGuestOptions = {
+  clearRestoredCamera?: boolean;
+  bestEffort?: boolean;
+};
+
+type AccountCleanupOptions = {
+  clearAccountSnapshot?: boolean;
+  clearCurrentAccountOutbox?: boolean;
+  clearRestoredCamera?: boolean;
+};
+
 export type FieldJournal = {
   places: Place[];
   visited: Set<string>;
@@ -95,6 +120,7 @@ export type FieldJournal = {
   logout: () => Promise<void>;
   importGuest: () => Promise<void>;
   resetProgress: () => Promise<void>;
+  deleteAccount: () => Promise<AccountDeletionResult>;
   recommendClaim?: (input: ClaimRecommendationInput) => Promise<ClaimRecommendation>;
   createClaim?: (input: { recommendationToken: string; expectedPlaceId: string }) => Promise<ClaimConfirmation>;
   reconcileClaim?: (placeId: string) => Promise<ClaimConfirmation | null>;
@@ -136,6 +162,17 @@ function metadataFor(visits: Visit[] | undefined, visitedIds?: Iterable<string>,
     if (!metadata[placeId] && timestamps[placeId]) metadata[placeId] = { placeId, visitedAt: timestamps[placeId] };
   }
   return metadata;
+}
+
+function createAccountDeletionRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") crypto.getRandomValues(bytes);
+  else for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function claimOwner(identity: Identity): ClaimOwner {
@@ -289,6 +326,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const accountVisitOutboxRef = useRef(new VisitOutbox());
   const accountTrailOutboxRef = useRef(new VisitOutbox());
   const accountOutboxOwnerRef = useRef("");
+  const accountDeletionIntentRef = useRef<AccountDeletionIntent | null>(null);
+  const accountDeletionBootReplayRef = useRef(false);
   const visitMutationsRef = useRef(new VisitMutationJournal());
   const [hydrationReady] = useState(() => {
     let resolve: () => void = () => {};
@@ -434,13 +473,30 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     return await readStored<number>(target, importedGuestKey(accountId), -1) === currentRevision;
   }, [storage]);
 
-  const switchToGuest = useCallback(async (message = "") => {
+  const switchToGuest = useCallback(async (message = "", options: SwitchToGuestOptions = {}) => {
+    const bestEffort = options.bestEffort === true;
+    let cleanupSucceeded = true;
     epochRef.current.advance();
     visitMutationsRef.current.reset();
-    await clearRestoredCameraPhoto();
+    if (options.clearRestoredCamera !== false) {
+      try {
+        await clearRestoredCameraPhoto();
+      } catch (error) {
+        cleanupSucceeded = false;
+        if (!bestEffort) throw error;
+        noteStorageFailure(false);
+      }
+    }
     const target = storage();
-    noteStorageFailure(await removeStored(target, ACCOUNT_TOKEN_KEY));
-    noteStorageFailure(await removeStored(target, JOURNAL_STORAGE.accountSnapshot));
+    const remove = async (key: string) => {
+      const success = await removeStored(target, key);
+      noteStorageFailure(success);
+      if (!success) {
+        cleanupSucceeded = false;
+      }
+    };
+    await remove(ACCOUNT_TOKEN_KEY);
+    await remove(JOURNAL_STORAGE.accountSnapshot);
     const collectionKey = identityRef.current.kind === "guest"
       ? identityRef.current.collectionKey
       : await readStored<string>(target, JOURNAL_STORAGE.collectionKey, "");
@@ -459,10 +515,75 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     );
     setGuestProgressAvailable(await guestHasProgress());
     if (message) setSyncMessage(message);
+    return cleanupSucceeded;
   }, [guestHasProgress, noteStorageFailure, storage, updateProgress]);
+
+  const accountDeletionIntent = useCallback(async (accountId: string): Promise<AccountDeletionIntent> => {
+    const target = storage();
+    const stored = await readStored<AccountDeletionIntent | null>(target, JOURNAL_STORAGE.accountDeletion, null);
+    if (stored?.accountId && stored.accountId !== accountId) {
+      throw new Error("Another account deletion is still waiting for local cleanup.");
+    }
+    const intent = stored?.accountId === accountId && stored.requestId
+      ? stored
+      : { accountId, requestId: createAccountDeletionRequestId() };
+    if (!await writeStored(target, JOURNAL_STORAGE.accountDeletion, intent)) {
+      throw new Error("Private device storage could not save the deletion retry.");
+    }
+    accountDeletionIntentRef.current = intent;
+    return intent;
+  }, [storage]);
+
+  const clearDeletedAccountLocalState = useCallback(async (accountId: string, options: AccountCleanupOptions = {}) => {
+    const target = storage();
+    const failures: Error[] = [];
+    const attempt = async (label: string, operation: () => boolean | void | Promise<boolean | void>) => {
+      try {
+        const result = await operation();
+        if (result === false) failures.push(new Error(label));
+      } catch (error) {
+        failures.push(error instanceof Error ? error : new Error(label));
+      }
+    };
+
+    // Wait for any in-flight account retry before replacing its durable entry.
+    // A confirmed marker for account A can be encountered while account B is
+    // already cached, so never clear B's in-memory outbox or mutation journal.
+    if (options.clearCurrentAccountOutbox !== false) {
+      await attempt("Could not cancel pending account visit retries.", () => accountVisitOutboxRef.current.clearAndWait());
+      await attempt("Could not cancel pending account trail retries.", () => accountTrailOutboxRef.current.clearAndWait());
+    }
+    await attempt("Could not clear pending account visit retries.", () => writeStored(target, accountPendingKey(accountId, "visits"), {}));
+    await attempt("Could not clear pending account trail retries.", () => writeStored(target, accountPendingKey(accountId, "trails"), {}));
+    if (options.clearAccountSnapshot !== false) {
+      await attempt("Could not clear the cached account journal.", () => removeStored(target, JOURNAL_STORAGE.accountSnapshot));
+    }
+    await attempt("Could not clear the imported guest marker.", () => removeStored(target, importedGuestKey(accountId)));
+    await attempt("Private photo storage is busy.", () => clearPhotoRetryOwner(`account:${accountId}`));
+    if (options.clearRestoredCamera !== false) {
+      await attempt("Recovered camera storage is busy.", () => clearRestoredCameraPhoto());
+    }
+
+    if (options.clearCurrentAccountOutbox !== false) {
+      accountVisitOutboxRef.current = new VisitOutbox();
+      accountTrailOutboxRef.current = new VisitOutbox();
+      accountOutboxOwnerRef.current = "";
+      visitMutationsRef.current.reset();
+    }
+    if (failures.length) {
+      noteStorageFailure(false);
+      throw failures[0];
+    }
+  }, [noteStorageFailure, storage]);
 
   const expireAccount = useCallback((capturedEpoch: number) => {
     if (!epochRef.current.isCurrent(capturedEpoch) || identityRef.current.kind !== "account") return;
+    const pendingDeletion = accountDeletionIntentRef.current;
+    if (pendingDeletion
+      && (!identityRef.current.account || identityRef.current.account.id === pendingDeletion.accountId)) {
+      setSyncMessage("The server did not confirm account deletion. Retry with the same request to resolve it.");
+      return;
+    }
     void switchToGuest("Your session expired. Sign in again to continue syncing your account.");
   }, [switchToGuest]);
 
@@ -746,6 +867,64 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
       let savedToken = await target.getItem(ACCOUNT_TOKEN_KEY) ?? "";
       const cachedAccount = await readStored<AccountSnapshot | null>(target, JOURNAL_STORAGE.accountSnapshot, null);
+      const pendingDeletion = await readStored<AccountDeletionIntent | null>(target, JOURNAL_STORAGE.accountDeletion, null);
+      accountDeletionIntentRef.current = pendingDeletion;
+      const ownsPendingDeletionSession = Boolean(pendingDeletion?.confirmed
+        && (!cachedAccount || cachedAccount.account.id === pendingDeletion.accountId));
+      if (pendingDeletion?.confirmed) {
+        try {
+          await clearDeletedAccountLocalState(pendingDeletion.accountId, {
+            clearAccountSnapshot: ownsPendingDeletionSession,
+            clearCurrentAccountOutbox: ownsPendingDeletionSession,
+            clearRestoredCamera: ownsPendingDeletionSession,
+          });
+          if (ownsPendingDeletionSession) {
+            noteStorageFailure(await removeStored(target, ACCOUNT_TOKEN_KEY));
+            savedToken = "";
+          }
+          const markerRemoved = await removeStored(target, JOURNAL_STORAGE.accountDeletion);
+          noteStorageFailure(markerRemoved);
+          if (markerRemoved) accountDeletionIntentRef.current = null;
+        } catch {
+          // Keep the confirmed marker so the next launch can retry cleanup;
+          // invalidate this owner's cached session when it is still active.
+          if (ownsPendingDeletionSession) savedToken = "";
+        }
+      }
+      let bootDeletionOutcomeUnresolved = false;
+      if (apiBaseUrl && savedToken && cachedAccount?.account.id === pendingDeletion?.accountId
+        && pendingDeletion && !pendingDeletion.confirmed && !accountDeletionBootReplayRef.current) {
+        accountDeletionBootReplayRef.current = true;
+        try {
+          const deletion = await deleteAccountRequest(apiBaseUrl, savedToken, pendingDeletion.requestId);
+          const confirmedIntent: AccountDeletionIntent = {
+            ...pendingDeletion,
+            confirmed: true,
+            photoCleanupPending: deletion.photoCleanupPending,
+          };
+          if (!await writeStored(target, JOURNAL_STORAGE.accountDeletion, confirmedIntent)) {
+            noteStorageFailure(false);
+            bootDeletionOutcomeUnresolved = true;
+          } else {
+            accountDeletionIntentRef.current = confirmedIntent;
+            let cleanupPending = false;
+            try {
+              await clearDeletedAccountLocalState(pendingDeletion.accountId);
+            } catch {
+              cleanupPending = true;
+            }
+            noteStorageFailure(await removeStored(target, ACCOUNT_TOKEN_KEY));
+            savedToken = "";
+            if (!cleanupPending) {
+              const markerRemoved = await removeStored(target, JOURNAL_STORAGE.accountDeletion);
+              noteStorageFailure(markerRemoved);
+              if (markerRemoved) accountDeletionIntentRef.current = null;
+            }
+          }
+        } catch {
+          bootDeletionOutcomeUnresolved = true;
+        }
+      }
       let initialVisited = guestVisited;
       let initialTrails = guestTrails;
       let initialVisitTimestamps = guestVisitTimestamps;
@@ -807,9 +986,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           await persistAccount();
         } catch (error) {
           if (!active || !epochRef.current.isCurrent(accountEpoch)) return;
-          if (error instanceof ApiError && error.status === 401) {
+          const deletionOutcomeUnresolved = Boolean(pendingDeletion
+            && (!cachedAccount || cachedAccount.account.id === pendingDeletion.accountId));
+          if (error instanceof ApiError && error.status === 401 && !deletionOutcomeUnresolved) {
             savedToken = "";
             await switchToGuest("Your session expired. Sign in again to continue syncing your account.");
+          } else if (deletionOutcomeUnresolved) {
+            setLoadError("Your account deletion outcome is unresolved. Reopen account deletion to retry it safely.");
           } else {
             setLoadError(cachedPlaces.length ? "Showing your saved account journal offline." : "Your account is offline. We’ll reconnect without switching collections.");
           }
@@ -823,7 +1006,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         if (!active) return;
         setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : "Could not load the field guide. Check your connection and try again.");
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          if (bootDeletionOutcomeUnresolved) {
+            setLoadError("Your account deletion outcome is unresolved. Reopen account deletion to retry it safely.");
+          }
+          setLoading(false);
+        }
       }
     })().catch(() => {
       if (!active) return;
@@ -834,7 +1022,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     });
 
     return () => { active = false; epoch.advance(); };
-  }, [apiBaseUrl, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, refreshCatalogue, refreshCatalogueWithRetry, storage, switchToGuest, updatePlaces, updateProgress]);
+  }, [apiBaseUrl, clearDeletedAccountLocalState, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, persistAccount, refreshCatalogue, refreshCatalogueWithRetry, storage, switchToGuest, updatePlaces, updateProgress]);
 
   useEffect(() => {
     if (loading) return;
@@ -1046,6 +1234,90 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       setTransitionBusy(false);
     }
   }, [apiBaseUrl, switchToGuest]);
+
+  const deleteAccount = useCallback(async (): Promise<AccountDeletionResult> => {
+    const identity = identityRef.current;
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    if (identity.kind !== "account" || !identity.account) throw new Error("Sign in before deleting your account.");
+    transitionRef.current = true;
+    setTransitionBusy(true);
+    // Invalidate every claim, photo, and outbox response that started before
+    // the destructive transition. The request itself is replayable through
+    // the owner-bound intent persisted below.
+    epochRef.current.advance();
+    let serverConfirmed = false;
+    try {
+      const intent = await accountDeletionIntent(identity.account.id);
+      let deletion: AccountDeletionResponse;
+      if (intent.confirmed) {
+        deletion = { deleted: true, photoCleanupPending: intent.photoCleanupPending === true };
+      } else {
+        deletion = await deleteAccountRequest(apiBaseUrl, identity.token, intent.requestId);
+      }
+      serverConfirmed = true;
+
+      const target = storage();
+      const confirmedIntent: AccountDeletionIntent = {
+        ...intent,
+        confirmed: true,
+        photoCleanupPending: deletion.photoCleanupPending,
+      };
+      if (!await writeStored(target, JOURNAL_STORAGE.accountDeletion, confirmedIntent)) {
+        noteStorageFailure(false);
+        throw new Error("Could not save the deletion confirmation for local recovery. Retry with the same request.");
+      }
+      accountDeletionIntentRef.current = confirmedIntent;
+      let cleanupPending = false;
+      try {
+        await clearDeletedAccountLocalState(identity.account.id);
+      } catch (error) {
+        cleanupPending = true;
+        setSyncMessage(error instanceof Error
+          ? `Your account was deleted, but local cleanup needs another retry: ${error.message}`
+          : "Your account was deleted, but local cleanup needs another retry.");
+      }
+
+      let sessionCleared = false;
+      try {
+        sessionCleared = await switchToGuest("Your account was deleted.", {
+          clearRestoredCamera: false,
+          bestEffort: true,
+        });
+      } catch {
+        cleanupPending = true;
+      }
+      if (!sessionCleared) cleanupPending = true;
+      if (cleanupPending) {
+        setSyncMessage("Your account was deleted. Some private device data will be cleared when storage is available.");
+      } else {
+        const markerRemoved = await removeStored(target, JOURNAL_STORAGE.accountDeletion);
+        noteStorageFailure(markerRemoved);
+        if (!markerRemoved) cleanupPending = true;
+        else accountDeletionIntentRef.current = null;
+      }
+      return {
+        deleted: true,
+        photoCleanupPending: deletion.photoCleanupPending,
+        ...(cleanupPending ? { localCleanupPending: true } : {}),
+      };
+    } catch (error) {
+      if (serverConfirmed) {
+        setSyncMessage("The server confirmed account deletion, but local cleanup is unresolved. Retry to finish clearing this device.");
+        throw error;
+      }
+      // A transport error, validation error, or generic 401 leaves the
+      // account and its local state intact. The stored request id remains so
+      // the next explicit attempt can safely ask the server for the same
+      // deletion outcome.
+      setSyncMessage(error instanceof Error
+        ? `The server did not confirm account deletion. Retry with the same request to resolve it. ${error.message}`
+        : "The server did not confirm account deletion. Retry with the same request to resolve it.");
+      throw error;
+    } finally {
+      transitionRef.current = false;
+      setTransitionBusy(false);
+    }
+  }, [accountDeletionIntent, apiBaseUrl, clearDeletedAccountLocalState, noteStorageFailure, storage, switchToGuest]);
 
   const importGuest = useCallback(async () => {
     const accountIdentity = identityRef.current;
@@ -1330,6 +1602,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     logout,
     importGuest,
     resetProgress,
+    deleteAccount,
     recommendClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? recommendClaim : undefined,
     createClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? createClaim : undefined,
     reconcileClaim: visitClaimMode === "compatible" || visitClaimMode === "required" ? reconcileClaim : undefined,

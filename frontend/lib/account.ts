@@ -22,6 +22,13 @@ export type AccountSession = {
   completedTrailIds: string[];
 };
 
+export type AccountDeletionResponse = {
+  deleted: true;
+  photoCleanupPending: boolean;
+};
+
+export const ACCOUNT_DELETION_TIMEOUT_MS = 30_000;
+
 export const ACCOUNT_TOKEN_KEY = "every-park:account-token:v1";
 
 export class ApiError extends Error {
@@ -116,5 +123,48 @@ export async function resetAccountProgress(apiBaseUrl: string, token: string): P
     let message = "Could not reset your progress. Please try again.";
     try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* use friendly fallback */ }
     throw new ApiError(message, response.status);
+  }
+}
+
+/**
+ * Delete the authenticated account. The request id is intentionally supplied
+ * by the caller so a retry after a lost response can be recognized by the
+ * server as the same destructive operation.
+ */
+export async function deleteAccount(
+  apiBaseUrl: string,
+  token: string,
+  requestId: string,
+): Promise<AccountDeletionResponse> {
+  const controller = typeof AbortController === "undefined" ? undefined : new AbortController();
+  const timeout = controller === undefined
+    ? undefined
+    : setTimeout(() => controller.abort(), ACCOUNT_DELETION_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/account`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirm: "DELETE_ACCOUNT", requestId }),
+      signal: controller?.signal,
+    });
+    const result = await parseResponse<Partial<AccountDeletionResponse>>(response);
+    if (result?.deleted !== true || typeof result.photoCleanupPending !== "boolean") {
+      throw new ApiError("The server did not confirm account deletion.", response.status);
+    }
+    return {
+      deleted: true,
+      photoCleanupPending: result.photoCleanupPending,
+    };
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new Error("Could not confirm account deletion before the request timed out. Retry with the same request.");
+    }
+    if (error instanceof ApiError) throw error;
+    throw new Error(networkErrorMessage(error, "delete your account"));
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
