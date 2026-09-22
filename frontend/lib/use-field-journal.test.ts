@@ -1031,11 +1031,11 @@ describe("useFieldJournal identity and progress races", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     const location = { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() };
 
-    await expect(result.current.recommendClaim!({ location })).rejects.toThrow("Sign in to manage visit claims and private photos.");
-    await expect(result.current.createClaim!({ recommendationToken: "token", expectedPlaceId: PLACE.id })).rejects.toThrow("Sign in to manage visit claims and private photos.");
-    await expect(result.current.uploadVisitPhoto!(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" }))).rejects.toThrow("Sign in to manage visit claims and private photos.");
-    await expect(result.current.loadVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
-    await expect(result.current.removeVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to manage visit claims and private photos.");
+    await expect(result.current.recommendClaim!({ location })).rejects.toThrow("Sign in to save visits and private photos.");
+    await expect(result.current.createClaim!({ recommendationToken: "token", expectedPlaceId: PLACE.id })).rejects.toThrow("Sign in to save visits and private photos.");
+    await expect(result.current.uploadVisitPhoto!(PLACE.id, new File(["photo"], "visit.jpg", { type: "image/jpeg" }))).rejects.toThrow("Sign in to save visits and private photos.");
+    await expect(result.current.loadVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to save visits and private photos.");
+    await expect(result.current.removeVisitPhoto!(PLACE.id)).rejects.toThrow("Sign in to save visits and private photos.");
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("claim-recommendations") || String(url).includes("/api/claims") || String(url).includes("/photo"))).toBe(false);
   });
 

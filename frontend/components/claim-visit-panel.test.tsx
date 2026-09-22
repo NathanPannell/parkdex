@@ -34,7 +34,7 @@ describe("ClaimVisitPanel", () => {
     const handlers = props();
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn() });
     render(<ClaimVisitPanel {...handlers} authenticated={false} />);
-    expect(screen.getByText("Visit claims belong to your account.")).toBeTruthy();
+    expect(screen.getByText("Saved visits belong to your account.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /claim|photo|location/i })).toBeNull();
     expect(handlers.recommendClaim).not.toHaveBeenCalled();
     expect(handlers.createClaim).not.toHaveBeenCalled();
@@ -44,19 +44,19 @@ describe("ClaimVisitPanel", () => {
   it("shows the one matching recommendation and creates a nonoptimistic claim", async () => {
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null) });
     const handlers = props(); render(<ClaimVisitPanel {...handlers} />);
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    expect(await screen.findByText("You’re here, claim this park now")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    expect(await screen.findByText("You’re here. Log this visit?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Log this visit" }));
     await waitFor(() => expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "token", expectedPlaceId: place.id }));
   });
 
   it("directs approximate-location users to enable precise access", async () => {
-    const getCurrentLocation = vi.fn().mockRejectedValue(new LocationCapabilityError("precise-required", "Precise location is required to claim a park. Turn on precise location for Parkdex in Android settings, then try again."));
+    const getCurrentLocation = vi.fn().mockRejectedValue(new LocationCapabilityError("precise-required", "Precise location is required to confirm a visit. Turn on precise location for Parkdex in Android settings, then try again."));
     restore = registerNativeCapabilities({ getCurrentLocation, getPhoto: vi.fn() });
     const handlers = props();
     render(<ClaimVisitPanel {...handlers} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
 
     expect(await screen.findByText(/Turn on Precise location for Parkdex in Android settings/i)).toBeTruthy();
     expect(getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ requirePrecise: true }));
@@ -70,8 +70,8 @@ describe("ClaimVisitPanel", () => {
     const handlers = props(); render(<ClaimVisitPanel {...handlers} />);
     await clickCamera();
     expect(await screen.findByRole("button", { name: "Use photo" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    const claimButton = await screen.findByRole("button", { name: "Claim this park" });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    const claimButton = await screen.findByRole("button", { name: "Log this visit" });
     expect((claimButton as HTMLButtonElement).disabled).toBe(true); expect(handlers.uploadPhoto).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Use photo" })); fireEvent.click(claimButton);
     await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo));
@@ -90,7 +90,7 @@ describe("ClaimVisitPanel", () => {
     }
     render(<Parent />);
     await clickCamera(); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); await screen.findByText("You’re here, claim this park now"); fireEvent.click(screen.getByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" })); await screen.findByText("You’re here. Log this visit?"); fireEvent.click(screen.getByRole("button", { name: "Log this visit" }));
     expect(await screen.findByText(/visit is saved, but the photo did not upload/i)).toBeTruthy(); expect(screen.getByLabelText(/Inspect postcard/)).toBeTruthy(); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Open claimed Goldstream" }));
     fireEvent.click(screen.getByRole("button", { name: "Retry photo upload" })); await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledTimes(2)); expect(handlers.createClaim).toHaveBeenCalledTimes(1);
@@ -103,7 +103,7 @@ describe("ClaimVisitPanel", () => {
     const handlers = props(); handlers.recommendClaim.mockResolvedValue(other);
     const onOpenPlace = vi.fn();
     render(<ClaimVisitPanel {...handlers} placeNameForId={(id) => id === other.candidate.placeId ? "Goldstream Provincial Park" : undefined} onOpenPlace={onOpenPlace} />);
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
     const open = await screen.findByRole("button", { name: "Open Goldstream Provincial Park" });
     fireEvent.click(open);
     expect(onOpenPlace).toHaveBeenCalledWith(other.candidate.placeId);
@@ -117,8 +117,8 @@ describe("ClaimVisitPanel", () => {
     const handlers = props(); handlers.recommendClaim.mockResolvedValue({ ...recommendation, candidate: { ...recommendation.candidate, placeId: otherPlace.id } });
     function Parent() { const [selected, setSelected] = useState(place); return <ClaimVisitPanel {...handlers} place={selected} placeNameForId={(id) => id === otherPlace.id ? otherPlace.name : undefined} onOpenPlace={() => setSelected(otherPlace)} />; }
     render(<Parent />); await clickCamera(); await screen.findByRole("button", { name: "Use photo" }); fireEvent.click(screen.getByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" })); fireEvent.click(await screen.findByRole("button", { name: `Open ${otherPlace.name}` }));
-    const claimButton = screen.getByRole("button", { name: "Claim this park" }) as HTMLButtonElement; expect(claimButton.disabled).toBe(true); expect(screen.getByText(`Use this photo for ${otherPlace.name}?`)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" })); fireEvent.click(await screen.findByRole("button", { name: `Open ${otherPlace.name}` }));
+    const claimButton = screen.getByRole("button", { name: "Log this visit" }) as HTMLButtonElement; expect(claimButton.disabled).toBe(true); expect(screen.getByText(`Use this photo for ${otherPlace.name}?`)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Use photo" })); expect(claimButton.disabled).toBe(false); expect(handlers.uploadPhoto).not.toHaveBeenCalled();
   });
 
@@ -131,14 +131,14 @@ describe("ClaimVisitPanel", () => {
     const { rerender } = render(<ClaimVisitPanel {...handlers} ownerKey="account:first" />);
     await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    expect(await screen.findByRole("button", { name: "Claim this park" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    expect(await screen.findByRole("button", { name: "Log this visit" })).toBeTruthy();
 
     rerender(<ClaimVisitPanel {...handlers} ownerKey="account:second" />);
 
     expect(await screen.findByRole("button", { name: "Take an optional visit photo" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Check if I can claim a park" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Claim this park" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Confirm this visit" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Log this visit" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use photo" })).toBeNull();
     expect(handlers.createClaim).not.toHaveBeenCalled();
     expect(handlers.uploadPhoto).not.toHaveBeenCalled();

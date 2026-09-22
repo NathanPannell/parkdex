@@ -139,7 +139,7 @@ function metadataFor(visits: Visit[] | undefined, visitedIds?: Iterable<string>,
 }
 
 function claimOwner(identity: Identity): ClaimOwner {
-  if (identity.kind !== "account") throw new Error("Sign in to manage visit claims and private photos.");
+  if (identity.kind !== "account") throw new Error("Sign in to save visits and private photos.");
   return { kind: "account", token: identity.token };
 }
 
@@ -468,7 +468,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   const authenticatedRequest = useCallback(async (path: string, init: RequestInit = {}) => {
     const identity = identityRef.current;
-    if (identity.kind !== "account") throw new Error("Sign in to manage groups.");
+    if (identity.kind !== "account") throw new Error("Sign in to manage collections.");
     const capturedEpoch = epochRef.current.capture();
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${identity.token}`);
@@ -904,7 +904,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         : putProgress(kind, pendingId, pendingValue, identity, capturedEpoch));
     } catch (error) {
       if (kind === "visits" && enabled && isLocationClaimRequired(error)) {
-        setSyncMessage("This park now requires a location claim. Use “Claim this park” while you’re there.");
+        setSyncMessage("This park now requires location confirmation. Use “Confirm this visit” while you’re there.");
       } else if (!(error instanceof ApiError && error.status === 401)) {
         setSyncMessage(identity.kind === "account"
           ? "Your account checkoff is saved on this device and waiting to sync."
@@ -1075,11 +1075,11 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   }, [apiBaseUrl, drainIdentity, expireAccount, noteStorageFailure, persistAccount, storage, updateProgress]);
 
   const currentClaimIdentity = useCallback((): Extract<Identity, { kind: "account" }> => {
-    if (!apiBaseUrl) throw new Error("Claims are unavailable while the field guide is offline.");
+    if (!apiBaseUrl) throw new Error("Visit saving is unavailable while the field guide is offline.");
     if (transitionRef.current) throw new Error("Another account change is still in progress.");
     storage();
     const identity = identityRef.current;
-    if (identity.kind !== "account") throw new Error("Sign in to manage visit claims and private photos.");
+    if (identity.kind !== "account") throw new Error("Sign in to save visits and private photos.");
     return identity;
   }, [apiBaseUrl, storage]);
 
@@ -1135,7 +1135,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const capturedEpoch = epochRef.current.capture();
     try {
       const confirmation = await createClaimRequest(apiBaseUrl, claimOwner(identity), input);
-      assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this claim finished. Refresh your journal before trying again.");
+      assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this visit finished. Refresh your journal before trying again.");
       const nextVisited = new Set(visitedRef.current).add(confirmation.placeId);
       const nextTimestamps = { ...visitTimestampsRef.current, [confirmation.placeId]: confirmation.visitedAt };
       const claimedVisit: Visit = { placeId: confirmation.placeId, visitedAt: confirmation.visitedAt, claim: confirmation.claim };
@@ -1159,7 +1159,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const mutationCheckpoint = visitMutationsRef.current.checkpoint();
     try {
       const session = await loadAccount(apiBaseUrl, identity.token);
-      assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this claim. Try again.");
+      assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this visit. Try again.");
       const sessionTimestamps = timestampsFor(session.visits);
       const sessionVisited = accountVisitOutboxRef.current.applyTo(session.visitedIds);
       const rebased = visitMutationsRef.current.rebase(

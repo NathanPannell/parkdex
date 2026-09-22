@@ -18,6 +18,21 @@ describe("public navigation", () => {
     expect(readNavigation("/?place=removed-id")).toMatchObject({ view: "map", selectedId: "removed-id", mapMode: "discover" });
   });
 
+  it("keeps the list origin and fullscreen detail in a shareable place URL", () => {
+    const state = readNavigation("/?view=collection&place=provincial-juan-de-fuca-park&detail=full&placesQuery=Forest&placesVisited=unseen&mode=explored");
+    expect(state).toMatchObject({ view: "collection", selectedId: "provincial-juan-de-fuca-park", detailExpanded: true, collectionSearch: "Forest", collectionVisitFilter: "unseen", mapMode: "explored" });
+    expect(readNavigation(navigationUrl("/?campaign=fall", state))).toEqual(state);
+  });
+
+  it("does not persist fullscreen mode after a place closes", () => {
+    const state = readNavigation("/?view=collection&place=provincial-juan-de-fuca-park&detail=full");
+    state.selectedId = null;
+    const url = navigationUrl("/?view=collection&place=provincial-juan-de-fuca-park&detail=full", state);
+    expect(url).not.toContain("place=");
+    expect(url).not.toContain("detail=");
+    expect(readNavigation(url).detailExpanded).toBe(false);
+  });
+
   it.each(["#resetToken=one-use", "#verificationToken=one-use", "&code=one-use&state=pkce", "&error=access_denied&state=pkce"])("prioritizes account callbacks: %s", (callback) => {
     const href = `/?view=groups&place=public-place${callback}`;
     const state = readNavigation(href);

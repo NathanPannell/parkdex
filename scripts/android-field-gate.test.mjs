@@ -19,6 +19,7 @@ import {
   isFieldReadyProfile,
   manualCleanupFailure,
   networkStartupRecoveryReady,
+  onboardingSkipCenter,
   offlineCatalogueOracle,
   parseAdbDevices,
   parseAirplaneMode,
@@ -70,6 +71,8 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.equal(offlineCatalogueOracle(xml), "unexpected-ready");
   assert.equal(offlineCatalogueOracle('<node text="Loading"/>'), null);
   assert.deepEqual(labelledNodeCenter('<node text="Claim + photo" bounds="[10,20][110,80]"/>', [/Claim \+ photo/]), { x: 60, y: 50 });
+  assert.deepEqual(labelledNodeCenter('<node text="Log visit + photo" bounds="[10,20][110,80]"/>', [/^Log visit \+ photo$/i]), { x: 60, y: 50 });
+  assert.deepEqual(labelledNodeCenter('<node text="Log without photo" bounds="[10,20][110,80]"/>', [/^Log without photo$/i]), { x: 60, y: 50 });
   assert.deepEqual(labelledNodeCenter('<node text="" content-desc="Shutter" bounds="[0,2010][1080,2340]"/>', [/Shutter/]), { x: 540, y: 2175 });
   assert.deepEqual(labelledNodeCenter('<node text="Map" clickable="false" bounds="[0,0][100,100]"/><node text="Map" clickable="true" enabled="true" bounds="[800,1800][1000,2000]"/>', [/^Map$/]), { x: 900, y: 1900 });
   const postcard = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo" clickable="true" enabled="true" bounds="[1,1][2,2]"/>';
@@ -83,6 +86,8 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.equal(photoPostcardReady(`${postcard}<node text="Photo unavailable"/>`), false);
   const emptyCollection = '<node text="Your first boundary claim will become a postcard here."/>';
   assert.equal(photoJourneyCleanupReady(emptyCollection), true);
+  const modernEmptyCollection = '<node text="Your first postcard will appear in your Collection after a boundary claim."/>';
+  assert.equal(photoJourneyCleanupReady(modernEmptyCollection), true);
   assert.equal(photoJourneyCleanupReady(`${emptyCollection}<node content-desc="Postcard from Bell Park"/>`), false);
   const review = '<node text="Keep this one?" bounds="[20,300][500,360]"/><node text="Save my visit" clickable="true" enabled="true" bounds="[20,700][500,780]"/>';
   assert.equal(photoReviewReady(review), true);
@@ -92,6 +97,7 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
 
 test("dismisses blocking dialogs before retrying Account navigation", () => {
   const accountButton = '<node text="Account" clickable="true" bounds="[849,2099][1042,2242]"/>';
+  const myDexButton = '<node content-desc="My Dex" clickable="true" enabled="true" bounds="[849,2099][1042,2242]"/>';
   const arrivalClose = '<node content-desc="Close sealed impression" clickable="true" bounds="[893,193][1017,320]"/>';
   assert.deepEqual(accountNavigationTarget(`${accountButton}${arrivalClose}`), {
     kind: "dismiss-arrival", center: { x: 955, y: 257 },
@@ -102,9 +108,21 @@ test("dismisses blocking dialogs before retrying Account navigation", () => {
   assert.equal(accountNavigationTarget(`${accountButton}<node text="Close nearby places" bounds="[1,1][3,3]"/>`).kind, "dismiss-nearby");
   assert.equal(accountNavigationTarget(`${accountButton}<node text="Claim my badge" bounds="[1,1][3,3]"/>`).kind, "dismiss-badge");
   assert.deepEqual(accountNavigationTarget('<node text="Account" resource-id="primary-content"/>'), { kind: "ready" });
+  assert.deepEqual(accountNavigationTarget('<node content-desc="My Dex" resource-id="primary-content"/>'), { kind: "ready" });
+  assert.deepEqual(accountNavigationTarget(myDexButton), {
+    kind: "navigate", center: { x: 946, y: 2171 },
+  });
+  assert.deepEqual(accountNavigationTarget('<node content-desc="Skip" clickable="true" bounds="[10,20][110,80]"/>'), {
+    kind: "dismiss-onboarding", center: { x: 60, y: 50 },
+  });
+  assert.deepEqual(onboardingSkipCenter('<node text="Skip intro" clickable="true" bounds="[10,20][110,80]"/>'), { x: 60, y: 50 });
+  assert.equal(onboardingSkipCenter('<node text="Skip to navigation" clickable="true" bounds="[10,20][110,80]"/>'), null);
   const claim = '<node text="Claim + photo" clickable="true" bounds="[10,20][110,80]"/>';
   assert.equal(sealedClaimCenter(claim), null);
   assert.deepEqual(sealedClaimCenter(`${arrivalClose}${claim}`), { x: 60, y: 50 });
+  const modernClaim = '<node text="Log visit + photo" clickable="true" bounds="[10,20][110,80]"/>';
+  assert.deepEqual(sealedClaimCenter(`${arrivalClose}${modernClaim}`), { x: 60, y: 50 });
+  assert.equal(sealedClaimCenter(`<node text="Log visit + photo" clickable="true" bounds="[10,20][110,80]"/>`), null);
 });
 
 test("parses deterministic emulator connectivity and process oracles", () => {

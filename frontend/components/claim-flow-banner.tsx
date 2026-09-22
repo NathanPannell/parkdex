@@ -446,7 +446,7 @@ export function ClaimFlowBanner({
       setRetry({ stage: "claim", file, processingState: "prepared", forcePhotoUpload });
       setFlowScreen("arrival");
       setWorkStage(null);
-      setMessage(error instanceof Error ? `${error.message} Your photo is saved, so you can retry the saved visit without reopening the camera.` : "Your photo is saved. Try finishing the claim again.");
+      setMessage(error instanceof Error ? `${error.message} Your photo is saved, so you can retry the saved visit without reopening the camera.` : "Your photo is saved. Try finishing the visit again.");
       diagnosticRef.current?.warn("claim", { summary: "The postcard paused after the photo was saved for retry", facts: failureFacts(error) });
     }
   }
@@ -499,7 +499,7 @@ export function ClaimFlowBanner({
           setMessage(`${error instanceof Error ? error.message : "The photo could not be prepared."} Your accepted photo is saved, so you can retry the saved visit without reopening the camera.`);
           onFlowActiveChangeRef.current(place.id);
         } else {
-          setMessage(error instanceof Error ? error.message : "Could not finish this claim. Try again.");
+          setMessage(error instanceof Error ? error.message : "Could not finish this visit. Try again.");
           onFlowActiveChangeRef.current(null);
         }
         trace.fail("camera", { summary: savedPhoto ? "The accepted photo is safe for retry" : "The camera could not return a usable photo", facts: failureFacts(error) });
@@ -843,8 +843,8 @@ export function ClaimFlowBanner({
         {hydrationStatus === "loading" && <button className="impression-primary" type="button" disabled><RefreshCw className="impression-spin" size={18} />Checking saved photos…</button>}
         {hydrationStatus === "failed" && <button className="impression-primary" type="button" onClick={retryHydration}><RefreshCw size={18} />Retry saved photo check</button>}
         {hydrationStatus === "ready" && !retry && !noPhotoRetry && <>
-          <button className="impression-primary" type="button" onClick={() => void claimWithCamera()} disabled={working || busy}><Camera size={18} />{working ? workingLabel : "Claim + photo"}</button>
-          <button className="impression-secondary" type="button" onClick={() => void claimWithoutPhoto()} disabled={working || busy}>Without a photo</button>
+          <button className="impression-primary" type="button" onClick={() => void claimWithCamera()} disabled={working || busy}><Camera size={18} />{working ? workingLabel : "Log visit + photo"}</button>
+          <button className="impression-secondary" type="button" onClick={() => void claimWithoutPhoto()} disabled={working || busy}>Log without photo</button>
         </>}
         {retryControl}
         {noPhotoRetryControl}

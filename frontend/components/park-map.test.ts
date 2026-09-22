@@ -4,12 +4,15 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { cameraPaddingWithContentMargin } from "@/lib/map-fit";
 import {
   cameraViewDiffers,
+  collectionData,
   loadPostcardPhotoUrl,
+  measuredCameraPadding,
   postcardMarkerCoordinates,
   postcardPhotoKey,
   POSTCARD_MARKER_FOOTPRINT,
   POSTCARD_MARKER_MIN_ZOOM,
   projectPostcardMarker,
+  visiblePlaces,
   type MapCameraSnapshot,
 } from "./park-map";
 
@@ -75,6 +78,83 @@ describe("map reset visibility state", () => {
       { top: 100, right: 20, bottom: 200, left: 20 },
       0.1,
     )).toEqual({ top: 130, right: 56, bottom: 230, left: 56 });
+  });
+});
+
+describe("map place visibility and progress mode", () => {
+  const unvisited = {
+    ...place,
+    id: "park-2",
+    name: "Unvisited Park",
+    longitude: -124.5,
+  };
+  const places = [place, unvisited];
+  const visited = new Set([place.id]);
+
+  it.each(["explored", "discover"] as const)("keeps unvisited markers in %s mode", (mode) => {
+    expect(visiblePlaces(places, visited, mode)).toEqual(places);
+    expect(collectionData(places, visited, mode, new Set()).features.map((feature) => feature.properties?.id)).toEqual([
+      place.id,
+      unvisited.id,
+    ]);
+  });
+
+  it("honors the externally supplied place subset in either mode", () => {
+    const suppliedFilter = [unvisited];
+
+    expect(collectionData(suppliedFilter, visited, "explored", new Set()).features.map((feature) => feature.properties?.id)).toEqual([unvisited.id]);
+    expect(collectionData(suppliedFilter, visited, "discover", new Set()).features.map((feature) => feature.properties?.id)).toEqual([unvisited.id]);
+  });
+});
+
+describe("field guide map camera overlays", () => {
+  type Rect = { top: number; left: number; width: number; height: number };
+
+  function overlayElement(rect: Rect) {
+    return {
+      getBoundingClientRect: () => ({ top: rect.top, left: rect.left, right: rect.left + rect.width, bottom: rect.top + rect.height, width: rect.width, height: rect.height }),
+      offsetParent: { getBoundingClientRect: () => ({ top: 0, left: 0 }) },
+      offsetTop: rect.top,
+      offsetLeft: rect.left,
+      offsetWidth: rect.width,
+      offsetHeight: rect.height,
+    } as unknown as HTMLElement;
+  }
+
+  function mapElement(width: number, height: number) {
+    return {
+      getBoundingClientRect: () => ({ top: 0, left: 0, right: width, bottom: height, width, height }),
+    } as unknown as HTMLElement;
+  }
+
+  it("reserves the new view switch, map utility, and bottom navigation when fitting the map", () => {
+    const overlays = new Map([
+      [".guide-view-switch", overlayElement({ top: 12, left: 12, width: 366, height: 54 })],
+      [".map-utility", overlayElement({ top: 76, left: 12, width: 366, height: 50 })],
+      [".map-visit-filter", overlayElement({ top: 134, left: 12, width: 366, height: 46 })],
+      [".global-progress", overlayElement({ top: 698, left: 250, width: 128, height: 44 })],
+      [".thumb-nav", overlayElement({ top: 770, left: 12, width: 366, height: 64 })],
+    ]);
+    vi.stubGlobal("document", { querySelector: (selector: string) => overlays.get(selector) ?? null });
+
+    expect(measuredCameraPadding(mapElement(390, 844), false)).toEqual({
+      top: 192,
+      right: 24,
+      bottom: 92,
+      left: 24,
+    });
+  });
+
+  it("reserves the desktop field guide collection beside the map", () => {
+    const overlays = new Map([
+      [".guide-view-switch", overlayElement({ top: 20, left: 24, width: 370, height: 54 })],
+      [".map-utility", overlayElement({ top: 84, left: 24, width: 370, height: 50 })],
+      [".feature-collection", overlayElement({ top: 84, left: 24, width: 410, height: 728 })],
+      [".thumb-nav", overlayElement({ top: 826, left: 24, width: 500, height: 64 })],
+    ]);
+    vi.stubGlobal("document", { querySelector: (selector: string) => overlays.get(selector) ?? null });
+
+    expect(measuredCameraPadding(mapElement(1200, 900), false)).toMatchObject({ left: 452, bottom: 32 });
   });
 });
 

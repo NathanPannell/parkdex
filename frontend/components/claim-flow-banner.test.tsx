@@ -51,7 +51,7 @@ function setup(
 }
 
 async function openPhotoReview() {
-  fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Log visit + photo" }));
   return screen.findByRole("button", { name: "Save my visit" });
 }
 
@@ -62,7 +62,7 @@ async function savePhotoReview() {
 describe("ClaimFlowBanner", () => {
   it("keeps the recommendation untouched when the camera is cancelled", async () => {
     const handlers = setup(null);
-    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log visit + photo" }));
     await waitFor(() => expect(handlers.getPhoto).toHaveBeenCalledTimes(1));
     expect(handlers.getCurrentLocation).not.toHaveBeenCalled();
     expect(handlers.recommendClaim).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe("ClaimFlowBanner", () => {
 
   it("rechecks a fresh location for a no-photo visit and shows the explicit success state", async () => {
     const handlers = setup(null);
-    fireEvent.click(await screen.findByRole("button", { name: "Without a photo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log without photo" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
     expect(handlers.getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ maxAgeMs: 0, requirePrecise: true }));
     expect(handlers.recommendClaim).toHaveBeenCalledWith({ location });
@@ -91,7 +91,7 @@ describe("ClaimFlowBanner", () => {
     const handlers = setup(null);
     handlers.getCurrentLocation.mockRejectedValueOnce(new Error("gps offline"));
     handlers.reconcileClaim.mockResolvedValueOnce(confirmation);
-    fireEvent.click(await screen.findByRole("button", { name: "Without a photo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log without photo" }));
     expect(await screen.findByRole("button", { name: "Retry saved visit" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry saved visit" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
@@ -133,12 +133,12 @@ describe("ClaimFlowBanner", () => {
       .mockRejectedValueOnce(new RestoredPhotoAwaitingAdoptionError("restored-attempt-a"))
       .mockResolvedValueOnce({ file: photo, mimeType: photo.type });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Claim + photo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log visit + photo" }));
     expect(await screen.findByText(/recovered camera photo is waiting/i)).toBeTruthy();
     expect(handlers.createClaim).not.toHaveBeenCalled();
 
-    await waitFor(() => expect((screen.getByRole("button", { name: "Claim + photo" }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole("button", { name: "Claim + photo" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Log visit + photo" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Log visit + photo" }));
     fireEvent.click(await screen.findByRole("button", { name: "Save my visit" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(photoConfirmation));
     expect(handlers.getPhoto).toHaveBeenNthCalledWith(2, expect.objectContaining({ captureAttemptId: "restored-attempt-a" }));
@@ -305,7 +305,7 @@ describe("ClaimFlowBanner", () => {
     fireEvent.click(checking);
     expect(handlers.getPhoto).not.toHaveBeenCalled();
     pending.resolve(null);
-    expect((await screen.findByRole("button", { name: "Claim + photo" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((await screen.findByRole("button", { name: "Log visit + photo" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("retries failed durable-photo recovery instead of allowing an overwrite", async () => {
@@ -315,7 +315,7 @@ describe("ClaimFlowBanner", () => {
       .mockResolvedValueOnce({ file: saved, mimeType: saved.type });
     const handlers = setup(null, undefined, { load });
     expect(await screen.findByRole("button", { name: "Retry saved photo check" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Claim + photo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Log visit + photo" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Retry saved photo check" }));
     expect(await screen.findByRole("button", { name: "Save my visit" })).toBeTruthy();
     expect(handlers.getPhoto).not.toHaveBeenCalled();

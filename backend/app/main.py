@@ -650,12 +650,12 @@ def _group_mutation_limit(conn: Connection, account_id: str) -> None:
     reserve_rate_limit(conn, "group_mutation", account_id, 120, timedelta(minutes=15))
 
 
-def _group_name(value: str, label: str = "Group") -> str:
+def _group_name(value: str, label: str = "Collection") -> str:
     name = value.strip()
     if not name:
         raise HTTPException(status_code=422, detail=f"{label} name must not be blank")
     if name.casefold() == "wishlist":
-        raise HTTPException(status_code=422, detail="Wishlist is reserved for the protected account group")
+        raise HTTPException(status_code=422, detail="Wishlist is reserved for the protected account collection")
     return name
 
 
@@ -772,11 +772,11 @@ def get_group(
     result = group_row(
         conn,
         identity.account_id,
-        _record_id(group_id, "Group"),
+        _record_id(group_id, "Collection"),
         include_staging_field_places=settings.staging_field_places_enabled,
     )
     if result is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     return result
 
 
@@ -788,7 +788,7 @@ def rename_group(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
+    canonical_id = _record_id(group_id, "Collection")
     name = _group_name(payload.name)
     identity = revalidate_locked_account_identity(conn, identity, authorization)
     current = group_row(
@@ -798,13 +798,13 @@ def rename_group(
         include_staging_field_places=settings.staging_field_places_enabled,
     )
     if current is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be renamed")
     _group_mutation_limit(conn, identity.account_id)
     if not rename_group_row(conn, identity.account_id, canonical_id, name):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
     return group_row(
         conn,
@@ -821,7 +821,7 @@ def delete_group(
     authorization: str | None = Header(default=None),
 ) -> Response:
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
+    canonical_id = _record_id(group_id, "Collection")
     identity = revalidate_locked_account_identity(conn, identity, authorization)
     current = group_row(
         conn,
@@ -830,13 +830,13 @@ def delete_group(
         include_staging_field_places=settings.staging_field_places_enabled,
     )
     if current is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be deleted")
     _group_mutation_limit(conn, identity.account_id)
     if not delete_group_row(conn, identity.account_id, canonical_id):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
     return Response(status_code=204)
 
@@ -849,7 +849,7 @@ def add_group_places_api(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
+    canonical_id = _record_id(group_id, "Collection")
     identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     try:
@@ -865,7 +865,7 @@ def add_group_places_api(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not exists:
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
     return group_row(
         conn,
@@ -883,12 +883,12 @@ def remove_group_places_api(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
+    canonical_id = _record_id(group_id, "Collection")
     identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     if not remove_group_places(conn, identity.account_id, canonical_id, payload.placeIds):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
     return group_row(
         conn,

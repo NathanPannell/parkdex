@@ -1,0 +1,91 @@
+/* Three destinations share a bottom dock. Headers belong to each destination. */
+.field-guide-shell .parkdex-nav { display: grid; position: absolute; grid-template-columns: repeat(3,minmax(0,1fr)); left: 10px; right: 10px; bottom: max(10px,env(safe-area-inset-bottom)); width: auto; max-width: 540px; margin-inline: auto; min-height: 64px; z-index: 20; }
+.field-guide-shell .parkdex-nav button { min-height: 52px; font-size: 12px; gap: 3px; }
+.field-guide-shell .feature-panel { inset: max(12px,env(safe-area-inset-top)) 12px calc(88px + env(safe-area-inset-bottom)); width: auto; max-height: none; padding: 20px; border-radius: 20px; background: var(--paper-bright); }
+.field-guide-shell .feature-collection { top: calc(76px + env(safe-area-inset-top)); padding: 0; }
+.guide-view-switch { position: absolute; z-index: 8; top: max(12px,env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; align-items: center; gap: 4px; width: auto; padding: 5px; border-radius: 16px; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
+.guide-view-switch > span { margin-right: auto; padding-inline: 10px; font-size: 17px; font-weight: 950; }
+.guide-view-switch button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; cursor: pointer; font-weight: 850; }
+.guide-view-switch button[aria-pressed=true] { background: var(--forest); color: var(--paper-bright); }
+.field-guide-shell .map-utility { top: auto; bottom: calc(84px + env(safe-area-inset-bottom)); right: 10px; left: 10px; display: grid; grid-template-columns: minmax(0,1fr) 44px; gap: 8px; height: 54px; min-height: 54px; padding: 5px; }
+.field-guide-shell .map-utility.search-open { grid-template-columns: minmax(0,1fr); }
+.field-guide-shell .map-utility.search-open .map-mode-switch { display: none; }
+.field-guide-shell .map-utility .search-dock { width: 44px; min-width: 0; min-height: 44px; padding: 0; }
+.field-guide-shell .map-utility.search-open .search-dock { width: 100%; max-width: none; background: var(--paper-bright); }
+.field-guide-shell .map-utility .map-mode-switch button { min-width: 0; min-height: 44px; }
+.field-guide-shell .map-utility .locate-button,
+.field-guide-shell .map-utility .search-toggle { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+.field-guide-shell .map-mode-switch { grid-template-columns: minmax(0,1fr) 44px; display: grid; flex: 1; }
+.field-guide-shell .map-mode-switch button { min-height: 44px; }
+.field-guide-shell .map-mode-switch button[role=switch] { display: flex; flex-direction: row; gap: 7px; font-size: 13px; }
+.progress-switch-track { width: 28px; height: 17px; padding: 3px; border-radius: 20px; background: #a6b8a9; }
+.progress-switch-track::after { content: ''; display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--paper-bright); }
+[aria-checked=true] .progress-switch-track { background: var(--forest); }
+[aria-checked=true] .progress-switch-track::after { transform: translateX(11px); background: var(--lime); }
+.map-visit-filter { position: absolute; z-index: 6; top: calc(76px + env(safe-area-inset-top)); left: 12px; width: max-content; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
+.map-visit-filter button { min-height: 40px; min-width: 66px; font-size: 12px; }
+.field-guide-shell .applied-map-search { top: calc(130px + env(safe-area-inset-top)); bottom: auto; left: 12px; right: 12px; }
+.field-guide-shell .search-results, .field-guide-shell .filter-tray { top: auto; bottom: calc(146px + env(safe-area-inset-bottom)); left: 10px; right: 10px; max-height: calc(100dvh - 280px); z-index: 12; }
+.field-guide-shell .global-progress { position: absolute; top: auto; bottom: calc(154px + env(safe-area-inset-bottom)); right: 18px; left: auto; padding: 10px 12px; border-radius: 12px; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
+.field-guide-shell .global-progress::after { display: none; }
+.field-guide-shell .maplibregl-ctrl-top-right { top: 198px; }
+.field-guide-shell .connection-status { top: auto; bottom: calc(88px + env(safe-area-inset-bottom)); right: 12px; left: 12px; z-index: 15; width: auto; }
+.field-guide-shell .map-stage:has(.connection-status) .place-sheet { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); max-height: calc(100dvh - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--connection-status-height,34px)); }
+.field-guide-shell .map-stage:has(.connection-status) .feature-panel { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); }
+.field-guide-shell .place-sheet { bottom: calc(88px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); z-index: 16; }
+.field-guide-shell .place-sheet-header { display: grid; grid-template-columns: minmax(0,1fr) 44px 44px; gap: 4px; }
+.field-guide-shell .place-sheet-header h2 { max-width: none; }
+.sheet-expand, .field-guide-shell .sheet-close { position: static; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #e3e8d8; cursor: pointer; }
+.field-guide-shell .place-sheet-full, .field-guide-shell .map-stage:has(.connection-status) .place-sheet-full { position: fixed; z-index: 40; inset: 0; width: 100%; max-height: none; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); border-radius: 0; background: var(--paper-bright); }
+.field-guide-shell .place-sheet-full .place-sheet-header { max-width: 850px; margin: 0 auto; padding: 24px 18px 16px; }
+.field-guide-shell .place-sheet-full .place-sheet-content { max-width: 850px; margin: 0 auto; padding: 0 18px 32px; }
+.field-guide-shell .place-sheet-full h2 { font-size: clamp(30px,7vw,54px); }
+.field-guide-shell .place-sheet-full .place-sheet-media { grid-template-columns: minmax(0,1fr); }
+.field-guide-shell .place-sheet-full .place-image--card { height: auto; max-height: none; min-height: 0; }
+.field-guide-shell .place-sheet-full .place-image__photo { width: 100%; height: clamp(200px,42dvh,430px); max-height: none; object-fit: cover; }
+.field-guide-shell .place-sheet-full .sheet-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.field-guide-shell .place-sheet-full .sheet-actions button { min-width: 48px; width: auto; padding-inline: 14px; }
+.field-guide-shell .place-sheet-full .sheet-actions button span { display: inline; position: static; width: auto; height: auto; clip: auto; }
+.field-guide-shell .place-sheet-full .place-description { font-size: 16px; line-height: 1.6; }
+.dex-settings { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border: 0; border-radius: 50%; background: #dfe8d8; cursor: pointer; }
+.dex-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 8px 0 28px; padding-block: 16px; border-block: 1px solid #cbd5c4; }
+.dex-summary > div { display: flex; flex-direction: column-reverse; gap: 6px; }
+.dex-summary dt { font-size: 11px; font-weight: 850; }
+.dex-summary dd { margin: 0; font: 750 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.dex-account-settings > p { overflow-wrap: anywhere; }
+.dex-badge-guide { width: 100%; min-height: 48px; margin-block: 12px; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; font-weight: 850; cursor: pointer; }
+.dex-badge-guide svg:last-child { margin-left: auto; }
+.field-guide-shell .group-quick-action { min-width: 92px; }
+.field-guide-shell .group-action-label { display: inline; }
+.collection-map-progress { position: absolute; z-index: 8; left: 12px; bottom: calc(88px + env(safe-area-inset-bottom)); min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border: 0; border-radius: 12px; background: var(--paper-bright); box-shadow: var(--soft-shadow); font-weight: 850; cursor: pointer; }
+.field-guide-shell .view-map .connection-status { top: calc(132px + env(safe-area-inset-top)); bottom: auto; }
+.field-guide-shell .view-map:has(.connection-status) .applied-map-search { top: calc(140px + env(safe-area-inset-top) + var(--connection-status-height,34px)); }
+.field-guide-shell .map-stage:has(.connection-status) .search-results,
+.field-guide-shell .map-stage:has(.connection-status) .filter-tray { top: auto; bottom: calc(146px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 280px - var(--connection-status-height,34px)); }
+.field-guide-shell .place-sheet-media .sheet-actions { grid-template-columns: minmax(0,1fr) 52px; }
+.field-guide-shell .place-sheet-media .sheet-actions .group-quick-action { width: auto; grid-column: 1 / -1; min-width: 140px; }
+@media (width < 860px) {
+  .field-guide-shell .parkdex-nav { max-width: none; }
+}
+@media (width < 380px) {
+  .field-guide-shell .group-detail > header { grid-template-columns: minmax(0,1fr); }
+  .field-guide-shell .group-detail-actions { justify-content: flex-end; }
+}
+@media (min-width: 860px) {
+  .field-guide-shell .feature-panel { left: 50%; right: auto; width: min(720px,calc(100% - 48px)); transform: translateX(-50%); }
+  .guide-view-switch { right: auto; width: 370px; left: 24px; top: 20px; }
+  .field-guide-shell .map-utility { left: 24px; right: auto; width: 370px; top: auto; bottom: 92px; }
+  .map-visit-filter { left: 24px; top: 84px; }
+  .field-guide-shell .applied-map-search { left: 24px; right: auto; width: 370px; top: 138px; }
+  .field-guide-shell .search-results, .field-guide-shell .filter-tray { left: 24px; right: auto; width: 370px; top: auto; bottom: 154px; }
+  .field-guide-shell .map-stage:has(.connection-status) .search-results,
+  .field-guide-shell .map-stage:has(.connection-status) .filter-tray { left: 24px; right: auto; width: 370px; bottom: 154px; }
+  .field-guide-shell .feature-collection { left: 24px; width: 410px; transform: none; top: 84px; }
+  .field-guide-shell .connection-status { left: 24px; right: auto; max-width: 410px; }
+  .field-guide-shell .maplibregl-ctrl-top-right { top: 20px; }
+  .field-guide-shell .map-utility, .field-guide-shell .search-results,
+  .field-guide-shell .filter-tray, .field-guide-shell .applied-map-search { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-guide-shell .place-sheet, .field-guide-shell .global-progress { animation: none; transition: none; }
+}
