@@ -32,10 +32,10 @@ const claimMessage = (error: unknown) => {
   if (error instanceof LocationCapabilityError) return error.code === "permission-denied" ? "Location permission is off. Allow it for Parkdex, then try again." : error.code === "precise-required" ? error.message : error.code === "timeout" ? "Your location took too long. Move into open sky and try again." : "Your location is unavailable. Check location services and try again.";
   if (code === "location_accuracy_too_low") return "Your location is too broad to confirm this boundary. Turn on Precise location for Parkdex in Android settings, then move into open sky and try again.";
   if (code === "location_stale") return "That location sample is too old. Refresh your location to continue.";
-  if (code === "claim_recommendation_expired") return "This recommendation expired. Refresh your location and confirm the park again.";
-  if (code === "claim_recommendation_not_found") return "That recommendation is no longer available. Refresh your location to make a new claim.";
+  if (code === "claim_recommendation_expired") return "This recommendation expired. Refresh your location and confirm the visit again.";
+  if (code === "claim_recommendation_not_found") return "That recommendation is no longer available. Refresh your location to confirm the visit again.";
   if (code === "claim_recommendation_candidate_mismatch") return "Your location now matches a different park. Refresh and confirm the new recommendation.";
-  return error instanceof Error ? error.message : "Parkdex could not confirm this claim. Try again.";
+  return error instanceof Error ? error.message : "Parkdex could not confirm this visit. Try again.";
 };
 
 export function ClaimVisitPanel({ place, visit, busy, authenticated = false, recommendClaim, createClaim, uploadPhoto, loadPhoto, removePhoto, onClaimed, ownerKey, placeNameForId, onOpenPlace }: Props) {
@@ -124,7 +124,7 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
         setUploadRetry(null);
         setPendingPhoto(photo);
         setPhotoConfirmedFor(place.id);
-        setMessage("A saved photo is ready to attach after you confirm this park.");
+        setMessage("A saved photo is ready to attach after you confirm this visit.");
       }
       setPhotoPreview(URL.createObjectURL(photo.file));
     }).catch(() => {
@@ -255,7 +255,7 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
       if (operationEpochRef.current !== operationEpoch) return;
       if (photoToUpload && ownerKey && photoPersistence !== "stored") {
         setMessage(photoPersistence === "failed"
-          ? "The photo could not be saved for retry. Check your device storage, then try claiming again."
+          ? "The photo could not be saved for retry. Check your device storage, then try logging the visit again."
           : "Wait for your account to finish loading before attaching a photo.");
         return;
       }
@@ -310,18 +310,18 @@ export function ClaimVisitPanel({ place, visit, busy, authenticated = false, rec
 
   const retryControl = uploadRetry && <div className="claim-photo-recovery" role="alert"><p>{message || "Your visit is saved, but the photo still needs to upload."}</p><button className="claim-refresh" type="button" onClick={() => void retryPhoto()} disabled={working}><RefreshCw size={16} />{working ? "Uploading photo…" : "Retry photo upload"}</button><button type="button" onClick={() => void discardPhoto()} disabled={working}><X size={16} />Remove saved photo</button></div>;
   const cleanupControl = (ownerCleanupFailed || photoCleanupFailed) && <div className="claim-photo-recovery" role="alert"><p>{ownerCleanupFailed ? "A private photo from the previous account could not be removed yet." : "This visit already has a photo, but its local retry copy could not be removed yet."}</p><button className="claim-refresh" type="button" onClick={() => { if (ownerCleanupFailed) setOwnerCleanupAttempt((current) => current + 1); if (photoCleanupFailed) setPhotoCleanupAttempt((current) => current + 1); }} disabled={working}><RefreshCw size={16} />Retry private photo cleanup</button></div>;
-  const photoLoadControl = photoLoadFailed && <div className="claim-photo-recovery" role="alert"><p>{claimExists ? "A saved photo could not be loaded. Retry recovery before uploading it." : "A saved photo could not be loaded. Retry recovery before choosing another photo or claiming."}</p><button className="claim-refresh" type="button" onClick={() => { setPhotoLoadStatus({ key: photoLoadKey, status: "pending" }); setPhotoLoadAttempt((current) => current + 1); }} disabled={working}><RefreshCw size={16} />Retry saved photo recovery</button></div>;
+  const photoLoadControl = photoLoadFailed && <div className="claim-photo-recovery" role="alert"><p>{claimExists ? "A saved photo could not be loaded. Retry recovery before uploading it." : "A saved photo could not be loaded. Retry recovery before choosing another photo or logging the visit."}</p><button className="claim-refresh" type="button" onClick={() => { setPhotoLoadStatus({ key: photoLoadKey, status: "pending" }); setPhotoLoadAttempt((current) => current + 1); }} disabled={working}><RefreshCw size={16} />Retry saved photo recovery</button></div>;
 
-  if (!authenticated) return <><section className="claim-owner-gate" aria-label="Account claims"><strong>Visit claims belong to your account.</strong><p>Sign in to confirm a visit or add a private photo to this field note.</p></section>{cleanupControl}{photoLoadControl}</>;
+  if (!authenticated) return <><section className="claim-owner-gate" aria-label="Account visits"><strong>Saved visits belong to your account.</strong><p>Sign in to confirm a visit or add a private photo to this field note.</p></section>{cleanupControl}{photoLoadControl}</>;
   if (visit?.claim) return <section className="claimed-visit"><VisitPostcard place={place} visit={visit} loadPhoto={loadPhoto} removePhoto={removePhoto} ownerKey={ownerKey} onOpenPlace={onOpenPlace ? () => onOpenPlace(place.id) : undefined} />{retryControl}{cleanupControl}{photoLoadControl}</section>;
   if (visit) return <><p className="legacy-visit-note"><Check size={16} />Visited {new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(visit.visitedAt))}. This legacy visit remains in your journal.</p>{cleanupControl}{photoLoadControl}</>;
 
-  return <section className="claim-visit" aria-label={`Claim ${place.name}`}>
+  return <section className="claim-visit" aria-label={`Log visit at ${place.name}`}>
      <div className="claim-photo-prompt">
-       {photoPreview ? <><img src={photoPreview} alt="Photo ready to attach after you claim this park" /><div><strong>{photoConfirmed ? `Photo ready for ${place.name}` : `Use this photo for ${place.name}?`}</strong><p>{photoConfirmed ? "It will upload after the boundary claim succeeds." : "Confirm the park before this recovered or new photo can be attached."}</p><span className="claim-photo-actions">{!photoConfirmed && <button type="button" onClick={() => setPhotoConfirmedFor(place.id)}><Check size={16} />Use photo</button>}<button type="button" onClick={() => void discardPhoto()}><X size={16} />Discard</button></span></div></> : <button type="button" onClick={() => void capturePhoto()} disabled={working || busy || photoLoadPending || photoLoadFailed}><Camera size={18} />Take an optional visit photo</button>}
+       {photoPreview ? <><img src={photoPreview} alt="Photo ready to attach after you log this visit" /><div><strong>{photoConfirmed ? `Photo ready for ${place.name}` : `Use this photo for ${place.name}?`}</strong><p>{photoConfirmed ? "It will upload after this visit is saved." : "Confirm the visit before this recovered or new photo can be attached."}</p><span className="claim-photo-actions">{!photoConfirmed && <button type="button" onClick={() => setPhotoConfirmedFor(place.id)}><Check size={16} />Use photo</button>}<button type="button" onClick={() => void discardPhoto()}><X size={16} />Discard</button></span></div></> : <button type="button" onClick={() => void capturePhoto()} disabled={working || busy || photoLoadPending || photoLoadFailed}><Camera size={18} />Take an optional visit photo</button>}
     </div>
-    {!candidateMatches && <button className="claim-locate" type="button" onClick={() => void locate()} disabled={working || busy}><LocateFixed size={19} />{working ? "Checking your boundary…" : "Check if I can claim a park"}</button>}
-    {candidateMatches && <div className="claim-recommendation"><strong>You’re here, claim this park now</strong><p>{recommendation.candidate.matchKind === "exact" ? "Your location is inside the published boundary." : `You’re ${Math.round(recommendation.candidate.distanceMeters)} m from this boundary.`}</p><button type="button" onClick={() => void claim()} disabled={working || busy || expired || Boolean(pendingPhoto && !photoConfirmed)}><Check size={19} />{working ? "Claiming…" : "Claim this park"}</button>{pendingPhoto && !photoConfirmed && <small>Use or discard the photo before claiming.</small>}{expired && <button type="button" className="claim-refresh" onClick={() => void locate()}><RefreshCw size={16} />Refresh location</button>}</div>}
+    {!candidateMatches && <button className="claim-locate" type="button" onClick={() => void locate()} disabled={working || busy}><LocateFixed size={19} />{working ? "Checking your boundary…" : "Confirm this visit"}</button>}
+    {candidateMatches && <div className="claim-recommendation"><strong>You’re here. Log this visit?</strong><p>{recommendation.candidate.matchKind === "exact" ? "Your location is inside the published boundary." : `You’re ${Math.round(recommendation.candidate.distanceMeters)} m from this boundary.`}</p><button type="button" onClick={() => void claim()} disabled={working || busy || expired || Boolean(pendingPhoto && !photoConfirmed)}><Check size={19} />{working ? "Saving visit…" : "Log this visit"}</button>{pendingPhoto && !photoConfirmed && <small>Use or discard the photo before logging the visit.</small>}{expired && <button type="button" className="claim-refresh" onClick={() => void locate()}><RefreshCw size={16} />Refresh location</button>}</div>}
     {otherCandidate && <div className="claim-other-candidate" role="status"><p>Your location matches <strong>{otherCandidateName}</strong>.</p>{onOpenPlace && <button type="button" onClick={() => onOpenPlace(otherCandidate.placeId)}>Open {otherCandidateName}</button>}</div>}
     {recommendationText && <p className="claim-state" role="status">{recommendationText}</p>}
      {message && !uploadRetry && <p className="claim-state claim-error" role="alert">{message}</p>}

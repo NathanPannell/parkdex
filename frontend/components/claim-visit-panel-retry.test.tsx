@@ -35,8 +35,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
     render(<ClaimVisitPanel {...handlers} />);
     await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
 
     expect(await screen.findByText(/could not be saved for retry/i)).toBeTruthy();
     expect(save).toHaveBeenCalledWith("account:first", place.id, { file: photo, mimeType: photo.type });
@@ -57,8 +57,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
     const first = render(<ClaimVisitPanel {...handlers} />);
     await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
     expect(await screen.findByText("request lost")).toBeTruthy();
     await expect(store.load("account:first", place.id).then((value) => value?.file.text())).resolves.toBe("private photo");
 
@@ -86,8 +86,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
     expect(screen.queryByText(/your visit is saved/i)).toBeNull();
     expect(handlers.createClaim).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
     await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo));
     await expect(store.load("account:first", place.id)).resolves.toBeNull();
   });
@@ -181,8 +181,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
     const first = render(<ClaimVisitPanel {...handlers} />);
     await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
     expect(await screen.findByText(/photo did not upload/i)).toBeTruthy();
     await expect(store.load("account:first", place.id).then((value) => value?.file.text())).resolves.toBe("private photo");
 
@@ -205,8 +205,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
     const { rerender } = render(<ClaimVisitPanel {...handlers} />);
     await clickCamera();
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
-    fireEvent.click(screen.getByRole("button", { name: "Check if I can claim a park" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Claim this park" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
     await screen.findByText(/photo did not upload/i);
 
     rerender(<ClaimVisitPanel {...handlers} ownerKey="account:second" />);

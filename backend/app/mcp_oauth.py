@@ -570,7 +570,7 @@ class ParkdexOAuthProvider(
         <p class="introduction"><strong class="client-name">{name}</strong> is asking to use your Parkdex account. Sign in to choose whether to allow access.</p>
         <section class="permission-summary" aria-labelledby="permission-title">
           <h2 id="permission-title">If you allow access, it can:</h2>
-          <ul><li>Search the Parkdex place catalogue.</li><li>View and change your private groups, including Wishlist.</li></ul>
+          <ul><li>Search the Parkdex place catalogue.</li><li>View and change your private collections, including Wishlist.</li></ul>
         </section>
         {message}
         <form method="post" action="/oauth/consent"{form_description}>

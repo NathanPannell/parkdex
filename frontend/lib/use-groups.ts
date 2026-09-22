@@ -42,7 +42,7 @@ type GroupState = {
 };
 
 function messageFor(error: unknown) {
-  return networkErrorMessage(error, "load your groups");
+  return networkErrorMessage(error, "load your collections");
 }
 
 function browserIsOffline() {
@@ -170,7 +170,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   ) => {
     // Do not let a stale drain accidentally use the request function after an
     // account switch. Throwing retains the entry for that account's next run.
-    if (epoch !== epochRef.current || accountId !== identityKey) throw new Error("Group identity changed while syncing.");
+    if (epoch !== epochRef.current || accountId !== identityKey) throw new Error("Collection identity changed while syncing.");
     const result = included
       ? await addGroupPlace(currentRequest, groupId, placeId)
       : await removeGroupPlace(currentRequest, groupId, placeId);
@@ -181,7 +181,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       : [...groupsRef.current, rebased];
     setCurrentGroups(next, accountId);
     if (!await persistSnapshot(accountId, next)) {
-      throw new Error("Private device storage could not save the synced groups.");
+      throw new Error("Private device storage could not save the synced collections.");
     }
   }, [identityKey, persistSnapshot, setCurrentGroups]);
 
@@ -199,13 +199,13 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     setCurrentGroups(rebased, accountId);
     setSelectedGroupId((current) => current && rebased.some((group) => group.id === current) ? current : null);
     if (!await persistSnapshot(accountId, rebased) || !await persistOutbox(accountId, outbox)) {
-      throw new Error("Private device storage could not save your refreshed groups.");
+      throw new Error("Private device storage could not save your refreshed collections.");
     }
     setPendingMemberships(outbox.pendingCount());
     setOffline(false);
     setError("");
     setSyncStatus(outbox.hasPending() ? "syncing" : "idle");
-    setSyncMessage(outbox.hasPending() ? "Your newer group changes are saved on this device and waiting to sync." : "");
+    setSyncMessage(outbox.hasPending() ? "Your newer collection changes are saved on this device and waiting to sync." : "");
   }, [identityKey, persistOutbox, persistSnapshot, setCurrentGroups]);
 
   const drainOutbox = useCallback(async (accountId: string, epoch: number, currentRequest = requestRef.current) => {
@@ -224,7 +224,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       if (epoch === epochRef.current && accountId === identityKey) {
         setOffline(true);
         setSyncStatus("offline");
-        setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+        setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
       }
       await persistOutbox(accountId, outbox);
       return;
@@ -239,7 +239,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
         { discardOnError: isPermanentlyInvalidMembership },
       );
       if (!await persistOutbox(accountId, outbox)) {
-        throw new Error("Private device storage could not save the group outbox.");
+        throw new Error("Private device storage could not save the collection changes.");
       }
       setPendingMemberships(outbox.pendingCount());
       if (epoch === epochRef.current && accountId === identityKey) {
@@ -262,16 +262,16 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       if (epoch === epochRef.current && accountId === identityKey) {
         if (!outboxStored) {
           setSyncStatus("error");
-          setError("Private device storage could not save your pending group changes.");
+          setError("Private device storage could not save your pending collection changes.");
           setSyncMessage("Keep Parkdex open and try again before leaving this page.");
         } else if (isOfflineFailure(caught)) {
           setOffline(true);
           setSyncStatus("offline");
-          setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+          setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
         } else {
           setSyncStatus("error");
           setError(messageFor(caught));
-          setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+          setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
         }
       }
       throw caught;
@@ -310,7 +310,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       setBusy(false);
       setOffline(browserIsOffline() || !apiBaseUrl);
       setSyncStatus("error");
-      setError("Private device storage could not open your saved groups.");
+      setError("Private device storage could not open your saved collections.");
       setSyncMessage("Restart Parkdex and try again.");
       return;
     }
@@ -325,8 +325,8 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     setSyncStatus(unavailable ? "offline" : "syncing");
     if (unavailable) {
       setSyncMessage(outbox.hasPending()
-        ? "Your group changes are saved on this device and waiting to sync."
-        : cached.length ? "Showing your saved groups offline." : "Your groups are unavailable offline.");
+        ? "Your collection changes are saved on this device and waiting to sync."
+        : cached.length ? "Showing your saved collections offline." : "Your collections are unavailable offline.");
       await persistOutbox(accountId, outbox);
       return;
     }
@@ -339,7 +339,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       setCurrentGroups(rebased, accountId);
       setSelectedGroupId((current) => current && rebased.some((group) => group.id === current) ? current : null);
       if (!await persistSnapshot(accountId, rebased) || !await persistOutbox(accountId, outbox)) {
-        throw new Error("Private device storage could not save your groups.");
+        throw new Error("Private device storage could not save your collections.");
       }
       setOffline(false);
       setError("");
@@ -353,7 +353,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       // Keep genuine API/storage failures in the separate actionable alert.
       setError(nowOffline ? "" : messageFor(caught));
       setSyncMessage(nowOffline
-        ? outbox.hasPending() ? "Your group changes are saved on this device and waiting to sync." : cached.length ? "Showing your saved groups offline." : "Your groups are unavailable offline."
+        ? outbox.hasPending() ? "Your collection changes are saved on this device and waiting to sync." : cached.length ? "Showing your saved collections offline." : "Your collections are unavailable offline."
         : "");
     } finally {
       if (epoch === epochRef.current) {
@@ -372,7 +372,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     const becameOffline = () => {
       setOffline(true);
       setSyncStatus("offline");
-      if (outboxRef.current.hasPending()) setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+      if (outboxRef.current.hasPending()) setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
     };
     const cameOnline = () => {
       setOffline(false);
@@ -390,10 +390,10 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     if (!apiBaseUrl || offline || browserIsOffline()) {
       setOffline(true);
       setSyncStatus("offline");
-      throw new Error("Creating, renaming, or deleting groups requires an online connection.");
+      throw new Error("Creating, renaming, or deleting collections requires an online connection.");
     }
     const currentRequest = requestRef.current;
-    if (!currentRequest) throw new Error("Sign in to manage groups.");
+    if (!currentRequest) throw new Error("Sign in to manage collections.");
     const epoch = epochRef.current;
     const accountId = identityKey;
     setBusy(true);
@@ -407,7 +407,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
           : [...groupsRef.current, result];
         setCurrentGroups(next, accountId);
         if (!await persistSnapshot(accountId, next)) {
-          throw new Error("Private device storage could not save your groups.");
+          throw new Error("Private device storage could not save your collections.");
         }
       }
       return result;
@@ -461,10 +461,10 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       const outbox = await hydrateOutbox(accountId, epoch);
       if (!outbox) return;
       outbox.clearGroup(id);
-      if (!await persistOutbox(accountId, outbox)) throw new Error("Private device storage could not clear the group outbox.");
+      if (!await persistOutbox(accountId, outbox)) throw new Error("Private device storage could not clear the collection changes.");
       const next = groupsRef.current.filter((group) => group.id !== id);
       setCurrentGroups(next, accountId);
-      if (!await persistSnapshot(accountId, next)) throw new Error("Private device storage could not save your groups.");
+      if (!await persistSnapshot(accountId, next)) throw new Error("Private device storage could not save your collections.");
       if (selectedGroupId === id) setSelectedGroupId(null);
       setPendingMemberships(outbox.pendingCount());
     }
@@ -473,13 +473,13 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const changeMembership = useCallback(async (groupId: string, placeId: string, included: boolean) => {
     const accountId = identityKey;
     const epoch = epochRef.current;
-    if (!authenticated || !accountId) throw new Error("Sign in to manage groups.");
+    if (!authenticated || !accountId) throw new Error("Sign in to manage collections.");
     if (groupsOwnerRef.current !== accountId || !groupsRef.current.some((group) => group.id === groupId)) {
-      throw new Error("That group is not available yet. Please try again.");
+      throw new Error("That collection is not available yet. Please try again.");
     }
     const outbox = await hydrateOutbox(accountId, epoch);
     if (!outbox || epoch !== epochRef.current || accountId !== identityKey) {
-      throw new Error("Your account changed while opening saved groups. Try again.");
+      throw new Error("Your account changed while opening saved collections. Try again.");
     }
     outbox.setDesired(groupId, placeId, included);
     const next = withMembershipInGroups(groupsRef.current, groupId, placeId, included);
@@ -488,16 +488,16 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     setError("");
     if (!await persistOutbox(accountId, outbox) || !await persistSnapshot(accountId, next)) {
       setSyncStatus("error");
-      setError("Private device storage could not save this group change.");
+      setError("Private device storage could not save this collection change.");
       setSyncMessage("Keep Parkdex open and try again before leaving this page.");
-      throw new Error("Private device storage could not save this group change.");
+      throw new Error("Private device storage could not save this collection change.");
     }
 
     const currentRequest = requestRef.current;
     if (!apiBaseUrl || browserIsOffline() || !currentRequest) {
       setOffline(true);
       setSyncStatus("offline");
-      setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+      setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
       setBusy(false);
       return;
     }
@@ -512,7 +512,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
         (pendingGroupId, pendingPlaceId, pendingIncluded) => sendMembership(accountId, epoch, currentRequest, outbox, pendingGroupId, pendingPlaceId, pendingIncluded),
         { discardOnError: isPermanentlyInvalidMembership },
       );
-      if (!await persistOutbox(accountId, outbox)) throw new Error("Private device storage could not save the group outbox.");
+      if (!await persistOutbox(accountId, outbox)) throw new Error("Private device storage could not save the collection changes.");
       setPendingMemberships(outbox.pendingCount());
       if (epoch === epochRef.current && accountId === identityKey) {
         setSyncStatus(outbox.hasPending() ? "syncing" : "idle");
@@ -534,21 +534,21 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       if (epoch === epochRef.current && accountId === identityKey) {
         if (!outboxStored) {
           setSyncStatus("error");
-          setError("Private device storage could not save your pending group changes.");
+          setError("Private device storage could not save your pending collection changes.");
           setSyncMessage("Keep Parkdex open and try again before leaving this page.");
         } else if (reconciledPermanentFailure) {
           setOffline(false);
           setSyncStatus(outbox.hasPending() ? "syncing" : "idle");
           setError(messageFor(caught));
-          setSyncMessage(outbox.hasPending() ? "Your newer group changes are saved on this device and waiting to sync." : "");
+          setSyncMessage(outbox.hasPending() ? "Your newer collection changes are saved on this device and waiting to sync." : "");
         } else if (isOfflineFailure(caught)) {
           setOffline(true);
           setSyncStatus("offline");
-          setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+          setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
         } else {
           setSyncStatus("error");
           setError(messageFor(caught));
-          setSyncMessage("Your group changes are saved on this device and waiting to sync.");
+          setSyncMessage("Your collection changes are saved on this device and waiting to sync.");
         }
       }
       if (isOfflineFailure(caught)) return;
@@ -580,7 +580,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     if (accountId) {
       const target = await storage();
       if (!await removeStored(target, accountGroupsCacheKey(accountId)) || !await persistOutbox(accountId, outbox)) {
-        throw new Error("Private device storage could not clear the saved groups.");
+        throw new Error("Private device storage could not clear the saved collections.");
       }
     }
     setError("");

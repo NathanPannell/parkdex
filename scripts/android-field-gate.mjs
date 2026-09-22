@@ -81,6 +81,19 @@ export function labelledNodeCenter(xml, labels) {
   return matches.find((candidate) => candidate.clickable)?.center || matches[0]?.center || null;
 }
 
+const ONBOARDING_SKIP_LABELS = [/^Skip(?: intro)?$/i];
+const MY_DEX_LABELS = [/^(?:My Dex|Account)$/i];
+const SETTINGS_LABELS = [/^Settings$/i];
+
+/**
+ * The first launch intro is rendered in the WebView and can cover every
+ * native/WebView target the gate needs. Keep this exact so the global
+ * "Skip to ..." accessibility controls are never mistaken for the intro.
+ */
+export function onboardingSkipCenter(xml) {
+  return labelledNodeCenter(xml, ONBOARDING_SKIP_LABELS);
+}
+
 export function photoPostcardReady(xml, placeName = "Bell Park") {
   const text = String(xml);
   const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -93,7 +106,7 @@ export function photoPostcardReady(xml, placeName = "Bell Park") {
 export function photoJourneyCleanupReady(xml, placeName = "Bell Park") {
   const text = String(xml);
   const escaped = placeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return /Your first boundary claim will become a postcard here/i.test(text)
+  return /(?:Your first boundary claim will become a postcard here|Your first postcard will appear in your Collection after a boundary claim)/i.test(text)
     && !new RegExp(`(?:text|content-desc)="(?:Postcard|Private postcard) from ${escaped}"`, "i").test(text);
 }
 
@@ -454,6 +467,13 @@ function waitFor(context, predicate, deadline, label, { retryAction, retryInterv
     let retry = false;
     try {
       lastXml = dumpHierarchy(context);
+      const onboardingSkip = onboardingSkipCenter(lastXml);
+      if (onboardingSkip) {
+        adb(context, ["shell", "input", "tap", String(onboardingSkip.x), String(onboardingSkip.y)]);
+        lastRetryAt = Date.now();
+        sleep(300);
+        continue;
+      }
       const decision = evaluateDumpedPoll({
         deadlineMs: deadline,
         lastRetryAt,
@@ -488,6 +508,12 @@ function waitForWithScroll(context, predicate, deadline, label) {
   while (Date.now() < deadline) {
     try {
       lastXml = dumpHierarchy(context);
+      const onboardingSkip = onboardingSkipCenter(lastXml);
+      if (onboardingSkip) {
+        adb(context, ["shell", "input", "tap", String(onboardingSkip.x), String(onboardingSkip.y)]);
+        sleep(300);
+        continue;
+      }
       const result = predicate(lastXml);
       if (result) return { value: result, xml: lastXml };
       // The postcard deliberately consumes drag gestures for its tilt effect,
@@ -546,12 +572,58 @@ function tapLabelWithScroll(context, labels, deadline, description) {
   return found.xml;
 }
 
+function primaryContentVisible(xml, labels) {
+  const matchers = labels.map((label) => label instanceof RegExp ? label : new RegExp(`^${String(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"));
+  for (const match of String(xml).matchAll(/<node\b[^>]*>/g)) {
+    const node = match[0];
+    if (!/resource-id="primary-content"/.test(node)) continue;
+    const nodeLabels = [...node.matchAll(/(?:text|content-desc)="([^"]*)"/g)].map((candidate) => candidate[1]);
+    if (nodeLabels.some((nodeLabel) => matchers.some((matcher) => matcher.test(nodeLabel)))) return true;
+  }
+  return false;
+}
+
 function accountViewVisible(xml) {
-  return /text="Account"[^>]*resource-id="primary-content"/.test(String(xml));
+  // Account became My Dex in the bottom navigation. Keep Account as a
+  // backwards-compatible label for older field APKs while recognizing the
+  // modern primary-content aria-label regardless of XML attribute order.
+  return primaryContentVisible(xml, MY_DEX_LABELS);
+}
+
+function settingsViewVisible(xml) {
+  const text = String(xml);
+  return /(?:text|content-desc)="Back to My Dex"/i.test(text)
+    || /(?:text|content-desc)="Sign out"/i.test(text);
+}
+
+function navigateToAccountSettings(context, deadline, description) {
+  const accountXml = navigateToAccountHandlingOverlays(context, deadline, description);
+  if (settingsViewVisible(accountXml)) return accountXml;
+  const settings = labelledNodeCenter(accountXml, SETTINGS_LABELS);
+  // Older APKs kept account controls on the account page. Preserve that
+  // compatibility while requiring the modern Settings tap when it exists.
+  if (!settings) return accountXml;
+  adb(context, ["shell", "input", "tap", String(settings.x), String(settings.y)]);
+  return waitFor(context, settingsViewVisible, deadline, `${description} Settings view`).xml;
+}
+
+function leaveAccountSettingsIfOpen(context, deadline, description) {
+  let current = "";
+  try {
+    current = dumpHierarchy(context);
+    const backToMyDex = labelledNodeCenter(current, [/^Back to My Dex$/i]);
+    if (!backToMyDex) return current;
+    adb(context, ["shell", "input", "tap", String(backToMyDex.x), String(backToMyDex.y)]);
+    return waitFor(context, (xml) => accountViewVisible(xml) && !settingsViewVisible(xml), deadline, `${description} My Dex view`).xml;
+  } catch (error) {
+    error.lastXml = error.lastXml || current;
+    throw error;
+  }
 }
 
 export function accountNavigationTarget(xml) {
   for (const [kind, labels] of [
+    ["dismiss-onboarding", ONBOARDING_SKIP_LABELS],
     ["dismiss-arrival", [/^Close sealed impression$/i]],
     ["dismiss-nearby", [/^Close nearby places$/i]],
     ["dismiss-badge", [/^Claim my badge$/i]],
@@ -560,13 +632,13 @@ export function accountNavigationTarget(xml) {
     if (center) return { kind, center };
   }
   if (accountViewVisible(xml)) return { kind: "ready" };
-  const center = labelledNodeCenter(xml, [/^Account$/i]);
+  const center = labelledNodeCenter(xml, MY_DEX_LABELS);
   return center ? { kind: "navigate", center } : null;
 }
 
 export function sealedClaimCenter(xml) {
   if (!labelledNodeCenter(xml, [/^Close sealed impression$/i])) return null;
-  return labelledNodeCenter(xml, [/^Claim \+ photo$/i]);
+  return labelledNodeCenter(xml, [/^(?:Claim \+ photo|Log visit \+ photo)$/i]);
 }
 
 export function openSealedArrivalCamera(context, {
@@ -589,14 +661,32 @@ function waitForAccountPostcard(context, deadline) {
   while (Date.now() < deadline) {
     try {
       lastXml = dumpHierarchy(context);
-      const seeCollection = labelledNodeCenter(lastXml, [/^See my collection$/i]);
+      const onboardingSkip = onboardingSkipCenter(lastXml);
+      if (onboardingSkip) {
+        adb(context, ["shell", "input", "tap", String(onboardingSkip.x), String(onboardingSkip.y)]);
+        sleep(300);
+        continue;
+      }
+      const seeCollection = !collectionRequested && labelledNodeCenter(lastXml, [/^See my collection$/i]);
       if (seeCollection) {
         adb(context, ["shell", "input", "tap", String(seeCollection.x), String(seeCollection.y)]);
         collectionRequested = true;
         sleep(500);
         continue;
       }
-      const backToMap = labelledNodeCenter(lastXml, [/^Back to map$/i]);
+      // The current success receipt can be dismissed into the map. If the
+      // success flow has already returned there, use its explicit postcard
+      // action before checking the My Dex collection.
+      if (!collectionRequested) {
+        const openPostcard = labelledNodeCenter(lastXml, [/^Open your postcard$/i, /^Open your Bell Park postcard$/i]);
+        if (openPostcard) {
+          adb(context, ["shell", "input", "tap", String(openPostcard.x), String(openPostcard.y)]);
+          collectionRequested = true;
+          sleep(500);
+          continue;
+        }
+      }
+      const backToMap = !collectionRequested && labelledNodeCenter(lastXml, [/^Back to map$/i]);
       if (backToMap) {
         adb(context, ["shell", "input", "tap", String(backToMap.x), String(backToMap.y)]);
         sleep(500);
@@ -608,7 +698,7 @@ function waitForAccountPostcard(context, deadline) {
         sleep(500);
         continue;
       }
-      if (collectionRequested && !postcardRequested) {
+      if (collectionRequested && !postcardRequested && (accountViewVisible(lastXml) || /(?:text|content-desc)="My Dex"/i.test(lastXml))) {
         const viewPostcard = labelledNodeCenter(lastXml, [/^View Bell Park postcard$/i]);
         if (viewPostcard) {
           adb(context, ["shell", "input", "tap", String(viewPostcard.x), String(viewPostcard.y)]);
@@ -825,9 +915,10 @@ function runPhotoJourney(context, apk) {
   let result = null;
   let primaryFailure = null;
   try {
-    navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "Account navigation");
+    navigateToAccountSettings(context, Date.now() + context.photoTimeoutMs, "My Dex navigation");
     waitFor(context, (xml) => String(xml).includes(context.qaAccountEmail) && /Sign out/i.test(xml), Date.now() + context.photoTimeoutMs, "expected signed-in QA account");
     verifiedQaAccount = true;
+    tapLabel(context, [/^Field Guide$/i], Date.now() + context.timeoutMs, "Field Guide navigation");
     tapLabel(context, [/^Map$/i], Date.now() + context.timeoutMs, "Map navigation");
     // Closing the first arrival to verify Account suppresses that park's
     // invitation until departure in this app session. Relaunch with the
@@ -850,9 +941,10 @@ function runPhotoJourney(context, apk) {
     // The first-visit badge can mount again after the postcard readback has
     // already passed. Clear that modal at the cleanup boundary so it cannot
     // absorb the following Account scroll/tap sequence.
-    navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "postcard cleanup Account navigation");
+    navigateToAccountSettings(context, Date.now() + context.photoTimeoutMs, "postcard cleanup My Dex navigation");
     tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "progress reset action");
     tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "progress reset confirmation");
+    leaveAccountSettingsIfOpen(context, Date.now() + context.timeoutMs, "progress reset");
     const cleanupResult = waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "photo journey cleanup");
     cleaned = true;
     result = {
@@ -860,7 +952,7 @@ function runPhotoJourney(context, apk) {
       readback: true,
       cleanup: true,
       cameraOracle: /Shutter|Take photo/i.test(shutterXml),
-      claimOracle: /Claim \+ photo/i.test(claimXml),
+      claimOracle: /(?:Claim \+ photo|Log visit \+ photo)/i.test(claimXml),
       reviewOracle: photoReviewReady(review.xml),
       postcardOracle: photoPostcardReady(ready.xml),
       cleanupOracle: photoJourneyCleanupReady(cleanupResult.xml),
@@ -874,9 +966,10 @@ function runPhotoJourney(context, apk) {
       try {
         adb(context, ["shell", "am", "force-stop", PACKAGE]);
         adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
-        navigateToAccountHandlingOverlays(context, Date.now() + context.photoTimeoutMs, "cleanup Account navigation");
+        navigateToAccountSettings(context, Date.now() + context.photoTimeoutMs, "cleanup My Dex navigation");
         tapLabelWithScroll(context, [/^Reset my progress$/i], Date.now() + context.photoTimeoutMs, "cleanup progress reset action");
         tapLabel(context, [/^Reset everything$/i], Date.now() + context.timeoutMs, "cleanup progress reset confirmation");
+        leaveAccountSettingsIfOpen(context, Date.now() + context.timeoutMs, "cleanup progress reset");
         waitFor(context, photoJourneyCleanupReady, Date.now() + context.photoTimeoutMs, "failed photo journey cleanup");
       } catch (cleanupError) {
         primaryFailure = manualCleanupFailure(primaryFailure ?? cleanupError);

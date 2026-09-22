@@ -103,7 +103,7 @@ async function locationPermission(requirePrecise = false, promptForPrecise = req
   if (requirePrecise && permission.location !== "granted") {
     throw new LocationCapabilityError(
       "precise-required",
-      "Precise location is required to claim a park. Turn on precise location for Parkdex in Android settings, then try again.",
+      "Precise location is required to confirm a visit. Turn on precise location for Parkdex in Android settings, then try again.",
     );
   }
   return permission;

@@ -22,7 +22,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const body = await response.text();
     return (body ? JSON.parse(body) : undefined) as T;
   }
-  let message = "Groups are unavailable right now. Please try again.";
+  let message = "Collections are unavailable right now. Please try again.";
   try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* friendly fallback */ }
   throw new GroupsApiError(message, response.status);
 }
@@ -39,7 +39,7 @@ function normalizeGroup(value: unknown): Group {
   const placeIds = Array.isArray(rawPlaceIds) ? rawPlaceIds.filter((id): id is string => typeof id === "string") : places.map((place) => place.id);
   return {
     id: String(source.id ?? ""),
-    name: String(source.name ?? "Untitled group"),
+    name: String(source.name ?? "Untitled collection"),
     isWishlist: source.isWishlist === true || source.is_wishlist === true || source.id === "wishlist" || source.kind === "wishlist",
     places,
     placeIds,

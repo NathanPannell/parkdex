@@ -178,7 +178,7 @@ describe("useGroups offline groups", () => {
     await waitFor(() => expect(result.current.syncStatus).toBe("offline"));
     expect(result.current.groups[0].places).toEqual([place]);
     expect(result.current.error).toBe("");
-    expect(result.current.syncMessage).toBe("Showing your saved groups offline.");
+    expect(result.current.syncMessage).toBe("Showing your saved collections offline.");
     await act(() => result.current.retry());
     expect(result.current.offline).toBe(false);
     expect(result.current.syncStatus).toBe("idle");
@@ -333,7 +333,7 @@ describe("useGroups offline groups", () => {
     window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
     window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ coast: { "park-1": { included: false, revision: 1 } } }));
     const request = vi.fn((path: string) => path === "/api/groups/coast/places"
-      ? failed(404, "Group not found")
+      ? failed(404, "Collection not found")
       : json([]));
 
     const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
@@ -363,7 +363,7 @@ describe("useGroups offline groups", () => {
   it("refreshes after a rename discovers that the group was deleted elsewhere", async () => {
     let groupReads = 0;
     const request = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/groups/coast" && init?.method === "PATCH") return failed(404, "Group not found");
+      if (path === "/api/groups/coast" && init?.method === "PATCH") return failed(404, "Collection not found");
       groupReads += 1;
       return json(groupReads === 1 ? [{ id: "coast", name: "Coastal plans", placeIds: [] }] : []);
     });
@@ -382,7 +382,7 @@ describe("useGroups offline groups", () => {
   it("treats deleting an already-deleted group as success after reconciliation", async () => {
     let groupReads = 0;
     const request = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/groups/coast" && init?.method === "DELETE") return failed(404, "Group not found");
+      if (path === "/api/groups/coast" && init?.method === "DELETE") return failed(404, "Collection not found");
       groupReads += 1;
       return json(groupReads === 1 ? [{ id: "coast", name: "Coastal plans", placeIds: [] }] : []);
     });
@@ -398,7 +398,7 @@ describe("useGroups offline groups", () => {
 
   it("does not refresh or queue an invalid create request", async () => {
     const request = vi.fn((path: string, init?: RequestInit) => path === "/api/groups" && init?.method === "POST"
-      ? failed(422, "Wishlist is reserved for the protected account group")
+      ? failed(422, "Wishlist is reserved for the protected account collection")
       : json([{ id: "wishlist", name: "Wishlist", isWishlist: true, placeIds: [] }]));
     const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
     await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["wishlist"]));

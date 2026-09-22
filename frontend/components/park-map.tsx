@@ -175,11 +175,18 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   ],
 };
 
-function visiblePlaces(places: Place[], visited: Set<string>, mode: ParkMapMode) {
-  return mode === "discover" ? places : places.filter((place) => visited.has(place.id));
+/**
+ * Place visibility follows the collection supplied by the parent. The map
+ * mode controls the progress overlay only, so explored/discover cannot
+ * silently remove unvisited markers or make them unavailable to hit testing.
+ */
+export function visiblePlaces(places: Place[], _visited: ReadonlySet<string>, _mode: ParkMapMode) {
+  void _visited;
+  void _mode;
+  return places;
 }
 
-function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
+export function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: visiblePlaces(places, visited, mode).map((place) => ({
@@ -283,17 +290,18 @@ function cameraSnapshot(map: MapLibreMap): MapCameraSnapshot {
   };
 }
 
-function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
+export function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
   const selectors = [
-    ".expedition-header",
+    ".guide-view-switch",
     ".map-utility",
-    ".map-utility-bar",
-    ".map-mode-switch",
+    ".map-visit-filter",
     ".search-dock",
     ".filter-tray",
     ".search-results",
     ".nearby-strip",
+    ".global-progress",
     ".thumb-nav",
+    ".feature-collection",
     ...(includeSheet ? [".place-sheet"] : []),
   ];
   const overlays = selectors.flatMap((selector) => {
@@ -364,12 +372,13 @@ function addBoundaryLayers(map: MapLibreMap) {
 function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null, selectedIds: ReadonlySet<string> = new Set()) {
   if (!map.getSource(BOUNDARY_SOURCE)) return;
   const ids = places.map((place) => place.id);
+  const idsInView = new Set(ids);
   BOUNDARY_VISIBLE_LAYERS.forEach((layer) => {
     map.setFilter(layer, boundaryFilter(ids, layer.includes("island") ? "island" : "park"));
   });
   map.setFilter("boundary-hit", boundaryFilter(ids));
   const selected: FilterSpecification = selectedIds.size
-    ? ["in", ["get", "id"], ["literal", [...selectedIds]]]
+    ? ["in", ["get", "id"], ["literal", [...selectedIds].filter((id) => idsInView.has(id))]]
     : selectedBoundaryFilter(selectedId, ids);
   BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, selected));
 }

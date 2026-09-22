@@ -90,7 +90,7 @@ export async function createClaimRequest(
     method: "POST",
     headers: { ...ownerHeaders(owner), "Content-Type": "application/json" },
     body: JSON.stringify(input),
-  }), "Could not claim this park right now.");
+  }), "Could not save this visit right now.");
 }
 
 export async function uploadVisitPhotoRequest(apiBaseUrl: string, owner: ClaimOwner, placeId: string, file: File, timeoutMs = PHOTO_UPLOAD_TIMEOUT_MS): Promise<void> {

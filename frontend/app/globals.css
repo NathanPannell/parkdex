@@ -1084,7 +1084,7 @@ button { color: inherit; }
 }
 
 @media (min-width: 860px) {
-  .thumb-nav { display: none !important; }
+  .thumb-nav:not(.parkdex-nav) { display: none !important; }
   .desktop-top-nav { background: transparent; padding: 0; }
   .desktop-top-nav button.active { box-shadow: none; }
   .map-utility .locate-button, .map-utility .search-toggle { width: 46px; height: 46px; min-height: 46px; flex: 0 0 46px; padding: 0; }
