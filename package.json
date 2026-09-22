@@ -2,7 +2,9 @@
   "name": "every-park-boundaries",
   "scripts": {
     "android:field-gate": "node scripts/android-field-gate.mjs",
+    "android:release-prep": "node scripts/android-release-prep.mjs",
     "test:android-field-gate": "node --test scripts/android-field-gate.test.mjs",
+    "test:android-release-prep": "node --test scripts/android-release-prep.test.mjs",
     "test:r2-contract": "python -m pytest scripts/r2_contract_test.py -q",
     "boundaries:build": "node scripts/boundary-build.mjs",
     "boundaries:validate": "node scripts/boundary-validate.mjs",
