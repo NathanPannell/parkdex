@@ -641,6 +641,19 @@ export function sealedClaimCenter(xml) {
   return labelledNodeCenter(xml, [/^(?:Claim \+ photo|Log visit \+ photo)$/i]);
 }
 
+export function openSealedArrivalCamera(context, {
+  wait = waitFor,
+  tap = (center) => adb(context, ["shell", "input", "tap", String(center.x), String(center.y)]),
+  injectLocation = () => spoof(context, BELL),
+  now = Date.now,
+} = {}) {
+  const sealedClaim = wait(context, sealedClaimCenter, now() + context.photoTimeoutMs, "Bell Park sealed Claim + photo action", {
+    retryAction: injectLocation,
+  });
+  tap(sealedClaim.value);
+  return sealedClaim.xml;
+}
+
 function waitForAccountPostcard(context, deadline) {
   let lastXml = "";
   let collectionRequested = false;
@@ -913,22 +926,10 @@ function runPhotoJourney(context, apk) {
     adb(context, ["shell", "am", "force-stop", PACKAGE]);
     adb(context, ["shell", "am", "start", "-W", "-n", ACTIVITY]);
     spoof(context, BELL);
-    const locationAction = waitFor(context, (xml) => {
-      const claim = sealedClaimCenter(xml);
-      if (claim) return { kind: "claim", center: claim };
-      const locate = locateButtonCenter(xml);
-      return locate ? { kind: "locate", center: locate } : false;
-    }, Date.now() + context.timeoutMs, "Map location action");
-    let claimXml = locationAction.xml;
-    if (locationAction.value.kind === "locate") {
-      adb(context, ["shell", "input", "tap", String(locationAction.value.center.x), String(locationAction.value.center.y)]);
-      spoof(context, BELL);
-      const sealedClaim = waitFor(context, sealedClaimCenter, Date.now() + context.photoTimeoutMs, "Bell Park sealed Claim + photo action");
-      claimXml = sealedClaim.xml;
-      adb(context, ["shell", "input", "tap", String(sealedClaim.value.x), String(sealedClaim.value.y)]);
-    } else {
-      adb(context, ["shell", "input", "tap", String(locationAction.value.center.x), String(locationAction.value.center.y)]);
-    }
+    // Authenticated Android starts its location watch automatically. Wait for
+    // the actual arrival before tapping: Locate can occupy the same screen
+    // coordinates as Claim + photo while the sheet mounts.
+    const claimXml = openSealedArrivalCamera(context);
 
     const shutterXml = tapLabel(context, [/Shutter/i, /Take photo/i], Date.now() + context.photoTimeoutMs, "camera shutter");
     tapLabel(context, [/^Done$/i, /^Use photo$/i], Date.now() + context.photoTimeoutMs, "native camera acceptance");

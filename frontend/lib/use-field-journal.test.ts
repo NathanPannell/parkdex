@@ -68,8 +68,21 @@ function catalogue(visitedIds: string[] = [], completedTrailIds: string[] = []) 
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+let restoreNavigatorOnline: (() => void) | undefined;
+
+function setNavigatorOnline(value: boolean) {
+  restoreNavigatorOnline?.();
+  const previous = Object.getOwnPropertyDescriptor(window.navigator, "onLine");
+  Object.defineProperty(window.navigator, "onLine", { configurable: true, value });
+  restoreNavigatorOnline = () => {
+    if (previous) Object.defineProperty(window.navigator, "onLine", previous);
+    else Reflect.deleteProperty(window.navigator, "onLine");
+  };
 }
 
 beforeEach(() => {
@@ -80,6 +93,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreNavigatorOnline?.();
+  restoreNavigatorOnline = undefined;
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -119,8 +134,27 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.loadError).toBe("");
   });
 
+  it("shows reconnecting feedback after a known-offline failure while boot stays in loading", async () => {
+    vi.useFakeTimers();
+    setNavigatorOnline(false);
+    let catalogueAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(() => {
+      catalogueAttempts += 1;
+      return Promise.reject(new TypeError("offline"));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    expect(catalogueAttempts).toBe(1);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
+  });
+
   it("keeps bounded boot recovery active through a slow Android reconnect", async () => {
     vi.useFakeTimers();
+    setNavigatorOnline(true);
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn(() => {
       catalogueAttempts += 1;
@@ -133,14 +167,24 @@ describe("useFieldJournal identity and progress races", () => {
     }
     expect(catalogueAttempts).toBe(1);
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(14_999); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(999); });
+    expect(catalogueAttempts).toBe(2);
+    expect(result.current.loadError).toBe("");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(catalogueAttempts).toBe(3);
+    expect(result.current.loading).toBe(true);
+    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(13_999); });
     expect(catalogueAttempts).toBe(5);
     expect(result.current.loading).toBe(true);
+    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1); });
     expect(catalogueAttempts).toBe(6);
     expect(result.current.loading).toBe(false);
     expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.loadError).toBe("");
   });
 
   it("continues finite timed recovery after every boot attempt fails without an online event", async () => {
@@ -270,20 +314,26 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.loadError).toBe("Showing your saved field guide offline.");
   });
 
-  it("does not continue a pending boot retry after unmount", async () => {
+  it.each(["waiting to retry", "in flight"] as const)("does not continue a boot request %s after unmount", async (phase) => {
+    const lateCatalogue = deferred<Response>();
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn(() => {
       catalogueAttempts += 1;
-      return Promise.reject(new TypeError("network not ready"));
+      return phase === "in flight" ? lateCatalogue.promise : Promise.reject(new TypeError("network not ready"));
     }));
 
     const mounted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     await waitFor(() => expect(catalogueAttempts).toBe(1));
     mounted.unmount();
+    await act(async () => {
+      if (phase === "in flight") lateCatalogue.reject(new TypeError("network not ready"));
+      await Promise.resolve();
+    });
     act(() => window.dispatchEvent(new Event("online")));
     await new Promise((resolve) => window.setTimeout(resolve, 20));
 
     expect(catalogueAttempts).toBe(1);
+    expect(mounted.result.current.loadError).toBe("");
   });
 
   it("falls back to legacy account writes when the previous API has no claim capability", async () => {
@@ -400,7 +450,8 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.visited.has(PLACE.id)).toBe(false);
   });
 
-  it("ignores a guest catalogue response that arrives after login", async () => {
+  it.each(["success", "failure"] as const)("ignores a guest catalogue %s that arrives after login", async (outcome) => {
+    setNavigatorOnline(false);
     const lateCatalogue = deferred<Response>();
     let accountCatalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
@@ -419,9 +470,14 @@ describe("useFieldJournal identity and progress races", () => {
     await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
     await waitFor(() => expect(accountCatalogueAttempts).toBe(1));
     expect(result.current.visited.has(PLACE.id)).toBe(true);
-    await act(async () => { lateCatalogue.resolve(await json(catalogue())); });
+    await act(async () => {
+      if (outcome === "success") lateCatalogue.resolve(await json(catalogue()));
+      else lateCatalogue.reject(new TypeError("guest offline"));
+      await Promise.resolve();
+    });
     expect(result.current.authenticated).toBe(true);
     expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.loadError).toBe("");
   });
 
   it("replays the selected account's persisted outbox immediately after login", async () => {
