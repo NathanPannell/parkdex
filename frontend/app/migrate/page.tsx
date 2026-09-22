@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   GUEST_MIGRATION_READY_TYPE,
   GUEST_MIGRATION_RESULT_TYPE,
+  fetchRemoteGuestProgress,
   guestMigrationPairForAppOrigin,
   receiveGuestMigrationMessage,
   type GuestMigrationStatus,
@@ -37,37 +38,49 @@ export default function GuestProgressMigrationPage() {
     }
 
     let handled = false;
+    let processing = false;
     let navigationTimer: number | undefined;
     const onMessage = (event: MessageEvent<unknown>) => {
-      if (handled) return;
-      let result;
-      try {
-        result = receiveGuestMigrationMessage({
-          origin: event.origin,
-          source: event.source,
-          expectedOrigin: pair.sourceOrigin,
-          expectedSource: opener,
-          payload: event.data,
-          storage: window.localStorage,
-        });
-      } catch {
-        result = { status: "storage-error" as const };
-      }
-      if (result.status === "ignored") return;
+      if (handled || processing || event.origin !== pair.sourceOrigin || event.source !== opener) return;
+      processing = true;
+      void (async () => {
+        let result;
+        try {
+          result = await receiveGuestMigrationMessage({
+            origin: event.origin,
+            source: event.source,
+            expectedOrigin: pair.sourceOrigin,
+            expectedSource: opener,
+            payload: event.data,
+            storage: window.localStorage,
+            checkRemoteProgress: (collectionKey) => fetchRemoteGuestProgress(
+              process.env.NEXT_PUBLIC_API_BASE_URL ?? "",
+              window.location.origin,
+              collectionKey,
+            ),
+          });
+        } catch {
+          result = { status: "storage-error" as const };
+        }
+        if (result.status === "ignored") {
+          processing = false;
+          return;
+        }
 
-      handled = true;
-      window.removeEventListener("message", onMessage);
-      const resultStatus = isResultStatus(result.status) ? result.status : "invalid";
-      opener.postMessage({
-        type: GUEST_MIGRATION_RESULT_TYPE,
-        version: 1,
-        status: resultStatus,
-      }, pair.sourceOrigin);
-      setStatus(resultStatus);
+        handled = true;
+        window.removeEventListener("message", onMessage);
+        const resultStatus = isResultStatus(result.status) ? result.status : "invalid";
+        opener.postMessage({
+          type: GUEST_MIGRATION_RESULT_TYPE,
+          version: 1,
+          status: resultStatus,
+        }, pair.sourceOrigin);
+        setStatus(resultStatus);
 
-      if (resultStatus === "imported") {
-        navigationTimer = window.setTimeout(() => window.location.replace("/"), 500);
-      }
+        if (resultStatus === "imported") {
+          navigationTimer = window.setTimeout(() => window.location.replace("/"), 500);
+        }
+      })();
     };
 
     window.addEventListener("message", onMessage);

@@ -34,6 +34,7 @@ export type GuestMigrationStatus =
   | "storage-error";
 
 export type GuestMigrationStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type GuestMigrationRemoteCheck = (collectionKey: string) => Promise<boolean>;
 
 export type GuestMigrationResult = {
   status: GuestMigrationStatus;
@@ -127,13 +128,70 @@ function hasExistingGuestProgress(previous: Map<GuestMigrationKey, string | null
   return GUEST_MIGRATION_KEYS.some((key) => !isEmptyStoredGuestValue(key, previous.get(key) ?? null));
 }
 
-export function receiveGuestMigrationMessage({
+function readGuestMigrationSnapshot(storage: GuestMigrationStorage) {
+  const snapshot = new Map<GuestMigrationKey, string | null>();
+  for (const key of GUEST_MIGRATION_KEYS) snapshot.set(key, storage.getItem(key));
+  return snapshot;
+}
+
+function sameGuestMigrationSnapshot(
+  left: Map<GuestMigrationKey, string | null>,
+  right: Map<GuestMigrationKey, string | null>,
+) {
+  return GUEST_MIGRATION_KEYS.every((key) => left.get(key) === right.get(key));
+}
+
+export async function fetchRemoteGuestProgress(
+  apiBaseUrl: string,
+  appOrigin: string,
+  collectionKey: string,
+  fetcher: typeof fetch = fetch,
+): Promise<boolean> {
+  const trimmedBaseUrl = apiBaseUrl.trim();
+  if (!trimmedBaseUrl) throw new Error("The Parkdex API is not configured.");
+
+  let endpoint: URL;
+  if (trimmedBaseUrl === ".") {
+    endpoint = new URL("/api/guest/progress-state", appOrigin);
+  } else {
+    const apiUrl = new URL(trimmedBaseUrl);
+    if (
+      !["http:", "https:"].includes(apiUrl.protocol)
+      || apiUrl.username
+      || apiUrl.password
+      || apiUrl.pathname !== "/"
+      || apiUrl.search
+      || apiUrl.hash
+    ) {
+      throw new Error("The Parkdex API origin is invalid.");
+    }
+    endpoint = new URL("/api/guest/progress-state", apiUrl.origin);
+  }
+
+  const response = await fetcher(endpoint, {
+    method: "GET",
+    headers: { "X-Collection-Key": collectionKey },
+    cache: "no-store",
+    credentials: "omit",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) throw new Error("The Parkdex API could not confirm saved guest progress.");
+
+  const payload: unknown = await response.json();
+  if (!isPlainRecord(payload) || typeof payload.hasProgress !== "boolean") {
+    throw new Error("The Parkdex API returned an invalid guest progress response.");
+  }
+  return payload.hasProgress;
+}
+
+export async function receiveGuestMigrationMessage({
   origin,
   source,
   expectedOrigin,
   expectedSource,
   payload,
   storage,
+  checkRemoteProgress,
 }: {
   origin: string;
   source: unknown;
@@ -141,7 +199,8 @@ export function receiveGuestMigrationMessage({
   expectedSource: unknown;
   payload: unknown;
   storage: GuestMigrationStorage;
-}): GuestMigrationResult {
+  checkRemoteProgress?: GuestMigrationRemoteCheck;
+}): Promise<GuestMigrationResult> {
   if (!expectedSource || origin !== expectedOrigin || source !== expectedSource) {
     return { status: "ignored" };
   }
@@ -150,15 +209,36 @@ export function receiveGuestMigrationMessage({
   if (parsed.status !== "valid") return { status: parsed.status };
 
   const keys = Object.keys(parsed.values) as GuestMigrationKey[];
-  const previous = new Map<GuestMigrationKey, string | null>();
+  let previous: Map<GuestMigrationKey, string | null>;
   try {
-    for (const key of GUEST_MIGRATION_KEYS) previous.set(key, storage.getItem(key));
+    previous = readGuestMigrationSnapshot(storage);
   } catch {
     return { status: "storage-error" };
   }
 
   if (hasExistingGuestProgress(previous)) {
     return { status: "conflict" };
+  }
+
+  const destinationCollectionKey = previous.get("every-park:collection-key:v1");
+  if (destinationCollectionKey) {
+    if (!checkRemoteProgress) return { status: "conflict" };
+    try {
+      if (await checkRemoteProgress(destinationCollectionKey)) return { status: "conflict" };
+    } catch {
+      return { status: "conflict" };
+    }
+
+    let current: Map<GuestMigrationKey, string | null>;
+    try {
+      current = readGuestMigrationSnapshot(storage);
+    } catch {
+      return { status: "storage-error" };
+    }
+    if (!sameGuestMigrationSnapshot(previous, current) || hasExistingGuestProgress(current)) {
+      return { status: "conflict" };
+    }
+    previous = current;
   }
 
   try {

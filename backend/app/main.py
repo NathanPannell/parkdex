@@ -591,6 +591,23 @@ def auth_config() -> dict[str, bool]:
     }
 
 
+@app.get("/api/guest/progress-state")
+def guest_progress_state(
+    conn: Connection = Depends(connection),
+    x_collection_key: str | None = Header(default=None),
+) -> dict[str, bool]:
+    owner_hash = collection_hash(x_collection_key, required=True)
+    has_visits = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM visits WHERE owner_hash = %s) AS has_progress",
+        (owner_hash,),
+    ).fetchone()["has_progress"]
+    has_trails = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM guest_trail_completions WHERE owner_hash = %s) AS has_progress",
+        (owner_hash,),
+    ).fetchone()["has_progress"]
+    return {"hasProgress": bool(has_visits or has_trails)}
+
+
 @app.get("/api/places", response_model=PlaceCollection)
 def list_places(
     conn: Connection = Depends(connection),
