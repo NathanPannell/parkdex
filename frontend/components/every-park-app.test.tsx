@@ -54,6 +54,12 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    const information = screen.getByRole("navigation", { name: "Parkdex information" });
+    expect([...information.querySelectorAll("a")].map((link) => [link.textContent, link.href])).toEqual([
+      ["Privacy", "https://parkdex.app/privacy"],
+      ["Support", "https://parkdex.app/support"],
+      ["Delete account", "https://parkdex.app/delete-account"],
+    ]);
   });
 
   it("shows all map places by default and filters markers independently of green progress", () => {
