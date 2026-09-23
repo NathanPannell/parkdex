@@ -5,36 +5,49 @@ import { mcpMetadataOptions, proxyMcpMetadata } from "./mcp-metadata-proxy";
 describe("MCP metadata proxy", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("fetches the matching metadata path from the API without following redirects", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response('{"resource":"https://staging.parkdex.app/mcp"}', {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const response = await proxyMcpMetadata(
-      new Request(
-        "https://staging.parkdex.app/.well-known/oauth-protected-resource/mcp?version=1",
-      ),
+  it.each([
+    [
+      "https://parkdex.app",
+      "https://api-production.example.test",
+      "https://parkdex.app/mcp",
+    ],
+    [
+      "https://staging.parkdex.app",
       "https://api-staging.example.test",
-    );
+      "https://staging.parkdex.app/mcp",
+    ],
+    [
+      "https://staging.web.parkdex.app",
+      "https://api-staging.example.test",
+      "https://staging.parkdex.app/mcp",
+    ],
+  ])(
+    "fetches metadata for %s from the matching API without following redirects",
+    async (requestOrigin, apiOrigin, resource) => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ resource }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      new URL(
-        "https://api-staging.example.test/.well-known/oauth-protected-resource/mcp?version=1",
-      ),
-      {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-        redirect: "manual",
-      },
-    );
-    expect(response.headers.get("access-control-allow-origin")).toBe("*");
-    await expect(response.json()).resolves.toEqual({
-      resource: "https://staging.parkdex.app/mcp",
-    });
-  });
+      const response = await proxyMcpMetadata(
+        new Request(`${requestOrigin}/.well-known/oauth-protected-resource/mcp?version=1`),
+        apiOrigin,
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        new URL(`${apiOrigin}/.well-known/oauth-protected-resource/mcp?version=1`),
+        {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+          redirect: "manual",
+        },
+      );
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+      await expect(response.json()).resolves.toEqual({ resource });
+    },
+  );
 
   it("returns a CORS preflight for browser-based MCP clients", () => {
     const response = mcpMetadataOptions();

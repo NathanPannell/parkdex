@@ -1,0 +1,20 @@
+{
+  "$schema": "parkdex.cloudflare-pages/v1",
+  "repository": "NathanPannell/parkdex",
+  "rootDirectory": "frontend",
+  "buildCommand": "npm run build:cloudflare",
+  "buildOutputDirectory": "out",
+  "compatibilityDate": "2026-09-14",
+  "previewDeployments": "none",
+  "failOpen": false,
+  "projects": {
+    "parkdex-staging": {
+      "productionBranch": "staging",
+      "apiBaseUrl": "https://api-staging-882c.up.railway.app"
+    },
+    "parkdex-production": {
+      "productionBranch": "main",
+      "apiBaseUrl": "https://api-production-e72df.up.railway.app"
+    }
+  }
+}

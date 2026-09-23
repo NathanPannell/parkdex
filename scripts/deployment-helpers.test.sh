@@ -52,7 +52,7 @@ MOCK
 cat > "$test_dir/curl" <<'MOCK'
 #!/usr/bin/env bash
 if [[ "$*" == *api.vercel.com/v13/deployments/* ]]; then
-  [[ " $* " == *" https://api.vercel.com/v13/deployments/staging.parkdex.app?teamId=org "* ]] || exit 2
+  [[ " $* " == *" https://api.vercel.com/v13/deployments/staging.web.parkdex.app?teamId=org "* ]] || exit 2
   printf '{"readyState":"READY","meta":{"githubCommitSha":"%s"},"projectId":"project","url":"verified-release.vercel.app"}\n' "$MOCK_FRONTEND_SHA"
   exit 0
 fi
@@ -91,7 +91,7 @@ export MOCK_PAGE_SHA=abcdef0123456789012345678901234567890123
 export MOCK_FRONTEND_SHA="$MOCK_PAGE_SHA" MOCK_READY_STATE=READY
 (cd "$test_dir/work" && bash "$repo/scripts/verify-frontend-release.sh" https://verified-release.vercel.app "$MOCK_FRONTEND_SHA")
 env -u VERCEL_SCOPE -u VERCEL_PROJECT_NAME VERCEL_TOKEN=test VERCEL_ORG_ID=org \
-  bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://staging.parkdex.app '$MOCK_FRONTEND_SHA'"
+  bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://staging.web.parkdex.app '$MOCK_FRONTEND_SHA'"
 if MOCK_FRONTEND_SHA=abcdef0fffffffffffffffffffffffffffffffff \
   bash -c "cd '$test_dir/work' && bash '$repo/scripts/verify-frontend-release.sh' https://verified-release.vercel.app '$MOCK_PAGE_SHA'" 2>/dev/null; then
   echo 'Frontend with only a matching short SHA was accepted.' >&2

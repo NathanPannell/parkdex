@@ -49,6 +49,176 @@ MAX_DCR_CLIENTS = 10_000
 MAX_DCR_REGISTRATIONS_PER_HOUR = 5_000
 
 
+def _oauth_document(*, title: str, content: str) -> str:
+    return f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{html.escape(title)}</title>
+    <style>
+      :root {{ color-scheme: light; font-family: Arial, Helvetica, sans-serif; }}
+      * {{ box-sizing: border-box; }}
+      html {{ min-height: 100%; background: #edf2e8; }}
+      body {{
+        min-height: 100svh;
+        margin: 0;
+        display: grid;
+        place-items: start center;
+        padding: 32px 20px;
+        background: #edf2e8;
+        color: #173d32;
+        font-size: 16px;
+        line-height: 1.55;
+      }}
+      ::selection {{ background: #b9ea55; color: #173d32; }}
+      .oauth-card {{
+        width: min(100%, 600px);
+        overflow: hidden;
+        border-radius: 16px;
+        background: #fffaf0;
+        box-shadow: 0 18px 44px rgba(23, 61, 50, 0.16);
+      }}
+      .brand-header {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 26px 40px 24px;
+        background: #173d32;
+        box-shadow: inset 0 6px #b9ea55;
+        color: #fffaf0;
+      }}
+      .brand-mark {{
+        display: grid;
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        place-items: center;
+        border-radius: 50%;
+        background: #b9ea55;
+        color: #173d32;
+        font-size: 17px;
+        font-weight: 800;
+      }}
+      .brand-name {{ font-size: 19px; font-weight: 800; letter-spacing: 0.12em; }}
+      .oauth-content {{ padding: 36px 40px 38px; }}
+      h1 {{
+        max-width: 16ch;
+        margin: 0 0 14px;
+        overflow-wrap: anywhere;
+        color: #173d32;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 38px;
+        line-height: 1.12;
+        letter-spacing: -0.025em;
+      }}
+      h2 {{ margin: 0 0 8px; color: #173d32; font-size: 15px; line-height: 1.35; }}
+      p {{ margin: 0; }}
+      .introduction {{ max-width: 65ch; color: #365b50; font-size: 17px; }}
+      .client-name {{ overflow-wrap: anywhere; color: #173d32; font-weight: 800; }}
+      .permission-summary {{
+        margin: 22px 0;
+        padding: 18px 20px;
+        border-radius: 12px;
+        background: #e8f3ee;
+        color: #28594a;
+      }}
+      .permission-summary ul {{ margin: 8px 0 0; padding-left: 21px; }}
+      .permission-summary li + li {{ margin-top: 4px; }}
+      .error-message {{
+        margin: 0 0 22px;
+        padding: 15px 18px;
+        border: 1px solid #f1c5b9;
+        border-radius: 12px;
+        background: #fff0e9;
+        color: #643f36;
+      }}
+      .error-message strong {{ display: block; margin-bottom: 2px; color: #8b3d32; }}
+      form {{ margin-top: 22px; }}
+      .field + .field {{ margin-top: 18px; }}
+      label {{ display: inline-block; margin-bottom: 7px; color: #173d32; font-weight: 800; }}
+      input {{
+        width: 100%;
+        min-height: 50px;
+        padding: 12px 14px;
+        border: 1px solid #66877a;
+        border-radius: 10px;
+        background: #fffdf7;
+        color: #173d32;
+        font: inherit;
+        caret-color: #2b7a78;
+      }}
+      input:hover {{ border-color: #66877a; }}
+      input:focus-visible {{ border-color: #2b7a78; outline: 3px solid rgba(43, 122, 120, 0.28); outline-offset: 2px; }}
+      input:-webkit-autofill {{
+        box-shadow: inset 0 0 0 1000px #fffdf7;
+        -webkit-text-fill-color: #173d32;
+      }}
+      .credential-note {{ margin-top: 12px; color: #587168; font-size: 13px; line-height: 1.5; }}
+      .actions {{ display: flex; align-items: center; gap: 12px; margin-top: 24px; }}
+      button, .return-link {{
+        min-height: 48px;
+        border-radius: 10px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }}
+      button {{ padding: 12px 20px; }}
+      .primary-action {{ border: 1px solid #92c238; background: #b9ea55; color: #173d32; }}
+      .primary-action:hover {{ background: #c8f16f; }}
+      .primary-action:active {{ background: #a9d846; }}
+      .secondary-action {{ border: 1px solid #66877a; background: transparent; color: #28594a; }}
+      .secondary-action:hover {{ border-color: #66877a; background: #edf2e8; }}
+      button:focus-visible, a:focus-visible {{ outline: 3px solid #2b7a78; outline-offset: 3px; }}
+      .account-note {{ margin-top: 22px; color: #587168; font-size: 14px; }}
+      a {{ color: #1f6d69; font-weight: 800; text-underline-offset: 3px; }}
+      a:hover {{ color: #173d32; }}
+      .error-recovery {{ margin-top: 24px; color: #365b50; }}
+      .return-link {{
+        display: inline-flex;
+        align-items: center;
+        margin-top: 24px;
+        padding: 11px 18px;
+        border: 1px solid #92c238;
+        background: #b9ea55;
+        color: #173d32;
+        text-decoration: none;
+      }}
+      .brand-footer {{
+        padding: 19px 40px 22px;
+        border-top: 1px solid #e3ddc8;
+        background: #f6f0dc;
+        color: #59675f;
+        font-size: 12px;
+      }}
+      .brand-footer strong {{ display: block; margin-bottom: 2px; color: #173d32; font-size: 13px; }}
+      @media (max-width: 520px) {{
+        body {{ display: block; padding: 0; }}
+        .oauth-card {{ min-height: 100svh; border-radius: 0; box-shadow: none; }}
+        .brand-header {{ padding: 24px 24px 22px; }}
+        .oauth-content {{ padding: 32px 24px 36px; }}
+        h1 {{ max-width: none; font-size: 33px; }}
+        .actions {{ align-items: stretch; flex-direction: column; }}
+        .actions button {{ width: 100%; }}
+        .brand-footer {{ padding: 18px 24px 22px; }}
+      }}
+      @media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ scroll-behavior: auto !important; }} }}
+    </style>
+  </head>
+  <body>
+    <main class="oauth-card">
+      <header class="brand-header">
+        <span class="brand-mark" aria-hidden="true">P</span>
+        <span class="brand-name">PARKDEX</span>
+      </header>
+      {content}
+      <footer class="brand-footer"><strong>Parkdex</strong>A completionist map of Vancouver Island</footer>
+    </main>
+  </body>
+</html>"""
+
+
 def database_thread(method):
     """Run synchronous psycopg/Argon provider work away from the ASGI loop."""
     @wraps(method)
@@ -383,24 +553,57 @@ class ParkdexOAuthProvider(
                 (sha256_hex(request_token),),
             ).fetchone()
         if row is None:
-            return HTMLResponse("Authorization request expired or invalid.", status_code=400, headers=_html_headers())
+            return self.error_page(
+                "This authorization request has expired or is no longer valid.",
+                status_code=400,
+            )
         name = html.escape(row["metadata"].get("client_name") or "An MCP client")
-        message = f'<p role="alert">{html.escape(error)}</p>' if error else ""
+        message = (
+            f'<div class="error-message" id="auth-error" role="alert" tabindex="-1">'
+            f'<strong>Sign-in failed</strong>{html.escape(error)}</div>'
+            if error else ""
+        )
+        form_description = ' aria-describedby="auth-error"' if error else ""
         csrf = _token()
-        page = f"""<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width'><title>Connect Parkdex</title>
-        <style>body{{font:16px system-ui;max-width:32rem;margin:4rem auto;padding:1rem;color:#17231b}}label{{display:block;margin:1rem 0}}input{{box-sizing:border-box;width:100%;padding:.75rem}}button{{padding:.75rem 1rem;margin-right:.5rem}}small{{color:#526057}}</style></head>
-        <body><h1>Connect {name} to Parkdex</h1><p>This allows the client to search places and read or change your private groups, including Wishlist.</p>{message}
-        <form method=post action=/oauth/consent><input type=hidden name=request value='{html.escape(request_token)}'><input type=hidden name=csrf value='{csrf}'>
-        <label>Email<input required type=email name=email autocomplete=username></label><label>Password<input required type=password name=password autocomplete=current-password></label>
-        <button name=decision value=allow>Log in and allow</button><button name=decision value=deny>Cancel</button></form>
-        <p><small>No account? <a href='{html.escape(self.account_url)}'>Create one in Parkdex</a>, then return here.</small></p></body></html>"""
+        content = f"""<section class="oauth-content" aria-labelledby="consent-title">
+        <h1 id="consent-title">Connect to Parkdex</h1>
+        <p class="introduction"><strong class="client-name">{name}</strong> is asking to use your Parkdex account. Sign in to choose whether to allow access.</p>
+        <section class="permission-summary" aria-labelledby="permission-title">
+          <h2 id="permission-title">If you allow access, it can:</h2>
+          <ul><li>Search the Parkdex place catalogue.</li><li>View and change your private collections, including Wishlist.</li></ul>
+        </section>
+        {message}
+        <form method="post" action="/oauth/consent"{form_description}>
+          <input type="hidden" name="request" value='{html.escape(request_token)}'>
+          <input type="hidden" name="csrf" value='{csrf}'>
+          <div class="field"><label for="oauth-email">Email</label><input id="oauth-email" required type="email" name="email" autocomplete="username" inputmode="email"></div>
+          <div class="field"><label for="oauth-password">Password</label><input id="oauth-password" required type="password" name="password" autocomplete="current-password"></div>
+          <p class="credential-note">Your sign-in details go only to Parkdex. This client never receives your password.</p>
+          <div class="actions"><button class="primary-action" type="submit" name="decision" value="allow">Log in and allow</button><button class="secondary-action" type="submit" name="decision" value="deny" formnovalidate>Cancel</button></div>
+        </form>
+        <p class="account-note">No account? <a href='{html.escape(self.account_url)}'>Create one in Parkdex</a>, then return here.</p>
+      </section>"""
+        page = _oauth_document(title="Connect to Parkdex", content=content)
         response = HTMLResponse(page, headers=_html_headers())
         response.set_cookie("mcp_oauth_csrf", csrf, max_age=int(AUTH_REQUEST_LIFETIME.total_seconds()), secure=self.issuer_url.startswith("https://"), httponly=True, samesite="lax", path="/oauth/consent")
         return response
 
+    def error_page(self, message: str, *, status_code: int) -> HTMLResponse:
+        content = f"""<section class="oauth-content" aria-labelledby="oauth-error-title">
+        <h1 id="oauth-error-title">We couldn't continue</h1>
+        <div class="error-message" role="alert"><strong>Connection not completed</strong>{html.escape(message)}</div>
+        <p class="error-recovery">Return to the app that asked to connect to Parkdex, then start the authorization again.</p>
+        <a class="return-link" href='{html.escape(self.account_url)}'>Open Parkdex</a>
+      </section>"""
+        return HTMLResponse(
+            _oauth_document(title="Parkdex connection not completed", content=content),
+            status_code=status_code,
+            headers=_html_headers(),
+        )
+
     def complete_consent(self, request_token: str, email: str, password: str, decision: str, csrf: str, csrf_cookie: str) -> RedirectResponse | HTMLResponse:
         if not csrf or not csrf_cookie or not secrets.compare_digest(csrf, csrf_cookie):
-            return HTMLResponse("Invalid authorization form. Please start again.", status_code=400, headers=_html_headers())
+            return self.error_page("The authorization form is invalid. Please start again.", status_code=400)
         normalized_email = email.strip().lower()
         if decision == "allow":
             with contextmanager(connection)() as conn:
@@ -413,7 +616,10 @@ class ParkdexOAuthProvider(
                 (sha256_hex(request_token),),
             ).fetchone()
             if request_row is None:
-                return HTMLResponse("Authorization request expired or invalid.", status_code=400, headers=_html_headers())
+                return self.error_page(
+                    "This authorization request has expired or is no longer valid.",
+                    status_code=400,
+                )
             if decision != "allow":
                 conn.execute("UPDATE mcp_oauth_authorization_requests SET used_at = NOW() WHERE request_hash = %s", (sha256_hex(request_token),))
                 conn.commit()
@@ -458,10 +664,10 @@ async def consent_post(request: Request, provider: ParkdexOAuthProvider) -> Redi
     import anyio
     content_length = request.headers.get("content-length")
     if content_length is not None and (not content_length.isdigit() or int(content_length) > MAX_CONSENT_BODY_BYTES):
-        return HTMLResponse("Authorization form is too large.", status_code=413, headers=_html_headers())
+        return provider.error_page("The authorization form is too large. Please start again.", status_code=413)
     body = await request.body()
     if len(body) > MAX_CONSENT_BODY_BYTES:
-        return HTMLResponse("Authorization form is too large.", status_code=413, headers=_html_headers())
+        return provider.error_page("The authorization form is too large. Please start again.", status_code=413)
     form = await request.form()
     response = await anyio.to_thread.run_sync(
         provider.complete_consent, str(form.get("request", "")), str(form.get("email", "")),

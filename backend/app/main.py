@@ -5,9 +5,11 @@ import re
 import secrets
 from datetime import timedelta
 from uuid import UUID
+from datetime import datetime, timezone
+from threading import Lock
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, Response, UploadFile
 from google.auth.exceptions import GoogleAuthError
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
@@ -29,13 +31,50 @@ from backend.app.auth import (
     require_bearer,
     verify_password,
 )
+from backend.app.account_deletion import (
+    account_deletion_receipt,
+    account_deletion_receipt_hash,
+    account_deletion_result,
+    delete_account_rows,
+    enqueue_photo_object_deletions,
+    purge_expired_account_deletion_receipts,
+    update_account_deletion_receipt,
+)
+from backend.app.auth_emails import AuthEmail, password_reset_email, verification_email
 from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
+from backend.app.claim_photos import MAX_UPLOAD_BYTES, PhotoInputError, normalize_photo
+from backend.app.claims import (
+    ClaimInputError,
+    LocationSample,
+    create_recommendation_token,
+    get_boundary_registry,
+    recommendation_token_hash,
+    validate_location_sample,
+)
+from backend.app.object_storage import (
+    ObjectStorage,
+    ObjectStorageError,
+    ObjectStorageNotFound,
+    object_storage_from_settings,
+)
+from backend.app.request_body_limit import ClaimPhotoBodyLimitMiddleware
+from backend.app.staging_field_places import (
+    place_visibility_clause,
+    place_visibility_params,
+    sync_staging_field_places,
+)
 from backend.app.google_oauth import authorization_url, exchange_and_verify
 from backend.app.mcp_server import build_hosted_mcp_app
 from backend.app.schemas import (
     AccountState,
+    AccountDeletionRequest,
+    AccountDeletionResult,
     AuthResult,
+    ClaimRecommendationRequest,
+    ClaimRecommendationResponse,
+    CreateClaimRequest,
+    CreateClaimResponse,
     Credentials,
     EmailRequest,
     GoogleCallback,
@@ -53,6 +92,7 @@ from backend.app.schemas import (
     TrailUpdate,
     TokenConfirmation,
     VisitResult,
+    VisitPhotoResult,
     VisitUpdate,
 )
 from backend.app.settings import get_settings
@@ -67,7 +107,6 @@ from backend.app.groups import (
     rename_group_row,
     place_detail_row,
     search_place_rows,
-    lock_account_group_mutations,
 )
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
@@ -80,6 +119,15 @@ COVERAGE_NOTE = (
     "collection; Vancouver Island frames the map rather than acting as a collectible. "
     "Pins are representative centres, not entrances or trailheads."
 )
+CLAIM_RECOMMENDATION_ACCOUNT_LIMIT = 60
+CLAIM_RECOMMENDATION_GLOBAL_LIMIT = 5_000
+PHOTO_UPLOAD_ACCOUNT_LIMIT = 30
+PHOTO_UPLOAD_GLOBAL_LIMIT = 2_000
+CLAIM_ABUSE_WINDOW = timedelta(minutes=15)
+PHOTO_DELETION_BATCH_SIZE = 100
+PHOTO_DELETION_RETRY_BASE_SECONDS = 30
+PHOTO_DELETION_RETRY_MAX_SECONDS = 60 * 60
+PHOTO_DELETION_RETRY_MAX_EXPONENT = 7
 
 
 def collection_hash(raw_key: str | None, *, required: bool = False) -> str | None:
@@ -110,22 +158,73 @@ def resolve_identity(
     return collection_hash(collection_key, required=required)
 
 
-def visits_for_account(conn: Connection, account_id: str) -> list[dict]:
+def visit_from_row(row: dict) -> dict:
+    claim = None
+    if row.get("claimed_at") is not None:
+        claim = {
+            "claimed_at": row["claimed_at"],
+            "captured_at": row["captured_at"],
+            "coordinates": {"latitude": row["claim_latitude"], "longitude": row["claim_longitude"]},
+            "accuracy_meters": row["accuracy_m"],
+            "boundary_version": row["boundary_version"],
+            "match_kind": row["match_kind"],
+            "distance_meters": row["distance_m"],
+            "has_photo": row.get("photo_object_key") is not None,
+        }
+    return {"place_id": row["place_id"], "visited_at": row["visited_at"], "claim": claim}
+
+
+def visits_for_account(
+    conn: Connection,
+    account_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> list[dict]:
     return [
-        {"place_id": row["place_id"], "visited_at": row["visited_at"]}
+        visit_from_row(row)
         for row in conn.execute(
-            """
-            SELECT account_visits.place_id, account_visits.visited_at FROM account_visits
-            JOIN places ON places.id = account_visits.place_id AND places.active
+            f"""
+            SELECT account_visits.place_id, account_visits.visited_at,
+                   account_visit_claims.claimed_at, account_visit_claims.captured_at,
+                   account_visit_claims.latitude AS claim_latitude,
+                   account_visit_claims.longitude AS claim_longitude,
+                   account_visit_claims.accuracy_m, account_visit_claims.boundary_version,
+                   account_visit_claims.match_kind, account_visit_claims.distance_m,
+                   account_visit_claims.photo_object_key
+            FROM account_visits
+            JOIN places ON places.id = account_visits.place_id
+                AND {place_visibility_clause()}
+            LEFT JOIN account_visit_claims USING (account_id, place_id)
             WHERE account_visits.account_id = %s ORDER BY account_visits.visited_at, account_visits.place_id
             """,
-            (account_id,),
+            (*place_visibility_params(include_staging_field_places), account_id),
         ).fetchall()
     ]
 
 
 def visited_ids(visits: list[dict]) -> list[str]:
     return [visit["place_id"] for visit in visits]
+
+
+def visits_for_guest(
+    conn: Connection,
+    owner_hash: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> list[dict]:
+    return [
+        visit_from_row(row)
+        for row in conn.execute(
+            f"""
+            SELECT visits.place_id, visits.visited_at
+            FROM visits
+            JOIN places ON places.id = visits.place_id
+                AND {place_visibility_clause()}
+            WHERE visits.owner_hash = %s ORDER BY visits.visited_at, visits.place_id
+            """,
+            (*place_visibility_params(include_staging_field_places), owner_hash),
+        ).fetchall()
+    ]
 
 
 def completed_trails_for_account(conn: Connection, account_id: str) -> list[str]:
@@ -137,7 +236,11 @@ def lock_account_progress(conn: Connection, account_id: str) -> None:
 
 
 def account_state(conn: Connection, identity: AccountIdentity) -> dict:
-    visits = visits_for_account(conn, identity.account_id)
+    visits = visits_for_account(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     account = conn.execute("SELECT password_hash IS NOT NULL AS has_password FROM accounts WHERE id = %s", (identity.account_id,)).fetchone()
     return {
         "account": {
@@ -154,6 +257,242 @@ def account_state(conn: Connection, identity: AccountIdentity) -> dict:
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+_photo_storage: ObjectStorage | None = None
+_photo_storage_lock = Lock()
+
+
+def set_photo_storage(storage: ObjectStorage | None) -> None:
+    """Inject a photo store for tests or a local process.
+
+    Passing ``None`` clears both the test override and the lazy production
+    instance.  The API never accepts a client-provided storage URL.
+    """
+
+    global _photo_storage
+    with _photo_storage_lock:
+        _photo_storage = storage
+
+
+def photo_storage() -> ObjectStorage:
+    global _photo_storage
+    with _photo_storage_lock:
+        if _photo_storage is None:
+            _photo_storage = object_storage_from_settings(settings)
+        return _photo_storage
+
+
+def photo_storage_error(exc: Exception) -> HTTPException:
+    logger.error("Private photo object storage unavailable (%s)", type(exc).__name__)
+    return claim_error(
+        503,
+        "photo_storage_unavailable",
+        "Private photo object storage is unavailable; try again later",
+    )
+
+
+def settle_photo_object_deletions(
+    keys: list[str], *, outcome_conn: Connection | None = None
+) -> int:
+    """Attempt queued object deletions now, leaving only failures for retry.
+
+    Callers first enqueue the keys in the same transaction that removes their
+    database references.  That preserves the transactional outbox guarantee if
+    the process exits after commit.  Successful provider deletes remove their
+    tombstones immediately; failures retain the existing exponential retry
+    schedule for the manual cleanup command.
+    """
+
+    pending_keys = sorted(set(keys))
+    if not pending_keys:
+        return 0
+
+    deleted_keys: list[str] = []
+    failed: dict[str, str] = {}
+    try:
+        storage = photo_storage()
+    except Exception as exc:
+        error_type = type(exc).__name__
+        failed = {key: error_type for key in pending_keys}
+        logger.warning("Private photo cleanup storage unavailable (%s)", error_type)
+    else:
+        for key in pending_keys:
+            try:
+                storage.delete(key)
+            except ObjectStorageNotFound:
+                deleted_keys.append(key)
+            except Exception as exc:
+                failed[key] = type(exc).__name__
+            else:
+                deleted_keys.append(key)
+
+    def record_outcomes(conn: Connection) -> None:
+        if deleted_keys:
+            conn.execute(
+                "DELETE FROM photo_object_deletions WHERE object_key = ANY(%s)",
+                (deleted_keys,),
+            )
+        for key, error_type in failed.items():
+            conn.execute(
+                """
+                UPDATE photo_object_deletions
+                SET attempt_count = attempt_count + 1,
+                    last_attempted_at = NOW(),
+                    next_attempt_at = NOW() + make_interval(
+                        secs => LEAST(%s, %s * POWER(
+                            2, LEAST(attempt_count, %s)
+                        ))::INTEGER
+                    ),
+                    last_error = %s
+                WHERE object_key = %s
+                """,
+                (
+                    PHOTO_DELETION_RETRY_MAX_SECONDS,
+                    PHOTO_DELETION_RETRY_BASE_SECONDS,
+                    PHOTO_DELETION_RETRY_MAX_EXPONENT,
+                    error_type,
+                    key,
+                ),
+            )
+        conn.commit()
+
+    try:
+        if outcome_conn is not None:
+            record_outcomes(outcome_conn)
+        else:
+            with contextmanager(connection)() as conn:
+                record_outcomes(conn)
+    except Exception as exc:
+        # The original tombstones remain durable and due when outcome recording
+        # fails, so the manual cleanup command can safely retry every provider operation.
+        logger.warning(
+            "Could not record private photo deletion outcomes (%s)",
+            type(exc).__name__,
+        )
+    return len(deleted_keys)
+
+
+def process_photo_deletion_outbox(limit: int = PHOTO_DELETION_BATCH_SIZE) -> int:
+    """Best-effort one durable cleanup batch; failures remain queued for retry.
+
+    Claim due rows in one short transaction, release the pool connection before
+    touching object storage, then persist the outcomes in another short
+    transaction.  Object deletion is idempotent, so a worker crash after the
+    provider call is safely retried by a later manual run when the backoff becomes due.
+    """
+
+    try:
+        with contextmanager(connection)() as conn:
+            rows = conn.execute(
+                """
+                WITH due AS (
+                    SELECT object_key
+                    FROM photo_object_deletions
+                    WHERE next_attempt_at <= NOW()
+                    ORDER BY next_attempt_at, enqueued_at, object_key
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT %s
+                )
+                UPDATE photo_object_deletions AS deletion
+                SET attempt_count = deletion.attempt_count + 1,
+                    last_attempted_at = NOW(),
+                    next_attempt_at = NOW() + make_interval(
+                        secs => LEAST(%s, %s * POWER(
+                            2, LEAST(deletion.attempt_count, %s)
+                        ))::INTEGER
+                    ),
+                    last_error = NULL
+                FROM due
+                WHERE deletion.object_key = due.object_key
+                RETURNING deletion.object_key
+                """,
+                (
+                    limit,
+                    PHOTO_DELETION_RETRY_MAX_SECONDS,
+                    PHOTO_DELETION_RETRY_BASE_SECONDS,
+                    PHOTO_DELETION_RETRY_MAX_EXPONENT,
+                ),
+            ).fetchall()
+            if not rows:
+                return 0
+            conn.commit()
+
+        keys = [row["object_key"] for row in rows]
+        deleted_keys: list[str] = []
+        failed: dict[str, str] = {}
+        try:
+            storage = photo_storage()
+        except Exception as exc:
+            error_type = type(exc).__name__
+            failed = {key: error_type for key in keys}
+            logger.warning(
+                "Private photo cleanup storage unavailable (%s)", error_type
+            )
+        else:
+            for key in keys:
+                try:
+                    storage.delete(key)
+                except ObjectStorageNotFound:
+                    deleted_keys.append(key)
+                except Exception as exc:
+                    failed[key] = type(exc).__name__
+                else:
+                    deleted_keys.append(key)
+
+        with contextmanager(connection)() as conn:
+            if deleted_keys:
+                conn.execute(
+                    "DELETE FROM photo_object_deletions WHERE object_key = ANY(%s)",
+                    (deleted_keys,),
+                )
+            for key, error_type in failed.items():
+                conn.execute(
+                    """
+                    UPDATE photo_object_deletions
+                    SET last_error = %s
+                    WHERE object_key = %s
+                    """,
+                    (error_type, key),
+                )
+            conn.commit()
+        return len(deleted_keys)
+    except Exception as exc:
+        logger.warning(
+            "Could not process private photo deletion outbox (%s)",
+            type(exc).__name__,
+        )
+        return 0
+
+
+def persist_failed_upload_cleanup(_account_id: str, object_key: str) -> None:
+    """Delete an unreferenced upload now, retaining a durable retry on failure.
+
+    The account may have been deleted while the object was being uploaded, so
+    this orphan cleanup intent deliberately leaves ``account_id`` NULL.  The
+    outbox is designed to survive that account cascade.
+    """
+
+    try:
+        with contextmanager(connection)() as conn:
+            enqueue_photo_object_deletions(conn, None, [object_key])
+            conn.commit()
+    except Exception as exc:
+        # If the database itself is unavailable, a direct idempotent delete is
+        # the only remaining cleanup path.
+        logger.error(
+            "Could not persist failed postcard cleanup (%s)", type(exc).__name__
+        )
+        try:
+            photo_storage().delete(object_key)
+        except Exception as cleanup_exc:
+            logger.error(
+                "Could not clean up failed postcard upload (%s)",
+                type(cleanup_exc).__name__,
+            )
+        return
+    settle_photo_object_deletions([object_key])
+
+
 mcp_http_app = build_hosted_mcp_app(
     issuer_url=settings.api_public_url,
     resource_url=settings.mcp_public_url,
@@ -163,17 +502,42 @@ mcp_http_app = build_hosted_mcp_app(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    open_pool()
     try:
+        open_pool()
+        include_staging_field_places = settings.staging_field_places_enabled
+        with contextmanager(connection)() as conn:
+            sync_staging_field_places(
+                conn,
+                enabled=include_staging_field_places,
+            )
+            registry = get_boundary_registry(include_staging_field_places)
+            active_ids = {
+                row["id"]
+                for row in conn.execute(
+                    f"SELECT id FROM places WHERE {place_visibility_clause()} "
+                    "AND id = ANY(%s)",
+                    (
+                        *place_visibility_params(include_staging_field_places),
+                        list(registry.place_ids),
+                    ),
+                ).fetchall()
+            }
+            missing = registry.place_ids - active_ids
+            if missing:
+                raise RuntimeError(
+                    "Claim boundaries reference inactive or missing places: "
+                    f"{sorted(missing)[:5]}"
+                )
+            conn.commit()
         async with mcp_http_app.lifespan():
             yield
     finally:
         close_pool()
 
 
-def deliver_auth_email(recipient: str, subject: str, text: str, event_type: str) -> None:
+def deliver_auth_email(recipient: str, email: AuthEmail, event_type: str) -> None:
     try:
-        send_auth_email(settings, recipient, subject, text)
+        send_auth_email(settings, recipient, email.subject, email.text, email.html)
     except Exception as exc:
         logger.error("Auth email delivery failed (%s)", type(exc).__name__)
         try:
@@ -189,6 +553,7 @@ def auth_link(fragment: str) -> str:
 
 
 app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)
+app.add_middleware(ClaimPhotoBodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -212,6 +577,9 @@ def ready(conn: Connection = Depends(connection)) -> dict[str, str | int]:
         "commit": settings.app_commit_sha,
         "release": settings.app_release_id,
         "migrations": migration_count["migration_count"],
+        "boundaryVersion": get_boundary_registry(
+            settings.staging_field_places_enabled
+        ).version,
     }
 
 
@@ -223,6 +591,25 @@ def auth_config() -> dict[str, bool]:
     }
 
 
+@app.get("/api/guest/progress-state")
+def guest_progress_state(
+    response: Response,
+    conn: Connection = Depends(connection),
+    x_collection_key: str | None = Header(default=None),
+) -> dict[str, bool]:
+    response.headers["Cache-Control"] = "no-store"
+    owner_hash = collection_hash(x_collection_key, required=True)
+    has_visits = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM visits WHERE owner_hash = %s) AS has_progress",
+        (owner_hash,),
+    ).fetchone()["has_progress"]
+    has_trails = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM guest_trail_completions WHERE owner_hash = %s) AS has_progress",
+        (owner_hash,),
+    ).fetchone()["has_progress"]
+    return {"hasProgress": bool(has_visits or has_trails)}
+
+
 @app.get("/api/places", response_model=PlaceCollection)
 def list_places(
     conn: Connection = Depends(connection),
@@ -230,30 +617,30 @@ def list_places(
     x_collection_key: str | None = Header(default=None),
 ):
     identity = resolve_identity(conn, authorization, x_collection_key)
+    include_staging_field_places = settings.staging_field_places_enabled
     places = conn.execute(
-        """
+        f"""
         SELECT id, name, category, latitude, longitude, region, description,
                source_url, source_name, source_id
-        FROM places WHERE active ORDER BY name
-        """
+        FROM places WHERE {place_visibility_clause()} ORDER BY name
+        """,
+        place_visibility_params(include_staging_field_places),
     ).fetchall()
     visits: list[dict] = []
     completed_trail_ids: list[str] = []
     if isinstance(identity, AccountIdentity):
-        visits = visits_for_account(conn, identity.account_id)
+        visits = visits_for_account(
+            conn,
+            identity.account_id,
+            include_staging_field_places=include_staging_field_places,
+        )
         completed_trail_ids = completed_trails_for_account(conn, identity.account_id)
     elif identity:
-        visits = [
-            {"place_id": row["place_id"], "visited_at": row["visited_at"]}
-            for row in conn.execute(
-                """
-                SELECT visits.place_id, visits.visited_at FROM visits
-                JOIN places ON places.id = visits.place_id AND places.active
-                WHERE visits.owner_hash = %s ORDER BY visits.visited_at, visits.place_id
-                """,
-                (identity,),
-            ).fetchall()
-        ]
+        visits = visits_for_guest(
+            conn,
+            identity,
+            include_staging_field_places=include_staging_field_places,
+        )
         completed_trail_ids = [row["trail_id"] for row in conn.execute("SELECT trail_id FROM guest_trail_completions WHERE owner_hash = %s ORDER BY trail_id", (identity,)).fetchall()]
     return {
         "places": places,
@@ -261,6 +648,10 @@ def list_places(
         "visits": visits,
         "completed_trail_ids": completed_trail_ids,
         "coverage_note": COVERAGE_NOTE,
+        "visit_claims": {
+            "supported": True,
+            "enforcement": settings.visit_claim_enforcement,
+        },
     }
 
 
@@ -278,12 +669,12 @@ def _group_mutation_limit(conn: Connection, account_id: str) -> None:
     reserve_rate_limit(conn, "group_mutation", account_id, 120, timedelta(minutes=15))
 
 
-def _group_name(value: str, label: str = "Group") -> str:
+def _group_name(value: str, label: str = "Collection") -> str:
     name = value.strip()
     if not name:
         raise HTTPException(status_code=422, detail=f"{label} name must not be blank")
     if name.casefold() == "wishlist":
-        raise HTTPException(status_code=422, detail="Wishlist is reserved for the protected account group")
+        raise HTTPException(status_code=422, detail="Wishlist is reserved for the protected account collection")
     return name
 
 
@@ -322,6 +713,7 @@ def search_places(
         radius_km=radius_km,
         limit=limit,
         offset=offset,
+        include_staging_field_places=settings.staging_field_places_enabled,
     )
     return {"places": rows, "total": total, "limit": limit, "offset": offset}
 
@@ -333,7 +725,12 @@ def get_place_details(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    row = place_detail_row(conn, identity.account_id, place_id)
+    row = place_detail_row(
+        conn,
+        identity.account_id,
+        place_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="Place not found")
     return row
@@ -345,10 +742,18 @@ def list_groups(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    lock_account_group_mutations(conn, identity.account_id)
-    ensure_wishlist(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    ensure_wishlist(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     conn.commit()
-    return list_group_rows(conn, identity.account_id)
+    return list_group_rows(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
 
 
 @app.post("/api/groups", response_model=Group, status_code=201)
@@ -359,10 +764,16 @@ def create_group(
 ):
     identity = require_bearer(conn, authorization)
     name = _group_name(payload.name)
-    lock_account_group_mutations(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     try:
-        result = create_group_row(conn, identity.account_id, name, payload.placeIds)
+        result = create_group_row(
+            conn,
+            identity.account_id,
+            name,
+            payload.placeIds,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
     except ValueError as exc:
         conn.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -377,9 +788,14 @@ def get_group(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    result = group_row(conn, identity.account_id, _record_id(group_id, "Group"))
+    result = group_row(
+        conn,
+        identity.account_id,
+        _record_id(group_id, "Collection"),
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     if result is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     return result
 
 
@@ -391,20 +807,30 @@ def rename_group(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
+    canonical_id = _record_id(group_id, "Collection")
     name = _group_name(payload.name)
-    lock_account_group_mutations(conn, identity.account_id)
-    current = group_row(conn, identity.account_id, canonical_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    current = group_row(
+        conn,
+        identity.account_id,
+        canonical_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     if current is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be renamed")
     _group_mutation_limit(conn, identity.account_id)
     if not rename_group_row(conn, identity.account_id, canonical_id, name):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
-    return group_row(conn, identity.account_id, canonical_id)
+    return group_row(
+        conn,
+        identity.account_id,
+        canonical_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
 
 
 @app.delete("/api/groups/{group_id}", status_code=204)
@@ -414,17 +840,22 @@ def delete_group(
     authorization: str | None = Header(default=None),
 ) -> Response:
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
-    lock_account_group_mutations(conn, identity.account_id)
-    current = group_row(conn, identity.account_id, canonical_id)
+    canonical_id = _record_id(group_id, "Collection")
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    current = group_row(
+        conn,
+        identity.account_id,
+        canonical_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     if current is None:
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     if current["is_wishlist"]:
         raise HTTPException(status_code=409, detail="Wishlist cannot be deleted")
     _group_mutation_limit(conn, identity.account_id)
     if not delete_group_row(conn, identity.account_id, canonical_id):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
     return Response(status_code=204)
 
@@ -437,19 +868,30 @@ def add_group_places_api(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
-    lock_account_group_mutations(conn, identity.account_id)
+    canonical_id = _record_id(group_id, "Collection")
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     try:
-        exists = add_group_places(conn, identity.account_id, canonical_id, payload.placeIds)
+        exists = add_group_places(
+            conn,
+            identity.account_id,
+            canonical_id,
+            payload.placeIds,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
     except ValueError as exc:
         conn.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not exists:
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
-    return group_row(conn, identity.account_id, canonical_id)
+    return group_row(
+        conn,
+        identity.account_id,
+        canonical_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
 
 
 @app.delete("/api/groups/{group_id}/places", response_model=Group)
@@ -460,14 +902,19 @@ def remove_group_places_api(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    canonical_id = _record_id(group_id, "Group")
-    lock_account_group_mutations(conn, identity.account_id)
+    canonical_id = _record_id(group_id, "Collection")
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     if not remove_group_places(conn, identity.account_id, canonical_id, payload.placeIds):
         conn.rollback()
-        raise HTTPException(status_code=404, detail="Group not found")
+        raise HTTPException(status_code=404, detail="Collection not found")
     conn.commit()
-    return group_row(conn, identity.account_id, canonical_id)
+    return group_row(
+        conn,
+        identity.account_id,
+        canonical_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
 
 
 @app.get("/api/wishlist", response_model=Group)
@@ -476,8 +923,12 @@ def get_wishlist(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    lock_account_group_mutations(conn, identity.account_id)
-    result = ensure_wishlist(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    result = ensure_wishlist(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     conn.commit()
     return result
 
@@ -489,16 +940,31 @@ def add_wishlist_places(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    lock_account_group_mutations(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
     try:
-        wishlist = ensure_wishlist(conn, identity.account_id)
-        add_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
+        wishlist = ensure_wishlist(
+            conn,
+            identity.account_id,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
+        add_group_places(
+            conn,
+            identity.account_id,
+            wishlist["id"],
+            payload.placeIds,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
     except ValueError as exc:
         conn.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     conn.commit()
-    return group_row(conn, identity.account_id, wishlist["id"])
+    return group_row(
+        conn,
+        identity.account_id,
+        wishlist["id"],
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
 
 
 @app.delete("/api/wishlist/places", response_model=Group)
@@ -508,12 +974,349 @@ def remove_wishlist_places(
     authorization: str | None = Header(default=None),
 ):
     identity = require_bearer(conn, authorization)
-    lock_account_group_mutations(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     _group_mutation_limit(conn, identity.account_id)
-    wishlist = ensure_wishlist(conn, identity.account_id)
+    wishlist = ensure_wishlist(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     remove_group_places(conn, identity.account_id, wishlist["id"], payload.placeIds)
     conn.commit()
-    return group_row(conn, identity.account_id, wishlist["id"])
+    return group_row(
+        conn,
+        identity.account_id,
+        wishlist["id"],
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
+CLAIM_TEST_FIXTURES = {
+    "inside-goldstream": "provincial-goldstream-park",
+    "inside-saltspring": "island-saltspring-island",
+}
+
+
+def claim_error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
+
+
+def authenticated_claim_identity(
+    conn: Connection,
+    authorization: str | None,
+    collection_key: str | None,
+) -> AccountIdentity:
+    """Claims and postcard bytes are account-only, including test fixtures."""
+
+    if collection_key is not None:
+        raise claim_error(
+            401,
+            "authentication_required",
+            "Location claims require an authenticated account",
+        )
+    return require_bearer(conn, authorization)
+
+
+def revalidate_locked_account_identity(
+    conn: Connection,
+    expected: AccountIdentity,
+    authorization: str | None,
+) -> AccountIdentity:
+    """Lock account-owned state, then reject a bearer revoked while waiting."""
+
+    lock_account_progress(conn, expected.account_id)
+    current = require_bearer(conn, authorization)
+    if current.account_id != expected.account_id:
+        raise claim_error(401, "authentication_required", "Authentication required")
+    return current
+
+
+def revalidate_locked_claim_identity(
+    conn: Connection,
+    expected: AccountIdentity,
+    authorization: str | None,
+    collection_key: str | None,
+) -> AccountIdentity:
+    """Acquire the account mutation lock, then observe current session state."""
+
+    if collection_key is not None:
+        raise claim_error(
+            401,
+            "authentication_required",
+            "Location claims require an authenticated account",
+        )
+    return revalidate_locked_account_identity(conn, expected, authorization)
+
+
+def reserve_claim_recommendation_capacity(
+    conn: Connection, account_id: str
+) -> None:
+    reserve_rate_limit(
+        conn,
+        "claim_recommendation_global",
+        "global",
+        CLAIM_RECOMMENDATION_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "claim_recommendation",
+        account_id,
+        CLAIM_RECOMMENDATION_ACCOUNT_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    # Capacity reservations must survive invalid samples and downstream errors.
+    conn.commit()
+
+
+def reserve_photo_upload_capacity(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(
+        conn,
+        "claim_photo_upload_global",
+        "global",
+        PHOTO_UPLOAD_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "claim_photo_upload",
+        account_id,
+        PHOTO_UPLOAD_ACCOUNT_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    conn.commit()
+
+
+def owner_visited_ids(conn: Connection, account_id: str) -> list[str]:
+    rows = conn.execute(
+        "SELECT place_id FROM account_visits WHERE account_id = %s", (account_id,)
+    ).fetchall()
+    return [row["place_id"] for row in rows]
+
+
+def claim_response_from_row(row: dict, visited_count: int) -> dict:
+    return {
+        "place_id": row["place_id"],
+        "visited": True,
+        "visited_count": visited_count,
+        "visited_at": row["visited_at"],
+        "claim": {
+            "claimed_at": row["claimed_at"],
+            "captured_at": row["captured_at"],
+            "coordinates": {"latitude": row["latitude"], "longitude": row["longitude"]},
+            "accuracy_meters": row["accuracy_m"],
+            "boundary_version": row["boundary_version"],
+            "match_kind": row["match_kind"],
+            "distance_meters": row["distance_m"],
+            "has_photo": row.get("photo_object_key") is not None,
+        },
+    }
+
+
+def fetch_claim(
+    conn: Connection, account_id: str, place_id: str
+) -> dict | None:
+    return conn.execute(
+        """
+        SELECT account_visits.place_id, account_visits.visited_at,
+               account_visit_claims.claimed_at, account_visit_claims.captured_at,
+               account_visit_claims.latitude, account_visit_claims.longitude,
+               account_visit_claims.accuracy_m, account_visit_claims.boundary_version,
+               account_visit_claims.match_kind, account_visit_claims.distance_m,
+               account_visit_claims.photo_object_key
+        FROM account_visit_claims
+        JOIN account_visits USING (account_id, place_id)
+        WHERE account_visit_claims.account_id = %s
+          AND account_visit_claims.place_id = %s
+        """,
+        (account_id, place_id),
+    ).fetchone()
+
+
+def owner_visit_count(
+    conn: Connection,
+    account_id: str,
+    *,
+    include_staging_field_places: bool = False,
+) -> int:
+    return conn.execute(
+        f"""SELECT COUNT(*) AS count FROM account_visits
+           JOIN places ON places.id = account_visits.place_id
+               AND {place_visibility_clause()}
+           WHERE account_id = %s""",
+        (*place_visibility_params(include_staging_field_places), account_id),
+    ).fetchone()["count"]
+
+
+@app.post(
+    "/api/claim-recommendations",
+    response_model=ClaimRecommendationResponse,
+    response_model_exclude_none=True,
+)
+def recommend_claim(
+    payload: ClaimRecommendationRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    reserve_claim_recommendation_capacity(conn, identity.account_id)
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    now = datetime.now(timezone.utc)
+    if payload.testFixtureId is not None:
+        if not settings.claim_test_fixtures_enabled:
+            raise claim_error(403, "claim_test_mode_disabled", "Claim test fixtures are disabled")
+        place_id = CLAIM_TEST_FIXTURES.get(payload.testFixtureId)
+        if place_id is None:
+            raise claim_error(404, "claim_test_fixture_not_found", "Claim test fixture was not found")
+        sample = registry.representative_sample(place_id, now)
+    else:
+        assert payload.location is not None
+        try:
+            sample = validate_location_sample(
+                payload.location.latitude,
+                payload.location.longitude,
+                payload.location.accuracy_meters,
+                payload.location.captured_at_epoch_ms,
+                now,
+            )
+        except ClaimInputError as exc:
+            raise claim_error(422, exc.code, str(exc)) from exc
+    candidate = registry.recommend(sample, owner_visited_ids(conn, identity.account_id))
+    if candidate is None:
+        return {"status": "none"}
+    if not conn.execute(
+        f"SELECT 1 FROM places WHERE id = %s AND {place_visibility_clause()}",
+        (
+            candidate.place_id,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone():
+        raise claim_error(409, "claim_place_unavailable", "The recommended place is no longer available")
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    token, token_hash = create_recommendation_token()
+    expires_at = sample.captured_at + timedelta(seconds=60)
+    conn.execute(
+        """
+        DELETE FROM claim_recommendations
+        WHERE token_hash IN (
+            SELECT token_hash FROM claim_recommendations
+            WHERE expires_at < NOW() - INTERVAL '1 hour'
+            ORDER BY expires_at
+            LIMIT 500
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO claim_recommendations (
+            token_hash, account_id, session_hash, place_id, captured_at, latitude,
+            longitude, accuracy_m, boundary_version, match_kind, distance_m, expires_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            token_hash, identity.account_id, identity.session_hash, candidate.place_id,
+            sample.captured_at,
+            round(sample.latitude, 5), round(sample.longitude, 5), sample.accuracy_meters,
+            registry.version, candidate.match_kind, round(candidate.distance_meters, 3), expires_at,
+        ),
+    )
+    conn.commit()
+    return {
+        "status": "recommended",
+        "recommendation_token": token,
+        "expires_at": expires_at,
+        "candidate": {
+            "place_id": candidate.place_id,
+            "match_kind": candidate.match_kind,
+            "distance_meters": round(candidate.distance_meters, 3),
+        },
+    }
+
+
+@app.post("/api/claims", response_model=CreateClaimResponse)
+def create_claim(
+    payload: CreateClaimRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+    token_hash = recommendation_token_hash(payload.recommendationToken)
+    if token_hash is None:
+        raise claim_error(404, "claim_recommendation_not_found", "Claim recommendation was not found")
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    recommendation = conn.execute(
+        """
+        SELECT * FROM claim_recommendations
+        WHERE token_hash = %s
+          AND account_id = %s
+          AND session_hash = %s
+        FOR UPDATE
+        """,
+        (token_hash, identity.account_id, identity.session_hash),
+    ).fetchone()
+    if recommendation is None:
+        raise claim_error(404, "claim_recommendation_not_found", "Claim recommendation was not found")
+    if recommendation["consumed_at"] is not None:
+        raise claim_error(409, "claim_recommendation_replayed", "Claim recommendation has already been used")
+    if recommendation["place_id"] != payload.expectedPlaceId:
+        raise claim_error(409, "claim_recommendation_candidate_mismatch", "The expected place does not match this recommendation")
+    if datetime.now(timezone.utc) > recommendation["expires_at"]:
+        raise claim_error(410, "claim_recommendation_expired", "Location recommendation expired; check your location again")
+    if not conn.execute(
+        f"SELECT 1 FROM places WHERE id = %s AND {place_visibility_clause()}",
+        (
+            recommendation["place_id"],
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone():
+        raise claim_error(409, "claim_place_unavailable", "The recommended place is no longer available")
+    existing_claim = conn.execute(
+        "SELECT 1 FROM account_visit_claims WHERE account_id = %s AND place_id = %s",
+        (identity.account_id, recommendation["place_id"]),
+    ).fetchone()
+    if existing_claim:
+        raise claim_error(409, "claim_place_already_claimed", "This place already has a location claim")
+    conn.execute(
+        "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        (identity.account_id, recommendation["place_id"]),
+    )
+    conn.execute(
+        """
+        INSERT INTO account_visit_claims (
+            account_id, place_id, recommendation_hash, captured_at, latitude,
+            longitude, accuracy_m, boundary_version, match_kind, distance_m
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (identity.account_id, recommendation["place_id"], token_hash, recommendation["captured_at"],
+         recommendation["latitude"], recommendation["longitude"], recommendation["accuracy_m"],
+         recommendation["boundary_version"], recommendation["match_kind"], recommendation["distance_m"]),
+    )
+    conn.execute(
+        "UPDATE claim_recommendations SET consumed_at = NOW() "
+        "WHERE token_hash = %s AND account_id = %s AND session_hash = %s",
+        (token_hash, identity.account_id, identity.session_hash),
+    )
+    created = fetch_claim(conn, identity.account_id, recommendation["place_id"])
+    conn.commit()
+    return claim_response_from_row(
+        created,
+        owner_visit_count(
+            conn,
+            identity.account_id,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        ),
+    )
 
 
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
@@ -528,50 +1331,86 @@ def update_visit(
         conn, authorization, x_collection_key, required=True
     )
     if not conn.execute(
-        "SELECT 1 FROM places WHERE id = %s AND active", (place_id,)
+        f"SELECT 1 FROM places WHERE id = %s AND {place_visibility_clause()}",
+        (
+            place_id,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
     ).fetchone():
         raise HTTPException(status_code=404, detail="Place not found")
+    photo_keys: list[str] = []
     if isinstance(identity, AccountIdentity):
-        lock_account_progress(conn, identity.account_id)
+        identity = revalidate_locked_claim_identity(
+            conn, identity, authorization, x_collection_key
+        )
         if payload.visited:
-            conn.execute(
-                """
-                INSERT INTO account_visits (account_id, place_id)
-                VALUES (%s, %s) ON CONFLICT DO NOTHING
-                """,
+            existing_visit = conn.execute(
+                "SELECT 1 FROM account_visits WHERE account_id = %s AND place_id = %s",
                 (identity.account_id, place_id),
-            )
+            ).fetchone()
+            if not existing_visit and settings.visit_claim_enforcement == "required":
+                raise claim_error(409, "location_claim_required", "A current location claim is required for a new visit")
+            if not existing_visit:
+                # Rollout bridge for the immediately previous account client.
+                # Claim-aware clients prefer /api/claims because /api/places
+                # advertises support even while this compatibility write is on.
+                conn.execute(
+                    """
+                    INSERT INTO account_visits (account_id, place_id)
+                    VALUES (%s, %s) ON CONFLICT DO NOTHING
+                    """,
+                    (identity.account_id, place_id),
+                )
         else:
+            photo_keys = [
+                row["photo_object_key"]
+                for row in conn.execute(
+                    "SELECT photo_object_key FROM account_visit_claims "
+                    "WHERE account_id = %s AND place_id = %s",
+                    (identity.account_id, place_id),
+                ).fetchall()
+                if row["photo_object_key"]
+            ]
+            enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
             conn.execute(
                 "DELETE FROM account_visits WHERE account_id = %s AND place_id = %s",
                 (identity.account_id, place_id),
             )
         count = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) AS visited_count FROM account_visits
-            JOIN places ON places.id = account_visits.place_id AND places.active
+            JOIN places ON places.id = account_visits.place_id
+                AND {place_visibility_clause()}
             WHERE account_visits.account_id = %s
             """,
-            (identity.account_id,),
+            (
+                *place_visibility_params(settings.staging_field_places_enabled),
+                identity.account_id,
+            ),
         ).fetchone()["visited_count"]
     else:
         if payload.visited:
-            conn.execute(
-                "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            if not conn.execute(
+                "SELECT 1 FROM visits WHERE owner_hash = %s AND place_id = %s",
                 (identity, place_id),
-            )
+            ).fetchone():
+                raise claim_error(409, "location_claim_required", "A current location claim is required for a new visit")
         else:
             conn.execute(
                 "DELETE FROM visits WHERE owner_hash = %s AND place_id = %s",
                 (identity, place_id),
             )
         count = conn.execute(
-            """
+            f"""
             SELECT COUNT(*) AS visited_count FROM visits
-            JOIN places ON places.id = visits.place_id AND places.active
+            JOIN places ON places.id = visits.place_id
+                AND {place_visibility_clause()}
             WHERE visits.owner_hash = %s
             """,
-            (identity,),
+            (
+                *place_visibility_params(settings.staging_field_places_enabled),
+                identity,
+            ),
         ).fetchone()["visited_count"]
     visited_at = None
     if payload.visited:
@@ -587,6 +1426,8 @@ def update_visit(
             ).fetchone()
         visited_at = row["visited_at"]
     conn.commit()
+    if isinstance(identity, AccountIdentity):
+        settle_photo_object_deletions(photo_keys, outcome_conn=conn)
     return {
         "place_id": place_id,
         "visited": payload.visited,
@@ -595,13 +1436,224 @@ def update_visit(
     }
 
 
+def claim_photo_row(
+    conn: Connection,
+    account_id: str,
+    place_id: str,
+    *,
+    lock: bool = False,
+    include_staging_field_places: bool = False,
+):
+    suffix = " FOR UPDATE" if lock else ""
+    return conn.execute(
+        f"""
+        SELECT photo_object_key, photo_mime, photo_width, photo_height,
+               photo_byte_length, photo_sha256, photo_updated_at
+        FROM account_visit_claims
+        JOIN places ON places.id = account_visit_claims.place_id
+            AND {place_visibility_clause()}
+        WHERE account_visit_claims.account_id = %s
+          AND account_visit_claims.place_id = %s
+        """ + suffix,
+        (
+            *place_visibility_params(include_staging_field_places),
+            account_id,
+            place_id,
+        ),
+    ).fetchone()
+
+
+def make_photo_object_key() -> str:
+    """Return a non-identifying, non-reusable private object key."""
+
+    return f"postcards/{secrets.token_urlsafe(32)}.jpg"
+
+
+@app.put("/api/visits/{place_id}/photo", response_model=VisitPhotoResult)
+def put_visit_photo(
+    place_id: str,
+    photo: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    # Authenticate before doing image work, then authenticate again in the update
+    # transaction.  Collection keys are intentionally not accepted for photos.
+    with contextmanager(connection)() as conn:
+        identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+        identity = revalidate_locked_claim_identity(
+            conn, identity, authorization, x_collection_key
+        )
+        reserve_photo_upload_capacity(conn, identity.account_id)
+        if claim_photo_row(
+            conn,
+            identity.account_id,
+            place_id,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        ) is None:
+            raise claim_error(404, "claim_not_found", "A location claim is required before adding a photo")
+    try:
+        storage = photo_storage()
+    except ObjectStorageError as exc:
+        raise photo_storage_error(exc) from exc
+    # FastAPI runs synchronous handlers in its threadpool. Keeping the whole
+    # transaction here ensures Pillow, sync psycopg, filesystem fsync, and R2
+    # client calls never run on Uvicorn's event-loop thread.
+    raw = photo.file.read(MAX_UPLOAD_BYTES + 1)
+    try:
+        normalized = normalize_photo(raw)
+    except PhotoInputError as exc:
+        raise claim_error(422, "invalid_claim_photo", str(exc)) from exc
+    object_key = make_photo_object_key()
+    try:
+        storage.put(object_key, normalized.content, normalized.content_type)
+    except Exception as exc:
+        raise photo_storage_error(exc) from exc
+    old_key: str | None = None
+    try:
+        with contextmanager(connection)() as conn:
+            identity = revalidate_locked_claim_identity(
+                conn, identity, authorization, x_collection_key
+            )
+            current = claim_photo_row(
+                conn,
+                identity.account_id,
+                place_id,
+                lock=True,
+                include_staging_field_places=settings.staging_field_places_enabled,
+            )
+            if current is None:
+                raise claim_error(
+                    404,
+                    "claim_not_found",
+                    "The location claim was removed before the photo was saved",
+                )
+            old_key = current["photo_object_key"]
+            row = conn.execute(
+                """
+                UPDATE account_visit_claims SET
+                    photo_object_key = %s, photo_mime = %s, photo_width = %s,
+                    photo_height = %s, photo_byte_length = %s, photo_sha256 = %s,
+                    photo_updated_at = NOW(), photo_account_modified = TRUE
+                WHERE account_id = %s AND place_id = %s
+                RETURNING photo_object_key, photo_mime, photo_width, photo_height,
+                          photo_byte_length, photo_sha256, photo_updated_at
+                """,
+                (
+                    object_key,
+                    normalized.content_type,
+                    normalized.width,
+                    normalized.height,
+                    len(normalized.content),
+                    normalized.sha256_hex,
+                    identity.account_id,
+                    place_id,
+                ),
+            ).fetchone()
+            if row is None:
+                raise claim_error(404, "claim_not_found", "Location claim was not found")
+            if old_key and old_key != object_key:
+                enqueue_photo_object_deletions(
+                    conn, identity.account_id, [old_key]
+                )
+            conn.commit()
+    except Exception:
+        # The object must not survive a failed DB write or a concurrent undo.
+        persist_failed_upload_cleanup(identity.account_id, object_key)
+        raise
+    if old_key and old_key != object_key:
+        settle_photo_object_deletions([old_key])
+    return {
+        "place_id": place_id,
+        "photo": {
+            "content_type": row["photo_mime"],
+            "width": row["photo_width"],
+            "height": row["photo_height"],
+            "byte_length": row["photo_byte_length"],
+            "sha256": row["photo_sha256"],
+            "updated_at": row["photo_updated_at"],
+        },
+    }
+
+
+@app.get("/api/visits/{place_id}/photo")
+def get_visit_photo(
+    place_id: str,
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> Response:
+    with contextmanager(connection)() as conn:
+        identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+        row = claim_photo_row(
+            conn,
+            identity.account_id,
+            place_id,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
+        if row is None or row["photo_object_key"] is None:
+            raise claim_error(404, "claim_photo_not_found", "Claim photo was not found")
+        object_key = row["photo_object_key"]
+        content_type = row["photo_mime"]
+    try:
+        content = photo_storage().get(object_key)
+    except ObjectStorageNotFound as exc:
+        raise claim_error(404, "claim_photo_not_found", "Claim photo was not found") from exc
+    except ObjectStorageError as exc:
+        raise photo_storage_error(exc) from exc
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.delete("/api/visits/{place_id}/photo", status_code=204)
+def delete_visit_photo(
+    place_id: str,
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> Response:
+    with contextmanager(connection)() as conn:
+        identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+        identity = revalidate_locked_claim_identity(
+            conn, identity, authorization, x_collection_key
+        )
+        row = claim_photo_row(
+            conn,
+            identity.account_id,
+            place_id,
+            lock=True,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
+        if row is None:
+            raise claim_error(404, "claim_not_found", "Location claim was not found")
+        object_key = row["photo_object_key"]
+        if object_key is None:
+            raise claim_error(404, "claim_photo_not_found", "Claim photo was not found")
+        conn.execute(
+            """
+            UPDATE account_visit_claims SET photo_object_key = NULL,
+                photo_mime = NULL, photo_width = NULL, photo_height = NULL,
+                photo_byte_length = NULL, photo_sha256 = NULL,
+                photo_updated_at = NULL, photo_account_modified = TRUE
+            WHERE account_id = %s AND place_id = %s
+            """,
+            (identity.account_id, place_id),
+        )
+        enqueue_photo_object_deletions(
+            conn, identity.account_id, [object_key]
+        )
+        conn.commit()
+    settle_photo_object_deletions([object_key])
+    return Response(status_code=204)
+
+
 @app.put("/api/trails/{trail_id}", response_model=TrailResult)
 def update_trail(trail_id: str, payload: TrailUpdate, conn: Connection = Depends(connection), authorization: str | None = Header(default=None), x_collection_key: str | None = Header(default=None)):
     if trail_id not in TRAIL_IDS:
         raise HTTPException(status_code=404, detail="Trail not found")
     identity = resolve_identity(conn, authorization, x_collection_key, required=True)
     if isinstance(identity, AccountIdentity):
-        lock_account_progress(conn, identity.account_id)
+        identity = revalidate_locked_account_identity(conn, identity, authorization)
     table, owner, value = ("account_trail_completions", "account_id", identity.account_id) if isinstance(identity, AccountIdentity) else ("guest_trail_completions", "owner_hash", identity)
     if payload.completed:
         conn.execute(f"INSERT INTO {table} ({owner}, trail_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (value, trail_id))
@@ -643,7 +1695,8 @@ def register(payload: Credentials):
         conn.commit()
     if verification_token:
         try:
-            send_auth_email(settings, email, "Verify your Parkdex email", f"Verify your email: {auth_link(f'verificationToken={verification_token}')}")
+            verification = verification_email(auth_link(f"verificationToken={verification_token}"))
+            send_auth_email(settings, email, verification.subject, verification.text, verification.html)
         except Exception as exc:
             logger.error("Registration verification email delivery failed (%s)", type(exc).__name__)
     return {
@@ -674,7 +1727,11 @@ def login(payload: Credentials):
         if not current or current["password_hash"] != password_hash:
             raise HTTPException(status_code=401, detail="Invalid email or password")
         token, expires_at = create_session(conn, str(account["id"]))
-        visits = visits_for_account(conn, str(account["id"]))
+        visits = visits_for_account(
+            conn,
+            str(account["id"]),
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
         completed_trail_ids = completed_trails_for_account(conn, str(account["id"]))
         conn.commit()
     return {
@@ -701,6 +1758,10 @@ def logout(
     authorization: str | None = Header(default=None),
 ) -> Response:
     identity = require_bearer(conn, authorization)
+    # Wait for any in-flight account mutation, then re-check this session while
+    # holding the same lock. Mutations that authenticated before logout must
+    # subsequently observe the revocation before they can commit.
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     conn.execute(
         "UPDATE account_sessions SET revoked_at = NOW() WHERE token_hash = %s",
         (identity.session_hash,),
@@ -725,7 +1786,8 @@ def request_password_reset(payload: EmailRequest, background_tasks: BackgroundTa
         record_security_event(conn, "password_reset_requested", email, "accepted")
         conn.commit()
     if token:
-        background_tasks.add_task(deliver_auth_email, email, "Reset your Parkdex password", f"Reset your password: {auth_link(f'resetToken={token}')}\n\nIf you did not request this, ignore this email.", "password_reset_email")
+        reset = password_reset_email(auth_link(f"resetToken={token}"))
+        background_tasks.add_task(deliver_auth_email, email, reset, "password_reset_email")
     return {"detail": "If an account exists, password reset instructions have been sent."}
 
 
@@ -753,6 +1815,7 @@ def request_email_verification(authorization: str | None = Header(default=None))
         raise HTTPException(status_code=503, detail=str(exc))
     with contextmanager(connection)() as conn:
         identity = require_bearer(conn, authorization)
+        identity = revalidate_locked_account_identity(conn, identity, authorization)
         reserve_rate_limit(conn, "email_verification", identity.account_id, 3, timedelta(minutes=15))
         if identity.email_verified:
             conn.commit()
@@ -760,7 +1823,8 @@ def request_email_verification(authorization: str | None = Header(default=None))
         token, _ = create_action_token(conn, identity.account_id, "email_verification")
         conn.commit()
     try:
-        send_auth_email(settings, identity.email, "Verify your Parkdex email", f"Verify your email: {auth_link(f'verificationToken={token}')}")
+        verification = verification_email(auth_link(f"verificationToken={token}"))
+        send_auth_email(settings, identity.email, verification.subject, verification.text, verification.html)
     except Exception as exc:
         logger.error("Verification email delivery failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Email delivery is temporarily unavailable")
@@ -875,13 +1939,120 @@ def finish_google_oauth(payload: GoogleCallback):
                 account = conn.execute("INSERT INTO accounts (email, password_hash, email_verified_at) VALUES (%s, NULL, NOW()) RETURNING id, email", (canonical_email,)).fetchone()
             conn.execute("INSERT INTO account_oauth_identities (provider, subject, account_id, email_at_link) VALUES ('google', %s, %s, %s)", (subject, account["id"], canonical_email))
         token, expires_at = create_session(conn, str(account["id"]))
-        visits = visits_for_account(conn, str(account["id"]))
+        visits = visits_for_account(
+            conn,
+            str(account["id"]),
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
         trails = completed_trails_for_account(conn, str(account["id"]))
         record_security_event(conn, "google_sign_in", str(account["id"]), "success")
         conn.commit()
     with contextmanager(connection)() as conn:
         account = conn.execute("SELECT id, email, password_hash FROM accounts WHERE id = %s", (account["id"],)).fetchone()
     return {"token": token, "expires_at": expires_at, "account": {"id": str(account["id"]), "email": account["email"], "email_verified": True, "has_password": bool(account.get("password_hash"))}, "visited_ids": visited_ids(visits), "visits": visits, "completed_trail_ids": trails}
+
+
+@app.delete("/api/account", response_model=AccountDeletionResult)
+def delete_account(
+    payload: AccountDeletionRequest,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+) -> dict[str, object]:
+    """Delete the authenticated account and retain only a retry receipt.
+
+    The receipt lookup happens before bearer validation so a client can safely
+    retry an otherwise successful delete after losing its response.  It is
+    keyed by a one-way combination of the exact bearer and request id, so a
+    different or malformed bearer still receives the normal authentication
+    error.
+    """
+
+    purged = purge_expired_account_deletion_receipts(conn)
+    if purged:
+        conn.commit()
+
+    request_hash = account_deletion_receipt_hash(authorization, payload.request_id)
+    receipt = account_deletion_receipt(conn, request_hash)
+    if receipt is not None:
+        return account_deletion_result(
+            photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+        )
+
+    identity = require_bearer(conn, authorization)
+    try:
+        identity = revalidate_locked_account_identity(conn, identity, authorization)
+    except HTTPException:
+        # A concurrent delete can revoke the session before this request
+        # reaches the account lock.  Only the exact private receipt can turn
+        # that lost-response race into a successful retry.
+        receipt = account_deletion_receipt(conn, request_hash)
+        if receipt is not None:
+            return account_deletion_result(
+                photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+            )
+        raise
+
+    # Recheck after waiting for the account lock in case another request
+    # committed a receipt while this request was queued.
+    receipt = account_deletion_receipt(conn, request_hash)
+    if receipt is not None:
+        return account_deletion_result(
+            photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+        )
+
+    try:
+        deleted = delete_account_rows(
+            conn,
+            identity.account_id,
+            request_hash=request_hash,
+        )
+    except LookupError:
+        # The account lock/revalidation normally makes this unreachable.  If a
+        # database failover races the request, preserve the idempotent retry
+        # behavior when the committed receipt is available.
+        conn.rollback()
+        receipt = account_deletion_receipt(conn, request_hash)
+        if receipt is not None:
+            return account_deletion_result(
+                photo_cleanup_pending=bool(receipt["photo_cleanup_pending"])
+            )
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn.commit()
+    photo_cleanup_pending = bool(deleted.photo_keys)
+    if deleted.photo_keys:
+        try:
+            settle_photo_object_deletions(list(deleted.photo_keys), outcome_conn=conn)
+            remaining = conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM photo_object_deletions
+                WHERE object_key = ANY(%s)
+                """,
+                (list(deleted.photo_keys),),
+            ).fetchone()
+            photo_cleanup_pending = bool(remaining and remaining["count"])
+            update_account_deletion_receipt(
+                conn,
+                request_hash,
+                photo_cleanup_pending=photo_cleanup_pending,
+            )
+            conn.commit()
+        except Exception as exc:
+            # The database deletion and outbox commit already succeeded.  Keep
+            # the conservative pending state if immediate object cleanup or
+            # receipt refinement cannot complete in this request.
+            logger.warning(
+                "Could not finalize account deletion photo state (%s)",
+                type(exc).__name__,
+            )
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            photo_cleanup_pending = True
+
+    return account_deletion_result(photo_cleanup_pending=photo_cleanup_pending)
 
 
 @app.delete("/api/account/progress", status_code=204)
@@ -891,7 +2062,20 @@ def reset_account_progress(
 ) -> Response:
     identity = require_bearer(conn, authorization)
     # Serialize the reset with imports and progress writes for this account.
-    lock_account_progress(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    photo_keys = [
+        row["photo_object_key"]
+        for row in conn.execute(
+            "SELECT photo_object_key FROM account_visit_claims "
+            "WHERE account_id = %s AND photo_object_key IS NOT NULL",
+            (identity.account_id,),
+        ).fetchall()
+    ]
+    enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
+    conn.execute(
+        "DELETE FROM claim_recommendations WHERE account_id = %s",
+        (identity.account_id,),
+    )
     conn.execute(
         "DELETE FROM account_visits WHERE account_id = %s", (identity.account_id,)
     )
@@ -904,6 +2088,7 @@ def reset_account_progress(
     conn.execute("DELETE FROM account_groups WHERE account_id = %s", (identity.account_id,))
     ensure_wishlist(conn, identity.account_id)
     conn.commit()
+    settle_photo_object_deletions(photo_keys, outcome_conn=conn)
     return Response(status_code=204)
 
 
@@ -915,15 +2100,40 @@ def import_guest_progress(
 ):
     identity = require_bearer(conn, authorization)
     owner_hash = collection_hash(x_collection_key, required=True)
-    lock_account_progress(conn, identity.account_id)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
     imported_visits = conn.execute(
-        """
+        f"""
         INSERT INTO account_visits (account_id, place_id, visited_at)
-        SELECT %s, place_id, visited_at FROM visits WHERE owner_hash = %s
+        SELECT %s, visits.place_id, visits.visited_at
+        FROM visits
+        JOIN places ON places.id = visits.place_id
+            AND {place_visibility_clause()}
+        WHERE owner_hash = %s
         ON CONFLICT DO NOTHING
         """,
-        (identity.account_id, owner_hash),
+        (
+            identity.account_id,
+            *place_visibility_params(settings.staging_field_places_enabled),
+            owner_hash,
+        ),
     ).rowcount
+    conn.execute(
+        f"""
+        UPDATE account_visits AS destination
+        SET visited_at = LEAST(destination.visited_at, source.visited_at)
+        FROM visits AS source
+        JOIN places ON places.id = source.place_id
+            AND {place_visibility_clause()}
+        WHERE destination.account_id = %s
+          AND source.owner_hash = %s
+          AND destination.place_id = source.place_id
+        """,
+        (
+            *place_visibility_params(settings.staging_field_places_enabled),
+            identity.account_id,
+            owner_hash,
+        ),
+    )
     imported_trails = conn.execute(
         """
         INSERT INTO account_trail_completions (account_id, trail_id, completed_at)
@@ -932,7 +2142,11 @@ def import_guest_progress(
         """,
         (identity.account_id, owner_hash),
     ).rowcount
-    visits = visits_for_account(conn, identity.account_id)
+    visits = visits_for_account(
+        conn,
+        identity.account_id,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
     conn.commit()
     return {
         "imported_visit_count": imported_visits,

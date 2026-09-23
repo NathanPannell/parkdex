@@ -27,7 +27,7 @@ describe("groups API client", () => {
   });
 
   it("surfaces API status and detail without leaking response internals", async () => {
-    const request = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(() => response({ detail: "Group not found" }, 404));
-    await expect(listGroups(request)).rejects.toMatchObject({ name: "GroupsApiError", status: 404, message: "Group not found" } satisfies Partial<GroupsApiError>);
+    const request = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(() => response({ detail: "Collection not found" }, 404));
+    await expect(listGroups(request)).rejects.toMatchObject({ name: "GroupsApiError", status: 404, message: "Collection not found" } satisfies Partial<GroupsApiError>);
   });
 });

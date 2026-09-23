@@ -1,0 +1,157 @@
+.backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(23, 61, 50, .82);
+}
+
+.dialog {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: min(720px, calc(100dvh - 32px));
+  overflow: auto;
+  padding: 30px 28px 24px;
+  border: 1px solid rgba(23, 61, 50, .18);
+  border-radius: 18px;
+  background: var(--paper-bright);
+  box-shadow: 0 20px 54px rgba(6, 30, 24, .36);
+  color: var(--forest);
+}
+
+.close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: #e8eadc;
+  color: var(--forest);
+  cursor: pointer;
+}
+
+.warningIcon,
+.successIcon {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.warningIcon { color: #a45b18; }
+.successIcon { color: var(--water); }
+
+.dialog h2 {
+  max-width: 13ch;
+  margin: 0 48px 10px 0;
+  font: 760 clamp(2rem, 7vw, 2.65rem) / .98 var(--font-display);
+  letter-spacing: -.03em;
+}
+
+.dialog > p {
+  margin: 0;
+  color: #426257;
+  line-height: 1.5;
+}
+
+.warningBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 20px 0;
+  padding: 13px 14px;
+  border: 1px solid #ddc58a;
+  border-radius: 12px;
+  background: #fff4d8;
+  color: #614b24;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.warningBox svg { flex: 0 0 auto; color: #a45b18; }
+
+.label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--forest-2);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.label strong { color: var(--forest); letter-spacing: .02em; }
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 2px solid #aeb9a6;
+  border-radius: 11px;
+  outline: 0;
+  background: var(--paper);
+  color: var(--forest);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .03em;
+}
+
+.input:focus-visible { border-color: var(--water); box-shadow: 0 0 0 3px rgba(43, 122, 120, .2); }
+.input[aria-invalid="true"] { border-color: var(--coral); }
+
+.error {
+  margin: 9px 0 0 !important;
+  color: #a93f2e !important;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.cancelAction,
+.deleteAction,
+.primaryAction {
+  min-height: 48px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 11px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.cancelAction { background: #e6e8da; color: var(--forest); }
+.deleteAction { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--coral); color: #321b17; }
+.primaryAction { width: 100%; margin-top: 22px; background: var(--forest); color: var(--paper-bright); }
+.cancelAction:disabled, .deleteAction:disabled, .primaryAction:disabled, .close:disabled { cursor: not-allowed; opacity: .52; }
+
+.spinner { animation: account-deletion-spin .8s linear infinite; }
+.status { margin-top: 12px !important; color: var(--water) !important; font-size: 12px; font-weight: 800; }
+.pendingNotice { margin-top: 14px !important; padding: 10px 12px; border-radius: 10px; background: #fff4d8; color: #614b24 !important; font-size: 13px; font-weight: 800; }
+.accountEmail { margin-top: 22px !important; color: var(--muted) !important; font-size: 11px; overflow-wrap: anywhere; }
+
+@media (hover: hover) and (pointer: fine) {
+  .close:hover, .cancelAction:hover { background: #dce3d1; }
+  .deleteAction:hover:not(:disabled) { background: #d85f4c; }
+  .primaryAction:hover { background: var(--forest-2); }
+}
+
+@keyframes account-deletion-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
+@media (max-width: 420px) {
+  .dialog { padding: 26px 20px 20px; border-radius: 16px; }
+  .actions { grid-template-columns: 1fr; }
+  .deleteAction { order: -1; }
+}

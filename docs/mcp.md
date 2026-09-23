@@ -1,6 +1,6 @@
 # Parkdex MCP server
 
-Parkdex exposes a public, authenticated MCP server through the Parkdex site domain. Production uses `https://parkdex.app/mcp`; staging uses `https://staging.parkdex.app/mcp`. Vercel proxies the MCP transport, OAuth, and discovery routes to the matching Railway API without exposing the provider hostname as the MCP identity. The server uses the official MCP Python SDK v2 Streamable HTTP transport and OAuth 2.1 authorization-code flow with PKCE. Any Parkdex account with a password can authorize an MCP client without sharing credentials with that client.
+Parkdex exposes a public, authenticated MCP server through the apex and staging apex. Production uses `https://parkdex.app/mcp`; staging uses `https://staging.parkdex.app/mcp`. These stable MCP identities are separate from the app origins, which are `https://web.parkdex.app` and `https://staging.web.parkdex.app`. The cutover target preserves the existing issuer and resource identity: the landing site serves environment-specific JSON for `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource/mcp`, and routes `/authorize`, `/token`, `/register`, `/revoke`, `/oauth/consent`, `/mcp`, and `/mcp/*` to the matching Railway API. Vercel does not support rewrites under `/.well-known`, so verify both generated metadata documents, their JSON content types, and all seven routed paths on the no-domain landing deployment before moving DNS or changing Railway settings. The OAuth consent page stays on the MCP origin and links to the app through `APP_PUBLIC_URL`. The server uses the official MCP Python SDK v2 Streamable HTTP transport and OAuth 2.1 authorization-code flow with PKCE. Any Parkdex account with a password can authorize an MCP client without sharing credentials with that client.
 
 ## Connect
 
@@ -10,7 +10,7 @@ Add this remote MCP server URL to an MCP client:
 https://parkdex.app/mcp
 ```
 
-Use `https://staging.parkdex.app/mcp` instead when testing against staging. The client discovers Parkdex's OAuth metadata, dynamically registers, and opens the Parkdex authorization page on the same Parkdex origin. Sign in there and approve access. Access is account-scoped, revocable, and never grants the MCP client access to Parkdex's REST session endpoints.
+Use `https://staging.parkdex.app/mcp` instead when testing against staging. The client discovers Parkdex's OAuth metadata, dynamically registers, and opens the Parkdex authorization page on the matching MCP origin. Sign in there and approve access. The page links to the matching `web` app origin for account creation. Access is account-scoped, revocable, and never grants the MCP client access to Parkdex's REST session endpoints.
 
 Google-only accounts must first use **Set password** in Parkdex Account settings. Local development uses the same endpoint at `http://localhost:8000/mcp` with `API_PUBLIC_URL=http://localhost:8000` and `MCP_PUBLIC_URL=http://localhost:8000/mcp`.
 
@@ -35,8 +35,8 @@ The repository retains a local stdio client for development. Install backend dep
 
 ```sh
 python -m pip install -r backend/requirements-dev.txt
-python -m backend.app.mcp_server setup --origin https://parkdex.app
+python -m backend.app.mcp_server setup --origin https://api-production-e72df.up.railway.app
 python -m backend.app.mcp_server
 ```
 
-For headless development, use `PARKDEX_API_ORIGIN`, `PARKDEX_ACCOUNT_EMAIL`, and `PARKDEX_SESSION_TOKEN`. Never put a token in a prompt, command log, or source file. Revoke and remove the saved session with `python -m backend.app.mcp_server logout --origin https://parkdex.app --email you@example.com`.
+The local stdio helper calls the REST API directly. Use `https://api-staging-882c.up.railway.app` with `--origin` or `PARKDEX_API_ORIGIN` when testing staging. Keyring sessions are scoped to the API origin, so run `setup` again when switching hosts. For headless development, use `PARKDEX_API_ORIGIN`, `PARKDEX_ACCOUNT_EMAIL`, and `PARKDEX_SESSION_TOKEN`. Never put a token in a prompt, command log, or source file. Revoke and remove the saved session with `python -m backend.app.mcp_server logout --origin https://api-production-e72df.up.railway.app --email you@example.com`.

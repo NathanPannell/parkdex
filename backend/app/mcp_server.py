@@ -24,6 +24,7 @@ from backend.app.db import connection
 from backend.app.mcp_oauth import MAX_CONSENT_BODY_BYTES, MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
 from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, lock_account_group_mutations, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 from backend.app.schemas import Group, PlaceSearchResult, SearchPlace
+from backend.app.settings import get_settings
 
 KEYRING_SERVICE, SESSION_ENV, EMAIL_ENV, ORIGIN_ENV = "parkdex-mcp-session", "PARKDEX_SESSION_TOKEN", "PARKDEX_ACCOUNT_EMAIL", "PARKDEX_API_ORIGIN"
 MAX_TIMEOUT_SECONDS = 20.0
@@ -77,7 +78,7 @@ class ParkdexClient:
             raise RuntimeError(f"Parkdex request failed ({response.status_code}): {detail}")
         return None if response.status_code == 204 else response.json()
 def _client():
-    origin=normalize_origin(os.environ.get(ORIGIN_ENV,"https://parkdex.app")); return ParkdexClient(origin,session_token(origin))
+    origin=normalize_origin(os.environ.get(ORIGIN_ENV,"https://api-production-e72df.up.railway.app")); return ParkdexClient(origin,session_token(origin))
 def logout_session(origin: str,email: str|None=None):
     origin=normalize_origin(origin); account_email=(email or os.environ.get(EMAIL_ENV,"")).strip().lower() or input("Parkdex email: ").strip().lower(); client=ParkdexClient(origin,session_token(origin,account_email)); error=None
     try: client.request("POST","/api/auth/logout")
@@ -96,14 +97,16 @@ def _account_id():
 def _mutation_limit(conn,account_id): reserve_rate_limit(conn,"group_mutation",account_id,120,timedelta(minutes=15))
 def _name(value):
     name=value.strip()
-    if not name or name.casefold()=="wishlist": raise ValueError("Group name must not be blank and Wishlist is reserved")
+    if not name or name.casefold()=="wishlist": raise ValueError("Collection name must not be blank and Wishlist is reserved")
     return name
 def _group_output(value):
     return Group.model_validate(value).model_dump(by_alias=True, mode="json")
 def _place_output(value):
     return SearchPlace.model_validate(value).model_dump(by_alias=True, mode="json")
+def _include_staging_field_places():
+    return get_settings().staging_field_places_enabled
 
-mcp=MCPServer("Parkdex Groups",description="Search Parkdex places and manage private account-owned groups, including Wishlist.",instructions="Authentication is required. Wishlist is the protected account group named Wishlist.")
+mcp=MCPServer("Parkdex Collections",description="Search Parkdex places and manage private account-owned collections, including Wishlist.",instructions="Authentication is required. Wishlist is the protected account collection named Wishlist.")
 
 @mcp.tool(annotations=READ_ONLY)
 def search_places(visited:bool|None=None,type:PlaceType|None=None,category:PlaceType|None=None,query:Annotated[str|None,Field(max_length=200)]=None,latitude:Annotated[float|None,Field(ge=-90,le=90)]=None,longitude:Annotated[float|None,Field(ge=-180,le=180)]=None,radius_km:Annotated[float|None,Field(gt=0,le=20000)]=None,limit:Annotated[int,Field(ge=1,le=100)]=25,offset:Annotated[int,Field(ge=0,le=10000)]=0)->dict:
@@ -112,7 +115,7 @@ def search_places(visited:bool|None=None,type:PlaceType|None=None,category:Place
     if type and category and type!=category: raise ValueError("type and category must match")
     if (latitude is None)!=(longitude is None) or (radius_km is not None and latitude is None): raise ValueError("latitude and longitude are required together; radius requires both")
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: rows,total=search_place_rows(conn,account_id,visited=visited,category=selected,query=query,latitude=latitude,longitude=longitude,radius_km=radius_km,limit=limit,offset=offset)
+        with contextmanager(connection)() as conn: rows,total=search_place_rows(conn,account_id,visited=visited,category=selected,query=query,latitude=latitude,longitude=longitude,radius_km=radius_km,limit=limit,offset=offset,include_staging_field_places=_include_staging_field_places())
         return PlaceSearchResult(places=rows,total=total,limit=limit,offset=offset).model_dump(by_alias=True,mode="json")
     with _local_client() as client:
         params={"visited":visited,"type":selected,"query":query,"latitude":latitude,"longitude":longitude,"radius_km":radius_km,"limit":limit,"offset":offset}; return client.request("GET","/api/places/search",params={k:v for k,v in params.items() if v is not None})
@@ -120,70 +123,71 @@ def search_places(visited:bool|None=None,type:PlaceType|None=None,category:Place
 def get_place_details(place_id:Annotated[str,Field(min_length=1,max_length=200)])->dict:
     """Read one active place and this account's visit state."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: result=place_detail_row(conn,account_id,place_id)
+        with contextmanager(connection)() as conn: result=place_detail_row(conn,account_id,place_id,include_staging_field_places=_include_staging_field_places())
         if result is None: raise ValueError("Place not found")
         return _place_output(result)
     with _local_client() as client: return client.request("GET",f"/api/places/{place_id}")
 @mcp.tool(annotations=READ_ONLY)
 def list_groups()->list:
-    """Read all private groups, including Wishlist."""
+    """Read all private collections, including Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); ensure_wishlist(conn,account_id); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id)]
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); ensure_wishlist(conn,account_id,include_staging_field_places=_include_staging_field_places()); conn.commit(); return [_group_output(group) for group in list_group_rows(conn,account_id,include_staging_field_places=_include_staging_field_places())]
     with _local_client() as client: return client.request("GET","/api/groups")
 @mcp.tool(annotations=READ_ONLY)
 def get_group(group_id:GroupId)->dict:
-    """Read one private group and its places."""
+    """Read one private collection and its places."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: result=group_row(conn,account_id,group_id)
-        if result is None: raise ValueError("Group not found")
+        with contextmanager(connection)() as conn: result=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
+        if result is None: raise ValueError("Collection not found")
         return _group_output(result)
     with _local_client() as client: return client.request("GET",f"/api/groups/{group_id}")
 @mcp.tool(annotations=WRITE)
 def create_group(name:GroupName,place_ids:OptionalPlaceIds=None)->dict:
-    """Create a private group. This writes group data."""
+    """Create a private collection. This writes collection data."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or []); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); result=create_group_row(conn,account_id,_name(name),place_ids or [],include_staging_field_places=_include_staging_field_places()); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("POST","/api/groups",json={"name":name,"placeIds":place_ids or []})
 @mcp.tool(annotations=WRITE)
 def rename_group(group_id:GroupId,name:GroupName)->dict:
-    """Rename an ordinary group. Wishlist is protected."""
+    """Rename an ordinary collection. Wishlist is protected."""
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id)
-            current=group_row(conn,account_id,group_id)
-            if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
-            _mutation_limit(conn,account_id); rename_group_row(conn,account_id,group_id,_name(name)); conn.commit(); return _group_output(group_row(conn,account_id,group_id))
+            current=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
+            if current is None or current["is_wishlist"]: raise ValueError("Collection not found or protected")
+            _mutation_limit(conn,account_id); rename_group_row(conn,account_id,group_id,_name(name)); conn.commit(); return _group_output(group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places()))
     with _local_client() as client: return client.request("PATCH",f"/api/groups/{group_id}",json={"name":name})
 @mcp.tool(annotations=DELETE)
 def delete_group(group_id:GroupId)->dict:
-    """Permanently delete an ordinary group. Wishlist is protected."""
+    """Permanently delete an ordinary collection. Wishlist is protected."""
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id)
-            current=group_row(conn,account_id,group_id)
-            if current is None or current["is_wishlist"]: raise ValueError("Group not found or protected")
+            current=group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places())
+            if current is None or current["is_wishlist"]: raise ValueError("Collection not found or protected")
             _mutation_limit(conn,account_id); delete_group_row(conn,account_id,group_id); conn.commit(); return {"deleted":True,"group_id":group_id}
     with _local_client() as client: client.request("DELETE",f"/api/groups/{group_id}"); return {"deleted":True,"group_id":group_id}
 def _change_places(group_id,place_ids,remove):
     if account_id:=_account_id():
         with contextmanager(connection)() as conn:
             lock_account_group_mutations(conn,account_id); _mutation_limit(conn,account_id); fn=remove_group_places if remove else add_group_places
-            if not fn(conn,account_id,group_id,place_ids): raise ValueError("Group not found")
-            conn.commit(); return _group_output(group_row(conn,account_id,group_id))
+            kwargs={"include_staging_field_places":_include_staging_field_places()} if not remove else {}
+            if not fn(conn,account_id,group_id,place_ids,**kwargs): raise ValueError("Collection not found")
+            conn.commit(); return _group_output(group_row(conn,account_id,group_id,include_staging_field_places=_include_staging_field_places()))
     with _local_client() as client: return client.request("DELETE" if remove else "POST",f"/api/groups/{group_id}/places",json={"placeIds":place_ids})
 @mcp.tool(annotations=WRITE)
 def add_places_to_group(group_id:GroupId,place_ids:PlaceIds)->dict:
-    """Add active places to a private group, including Wishlist."""
+    """Add active places to a private collection, including Wishlist."""
     return _change_places(group_id,place_ids,False)
 @mcp.tool(annotations=WRITE)
 def remove_places_from_group(group_id:GroupId,place_ids:PlaceIds)->dict:
-    """Remove places from a private group without changing visits."""
+    """Remove places from a private collection without changing visits."""
     return _change_places(group_id,place_ids,True)
 @mcp.tool(annotations=READ_ONLY)
 def get_wishlist()->dict:
-    """Read the protected group named Wishlist."""
+    """Read the protected collection named Wishlist."""
     if account_id:=_account_id():
-        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); result=ensure_wishlist(conn,account_id); conn.commit(); return _group_output(result)
+        with contextmanager(connection)() as conn: lock_account_group_mutations(conn,account_id); result=ensure_wishlist(conn,account_id,include_staging_field_places=_include_staging_field_places()); conn.commit(); return _group_output(result)
     with _local_client() as client: return client.request("GET","/api/wishlist")
 
 class RestartableHostedMCP:
@@ -242,7 +246,7 @@ def _build_hosted_mcp_app_once(*,issuer_url:str,resource_url:str,account_url:str
     issuer=normalize_origin(issuer_url)
     if resource_url!=f"{issuer}/mcp": raise ValueError("MCP resource URL must be canonical issuer plus /mcp")
     provider=ParkdexOAuthProvider(issuer_url=issuer,resource_url=resource_url,account_url=account_url)
-    hosted=MCPServer("Parkdex Groups",description=mcp.description,instructions=mcp.instructions,auth_server_provider=provider,auth=AuthSettings(issuer_url=AnyHttpUrl(issuer),resource_server_url=AnyHttpUrl(resource_url),validate_token_resource=True,required_scopes=[MCP_SCOPE],client_registration_options=ClientRegistrationOptions(enabled=True,valid_scopes=[MCP_SCOPE],default_scopes=[MCP_SCOPE]),revocation_options=RevocationOptions(enabled=True)),tools=mcp._tool_manager.list_tools())
+    hosted=MCPServer("Parkdex Collections",description=mcp.description,instructions=mcp.instructions,auth_server_provider=provider,auth=AuthSettings(issuer_url=AnyHttpUrl(issuer),resource_server_url=AnyHttpUrl(resource_url),validate_token_resource=True,required_scopes=[MCP_SCOPE],client_registration_options=ClientRegistrationOptions(enabled=True,valid_scopes=[MCP_SCOPE],default_scopes=[MCP_SCOPE]),revocation_options=RevocationOptions(enabled=True)),tools=mcp._tool_manager.list_tools())
     @hosted.custom_route("/oauth/consent",methods=["GET"])
     async def oauth_consent_get(request:Request): return await consent_get(request,provider)
     @hosted.custom_route("/oauth/consent",methods=["POST"])
@@ -277,7 +281,7 @@ def build_hosted_mcp_app(*,issuer_url:str,resource_url:str,account_url:str):
     )
 
 def main(argv:list[str]|None=None):
-    parser=argparse.ArgumentParser(); parser.add_argument("command",choices=("serve","setup","logout"),nargs="?",default="serve"); parser.add_argument("--origin",default=os.environ.get(ORIGIN_ENV,"https://parkdex.app")); parser.add_argument("--email",default=os.environ.get(EMAIL_ENV)); args=parser.parse_args(argv)
+    parser=argparse.ArgumentParser(); parser.add_argument("command",choices=("serve","setup","logout"),nargs="?",default="serve"); parser.add_argument("--origin",default=os.environ.get(ORIGIN_ENV,"https://api-production-e72df.up.railway.app")); parser.add_argument("--email",default=os.environ.get(EMAIL_ENV)); args=parser.parse_args(argv)
     if args.command=="setup": setup_session(args.origin)
     elif args.command=="logout": logout_session(args.origin,args.email)
     else: mcp.run(transport="stdio")

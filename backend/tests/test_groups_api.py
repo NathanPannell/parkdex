@@ -286,6 +286,15 @@ def test_account_reset_rolls_back_every_progress_collection_when_wishlist_recrea
             ).json()
             account_id = registered["account"]["id"]
             headers = auth(registered["token"])
+            # Reset rollback needs pre-existing progress, not a new arbitrary
+            # visit. Seed a grandfathered row; claim creation is tested in the
+            # dedicated claim integration suite.
+            with psycopg.connect(database_url) as conn:
+                conn.execute(
+                    "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s)",
+                    (account_id, place_id),
+                )
+                conn.commit()
             assert client.put(f"/api/visits/{place_id}", headers=headers, json={"visited": True}).status_code == 200
             assert client.put("/api/trails/west_coast_trail", headers=headers, json={"completed": True}).status_code == 200
             group = client.post(

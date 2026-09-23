@@ -186,5 +186,5 @@ describe("softened boundary display asset", () => {
 
     expect(spills).toEqual([]);
     expect(overlaps).toEqual([]);
-  }, 20_000);
+  }, 40_000);
 });

@@ -61,4 +61,36 @@ describe("VisitOutbox", () => {
     expect(sent).toEqual([true]);
     expect(outbox.applyTo([])).toEqual(new Set());
   });
+
+  it("discards only the matching revision when an acknowledgement is applied", () => {
+    const outbox = new VisitOutbox();
+    outbox.setDesired("park", true);
+    outbox.discard("park", false);
+    expect(outbox.snapshot()).toEqual({ park: { visited: true, revision: 1 } });
+    outbox.discard("park", true);
+    expect(outbox.snapshot()).toEqual({});
+  });
+
+  it("preserves a newer same-valued intent when discarding a failed attempt", () => {
+    const outbox = new VisitOutbox();
+    outbox.setDesired("park", true);
+    const failedRevision = outbox.snapshot().park.revision;
+    outbox.setDesired("park", true);
+
+    outbox.discardRevision("park", failedRevision);
+
+    expect(outbox.snapshot().park.visited).toBe(true);
+    expect(outbox.snapshot().park.revision).not.toBe(failedRevision);
+  });
+
+  it("preserves a sender's structured error through drainAll", async () => {
+    const outbox = new VisitOutbox();
+    outbox.setDesired("park", true);
+    const error = Object.assign(new Error("A current location claim is required"), {
+      code: "location_claim_required",
+    });
+
+    await expect(outbox.drainAll(async () => { throw error; }))
+      .rejects.toMatchObject({ code: "location_claim_required" });
+  });
 });

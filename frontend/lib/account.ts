@@ -1,6 +1,18 @@
+import { networkErrorMessage } from "./network-error";
+
 export type Account = { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean };
 export type AuthConfig = { googleEnabled: boolean; emailEnabled: boolean };
-export type Visit = { placeId: string; visitedAt: string };
+export type VisitClaim = {
+  claimedAt: string;
+  capturedAt: string;
+  coordinates: { latitude: number; longitude: number };
+  accuracyMeters: number;
+  boundaryVersion: string;
+  matchKind: "exact" | "buffer";
+  distanceMeters: number;
+  hasPhoto: boolean;
+};
+export type Visit = { placeId: string; visitedAt: string; claim?: VisitClaim | null };
 export type AccountSession = {
   token: string;
   expiresAt: string;
@@ -10,10 +22,17 @@ export type AccountSession = {
   completedTrailIds: string[];
 };
 
+export type AccountDeletionResponse = {
+  deleted: true;
+  photoCleanupPending: boolean;
+};
+
+export const ACCOUNT_DELETION_TIMEOUT_MS = 30_000;
+
 export const ACCOUNT_TOKEN_KEY = "every-park:account-token:v1";
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -37,12 +56,17 @@ function jsonRequest(method: "POST", body?: unknown, token?: string): RequestIni
 }
 
 export async function authenticate(apiBaseUrl: string, mode: "register" | "login", email: string, password: string): Promise<AccountSession> {
-  const response = await fetch(`${apiBaseUrl}/api/auth/${mode}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  return parseResponse<AccountSession>(response);
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    return await parseResponse<AccountSession>(response);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new Error(networkErrorMessage(error, mode === "login" ? "log in" : "create your account"));
+  }
 }
 
 export async function loadAuthConfig(apiBaseUrl: string): Promise<AuthConfig> {
@@ -99,5 +123,48 @@ export async function resetAccountProgress(apiBaseUrl: string, token: string): P
     let message = "Could not reset your progress. Please try again.";
     try { message = (await response.json() as { detail?: string }).detail ?? message; } catch { /* use friendly fallback */ }
     throw new ApiError(message, response.status);
+  }
+}
+
+/**
+ * Delete the authenticated account. The request id is intentionally supplied
+ * by the caller so a retry after a lost response can be recognized by the
+ * server as the same destructive operation.
+ */
+export async function deleteAccount(
+  apiBaseUrl: string,
+  token: string,
+  requestId: string,
+): Promise<AccountDeletionResponse> {
+  const controller = typeof AbortController === "undefined" ? undefined : new AbortController();
+  const timeout = controller === undefined
+    ? undefined
+    : setTimeout(() => controller.abort(), ACCOUNT_DELETION_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/account`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirm: "DELETE_ACCOUNT", requestId }),
+      signal: controller?.signal,
+    });
+    const result = await parseResponse<Partial<AccountDeletionResponse>>(response);
+    if (result?.deleted !== true || typeof result.photoCleanupPending !== "boolean") {
+      throw new ApiError("The server did not confirm account deletion.", response.status);
+    }
+    return {
+      deleted: true,
+      photoCleanupPending: result.photoCleanupPending,
+    };
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new Error("Could not confirm account deletion before the request timed out. Retry with the same request.");
+    }
+    if (error instanceof ApiError) throw error;
+    throw new Error(networkErrorMessage(error, "delete your account"));
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
