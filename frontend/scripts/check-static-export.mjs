@@ -4,8 +4,15 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputRoot = resolve(frontendRoot, "out");
+const parkRoutes = JSON.parse(readFileSync(resolve(frontendRoot, "lib/park-routes.json"), "utf8"));
 const requiredFiles = [
   "index.html",
+  "map.html",
+  "places.html",
+  "groups.html",
+  "badges.html",
+  "account.html",
+  "settings.html",
   "migrate.html",
   "migrate/index.html",
   "auth/google/callback.html",
@@ -18,6 +25,7 @@ const requiredFiles = [
   "_headers",
   "_routes.json",
   "parkdex-artifact.json",
+  ...parkRoutes.map(({ slug }) => `parks/${slug}.html`),
 ];
 
 for (const relativePath of requiredFiles) {

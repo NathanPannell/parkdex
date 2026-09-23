@@ -549,7 +549,7 @@ def deliver_auth_email(recipient: str, email: AuthEmail, event_type: str) -> Non
 
 
 def auth_link(fragment: str) -> str:
-    return f"{settings.app_public_url.rstrip('/')}/#{fragment}"
+    return f"{settings.app_public_url.rstrip('/')}/account#{fragment}"
 
 
 app = FastAPI(title="Parkdex API", version="1.0.0", lifespan=lifespan)

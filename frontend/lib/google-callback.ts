@@ -21,5 +21,5 @@ export function buildGoogleCallbackDestination(search: string): string {
   }
 
   const query = outgoing.toString();
-  return query ? `/?${query}` : "/";
+  return query ? `/account?${query}` : "/account";
 }
