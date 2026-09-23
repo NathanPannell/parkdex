@@ -13,6 +13,7 @@ import { PostcardCollection } from "@/components/postcard-collection";
 import { FieldGuideOnboarding } from "@/components/field-guide-onboarding";
 import { AccountDeletionDialog, type AccountDeletionResult } from "@/components/account-deletion-dialog";
 import { confirmPasswordReset, loadAuthConfig, requestGoogleAuthorization, requestPasswordReset, type Account, type AuthConfig } from "@/lib/account";
+import { resolveApiBaseUrl } from "@/lib/api-base-url";
 import { achievements, newlyEarnedAchievementIds, type Achievement } from "@/lib/achievements";
 import badgeImages from "@/lib/badge-images.json";
 import type { BoundaryLoadState } from "@/lib/boundaries";
@@ -31,7 +32,7 @@ import { useGroups } from "@/lib/use-groups";
 import { readGroupNavigation, rememberGroupNavigation } from "@/lib/group-navigation";
 
 import { usePublicNavigation, notifyNavigationChange } from "@/lib/use-public-navigation";
-import type { View } from "@/lib/navigation";
+import { navigationUrl, readNavigation, type View } from "@/lib/navigation";
 import { getVisitorInformation } from "@/lib/visitor-information";
 
 const categories = Object.keys(categoryLabels) as PlaceCategory[];
@@ -72,7 +73,8 @@ function useDialogFocus(onClose?: () => void) {
   return ref;
 }
 
-export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAllowed = true, automaticLocationAllowed = false }: { apiBaseUrl: string; googleAuthAllowed?: boolean; geolocationAllowed?: boolean; automaticLocationAllowed?: boolean }) {
+export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed = true, geolocationAllowed = true, automaticLocationAllowed = false }: { apiBaseUrl: string; googleAuthAllowed?: boolean; geolocationAllowed?: boolean; automaticLocationAllowed?: boolean }) {
+  const apiBaseUrl = resolveApiBaseUrl(configuredApiBaseUrl, typeof window === "undefined" ? undefined : window.location.origin);
   const journal = useFieldJournal({ apiBaseUrl });
   const { places, visited, visitTimestamps, visitMetadata, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, visitClaimMode, toggleVisit, retrySync, authenticate: completeAuth, authenticateWithGoogle, requestEmailVerification, confirmEmailVerification, logout: signOut, importGuest, resetProgress, deleteAccount: onDeleteAccount, recommendClaim, createClaim, reconcileClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto, authenticatedRequest } = journal;
   const { state: navigation, update: updateNavigation, set: setNavigation } = usePublicNavigation();
@@ -90,7 +92,8 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   useEffect(() => {
     if (loading || onboardingChecked.current) return;
     onboardingChecked.current = true;
-    if (authenticated || visited.size || window.location.search || window.location.hash) return;
+    if (authenticated || visited.size || window.location.search || window.location.hash ||
+      !["/", "/map"].includes(window.location.pathname)) return;
     try { if (window.localStorage.getItem(ONBOARDING_KEY)) return; } catch { /* An intro never requires storage access. */ }
     queueMicrotask(() => setShowOnboarding(true));
   }, [authenticated, loading, visited.size]);
@@ -232,7 +235,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
   useEffect(() => {
     function restoreHistory() {
       setShowNearby(false); setShowFilters(false); setSearchExpanded(false); setNavigationNotice("");
-      const targetView = new URL(window.location.href).searchParams.get("view");
+      const targetView = readNavigation(window.location.href).view;
       const saved = readGroupNavigation(groupNavigationAccountId);
       const restoredGroupId = authenticated && !recoveryActive && (targetView === "groups" || targetView === "map") ? saved.groupId : null;
       selectGroup(restoredGroupId);
@@ -319,8 +322,15 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
     if (next === "collection" && resetting) resetCollectionFilters();
     if (next === "groups" && resetting) groupsState.selectGroup(null);
     if (resetting) { setViewRevision((current) => current + 1); requestAnimationFrame(() => document.querySelectorAll<HTMLElement>(".feature-panel, .collection-scroll").forEach((element) => element.scrollTo({ top: 0 }))); }
-    updateNavigation({ view: next, selectedId: null }, "push");
+    updateNavigation({ view: next, selectedId: null, settingsOpen: false }, "push");
     if (!(next === "groups" && view === "map" && selectedGroup)) rememberGroupNavigation(null, 0, groupNavigationAccountId);
+  }
+  function changeSettingsRoute(open: boolean) {
+    if (!open && window.history.state?.parkdexRouteDepth > 0) {
+      window.history.back();
+      return;
+    }
+    updateNavigation({ view: "account", settingsOpen: open, selectedId: null }, open ? "push" : "replace");
   }
   function applyMapSearch() { setMapSearch(mapSearchDraft); setShowFilters(false); setSearchExpanded(false); }
   function switchGuide(next: "map" | "collection") {
@@ -411,7 +421,7 @@ export function ParkdexApp({ apiBaseUrl, googleAuthAllowed = true, geolocationAl
       {searchExpanded && mapSearchDraft.trim() && !showFilters && <div className="search-results" aria-live="polite">{mapSearchMatches.length ? <><p>{mapSearchMatches.length} {mapSearchMatches.length === 1 ? "place" : "places"} found</p>{mapSearchMatches.map((place) => <button key={place.id} className={`category-${place.category}`} onClick={() => { setMapSearch(mapSearchDraft); choosePlace(place.id); setSearchExpanded(false); }}><span><strong>{place.name}</strong><small><i />{categoryLabels[place.category]} · {place.region}</small></span><ArrowUpRight size={17} /></button>)}</> : <p className="empty-search">No places match “{mapSearchDraft.trim()}”.</p>}</div>}
       {showNearby && <NearbyDialog status={locationStatus} nearby={nearby} onClose={() => setShowNearby(false)} choosePlace={choosePlace} />}
     </>}
-    {view !== "map" && <section key={`${view}-${viewRevision}`} onScroll={rememberGroupPanelScroll} className={`feature-panel feature-${view}`}><button className="content-skip" onClick={focusNavigation}>Skip to navigation</button><div id="primary-content" tabIndex={-1} className="primary-content-target" aria-label={view === "collection" ? "Field Guide" : view === "badges" ? "Badges" : view === "groups" ? "Collections" : "My Dex"} />{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} resetFilters={resetCollectionFilters} clearActiveFilters={clearCollectionActiveFilters} choosePlace={choosePlace} />}{view === "groups" && authenticated && !recoveryActive && <GroupsView places={places} groups={groupsState.groups} selectedGroupId={groupsState.selectedGroupId} loading={groupsState.loading} retrying={groupsState.retrying} error={groupsState.error} busy={groupsState.busy} offline={groupsState.offline} syncStatus={groupsState.syncStatus} syncMessage={groupsState.syncMessage} pendingMemberships={groupsState.pendingMemberships} onRetry={groupsState.retry} onSelect={groupsState.selectGroup} onClear={() => groupsState.selectGroup(null)} onCreate={groupsState.create} onRename={groupsState.rename} onDelete={groupsState.remove} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} onViewMap={viewSelectedGroupOnMap} onOpenPlace={openGroupMember} />}{view === "badges" && <><button className="groups-back" onClick={() => navigate("account")}><ArrowLeft size={18} />My Dex</button><BadgesView badges={badgeList} earned={earnedBadges} places={places} visited={visited} onOpenPlace={choosePlace} /></>}{(view === "account" || (view === "groups" && (!authenticated || recoveryActive))) && <AccountView section={view === "groups" ? "collections" : "account"} apiBaseUrl={apiBaseUrl} googleAuthAllowed={googleAuthAllowed} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy || Boolean(claimFlow)} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onExitRecovery={() => setRecoveryActive(false)} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={logoutAndClearGroupHistory} onReset={async () => { await resetProgress(); setCelebrationBadges([]); setProgressHoldCount(null); try { await groupsState.refreshAfterReset(); } catch { setNavigationNotice("Progress was reset, but saved collection data still needs cleanup. Open Collections and retry sync."); } }} onDeleteAccount={onDeleteAccount} badges={badgeList} places={places.filter((place) => visited.has(place.id))} allPlaces={places} visits={visits} visitTimestamps={visitTimestamps} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} onBrowseBadges={() => navigate("badges")} onShowGuide={() => setShowOnboarding(true)} />}</section>}
+    {view !== "map" && <section key={`${view}-${viewRevision}`} onScroll={rememberGroupPanelScroll} className={`feature-panel feature-${view}`}><button className="content-skip" onClick={focusNavigation}>Skip to navigation</button><div id="primary-content" tabIndex={-1} className="primary-content-target" aria-label={view === "collection" ? "Field Guide" : view === "badges" ? "Badges" : view === "groups" ? "Collections" : "My Dex"} />{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} resetFilters={resetCollectionFilters} clearActiveFilters={clearCollectionActiveFilters} choosePlace={choosePlace} />}{view === "groups" && authenticated && !recoveryActive && <GroupsView places={places} groups={groupsState.groups} selectedGroupId={groupsState.selectedGroupId} loading={groupsState.loading} retrying={groupsState.retrying} error={groupsState.error} busy={groupsState.busy} offline={groupsState.offline} syncStatus={groupsState.syncStatus} syncMessage={groupsState.syncMessage} pendingMemberships={groupsState.pendingMemberships} onRetry={groupsState.retry} onSelect={groupsState.selectGroup} onClear={() => groupsState.selectGroup(null)} onCreate={groupsState.create} onRename={groupsState.rename} onDelete={groupsState.remove} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} onViewMap={viewSelectedGroupOnMap} onOpenPlace={openGroupMember} />}{view === "badges" && <><button className="groups-back" onClick={() => navigate("account")}><ArrowLeft size={18} />My Dex</button><BadgesView badges={badgeList} earned={earnedBadges} places={places} visited={visited} onOpenPlace={choosePlace} /></>}{(view === "account" || (view === "groups" && (!authenticated || recoveryActive))) && <AccountView section={view === "groups" ? "collections" : "account"} settingsRoute={navigation.settingsOpen} onSettingsRouteChange={changeSettingsRoute} apiBaseUrl={apiBaseUrl} googleAuthAllowed={googleAuthAllowed} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy || Boolean(claimFlow)} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onExitRecovery={() => setRecoveryActive(false)} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={logoutAndClearGroupHistory} onReset={async () => { await resetProgress(); setCelebrationBadges([]); setProgressHoldCount(null); try { await groupsState.refreshAfterReset(); } catch { setNavigationNotice("Progress was reset, but saved collection data still needs cleanup. Open Collections and retry sync."); } }} onDeleteAccount={onDeleteAccount} badges={badgeList} places={places.filter((place) => visited.has(place.id))} allPlaces={places} visits={visits} visitTimestamps={visitTimestamps} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} onBrowseBadges={() => navigate("badges")} onShowGuide={() => setShowOnboarding(true)} />}</section>}
     {showFilters && view === "map" && <div className="filter-tray category-chips"><div className="filter-tray-heading"><strong>Filter places</strong><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={19} /></button></div>{categories.map((category) => <button key={category} className={`category-${category} ${mapCategories.has(category) ? "selected active" : ""}`} onClick={() => toggleSet(setMapCategories, category)} aria-pressed={mapCategories.has(category)}>{categoryLabels[category]}</button>)}{mapCategories.size > 0 && <button className="clear-filter" onClick={resetMapFilters}>Clear filters</button>}</div>}
     {navigationNotice && <p className="navigation-notice" role="status">{navigationNotice}<button onClick={() => setNavigationNotice("")} aria-label="Dismiss navigation message"><X size={17} /></button></p>}
     {photoOwnerCleanupFailed && <p className="navigation-notice" role="alert">A private photo from the previous account could not be removed yet.<button className="claim-refresh" onClick={() => setPhotoOwnerCleanupAttempt((current) => current + 1)}>Retry private photo cleanup</button></p>}
@@ -654,6 +664,8 @@ function BadgeDetail({ badge, places, visited, onOpenPlace, onClose }: { badge: 
 
 type AccountViewProps = {
   section: "account" | "collections";
+  settingsRoute: boolean;
+  onSettingsRouteChange: (open: boolean) => void;
   onShowGuide: () => void;
   onBrowseBadges: () => void;
   apiBaseUrl: string; googleAuthAllowed: boolean; account: Account | null; authenticated: boolean; sessionAuthenticated: boolean; loading: boolean; busy: boolean; guestProgressAvailable: boolean;
@@ -671,10 +683,11 @@ function cleanAuthParams(names: string[]) {
   const url = new URL(window.location.href);
   const fragment = new URLSearchParams(url.hash.slice(1));
   names.forEach((name) => { url.searchParams.delete(name); fragment.delete(name); });
-  url.searchParams.set("view", "account");
-  url.searchParams.delete("place");
   const hash = fragment.toString();
-  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${hash ? `#${hash}` : ""}`);
+  url.hash = hash;
+  const state = readNavigation(url.href);
+  const next = navigationUrl(url.href, { ...state, view: "account", settingsOpen: names.includes("action") || url.pathname === "/settings", selectedId: null });
+  window.history.replaceState(window.history.state, "", next);
   notifyNavigationChange();
 }
 
@@ -704,16 +717,17 @@ function PasswordResetExpiredCard({ onRequest, onBack }: { onRequest: () => void
   return <div className="password-reset-flow"><div className="password-reset-icon expired"><X size={28} /></div><h2 tabIndex={-1}>That reset link is no longer valid</h2><p>For your security, reset links expire after one hour and work only once. Request a fresh link to continue.</p><button className="primary-action" onClick={onRequest}>Request a new link</button><button className="auth-link" onClick={onBack}>Back to log in</button><ReleaseFooter /></div>;
 }
 
-function AccountView({ section, onShowGuide, onBrowseBadges, apiBaseUrl, googleAuthAllowed, account, authenticated, sessionAuthenticated, loading, busy, guestProgressAvailable, onAuth, onGoogleAuth, onExitRecovery, onRequestVerification, onConfirmVerification, onImport, onLogout, onReset, onDeleteAccount, badges, places, allPlaces, visits, visitTimestamps, loadPhoto, removePhoto, photoOwnerKey, choosePlace }: AccountViewProps) {
+function AccountView({ section, settingsRoute, onSettingsRouteChange, onShowGuide, onBrowseBadges, apiBaseUrl, googleAuthAllowed, account, authenticated, sessionAuthenticated, loading, busy, guestProgressAvailable, onAuth, onGoogleAuth, onExitRecovery, onRequestVerification, onConfirmVerification, onImport, onLogout, onReset, onDeleteAccount, badges, places, allPlaces, visits, visitTimestamps, loadPhoto, removePhoto, photoOwnerKey, choosePlace }: AccountViewProps) {
   const [resetToken] = useState(() => typeof window === "undefined" ? "" : emailToken("resetToken"));
   const deletionIntent = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("action") === "delete-account";
   const [mode, setMode] = useState<"login" | "register" | "forgot" | "sent" | "reset" | "expired">(resetToken ? "reset" : deletionIntent ? "login" : "register"), [email, setEmail] = useState(""), [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState(""), [formBusy, setFormBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null), [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const [expanded, setExpanded] = useState<"badges" | "places" | null>(null), [confirmReset, setConfirmReset] = useState(false), [selectedBadge, setSelectedBadge] = useState<Achievement | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false), [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const settingsOpen = settingsRoute;
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deletionEmail, setDeletionEmail] = useState(""), [deletionResult, setDeletionResult] = useState<AccountDeletionResult | null>(null);
-  useEffect(() => { if (settingsOpen) return addNativeBackConsumer(() => setSettingsOpen(false)); }, [settingsOpen]);
+  useEffect(() => { if (settingsOpen) return addNativeBackConsumer(() => onSettingsRouteChange(false)); }, [settingsOpen, onSettingsRouteChange]);
   const previousResetView = useRef("");
   const callbackHandled = useRef(false), deletionIntentHandled = useRef(false), earned = badges.filter((badge) => badge.earned);
   const deletionHandlerRef = useRef<DeleteAccountHandler | null>(null);
@@ -729,7 +743,6 @@ function AccountView({ section, onShowGuide, onBrowseBadges, apiBaseUrl, googleA
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      setSettingsOpen(true);
       setDeletionEmail(account.email);
       setDeletionResult(null);
       setDeleteAccountOpen(true);
@@ -819,7 +832,7 @@ function AccountView({ section, onShowGuide, onBrowseBadges, apiBaseUrl, googleA
     return <PasswordResetRequestCard email={email} emailLocked={Boolean(account?.email)} error={error} formBusy={formBusy} emailEnabled={Boolean(authConfig?.emailEnabled)} onEmailChange={setEmail} onSubmit={submit} onBack={backToAccount} />;
   }
   if (authenticated) return <>
-    <div className="panel-heading dex-heading"><div><h2 tabIndex={-1}>{settingsOpen ? "Settings" : "My Dex"}</h2><p>{settingsOpen ? "Your account and saved progress." : "The places you’ve made part of your story."}</p></div><button className="dex-settings" aria-label={settingsOpen ? "Back to My Dex" : "Settings"} onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? <ArrowLeft size={22} /> : <Settings size={22} />}</button></div>
+    <div className="panel-heading dex-heading"><div><h2 tabIndex={-1}>{settingsOpen ? "Settings" : "My Dex"}</h2><p>{settingsOpen ? "Your account and saved progress." : "The places you’ve made part of your story."}</p></div><button className="dex-settings" aria-label={settingsOpen ? "Back to My Dex" : "Settings"} onClick={() => onSettingsRouteChange(!settingsOpen)}>{settingsOpen ? <ArrowLeft size={22} /> : <Settings size={22} />}</button></div>
     {settingsOpen ? <section className="dex-account-settings"><button className="secondary-action" onClick={onShowGuide}><BookOpen size={18} />How Parkdex works</button><h3>Account</h3><p>{account?.email ?? "Account details will refresh online"}</p>{notice && <p className="auth-notice" role="status">{notice}</p>}{error && <p className="auth-error" role="alert">{error}</p>}{account && !account.emailVerified && <section className="verification-card"><MailCheck size={22} /><div><strong>Verify your email</strong><p>Confirm that this email address belongs to you.</p></div><button disabled={formBusy || !authConfig?.emailEnabled} onClick={() => void resendVerification()}>{authConfig?.emailEnabled ? "Send verification" : "Email unavailable"}</button></section>}{guestProgressAvailable && <div className="import-card"><strong>Guest progress found on this device</strong><p>Add it to this account? This optional step keeps shared-device collections separate.</p><button disabled={busy} onClick={() => void onImport()}>{busy ? "Working…" : "Add guest progress"}</button></div>}<button disabled={busy} className="secondary-action" onClick={openPasswordReset}><MailCheck size={18} />Reset password by email</button><button disabled={busy} className="secondary-action" onClick={() => void onLogout()}><LogOut size={18} />{busy ? "Signing out…" : "Sign out"}</button><button disabled={busy} className="reset-action" onClick={() => setConfirmReset(true)}><Trash2 size={18} />Reset my progress</button>{onDeleteAccount && <div className="account-delete-section"><h3>Delete account</h3><p>This permanently removes your account and saved progress.</p><button disabled={busy} className="reset-action" onClick={openAccountDeletion}><Trash2 size={18} />Delete account</button></div>}<ReleaseFooter />{deletionDialog}</section> : <>
       <dl className="dex-summary"><div><dt>Places visited</dt><dd>{places.length}</dd></div><div><dt>Saved visits</dt><dd>{places.filter((place) => visits[place.id]).length}</dd></div><div><dt>Postcards</dt><dd>{places.filter((place) => visits[place.id]?.claim).length}</dd></div></dl>
       {loadPhoto && removePhoto && <PostcardCollection places={places} visits={visits} loadPhoto={loadPhoto} removePhoto={removePhoto} ownerKey={photoOwnerKey} onOpenPlace={choosePlace} />}<AccountShelf title="Badges" count={earned.length} items={earned.slice(0, 4).map((badge) => ({ id: badge.id, name: badge.name, kind: "badge" as const, image: imageMap[badge.species]?.src, date: badge.earnedAt }))} onSeeAll={() => setExpanded("badges")} onSelect={selectShelfItem} /><AccountShelf title="Places" count={places.length} items={places.slice(0, 4).map((place) => ({ id: place.id, name: place.name, kind: "place" as const, image: getPlaceImage(place.id)?.thumbnail.src, date: visitTimestamps[place.id] }))} onSeeAll={() => setExpanded("places")} onSelect={selectShelfItem} /><button className="dex-badge-guide" onClick={onBrowseBadges}><Award size={20} />Explore all badges<ChevronRight size={18} /></button>

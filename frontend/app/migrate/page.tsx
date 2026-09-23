@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { resolveApiBaseUrl } from "@/lib/api-base-url";
 
 import {
   GUEST_MIGRATION_READY_TYPE,
@@ -54,7 +55,7 @@ export default function GuestProgressMigrationPage() {
             payload: event.data,
             storage: window.localStorage,
             checkRemoteProgress: (collectionKey) => fetchRemoteGuestProgress(
-              process.env.NEXT_PUBLIC_API_BASE_URL ?? "",
+              resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? "", window.location.origin),
               window.location.origin,
               collectionKey,
             ),

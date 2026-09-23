@@ -13,15 +13,26 @@ afterEach(() => {
 });
 
 describe("native Android Back", () => {
-  it.each([
-    ["/?view=account", true],
-    ["/?place=provincial-goldstream-park", true],
-    ["/field-guide", true],
-    ["/#account", true],
-    ["/", false],
-  ])("recognizes whether %s has browser history state to consume", (href, expected) => {
-    window.history.replaceState(null, "", href);
-    expect(hasNativeBackHistory(window.location)).toBe(expected);
+  it.each(["/", "/map", "/parks/goldstream-park", "/settings", "/map?query=river"])(
+    "does not attempt browser Back after a direct load of %s",
+    (href) => {
+      window.history.replaceState(null, "", href);
+      expect(hasNativeBackHistory(window.location)).toBe(false);
+    },
+  );
+
+  it("uses the app-owned route depth to recognize navigable history", () => {
+    window.history.replaceState({ parkdexRouteDepth: 0 }, "", "/map");
+    expect(hasNativeBackHistory(window.location)).toBe(false);
+    window.history.pushState({ parkdexRouteDepth: 1 }, "", "/settings");
+    expect(hasNativeBackHistory(window.location)).toBe(true);
+    window.history.pushState({ parkdexRouteDepth: 2 }, "", "/parks/goldstream-park");
+    expect(hasNativeBackHistory(window.location)).toBe(true);
+  });
+
+  it.each([-1, 0, 1.5, "1", Number.NaN])("rejects an invalid route depth of %s", (depth) => {
+    window.history.replaceState({ parkdexRouteDepth: depth }, "", "/settings");
+    expect(hasNativeBackHistory(window.location)).toBe(false);
   });
 
   it("lets an active overlay consume Back and unregister cleanly", () => {

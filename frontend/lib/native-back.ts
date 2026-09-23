@@ -29,6 +29,8 @@ export function addNativeBackConsumer(consumer: () => void): () => void {
   };
 }
 
-export function hasNativeBackHistory(location: Pick<Location, "pathname" | "search" | "hash">): boolean {
-  return location.pathname !== "/" || Boolean(location.search) || Boolean(location.hash);
+export function hasNativeBackHistory(_location: Pick<Location, "pathname" | "search" | "hash">): boolean {
+  void _location;
+  const depth = window.history.state?.parkdexRouteDepth;
+  return typeof depth === "number" && Number.isInteger(depth) && depth > 0;
 }
