@@ -6,12 +6,19 @@
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
-    "build": "next build",
-    "start": "next start",
+    "build": "node scripts/build.mjs",
+    "build:cloudflare": "node scripts/cloudflare-build.mjs",
+    "process:cloudflare": "node scripts/copy-cloudflare-files.mjs && node scripts/write-static-export-manifest.mjs && node scripts/check-static-export.mjs",
+    "prebuild:android": "node scripts/copy-maplibre-worker.mjs",
+    "build:android": "node scripts/build-android.mjs",
+    "android:sync": "npm run build:android && cap sync android",
+    "android:open": "cap open android",
+    "start": "wrangler pages dev out --compatibility-date=2026-09-14 --binding API_BASE_URL=http://localhost:8000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:boundaries": "node scripts/check-boundary-asset.mjs && node scripts/check-display-boundary-asset.mjs",
+    "check:export": "node scripts/check-static-export.mjs",
     "generate:boundary-display": "node scripts/generate-display-boundaries.mjs && node scripts/generate-map-focus-mask.mjs",
     "generate:map-focus": "node scripts/generate-map-focus-mask.mjs",
     "generate:exploration-territories": "node --no-warnings scripts/generate-exploration-territories.mjs",
@@ -20,6 +27,13 @@
     "sync:boundaries": "node scripts/sync-boundary-assets.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/camera": "8.2.4",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.1",
+    "@capacitor/geolocation": "8.2.2",
+    "@capacitor/preferences": "8.0.1",
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/nunito-sans": "^5.3.0",
     "lucide-react": "^1.42.0",
@@ -30,6 +44,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.2",
     "@maplibre/maplibre-gl-style-spec": "^26.4.1",
     "@testing-library/react": "^16.3.3",
     "@turf/boolean-valid": "^7.4.0",
@@ -40,8 +55,10 @@
     "@types/react-dom": "19.1.9",
     "eslint": "9.39.2",
     "eslint-config-next": "16.3.4",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "typescript": "5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "4.131.2"
   }
 }

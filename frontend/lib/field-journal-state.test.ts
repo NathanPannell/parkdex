@@ -57,4 +57,17 @@ describe("field journal state helpers", () => {
     expect(writeStored(unavailable, "x", [])).toBe(false);
     expect(removeStored(unavailable, "x")).toBe(false);
   });
+
+  it("supports the asynchronous native key-value store contract", async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: async (key: string) => values.get(key) ?? null,
+      setItem: async (key: string, value: string) => { values.set(key, value); },
+      removeItem: async (key: string) => { values.delete(key); },
+    };
+    await expect(writeStored(storage, "visits", { ids: ["park"] })).resolves.toBe(true);
+    await expect(readStored(storage, "visits", { ids: [] })).resolves.toEqual({ ids: ["park"] });
+    await expect(removeStored(storage, "visits")).resolves.toBe(true);
+    await expect(readStored(storage, "visits", null)).resolves.toBeNull();
+  });
 });

@@ -24,9 +24,13 @@ def clean(email: str) -> None:
         conn.commit()
 
 
-def enable_fake_email(monkeypatch, sent: list[tuple[str, str, str]]) -> None:
+def enable_fake_email(monkeypatch, sent: list[tuple[str, str, str, str]]) -> None:
     monkeypatch.setattr(api.settings, "smtp_host", "smtp.test")
-    monkeypatch.setattr(api, "send_auth_email", lambda settings, recipient, subject, text: sent.append((recipient, subject, text)))
+    monkeypatch.setattr(
+        api,
+        "send_auth_email",
+        lambda settings, recipient, subject, text, html=None: sent.append((recipient, subject, text, html)),
+    )
 
 
 def enable_fake_google(monkeypatch) -> None:
@@ -43,13 +47,14 @@ def start_google(client: TestClient, verifier: str = "v" * 43) -> tuple[str, str
 
 
 def token_from_message(message: str, parameter: str) -> str:
-    return parse_qs(urlparse(message.split()[-1]).fragment)[parameter][0]
+    link = next(word for word in message.split() if f"#{parameter}=" in word)
+    return parse_qs(urlparse(link).fragment)[parameter][0]
 
 
 def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monkeypatch) -> None:
     email = "secure-reset@example.com"
     unknown = "unknown-reset@example.com"
-    sent: list[tuple[str, str, str]] = []
+    sent: list[tuple[str, str, str, str]] = []
     clean(email)
     enable_fake_email(monkeypatch, sent)
     try:
@@ -82,7 +87,7 @@ def test_password_reset_is_generic_expiring_single_use_and_revokes_sessions(monk
             assert known.status_code == missing.status_code == 202
             assert known.json() == missing.json()
             assert len(sent) == 2  # registration verification plus the known account reset
-            reset_token = token_from_message(sent[1][2].splitlines()[0], "resetToken")
+            reset_token = token_from_message(sent[1][2], "resetToken")
             expired_token = "e" * 43
             with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
                 conn.execute("INSERT INTO account_action_tokens (token_hash, account_id, purpose, created_at, expires_at) SELECT %s, id, 'password_reset', NOW() - INTERVAL '2 hours', NOW() - INTERVAL '1 hour' FROM accounts WHERE email = %s", (hashlib.sha256(expired_token.encode()).hexdigest(), email))
@@ -130,21 +135,25 @@ def test_resend_provider_delivers_registration_and_reset_links(monkeypatch) -> N
         assert all(request["headers"] == {"Authorization": "Bearer re_test_key"} for request in requests)
         assert requests[0]["json"]["from"] == "Parkdex <test@example.com>"
         assert "https://preview.example.test/#verificationToken=" in requests[0]["json"]["text"]
+        assert "https://preview.example.test/#verificationToken=" in requests[0]["json"]["html"]
+        assert ">Confirm email</a>" in requests[0]["json"]["html"]
         assert "https://preview.example.test/#resetToken=" in requests[1]["json"]["text"]
+        assert "https://preview.example.test/#resetToken=" in requests[1]["json"]["html"]
+        assert ">Reset password</a>" in requests[1]["json"]["html"]
     finally:
         clean(email)
 
 
 def test_action_token_can_only_win_one_concurrent_confirmation(monkeypatch) -> None:
     email = "token-race@example.com"
-    sent: list[tuple[str, str, str]] = []
+    sent: list[tuple[str, str, str, str]] = []
     clean(email)
     enable_fake_email(monkeypatch, sent)
     try:
         with TestClient(api.app) as client:
             client.post("/api/auth/register", json={"email": email, "password": "initial password value"})
             client.post("/api/auth/password-reset/request", json={"email": email})
-            token = token_from_message(sent[-1][2].splitlines()[0], "resetToken")
+            token = token_from_message(sent[-1][2], "resetToken")
             with ThreadPoolExecutor(max_workers=2) as executor:
                 statuses = list(executor.map(lambda _: client.post("/api/auth/password-reset/confirm", json={"token": token, "newPassword": "concurrent password value"}).status_code, range(2)))
             assert sorted(statuses) == [204, 400]
@@ -167,7 +176,7 @@ def test_registration_limit_is_atomic_and_observable() -> None:
 
 def test_verification_resend_invalidates_old_token(monkeypatch) -> None:
     email = "verify-change@example.com"
-    sent: list[tuple[str, str, str]] = []
+    sent: list[tuple[str, str, str, str]] = []
     clean(email)
     enable_fake_email(monkeypatch, sent)
     try:

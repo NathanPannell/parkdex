@@ -20,6 +20,11 @@ describe("achievements", () => {
     expect(badge).toMatchObject({ earned: true, current: 3, target: 3, earnedAt: "2026-09-03T10:00:00Z" });
   });
 
+  it("exposes the exact place IDs used by place-set badges", () => {
+    const badge = achievements({ places: [], visited: new Set() }).find((item) => item.id === "banana-slug-medal");
+    expect(badge?.requiredPlaceIds).toEqual([JUAN_DE_FUCA_PARK_ID, "provincial-carmanah-walbran-park", "provincial-macmillan-park"]);
+  });
+
   it("keeps every exact-place challenge satisfiable by the active catalogue", () => {
     const activePlaces = JSON.parse(readFileSync(resolve(process.cwd(), "../data/places.json"), "utf8")) as Place[];
     const badges = achievements({ places: activePlaces, visited: new Set(activePlaces.map((item) => item.id)) });

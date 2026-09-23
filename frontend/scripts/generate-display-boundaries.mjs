@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import buffer from "@turf/buffer";
 import booleanValid from "@turf/boolean-valid";
 import simplify from "@turf/simplify";
 import polygonClipping from "polygon-clipping";
+import { boundarySourceDescription, readScopedBoundaryCollection } from "./catalogue-scope.mjs";
 
-const inputUrl = new URL("../../data/boundaries.geojson", import.meta.url);
 const outputUrl = new URL("../public/data/boundaries-display.v1.geojson", import.meta.url);
 const manifestUrl = new URL("../public/data/boundaries-display.v1.manifest.json", import.meta.url);
 const MIN_BUFFER_METERS = 15;
@@ -121,9 +121,9 @@ function roundCoordinatesTo(value, precision) {
   return value.map((child) => roundCoordinatesTo(child, precision));
 }
 
-const inputText = await readFile(fileURLToPath(inputUrl), "utf8");
-const normalizedInputText = inputText.replace(/\r\n/g, "\n");
-const canonical = JSON.parse(inputText);
+const scoped = await readScopedBoundaryCollection();
+const normalizedInputText = scoped.inputText;
+const canonical = scoped.collection;
 const rounded = canonical.features.map(softenBoundary).map(roundBoundarySafely);
 const precisionCounts = rounded.reduce((counts, result) => {
   const key = result.precision == null ? "unrounded" : String(result.precision);
@@ -137,7 +137,7 @@ const display = {
 const outputText = `${JSON.stringify(display)}\n`;
 const manifest = {
   version: 1,
-  input: "data/boundaries.geojson",
+  input: boundarySourceDescription(scoped.scope),
   output: "frontend/public/data/boundaries-display.v1.geojson",
   inputSha256: sha256(normalizedInputText),
   outputSha256: sha256(outputText),

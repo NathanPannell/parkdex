@@ -1,0 +1,307 @@
+/* My Dex postcard shelf. The print remains a physical cream paper object while
+ * the rail handles touch scrolling and the card adds a small pointer-led turn. */
+.postcard-shelf {
+  margin: 20px -4px 28px;
+  padding: 22px 8px 12px;
+  min-width: 0;
+  border-radius: 24px;
+  background: var(--impression-mist);
+}
+
+.postcard-shelf .impression-collection-heading {
+  padding-inline: 4px;
+}
+
+.postcard-shelf .impression-collection-heading h2 {
+  margin: 0 0 9px;
+  font: 900 clamp(30px, 8vw, 40px)/1 var(--impression-font-ui);
+  letter-spacing: -.03em;
+}
+
+.postcard-shelf__empty {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  min-height: 190px;
+  margin-top: 24px;
+  padding: 30px 24px;
+  border-radius: 26px;
+  background: var(--impression-mint);
+  color: var(--impression-ink);
+  text-align: center;
+}
+
+.postcard-shelf__empty strong {
+  font: 850 20px/1.1 var(--impression-font-ui);
+}
+
+.postcard-shelf__empty p {
+  max-width: 28ch;
+  color: var(--impression-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.postcard-shelf__browse-hint {
+  margin: 24px 8px 6px;
+  color: var(--impression-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.postcard-shelf__viewport {
+  position: relative;
+  min-width: 0;
+}
+
+.postcard-shelf__track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(216px, calc(100vw - 88px));
+  gap: 15px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 22px 26px 12px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  perspective: 1100px;
+  scroll-padding-inline: 12px;
+  scroll-snap-type: x mandatory;
+  scrollbar-color: var(--impression-line) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-x pan-y;
+}
+
+.postcard-shelf__track:focus-visible {
+  outline: 3px solid var(--impression-pine);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+.postcard-shelf__rotation-state {
+  min-width: 0;
+  transform-style: preserve-3d;
+}
+
+.postcard-shelf__card {
+  --postcard-base-rotation: 0deg;
+  min-width: 0;
+  scroll-snap-align: start;
+  transform: rotate(var(--postcard-base-rotation));
+  transform-style: preserve-3d;
+  transition: transform 280ms var(--impression-ease);
+}
+
+.postcard-shelf__card > .impression-postcard {
+  min-width: 0;
+  padding: 4px 5px 16px;
+  background: transparent;
+  transform: rotateX(var(--postcard-rotation-x, 0deg)) rotateY(var(--postcard-rotation-y, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 180ms var(--impression-ease);
+}
+
+.postcard-shelf__card .impression-postcard-open {
+  background: transparent;
+}
+
+.postcard-shelf__card .impression-print {
+  transform: none;
+  backface-visibility: hidden;
+}
+
+.postcard-shelf__card .impression-print-paper {
+  background: var(--impression-paper);
+  backface-visibility: hidden;
+}
+
+.postcard-shelf__card .impression-print-shadow {
+  display: block;
+}
+
+.postcard-shelf__card-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.postcard-shelf__rotate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 9px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--impression-mint);
+  color: var(--impression-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  touch-action: manipulation;
+}
+
+.postcard-shelf__rotate:disabled {
+  cursor: default;
+  opacity: .58;
+}
+
+.postcard-shelf__card:focus-within {
+  position: relative;
+  z-index: 2;
+}
+
+.postcard-shelf__arrows {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: 4px;
+  left: 4px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.postcard-shelf__arrows button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--impression-line);
+  border-radius: 50%;
+  background: var(--impression-paper);
+  color: var(--impression-ink);
+  box-shadow: 0 8px 16px var(--impression-shadow);
+  cursor: pointer;
+  font: 700 30px/1 var(--impression-font-ui);
+  pointer-events: auto;
+}
+
+.postcard-shelf__arrows button:disabled {
+  cursor: default;
+  opacity: .35;
+}
+
+.postcard-shelf__arrows button:focus-visible,
+.postcard-shelf__rotate:focus-visible,
+.postcard-shelf__toggle:focus-visible,
+.postcard-shelf__footer .impression-collection-load-more:focus-visible {
+  outline: 3px solid var(--impression-pine);
+  outline-offset: 3px;
+}
+
+.postcard-shelf__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 4px;
+}
+
+.postcard-shelf__toggle,
+.postcard-shelf__footer .impression-collection-load-more {
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 17px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--impression-mint);
+  color: var(--impression-ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.postcard-shelf__footer .impression-collection-load-more {
+  background: var(--impression-ink);
+  color: var(--impression-paper);
+}
+
+.postcard-shelf__track--expanded {
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 8px 22px;
+  overflow: visible;
+  perspective: none;
+  scroll-snap-type: none;
+  touch-action: auto;
+}
+
+.postcard-shelf__track--expanded .postcard-shelf__card {
+  transform: none;
+}
+
+.postcard-shelf__track--expanded .postcard-shelf__card > .impression-postcard,
+.postcard-shelf__track--expanded .postcard-shelf__card .impression-postcard-open {
+  width: 100%;
+}
+
+.postcard-shelf__track--expanded .postcard-shelf__card .impression-print {
+  width: min(100%, 330px);
+  margin-inline: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .postcard-shelf__card:hover {
+    z-index: 2;
+  }
+
+  .postcard-shelf__card:hover > .impression-postcard {
+    filter: drop-shadow(0 11px 16px rgba(23, 61, 50, .14));
+  }
+
+  .postcard-shelf__arrows button:hover:not(:disabled),
+  .postcard-shelf__toggle:hover,
+  .postcard-shelf__footer .impression-collection-load-more:hover {
+    filter: brightness(.97);
+  }
+}
+
+@media (min-width: 620px) {
+  .postcard-shelf__track {
+    grid-auto-columns: minmax(230px, 42%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postcard-shelf__track {
+    scroll-behavior: auto;
+  }
+
+  .postcard-shelf__card,
+  .postcard-shelf__card:hover,
+  .postcard-shelf__card > .impression-postcard,
+  .postcard-shelf__track--expanded .postcard-shelf__card {
+    transform: none;
+    transition: none;
+  }
+
+  .postcard-shelf__card:hover > .impression-postcard {
+    filter: none;
+  }
+
+  .postcard-shelf__rotate,
+  .postcard-shelf__rotate:hover {
+    filter: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .postcard-shelf__track {
+    grid-auto-columns: minmax(198px, calc(100vw - 76px));
+    gap: 11px;
+    padding-inline-start: 8px;
+  }
+
+  .postcard-shelf__arrows {
+    right: 0;
+    left: 0;
+  }
+}

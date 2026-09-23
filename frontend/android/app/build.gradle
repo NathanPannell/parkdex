@@ -1,0 +1,111 @@
+apply plugin: 'com.android.application'
+
+// Release-only values are deliberately read from the process environment or
+// Gradle's user properties. Keep passwords and keystore paths outside the
+// repository. Debug builds continue to use the Android debug keystore.
+def releaseProperty = { String name ->
+    def environmentValue = System.getenv(name)?.toString()?.trim()
+    def propertyValue = project.findProperty(name)?.toString()?.trim()
+    environmentValue ?: propertyValue
+}
+
+def releaseKeystoreFile = releaseProperty('PARKDEX_RELEASE_KEYSTORE_FILE')
+def releaseKeystorePassword = releaseProperty('PARKDEX_RELEASE_KEYSTORE_PASSWORD')
+def releaseKeyAlias = releaseProperty('PARKDEX_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = releaseProperty('PARKDEX_RELEASE_KEY_PASSWORD')
+def releaseVersionCode = releaseProperty('PARKDEX_ANDROID_VERSION_CODE')
+def releaseVersionName = releaseProperty('PARKDEX_ANDROID_VERSION_NAME')
+def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    def task = taskName.toString().toLowerCase()
+    task == 'assemble' || task.endsWith(':assemble') || task == 'bundle' || task.endsWith(':bundle') || task.contains('release')
+}
+
+if (releaseTaskRequested) {
+    def missing = [
+        'PARKDEX_RELEASE_KEYSTORE_FILE': releaseKeystoreFile,
+        'PARKDEX_RELEASE_KEYSTORE_PASSWORD': releaseKeystorePassword,
+        'PARKDEX_RELEASE_KEY_ALIAS': releaseKeyAlias,
+        'PARKDEX_RELEASE_KEY_PASSWORD': releaseKeyPassword,
+        'PARKDEX_ANDROID_VERSION_CODE': releaseVersionCode,
+        'PARKDEX_ANDROID_VERSION_NAME': releaseVersionName,
+    ].findAll { name, value -> !value }.keySet()
+    if (!missing.isEmpty()) {
+        throw new GradleException("Release tasks require explicit inputs: ${missing.join(', ')}")
+    }
+    if (!(releaseVersionCode ==~ /[1-9][0-9]*/)) {
+        throw new GradleException('PARKDEX_ANDROID_VERSION_CODE must be a positive integer.')
+    }
+    if (!file(releaseKeystoreFile).isFile()) {
+        throw new GradleException('PARKDEX_RELEASE_KEYSTORE_FILE must point to an existing file.')
+    }
+}
+
+android {
+    namespace = "app.parkdex"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "app.parkdex"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode releaseTaskRequested && releaseVersionCode ? Integer.parseInt(releaseVersionCode) : 1
+        versionName releaseTaskRequested && releaseVersionName ? releaseVersionName : "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (releaseKeystoreFile) {
+                storeFile file(releaseKeystoreFile)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

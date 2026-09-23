@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -27,12 +28,18 @@ class Place(BaseModel):
     source_id: str | None = Field(default=None, serialization_alias="sourceId")
 
 
+class VisitClaimCapability(BaseModel):
+    supported: bool = True
+    enforcement: Literal["compatible", "required"]
+
+
 class PlaceCollection(BaseModel):
     places: list[Place]
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
     visits: list["Visit"]
     coverage_note: str = Field(serialization_alias="coverageNote")
     completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
+    visit_claims: VisitClaimCapability = Field(serialization_alias="visitClaims")
 
 
 class SearchPlace(Place):
@@ -90,6 +97,82 @@ class Group(BaseModel):
 class Visit(BaseModel):
     place_id: str = Field(serialization_alias="placeId")
     visited_at: datetime = Field(serialization_alias="visitedAt")
+    claim: "VisitClaim | None" = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ClaimCoordinates(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class VisitClaim(BaseModel):
+    claimed_at: datetime = Field(serialization_alias="claimedAt")
+    captured_at: datetime = Field(serialization_alias="capturedAt")
+    coordinates: ClaimCoordinates
+    accuracy_meters: float = Field(serialization_alias="accuracyMeters")
+    boundary_version: str = Field(serialization_alias="boundaryVersion")
+    match_kind: Literal["exact", "buffer"] = Field(serialization_alias="matchKind")
+    distance_meters: float = Field(serialization_alias="distanceMeters")
+    has_photo: bool = Field(serialization_alias="hasPhoto")
+
+
+class ClaimLocation(BaseModel):
+    latitude: float = Field(allow_inf_nan=False, ge=-90, le=90)
+    longitude: float = Field(allow_inf_nan=False, ge=-180, le=180)
+    accuracy_meters: float = Field(serialization_alias="accuracyMeters", validation_alias="accuracyMeters", allow_inf_nan=False, gt=0, le=50)
+    captured_at_epoch_ms: int = Field(serialization_alias="capturedAtEpochMs", validation_alias="capturedAtEpochMs")
+
+
+class ClaimRecommendationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    location: ClaimLocation | None = None
+    testFixtureId: str | None = Field(default=None, min_length=1, max_length=80)
+
+    @model_validator(mode="after")
+    def require_one_location_source(self):
+        if (self.location is None) == (self.testFixtureId is None):
+            raise ValueError("Send exactly one of location or testFixtureId")
+        return self
+
+
+class ClaimCandidate(BaseModel):
+    place_id: str = Field(serialization_alias="placeId")
+    match_kind: Literal["exact", "buffer"] = Field(serialization_alias="matchKind")
+    distance_meters: float = Field(serialization_alias="distanceMeters")
+
+
+class ClaimRecommendationResponse(BaseModel):
+    status: Literal["recommended", "none"]
+    recommendation_token: str | None = Field(default=None, serialization_alias="recommendationToken")
+    expires_at: datetime | None = Field(default=None, serialization_alias="expiresAt")
+    candidate: ClaimCandidate | None = None
+
+
+class CreateClaimRequest(BaseModel):
+    recommendationToken: str = Field(min_length=43, max_length=43)
+    expectedPlaceId: str = Field(min_length=1, max_length=200)
+
+
+class CreateClaimResponse(BaseModel):
+    place_id: str = Field(serialization_alias="placeId")
+    visited: Literal[True]
+    visited_count: int = Field(serialization_alias="visitedCount")
+    visited_at: datetime = Field(serialization_alias="visitedAt")
+    claim: VisitClaim
+
+
+class VisitPhoto(BaseModel):
+    content_type: Literal["image/jpeg"] = Field(serialization_alias="contentType")
+    width: int
+    height: int
+    byte_length: int = Field(serialization_alias="byteLength")
+    sha256: str
+    updated_at: datetime = Field(serialization_alias="updatedAt")
+
+
+class VisitPhotoResult(BaseModel):
+    place_id: str = Field(serialization_alias="placeId")
+    photo: VisitPhoto
 
 
 class VisitUpdate(BaseModel):
@@ -175,6 +258,18 @@ class AccountState(BaseModel):
     visited_ids: list[str] = Field(serialization_alias="visitedIds")
     visits: list[Visit]
     completed_trail_ids: list[str] = Field(default_factory=list, serialization_alias="completedTrailIds")
+
+
+class AccountDeletionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    confirm: Literal["DELETE_ACCOUNT"]
+    request_id: UUID = Field(alias="requestId")
+
+
+class AccountDeletionResult(BaseModel):
+    deleted: Literal[True]
+    photo_cleanup_pending: bool = Field(serialization_alias="photoCleanupPending")
 
 
 class GuestImportResult(BaseModel):

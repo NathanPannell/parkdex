@@ -41,7 +41,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: ${{ inputs.target }}
-      url: ${{ inputs.target == 'production' && 'https://parkdex.app' || 'https://staging.parkdex.app' }}
+      url: ${{ inputs.target == 'production' && 'https://web.parkdex.app' || 'https://staging.web.parkdex.app' }}
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
       release_id: ${{ steps.metadata.outputs.release_id }}
@@ -58,7 +58,7 @@ jobs:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       API_URL: ${{ inputs.target == 'staging' && 'https://api-staging-882c.up.railway.app' || 'https://api-production-e72df.up.railway.app' }}
-      FRONTEND_URL: ${{ inputs.target == 'staging' && 'https://staging.parkdex.app' || 'https://parkdex.app' }}
+      FRONTEND_URL: ${{ inputs.target == 'staging' && 'https://staging.web.parkdex.app' || 'https://web.parkdex.app' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -105,7 +105,11 @@ jobs:
           : "${VERCEL_ORG_ID:?VERCEL_ORG_ID is required}"
           : "${VERCEL_PROJECT_ID:?VERCEL_PROJECT_ID is required}"
           [[ "$API_URL" == https://*.up.railway.app ]]
-          [[ "$FRONTEND_URL" == https://*.parkdex.app || "$FRONTEND_URL" == https://parkdex.app ]]
+          if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
+            [[ "$FRONTEND_URL" == https://staging.web.parkdex.app ]]
+          else
+            [[ "$FRONTEND_URL" == https://web.parkdex.app ]]
+          fi
 
           railway_set() {
             local service_id="$1" name="$2" value="$3"
@@ -135,11 +139,21 @@ jobs:
           vercel_stdout="$RUNNER_TEMP/vercel.out"
           vercel_stderr="$RUNNER_TEMP/vercel.err"
 
+          if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
+            mkdir -p frontend/catalogue-build-data
+            cp data/boundaries.geojson data/places.json data/vancouver-island-focus.geojson \
+              data/staging-field-boundaries.geojson data/staging-field-places.json \
+              frontend/catalogue-build-data/
+          fi
+
           railway up --detach --yes --message "$deployment_message" \
             --service "$RAILWAY_API_SERVICE_ID" --environment "$TARGET_ENVIRONMENT" --project "$RAILWAY_PROJECT_ID" \
             >"$api_log" 2>&1 & api_pid=$!
           vercel deploy --yes --no-wait --prod --skip-domain --cwd frontend \
             --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
+            --build-env "NEXT_PUBLIC_APP_URL=$FRONTEND_URL" \
+            --build-env "PARKDEX_CATALOGUE_SCOPE=${{ inputs.target == 'staging' && 'staging' || 'canonical' }}" \
+            --build-env "PARKDEX_KEEP_SCOPED_ASSETS=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --build-env "NEXT_PUBLIC_RELEASE_VERSION=$RELEASE_VERSION" \
             --build-env "NEXT_PUBLIC_COMMIT_SHA=$EXPECTED_COMMIT_SHA" \
             --build-env "NEXT_PUBLIC_COMMIT_DATE=$COMMIT_DATE" \
@@ -178,9 +192,9 @@ jobs:
             echo "- Stable frontend after agent-controlled cutover: $FRONTEND_URL"
             echo "- Vercel deployment URL: $vercel_url"
             if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
-              echo '- Vercel Production build has domain assignment skipped. After it is READY, assign the stable staging domain and browser-test it.'
+              echo '- Vercel Production build has domain assignment skipped. After it is READY, assign staging.web.parkdex.app and browser-test it.'
             else
-              echo '- Vercel Production build has domain assignment skipped. After it is READY and verified, assign only parkdex.app and confirm the staging alias is unchanged.'
+              echo '- Vercel Production build has domain assignment skipped. After it is READY and verified, assign only web.parkdex.app and confirm the staging alias is unchanged.'
             fi
-            echo '- This job returns after both upload/queue clients exit; it does not wait for provider builds, readiness, or smoke tests.'
+            echo '- This job returns after all configured upload/queue clients exit; it does not wait for provider builds, readiness, or smoke tests.'
           } >> "$GITHUB_STEP_SUMMARY"

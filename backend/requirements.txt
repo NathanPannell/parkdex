@@ -1,10 +1,15 @@
 fastapi==0.116.1
 argon2-cffi==25.1.0
+boto3==1.40.25
 email-validator==2.2.0
 httpx==0.28.1
 google-auth[requests]==2.48.0
+Pillow==11.3.0
 psycopg[binary,pool]==3.2.9
 pydantic-settings==2.10.1
+pyproj==3.7.2
+python-multipart==0.0.20
+shapely==2.1.1
 uvicorn[standard]==0.35.0
 # Official MCP Python SDK v2 stdio server dependencies.  Keep Starlette on
 # FastAPI's supported line; this server does not expose HTTP/SSE transport.

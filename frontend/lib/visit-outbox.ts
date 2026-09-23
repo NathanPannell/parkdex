@@ -38,19 +38,30 @@ export class VisitOutbox {
   snapshot(): Record<string, PendingVisit> { return { ...this.entries }; }
   hasPending(): boolean { return Object.keys(this.entries).length > 0; }
 
+  discard(id: string, visited?: boolean) {
+    if (visited === undefined || this.entries[id]?.visited === visited) delete this.entries[id];
+    if (visited === undefined || this.latestIntent[id]?.visited === visited) delete this.latestIntent[id];
+  }
+
+  /** Discard only the exact attempt that produced a terminal response. */
+  discardRevision(id: string, revision: number) {
+    if (this.entries[id]?.revision === revision) delete this.entries[id];
+    if (this.latestIntent[id]?.revision === revision) delete this.latestIntent[id];
+  }
+
   async clearAndWait(): Promise<void> {
     this.entries = {};
     this.latestIntent = {};
     await Promise.allSettled([...this.active.values()]);
   }
 
-  drain(id: string, send: (id: string, visited: boolean) => Promise<void>): Promise<void> {
+  drain(id: string, send: (id: string, visited: boolean, revision: number) => Promise<void>): Promise<void> {
     const existing = this.active.get(id);
     if (existing) return existing;
     const task = (async () => {
       while (this.entries[id]) {
         const attempt = this.entries[id];
-        await send(id, attempt.visited);
+        await send(id, attempt.visited, attempt.revision);
         if (this.entries[id]?.revision === attempt.revision) delete this.entries[id];
       }
     })().finally(() => { this.active.delete(id); });
@@ -58,8 +69,12 @@ export class VisitOutbox {
     return task;
   }
 
-  async drainAll(send: (id: string, visited: boolean) => Promise<void>): Promise<void> {
+  async drainAll(send: (id: string, visited: boolean, revision: number) => Promise<void>): Promise<void> {
     const results = await Promise.allSettled(Object.keys(this.entries).map((id) => this.drain(id, send)));
-    if (results.some((result) => result.status === "rejected")) throw new Error("Some visits did not sync");
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    // Keep the original failure (including ApiError.code) available to the
+    // caller. The journal uses structured server codes to reconcile entries
+    // that can never succeed after an API migration.
+    if (failed) throw failed.reason instanceof Error ? failed.reason : new Error("Some visits did not sync");
   }
 }

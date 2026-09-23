@@ -5,5 +5,15 @@ import nextTypescript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "node_modules/**", "public/maplibre/**", "next-env.d.ts"]),
+  globalIgnores([
+    ".next/**",
+    ".wrangler/**",
+    "out/**",
+    "node_modules/**",
+    "public/maplibre/**",
+    "android/.gradle/**",
+    "android/**/build/**",
+    "android/app/src/main/assets/**",
+    "next-env.d.ts",
+  ]),
 ]);

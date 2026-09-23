@@ -30,14 +30,13 @@ export function collectionFilter(
   });
 }
 
-export function groupByAuthority(places: Place[]): Array<{ authority: string; places: Place[] }> {
+export function groupByRegion(places: Place[]): Array<{ region: string; places: Place[] }> {
   const groups = new Map<string, Place[]>();
   for (const place of places) {
-    const authority = authorityForPlace(place);
-    groups.set(authority, [...(groups.get(authority) ?? []), place]);
+    groups.set(place.region, [...(groups.get(place.region) ?? []), place]);
   }
-  return [...groups].map(([authority, members]) => ({
-    authority,
+  return [...groups].map(([region, members]) => ({
+    region,
     places: members.sort((a, b) => a.name.localeCompare(b.name)),
-  })).sort((a, b) => a.authority.localeCompare(b.authority));
+  })).sort((a, b) => a.region.localeCompare(b.region));
 }

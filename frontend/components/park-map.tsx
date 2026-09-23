@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Focus } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Focus, X } from "lucide-react";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
+import { PostcardPrint, type PostcardPhotoState } from "@/components/postcard-print";
 import {
   boundaryFilter,
   boundaryPlaceIds,
@@ -33,7 +34,9 @@ import {
 } from "@/lib/exploration-map-style";
 import { cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
+import type { Visit } from "@/lib/account";
 import type { Place } from "@/lib/places";
+import { distanceKm } from "@/lib/discovery";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
 const BOUNDARY_DISPLAY_DATA_URL = "/data/boundaries-display.v1.geojson";
@@ -46,6 +49,84 @@ const BOUNDARY_VISIBLE_LAYERS = [
   "boundary-park-fill",
   "boundary-park-line",
 ] as const;
+
+/**
+ * The receipt marker belongs to the close map view. At this zoom the normal
+ * place source has expanded its clusters, while the wide map remains quiet.
+ */
+export const POSTCARD_MARKER_MIN_ZOOM = 11;
+/**
+ * Approximate the compact print's rendered footprint, including its seal and
+ * dismiss control. The map anchor stays at the visit coordinate; these
+ * bounds only decide whether the complete marker can be reached on screen.
+ */
+export const POSTCARD_MARKER_FOOTPRINT = {
+  halfWidth: 76,
+  height: 220,
+  anchorGap: 28,
+} as const;
+
+export type RecentPostcard = {
+  place: Place;
+  visit: Visit;
+};
+
+export function postcardPhotoKey(ownerKey: string, postcard?: RecentPostcard): string {
+  const hasPhoto = postcard?.visit.claim?.hasPhoto === true;
+  return `${ownerKey}:${postcard?.place.id ?? "none"}:${postcard?.visit.visitedAt ?? "none"}:${hasPhoto ? "photo" : "visit"}`;
+}
+
+export function postcardMarkerCoordinates(postcard?: RecentPostcard): Pick<Place, "latitude" | "longitude"> | null {
+  if (!postcard) return null;
+  const claimed = postcard.visit.claim?.coordinates;
+  if (claimed && Number.isFinite(claimed.latitude) && Number.isFinite(claimed.longitude)) {
+    return { latitude: claimed.latitude, longitude: claimed.longitude };
+  }
+  if (Number.isFinite(postcard.place.latitude) && Number.isFinite(postcard.place.longitude)) {
+    return { latitude: postcard.place.latitude, longitude: postcard.place.longitude };
+  }
+  return null;
+}
+
+export function loadPostcardPhotoUrl(
+  loadPhoto: (placeId: string) => Promise<Blob>,
+  placeId: string,
+  key: string,
+  onLoaded: (url: string, key: string) => void,
+  onFailed: (key: string) => void,
+): () => void {
+  let active = true;
+  let objectUrl: string | null = null;
+  void loadPhoto(placeId).then((blob) => {
+    if (!active) return;
+    objectUrl = URL.createObjectURL(blob);
+    onLoaded(objectUrl, key);
+  }).catch(() => {
+    if (active) onFailed(key);
+  });
+  return () => {
+    active = false;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  };
+}
+
+export type ParkMapProps = {
+  places: Place[];
+  visited: Set<string>;
+  mode?: ParkMapMode;
+  currentLocation?: MapLocation | null;
+  selectedId: string | null;
+  selectedIds?: ReadonlySet<string>;
+  resetViewRequest?: number;
+  showResetControl?: boolean;
+  onSelect: (id: string) => void;
+  onBoundaryLoadState?: (state: BoundaryLoadState) => void;
+  recentPostcard?: RecentPostcard;
+  loadPhoto?: (placeId: string) => Promise<Blob>;
+  photoOwnerKey?: string;
+  onOpenPostcard?: () => void;
+  onDismissPostcard?: () => void;
+};
 
 export type ParkMapMode = "explored" | "discover";
 export type MapLocation = {
@@ -94,11 +175,18 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   ],
 };
 
-function visiblePlaces(places: Place[], visited: Set<string>, mode: ParkMapMode) {
-  return mode === "discover" ? places : places.filter((place) => visited.has(place.id));
+/**
+ * Place visibility follows the collection supplied by the parent. The map
+ * mode controls the progress overlay only, so explored/discover cannot
+ * silently remove unvisited markers or make them unavailable to hit testing.
+ */
+export function visiblePlaces(places: Place[], _visited: ReadonlySet<string>, _mode: ParkMapMode) {
+  void _visited;
+  void _mode;
+  return places;
 }
 
-function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
+export function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: visiblePlaces(places, visited, mode).map((place) => ({
@@ -202,17 +290,18 @@ function cameraSnapshot(map: MapLibreMap): MapCameraSnapshot {
   };
 }
 
-function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
+export function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
   const selectors = [
-    ".expedition-header",
+    ".guide-view-switch",
     ".map-utility",
-    ".map-utility-bar",
-    ".map-mode-switch",
+    ".map-visit-filter",
     ".search-dock",
     ".filter-tray",
     ".search-results",
     ".nearby-strip",
+    ".global-progress",
     ".thumb-nav",
+    ".feature-collection",
     ...(includeSheet ? [".place-sheet"] : []),
   ];
   const overlays = selectors.flatMap((selector) => {
@@ -224,6 +313,44 @@ function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, ba
     overlays,
     base,
   );
+}
+
+type PostcardMarkerPosition = {
+  left: number;
+  top: number;
+};
+
+type PostcardPhoto = {
+  key: string;
+  url?: string;
+  state: PostcardPhotoState;
+};
+
+export function projectPostcardMarker(map: MapLibreMap, place: Pick<Place, "longitude" | "latitude">): PostcardMarkerPosition | null {
+  if (!Number.isFinite(place.longitude) || !Number.isFinite(place.latitude) || map.getZoom() < POSTCARD_MARKER_MIN_ZOOM) {
+    return null;
+  }
+
+  const container = map.getContainer();
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width <= 0 || height <= 0) return null;
+
+  try {
+    const point = map.project([place.longitude, place.latitude]);
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+
+    const { halfWidth, height: markerHeight, anchorGap } = POSTCARD_MARKER_FOOTPRINT;
+    // The print is translated up from its coordinate by its full height and
+    // the stem gap. Hide it when that footprint would be clipped at an edge,
+    // which prevents an offscreen card from remaining keyboard-focusable.
+    if (point.x < halfWidth || point.x > width - halfWidth || point.y < markerHeight + anchorGap || point.y > height + anchorGap) return null;
+    return { left: point.x, top: point.y };
+  } catch {
+    // MapLibre can be between remove() and the next React cleanup during a
+    // fast account transition. The marker simply waits for the next frame.
+    return null;
+  }
 }
 
 function addBoundaryLayers(map: MapLibreMap) {
@@ -245,12 +372,13 @@ function addBoundaryLayers(map: MapLibreMap) {
 function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null, selectedIds: ReadonlySet<string> = new Set()) {
   if (!map.getSource(BOUNDARY_SOURCE)) return;
   const ids = places.map((place) => place.id);
+  const idsInView = new Set(ids);
   BOUNDARY_VISIBLE_LAYERS.forEach((layer) => {
     map.setFilter(layer, boundaryFilter(ids, layer.includes("island") ? "island" : "park"));
   });
   map.setFilter("boundary-hit", boundaryFilter(ids));
   const selected: FilterSpecification = selectedIds.size
-    ? ["in", ["get", "id"], ["literal", [...selectedIds]]]
+    ? ["in", ["get", "id"], ["literal", [...selectedIds].filter((id) => idsInView.has(id))]]
     : selectedBoundaryFilter(selectedId, ids);
   BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, selected));
 }
@@ -266,20 +394,15 @@ export function ParkMap({
   showResetControl = true,
   onSelect,
   onBoundaryLoadState,
-}: {
-  places: Place[];
-  visited: Set<string>;
-  mode?: ParkMapMode;
-  currentLocation?: MapLocation | null;
-  selectedId: string | null;
-  selectedIds?: ReadonlySet<string>;
-  resetViewRequest?: number;
-  showResetControl?: boolean;
-  onSelect: (id: string) => void;
-  onBoundaryLoadState?: (state: BoundaryLoadState) => void;
-}) {
+  recentPostcard,
+  loadPhoto,
+  photoOwnerKey = "current",
+  onOpenPostcard,
+  onDismissPostcard,
+}: ParkMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const loadPhotoRef = useRef(loadPhoto);
   const dataRef = useRef({ places, visited, mode, currentLocation, selectedIds });
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
@@ -291,12 +414,30 @@ export function ParkMap({
   const resetOverviewRef = useRef<(() => void) | null>(null);
   const handledResetRequestRef = useRef(resetViewRequest);
   const viewDiffersRef = useRef(false);
+  const displayedLocationRef = useRef<MapLocation | null>(currentLocation);
+  const locationAnimationRef = useRef(0);
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
   const [viewDiffersFromDefault, setViewDiffersFromDefault] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [postcardPhoto, setPostcardPhoto] = useState<PostcardPhoto>({ key: "", state: "empty" });
+  const [postcardMarkerPosition, setPostcardMarkerPosition] = useState<PostcardMarkerPosition | null>(null);
+
+  const postcardPlaceId = recentPostcard?.place.id;
+  const postcardHasPhoto = recentPostcard?.visit.claim?.hasPhoto === true;
+  const markerCoordinates = postcardMarkerCoordinates(recentPostcard);
+  const postcardMarkerLatitude = markerCoordinates?.latitude;
+  const postcardMarkerLongitude = markerCoordinates?.longitude;
+  const currentPostcardPhotoKey = postcardPhotoKey(photoOwnerKey, recentPostcard);
+  const matchingPostcardPhoto = postcardPhoto.key === currentPostcardPhotoKey ? postcardPhoto : null;
+  const canCreatePhotoUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function";
+  const postcardPhotoUrl = matchingPostcardPhoto?.url;
+  const postcardPhotoState: PostcardPhotoState = matchingPostcardPhoto?.state
+    ?? (postcardHasPhoto && loadPhoto && canCreatePhotoUrl ? "loading" : postcardHasPhoto ? "failed" : "empty");
 
   useEffect(() => { dataRef.current = { places, visited, mode, currentLocation, selectedIds }; }, [places, visited, mode, currentLocation, selectedIds]);
+  useEffect(() => { loadPhotoRef.current = loadPhoto; }, [loadPhoto]);
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { boundaryStateRef.current = onBoundaryLoadState; }, [onBoundaryLoadState]);
@@ -305,6 +446,20 @@ export function ParkMap({
     handledResetRequestRef.current = resetViewRequest;
     resetOverviewRef.current?.();
   }, [resetViewRequest]);
+
+  useEffect(() => {
+    if (!postcardPlaceId || !postcardHasPhoto || !loadPhotoRef.current || !canCreatePhotoUrl) {
+      return;
+    }
+
+    return loadPostcardPhotoUrl(
+      loadPhotoRef.current,
+      postcardPlaceId,
+      currentPostcardPhotoKey,
+      (url, key) => setPostcardPhoto({ key, url, state: "empty" }),
+      (key) => setPostcardPhoto({ key, state: "failed" }),
+    );
+  }, [canCreatePhotoUrl, currentPostcardPhotoKey, postcardHasPhoto, postcardPlaceId]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -327,6 +482,7 @@ export function ParkMap({
         attributionControl: false,
       });
       mapRef.current = map;
+      setMapReady(true);
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const setViewDiffers = (differs: boolean) => {
         viewDiffersRef.current = differs;
@@ -522,10 +678,33 @@ export function ParkMap({
       if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
       mapRef.current = null;
+      setMapReady(false);
       resetOverviewRef.current = null;
       overviewCameraRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const latitude = postcardMarkerLatitude;
+    const longitude = postcardMarkerLongitude;
+    if (!map || latitude == null || longitude == null) {
+      setPostcardMarkerPosition(null);
+      return;
+    }
+
+    const updateMarkerPosition = () => {
+      setPostcardMarkerPosition(projectPostcardMarker(map, { latitude, longitude }));
+    };
+    updateMarkerPosition();
+    map.on("move", updateMarkerPosition);
+    map.on("resize", updateMarkerPosition);
+    return () => {
+      map.off("move", updateMarkerPosition);
+      map.off("resize", updateMarkerPosition);
+      setPostcardMarkerPosition(null);
+    };
+  }, [mapReady, postcardMarkerLatitude, postcardMarkerLongitude]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -552,7 +731,38 @@ export function ParkMap({
 
   useEffect(() => {
     const source = mapRef.current?.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(locationData(currentLocation));
+    if (!source) return;
+    window.cancelAnimationFrame(locationAnimationRef.current);
+    const previous = displayedLocationRef.current;
+    if (!currentLocation || !previous) {
+      displayedLocationRef.current = currentLocation;
+      source.setData(locationData(currentLocation));
+      return;
+    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const jumpMeters = distanceKm(previous, currentLocation) * 1000;
+    const plausibleMove = jumpMeters <= Math.max(500, (previous.accuracyMeters ?? 0) + (currentLocation.accuracyMeters ?? 0) + 100);
+    if (reduceMotion || !plausibleMove) {
+      displayedLocationRef.current = currentLocation;
+      source.setData(locationData(currentLocation));
+      return;
+    }
+    const startedAt = performance.now();
+    const durationMs = 900;
+    const animate = (now: number) => {
+      const linear = Math.min(1, (now - startedAt) / durationMs);
+      const progress = 1 - (1 - linear) ** 3;
+      const frame = {
+        ...currentLocation,
+        latitude: previous.latitude + (currentLocation.latitude - previous.latitude) * progress,
+        longitude: previous.longitude + (currentLocation.longitude - previous.longitude) * progress,
+      };
+      displayedLocationRef.current = frame;
+      source.setData(locationData(frame));
+      if (linear < 1) locationAnimationRef.current = window.requestAnimationFrame(animate);
+    };
+    locationAnimationRef.current = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(locationAnimationRef.current);
   }, [currentLocation]);
 
   useEffect(() => {
@@ -603,9 +813,54 @@ export function ParkMap({
     };
   }, [selectedId, places, visited, mode, boundaryRevision, selectedIds]);
 
+  const postcard = recentPostcard && postcardMarkerPosition ? (
+    <div
+      className="map-postcard-marker"
+      style={{ left: postcardMarkerPosition.left, top: postcardMarkerPosition.top }}
+      data-place-id={recentPostcard.place.id}
+    >
+      <span className="map-postcard-marker__stem" aria-hidden="true" />
+      <div
+        className="map-postcard-marker__print"
+        role={onOpenPostcard ? "button" : undefined}
+        tabIndex={onOpenPostcard ? 0 : -1}
+        aria-label={onOpenPostcard ? `Open your ${recentPostcard.place.name} postcard` : undefined}
+        onClick={onOpenPostcard}
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          if (!onOpenPostcard || (event.key !== "Enter" && event.key !== " ")) return;
+          event.preventDefault();
+          onOpenPostcard();
+        }}
+      >
+        <PostcardPrint
+          place={recentPostcard.place}
+          photoUrl={postcardPhotoUrl ?? undefined}
+          visitedAt={recentPostcard.visit.visitedAt}
+          sealed
+          compact
+          photoState={postcardPhotoState}
+        />
+      </div>
+      {onDismissPostcard && (
+        <button
+          type="button"
+          className="map-postcard-marker__dismiss"
+          aria-label="Dismiss postcard marker"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDismissPostcard();
+          }}
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
+      {postcard}
       {showResetControl && !selectedId && viewDiffersFromDefault && (
         <button
           type="button"

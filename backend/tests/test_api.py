@@ -1,3 +1,4 @@
+import hashlib
 import os
 
 import psycopg
@@ -34,6 +35,13 @@ def test_visit_collection_is_persistent_and_isolated() -> None:
             ),
         )
         conn.execute("DELETE FROM visits WHERE place_id = %s", (TEST_PLACE,))
+        # Location claims are account-only. Seed one grandfathered guest visit
+        # to verify the compatibility path can still read, repeat, and remove
+        # progress that predates claim enforcement.
+        conn.execute(
+            "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s)",
+            (hashlib.sha256(KEY_ONE.encode("ascii")).hexdigest(), TEST_PLACE),
+        )
         conn.commit()
 
     try:
