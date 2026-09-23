@@ -5,12 +5,12 @@
 Staging and production have the same long-lived topology and the same queue-only deployment implementation:
 
 ```text
-Vercel frontend ──HTTPS──> Railway API ──pooled SQL──> Neon branch
-       /mcp + OAuth proxy ────────┘
+Vercel app ──HTTPS──> Railway API ──pooled SQL──> Neon branch
+Landing site ──OAuth and MCP routes──> Railway API
                           API migrations ──direct SQL──> Neon branch
 ```
 
-Production uses `web.parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.web.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. The public app origins are `https://web.parkdex.app` and `https://staging.web.parkdex.app`; the MCP identities remain `https://parkdex.app/mcp` and `https://staging.parkdex.app/mcp` so existing clients retain their issuer and resource identity. The apex and `staging.parkdex.app` are landing-site origins that proxy only the MCP transport, OAuth, and discovery paths to the matching Railway API. Railway service domains and Neon connection strings remain fixed during ordinary releases.
+Production uses `web.parkdex.app`, its production Railway environment, and the Neon `main` branch. Staging uses `staging.web.parkdex.app`, its isolated Railway environment, and the persistent Neon `staging` branch. The apex `parkdex.app` and `staging.parkdex.app` are landing-site origins. They preserve the public MCP identities `https://parkdex.app/mcp` and `https://staging.parkdex.app/mcp`, along with the production and staging OAuth issuer origins, so existing clients retain their issuer and resource identity. The landing site serves environment-specific OAuth metadata and proxies the OAuth and MCP routes to the matching stable Railway API. Railway service domains and Neon connection strings remain fixed during ordinary releases.
 
 ## Android client
 
@@ -29,13 +29,15 @@ Android builds and emulator verification run locally. Repository workflows do no
 
 `.github/workflows/deploy-release.yml` is the sole GitHub deployment implementation. Protected-branch merge pushes to `staging` and `main` provide an exact Git SHA and environment name; there are no manual, pull-request, scheduled, or rerunnable Actions deployment paths. One GitHub-hosted job stamps the SHA and release ID, then concurrently runs a detached Railway API upload and a no-wait staged Vercel Production deployment. It waits only for those client submissions to finish, not for provider builds or health.
 
-Before merge, an agent creates an isolated preview of the exact draft-PR head from a clean checkout at the current remote `staging` revision. The local preview path first validates the synthetic merge candidate, then creates a schema-only Neon branch and database, an empty Railway environment containing only the API, and an immutable Vercel Preview deployment. A durable external journal binds every resource to the PR, head SHA, and release ID.
+Before a draft PR merges, an agent creates an isolated preview of its exact head from a clean checkout at the current remote `staging` revision. The local preview path validates the synthetic merge candidate, then creates a schema-only Neon branch and database, an empty Railway environment containing only the API, and an immutable Vercel Preview deployment. A durable external journal binds every resource to the PR, head SHA, and release ID.
 
 The agent browser-tests that immutable URL, tears the preview down, and waits for authoritative absence inventories from Vercel, Railway, and Neon. Only then may the unchanged PR merge into `staging`; the merge push queues the normal persistent staging deployment. No GitHub Actions job creates, tests, or deletes PR previews.
 
 Preview environments receive no persistent application or provider credentials. Railway receives only the isolated database credentials and public/release values needed by that preview, and the Vercel project must have no configured Preview environment variables. Vercel platform system variables may still exist, so this lifecycle is limited to same-repository branches authored or reviewed by the trusted operator/agent; it is not an adversarial-code sandbox. Google OAuth and outbound email are intentionally unavailable in previews. Persistent staging and production retain their own OAuth, email, database, and domain configuration.
 
-Both Vercel targets use `--prod --skip-domain`, so the provider build path is identical. After external verification, the release agent assigns only the target's exact app domain: `staging.web.parkdex.app` for staging or `web.parkdex.app` for production. The staging domain is deliberately not a Git branch domain so Hobby deployment protection leaves MCP public. Because both stable domains are production-domain aliases in one Vercel project, project-wide promote/rollback operations are prohibited; production assignment must also prove the staging alias stayed unchanged. Vercel and Railway Git auto-deployments stay disabled to prevent duplicate releases.
+Both Vercel targets use `--prod --skip-domain`, so the provider build path is identical. After external verification, the release agent assigns only the target's exact app domain: `staging.web.parkdex.app` for staging or `web.parkdex.app` for production. The staging app domain is deliberately not a Git branch domain so Hobby deployment protection leaves app and MCP responses public. Because both stable app domains are production-domain aliases in one Vercel project, project-wide promote/rollback operations are prohibited; production assignment must also prove the staging alias stayed unchanged. Vercel and Railway Git auto-deployments stay disabled to prevent duplicate releases.
+
+The apex landing site owns the legacy OAuth issuer origins and MCP resource identities. It serves the OAuth authorization-server and protected-resource metadata as static JSON and routes OAuth and MCP requests to the matching Railway API. Verify the metadata and routes against a no-domain landing deployment before changing the public domain assignments. The app's optional MCP paths are separately proxied by Vercel to Railway. The landing site preserves legacy reset and verification links and provides the explicit guest-progress handoff to the matching app origin.
 
 A queue acknowledgment is not evidence that a release is live. Outside GitHub Actions, the release agent verifies the exact Railway API release, `/ready`, migration readability, Vercel metadata, the stable frontend revision, and a real-browser journey.
 
