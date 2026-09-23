@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
@@ -14,6 +14,7 @@ const rathtrevor: Place = { id: "provincial-rathtrevor-beach-park", name: "Ratht
 const national: Place = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national", latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const artlish: Place = { ...place, id: "provincial-artlish-caves-park", name: "Artlish Caves Park" };
 const goldstream: Place = { ...place, id: "provincial-goldstream-park", name: "Goldstream Park" };
+const cormorant: Place = { ...place, id: "island-cormorant-island", name: "Cormorant Island", category: "island", region: "Northern Islands", sourceName: "BC Geographical Names Office" };
 const woss: Place = { ...place, id: "provincial-woss-lake-park", name: "Woss Lake Park", region: "North Island" };
 const defaultPlaces = [place, rathtrevor, national];
 const journal = {
@@ -36,7 +37,7 @@ vi.mock("@/lib/photo-processing", () => ({
   isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
   normalizeVisitPhoto: vi.fn(async (photo) => photo),
 }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
 afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.syncMessage = ""; journal.storageUnavailable = false; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
@@ -91,23 +92,23 @@ describe("Parkdex navigation", () => {
     expect(new URLSearchParams(window.location.search).get("query")).toBe("river");
   });
 
-  it("shows all map places by default and filters markers independently of green progress", () => {
+  it("shows explored map coloring by default while visit filters change only the visible markers", () => {
     journal.visited = new Set([place.id]);
     render(<ParkdexApp apiBaseUrl="" />);
     const mapIds = () => screen.getByTestId("park-map").getAttribute("data-place-ids")?.split(",");
     const status = screen.getByRole("group", { name: "Visit status" });
-    const progress = screen.getByRole("switch", { name: "Show map progress" });
     expect(mapIds()).toEqual(defaultPlaces.map((item) => item.id));
+    expect(screen.getByTestId("park-map").dataset.mode).toBe("explored");
+    expect(screen.queryByRole("switch", { name: "Show map progress" })).toBeNull();
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
     fireEvent.click(status.querySelectorAll("button")[1]);
     expect(mapIds()).toEqual([place.id]);
-    fireEvent.click(progress);
-    expect(progress.getAttribute("aria-checked")).toBe("false");
     expect(mapIds()).toEqual([place.id]);
+    expect(screen.getByTestId("park-map").dataset.mode).toBe("explored");
     fireEvent.click(status.querySelectorAll("button")[2]);
     expect(mapIds()).toEqual(defaultPlaces.filter((item) => item.id !== place.id).map((item) => item.id));
-    fireEvent.click(progress);
-    expect(progress.getAttribute("aria-checked")).toBe("true");
     expect(mapIds()).toEqual(defaultPlaces.filter((item) => item.id !== place.id).map((item) => item.id));
+    expect(screen.getByTestId("park-map").dataset.mode).toBe("explored");
   });
 
   it("returns a fullscreen list detail to its filtered list through Close, Forward, and Back", async () => {
@@ -138,7 +139,7 @@ describe("Parkdex navigation", () => {
     expect(window.history.state.framework).toBe("preserved");
     expect(journal.authenticateWithGoogle).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Field Guide" }));
-    expect(screen.getByRole("switch", { name: "Show map progress" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Visit status" })).toBeTruthy();
     expect(window.location.pathname).toBe("/map");
   });
 
@@ -259,9 +260,24 @@ describe("Parkdex navigation", () => {
     expect(applied?.textContent).toContain("Provincial Parks");
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Park" } });
-    expect(screen.getByRole("button", { name: /Forest Park/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Rathtrevor Beach Park/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeNull();
+    const results = within(document.querySelector<HTMLElement>(".search-results")!);
+    expect(results.getByRole("button", { name: /Forest Park/ })).toBeTruthy();
+    expect(results.queryByRole("button", { name: /Rathtrevor Beach Park/ })).toBeNull();
+    expect(results.queryByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeNull();
+    expect(document.querySelector<HTMLElement>(".map-browser-panel")).toBeNull();
+  });
+
+  it("lists map places by region and opens a selected park from the browser panel", () => {
+    journal.places = [goldstream];
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.queryByRole("complementary", { name: "Places on the map" })).toBeNull();
+    fireEvent.focus(screen.getByRole("textbox", { name: "Search places" }));
+    const browser = screen.getByRole("complementary", { name: "Places on the map" });
+    expect(within(browser).getByRole("heading", { name: "Explore places" })).toBeTruthy();
+    expect(within(browser).getByRole("heading", { name: /South Island/ })).toBeTruthy();
+    fireEvent.click(within(browser).getByRole("button", { name: /Goldstream Park/ }));
+
+    expect(screen.getByRole("heading", { name: "Goldstream Park" })).toBeTruthy();
   });
 
   it("shows internal browsing and official visitor information as distinct actions", () => {
@@ -269,14 +285,64 @@ describe("Parkdex navigation", () => {
     window.history.replaceState({}, "", "/parks/goldstream-park");
     render(<ParkdexApp apiBaseUrl="" />);
     expect(window.location.pathname).toBe("/parks/goldstream-park");
-    expect(screen.getByRole("heading", { name: "Goldstream Park" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Official visitor information" }).getAttribute("href")).toBe("https://bcparks.ca/goldstream-park/");
-    expect(screen.getByRole("link", { name: "Place source" }).getAttribute("href")).toBe(goldstream.sourceUrl);
-    fireEvent.click(screen.getByRole("button", { name: "Browse Provincial Parks" }));
+    const sheet = screen.getByRole("heading", { name: "Goldstream Park" }).closest(".place-sheet") as HTMLElement;
+    const detail = within(sheet);
+    expect(detail.getByRole("button", { name: "Open fullscreen place details" }).classList.contains("sheet-pull-handle")).toBe(true);
+    expect(detail.getByRole("heading", { name: "About this place" })).toBeTruthy();
+    expect(sheet.querySelector(".place-story")?.compareDocumentPosition(sheet.querySelector(".place-visit-info")!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(detail.getByRole("heading", { name: "Plan your visit" })).toBeTruthy();
+    expect(detail.getByText("Origin").closest("span")?.textContent).toContain("BC Parks");
+    expect(detail.getByText("Size").closest("span")?.textContent).toMatch(/Approx\..*km²/);
+    expect(detail.getByRole("link", { name: /Official visitor information/ }).getAttribute("href")).toBe("https://bcparks.ca/goldstream-park/");
+    const credits = detail.getByText("Map data and photo credits").closest("details")!;
+    expect(credits.open).toBe(false);
+    expect(sheet.querySelector(".source-note")?.closest("details")).toBe(credits);
+    fireEvent.click(detail.getByText("Map data and photo credits"));
+    expect(credits.open).toBe(true);
+    expect(within(credits).getByRole("link", { name: /Place source/ }).getAttribute("href")).toBe(goldstream.sourceUrl);
+
+    fireEvent.click(detail.getByRole("button", { name: "Browse more from BC Parks" }));
     expect(screen.getByRole("heading", { name: "Find your next place" })).toBeTruthy();
     expect(document.querySelector(".collection-filter-summary")?.textContent).toContain("Provincial Parks");
     expect(screen.getByRole("button", { name: "Clear active place filters" })).toBeTruthy();
     expect(window.location.pathname).toBe("/places");
+  });
+
+  it("shows one concise origin and an unavailable visitor note when no official page is listed", () => {
+    journal.places = [cormorant];
+    window.history.replaceState({}, "", "/parks/cormorant-island");
+    render(<ParkdexApp apiBaseUrl="" />);
+
+    const sheet = screen.getByRole("heading", { name: "Cormorant Island" }).closest(".place-sheet") as HTMLElement;
+    const detail = within(sheet);
+    expect(detail.getAllByText("Origin", { exact: true })).toHaveLength(1);
+    expect(detail.getByText("Origin").closest("span")?.textContent).toContain("BC Geographical Names");
+    expect(detail.getByText("Official visitor information is not available for this place yet.")).toBeTruthy();
+    expect(detail.queryByRole("link", { name: /Official visitor information/ })).toBeNull();
+  });
+
+  it("opens and collapses place details when the photo is swiped", () => {
+    journal.places = [goldstream];
+    window.history.replaceState({}, "", "/parks/goldstream-park");
+    render(<ParkdexApp apiBaseUrl="" />);
+    const sheet = screen.getByRole("heading", { name: "Goldstream Park" }).closest(".place-sheet") as HTMLElement;
+    const hero = sheet.querySelector(".place-sheet-hero")!;
+    fireEvent.touchStart(hero, { touches: [{ clientY: 240 }] });
+    fireEvent.touchEnd(hero, { changedTouches: [{ clientY: 150 }] });
+    expect(sheet.classList.contains("place-sheet-full")).toBe(true);
+    fireEvent.touchStart(hero, { touches: [{ clientY: 150 }] });
+    fireEvent.touchEnd(hero, { changedTouches: [{ clientY: 240 }] });
+    expect(sheet.classList.contains("place-sheet-full")).toBe(false);
+  });
+
+  it("keeps source-gap notes in credits rather than the visitor story", () => {
+    journal.places = [{ ...goldstream, description: "No visitor overview is available for this park on the official page." }];
+    window.history.replaceState({}, "", "/parks/goldstream-park");
+    render(<ParkdexApp apiBaseUrl="" />);
+    const sheet = screen.getByRole("heading", { name: "Goldstream Park" }).closest(".place-sheet") as HTMLElement;
+    expect(within(sheet).queryByRole("heading", { name: "About this place" })).toBeNull();
+    const credits = sheet.querySelector(".place-credits")!;
+    expect(credits.textContent).toContain("No visitor overview is available");
   });
 
   it.each([false, true])("focuses reset entry and return headings without sending email (authenticated: %s)", async (signedIn) => {
@@ -376,16 +442,17 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("group", { name: "Field Guide view" })).toBeTruthy();
   });
 
-  it("keeps progress, location, and search in one utility toolbar", () => {
+  it("keeps location and search in the utility toolbar without a progress toggle", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     const toolbar = screen.getByRole("toolbar", { name: "Map utilities" });
-    expect(toolbar.querySelectorAll("button")).toHaveLength(3);
-    expect(toolbar.contains(screen.getByRole("switch", { name: "Show map progress" }))).toBe(true);
+    expect(screen.queryByRole("switch", { name: "Show map progress" })).toBeNull();
     expect(toolbar.contains(screen.getByRole("button", { name: "Show my current location" }))).toBe(true);
     expect(toolbar.contains(screen.getByRole("button", { name: "Search places" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("textbox", { name: "Search places" }))).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Filter places" }))).toBe(true);
   });
 
-  it("starts signed-out location only after the user requests Near Me", async () => {
+  it("starts signed-out location only after the user requests their location", async () => {
     const watchLocation = vi.fn(() => vi.fn());
     restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), watchLocation });
     render(<ParkdexApp apiBaseUrl="" />);
@@ -417,13 +484,13 @@ describe("Parkdex navigation", () => {
     const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(await screen.findByText("Finding your location…")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show my current location" })).toBeTruthy();
     expect(watchLocation).not.toHaveBeenCalled();
 
     act(() => publishNativeAppState(true));
     await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
     act(() => publish?.({ latitude: 49, longitude: -124, accuracyMeters: 6, capturedAtEpochMs: Date.now() }));
-    expect(await screen.findByText("Forest Park")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
     expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124");
 
     journal.authenticated = true;
@@ -502,12 +569,7 @@ describe("Parkdex navigation", () => {
 
   it("closes modal surfaces with Escape", () => {
     journal.authenticated = true;
-    Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined });
     render(<ParkdexApp apiBaseUrl="" />);
-    fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(screen.getByRole("dialog", { name: "Near Me" })).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "My Dex" }));
     fireEvent.click(screen.getByRole("button", { name: "Explore all badges" }));
     fireEvent.click(screen.getByRole("button", { name: /Banana Slug Rainwalk/ }));
@@ -516,25 +578,24 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("dialog", { name: "Banana Slug Rainwalk" })).toBeNull();
   });
 
-  it("dismisses Near Me after a delayed location timeout", async () => {
+  it("reports a delayed location timeout without opening a place list", async () => {
     let failLocation: PositionErrorCallback = () => undefined;
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => { failLocation = failure; } } });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(screen.getByRole("dialog", { name: "Near Me" })).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
     act(() => failLocation({ code: 3, message: "Timed out", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
-    expect(await screen.findByText("Your location is unavailable right now. Search the map instead.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close nearby places" }));
+    expect(screen.getByTestId("park-map")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
   });
 
-  it("dismisses Near Me while the browser location request is still pending", async () => {
+  it("keeps the map available while a browser location request is pending", async () => {
     let failLocation: PositionErrorCallback = () => undefined;
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (_success: PositionCallback, failure: PositionErrorCallback) => { failLocation = failure; } } });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(await screen.findByText("Finding your location…")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close nearby places" }));
+    expect(screen.getByTestId("park-map")).toBeTruthy();
+    expect(screen.getByTestId("park-map")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
     act(() => failLocation({ code: 3, message: "Timed out", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 }));
     expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
@@ -595,7 +656,12 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     expect(screen.getByRole("button", { name: "Browse Provincial places" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Browse Provincial Parks" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Browse more from BC Parks" })).toBeTruthy();
+    const sheet = screen.getByRole("heading", { name: "Forest Park" }).closest(".place-sheet") as HTMLElement;
+    const credits = within(sheet).getByText("Map data and photo credits").closest("details")!;
+    expect(credits.open).toBe(false);
+    fireEvent.click(within(credits).getByText("Map data and photo credits"));
+    expect(within(credits).getByRole("link", { name: /Published boundary · source|Place source/ })).toBeTruthy();
   });
 
   it("keeps the official place source available when boundary geometry fails", () => {
@@ -717,7 +783,7 @@ describe("Parkdex navigation", () => {
     expect(screen.getByTestId("park-map").getAttribute("data-place-ids")).toBe(national.id);
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Pacific" } });
-    expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
+    expect(within(document.querySelector<HTMLElement>(".search-results")!).getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
   });
 
   it("preserves active map filters when the tray closes and a list place opens", async () => {
@@ -733,6 +799,8 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Provincial" }));
     fireEvent.click(screen.getByRole("button", { name: /Rathtrevor Beach Park/ }));
     expect(screen.queryByRole("toolbar", { name: "Map utilities" })).toBeNull();
+    fireEvent.click(screen.getByText("Map data and photo credits"));
+    expect(screen.getByRole("link", { name: "Description source: BC Parks" }).getAttribute("href")).toBe("https://bcparks.ca/rathtrevor-beach-park/");
     fireEvent.click(screen.getByRole("button", { name: "Close place details" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Rathtrevor Beach Park" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Map" }));
@@ -953,13 +1021,10 @@ describe("Parkdex navigation", () => {
     expect((search as HTMLInputElement).value).toBe("");
   });
 
-  it("gates global percentage on the last badge claim and settles ARIA", async () => {
+  it("keeps the map free of completion percentages after a badge claim", async () => {
     journal.authenticated = true;
     const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
-    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
-    expect(progress.textContent).toBe("0.0%");
-    expect(progress.children).toHaveLength(1);
-    expect(progress.getAttribute("aria-valuetext")).toContain("0.0%");
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
     fireEvent.click(screen.getByRole("button", { name: "Mark as visited" }));
     journal.visited = new Set([place.id]);
@@ -967,10 +1032,11 @@ describe("Parkdex navigation", () => {
     rerender(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Claim my badge" }));
     fireEvent.click(screen.getByRole("button", { name: "Close place details" }));
-    await waitFor(() => expect(screen.getByRole("progressbar", { name: "Parkdex progress" }).getAttribute("aria-valuetext")).toBe("33.3% · 1 of 3 places visited"));
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+    expect(screen.getByTestId("park-map").dataset.placeIds).toContain(place.id);
   });
 
-  it("settles global percentage immediately for reduced motion", () => {
+  it("keeps completion percentages absent under reduced motion", () => {
     const requestFrame = vi.fn();
     vi.stubGlobal("requestAnimationFrame", requestFrame);
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
@@ -978,55 +1044,41 @@ describe("Parkdex navigation", () => {
     const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
     journal.visited = new Set([rathtrevor.id]);
     rerender(<ParkdexApp apiBaseUrl="" />);
-    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
-    expect(progress.textContent).toBe("33.3%");
-    expect(progress.getAttribute("aria-valuetext")).toBe("33.3% · 1 of 3 places visited");
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
     expect(requestFrame).not.toHaveBeenCalled();
   });
 
-  it("ignores stale visited ids and keeps percentage ARIA bounded to 100", () => {
+  it("ignores stale visited ids when filtering map markers", () => {
     journal.visited = new Set(["removed-place", ...defaultPlaces.map((item) => item.id)]);
     render(<ParkdexApp apiBaseUrl="" />);
-    const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
-    expect(progress.textContent).toBe("100.0%");
-    expect(progress.getAttribute("aria-valuemin")).toBe("0");
-    expect(progress.getAttribute("aria-valuemax")).toBe("100");
-    expect(progress.getAttribute("aria-valuenow")).toBe("100");
-    expect(progress.getAttribute("aria-valuetext")).toBe("100.0% · 3 of 3 places visited");
+    fireEvent.click(within(screen.getByRole("group", { name: "Visit status" })).getByRole("button", { name: "Visited" }));
+    expect(screen.getByTestId("park-map").dataset.placeIds?.split(",")).toEqual(defaultPlaces.map((item) => item.id));
+    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
   });
 
-  it("keeps map progress independent of visit filtering and hides it on other tabs", () => {
+  it("never shows a map completion meter across filters and destinations", () => {
     journal.authenticated = true;
     journal.visited = new Set([place.id]);
     groupState.groups = [{ id: "coast", name: "Coast days", places: [place] }];
     const { container, rerender } = render(<ParkdexApp apiBaseUrl="" />);
-    const assertMyMapProgress = () => {
-      const progress = screen.getByRole("progressbar", { name: "Parkdex progress" });
-      expect(progress.textContent).toBe("33.3%");
-      expect(progress.closest(".map-stage")).toBeTruthy();
-      expect(container.querySelectorAll(".global-progress")).toHaveLength(1);
+    const assertNoMapMeter = () => {
+      expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+      expect(container.querySelector(".global-progress")).toBeNull();
     };
-    assertMyMapProgress();
+    assertNoMapMeter();
     fireEvent.click(screen.getByRole("group", { name: "Visit status" }).querySelector('button[aria-pressed="false"]')!);
-    assertMyMapProgress();
-    fireEvent.click(screen.getByRole("switch", { name: "Show map progress" }));
-    expect(screen.getByRole("switch", { name: "Show map progress" }).getAttribute("aria-checked")).toBe("false");
-    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
-    expect(container.querySelector(".global-progress")?.hasAttribute("hidden")).toBe(true);
-    fireEvent.click(screen.getByRole("switch", { name: "Show map progress" }));
-    assertMyMapProgress();
+    assertNoMapMeter();
     fireEvent.click(screen.getByRole("button", { name: "Collections" }));
-    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+    assertNoMapMeter();
     fireEvent.click(screen.getByRole("button", { name: "My Dex" }));
-    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
+    assertNoMapMeter();
     fireEvent.click(screen.getByRole("button", { name: "Field Guide" }));
-    assertMyMapProgress();
+    assertNoMapMeter();
     fireEvent.click(screen.getByRole("button", { name: "Collections" }));
     groupState.selectedGroupId = "coast";
     rerender(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "View on map" }));
-    expect(screen.queryByRole("progressbar", { name: "Parkdex progress" })).toBeNull();
-    expect(container.querySelector(".global-progress")).toBeNull();
+    assertNoMapMeter();
   });
 
   it("groups badges into collected and uncollected sections", () => {
@@ -1068,13 +1120,13 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("link", { name: /OpenStreetMap contributors/ }).getAttribute("href")).toBe("https://www.openstreetmap.org/copyright");
   });
 
-  it("renders nearby places with the same category row treatment as Places", async () => {
+  it("centers the map on the current location without opening Nearby", async () => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: { latitude: 49, longitude: -124, accuracy: 5, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) }, timestamp: Date.now(), toJSON: () => ({}) }) } });
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    const row = await screen.findByRole("button", { name: /Forest Park/ });
-    expect(row.classList.contains("place-row")).toBe(true);
-    expect(row.classList.contains("category-provincial")).toBe(true);
+    await waitFor(() => expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124"));
+    expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Places on the map" })).toBeNull();
   });
 
   it("opens account shelf and modal entries at map and badge destinations", () => {
@@ -1100,7 +1152,8 @@ describe("Parkdex navigation", () => {
     fireEvent.change(input, { target: { value: "Park" } });
     expect(screen.getByText("3 places found")).toBeTruthy();
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.queryByRole("textbox", { name: "Search places" })).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Search places" }) as HTMLInputElement).value).toBe("Park");
+    expect(screen.getByRole("toolbar", { name: "Map utilities" }).classList.contains("search-open")).toBe(false);
     expect(screen.getByTestId("park-map").getAttribute("data-place-ids")?.split(",")).toHaveLength(3);
     expect(screen.getByLabelText("Map filter active")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
@@ -1123,10 +1176,10 @@ describe("Parkdex navigation", () => {
     expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
   });
 
-  it("keeps location in the mode row and closes filters when search regains focus", () => {
+  it("keeps location in the utility toolbar and closes filters when search regains focus", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     const location = screen.getByRole("button", { name: "Show my current location" });
-    expect(location.closest(".map-mode-switch")).toBeTruthy();
+    expect(location.closest('[role="toolbar"][aria-label="Map utilities"]')).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     fireEvent.click(screen.getByRole("button", { name: "Filter places" }));
     expect(document.querySelector(".filter-tray")).toBeTruthy();
@@ -1168,17 +1221,15 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: "Mark as visited" })).toBeTruthy();
   });
 
-  it("collapses search after a result detail closes while retaining the applied query", async () => {
+  it("retains a selected search query after its place detail closes", async () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Rathtrevor" } });
-    fireEvent.click(screen.getByRole("button", { name: /Rathtrevor Beach Park/ }));
+    fireEvent.click(within(document.querySelector<HTMLElement>(".search-results")!).getByRole("button", { name: /Rathtrevor Beach Park/ }));
     fireEvent.click(screen.getByRole("button", { name: "Close place details" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Rathtrevor Beach Park" })).toBeNull());
-    expect(screen.getByRole("toolbar", { name: "Map utilities" }).classList.contains("search-open")).toBe(false);
-    expect(screen.getByLabelText("Map filter active")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
     expect((screen.getByRole("textbox", { name: "Search places" }) as HTMLInputElement).value).toBe("Rathtrevor");
+    expect(screen.getByTestId("park-map").getAttribute("data-place-ids")).toBe(rathtrevor.id);
   });
 
   it("lets Android Back close transient search state before browser history", () => {
@@ -1192,7 +1243,8 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("textbox", { name: "Search places" })).toBeTruthy();
 
     act(() => { expect(dispatchNativeBack()).toBe(false); });
-    expect(screen.queryByRole("textbox", { name: "Search places" })).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Search places" })).toBeTruthy();
+    expect(screen.getByRole("toolbar", { name: "Map utilities" }).classList.contains("search-open")).toBe(false);
   });
 
   it("lets Android Back dismiss dialogs and selected group state", () => {
@@ -1511,12 +1563,13 @@ describe("Parkdex navigation", () => {
     expect(createClaim).not.toHaveBeenCalled();
   });
 
-  it("hides map utilities behind a detail card with three named actions", () => {
+  it("keeps map search available beside park details", () => {
     journal.authenticated = true;
     groupState.groups = [{ id: "wishlist", name: "Wishlist", isWishlist: true, places: [] }];
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
-    expect(screen.queryByRole("toolbar", { name: "Map utilities" })).toBeNull();
+    const toolbar = screen.getByRole("toolbar", { name: "Map utilities" });
+    expect(toolbar.contains(screen.getByRole("textbox", { name: "Search places" }))).toBe(true);
     expect(screen.getByRole("button", { name: "Mark as visited" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add this place to Wishlist" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add to Collection" })).toBeTruthy();
@@ -1659,7 +1712,7 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("heading", { name: "Forest Park" })).toBeTruthy();
   });
 
-  it("moves no-photo place metadata into the media column without duplication", () => {
+  it("keeps no-photo park details compact and avoids duplicate metadata", () => {
     journal.authenticated = true;
     journal.places = [woss];
     groupState.groups = [{ id: "north", name: "North", places: [woss] }];
@@ -1667,11 +1720,36 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "Collections" }));
     fireEvent.click(screen.getByRole("button", { name: "Woss Lake Park" }));
-    const sheet = screen.getByRole("heading", { name: "Woss Lake Park" }).closest(".place-sheet");
-    expect(sheet?.classList.contains("without-photo")).toBe(true);
-    expect(sheet?.querySelector(".place-sheet-media > img, .place-sheet-media figure")).toBeNull();
-    expect(sheet?.querySelector(".place-sheet-metadata")?.textContent).toContain("North Island");
-    expect(screen.getAllByRole("button", { name: "Browse Provincial Parks" })).toHaveLength(1);
+    const sheet = screen.getByRole("heading", { name: "Woss Lake Park" }).closest(".place-sheet") as HTMLElement;
+    expect(sheet.classList.contains("without-photo")).toBe(true);
+    expect(sheet.querySelector(".place-sheet-hero .place-image--fallback")).toBeTruthy();
+    expect(sheet.querySelectorAll(".place-story p")).toHaveLength(1);
+    expect(sheet.querySelector(".place-story p")?.textContent).toBe("A forest park.");
+    expect(within(sheet).getByText("Origin").closest("span")?.textContent).toContain("BC Parks");
+    expect(within(sheet).getByText("Size").closest("span")?.textContent).toMatch(/Approx\. 65(?:\.0)? km²/);
+    expect(within(sheet).getByRole("button", { name: "Browse more from BC Parks" })).toBeTruthy();
+  });
+
+  it("links the supplemental official source for a provincial park description", () => {
+    journal.places = [{ ...place, id: "provincial-arbutus-grove-park", name: "Arbutus Grove Park", description: "A quiet nature-viewing spot with no road access." }];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Arbutus" } });
+    fireEvent.click(within(document.querySelector<HTMLElement>(".search-results")!).getByRole("button", { name: /Arbutus Grove Park/ }));
+    expect(screen.getByRole("heading", { name: "About this place" })).toBeTruthy();
+    fireEvent.click(screen.getByText("Map data and photo credits"));
+    expect(screen.getByRole("link", { name: "Description source: BC Parks" }).getAttribute("href")).toBe("https://nrs.objectstore.gov.bc.ca/kuwyyf/arbutus_grove_zoningplan_89e9a73c51.pdf");
+  });
+
+  it("uses the catalogue status to suppress an unavailable visitor overview", () => {
+    journal.places = [{ ...place, id: "provincial-beaver-point-park", name: "Beaver Point Park", description: "An unsourced visitor story should remain hidden." }];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Beaver Point" } });
+    fireEvent.click(within(document.querySelector<HTMLElement>(".search-results")!).getByRole("button", { name: /Beaver Point Park/ }));
+    expect(screen.queryByRole("heading", { name: "About this place" })).toBeNull();
+    fireEvent.click(screen.getByText("Map data and photo credits"));
+    expect(screen.getByRole("link", { name: "Visitor overview check: BC Parks" }).getAttribute("href")).toBe("https://bcparks.ca/beaver-point-park/");
   });
 
   it("preserves a group only for View on map and clears it on ordinary navigation", () => {
@@ -1746,7 +1824,7 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
   });
 
-  it("shows account place photography and filters visited parks from Nearby", async () => {
+  it("shows account place photography and locates the map without Nearby", async () => {
     journal.authenticated = true; journal.account = { id: "account-1", email: "ranger@example.test" }; journal.visited = new Set([place.id]); journal.visitTimestamps = { [place.id]: "2026-09-07T12:00:00Z" };
     const location = { latitude: 49, longitude: -124, accuracy: 5, altitude: null, altitudeAccuracy: null, heading: null, speed: null, toJSON: () => ({}) };
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: (success: PositionCallback) => success({ coords: location, timestamp: Date.now(), toJSON: () => ({}) }) } });
@@ -1755,9 +1833,8 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: "Open Forest Park" }).querySelector("img")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Field Guide" }));
     fireEvent.click(screen.getByRole("button", { name: "Show my current location" }));
-    expect(screen.getByRole("heading", { name: "Near Me" })).toBeTruthy();
-    expect(await screen.findByText("Closest places you have not visited yet")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Forest Park/ })).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("park-map").dataset.currentLocation).toBe("49,-124"));
+    expect(screen.queryByRole("dialog", { name: "Near Me" })).toBeNull();
   });
 
   it("puts See all in each account shelf header and uses the place placeholder", () => {

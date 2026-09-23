@@ -7,7 +7,7 @@ MIGRATION_DIR = ROOT / "database" / "migrations"
 
 def test_claim_migrations_follow_current_schema_and_are_additive():
     names = sorted(path.name for path in MIGRATION_DIR.glob("*.sql"))
-    assert names[-7:] == [
+    claim_migrations = [
         "0015_create_location_claims.sql",
         "0016_add_visit_postcard_object_storage.sql",
         "0017_schedule_photo_deletion_retries.sql",
@@ -16,13 +16,12 @@ def test_claim_migrations_follow_current_schema_and_are_additive():
         "0020_create_account_deletion_receipts.sql",
         "0021_retire_bell_park_staging_overlay.sql",
     ]
-    claims = (MIGRATION_DIR / names[-7]).read_text(encoding="utf-8")
-    photos = (MIGRATION_DIR / names[-6]).read_text(encoding="utf-8")
-    retries = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
-    sessions = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
-    field_scope = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
-    deletion = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
-    retirement = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
+    first_claim_migration = names.index(claim_migrations[0])
+    assert names[first_claim_migration:first_claim_migration + len(claim_migrations)] == claim_migrations
+    claims, photos, retries, sessions, field_scope, deletion, retirement = (
+        (MIGRATION_DIR / name).read_text(encoding="utf-8")
+        for name in claim_migrations
+    )
     assert "account_id UUID NOT NULL" in claims
     assert "consumed_at TIMESTAMPTZ" in claims
     assert "FOREIGN KEY (account_id, place_id)" in claims

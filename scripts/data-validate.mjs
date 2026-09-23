@@ -6,6 +6,28 @@ import { hasBalancedNameDelimiters, provincialNameCorrections } from './place-na
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json'), 'utf8'));
 const audit = JSON.parse(fs.readFileSync(path.join(root, 'data', 'coverage-audit.json'), 'utf8'));
+const visitorPages = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'visitor-information.catalogue.json'), 'utf8'));
+const publishedDescriptionSources = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'place-description-sources.catalogue.json'), 'utf8'));
+const descriptionFiles = ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json'];
+const descriptionEntries = new Map();
+for (const filename of descriptionFiles) {
+  const catalogue = JSON.parse(fs.readFileSync(path.join(root, 'data', filename), 'utf8'));
+  if (!catalogue.entries || typeof catalogue.entries !== 'object' || Array.isArray(catalogue.entries)) {
+    throw new Error(`${filename}: expected an entries object`);
+  }
+  for (const [id, entry] of Object.entries(catalogue.entries)) {
+    if (descriptionEntries.has(id)) throw new Error(`duplicate description entry: ${id}`);
+    if (!['summary', 'no-overview'].includes(entry.status)
+        || typeof entry.description !== 'string' || entry.description.trim().length < 40
+        || !URL.canParse(entry.sourceUrl) || !entry.sourceUrl.startsWith('https://')
+        || !entry.sourceName || !entry.sourceTitle || !entry.sourceSection
+        || !/^\d{4}-\d{2}-\d{2}$/.test(entry.reviewedAt ?? '')
+        || (entry.status === 'no-overview' && !entry.description.startsWith('No visitor overview is available'))) {
+      throw new Error(`${filename}: incomplete description or source provenance for ${id}`);
+    }
+    descriptionEntries.set(id, entry);
+  }
+}
 const requiredFields = ['id', 'name', 'category', 'latitude', 'longitude', 'region', 'description', 'sourceUrl', 'sourceName'];
 const categories = new Set(['national', 'provincial', 'regional', 'island']);
 const ids = new Set();
@@ -21,11 +43,70 @@ for (const place of places) {
   if (!Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) throw new Error(`${place.id}: invalid coordinate`);
   if (place.latitude < 48.15 || place.latitude > 51.25 || place.longitude < -128.9 || place.longitude > -123) throw new Error(`${place.id}: coordinate outside catalogue extent`);
   if (!URL.canParse(place.sourceUrl) || !place.sourceUrl.startsWith('https://')) throw new Error(`${place.id}: sourceUrl must be HTTPS`);
+  const description = descriptionEntries.get(place.id);
+  if (!description) throw new Error(`${place.id}: missing visitor-facing description source`);
+  if (place.description !== description.description) throw new Error(`${place.id}: built description does not match its source catalogue`);
+}
+
+if (descriptionEntries.size !== places.length) throw new Error('description source catalogues do not match the canonical place count');
+const expectedDescriptionSources = Object.fromEntries([...descriptionEntries].sort(([a], [b]) => a.localeCompare(b)).map(([id, entry]) => [id, {
+  status: entry.status,
+  sourceName: entry.sourceName,
+  sourceTitle: entry.sourceTitle,
+  sourceUrl: entry.sourceUrl,
+  sourceSection: entry.sourceSection,
+  reviewedAt: entry.reviewedAt,
+}]));
+if (JSON.stringify(publishedDescriptionSources) !== JSON.stringify(expectedDescriptionSources)) {
+  throw new Error('frontend description source catalogue is stale or does not match source provenance');
+}
+const provincialDescriptionGaps = new Set(['provincial-beaver-point-park', 'provincial-eves-park']);
+const supplementalProvincialSources = new Map([
+  ['provincial-arbutus-grove-park', {
+    sourceName: 'BC Parks',
+    sourceUrl: 'https://nrs.objectstore.gov.bc.ca/kuwyyf/arbutus_grove_zoningplan_89e9a73c51.pdf',
+    sourceSection: 'Primary Role and Secondary Role',
+  }],
+  ['provincial-hwsalu-utsum-park', {
+    sourceName: 'Government of British Columbia',
+    sourceUrl: 'https://news.gov.bc.ca/releases/2021ENV0054-001907',
+    sourceSection: 'Hwsalu-Utsum description',
+  }],
+  ['provincial-wood-mountain-ski-park', {
+    sourceName: 'BC Geographical Names Office',
+    sourceUrl: 'https://apps.gov.bc.ca/pub/bcgnws/names/23998.html',
+    sourceSection: 'Description and history',
+  }],
+]);
+for (const place of places.filter((item) => item.category === 'provincial')) {
+  const description = descriptionEntries.get(place.id);
+  if (provincialDescriptionGaps.has(place.id)) {
+    if (description.status !== 'no-overview') throw new Error(`${place.id}: source gap must remain explicit`);
+    if (description.sourceName !== 'BC Parks' || description.sourceUrl !== visitorPages[place.id]?.url) {
+      throw new Error(`${place.id}: no-overview source provenance mismatch`);
+    }
+  } else {
+    const supplemental = supplementalProvincialSources.get(place.id);
+    const hasExpectedSource = supplemental
+      ? description.sourceName === supplemental.sourceName && description.sourceUrl === supplemental.sourceUrl
+        && description.sourceSection === supplemental.sourceSection
+      : description.sourceName === 'BC Parks' && description.sourceUrl === visitorPages[place.id]?.url
+        && description.sourceSection === 'Highlights in this park';
+    if (description.status !== 'summary' || !hasExpectedSource) {
+      throw new Error(`${place.id}: expected a paraphrased official overview with matching provenance`);
+    }
+  }
+}
+for (const [id] of supplementalProvincialSources) {
+  if (!places.some((place) => place.id === id && place.category === 'provincial')) {
+    throw new Error(`${id}: supplemental provincial source does not match a canonical park`);
+  }
 }
 
 for (const [sourceId, correction] of provincialNameCorrections) {
   const place = places.find((item) => item.category === 'provincial' && item.sourceId === sourceId);
-  if (!place || place.id !== correction.id || place.name !== correction.name || !place.description.includes(correction.alias)) throw new Error(`Display correction or stable identity lost for provincial source ${sourceId}`);
+  const alias = correction.alias.replace(/^Also known as\s+/i, '').replace(/[.!?]+$/, '');
+  if (!place || place.id !== correction.id || place.name !== correction.name || !place.description.includes(alias)) throw new Error(`Display correction or stable identity lost for provincial source ${sourceId}`);
 }
 
 const expected = [

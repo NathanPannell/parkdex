@@ -1,0 +1,1586 @@
+{
+  "island-cormorant-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Cormorant Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/24855.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-cortes-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Cortes Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/3982.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-denman-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Denman Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/13815.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-flores-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Flores Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/12922.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-gabriola-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Gabriola Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/5212.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-galiano-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Galiano Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/5236.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-hornby-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Hornby Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/18342.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-lasqueti-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Lasqueti Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/8911.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-malcolm-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Malcolm Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/25744.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-maurelle-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Maurelle Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/7434.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-mayne-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Mayne Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/7473.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-meares-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Meares Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/25714.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-nootka-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Nootka Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17007.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-north-pender-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "North Pender Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17115.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-penelakut-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Penelakut Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/61741.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-quadra-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Quadra Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/22210.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-read-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Read Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23374.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-saltspring-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Saltspring Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/13666.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-saturna-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Saturna Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17153.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-sonora-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Sonora Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/19760.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-south-pender-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "South Pender Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/20697.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-thetis-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Thetis Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/14969.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-valdes-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Valdes Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23524.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "island-vargas-island": {
+    "status": "no-overview",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Vargas Island | BC Geographical Names Office",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/24352.html",
+    "sourceSection": "Official feature name and location",
+    "reviewedAt": "2026-09-23"
+  },
+  "national-gulf-islands-national-park-reserve": {
+    "status": "summary",
+    "sourceName": "Parks Canada",
+    "sourceTitle": "Gulf Islands National Park Reserve | Parks Canada",
+    "sourceUrl": "https://parks.canada.ca/pn-np/bc/gulf",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "national-pacific-rim-national-park-reserve": {
+    "status": "summary",
+    "sourceName": "Parks Canada",
+    "sourceTitle": "Pacific Rim National Park Reserve | Parks Canada",
+    "sourceUrl": "https://parks.canada.ca/pn-np/bc/pacificrim",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-arbutus-grove-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Arbutus Grove Provincial Park Purpose Statement and Zoning Plan",
+    "sourceUrl": "https://nrs.objectstore.gov.bc.ca/kuwyyf/arbutus_grove_zoningplan_89e9a73c51.pdf",
+    "sourceSection": "Primary Role and Secondary Role",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-artlish-caves-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Artlish Caves Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/artlish-caves-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-au-welnew-john-dean-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "ȽÁU,WELṈEW̱/John Dean Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/lau-welnew-john-dean-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-bamberton-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Bamberton Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/bamberton-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-beaver-point-park": {
+    "status": "no-overview",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Beaver Point Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/beaver-point-park/",
+    "sourceSection": "BC Parks page with no published park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-bellhouse-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Bellhouse Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/bellhouse-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-big-bunsby-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Big Bunsby Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/big-bunsby-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-bodega-ridge-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Bodega Ridge Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/bodega-ridge-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-boyle-point-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Boyle Point Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/boyle-point-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-burgoyne-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Burgoyne Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/burgoyne-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-cape-scott-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Cape Scott Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/cape-scott-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-carmanah-walbran-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Carmanah Walbran Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/carmanah-walbran-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-chemainus-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Chemainus River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/chemainus-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-claud-elliott-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Claud Elliott Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/claud-elliott-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-clayoquot-arm-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Clayoquot Arm Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/clayoquot-arm-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-clayoquot-plateau-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Clayoquot Plateau Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/clayoquot-plateau-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-collinson-point-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Collinson Point Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/collinson-point-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-cowichan-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Cowichan River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/cowichan-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-dawley-passage-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Dawley Passage Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/dawley-passage-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-denman-island-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Denman Island Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/denman-island-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-dionisio-point-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Dionisio Point Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/dionisio-point-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-drumbeg-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Drumbeg Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/drumbeg-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-elk-falls-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Elk Falls Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/elk-falls-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-englishman-river-falls-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Englishman River Falls Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/englishman-river-falls-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-eves-park": {
+    "status": "no-overview",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Eves Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/eves-park/",
+    "sourceSection": "BC Parks page with no published park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-fillongley-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Fillongley Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/fillongley-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-flores-island-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Flores Island Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/flores-island-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-fossli-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Fossli Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/fossli-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-french-beach-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "French Beach Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/french-beach-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-gabriola-sands-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Gabriola Sands Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/gabriola-sands-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-gibson-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Gibson Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/gibson-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-gold-muchalat-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Gold Muchalat Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/gold-muchalat-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-goldstream-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Goldstream Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/goldstream-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-gordon-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Gordon Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/gordon-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-gowlland-tod-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Gowlland Tod Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/gowlland-tod-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Háthayim Marine Park [a.k.a. Von Donop Marine Park] | BC Parks",
+    "sourceUrl": "https://bcparks.ca/hathayim-marine-park-aka-von-donop-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-helliwell-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Helliwell Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/helliwell-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hemer-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Hemer Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/hemer-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hesquiat-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Hesquiat Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/hesquiat-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hesquiat-peninsula-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Hesquiat Peninsula Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/hesquiat-peninsula-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hitchie-creek-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Hitchie Creek Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/hitchie-creek-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-horne-lake-caves-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Horne Lake Caves Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/horne-lake-caves-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-hwsalu-utsum-park": {
+    "status": "summary",
+    "sourceName": "Government of British Columbia",
+    "sourceTitle": "Conservation, culture at the heart of newly protected areas",
+    "sourceUrl": "https://news.gov.bc.ca/releases/2021ENV0054-001907",
+    "sourceSection": "Hwsalu-Utsum description",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-juan-de-fuca-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Juan de Fuca Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/juan-de-fuca-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-kennedy-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Kennedy Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/kennedy-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-kennedy-river-bog-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Kennedy River Bog Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/kennedy-river-bog-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-kin-beach-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Kin Beach Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/kin-beach-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-kitty-coleman-beach-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Kitty Coleman Beach Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/kitty-coleman-beach-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-koksilah-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Koksilah River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/koksilah-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-lawn-point-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Lawn Point Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/lawn-point-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-little-qualicum-falls-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Little Qualicum Falls Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/little-qualicum-falls-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-loveland-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Loveland Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/loveland-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-lower-nimpkish-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Lower Nimpkish Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/lower-nimpkish-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-lower-tsitika-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Lower Tsitika River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/lower-tsitika-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-macmillan-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "MacMillan Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/macmillan-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-main-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Main Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/main-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-mansons-landing-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mansons Landing Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/mansons-landing-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-marble-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Marble River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/marble-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-memory-island-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Memory Island Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/memory-island-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-miracle-beach-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Miracle Beach Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/miracle-beach-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-mitlenatch-island-nature-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mitlenatch Island Nature Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/mitlenatch-island-nature-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-montague-harbour-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Montague Harbour Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/montague-harbour-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-morden-colliery-historic-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Morden Colliery Historic Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/morden-colliery-historic-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-morton-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Morton Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/morton-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-mount-erskine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mount Erskine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/mount-erskine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-mount-geoffrey-escarpment-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mount Geoffery Escarpment Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/mount-geoffrey-escarpment-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-mount-maxwell-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mount Maxwell Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/mount-maxwell-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-muqqiwn-brooks-peninsula-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Mᑫuqʷin/Brooks Peninsula Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/muqqiwn-brooks-peninsula-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-nimpkish-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Nimpkish Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/nimpkish-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-nismaakqin-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Nism̓aakqin Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/nismaakqin-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-nitinat-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Nitinat River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/nitinat-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-nuchatlitz-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Nuchatlitz Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/nuchatlitz-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-octopus-islands-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Octopus Islands Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/octopus-islands-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-petroglyph-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Petroglyph Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/petroglyph-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-pirates-cove-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Pirates Cove Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/pirates-cove-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-quatsino-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Quatsino Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/quatsino-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-raft-cove-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Raft Cove Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/raft-cove-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-rathtrevor-beach-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Rathtrevor Beach Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/rathtrevor-beach-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-read-island-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Read Island Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/read-island-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-rebecca-spit-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Rebecca Spit Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/rebecca-spit-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-roberts-memorial-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Roberts Memorial Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/roberts-memorial-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-rock-bay-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Rock Bay Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/rock-bay-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-rosewall-creek-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Rosewall Creek Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/rosewall-creek-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-ruckle-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Ruckle Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/ruckle-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-rugged-point-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Rugged Point Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/rugged-point-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sandwell-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sandwell Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sandwell-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-santa-gertrudis-boca-del-infierno-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Santa Gertrudis-Boca del Infierno Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/santa-gertrudis-boca-del-infierno-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-saysutshun-newcastle-island-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Saysutshun (Newcastle Island Marine) Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/saysutshun-newcastle-island-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-schoen-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Schoen Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/schoen-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-small-inlet-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Small Inlet Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/small-inlet-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-smelt-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Smelt Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/smelt-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sooke-mountain-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sooke Mountain Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sooke-mountain-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sooke-potholes-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sooke Potholes Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sooke-potholes-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-spectacle-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Spectacle Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/spectacle-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-spider-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Spider Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/spider-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sproat-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sproat Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sproat-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-squitty-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Squitty Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/squitty-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-stamp-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Stamp River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/stamp-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-strathcona-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Strathcona Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/strathcona-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-strathcona-westmin-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Strathcona-Westmin Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/strathcona-westmin-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sulphur-passage-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sulphur Passage Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sulphur-passage-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-surge-narrows-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Surge Narrows Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/surge-narrows-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-sydney-inlet-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Sydney Inlet Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/sydney-inlet-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-tahsish-kwois-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Tahsish-Kwois Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/tahsish-kwois-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-taylor-arm-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Taylor Arm Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/taylor-arm-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-thurston-bay-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Thurston Bay Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/thurston-bay-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-tranquil-creek-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Tranquil Creek Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/tranquil-creek-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-tribune-bay-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Tribune Bay Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/tribune-bay-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-vargas-island-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Vargas Island Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/vargas-island-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-wakes-cove-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Wakes Cove Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/wakes-cove-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-wallace-island-marine-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Wallace Island Marine Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/wallace-island-marine-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-west-shawnigan-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "West Shawnigan Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/west-shawnigan-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-weymer-creek-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Weymer Creek Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/weymer-creek-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-white-ridge-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "White Ridge Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/white-ridge-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-white-river-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "White River Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/white-river-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-wood-mountain-ski-park": {
+    "status": "summary",
+    "sourceName": "BC Geographical Names Office",
+    "sourceTitle": "Wood Mountain Ski Park | BC Geographical Names",
+    "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23998.html",
+    "sourceSection": "Description and history",
+    "reviewedAt": "2026-09-23"
+  },
+  "provincial-woss-lake-park": {
+    "status": "summary",
+    "sourceName": "BC Parks",
+    "sourceTitle": "Woss Lake Park | BC Parks",
+    "sourceUrl": "https://bcparks.ca/woss-lake-park/",
+    "sourceSection": "Highlights in this park",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-albert-head-lagoon-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Albert Head Lagoon Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/albert-head-lagoon-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-ayum-creek-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Ayum Creek Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/ayum-creek-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-beachcomber-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Beachcomber Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/beachcomber-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-bear-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Bear Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/bear-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-benson-creek-falls-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Benson Creek Falls Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/benson-creek-falls-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-bere-point-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Mount Waddington",
+    "sourceTitle": "Bere Point Regional Park & Campsite | Regional District of Mount Waddington",
+    "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/bere-point/",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-brooks-point-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Brooks Point Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/brooks-point-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-coats-marsh-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Coats Marsh Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/coats-marsh-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-coles-bay-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Coles Bay Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/coles-bay-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-descanso-bay-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Descanso Bay Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/descanso-bay-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-devonian-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Devonian Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/devonian-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-east-point-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "East Point Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/east-point-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-east-sooke-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "East Sooke Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/east-sooke-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-elk-beaver-lake-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Elk/Beaver Lake Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/elkbeaver-lake-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-englishman-river-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Englishman River Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/englishman-river-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-francis-king-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Francis/King Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/francisking-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-george-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "George Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/george-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-gonzales-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Gonzales Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/gonzales-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-hamilton-marsh-regional-park-and-conservation-area": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Hamilton Marsh Regional Park and Conservation Area | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/hamilton-marsh-regional-park-and-conservation-area",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-horne-lake-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Horne Lake Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/horne-lake-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-horth-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Horth Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/horth-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-island-view-beach-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Island View Beach Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/island-view-beach-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-jordan-river-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Jordan River Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/jordan-river-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-kapoor-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Kapoor Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/kapoor-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-kwaksistah-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Mount Waddington",
+    "sourceTitle": "Kwaksistah Regional Park | Regional District of Mount Waddington",
+    "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/kwaksistah-regional-park/",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-little-huson-cave-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Mount Waddington",
+    "sourceTitle": "Little Huson Cave Park Brochure | Regional District of Mount Waddington",
+    "sourceUrl": "https://www.rdmw.bc.ca/media/Brochure%20-%20Little%20Huson%202010.pdf",
+    "sourceSection": "Park Overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-little-qualicum-river-estuary-regional-conservation-area": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Little Qualicum River Estuary Regional Conservation Area | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/little-qualicum-river-estuary",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-little-qualicum-river-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Little Qualicum River Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/little-qualicum-river-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-lone-tree-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Lone Tree Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/lone-tree-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-matheson-lake-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Matheson Lake Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/matheson-lake-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-matthews-point-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Matthews Point Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/matthews-point-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mill-farm-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mill Farm Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mill-farm-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mill-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mill Hill Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mill-hill-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-moorecroft-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Moorecroft Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/moorecroft-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-arrowsmith-massif-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Mount Arrowsmith Massif Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/mount-arrowsmith-massif-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-arrowsmith-regional-park-acrd": {
+    "status": "summary",
+    "sourceName": "Alberni-Clayoquot Regional District",
+    "sourceTitle": "Mount Arrowsmith Regional Park | Alberni-Clayoquot Regional District",
+    "sourceUrl": "https://www.acrd.bc.ca/mount-arrowsmith-regional-park",
+    "sourceSection": "Overview and Public Access Road",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-benson-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Mount Benson Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/mount-benson-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-cain-alpine-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Mount Waddington",
+    "sourceTitle": "Parks & Recreation | Regional District of Mount Waddington",
+    "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/",
+    "sourceSection": "Mount Cain Alpine Park",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-parke-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mount Parke Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-parke-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-wells-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mount Wells Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-wells-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mount-work-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mount Work Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-work-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-mountain-forest-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Mountain Forest Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mountain-forest-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-nanaimo-river-regional-park": {
+    "status": "summary",
+    "sourceName": "Regional District of Nanaimo",
+    "sourceTitle": "Nanaimo River Regional Park | Regional District of Nanaimo",
+    "sourceUrl": "https://rdn.bc.ca/nanaimo-river-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-osborne-bay-regional-park": {
+    "status": "summary",
+    "sourceName": "Cowichan Valley Regional District",
+    "sourceTitle": "Osborne Bay Regional Park | Cowichan Valley Regional District",
+    "sourceUrl": "https://cvrd.ca/parks/osborne-bay-park/",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-roche-cove-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Roche Cove Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/roche-cove-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-sandy-pool-regional-park": {
+    "status": "summary",
+    "sourceName": "Cowichan Valley Regional District",
+    "sourceTitle": "Sandy Pool Regional Park | Cowichan Valley Regional District",
+    "sourceUrl": "https://cvrd.ca/parks/sandy-pool-regional-park/",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-sea-to-sea-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Sea to Sea Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sea-sea-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-sooke-hills-wilderness-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Sooke Hills Wilderness Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sooke-hills-wilderness-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-sooke-potholes-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Sooke Potholes Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sooke-potholes-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-sooke-river-regional-park": {
+    "status": "no-overview",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Regional Parks GIS layer | Capital Regional District",
+    "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+    "sourceSection": "Park name and mapped feature",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-st-john-point-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "St. John Point Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/st-john-point-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-stoney-hill-regional-park": {
+    "status": "summary",
+    "sourceName": "Cowichan Valley Regional District",
+    "sourceTitle": "Stoney Hill Regional Park | Cowichan Valley Regional District",
+    "sourceUrl": "https://cvrd.ca/parks/stoney-hill-regional-park/",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-thetis-lake-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Thetis Lake Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/thetis-lake-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-witty-s-lagoon-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Witty's Lagoon Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/wittys-lagoon-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  },
+  "regional-wrigglesworth-lake-regional-park": {
+    "status": "summary",
+    "sourceName": "Capital Regional District",
+    "sourceTitle": "Wrigglesworth Lake Regional Park | Capital Regional District",
+    "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/wrigglesworth-lake-regional-park",
+    "sourceSection": "Park overview",
+    "reviewedAt": "2026-09-23"
+  }
+}

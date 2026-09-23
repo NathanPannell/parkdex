@@ -8,6 +8,34 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const dataDir = path.join(root, 'data');
 const polygonInteriorFallbacks = [];
+const placeDescriptionEntries = new Map();
+
+for (const filename of ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json']) {
+  let raw;
+  try {
+    raw = await fs.readFile(path.join(dataDir, filename), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT' && filename === 'nonprovincial-descriptions.catalogue.json') continue;
+    throw error;
+  }
+  const catalogue = JSON.parse(raw);
+  if (!catalogue.entries || typeof catalogue.entries !== 'object' || Array.isArray(catalogue.entries)) {
+    throw new Error(`${filename}: expected an entries object`);
+  }
+  for (const [id, entry] of Object.entries(catalogue.entries)) {
+    if (placeDescriptionEntries.has(id)) throw new Error(`Duplicate description entry: ${id}`);
+    if (!['summary', 'no-overview'].includes(entry.status)
+        || typeof entry.description !== 'string' || entry.description.trim().length < 40
+        || !entry.sourceUrl?.startsWith('https://') || !entry.sourceName || !entry.sourceTitle || !entry.sourceSection) {
+      throw new Error(`${filename}: incomplete description or source provenance for ${id}`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.reviewedAt ?? '')
+        || (entry.status === 'no-overview' && !entry.description.startsWith('No visitor overview is available'))) {
+      throw new Error(`${filename}: invalid description status or review date for ${id}`);
+    }
+    placeDescriptionEntries.set(id, entry);
+  }
+}
 
 const sources = {
   bcParks: {
@@ -104,12 +132,13 @@ const parkIslandRegions = new Map([
     'SQUITTY BAY PARK', 'TRIBUNE BAY PARK',
   ].map((name) => [name, 'Northern Gulf Islands']),
   ...[
-    'HATHAYIM MARINE PARK [A.K.A. VON DONOP MARINE PARK', 'MAIN LAKE PARK', 'MANSONS LANDING PARK',
+    'MAIN LAKE PARK', 'MANSONS LANDING PARK',
     'MITLENATCH ISLAND NATURE PARK', 'OCTOPUS ISLANDS MARINE PARK', 'READ ISLAND PARK',
     'REBECCA SPIT MARINE PARK', 'RENDEZVOUS ISLAND SOUTH PARK', 'ROSCOE BAY PARK',
     'SMALL INLET MARINE PARK', 'SMELT BAY PARK', 'SURGE NARROWS PARK', 'THURSTON BAY MARINE PARK',
     'WALSH COVE PARK',
   ].map((name) => [name, 'Discovery Islands']),
+  [provincialNameCorrections.get('728').name, 'Discovery Islands'],
   ...[
     'BROUGHTON ARCHIPELAGO PARK', 'CORMORANT CHANNEL MARINE PARK', 'ECHO BAY MARINE PARK',
     "GOD'S POCKET MARINE PARK", 'LANZ AND COX ISLANDS PARK',
@@ -538,8 +567,23 @@ function validate(places) {
 const [provincial, crd, cvrd, rdn, islands] = await Promise.all([buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildIslands()]);
 const places = [...buildNational(), ...buildVerifiedRegionalPoints(), ...provincial.places, ...crd, ...cvrd, ...rdn, ...islands]
   .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'en-CA'));
+for (const place of places) {
+  const entry = placeDescriptionEntries.get(place.id);
+  if (!entry) throw new Error(`Missing visitor-facing description entry: ${place.id}`);
+  place.description = entry.description;
+}
+if (placeDescriptionEntries.size !== places.length) throw new Error('Description catalogues contain unknown place ids');
 validate(places);
 await fs.writeFile(path.join(dataDir, 'places.json'), `${JSON.stringify(places, null, 2)}\n`);
+const descriptionSources = Object.fromEntries([...placeDescriptionEntries].sort(([a], [b]) => a.localeCompare(b)).map(([id, entry]) => [id, {
+  status: entry.status,
+  sourceName: entry.sourceName,
+  sourceTitle: entry.sourceTitle,
+  sourceUrl: entry.sourceUrl,
+  sourceSection: entry.sourceSection,
+  reviewedAt: entry.reviewedAt,
+}]));
+await fs.writeFile(path.join(root, 'frontend', 'lib', 'place-description-sources.catalogue.json'), `${JSON.stringify(descriptionSources, null, 2)}\n`);
 await fs.writeFile(path.join(dataDir, 'coverage-audit.json'), `${JSON.stringify({
   generatedAt: new Date().toISOString(), counts: Object.fromEntries(['national', 'provincial', 'regional', 'island'].map((category) => [category, places.filter((p) => p.category === category).length])),
   bcParksBroadBboxFeatures: provincial.sourceFeatures,

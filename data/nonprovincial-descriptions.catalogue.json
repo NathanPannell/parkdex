@@ -1,0 +1,736 @@
+{
+  "checkedAt": "2026-09-23",
+  "sourceName": "Regional districts, Parks Canada, and BC Geographical Names Office",
+  "descriptionMethod": "Original concise visitor-focused paraphrases of official park pages and guides. Entries without an authoritative visitor overview are marked no-overview.",
+  "entries": {
+    "island-cormorant-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Cormorant Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/24855.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-cortes-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Cortes Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/3982.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-denman-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Denman Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/13815.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-flores-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Flores Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/12922.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-gabriola-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Gabriola Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/5212.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-galiano-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Galiano Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/5236.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-hornby-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Hornby Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/18342.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-lasqueti-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Lasqueti Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/8911.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-malcolm-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Malcolm Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/25744.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-maurelle-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Maurelle Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/7434.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-mayne-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Mayne Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/7473.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-meares-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Meares Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/25714.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-nootka-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Nootka Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17007.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-north-pender-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "North Pender Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17115.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-penelakut-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Penelakut Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/61741.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-quadra-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Quadra Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/22210.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-read-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Read Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23374.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-saltspring-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Saltspring Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/13666.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-saturna-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Saturna Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/17153.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-sonora-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Sonora Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/19760.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-south-pender-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "South Pender Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/20697.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-thetis-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Thetis Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/14969.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-valdes-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Valdes Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23524.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "island-vargas-island": {
+      "status": "no-overview",
+      "description": "No visitor overview is available from the BC Geographical Names Office; its record confirms the official island name and location.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Vargas Island | BC Geographical Names Office",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/24352.html",
+      "sourceSection": "Official feature name and location",
+      "reviewedAt": "2026-09-23"
+    },
+    "national-gulf-islands-national-park-reserve": {
+      "status": "summary",
+      "description": "Across the southern Gulf Islands, this reserve protects island habitats and small marine areas in the Salish Sea. Sheltered channels support seals, otters, orcas and porpoises, while eagles and seabirds pass above the water.",
+      "sourceName": "Parks Canada",
+      "sourceTitle": "Gulf Islands National Park Reserve | Parks Canada",
+      "sourceUrl": "https://parks.canada.ca/pn-np/bc/gulf",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "national-pacific-rim-national-park-reserve": {
+      "status": "summary",
+      "description": "On Vancouver Island’s west coast, Pacific Rim brings together three distinct areas: sandy beaches and rainforest at Long Beach, boat-access islands in Barkley Sound, and the backcountry West Coast Trail. The reserve protects coastal forest and nearshore marine habitat.",
+      "sourceName": "Parks Canada",
+      "sourceTitle": "Pacific Rim National Park Reserve | Parks Canada",
+      "sourceUrl": "https://parks.canada.ca/pn-np/bc/pacificrim",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-albert-head-lagoon-regional-park": {
+      "status": "summary",
+      "description": "A sheltered lagoon and dune landscape ends at a cobble beach with views toward the Olympic Mountains. It is a compact stop for shoreline walks, birdwatching and a picnic.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Albert Head Lagoon Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/albert-head-lagoon-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-ayum-creek-regional-park": {
+      "status": "summary",
+      "description": "Forest and wetland surround the estuary where Ayum Creek reaches Sooke Basin. The creek is important habitat for salmon and trout; the park has no public facilities.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Ayum Creek Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/ayum-creek-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-beachcomber-regional-park": {
+      "status": "summary",
+      "description": "At the end of Nanoose’s Beachcomber Peninsula, this small oceanfront park pairs short woodland trails with rocky shoreline and tidal pools. Views reach across Craig Bay toward Parksville and Mount Arrowsmith, and across the Strait of Georgia to the mainland mountains.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Beachcomber Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/beachcomber-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-bear-hill-regional-park": {
+      "status": "summary",
+      "description": "Woodland trails climb a hilly landscape of Douglas-fir, Garry oak and arbutus to a summit with views across the Saanich Peninsula toward Mount Baker and nearby islands. Spring brings wildflowers, and some routes are used by horseback riders.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Bear Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/bear-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-benson-creek-falls-regional-park": {
+      "status": "summary",
+      "description": "This rugged, forested park follows creeks through steep ravines to waterfalls, including Ammonite Falls. The falls are reached by a rough hike of about 1.5 kilometres from Weigles Road or 2.5 kilometres from Creekside Place.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Benson Creek Falls Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/benson-creek-falls-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-bere-point-regional-park": {
+      "status": "summary",
+      "description": "Six kilometres from Sointula, this wooded coastal campground sits close to the beach with views across Queen Charlotte Strait to the coastal mountains. A whale-watching platform overlooks the shore, and the Beautiful Bay Trail begins in the park.",
+      "sourceName": "Regional District of Mount Waddington",
+      "sourceTitle": "Bere Point Regional Park & Campsite | Regional District of Mount Waddington",
+      "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/bere-point/",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-brooks-point-regional-park": {
+      "status": "summary",
+      "description": "On South Pender Island, trails cross coastal forest, meadow and a wetland boardwalk to rocky bluffs and beaches. Look across Boundary Pass toward the San Juan Islands and Mount Baker, and watch for spring chocolate lilies in the meadow.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Brooks Point Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/brooks-point-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-coats-marsh-regional-park": {
+      "status": "summary",
+      "description": "Wetlands and second-growth forest form Gabriola Island’s first protected wetland area. Rough trails offer a close look at the marsh and its birdlife.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Coats Marsh Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/coats-marsh-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-coles-bay-regional-park": {
+      "status": "summary",
+      "description": "Short woodland trails lead to a pebble beach on Saanich Inlet. The sheltered shoreline is a popular summer swimming spot, with picnic tables and accessible toilets near the parking area.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Coles Bay Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/coles-bay-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-descanso-bay-regional-park": {
+      "status": "summary",
+      "description": "This oceanfront Gabriola park is a short distance from the ferry and village centre. Its wooded campground, small boat launch, shoreline coves and picnic area make it a base for kayaking, swimming and exploring the island.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Descanso Bay Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/descanso-bay-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-devonian-regional-park": {
+      "status": "summary",
+      "description": "This small coastal conservation area has a wooded trail beside Sherwood Creek leading to a cobble beach. The shore opens to views of Juan de Fuca Strait, Race Rocks and the Olympic Mountains; Sherwood Pond is a birdwatching stop.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Devonian Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/devonian-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-east-point-regional-park": {
+      "status": "summary",
+      "description": "At Saturna Island’s eastern tip, coastal bluffs look toward the San Juan Islands and Washington mainland. The park connects with Gulf Islands National Park Reserve and is known for its open shoreline scenery.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "East Point Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/east-point-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-east-sooke-regional-park": {
+      "status": "summary",
+      "description": "A network of roughly 50 kilometres of trails crosses forest, marsh, open fields and rugged coast. The 10-kilometre Coast Trail links pocket beaches and rocky bays, with views across Juan de Fuca Strait to the Olympic Mountains.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "East Sooke Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/east-sooke-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-elk-beaver-lake-regional-park": {
+      "status": "summary",
+      "description": "Elk and Beaver Lakes have four beaches, picnic areas and about 15 kilometres of walking routes, including a 10-kilometre loop. Designated trails allow cycling and horseback riding, and Elk Lake has an accessible fishing dock and stocked rainbow trout.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Elk/Beaver Lake Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/elkbeaver-lake-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-englishman-river-regional-park": {
+      "status": "summary",
+      "description": "A broad river corridor protects salmon habitat, including a constructed side channel and community hatchery. The park’s open trails welcome walkers, cyclists and horseback riders, with wildlife such as elk and bears in the surrounding landscape.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Englishman River Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/englishman-river-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-francis-king-regional-park": {
+      "status": "summary",
+      "description": "This forested conservation area pairs the universally accessible Elsie King Trail with a grove of old Douglas-fir trees. Additional trails connect to Thetis Lake Regional Park for a longer walk.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Francis/King Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/francisking-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-george-hill-regional-park": {
+      "status": "summary",
+      "description": "A steep forest trail on North Pender climbs to a broad viewpoint over Galiano, Mayne and Salt Spring islands. On clear days the Olympic Mountains are visible; the official trail starts from Ogden Road or Upper Terrace Road.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "George Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/george-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-gonzales-hill-regional-park": {
+      "status": "summary",
+      "description": "Rocky knolls and Garry oak meadows lead to the 66-metre summit, where views span Victoria and the Sooke Hills. The historic Gonzales Observatory and spring wildflowers add interest to a short hilltop visit.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Gonzales Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/gonzales-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-hamilton-marsh-regional-park-and-conservation-area": {
+      "status": "summary",
+      "description": "This 364-hectare property protects mature forest and a 36-hectare wetland within the French Creek watershed. Its marsh and surrounding forest are the defining features of this newly protected conservation area.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Hamilton Marsh Regional Park and Conservation Area | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/hamilton-marsh-regional-park-and-conservation-area",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-horne-lake-regional-park": {
+      "status": "summary",
+      "description": "Set below Mount Mark beside Horne Lake, this campground offers forest sites, canoe and stand-up paddleboard rentals, fishing and picnic space. It sits beside Horne Lake Caves Provincial Park and its cave tours.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Horne Lake Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/horne-lake-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-horth-hill-regional-park": {
+      "status": "summary",
+      "description": "Wooded slopes at the north end of the Saanich Peninsula lead to viewpoints over Satellite Channel, the peninsula and the Gulf Islands. The park covers about 36 hectares.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Horth Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/horth-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-island-view-beach-regional-park": {
+      "status": "summary",
+      "description": "A long sandy shoreline on the eastern Saanich Peninsula sits beside dunes, wetlands and coastal shrubs. Visitors come to walk, picnic and swim, while the beach and wetlands provide habitat for resident and migrating birds.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Island View Beach Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/island-view-beach-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-jordan-river-regional-park": {
+      "status": "summary",
+      "description": "A forest trail and stairway descend from the coastal park to Sandcut Beach, a long cobble shore on Juan de Fuca Strait. The route opens to views toward the Olympic Peninsula.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Jordan River Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/jordan-river-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-kapoor-regional-park": {
+      "status": "summary",
+      "description": "Following the Sooke River near the end of the Galloping Goose Regional Trail, Kapoor offers a quiet stretch of riverfront along old roads and trails. The park borders the historic Leechtown gold-rush site and former railway logging area.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Kapoor Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/kapoor-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-kwaksistah-regional-park": {
+      "status": "summary",
+      "description": "This remote, free campground at Winter Harbour has eight first-come sites, picnic tables, fire pits and outhouses, with no water, power or sewer service. The approach follows an active logging road, so allow extra time and be prepared to yield to logging trucks.",
+      "sourceName": "Regional District of Mount Waddington",
+      "sourceTitle": "Kwaksistah Regional Park | Regional District of Mount Waddington",
+      "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/kwaksistah-regional-park/",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-little-huson-cave-regional-park": {
+      "status": "summary",
+      "description": "A short forest path leads from the parking area to limestone arches, rock bridges and clear pools along Atluck Creek. The caves and karst formations are the main draw; water levels vary with rainfall and snowmelt.",
+      "sourceName": "Regional District of Mount Waddington",
+      "sourceTitle": "Little Huson Cave Park Brochure | Regional District of Mount Waddington",
+      "sourceUrl": "https://www.rdmw.bc.ca/media/Brochure%20-%20Little%20Huson%202010.pdf",
+      "sourceSection": "Park Overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-little-qualicum-river-estuary-regional-conservation-area": {
+      "status": "summary",
+      "description": "This coastal sand spit at the mouth of the Little Qualicum River supports marine life and waterfowl. Access to the spit is restricted for conservation; the adjacent wildlife management area offers a place to observe the estuary.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Little Qualicum River Estuary Regional Conservation Area | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/little-qualicum-river-estuary",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-little-qualicum-river-regional-park": {
+      "status": "summary",
+      "description": "This 111-hectare park follows both banks of the Little Qualicum River below Little Qualicum Falls. Rough trails lead to the river, while a developed route from Meadowood Way links with the provincial falls park.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Little Qualicum River Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/little-qualicum-river-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-lone-tree-hill-regional-park": {
+      "status": "summary",
+      "description": "A rocky climb reaches the 364-metre summit of Lone Tree Hill, with views of the Malahat, Highlands, Victoria and the Olympic Mountains. The park is named for a small, bonsai-like Douglas-fir once recognized as a heritage tree.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Lone Tree Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/lone-tree-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-matheson-lake-regional-park": {
+      "status": "summary",
+      "description": "A loop trail circles the lake through a landscape of sensitive ecosystems, with a sandy beach for swimming and picnics in summer. The park connects with Roche Cove Regional Park and the Galloping Goose Regional Trail.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Matheson Lake Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/matheson-lake-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-matthews-point-regional-park": {
+      "status": "summary",
+      "description": "Woodland paths and coastal bluffs open onto views of Active Pass. The park protects shoreline ecosystems on Salt Spring Island and offers opportunities for hiking, birdwatching and horseback riding.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Matthews Point Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/matthews-point-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mill-farm-regional-park": {
+      "status": "summary",
+      "description": "On Salt Spring Island, forest trails pass a remnant waterwheel from an early logging operation and one of the Gulf Islands’ larger old-growth stands. Openings in the forest look toward Saanich Inlet and Cowichan Bay, and rare plants include the phantom orchid.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mill Farm Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mill-farm-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mill-hill-regional-park": {
+      "status": "summary",
+      "description": "Trails climb through Douglas-fir forest and Garry oak habitat to a rocky 203-metre summit. From the top, look over Esquimalt Harbour and the Victoria area.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mill Hill Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mill-hill-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-moorecroft-regional-park": {
+      "status": "summary",
+      "description": "This oceanfront park protects Garry oak meadows and coastal Douglas-fir habitat under a conservation covenant. Low-impact trails and picnic spots bring visitors to the shoreline, with views across the Salish Sea to the coastal mountains.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Moorecroft Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/moorecroft-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-arrowsmith-massif-regional-park": {
+      "status": "summary",
+      "description": "A high alpine park spanning Mount Arrowsmith and Mount Cokely, with flower-filled meadows in late spring and summer. Long-standing routes lead onto the ridges and are best suited to experienced hikers; the RDN recommends guided hikes for novices.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Mount Arrowsmith Massif Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/mount-arrowsmith-massif-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-arrowsmith-regional-park-acrd": {
+      "status": "summary",
+      "description": "The northern Mount Cokely slope is reached by gravel logging roads and offers alpine hiking routes via Rousseau Trail, Arrowsmith Trail and the Lower Ski Area Trail. Access roads cross private forest land, so check Mosaic’s designated public access openings before setting out.",
+      "sourceName": "Alberni-Clayoquot Regional District",
+      "sourceTitle": "Mount Arrowsmith Regional Park | Alberni-Clayoquot Regional District",
+      "sourceUrl": "https://www.acrd.bc.ca/mount-arrowsmith-regional-park",
+      "sourceSection": "Overview and Public Access Road",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-benson-regional-park": {
+      "status": "summary",
+      "description": "Forested slopes above Nanaimo open to views of the city and Strait of Georgia, while the park protects headwaters feeding nearby lakes and rivers. The approach from the parking lot is steep and rough in places; allow three to five hours for the return hike and prepare for changing weather.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Mount Benson Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/mount-benson-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-cain-alpine-park": {
+      "status": "summary",
+      "description": "A community-operated ski area in the North Island mountains, Mount Cain is known for deep powder and backcountry terrain. Winter conditions and access change with weather, so check current local updates before travelling.",
+      "sourceName": "Regional District of Mount Waddington",
+      "sourceTitle": "Parks & Recreation | Regional District of Mount Waddington",
+      "sourceUrl": "https://www.rdmw.bc.ca/recreation-leisure/",
+      "sourceSection": "Mount Cain Alpine Park",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-parke-regional-park": {
+      "status": "summary",
+      "description": "A winding woodland trail on Mayne Island passes western red cedar, red alder and lush fern understory before reaching viewpoints. Spring wildflowers and birds of prey are among the seasonal highlights.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mount Parke Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-parke-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-wells-regional-park": {
+      "status": "summary",
+      "description": "This Sooke Hills wilderness park combines second-growth forest with fragile mossy rock outcrops and spring wildflowers. Viewpoints look toward Juan de Fuca Strait, Victoria and the Sea to Sea greenbelt.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mount Wells Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-wells-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mount-work-regional-park": {
+      "status": "summary",
+      "description": "Three freshwater lakes, Killarney, Durrance and Pease, anchor a broad network of recreation trails. Visitors can walk or swim at the lakes; canoeing and fishing are available at Durrance and Pease, with rainbow trout stocked at Durrance.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mount Work Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mount-work-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-mountain-forest-regional-park": {
+      "status": "summary",
+      "description": "Mature Coastal Douglas-fir, Garry oak meadow, rocky outcrops and arbutus stands make up this rare-ecosystem landscape. The park also protects habitat for at-risk birds and headwaters of Excelsior Creek in the Colquitz River system.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Mountain Forest Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/mountain-forest-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-nanaimo-river-regional-park": {
+      "status": "summary",
+      "description": "This conservation property protects a remnant of mature Coastal Douglas-fir forest along the lower Nanaimo River. Developed trails provide room to walk and cycle, the river is a swimming spot, and the southeast part is managed as wildlife habitat.",
+      "sourceName": "Regional District of Nanaimo",
+      "sourceTitle": "Nanaimo River Regional Park | Regional District of Nanaimo",
+      "sourceUrl": "https://rdn.bc.ca/nanaimo-river-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-osborne-bay-regional-park": {
+      "status": "summary",
+      "description": "This 44-hectare Crofton waterfront park combines calm water, pebble beaches, open fields and nature trails. It offers public shoreline access, picnic space and year-round off-leash dog use.",
+      "sourceName": "Cowichan Valley Regional District",
+      "sourceTitle": "Osborne Bay Regional Park | Cowichan Valley Regional District",
+      "sourceUrl": "https://cvrd.ca/parks/osborne-bay-park/",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-roche-cove-regional-park": {
+      "status": "summary",
+      "description": "Trails wind through temperate rainforest beside a cool creek and sheltered cove. The calm water is also suited to paddling, especially in the quiet morning.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Roche Cove Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/roche-cove-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-sandy-pool-regional-park": {
+      "status": "summary",
+      "description": "A sandy beach and swimming holes on the Cowichan River draw summer visitors, while forest paths extend for more than a kilometre and include interpretive signs. The park also has a drift-boat launch and seasonal toilets.",
+      "sourceName": "Cowichan Valley Regional District",
+      "sourceTitle": "Sandy Pool Regional Park | Cowichan Valley Regional District",
+      "sourceUrl": "https://cvrd.ca/parks/sandy-pool-regional-park/",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-sea-to-sea-regional-park": {
+      "status": "summary",
+      "description": "This nearly 4,000-hectare wilderness area forms part of a protected corridor from Saanich Inlet to Juan de Fuca Strait. High points such as Mount Manuel Quimper and Mount Brule offer expansive views across the Sooke Hills.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Sea to Sea Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sea-sea-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-sooke-hills-wilderness-regional-park": {
+      "status": "summary",
+      "description": "This large wilderness area borders the Greater Victoria Water Supply Area and includes Mount Braden, one of the highest peaks in the Capital Regional District park system at 471 metres.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Sooke Hills Wilderness Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sooke-hills-wilderness-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-sooke-potholes-regional-park": {
+      "status": "summary",
+      "description": "Glacially carved pools and smooth rock formations line the Sooke River, where salmon return each fall. Fast-moving water shaped the potholes in the sandstone valley, making the river’s geology the park’s central feature.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Sooke Potholes Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/sooke-potholes-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-sooke-river-regional-park": {
+      "status": "no-overview",
+      "description": "No visitor overview is available in the CRD parks map layer; it identifies the mapped park name and feature.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Regional Parks GIS layer | Capital Regional District",
+      "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+      "sourceSection": "Park name and mapped feature",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-st-john-point-regional-park": {
+      "status": "summary",
+      "description": "This North Pender waterfront park has two beaches, an informal perimeter route and a more rugged path along rocky bluffs. It is a quiet place for a coastal walk and birdwatching.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "St. John Point Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/st-john-point-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-stoney-hill-regional-park": {
+      "status": "summary",
+      "description": "A 3.2-kilometre loop climbs through the forest above Sansum Narrows, with views toward Salt Spring Island and the surrounding coast. The trail begins and ends at the parking area, which holds about 25 vehicles.",
+      "sourceName": "Cowichan Valley Regional District",
+      "sourceTitle": "Stoney Hill Regional Park | Cowichan Valley Regional District",
+      "sourceUrl": "https://cvrd.ca/parks/stoney-hill-regional-park/",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-thetis-lake-regional-park": {
+      "status": "summary",
+      "description": "Thetis Lake is a popular swimming and walking destination with more than 40 kilometres of recreation trails. Designated as Canada’s first nature sanctuary in 1958, the park combines protected natural areas with a broad trail network.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Thetis Lake Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/thetis-lake-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-witty-s-lagoon-regional-park": {
+      "status": "summary",
+      "description": "Woodland trails lead through a varied seashore landscape of creek, salt marsh, sandy beach and rocky headlands. The mix of habitats supports abundant birdlife and other wildlife.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Witty's Lagoon Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/wittys-lagoon-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "regional-wrigglesworth-lake-regional-park": {
+      "status": "summary",
+      "description": "A trail from Goldstream Heights Drive leads to the lake in this small park beside Sooke Hills Wilderness Regional Park. The lake is the focal point of the visit.",
+      "sourceName": "Capital Regional District",
+      "sourceTitle": "Wrigglesworth Lake Regional Park | Capital Regional District",
+      "sourceUrl": "https://www.crd.ca/parks-recreation/find-park-or-trail/wrigglesworth-lake-regional-park",
+      "sourceSection": "Park overview",
+      "reviewedAt": "2026-09-23"
+    }
+  }
+}

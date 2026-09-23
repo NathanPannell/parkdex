@@ -17,6 +17,7 @@ def open_pool() -> None:
         kwargs={"row_factory": dict_row},
         min_size=1,
         max_size=5,
+        check=ConnectionPool.check_connection,
         open=False,
     )
     _pool.open()
