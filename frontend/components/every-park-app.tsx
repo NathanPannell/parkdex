@@ -41,7 +41,7 @@ type LocationIdentity = "guest" | `account:${string}`;
 const imageMap = badgeImages as Record<string, BadgeImage>;
 const GOOGLE_VERIFIER_KEY = "parkdex:google-code-verifier:v1";
 const ONBOARDING_KEY = "parkdex:onboarding:v1";
-const PUBLIC_INFORMATION_ORIGIN = "https://parkdex-landing.vercel.app";
+const PUBLIC_INFORMATION_ORIGIN = "https://parkdex.app";
 const formatDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(date) : "Date unavailable"; };
 const formatShelfDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" }).format(date) : "Date unavailable"; };
 function useDialogFocus(onClose?: () => void) {
