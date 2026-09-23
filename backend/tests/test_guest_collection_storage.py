@@ -1,4 +1,5 @@
 from backend.app.main import guest_progress_state, list_places
+from fastapi import Response
 
 
 class EmptyResult:
@@ -56,10 +57,14 @@ def test_guest_progress_state_detects_any_visit_or_trail_row_without_mutating():
         (False, True, True),
     ):
         conn = ProgressConnection(has_visits, has_trails)
+        response = Response()
 
-        result = guest_progress_state(conn, x_collection_key="g" * 43)
+        result = guest_progress_state(
+            response, conn, x_collection_key="g" * 43
+        )
 
         assert result == {"hasProgress": expected}
+        assert response.headers["cache-control"] == "no-store"
         assert len(conn.queries) == 2
         assert all(query.lstrip().upper().startswith("SELECT") for query in conn.queries)
         assert all("JOIN places" not in query for query in conn.queries)

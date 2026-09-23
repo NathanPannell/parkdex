@@ -593,9 +593,11 @@ def auth_config() -> dict[str, bool]:
 
 @app.get("/api/guest/progress-state")
 def guest_progress_state(
+    response: Response,
     conn: Connection = Depends(connection),
     x_collection_key: str | None = Header(default=None),
 ) -> dict[str, bool]:
+    response.headers["Cache-Control"] = "no-store"
     owner_hash = collection_hash(x_collection_key, required=True)
     has_visits = conn.execute(
         "SELECT EXISTS(SELECT 1 FROM visits WHERE owner_hash = %s) AS has_progress",
