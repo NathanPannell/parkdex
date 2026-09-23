@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowUpRight, Award, Check, ChevronDown, ChevronRight, Circle, Compass, Heart, BookOpen, Layers, List, Maximize2, Minimize2, Settings, LandPlot, ListFilter, ListPlus, LocateFixed, LogIn, LogOut, MailCheck, Map as MapIcon, MapPin, Pencil, Plus, RotateCcw, Search, Trees, Trash2, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Award, Check, ChevronDown, ChevronRight, Circle, Compass, Heart, BookOpen, Layers, List, Settings, LandPlot, ListFilter, ListPlus, LocateFixed, LogIn, LogOut, MailCheck, Map as MapIcon, MapPin, Pencil, Plus, RotateCcw, Search, Trees, Trash2, UserRound, X } from "lucide-react";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -19,7 +19,6 @@ import badgeImages from "@/lib/badge-images.json";
 import type { BoundaryLoadState } from "@/lib/boundaries";
 import type { ClaimConfirmation, ClaimRecommendation } from "@/lib/claims-client";
 import { authorityForPlace, collectionFilter, groupByRegion, type VisitFilter } from "@/lib/collection";
-import { formatDistance, nearestUnseenParks } from "@/lib/discovery";
 import { clearPhotoRetryOwner, type LocationSample } from "@/lib/native-capabilities";
 import { addNativeBackConsumer } from "@/lib/native-back";
 import { getPlaceImage } from "@/lib/place-images";
@@ -34,6 +33,8 @@ import { readGroupNavigation, rememberGroupNavigation } from "@/lib/group-naviga
 import { usePublicNavigation, notifyNavigationChange } from "@/lib/use-public-navigation";
 import { navigationUrl, readNavigation, type View } from "@/lib/navigation";
 import { getVisitorInformation } from "@/lib/visitor-information";
+import { getPlaceDescriptionSource } from "@/lib/place-description-sources";
+import { formatPlaceArea, shortOriginForPlace } from "@/lib/place-detail-facts";
 
 const categories = Object.keys(categoryLabels) as PlaceCategory[];
 type BadgeImage = { src: string; alt: string; creator: string; license: string; licenseUrl: string; sourceUrl: string; species: string };
@@ -45,7 +46,7 @@ const ONBOARDING_KEY = "parkdex:onboarding:v1";
 const PUBLIC_INFORMATION_ORIGIN = "https://parkdex.app";
 const formatDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(date) : "Date unavailable"; };
 const formatShelfDate = (value?: string) => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.valueOf()) ? new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" }).format(date) : "Date unavailable"; };
-function useDialogFocus(onClose?: () => void) {
+function useDialogFocus(onClose?: () => void, trapFocus = true) {
   const ref = useRef<HTMLElement>(null);
   const closeRef = useRef(onClose);
   const closable = onClose !== undefined;
@@ -58,10 +59,10 @@ function useDialogFocus(onClose?: () => void) {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const node = ref.current;
     const focusable = () => [...(node?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled])') ?? [])];
-    focusable()[0]?.focus();
+    if (trapFocus) focusable()[0]?.focus();
     function keydown(event: KeyboardEvent) {
       if (event.key === "Escape" && closeRef.current) { event.preventDefault(); closeRef.current(); return; }
-      if (event.key !== "Tab") return;
+      if (event.key !== "Tab" || !trapFocus) return;
       const items = focusable(); if (!items.length) return;
       const first = items[0], last = items[items.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -69,7 +70,7 @@ function useDialogFocus(onClose?: () => void) {
     }
     document.addEventListener("keydown", keydown);
     return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
-  }, []);
+  }, [trapFocus]);
   return ref;
 }
 
@@ -78,13 +79,12 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   const journal = useFieldJournal({ apiBaseUrl });
   const { places, visited, visitTimestamps, visitMetadata, account, authenticated, loading, loadError, syncMessage, storageUnavailable, guestProgressAvailable, transitionBusy, visitClaimMode, toggleVisit, retrySync, authenticate: completeAuth, authenticateWithGoogle, requestEmailVerification, confirmEmailVerification, logout: signOut, importGuest, resetProgress, deleteAccount: onDeleteAccount, recommendClaim, createClaim, reconcileClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto, authenticatedRequest } = journal;
   const { state: navigation, update: updateNavigation, set: setNavigation } = usePublicNavigation();
-  const { selectedId, detailExpanded, mapSearch, mapCategories, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, view, mapMode } = navigation;
+  const { selectedId, detailExpanded, mapSearch, mapCategories, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, view } = navigation;
   const setMapSearch = (value: React.SetStateAction<string>) => setNavigation("mapSearch", value);
   const setMapCategories = (value: React.SetStateAction<Set<PlaceCategory>>) => setNavigation("mapCategories", value);
   const setCollectionSearch = (value: React.SetStateAction<string>) => setNavigation("collectionSearch", value);
   const setCollectionCategories = (value: React.SetStateAction<Set<PlaceCategory>>) => setNavigation("collectionCategories", value);
   const setCollectionVisitFilter = (value: React.SetStateAction<VisitFilter>) => setNavigation("collectionVisitFilter", value);
-  const setMapMode = (value: React.SetStateAction<"explored" | "discover">) => setNavigation("mapMode", value);
   const [mapSearchDraft, setMapSearchDraft] = useState("");
   const [navigationNotice, setNavigationNotice] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -112,9 +112,8 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   const locationStatus = liveLocationStatus === "starting" ? "locating" : liveLocationStatus;
   const [preciseLocationBusy, setPreciseLocationBusy] = useState(false);
   const [preciseLocationMessage, setPreciseLocationMessage] = useState("");
-  const [showFilters, setShowFilters] = useState(false), [showNearby, setShowNearby] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
+  const [showFilters, setShowFilters] = useState(false), [searchExpanded, setSearchExpanded] = useState(false), [celebrationBadges, setCelebrationBadges] = useState<Achievement[]>([]);
   const mapStageRef = useRef<HTMLElement>(null), connectionStatusRef = useRef<HTMLDivElement>(null);
-  const [progressHoldCount, setProgressHoldCount] = useState<number | null>(null);
   const [viewRevision, setViewRevision] = useState(0), [resetViewRequest, setResetViewRequest] = useState(0);
   const groupsState = useGroups({ apiBaseUrl, authenticated: authenticated && !recoveryActive, identityKey: account?.id ?? "", places, request: authenticatedRequest });
   const selectedGroup = authenticated && !recoveryActive ? groupsState.groups.find((group) => group.id === groupsState.selectedGroupId) ?? null : null;
@@ -127,7 +126,6 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   const mapSearchMatches = useMemo(() => collectionFilter(places, mapSearchDraft, mapCategories, collectionAuthorities, collectionVisitFilter, visited), [places, mapSearchDraft, mapCategories, collectionAuthorities, collectionVisitFilter, visited]);
   const collectionFiltered = useMemo(() => collectionFilter(places, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, visited), [places, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, visited]);
   const groups = useMemo(() => groupByRegion(collectionFiltered), [collectionFiltered]);
-  const visitedPlaceCount = useMemo(() => places.filter((place) => visited.has(place.id)).length, [places, visited]);
   const badgeList = useMemo(() => achievements({ places, visited, visitTimestamps }), [places, visited, visitTimestamps]);
   const earnedBadges = badgeList.filter((badge) => badge.earned).length, selected = places.find((place) => place.id === selectedId) ?? null;
   const claimFunctionsAvailable = [recommendClaim, createClaim, reconcileClaim, uploadVisitPhoto, loadVisitPhoto, removeVisitPhoto].every((value) => typeof value === "function");
@@ -152,12 +150,10 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   const [photoOwnerCleanupAttempt, setPhotoOwnerCleanupAttempt] = useState(0);
   const [photoOwnerCleanupFailed, setPhotoOwnerCleanupFailed] = useState(false);
   const photoOwnerCleanupFailedRef = useRef(false);
-  const globalProgressCount = Math.min(places.length, Math.max(0, progressHoldCount ?? visitedPlaceCount));
   const mapPlaces = useMemo(() => {
-    const candidates = selectedGroup ? collectionFilter(selectedGroup.places, "", new Set(), new Set(), collectionVisitFilter, visited) : mapFiltered;
+    const candidates = selectedGroup ? collectionFilter(selectedGroup.places, "", new Set(), new Set(), collectionVisitFilter, visited) : view === "collection" ? collectionFiltered : mapFiltered;
     return selected && !candidates.some((place) => place.id === selected.id) ? [...candidates, selected] : candidates;
-  }, [selectedGroup, collectionVisitFilter, visited, mapFiltered, selected]);
-  const nearby = useMemo(() => location ? nearestUnseenParks(places, visited, location) : [], [location, places, visited]);
+  }, [selectedGroup, collectionVisitFilter, visited, view, collectionFiltered, mapFiltered, selected]);
   const liveRecommendation = liveClaim.recommendation?.status === "recommended" ? liveClaim.recommendation : null;
   const displayedRecommendation = claimFlow?.recommendation ?? (liveRecommendation?.candidate.placeId === dismissedArrival ? null : liveRecommendation);
   const liveClaimPlace = displayedRecommendation ? places.find((place) => place.id === displayedRecommendation.candidate.placeId) ?? null : null;
@@ -234,7 +230,7 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   const selectGroup = groupsState.selectGroup;
   useEffect(() => {
     function restoreHistory() {
-      setShowNearby(false); setShowFilters(false); setSearchExpanded(false); setNavigationNotice("");
+      setShowFilters(false); setSearchExpanded(false); setNavigationNotice("");
       const targetView = readNavigation(window.location.href).view;
       const saved = readGroupNavigation(groupNavigationAccountId);
       const restoredGroupId = authenticated && !recoveryActive && (targetView === "groups" || targetView === "map") ? saved.groupId : null;
@@ -249,7 +245,7 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   }, [authenticated, recoveryActive, groupNavigationAccountId]);
   useEffect(() => {
     if (loading || loadError || !selectedId || places.some((place) => place.id === selectedId)) return;
-    queueMicrotask(() => { setNavigationNotice("This place is no longer in the catalogue. Find another place on the map."); updateNavigation({ selectedId: null, view: "map", mapMode: "discover" }); });
+    queueMicrotask(() => { setNavigationNotice("This place is no longer in the catalogue. Find another place on the map."); updateNavigation({ selectedId: null, view: "map" }); });
   }, [loading, loadError, places, selectedId, updateNavigation]);
   useEffect(() => {
     const stage = mapStageRef.current, status = connectionStatusRef.current;
@@ -274,7 +270,7 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
   }
 
   function requestLocation() {
-    setManualLocationScope(locationIdentity ?? "pending"); setLocationAttempt((current) => current + 1); setShowNearby(true); updateNavigation({ view: "map", selectedId: null }, "push"); setShowFilters(false);
+    setManualLocationScope(locationIdentity ?? "pending"); setLocationAttempt((current) => current + 1);
   }
   async function enablePreciseLocation() {
     if (preciseLocationBusy) return;
@@ -310,15 +306,15 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
     updateNavigation({ selectedId: id, detailExpanded: view !== "map", view: view === "collection" ? "collection" : "map" }, "push");
     window.history.replaceState({ ...window.history.state, parkdexDetailOrigin: origin, parkdexDetailId: id }, "");
     rememberGroupNavigation(null, 0, groupNavigationAccountId);
-    setNavigationNotice(""); setShowNearby(false); setShowFilters(false);
+    setNavigationNotice(""); setShowFilters(false); setSearchExpanded(false);
   }, [view, rememberDepartingGroup, updateNavigation, groupNavigationAccountId]);
   function openGroupMember(id: string) { groupsState.selectGroup(null); choosePlace(id); }
   function navigate(next: View) {
     const resetting = view === next;
-    setShowNearby(false); setShowFilters(false); setNavigationNotice("");
+    setShowFilters(false); setNavigationNotice("");
     rememberDepartingGroup();
     if (next !== "groups") groupsState.selectGroup(null);
-    if (next === "map" && resetting) { resetMapFilters(); setMapMode("explored"); setSearchExpanded(false); setResetViewRequest((current) => current + 1); }
+    if (next === "map" && resetting) { resetMapFilters(); setSearchExpanded(false); setResetViewRequest((current) => current + 1); }
     if (next === "collection" && resetting) resetCollectionFilters();
     if (next === "groups" && resetting) groupsState.selectGroup(null);
     if (resetting) { setViewRevision((current) => current + 1); requestAnimationFrame(() => document.querySelectorAll<HTMLElement>(".feature-panel, .collection-scroll").forEach((element) => element.scrollTo({ top: 0 }))); }
@@ -333,6 +329,11 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
     updateNavigation({ view: "account", settingsOpen: open, selectedId: null }, open ? "push" : "replace");
   }
   function applyMapSearch() { setMapSearch(mapSearchDraft); setShowFilters(false); setSearchExpanded(false); }
+  function openMapSearch() {
+    if (!searchExpanded) { setMapSearchDraft(mapSearch); setSearchExpanded(true); }
+    if (selectedId) updateNavigation({ selectedId: null, detailExpanded: false }, "replace");
+    setShowFilters(false);
+  }
   function switchGuide(next: "map" | "collection") {
     setShowFilters(false); setSearchExpanded(false);
     updateNavigation(next === "collection"
@@ -367,7 +368,6 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
       const nextBadges = achievements({ places, visited: nextVisited, visitTimestamps: nextTimestamps });
       const earnedIds = new Set(newlyEarnedAchievementIds(badgeList, nextBadges));
       const newlyEarned = nextBadges.filter((badge) => earnedIds.has(badge.id));
-      if (newlyEarned.length) setProgressHoldCount(Math.min(places.length, Math.max(0, visitedPlaceCount)));
       setCelebrationBadges(newlyEarned);
     }
     void toggleVisit(place);
@@ -379,13 +379,11 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
     const nextBadges = achievements({ places, visited: nextVisited, visitTimestamps: nextTimestamps });
     const earnedIds = new Set(newlyEarnedAchievementIds(badgeList, nextBadges));
     const newlyEarned = nextBadges.filter((badge) => earnedIds.has(badge.id));
-    if (newlyEarned.length) setProgressHoldCount(Math.min(places.length, Math.max(0, visitedPlaceCount)));
     setCelebrationBadges(newlyEarned);
   }
 
   function rememberImpression(confirmation: ClaimConfirmation) {
     setRecentImpression({ owner: photoOwnerKey, confirmation });
-    setProgressHoldCount(null);
     setCelebrationBadges([]);
   }
   function dismissArrival() {
@@ -400,8 +398,8 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
     visit: visits[recentPlace.id] ?? { placeId: recentPlace.id, visitedAt: recentImpression.confirmation.visitedAt, claim: recentImpression.confirmation.claim },
   } : undefined;
 
-  return <main className="app-shell field-guide-shell"><div className="skip-controls"><button onClick={focusNavigation}>Skip to navigation</button><button onClick={focusContent}>Skip to content</button></div><section ref={mapStageRef} className={`map-stage view-${view} ${groupMapMode ? "group-map-mode" : ""}`} aria-label="Parkdex explorer">
-    <div id={view === "map" ? "primary-content" : undefined} className="map-content-target" tabIndex={-1} aria-label="Map" /><ParkMap places={mapPlaces} visited={visited} selectedId={selectedId} selectedIds={groupSelectedIds} resetViewRequest={resetViewRequest} showResetControl={view === "map"} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} mode={mapMode} currentLocation={location} recentPostcard={view === "map" ? recentPostcard : undefined} loadPhoto={loadVisitPhoto} photoOwnerKey={photoOwnerKey} onOpenPostcard={() => navigate("account")} />
+  return <main className="app-shell field-guide-shell"><div className="skip-controls"><button onClick={focusNavigation}>Skip to navigation</button><button onClick={focusContent}>Skip to content</button></div><section ref={mapStageRef} className={`map-stage view-${view} ${groupMapMode ? "group-map-mode" : ""} ${selected ? "has-selected-place" : ""} ${searchExpanded ? "search-panel-open" : ""}`} aria-label="Parkdex explorer">
+    <div id={view === "map" ? "primary-content" : undefined} className="map-content-target" tabIndex={-1} aria-label="Map" /><ParkMap places={mapPlaces} visited={visited} selectedId={selectedId} selectedIds={groupSelectedIds} resetViewRequest={resetViewRequest} showResetControl={view === "map"} onSelect={choosePlace} onBoundaryLoadState={setBoundaryLoadState} mode="explored" currentLocation={location} recentPostcard={view === "map" ? recentPostcard : undefined} loadPhoto={loadVisitPhoto} photoOwnerKey={photoOwnerKey} onOpenPostcard={() => navigate("account")} />
     {(view === "map" || view === "collection") && !groupMapMode && <div className="guide-view-switch" role="group" aria-label="Field Guide view"><span>Field Guide</span><button aria-pressed={view === "map"} onClick={() => view !== "map" && switchGuide("map")}><MapIcon size={17} />Map</button><button aria-pressed={view === "collection"} onClick={() => view !== "collection" && switchGuide("collection")}><List size={17} />List</button></div>}
 
     <FieldDiagnosticRegion />
@@ -409,32 +407,39 @@ export function ParkdexApp({ apiBaseUrl: configuredApiBaseUrl, googleAuthAllowed
     {claimsAvailable && (view === "map" || claimFlow) && liveClaimPlace && displayedRecommendation && recommendClaim && createClaim && reconcileClaim && uploadVisitPhoto && <ClaimFlowBanner key={`${photoOwnerKey}:${liveClaimPlace.id}`} place={liveClaimPlace} recommendation={displayedRecommendation} ownerKey={photoOwnerKey} busy={transitionBusy} resetSignal={claimFlowResetSignal} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadVisitPhoto} onClaimed={rememberImpression} onDismiss={dismissArrival} onViewAccount={() => navigate("account")} onFlowActiveChange={(placeId) => setClaimFlow(placeId ? { placeId, recommendation: displayedRecommendation } : null)} onClearRecommendation={clearLiveClaim} />}
     {view === "map" && recentPostcard && !displayedRecommendation && !selected && <aside className="impression-map-receipt" aria-label="Your saved postcard"><header><Check size={22} /><div><h2>One more place. Yours.</h2><p>{recentPostcard.place.name}</p></div><button className="impression-icon-button" aria-label="Dismiss saved postcard" onClick={() => setRecentImpression(null)}><X size={18} /></button></header><button className="impression-primary" onClick={() => navigate("account")}>Open your postcard<ArrowUpRight size={18} /></button></aside>}
     {groupMapMode && <button className="group-map-exit" onClick={() => navigate("groups")}><ArrowLeft size={17} />Back to collection</button>}
-    {groupMapMode && !selected && <><div className="map-visit-filter segmented" role="group" aria-label="Visit status">{(["all", "visited", "unseen"] as VisitFilter[]).map((value) => <button key={value} aria-pressed={collectionVisitFilter === value} className={collectionVisitFilter === value ? "active" : ""} onClick={() => setCollectionVisitFilter(value)}>{value === "all" ? "All" : value === "visited" ? "Visited" : "Unvisited"}</button>)}</div><button className="collection-map-progress" role="switch" aria-checked={mapMode === "explored"} aria-label="Show map progress" onClick={() => setMapMode(mapMode === "explored" ? "discover" : "explored")}><Trees size={18} />Progress<i aria-hidden="true" className="progress-switch-track" /></button></>}
-    {view === "map" && !groupMapMode && !selected && <><div className={`map-utility ${searchExpanded ? "search-open" : ""}`} role="toolbar" aria-label="Map utilities"><div className="map-mode-switch"><button className={mapMode === "explored" ? "active" : ""} role="switch" aria-checked={mapMode === "explored"} aria-label="Show map progress" onClick={() => setMapMode(mapMode === "explored" ? "discover" : "explored")}><Trees size={16} /><span>Progress</span><i aria-hidden="true" className="progress-switch-track" /></button>{geolocationAllowed && <button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={19} className={locationStatus === "locating" ? "spin" : ""} /></button>}</div><div className={`search-dock ${searchExpanded ? "expanded" : "collapsed"}`}>
-        <button className="search-toggle" onClick={() => { if (searchExpanded) applyMapSearch(); else { setMapSearchDraft(mapSearch); setSearchExpanded(true); } }} aria-label={searchExpanded ? "Apply search" : "Search places"}><Search size={20} />{!searchExpanded && (mapSearch.trim() || mapCategories.size > 0) && <span className="active-filter-dot" aria-label="Map filter active" />}</button>
-        {searchExpanded && <input ref={searchInputRef} aria-label="Search places" value={mapSearchDraft} onFocus={() => setShowFilters(false)} onClick={() => setShowFilters(false)} onChange={(event) => setMapSearchDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyMapSearch(); if (event.key === "Escape" && !mapSearchDraft) setSearchExpanded(false); }} placeholder="Find a park or region" />}
-        {searchExpanded && <>{mapSearchDraft && <button className="icon-button" onClick={() => setMapSearchDraft("")} aria-label="Clear search"><X size={17} /></button>}<button className={`filter-button ${mapCategories.size ? "active" : ""} ${showFilters ? "open" : ""}`} onClick={() => setShowFilters((current) => !current)} aria-label={mapCategories.size ? `Filter places, ${mapCategories.size} active` : "Filter places"} aria-expanded={showFilters} aria-pressed={mapCategories.size > 0}><ListFilter size={18} /></button><button className="search-collapse" onClick={applyMapSearch} aria-label="Apply and close search"><ChevronDown size={19} /></button></>}
+    {groupMapMode && !selected && <div className="map-visit-filter segmented" role="group" aria-label="Visit status">{(["all", "visited", "unseen"] as VisitFilter[]).map((value) => <button key={value} aria-pressed={collectionVisitFilter === value} className={collectionVisitFilter === value ? "active" : ""} onClick={() => setCollectionVisitFilter(value)}>{value === "all" ? "All" : value === "visited" ? "Visited" : "Unvisited"}</button>)}</div>}
+    {view === "map" && !groupMapMode && <><div className={`map-utility ${searchExpanded ? "search-open" : ""}`} role="toolbar" aria-label="Map utilities">{geolocationAllowed && <button className="locate-button" onClick={requestLocation} aria-label="Show my current location"><LocateFixed size={19} className={locationStatus === "locating" ? "spin" : ""} /></button>}<div className={`search-dock ${searchExpanded ? "expanded" : "collapsed"}`}>
+        <button className="search-toggle" onClick={() => { if (searchExpanded) applyMapSearch(); else openMapSearch(); }} aria-label={searchExpanded ? "Apply search" : "Search places"}><Search size={20} />{!searchExpanded && (mapSearch.trim() || mapCategories.size > 0) && <span className="active-filter-dot" aria-label="Map filter active" />}</button>
+        <input ref={searchInputRef} aria-label="Search places" value={searchExpanded ? mapSearchDraft : mapSearch} onFocus={openMapSearch} onClick={openMapSearch} onChange={(event) => { setMapSearchDraft(event.target.value); setSearchExpanded(true); }} onKeyDown={(event) => { if (event.key === "Enter") applyMapSearch(); if (event.key === "Escape" && !mapSearchDraft) setSearchExpanded(false); }} placeholder="Search parks and islands" />
+        {(searchExpanded ? mapSearchDraft : mapSearch) && <button className="icon-button" onClick={() => { setMapSearchDraft(""); setMapSearch(""); }} aria-label="Clear search"><X size={17} /></button>}<button className={`filter-button ${mapCategories.size ? "active" : ""} ${showFilters ? "open" : ""}`} onClick={() => setShowFilters((current) => !current)} aria-label={mapCategories.size ? `Filter places, ${mapCategories.size} active` : "Filter places"} aria-expanded={showFilters} aria-pressed={mapCategories.size > 0}><ListFilter size={18} /></button>{searchExpanded && <button className="search-collapse" onClick={applyMapSearch} aria-label="Apply and close search"><ChevronDown size={19} /></button>}
       </div></div>
       {!searchExpanded && (mapSearch.trim() || mapCategories.size > 0 || collectionAuthorities.size > 0) && <div className="applied-map-search"><div role="status"><strong>{mapFiltered.length ? `${mapFiltered.length} ${mapFiltered.length === 1 ? "place" : "places"} found` : "No places match"}</strong><span>{[mapSearch.trim() ? `“${mapSearch.trim()}”` : "", ...[...mapCategories].map((category) => categoryLabels[category]), ...[...collectionAuthorities].map(collectionTitle)].filter(Boolean).join(" · ")}</span></div><button onClick={resetMapFilters} aria-label="Clear map search and filters"><X size={17} /><span>Clear</span></button></div>}
       <div className="map-visit-filter segmented" role="group" aria-label="Visit status">{(["all", "visited", "unseen"] as VisitFilter[]).map((value) => <button key={value} aria-pressed={collectionVisitFilter === value} className={collectionVisitFilter === value ? "active" : ""} onClick={() => setCollectionVisitFilter(value)}>{value === "all" ? "All" : value === "visited" ? "Visited" : "Unvisited"}</button>)}</div>
-      <GlobalProgress value={globalProgressCount} total={places.length} hidden={mapMode !== "explored"} />
       {searchExpanded && mapSearchDraft.trim() && !showFilters && <div className="search-results" aria-live="polite">{mapSearchMatches.length ? <><p>{mapSearchMatches.length} {mapSearchMatches.length === 1 ? "place" : "places"} found</p>{mapSearchMatches.map((place) => <button key={place.id} className={`category-${place.category}`} onClick={() => { setMapSearch(mapSearchDraft); choosePlace(place.id); setSearchExpanded(false); }}><span><strong>{place.name}</strong><small><i />{categoryLabels[place.category]} · {place.region}</small></span><ArrowUpRight size={17} /></button>)}</> : <p className="empty-search">No places match “{mapSearchDraft.trim()}”.</p>}</div>}
-      {showNearby && <NearbyDialog status={locationStatus} nearby={nearby} onClose={() => setShowNearby(false)} choosePlace={choosePlace} />}
     </>}
-    {view !== "map" && <section key={`${view}-${viewRevision}`} onScroll={rememberGroupPanelScroll} className={`feature-panel feature-${view}`}><button className="content-skip" onClick={focusNavigation}>Skip to navigation</button><div id="primary-content" tabIndex={-1} className="primary-content-target" aria-label={view === "collection" ? "Field Guide" : view === "badges" ? "Badges" : view === "groups" ? "Collections" : "My Dex"} />{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} resetFilters={resetCollectionFilters} clearActiveFilters={clearCollectionActiveFilters} choosePlace={choosePlace} />}{view === "groups" && authenticated && !recoveryActive && <GroupsView places={places} groups={groupsState.groups} selectedGroupId={groupsState.selectedGroupId} loading={groupsState.loading} retrying={groupsState.retrying} error={groupsState.error} busy={groupsState.busy} offline={groupsState.offline} syncStatus={groupsState.syncStatus} syncMessage={groupsState.syncMessage} pendingMemberships={groupsState.pendingMemberships} onRetry={groupsState.retry} onSelect={groupsState.selectGroup} onClear={() => groupsState.selectGroup(null)} onCreate={groupsState.create} onRename={groupsState.rename} onDelete={groupsState.remove} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} onViewMap={viewSelectedGroupOnMap} onOpenPlace={openGroupMember} />}{view === "badges" && <><button className="groups-back" onClick={() => navigate("account")}><ArrowLeft size={18} />My Dex</button><BadgesView badges={badgeList} earned={earnedBadges} places={places} visited={visited} onOpenPlace={choosePlace} /></>}{(view === "account" || (view === "groups" && (!authenticated || recoveryActive))) && <AccountView section={view === "groups" ? "collections" : "account"} settingsRoute={navigation.settingsOpen} onSettingsRouteChange={changeSettingsRoute} apiBaseUrl={apiBaseUrl} googleAuthAllowed={googleAuthAllowed} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy || Boolean(claimFlow)} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onExitRecovery={() => setRecoveryActive(false)} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={logoutAndClearGroupHistory} onReset={async () => { await resetProgress(); setCelebrationBadges([]); setProgressHoldCount(null); try { await groupsState.refreshAfterReset(); } catch { setNavigationNotice("Progress was reset, but saved collection data still needs cleanup. Open Collections and retry sync."); } }} onDeleteAccount={onDeleteAccount} badges={badgeList} places={places.filter((place) => visited.has(place.id))} allPlaces={places} visits={visits} visitTimestamps={visitTimestamps} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} onBrowseBadges={() => navigate("badges")} onShowGuide={() => setShowOnboarding(true)} />}</section>}
+    {view === "map" && !selected && searchExpanded && !mapSearchDraft.trim() && <MapBrowserPanel places={groupMapMode ? mapPlaces : mapFiltered} visited={visited} title={selectedGroup?.name ?? "Explore places"} inert={showFilters} onSelect={choosePlace} />}
+    {view !== "map" && <section key={`${view}-${viewRevision}`} onScroll={rememberGroupPanelScroll} className={`feature-panel feature-${view}`}><button className="content-skip" onClick={focusNavigation}>Skip to navigation</button><div id="primary-content" tabIndex={-1} className="primary-content-target" aria-label={view === "collection" ? "Field Guide" : view === "badges" ? "Badges" : view === "groups" ? "Collections" : "My Dex"} />{view === "collection" && <CollectionView groups={groups} places={places} visited={visited} search={collectionSearch} setSearch={setCollectionSearch} selectedCategories={collectionCategories} authorities={collectionAuthorities} visitFilter={collectionVisitFilter} setVisitFilter={setCollectionVisitFilter} toggleCategory={(value) => toggleSet(setCollectionCategories, value)} resetFilters={resetCollectionFilters} clearActiveFilters={clearCollectionActiveFilters} choosePlace={choosePlace} />}{view === "groups" && authenticated && !recoveryActive && <GroupsView places={places} groups={groupsState.groups} selectedGroupId={groupsState.selectedGroupId} loading={groupsState.loading} retrying={groupsState.retrying} error={groupsState.error} busy={groupsState.busy} offline={groupsState.offline} syncStatus={groupsState.syncStatus} syncMessage={groupsState.syncMessage} pendingMemberships={groupsState.pendingMemberships} onRetry={groupsState.retry} onSelect={groupsState.selectGroup} onClear={() => groupsState.selectGroup(null)} onCreate={groupsState.create} onRename={groupsState.rename} onDelete={groupsState.remove} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} onViewMap={viewSelectedGroupOnMap} onOpenPlace={openGroupMember} />}{view === "badges" && <><button className="groups-back" onClick={() => navigate("account")}><ArrowLeft size={18} />My Dex</button><BadgesView badges={badgeList} earned={earnedBadges} places={places} visited={visited} onOpenPlace={choosePlace} /></>}{(view === "account" || (view === "groups" && (!authenticated || recoveryActive))) && <AccountView section={view === "groups" ? "collections" : "account"} settingsRoute={navigation.settingsOpen} onSettingsRouteChange={changeSettingsRoute} apiBaseUrl={apiBaseUrl} googleAuthAllowed={googleAuthAllowed} account={account} authenticated={authenticated && !recoveryActive} sessionAuthenticated={authenticated} loading={loading} busy={transitionBusy || Boolean(claimFlow)} guestProgressAvailable={guestProgressAvailable} onAuth={completeAuth} onGoogleAuth={authenticateWithGoogle} onExitRecovery={() => setRecoveryActive(false)} onRequestVerification={requestEmailVerification} onConfirmVerification={confirmEmailVerification} onImport={importGuest} onLogout={logoutAndClearGroupHistory} onReset={async () => { await resetProgress(); setCelebrationBadges([]); try { await groupsState.refreshAfterReset(); } catch { setNavigationNotice("Progress was reset, but saved collection data still needs cleanup. Open Collections and retry sync."); } }} onDeleteAccount={onDeleteAccount} badges={badgeList} places={places.filter((place) => visited.has(place.id))} allPlaces={places} visits={visits} visitTimestamps={visitTimestamps} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} photoOwnerKey={photoOwnerKey} choosePlace={choosePlace} onBrowseBadges={() => navigate("badges")} onShowGuide={() => setShowOnboarding(true)} />}</section>}
     {showFilters && view === "map" && <div className="filter-tray category-chips"><div className="filter-tray-heading"><strong>Filter places</strong><button onClick={() => setShowFilters(false)} aria-label="Close filters"><X size={19} /></button></div>{categories.map((category) => <button key={category} className={`category-${category} ${mapCategories.has(category) ? "selected active" : ""}`} onClick={() => toggleSet(setMapCategories, category)} aria-pressed={mapCategories.has(category)}>{categoryLabels[category]}</button>)}{mapCategories.size > 0 && <button className="clear-filter" onClick={resetMapFilters}>Clear filters</button>}</div>}
     {navigationNotice && <p className="navigation-notice" role="status">{navigationNotice}<button onClick={() => setNavigationNotice("")} aria-label="Dismiss navigation message"><X size={17} /></button></p>}
     {photoOwnerCleanupFailed && <p className="navigation-notice" role="alert">A private photo from the previous account could not be removed yet.<button className="claim-refresh" onClick={() => setPhotoOwnerCleanupAttempt((current) => current + 1)}>Retry private photo cleanup</button></p>}
     {(loadError || syncMessage || storageUnavailable) && <div ref={connectionStatusRef} className="connection-status" role="status" aria-live="polite" aria-atomic="false">{loadError && <p className="connection-note">{loadError}</p>}{syncMessage && <p className="sync-note">{syncMessage}{syncMessage.includes("waiting") && <button onClick={() => void retrySync()}>Retry</button>}</p>}{storageUnavailable && <p className="storage-note">Private storage is blocked; guest progress lasts for this tab.</p>}</div>}
     {selected && <PlaceDetail key={selected.id} place={selected} visit={visits[selected.id]} visited={visited.has(selected.id)} busy={transitionBusy} authenticated={authenticated} claimsAvailable={claimsAvailable} legacyVisitCreationAvailable={legacyVisitCreationAvailable} recommendClaim={recommendClaim} createClaim={createClaim} uploadPhoto={uploadVisitPhoto} loadPhoto={loadVisitPhoto} removePhoto={removeVisitPhoto} ownerKey={photoOwnerKey} onClaimed={celebrateClaim} onOpenPlace={choosePlace} groupsState={groupsState} boundaryState={boundaryLoadState} expanded={detailExpanded} onExpand={() => updateNavigation({ detailExpanded: !detailExpanded })} onClose={closePlace} onToggle={() => toggleSelected(selected)} openCollection={openCollection} />}
 
-    <nav className="thumb-nav parkdex-nav" aria-label="Primary navigation"><Nav active={view === "map" || view === "collection"} click={() => navigate(view === "collection" ? "collection" : "map")} icon={<BookOpen size={20} />} label="Field Guide" /><Nav active={view === "groups"} click={() => navigate("groups")} icon={<Layers size={20} />} label="Collections" /><Nav active={view === "account" || view === "badges"} click={() => navigate("account")} icon={<UserRound size={20} />} label="My Dex" /><button className="navigation-skip" onClick={focusContent}>Skip to content</button></nav>
+    <nav className="thumb-nav parkdex-nav" aria-label="Primary navigation"><span className="rail-brand" aria-hidden="true"><Trees size={22} /></span><Nav active={view === "map" || view === "collection"} click={() => navigate(view === "collection" ? "collection" : "map")} icon={<BookOpen size={20} />} label="Field Guide" /><Nav active={view === "groups"} click={() => navigate("groups")} icon={<Layers size={20} />} label="Collections" /><Nav active={view === "account" || view === "badges"} click={() => navigate("account")} icon={<UserRound size={20} />} label="My Dex" /><button className="navigation-skip" onClick={focusContent}>Skip to content</button></nav>
+    <button className={`desktop-profile ${view === "account" || view === "badges" ? "active" : ""}`} onClick={() => navigate("account")} aria-label="Open profile" aria-current={view === "account" || view === "badges" ? "page" : undefined}><UserRound size={22} /></button>
     {showOnboarding && <FieldGuideOnboarding place={places.find((place) => place.id === "provincial-goldstream-park") ?? places[0]} onComplete={completeOnboarding} />}
-    {celebrationBadges[0] && <BadgeCelebration key={celebrationBadges[0].id} badge={celebrationBadges[0]} onClaim={() => setCelebrationBadges((current) => { const remaining = current.slice(1); if (!remaining.length) setProgressHoldCount(null); return remaining; })} />}
+    {celebrationBadges[0] && <BadgeCelebration key={celebrationBadges[0].id} badge={celebrationBadges[0]} onClaim={() => setCelebrationBadges((current) => current.slice(1))} />}
   </section></main>;
 }
 
 function Nav({ active, click, icon, label, ariaName }: { active: boolean; click: () => void; icon: React.ReactNode; label: string; ariaName?: string }) { return <button className={active ? "active" : ""} onClick={click} aria-label={ariaName ?? label} aria-current={active ? "page" : undefined}>{icon}<span>{label}</span></button>; }
+function MapBrowserPanel({ places, visited, title, inert, onSelect }: { places: Place[]; visited: ReadonlySet<string>; title: string; inert: boolean; onSelect: (id: string) => void }) {
+  const regions = groupByRegion(places);
+  return <aside className="map-browser-panel" aria-label="Places on the map" inert={inert}>
+    <header className="map-browser-heading"><div><h2>{title}</h2><p>{places.length} {places.length === 1 ? "place" : "places"} on the map</p></div></header>
+    <div className="map-browser-list">{regions.length ? regions.map((group) => <section key={group.region} className="map-browser-region"><h3>{group.region}<span>{group.places.length}</span></h3>{group.places.map((place) => <PlaceListRow key={place.id} place={place} visited={visited.has(place.id)} onSelect={() => onSelect(place.id)} />)}</section>) : <p className="map-browser-empty">No places match these filters.</p>}</div>
+  </aside>;
+}
 function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenticated, claimsAvailable, legacyVisitCreationAvailable, recommendClaim, createClaim, uploadPhoto, loadPhoto, removePhoto, ownerKey, onClaimed, onOpenPlace, groupsState, boundaryState, onClose, onToggle, openCollection }: {
   expanded: boolean;
   onExpand: () => void;
@@ -459,8 +464,27 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
   onToggle: () => void;
   openCollection: (category?: PlaceCategory, authority?: string) => void;
 }) {
-  const detailRef = useDialogFocus(onClose);
-  const hasImage = Boolean(getPlaceImage(place.id));
+  const [compactLayout, setCompactLayout] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia?.("(max-width: 859px)");
+    if (!query) return;
+    const update = () => setCompactLayout(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const modal = expanded && compactLayout;
+  const detailRef = useDialogFocus(onClose, modal);
+  const image = getPlaceImage(place.id);
+  const hasImage = Boolean(image);
+  const visitor = getVisitorInformation(place.id);
+  const descriptionSource = getPlaceDescriptionSource(place.id);
+  const area = formatPlaceArea(place.id);
+  const origin = shortOriginForPlace(place) ?? (place.sourceName.trim() || "Source unavailable");
+  const firstSentence = place.description.split(/(?<=\.)\s+/)[0];
+  const genericDescription = /collection\.$|regional park(?: or conservation area)?\.$|national park reserve\.$|officially named island|^No visitor overview is available/i.test(firstSentence);
+  const placeStory = descriptionSource?.status === "no-overview" || genericDescription ? null : place.description.trim();
+  const pullStartY = useRef<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   useEffect(() => {
     if (feedback?.kind !== "success") return;
@@ -468,61 +492,26 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
     return () => window.clearTimeout(timer);
   }, [feedback]);
   const showSheetActions = authenticated || visited || legacyVisitCreationAvailable;
-  return <article ref={detailRef as React.RefObject<HTMLElement>} role="dialog" aria-modal={expanded ? "true" : undefined} className={`place-sheet ${expanded ? "place-sheet-full" : ""} ${hasImage ? "with-photo" : "without-photo"} ${authenticated ? "signed-in" : "guest place-sheet-guest"}`} data-authenticated={authenticated ? "true" : "false"} aria-labelledby="place-detail-title">
-    <header className="place-sheet-header"><div><button className={`place-category category-${place.category}`} onClick={() => openCollection(place.category)} aria-label={`Browse ${categoryLabels[place.category]} places`}>{categoryLabels[place.category]}<ChevronRight size={13} /></button><h2 id="place-detail-title">{place.name}</h2></div><button className="sheet-expand" onClick={onExpand} aria-label={expanded ? "Collapse place details" : "Open fullscreen place details"}>{expanded ? <Minimize2 size={19} /> : <Maximize2 size={19} />}</button><button className="sheet-close" onClick={onClose} aria-label="Close place details"><X size={20} /></button></header>
+  return <article ref={detailRef as React.RefObject<HTMLElement>} role="dialog" aria-modal={modal ? "true" : undefined} className={`place-sheet ${expanded ? "place-sheet-full" : ""} ${hasImage ? "with-photo" : "without-photo"} ${authenticated ? "signed-in" : "guest place-sheet-guest"}`} data-authenticated={authenticated ? "true" : "false"} aria-labelledby="place-detail-title">
+    <div className="place-sheet-hero" onTouchStart={(event) => { pullStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { if (pullStartY.current === null) return; const distance = event.changedTouches[0]?.clientY - pullStartY.current; pullStartY.current = null; if (distance != null && (expanded ? distance > 45 : distance < -45)) onExpand(); }}><PlaceImage place={place} variant="card" showCredit={false} preload /><button className="sheet-pull-handle" onClick={onExpand} aria-label={expanded ? "Collapse place details" : "Open fullscreen place details"} /></div>
+    <header className="place-sheet-header"><div><button className={`place-category category-${place.category}`} onClick={() => openCollection(place.category)} aria-label={`Browse ${categoryLabels[place.category]} places`}>{categoryLabels[place.category]}<ChevronRight size={13} /></button><h2 id="place-detail-title">{place.name}</h2></div><button className="sheet-close" onClick={onClose} aria-label="Close place details"><X size={20} /></button></header>
     <div className="place-sheet-content">
+      <div className="place-facts"><span><MapPin size={17} /><span><small>Origin</small><strong>{origin}</strong></span></span>{area && <span><LandPlot size={17} /><span><small>Size</small><strong>{area}</strong></span></span>}</div>
+      {showSheetActions && <div className="sheet-actions" data-action-track={authenticated ? "account" : "visit"}>{(visited || legacyVisitCreationAvailable) && <button aria-label={visited ? "Undo visited place" : "Mark as visited"} title={visited ? "Undo visited place" : "Mark as visited"} aria-pressed={visited} disabled={busy} className={`visit-button place-primary-action ${visited ? "is-visited" : ""}`} onClick={onToggle}>{visited ? <RotateCcw size={20} /> : <Check size={20} />}<span className="action-hint">{visited ? "Undo visited" : "Mark visited"}</span></button>}
+        {authenticated && <GroupActions place={place} groups={groupsState.groups} busy={groupsState.busy} offline={groupsState.offline} onFeedback={setFeedback} onCreate={async (name, placeIds) => { const created = await groupsState.create(name, placeIds); groupsState.selectGroup(null); return created; }} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} />}
+      </div>}
       {((visit?.claim && claimsAvailable) || (!authenticated && typeof recommendClaim === "function")) && recommendClaim && createClaim && uploadPhoto && loadPhoto && removePhoto && <div className="place-primary-action-panel" data-primary-action="visit"><ClaimVisitPanel authenticated={authenticated} place={place} visit={visit} busy={busy} recommendClaim={recommendClaim} createClaim={createClaim} uploadPhoto={uploadPhoto} loadPhoto={loadPhoto} removePhoto={removePhoto} onClaimed={onClaimed} ownerKey={ownerKey} onOpenPlace={onOpenPlace} /></div>}
-      <div className="place-sheet-media">{hasImage ? <PlaceImage place={place} variant="card" /> : <div className="place-sheet-metadata" aria-label={`Details for ${place.name}`}><PlaceMetadata place={place} boundaryState={boundaryState} openCollection={openCollection} /></div>}
-        {showSheetActions && <div className="sheet-actions" data-action-track={authenticated ? "account" : "visit"}>{(visited || legacyVisitCreationAvailable) && <button aria-label={visited ? "Undo visited place" : "Mark as visited"} title={visited ? "Undo visited place" : "Mark as visited"} aria-pressed={visited} disabled={busy} className={`visit-button place-primary-action ${visited ? "is-visited" : ""}`} onClick={onToggle}>{visited ? <RotateCcw size={20} /> : <Check size={20} />}<span className="action-hint">{visited ? "Undo visited" : "Mark visited"}</span></button>}
-          {authenticated && <GroupActions place={place} groups={groupsState.groups} busy={groupsState.busy} offline={groupsState.offline} onFeedback={setFeedback} onCreate={async (name, placeIds) => { const created = await groupsState.create(name, placeIds); groupsState.selectGroup(null); return created; }} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} />}
-        </div>}
-      </div>
       {feedback && <p className={`place-action-feedback ${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"}>{feedback.text}</p>}
-      {hasImage && <PlaceMetadata place={place} boundaryState={boundaryState} openCollection={openCollection} />}
-      <p className="place-description">{place.description}</p>
+      {placeStory && <section className="place-story"><h3>About this place</h3>{placeStory.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</section>}
+      <section className="place-visit-info"><h3>Plan your visit</h3>{visitor ? <a className="official-visitor-link" href={visitor.url} target="_blank" rel="noreferrer"><span><strong>Official visitor information</strong><small>Access, facilities and current notices</small></span><ArrowUpRight size={18} /></a> : <p className="place-visitor-unavailable">Official visitor information is not available for this place yet.</p>}</section>
+      <button className="place-collection-link" onClick={() => openCollection(undefined, authorityForPlace(place))}>Browse more from {origin}<ChevronRight size={17} /></button>
+      <details className="place-credits"><summary>Map data and photo credits<ChevronDown size={17} /></summary><div><p className="place-pin-note">Map pin: {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}. The pin may be within the park rather than at an entrance.</p><PlaceProvenance place={place} boundaryState={boundaryState} />{descriptionSource && <p className="place-description-source"><a href={descriptionSource.sourceUrl} target="_blank" rel="noreferrer" title={`${descriptionSource.sourceTitle}, ${descriptionSource.sourceSection}`}>{descriptionSource.status === "summary" ? "Description source" : "Visitor overview check"}: {descriptionSource.sourceName}</a></p>}{image && <p className="place-photo-credit">Photo by <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.originalUrl} target="_blank" rel="noreferrer">Original</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a></p>}{!placeStory && <p className="place-listing-note">{place.description}</p>}</div></details>
     </div>
   </article>;
 }
 function PlaceProvenance({ place, boundaryState }: { place: Place; boundaryState: BoundaryLoadState }) { const published = boundaryState.status === "ready" && boundaryState.placeIds.has(place.id); return <>{boundaryState.status === "ready" && !published && <p className="boundary-note"><LandPlot size={15} />No sourced boundary is available.</p>}{boundaryState.status === "failed" && <p className="boundary-note"><LandPlot size={15} />Boundary display unavailable.</p>}<a className={`boundary-note source-note ${published ? "available" : ""}`} href={place.sourceUrl} target="_blank" rel="noreferrer"><LandPlot size={15} />{published ? "Published boundary · source" : "Place source"}<ArrowUpRight size={13} /></a></>; }
-function PlaceMetadata({ place, boundaryState, openCollection }: { place: Place; boundaryState: BoundaryLoadState; openCollection: (category?: PlaceCategory, authority?: string) => void }) { return <><p className="place-region"><MapPin size={15} />{place.region}</p><button className="place-collection-link" onClick={() => openCollection(undefined, authorityForPlace(place))}>Browse {collectionTitle(authorityForPlace(place))}<ChevronRight size={15} /></button>{getVisitorInformation(place.id) && <a className="official-visitor-link" href={getVisitorInformation(place.id)!.url} target="_blank" rel="noreferrer">Official visitor information<ArrowUpRight size={15} /></a>}<PlaceProvenance place={place} boundaryState={boundaryState} /></>; }
 function PlaceListRow({ place, visited, onSelect, detail }: { place: Place; visited: boolean; onSelect: () => void; detail?: string }) { return <button className={`place-row category-${place.category}`} onClick={onSelect}><PlaceImage place={place} variant="thumbnail" /><span className={`specimen-number ${visited ? "caught" : ""}`}>{visited ? <Check size={16} /> : <MapPin size={15} />}</span><span className="place-row-copy"><strong>{place.name}</strong><small><i />{categoryLabels[place.category]} · {place.region}{detail && <> · <em>{detail}</em></>}</small></span>{!detail && <ChevronDown size={17} />}</button>; }
-function NearbyDialog({ status, nearby, onClose, choosePlace }: { status: "idle" | "locating" | "ready" | "denied" | "unavailable"; nearby: ReturnType<typeof nearestUnseenParks>; onClose: () => void; choosePlace: (id: string) => void }) { const ref = useDialogFocus(onClose); const ready = status === "ready"; const message = status === "locating" ? "Finding your location…" : status === "denied" ? "Location is blocked. Allow it in browser settings, then try again." : status === "unavailable" ? "Your location is unavailable right now. Search the map instead." : "Closest places you have not visited yet"; return <section ref={ref} className="nearby-modal" role="dialog" aria-modal="true" aria-labelledby="nearby-title"><button className="modal-close" onClick={onClose} aria-label="Close nearby places"><X size={20} /></button><div><h2 id="nearby-title">Near Me</h2><p>{message}</p></div>{ready && <div className="nearby-list">{nearby.map(({ place, distanceKm }) => <PlaceListRow key={place.id} place={place} visited={false} detail={formatDistance(distanceKm)} onSelect={() => choosePlace(place.id)} />)}</div>}</section>; }
 function JuicyProgress({ value, total, label }: { value: number; total: number; label: string }) { return <div className="juicy-progress"><div><strong>{label}</strong><span>{value} / {total}</span></div><div className="juicy-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={value}><span style={{ width: `${total ? value / total * 100 : 0}%` }}><i /></span></div></div>; }
-function GlobalProgress({ value, total, hidden = false }: { value: number; total: number; hidden?: boolean }) {
-  const count = Math.min(total, Math.max(0, value));
-  const targetPercentage = total ? count / total * 100 : 0;
-  const [displayedPercentage, setDisplayedPercentage] = useState(targetPercentage);
-  const [settled, setSettled] = useState({ percentage: targetPercentage, count, total });
-  const displayedRef = useRef(targetPercentage);
-
-  useEffect(() => {
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const start = displayedRef.current;
-    if (reducedMotion || Math.abs(targetPercentage - start) < 0.05) {
-      displayedRef.current = targetPercentage;
-      setDisplayedPercentage(targetPercentage);
-      setSettled({ percentage: targetPercentage, count, total });
-      return;
-    }
-    let frame = 0;
-    let startedAt: number | null = null;
-    const tick = (timestamp: number) => {
-      startedAt ??= timestamp;
-      const elapsed = Math.min(1, (timestamp - startedAt) / 650);
-      const eased = 1 - Math.pow(1 - elapsed, 3);
-      const next = start + (targetPercentage - start) * eased;
-      displayedRef.current = next;
-      setDisplayedPercentage(next);
-      if (elapsed < 1) frame = window.requestAnimationFrame(tick);
-      else setSettled({ percentage: targetPercentage, count, total });
-    };
-    frame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frame);
-  }, [count, targetPercentage, total]);
-
-  const [wholePercentage, decimalPercentage] = displayedPercentage.toFixed(1).split(".");
-  return <div className="global-progress" hidden={hidden} role="progressbar" aria-label="Parkdex progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={settled.percentage} aria-valuetext={`${settled.percentage.toFixed(1)}% · ${settled.count} of ${settled.total} places visited`}><strong aria-hidden="true"><span>{wholePercentage}</span><span>.{decimalPercentage}%</span></strong></div>;
-}
 function CategoryProgress({ places, visited }: { places: Place[]; visited: Set<string> }) { const counts = categories.map((category) => { const categoryPlaces = places.filter((place) => place.category === category); return { category, total: categoryPlaces.length, visited: categoryPlaces.filter((place) => visited.has(place.id)).length }; }); const collected = counts.reduce((total, count) => total + count.visited, 0); return <section className="collection-progress" aria-label="Visit progress"><header><strong>{collected} of {places.length} visited</strong></header><div className="collection-progress-track" role="progressbar" aria-label={`${collected} of ${places.length} places visited`} aria-valuemin={0} aria-valuemax={places.length} aria-valuenow={collected}><div>{counts.map(({ category, visited: categoryVisited }) => <span key={category} className={`category-${category}`} style={{ width: `${places.length ? categoryVisited / places.length * 100 : 0}%` }} />)}</div></div><ul>{counts.map(({ category, total, visited: categoryVisited }) => <li key={category} className={`category-${category}`}><i /><span>{categoryLabels[category]}</span><b>{categoryVisited}/{total}</b></li>)}</ul></section>; }
 
 function collectionTitle(authority: string) {

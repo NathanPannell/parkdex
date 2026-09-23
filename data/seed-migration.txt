@@ -1,1 +1,1 @@
-database/migrations/0014_clean_place_names.sql
+database/migrations/0022_refresh_place_descriptions.sql
