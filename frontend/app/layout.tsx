@@ -9,6 +9,7 @@ import "./sealed-impressions.css";
 import "./field-guide.css";
 import "./postcard-shelf.css";
 import "./field-guide-onboarding.css";
+import "./map-panel-layout.css";
 
 const appPublicUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://web.parkdex.app";
 
