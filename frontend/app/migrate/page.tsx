@@ -93,18 +93,47 @@ export default function GuestProgressMigrationPage() {
   }, []);
 
   return (
-    <main style={{ maxWidth: 640, margin: "10vh auto", padding: "0 24px", fontFamily: "sans-serif", lineHeight: 1.5 }}>
-      <h1>Move your guest progress</h1>
-      {status === "connecting" && <p>Connecting to the Parkdex page that started this transfer…</p>}
-      {status === "unavailable" && <p>Start this transfer from the Parkdex landing page. Your saved progress has not been changed.</p>}
-      {status === "imported" && <p>Your guest progress is saved here. Opening Parkdex…</p>}
-      {status === "conflict" && (
-        <p>This app already has guest progress, or its saved state could not be confirmed empty. The transfer stopped to protect it. Keep the original Parkdex page open while you decide which copy to use.</p>
-      )}
-      {status === "invalid" && <p>The transfer did not pass its safety checks. Your original progress is still on the Parkdex landing page.</p>}
-      {status === "oversized" && <p>The saved progress is too large for this transfer. Your original progress remains on the Parkdex landing page.</p>}
-      {status === "storage-error" && <p>This browser could not save and verify the transfer. Your original progress remains on the Parkdex landing page.</p>}
-      <p><Link href="/">Open Parkdex</Link></p>
+    <main style={{
+      maxWidth: 640,
+      margin: "10vh auto 24px",
+      padding: "28px 24px",
+      borderRadius: 16,
+      background: "var(--paper-bright)",
+      color: "var(--forest)",
+      boxShadow: "var(--soft-shadow)",
+      fontFamily: "var(--font-body)",
+      lineHeight: 1.5,
+    }}>
+      <h1 style={{
+        margin: "0 0 12px",
+        color: "var(--forest)",
+        font: "750 clamp(28px, 8vw, 38px)/1.05 var(--font-display)",
+        letterSpacing: "-.02em",
+      }}>Move your guest progress</h1>
+      <div role="status" aria-live="polite" aria-atomic="true" style={{ color: "var(--forest-2)" }}>
+        {status === "connecting" && <p style={{ margin: 0 }}>Connecting to the Parkdex page that started this transfer…</p>}
+        {status === "unavailable" && <p style={{ margin: 0 }}>Start this transfer from the Parkdex landing page. Your saved progress has not been changed.</p>}
+        {status === "imported" && <p style={{ margin: 0 }}>Your guest progress is saved here. Opening Parkdex…</p>}
+        {status === "conflict" && (
+          <p style={{ margin: 0 }}>This app already has guest progress, or its saved state could not be confirmed empty. The transfer stopped to protect it. Keep the original Parkdex page open while you decide which copy to use.</p>
+        )}
+        {status === "invalid" && <p style={{ margin: 0 }}>The transfer did not pass its safety checks. Your original progress is still on the Parkdex landing page.</p>}
+        {status === "oversized" && <p style={{ margin: 0 }}>The saved progress is too large for this transfer. Your original progress remains on the Parkdex landing page.</p>}
+        {status === "storage-error" && <p style={{ margin: 0 }}>This browser could not save and verify the transfer. Your original progress remains on the Parkdex landing page.</p>}
+      </div>
+      <p style={{ margin: "20px 0 0" }}>
+        <Link href="/" style={{
+          display: "inline-flex",
+          minHeight: 44,
+          alignItems: "center",
+          padding: "0 16px",
+          borderRadius: 11,
+          background: "var(--forest)",
+          color: "var(--paper-bright)",
+          fontWeight: 850,
+          textDecoration: "none",
+        }}>Open Parkdex</Link>
+      </p>
     </main>
   );
 }
