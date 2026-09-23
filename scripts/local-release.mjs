@@ -15,6 +15,7 @@ const value = (name, fallback = "") => {
 const flag = (name) => process.argv.includes(name);
 const REPOSITORY = "NathanPannell/parkdex";
 const STAGING_API_HOST = "api-staging-882c.up.railway.app";
+const STAGING_FRONTEND_ORIGIN = "https://staging.web.parkdex.app";
 
 function run(command, args, options = {}) {
   const provider = buildProviderProcess(command, args);
@@ -676,14 +677,14 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     try {
       updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), vercel: { projectId: process.env.VERCEL_PROJECT_ID, commitSha: sha, releaseId, environment: railwayEnvironment } }, status: "vercel-creating" });
       const targetArgs = preview ? ["--target", "preview"] : ["--prod"];
-      const deployOutput = run("vercel", ["deploy", "--yes", ...targetArgs, "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
+      const deployOutput = run("vercel", ["deploy", "--yes", ...targetArgs, "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_APP_URL=${preview ? "https://web.parkdex.app" : STAGING_FRONTEND_ORIGIN}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
       deploymentUrl = deployOutput.split(/\r?\n/).findLast((line) => /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(line.trim()))?.trim();
     } catch {
       deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
     }
     if (!deploymentUrl) deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);
     const vercel = await verifyVercelDeployment(deploymentUrl, sha, releaseId, railwayEnvironment, preview ? "preview" : "production");
-    state.frontendUrl = preview ? vercel.url : "https://staging.parkdex.app";
+    state.frontendUrl = preview ? vercel.url : STAGING_FRONTEND_ORIGIN;
     updateJournal(journalPath, state, { vercelDeploymentId: vercel.id, frontendUrl: state.frontendUrl, apiUrl: state.apiUrl, status: "frontend-created" });
     const variables = preview
       ? [["PREVIEW_DATABASE_URL", database.pooled], ["PREVIEW_DATABASE_URL_UNPOOLED", database.direct], ["RAILWAY_ENVIRONMENT_NAME", railwayEnvironment], ["APP_COMMIT_SHA", sha], ["APP_RELEASE_ID", releaseId]]
@@ -705,7 +706,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     await verifyBrowserCors(state.apiUrl, state.frontendUrl);
     await smokeCatalogue(state.apiUrl);
     verifyFrontendContent(sourceRoot, vercel.url);
-    if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
+    if (!preview) run("vercel", ["alias", "set", vercel.url, "staging.web.parkdex.app", ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel staging alias" });
     updateJournal(journalPath, state, { status: "ready", readyAt: new Date().toISOString() });
     console.log(`local-release status=ready mode=${mode} sha=${sha} journal=${journalPath}`);
   } catch (error) {

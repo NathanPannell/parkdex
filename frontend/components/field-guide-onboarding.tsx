@@ -243,7 +243,7 @@ const placeholderPlace: Place = {
   longitude: -124,
   region: "Vancouver Island",
   description: "",
-  sourceUrl: "https://parkdex.app/",
+  sourceUrl: "https://web.parkdex.app/",
   sourceName: "Parkdex",
 };
 

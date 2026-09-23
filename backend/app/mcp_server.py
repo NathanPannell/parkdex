@@ -78,7 +78,7 @@ class ParkdexClient:
             raise RuntimeError(f"Parkdex request failed ({response.status_code}): {detail}")
         return None if response.status_code == 204 else response.json()
 def _client():
-    origin=normalize_origin(os.environ.get(ORIGIN_ENV,"https://parkdex.app")); return ParkdexClient(origin,session_token(origin))
+    origin=normalize_origin(os.environ.get(ORIGIN_ENV,"https://api-production-e72df.up.railway.app")); return ParkdexClient(origin,session_token(origin))
 def logout_session(origin: str,email: str|None=None):
     origin=normalize_origin(origin); account_email=(email or os.environ.get(EMAIL_ENV,"")).strip().lower() or input("Parkdex email: ").strip().lower(); client=ParkdexClient(origin,session_token(origin,account_email)); error=None
     try: client.request("POST","/api/auth/logout")
@@ -281,7 +281,7 @@ def build_hosted_mcp_app(*,issuer_url:str,resource_url:str,account_url:str):
     )
 
 def main(argv:list[str]|None=None):
-    parser=argparse.ArgumentParser(); parser.add_argument("command",choices=("serve","setup","logout"),nargs="?",default="serve"); parser.add_argument("--origin",default=os.environ.get(ORIGIN_ENV,"https://parkdex.app")); parser.add_argument("--email",default=os.environ.get(EMAIL_ENV)); args=parser.parse_args(argv)
+    parser=argparse.ArgumentParser(); parser.add_argument("command",choices=("serve","setup","logout"),nargs="?",default="serve"); parser.add_argument("--origin",default=os.environ.get(ORIGIN_ENV,"https://api-production-e72df.up.railway.app")); parser.add_argument("--email",default=os.environ.get(EMAIL_ENV)); args=parser.parse_args(argv)
     if args.command=="setup": setup_session(args.origin)
     elif args.command=="logout": logout_session(args.origin,args.email)
     else: mcp.run(transport="stdio")

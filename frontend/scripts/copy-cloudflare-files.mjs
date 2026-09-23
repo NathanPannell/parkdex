@@ -9,4 +9,8 @@ for (const name of ["_headers", "_routes.json"]) {
   mkdirSync(dirname(destination), { recursive: true });
   copyFileSync(source, destination);
 }
+const migrationPage = resolve(frontendRoot, "out", "migrate.html");
+const migrationDirectoryPage = resolve(frontendRoot, "out", "migrate", "index.html");
+mkdirSync(dirname(migrationDirectoryPage), { recursive: true });
+copyFileSync(migrationPage, migrationDirectoryPage);
 console.log("Copied Cloudflare Pages configuration");

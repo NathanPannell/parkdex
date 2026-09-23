@@ -14,7 +14,7 @@ describe("MCP metadata proxy", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await proxyMcpMetadata(
-      new Request("https://staging.parkdex.app/.well-known/oauth-protected-resource/mcp?version=1"),
+      new Request("https://staging.web.parkdex.app/.well-known/oauth-protected-resource/mcp?version=1"),
       "https://api-staging.example.test",
     );
 

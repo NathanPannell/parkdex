@@ -4,7 +4,7 @@ Keep track of your Vancouver Island adventures.
 
 Parkdex is a field guide and collection game for Vancouver Island parks and nearby islands. Find your next stop on the map, mark the places you've visited, and see how much of the island you've explored.
 
-[Open Parkdex](https://parkdex.app)
+[Open Parkdex](https://web.parkdex.app)
 
 Parkdex uses short, independent provider dispatches followed by agent-owned convergence checks and browser smoke tests. See [deployment operations](docs/deployments.md) for staging and overnight production releases.
 

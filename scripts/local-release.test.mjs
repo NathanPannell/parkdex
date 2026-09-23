@@ -69,7 +69,7 @@ test("local staging apply requires an exact reviewed candidate", () => {
   assert.match(source, /Railway staging API must run the migration pre-deploy command/);
   assert.match(source, /Railway staging API is missing \$\{name\}/);
   assert.match(source, /if \(preview && !domain\)/);
-  assert.match(source, /state\.frontendUrl = preview \? vercel\.url : "https:\/\/staging\.parkdex\.app"/);
+  assert.match(source, /state\.frontendUrl = preview \? vercel\.url : STAGING_FRONTEND_ORIGIN/);
   assert.match(source, /verifyBrowserCors\(state\.apiUrl, state\.frontendUrl\)/);
   assert.doesNotMatch(source, /verifyBrowserCors\(state\.apiUrl, vercel\.url\)/);
   assert.doesNotMatch(source, /RAILWAY_STAGING_ENVIRONMENT_ID \|\| process\.env\.RAILWAY_BASE_ENVIRONMENT_ID/);
@@ -103,7 +103,7 @@ test("browser CORS readiness requires the exact origin and requested preflight c
   });
   assert.doesNotThrow(() => verifyCorsHeaders(headers, origin, { method: "GET", requestedHeaders: ["authorization"] }));
   assert.doesNotThrow(() => verifyCorsHeaders(headers, origin, { method: "PUT", requestedHeaders: ["content-type", "x-collection-key"] }));
-  assert.throws(() => verifyCorsHeaders(headers, "https://staging.parkdex.app"), /exact frontend origin/);
+  assert.throws(() => verifyCorsHeaders(headers, "https://staging.web.parkdex.app"), /exact frontend origin/);
   assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin }), origin, { method: "PUT", requestedHeaders: ["x-collection-key"] }), /did not allow PUT/);
   assert.throws(() => verifyCorsHeaders(new Headers({ "access-control-allow-origin": origin, "access-control-allow-methods": "GET", "access-control-allow-headers": "content-type" }), origin, { method: "GET", requestedHeaders: ["authorization"] }), /requested headers/);
 });

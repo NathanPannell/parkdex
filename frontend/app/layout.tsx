@@ -10,8 +10,10 @@ import "./field-guide.css";
 import "./postcard-shelf.css";
 import "./field-guide-onboarding.css";
 
+const appPublicUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://web.parkdex.app";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://parkdex.app"),
+  metadataBase: new URL(appPublicUrl),
   title: "Parkdex · Vancouver Island field guide",
   description: "Collect the parks and major islands of Vancouver Island on a playful interactive map.",
   applicationName: "Parkdex",
@@ -30,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Parkdex · Vancouver Island field guide",
     description: "Collect Vancouver Island parks and major islands in your Parkdex.",
-    url: "https://parkdex.app",
+    url: appPublicUrl,
     siteName: "Parkdex",
     type: "website",
   },

@@ -93,10 +93,10 @@ def test_ephemeral_storage_rejects_railway_even_if_app_environment_is_local(
 
 def test_allowed_origins_include_capacitor_origin_once():
     settings = Settings(
-        FRONTEND_ORIGINS="https://staging.parkdex.app, https://localhost, https://staging.parkdex.app"
+        FRONTEND_ORIGINS="https://staging.web.parkdex.app, https://localhost, https://staging.web.parkdex.app"
     )
     assert settings.allowed_origins == [
-        "https://staging.parkdex.app",
+        "https://staging.web.parkdex.app",
         "https://localhost",
     ]
 
