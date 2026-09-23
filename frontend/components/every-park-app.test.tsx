@@ -233,6 +233,8 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("link", { name: "Place source" }).getAttribute("href")).toBe(goldstream.sourceUrl);
     fireEvent.click(screen.getByRole("button", { name: "Browse Provincial Parks" }));
     expect(screen.getByRole("heading", { name: "Find your next place" })).toBeTruthy();
+    expect(document.querySelector(".collection-filter-summary")?.textContent).toContain("Provincial Parks");
+    expect(screen.getByRole("button", { name: "Clear active place filters" })).toBeTruthy();
     expect(new URLSearchParams(window.location.search).get("view")).toBe("collection");
   });
 
@@ -315,13 +317,13 @@ describe("Parkdex navigation", () => {
     expect(groupState.addPlace).toHaveBeenCalledTimes(1);
   });
 
-  it("spells out the actual regional authorities inside their collection summaries", () => {
+  it("groups places from different authorities under their shared region", () => {
     journal.authenticated = true;
     journal.places = ["Capital Regional District", "Cowichan Valley Regional District", "Regional District of Nanaimo", "Regional District of Mount Waddington"].map((sourceName, index) => ({ ...place, id: `regional-${index}`, category: "regional", sourceName }));
     window.history.replaceState({}, "", "/?view=collection");
     render(<ParkdexApp apiBaseUrl="" />);
-    for (const item of journal.places) expect(screen.getByText(item.sourceName).closest("summary")).toBeTruthy();
-    expect(screen.queryByText(/Comox/)).toBeNull();
+    expect(screen.getByText("South Island").closest("summary")?.textContent).toContain("0/4");
+    for (const item of journal.places) expect(screen.queryByText(item.sourceName)).toBeNull();
   });
 
   it("renders the authenticated desktop primary navigation beside the brand", () => {
@@ -1687,16 +1689,16 @@ describe("Parkdex navigation", () => {
     expect(window.history.state.framework).toBe("preserved");
   });
 
-  it("starts renamed collections closed and keeps search results in their collection", () => {
+  it("starts regions closed and keeps search results in their region", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "List" }));
     expect(screen.queryByText("Browse by collection")).toBeNull();
-    const nationalCollection = screen.getByText("National Parks").closest("details");
-    expect(nationalCollection?.hasAttribute("open")).toBe(false);
-    expect(screen.getByText("Provincial Parks")).toBeTruthy();
+    const westCoastRegion = screen.getByText("West Coast").closest("details");
+    expect(westCoastRegion?.hasAttribute("open")).toBe(false);
+    expect(screen.getByText("South Island")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Pacific" } });
-    expect(screen.getByText("National Parks").closest("details")?.hasAttribute("open")).toBe(true);
+    expect(screen.getByText("West Coast").closest("details")?.hasAttribute("open")).toBe(true);
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
   });
 

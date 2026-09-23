@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   accountNavigationTarget,
   assertEmulatorSerial,
-  bellParkReady,
+  qaParkReady,
   catalogueUnavailable,
   distanceLabels,
   evaluateDumpedPoll,
@@ -56,13 +56,14 @@ test("parses adb inventory without selecting another attached device", () => {
   ]);
 });
 
-test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", () => {
-  const xml = '<hierarchy><node content-desc="Show my current location" bounds="[800,1800][1000,2000]"/><node text="Bell Park" bounds="[1,1][2,2]"/><node text="0.0 km" bounds="[1,1][2,2]"/></hierarchy>';
+test("finds the Locate Me target and Goldstream Park ready state in UIAutomator XML", () => {
+  const xml = '<hierarchy><node content-desc="Show my current location" bounds="[800,1800][1000,2000]"/><node text="Goldstream Park" bounds="[1,1][2,2]"/><node text="0.0 km" bounds="[1,1][2,2]"/></hierarchy>';
   assert.deepEqual(locateButtonCenter(xml), { x: 900, y: 1900 });
-  assert.equal(bellParkReady(xml), true);
+  assert.equal(qaParkReady(xml), true);
+  assert.equal(qaParkReady('<node text="Bell Park"/><node text="0.0 km"/>'), false);
   assert.deepEqual(distanceLabels(xml), ["0.0 km"]);
-  assert.equal(bellParkReady(xml.replace('<node text="0.0 km" bounds="[1,1][2,2]"/>', '<node text="Finding your location…" bounds="[1,1][2,2]"/>')), false);
-  assert.equal(bellParkReady(`${xml}<node text="Finding your location: Location pin is ready"/>`), true);
+  assert.equal(qaParkReady(xml.replace('<node text="0.0 km" bounds="[1,1][2,2]"/>', '<node text="Finding your location…" bounds="[1,1][2,2]"/>')), false);
+  assert.equal(qaParkReady(`${xml}<node text="Finding your location: Location pin is ready"/>`), true);
   assert.equal(locationUnavailable('<node text="Your location is unavailable right now."/>'), true);
   assert.equal(locationUnavailable(xml), false);
   assert.equal(catalogueUnavailable('<node text="Could not load the field guide."/>'), true);
@@ -76,20 +77,20 @@ test("finds the Locate Me target and Bell Park ready state in UIAutomator XML", 
   assert.deepEqual(labelledNodeCenter('<node text="Log without photo" bounds="[10,20][110,80]"/>', [/^Log without photo$/i]), { x: 60, y: 50 });
   assert.deepEqual(labelledNodeCenter('<node text="" content-desc="Shutter" bounds="[0,2010][1080,2340]"/>', [/Shutter/]), { x: 540, y: 2175 });
   assert.deepEqual(labelledNodeCenter('<node text="Map" clickable="false" bounds="[0,0][100,100]"/><node text="Map" clickable="true" enabled="true" bounds="[800,1800][1000,2000]"/>', [/^Map$/]), { x: 900, y: 1900 });
-  const postcard = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo" clickable="true" enabled="true" bounds="[1,1][2,2]"/>';
+  const postcard = '<node content-desc="Private postcard from Goldstream Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Goldstream Park" bounds="[1,1][2,2]"/><node text="Remove photo" clickable="true" enabled="true" bounds="[1,1][2,2]"/>';
   assert.equal(photoPostcardReady(postcard), true);
-  const collectionOnly = '<node content-desc="Postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/>';
+  const collectionOnly = '<node content-desc="Postcard from Goldstream Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Goldstream Park" bounds="[1,1][2,2]"/>';
   assert.equal(photoPostcardReady(collectionOnly), false);
-  const placeQualifiedRemove = '<node content-desc="Private postcard from Bell Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Bell Park" bounds="[1,1][2,2]"/><node text="Remove photo from Bell Park" bounds="[1,1][2,2]"/>';
+  const placeQualifiedRemove = '<node content-desc="Private postcard from Goldstream Park" bounds="[1,1][2,2]"/><node content-desc="Private visit photo from Goldstream Park" bounds="[1,1][2,2]"/><node text="Remove photo from Goldstream Park" bounds="[1,1][2,2]"/>';
   assert.equal(photoPostcardReady(placeQualifiedRemove), false);
-  const oldAndroidWebViewPostcard = '<node text="Inspect postcard from Bell Park. Use arrow keys to tilt it."/><node text="Private visit photo from Bell Park"/><node text="Remove photo from Bell Park"/>';
+  const oldAndroidWebViewPostcard = '<node text="Inspect postcard from Goldstream Park. Use arrow keys to tilt it."/><node text="Private visit photo from Goldstream Park"/><node text="Remove photo from Goldstream Park"/>';
   assert.equal(photoPostcardReady(oldAndroidWebViewPostcard), false);
   assert.equal(photoPostcardReady(`${postcard}<node text="Photo unavailable"/>`), false);
   const emptyCollection = '<node text="Your first boundary claim will become a postcard here."/>';
   assert.equal(photoJourneyCleanupReady(emptyCollection), true);
   const modernEmptyCollection = '<node text="Your first postcard will appear in your Collection after a boundary claim."/>';
   assert.equal(photoJourneyCleanupReady(modernEmptyCollection), true);
-  assert.equal(photoJourneyCleanupReady(`${emptyCollection}<node content-desc="Postcard from Bell Park"/>`), false);
+  assert.equal(photoJourneyCleanupReady(`${emptyCollection}<node content-desc="Postcard from Goldstream Park"/>`), false);
   const review = '<node text="Keep this one?" bounds="[20,300][500,360]"/><node text="Save my visit" clickable="true" enabled="true" bounds="[20,700][500,780]"/>';
   assert.equal(photoReviewReady(review), true);
   assert.equal(photoReviewReady('<node text="Keep this one?"/><node text="Save" clickable="true" bounds="[20,700][500,780]"/>'), false);
@@ -146,7 +147,7 @@ test("waits for the sealed arrival when Locate and Claim occupy overlapping scre
     wait: (receivedContext, predicate, deadline, label, { retryAction }) => {
       assert.equal(receivedContext, context);
       assert.equal(deadline, 61_000);
-      assert.equal(label, "Bell Park sealed Claim + photo action");
+      assert.equal(label, "Goldstream Park sealed Claim + photo action");
       assert.equal(predicate(locate), null);
       assert.equal(predicate(camera), null);
       assert.deepEqual(taps, []);

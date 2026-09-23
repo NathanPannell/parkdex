@@ -7,20 +7,22 @@ MIGRATION_DIR = ROOT / "database" / "migrations"
 
 def test_claim_migrations_follow_current_schema_and_are_additive():
     names = sorted(path.name for path in MIGRATION_DIR.glob("*.sql"))
-    assert names[-6:] == [
+    assert names[-7:] == [
         "0015_create_location_claims.sql",
         "0016_add_visit_postcard_object_storage.sql",
         "0017_schedule_photo_deletion_retries.sql",
         "0018_bind_claim_recommendations_to_session.sql",
         "0019_add_staging_field_place_scope.sql",
         "0020_create_account_deletion_receipts.sql",
+        "0021_retire_bell_park_staging_overlay.sql",
     ]
-    claims = (MIGRATION_DIR / names[-6]).read_text(encoding="utf-8")
-    photos = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
-    retries = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
-    sessions = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
-    field_scope = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
-    deletion = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
+    claims = (MIGRATION_DIR / names[-7]).read_text(encoding="utf-8")
+    photos = (MIGRATION_DIR / names[-6]).read_text(encoding="utf-8")
+    retries = (MIGRATION_DIR / names[-5]).read_text(encoding="utf-8")
+    sessions = (MIGRATION_DIR / names[-4]).read_text(encoding="utf-8")
+    field_scope = (MIGRATION_DIR / names[-3]).read_text(encoding="utf-8")
+    deletion = (MIGRATION_DIR / names[-2]).read_text(encoding="utf-8")
+    retirement = (MIGRATION_DIR / names[-1]).read_text(encoding="utf-8")
     assert "account_id UUID NOT NULL" in claims
     assert "consumed_at TIMESTAMPTZ" in claims
     assert "FOREIGN KEY (account_id, place_id)" in claims
@@ -66,6 +68,11 @@ def test_claim_migrations_follow_current_schema_and_are_additive():
     assert "account_deletion_request_hash CHAR(64)" in deletion
     assert "REFERENCES account_deletion_receipts(request_hash) ON DELETE SET NULL" in deletion
     assert "photo_object_deletions_account_deletion_receipt_idx" in deletion
+    assert "UPDATE places" in retirement
+    assert "active = FALSE" in retirement
+    assert "field_test_scope = NULL" in retirement
+    assert "id = 'regional-bell-park'" in retirement
+    assert "field_test_scope = 'staging'" in retirement
 
 
 def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
@@ -78,6 +85,7 @@ def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
         "0018_bind_claim_recommendations_to_session.sql",
         "0019_add_staging_field_place_scope.sql",
         "0020_create_account_deletion_receipts.sql",
+        "0021_retire_bell_park_staging_overlay.sql",
     ):
         sql = (MIGRATION_DIR / name).read_text(encoding="utf-8").upper()
         assert "DROP TABLE" not in sql

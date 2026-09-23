@@ -451,7 +451,7 @@ describe("useLiveClaimRecommendation", () => {
       status: "recommended" as const,
       recommendationToken: "signed",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      candidate: { placeId: "regional-bell-park", matchKind: "exact" as const, distanceMeters: 0 },
+      candidate: { placeId: "provincial-goldstream-park", matchKind: "exact" as const, distanceMeters: 0 },
     };
     const recommend = vi.fn().mockResolvedValue(recommendation);
     const { result, rerender } = renderHook(
@@ -478,7 +478,7 @@ describe("useLiveClaimRecommendation", () => {
       status: "recommended" as const,
       recommendationToken: "signed",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      candidate: { placeId: "regional-bell-park", matchKind: "exact" as const, distanceMeters: 0 },
+      candidate: { placeId: "provincial-goldstream-park", matchKind: "exact" as const, distanceMeters: 0 },
     };
     const recommend = vi.fn().mockResolvedValue(recommendation);
     const { result, rerender } = renderHook(
@@ -496,7 +496,7 @@ describe("useLiveClaimRecommendation", () => {
       status: "recommended" as const,
       recommendationToken: "signed",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      candidate: { placeId: "regional-bell-park", matchKind: "exact" as const, distanceMeters: 0 },
+      candidate: { placeId: "provincial-goldstream-park", matchKind: "exact" as const, distanceMeters: 0 },
     };
     const recommend = vi.fn().mockResolvedValue(recommendation);
     const { result, rerender } = renderHook(
@@ -514,7 +514,7 @@ describe("useLiveClaimRecommendation", () => {
       status: "recommended" as const,
       recommendationToken: "second",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      candidate: { placeId: "regional-bell-park", matchKind: "exact" as const, distanceMeters: 0 },
+      candidate: { placeId: "provincial-goldstream-park", matchKind: "exact" as const, distanceMeters: 0 },
     };
     const recommend = vi.fn()
       .mockReturnValueOnce(first.promise)

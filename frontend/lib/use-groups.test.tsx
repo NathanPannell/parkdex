@@ -70,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   resetPlatformStorageForTests();
   Reflect.deleteProperty(globalThis, "Capacitor");
   window.localStorage.clear();
@@ -171,18 +172,101 @@ describe("useGroups account isolation", () => {
 });
 
 describe("useGroups offline groups", () => {
-  it("uses one cached-state notice after a transport failure and clears it after retry", async () => {
+  it("silently retries failed collection fetches with exponential backoff until one succeeds", async () => {
+    vi.useFakeTimers();
     window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
-    const request = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockImplementation(() => json([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
+    const request = vi.fn()
+      .mockImplementationOnce(() => failed(503, "temporarily unavailable"))
+      .mockImplementationOnce(() => failed(503, "temporarily unavailable"))
+      .mockImplementation(() => json([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));
     const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
-    await waitFor(() => expect(result.current.syncStatus).toBe("offline"));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(request).toHaveBeenCalledTimes(1);
     expect(result.current.groups[0].places).toEqual([place]);
     expect(result.current.error).toBe("");
-    expect(result.current.syncMessage).toBe("Showing your saved collections offline.");
-    await act(() => result.current.retry());
+    expect(result.current.syncStatus).toBe("idle");
+    expect(result.current.syncMessage).toBe("");
+    expect(result.current.loading).toBe(false);
+    expect(result.current.retrying).toBe(true);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(999); });
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toBe("");
+    expect(result.current.syncStatus).toBe("idle");
+    expect(result.current.syncMessage).toBe("");
+    expect(result.current.loading).toBe(false);
+    expect(result.current.retrying).toBe(true);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_999); });
+    expect(request).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(result.current.groups.map((group) => group.id)).toEqual(["coast"]);
     expect(result.current.offline).toBe(false);
     expect(result.current.syncStatus).toBe("idle");
     expect(result.current.syncMessage).toBe("");
+    expect(result.current.error).toBe("");
+    expect(result.current.loading).toBe(false);
+    expect(result.current.retrying).toBe(false);
+  });
+
+  it("cancels a pending list retry immediately when the account changes", async () => {
+    vi.useFakeTimers();
+    const requestA = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const requestB = vi.fn(() => json([{ id: "group-b", name: "B", placeIds: [] }]));
+    const { result, rerender } = renderHook(
+      ({ identityKey, request }) => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey, places: [place], request }),
+      { initialProps: { identityKey: "account-a", request: requestA } },
+    );
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(requestA).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+    expect(result.current.retrying).toBe(true);
+
+    rerender({ identityKey: "account-b", request: requestB });
+    expect(vi.getTimerCount()).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(requestB).toHaveBeenCalledTimes(1);
+    expect(result.current.groups.map((group) => group.id)).toEqual(["group-b"]);
+    expect(result.current.retrying).toBe(false);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(requestA).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels a pending list retry on unmount", async () => {
+    vi.useFakeTimers();
+    const request = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { unmount } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the pending outbox notice visible while the initial collection fetch retries", async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [] }]));
+    window.localStorage.setItem(accountGroupsOutboxKey("account-a"), JSON.stringify({ coast: { "park-1": { included: true, revision: 1 } } }));
+    const request = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result } = renderHook(() => useGroups({ apiBaseUrl: "https://api.example.test", authenticated: true, identityKey: "account-a", places: [place], request }));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(result.current.retrying).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.pendingMemberships).toBe(1);
+    expect(result.current.syncStatus).toBe("syncing");
+    expect(result.current.syncMessage).toBe("Your collection changes are saved on this device and waiting to sync.");
   });
 
   it("restores native async cache and outbox state after a runtime restart", async () => {

@@ -28,7 +28,7 @@ const excursionParks = display.features.filter((feature) => excursionIds.has(fea
 if (excursionParks.length !== excursionIds.size) throw new Error("Map focus excursion park geometry is incomplete");
 // Staging-only field boundaries are excursion geometry too: keep their
 // locations in the focused map rather than dimming the test catalogue out.
-// The scoped id set avoids assuming a particular synthetic Bell Park id.
+// Include every staging-only boundary without depending on its synthetic id.
 const stagingExcursions = display.features.filter((feature) => scoped.stagingIds.has(feature.properties?.id));
 const focusFeatures = new Map([
   ...nearbyIslands.map((feature) => [feature.properties?.id, feature]),

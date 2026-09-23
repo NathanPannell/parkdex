@@ -13,12 +13,13 @@ import uuid
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
-from shapely.geometry import Point, shape
 
 import backend.app.claims as claims
 import backend.app.main as api
 from backend.app.claims import LocationSample
 from backend.app.staging_field_places import (
+    current_staging_field_place_ids,
+    load_staging_field_places,
     place_visibility_clause,
     place_visibility_params,
     sync_staging_field_places,
@@ -26,20 +27,32 @@ from backend.app.staging_field_places import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PLACE_ID = "regional-bell-park"
-PIN_LATITUDE = 49.0918726
-PIN_LONGITUDE = -123.0600868
-CITY_PAGE = (
-    "https://www.delta.ca/parks-recreation/parks-trails/"
-    "park-and-amenity-search/bell-park"
-)
-GIS_LAYER = (
-    "https://maps.delta.ca/arcgis/rest/services/DeltaMap/"
-    "PropertyBasemap/MapServer/10"
-)
+PLACE_ID = "provincial-goldstream-park"
+CANONICAL_BELLHOUSE_ID = "provincial-bellhouse-park"
+RETIRED_PLACE_ID = "regional-bell-park"
+PIN_LATITUDE = 48.475557
+PIN_LONGITUDE = -123.542431
 
 
-def test_bell_field_fixture_preserves_reviewed_delta_source_and_polygon() -> None:
+def staging_fixture_place(
+    place_id: str = "regional-staging-fixture",
+    name: str = "Staging Fixture Park",
+) -> dict[str, object]:
+    return {
+        "id": place_id,
+        "name": name,
+        "category": "regional",
+        "latitude": 48.475557,
+        "longitude": -123.542431,
+        "region": "South Island",
+        "description": "A synthetic staging fixture for backend behavior tests.",
+        "sourceUrl": "https://example.test/parks/fixture",
+        "sourceName": "Test fixture",
+        "sourceId": "fixture-1",
+    }
+
+
+def test_staging_field_overlay_is_empty_and_canonical_bellhouse_remains() -> None:
     places = json.loads(
         (ROOT / "data/staging-field-places.json").read_text(encoding="utf-8")
     )
@@ -48,41 +61,26 @@ def test_bell_field_fixture_preserves_reviewed_delta_source_and_polygon() -> Non
             encoding="utf-8"
         )
     )
-    assert places == [
-        {
-            "id": PLACE_ID,
-            "name": "Bell Park",
-            "category": "regional",
-            "latitude": PIN_LATITUDE,
-            "longitude": PIN_LONGITUDE,
-            "region": "Lower Mainland",
-            "description": (
-                "A City of Delta developed municipal park included only for "
-                "staging field verification. The pin is a reviewed interior point "
-                "in the official GIS polygon, not an entrance or trailhead."
-            ),
-            "sourceUrl": CITY_PAGE,
-            "sourceName": "City of Delta",
-            "sourceId": "1001484",
-        }
-    ]
+    assert places == []
+    assert load_staging_field_places() == ()
+    assert current_staging_field_place_ids() == ()
     assert boundaries["type"] == "FeatureCollection"
-    assert len(boundaries["features"]) == 1
-    feature = boundaries["features"][0]
-    assert feature["properties"] == {
-        "id": PLACE_ID,
-        "name": "Bell Park",
-        "category": "regional",
-        "sourceName": "City of Delta — Parks GIS layer",
-        "sourceUrl": GIS_LAYER,
-        "sourceId": "1001484",
-    }
-    ring = feature["geometry"]["coordinates"][0]
-    assert len(ring) == 18
-    assert ring[0] == ring[-1]
-    polygon = shape(feature["geometry"])
-    assert polygon.is_valid and not polygon.is_empty
-    assert polygon.covers(Point(PIN_LONGITUDE, PIN_LATITUDE))
+    assert boundaries["features"] == []
+
+    canonical_places = json.loads(
+        (ROOT / "data/places.json").read_text(encoding="utf-8")
+    )
+    bellhouse = next(
+        place for place in canonical_places if place["id"] == "provincial-bellhouse-park"
+    )
+    assert bellhouse["name"] == "Bellhouse Park"
+    canonical_boundaries = json.loads(
+        (ROOT / "data/boundaries.geojson").read_text(encoding="utf-8")
+    )
+    assert any(
+        feature["properties"]["id"] == "provincial-bellhouse-park"
+        for feature in canonical_boundaries["features"]
+    )
 
 
 def test_boundary_registry_cache_is_keyed_by_staging_overlay_inclusion() -> None:
@@ -92,8 +90,10 @@ def test_boundary_registry_cache_is_keyed_by_staging_overlay_inclusion() -> None
         staging = claims.get_boundary_registry(True)
         assert claims.get_boundary_registry(False) is canonical
         assert claims.get_boundary_registry(True) is staging
-        assert PLACE_ID not in canonical.place_ids
-        assert PLACE_ID in staging.place_ids
+        assert RETIRED_PLACE_ID not in canonical.place_ids
+        assert RETIRED_PLACE_ID not in staging.place_ids
+        assert "provincial-bellhouse-park" in canonical.place_ids
+        assert "provincial-bellhouse-park" in staging.place_ids
         assert staging.version != canonical.version
         assert canonical.version == hashlib.sha256(
             (ROOT / "data/boundaries.geojson").read_bytes()
@@ -114,8 +114,10 @@ def test_boundary_registry_cache_is_keyed_by_staging_overlay_inclusion() -> None
         claims.get_boundary_registry.cache_clear()
         staging_first = claims.get_boundary_registry(True)
         canonical_second = claims.get_boundary_registry(False)
+        assert RETIRED_PLACE_ID not in staging_first.place_ids
+        assert RETIRED_PLACE_ID not in canonical_second.place_ids
         assert PLACE_ID in staging_first.place_ids
-        assert PLACE_ID not in canonical_second.place_ids
+        assert PLACE_ID in canonical_second.place_ids
     finally:
         claims.get_boundary_registry.cache_clear()
 
@@ -160,6 +162,16 @@ def test_staging_field_place_sync_is_idempotent_and_retires_scoped_rows() -> Non
                 INSERT INTO places (
                     id, name, category, latitude, longitude, region,
                     description, source_url, source_name, active, field_test_scope
+                ) VALUES (%s, 'Bell Park', 'regional', 49, -123,
+                          'Test', '', 'https://example.test', 'Test', FALSE, 'staging')
+                """,
+                (RETIRED_PLACE_ID,),
+            )
+            conn.execute(
+                """
+                INSERT INTO places (
+                    id, name, category, latitude, longitude, region,
+                    description, source_url, source_name, active, field_test_scope
                 ) VALUES (%s, 'Stale field place', 'regional', 49, -123,
                           'Test', '', 'https://example.test', 'Test', FALSE, 'staging')
                 """,
@@ -169,21 +181,21 @@ def test_staging_field_place_sync_is_idempotent_and_retires_scoped_rows() -> Non
             sync_staging_field_places(conn, enabled=True)
             conn.commit()
 
-            bell = conn.execute(
+            retired = conn.execute(
                 "SELECT name, source_url, source_name, source_id, active, "
                 "field_test_scope FROM places WHERE id = %s",
-                (PLACE_ID,),
+                (RETIRED_PLACE_ID,),
             ).fetchone()
-            assert bell == (
+            assert retired == (
                 "Bell Park",
-                CITY_PAGE,
-                "City of Delta",
-                "1001484",
+                "https://example.test",
+                "Test",
+                None,
                 False,
                 "staging",
             )
             assert conn.execute(
-                "SELECT COUNT(*) FROM places WHERE id = %s", (PLACE_ID,)
+                "SELECT COUNT(*) FROM places WHERE id = %s", (RETIRED_PLACE_ID,)
             ).fetchone()[0] == 1
             assert conn.execute(
                 "SELECT active FROM places WHERE id = %s", (stale_id,)
@@ -192,18 +204,20 @@ def test_staging_field_place_sync_is_idempotent_and_retires_scoped_rows() -> Non
             # only ids in the current overlay. A retired fixture is not
             # resurrected just because its scoped history remains in Postgres.
             assert conn.execute(
-                "SELECT id FROM places WHERE active AND id = %s", (PLACE_ID,)
+                "SELECT id FROM places WHERE active AND id = %s",
+                (RETIRED_PLACE_ID,),
             ).fetchone() is None
             assert conn.execute(
                 f"SELECT id FROM places WHERE {place_visibility_clause()} "
                 "AND id = %s",
-                (*place_visibility_params(False), PLACE_ID),
+                (*place_visibility_params(False), RETIRED_PLACE_ID),
             ).fetchone() is None
             assert conn.execute(
                 f"SELECT id FROM places WHERE {place_visibility_clause()} "
                 "AND id = %s",
-                (*place_visibility_params(True), PLACE_ID),
-            ).fetchone()[0] == PLACE_ID
+                (*place_visibility_params(True), RETIRED_PLACE_ID),
+            ).fetchone() is None
+            assert place_visibility_params(True) == (True, [])
             assert conn.execute(
                 f"SELECT id FROM places WHERE {place_visibility_clause()} "
                 "AND id = %s",
@@ -213,28 +227,62 @@ def test_staging_field_place_sync_is_idempotent_and_retires_scoped_rows() -> Non
                 with conn.transaction():
                     conn.execute(
                         "UPDATE places SET active = TRUE WHERE id = %s",
-                        (PLACE_ID,),
+                        (RETIRED_PLACE_ID,),
                     )
             assert conn.execute(
                 "SELECT active FROM places WHERE id = %s",
-                ("provincial-goldstream-park",),
+                (PLACE_ID,),
             ).fetchone()[0] is True
-
-            conn.execute(
-                "UPDATE places SET name = 'Drifted name' WHERE id = %s", (PLACE_ID,)
-            )
-            sync_staging_field_places(conn, enabled=True)
-            assert conn.execute(
-                "SELECT name FROM places WHERE id = %s", (PLACE_ID,)
-            ).fetchone()[0] == "Bell Park"
             sync_staging_field_places(conn, enabled=False)
             assert conn.execute(
-                "SELECT active FROM places WHERE id = %s", (PLACE_ID,)
+                "SELECT active FROM places WHERE id = %s",
+                (RETIRED_PLACE_ID,),
             ).fetchone()[0] is False
             conn.commit()
         finally:
             conn.execute("DELETE FROM places WHERE field_test_scope IS NOT NULL")
             conn.commit()
+
+
+def test_retirement_migration_hides_old_row_from_n_minus_one_visibility() -> None:
+    if not os.environ.get("DATABASE_URL"):
+        return
+    migration = (
+        ROOT / "database/migrations/0021_retire_bell_park_staging_overlay.sql"
+    ).read_text(encoding="utf-8")
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO places (
+                    id, name, category, latitude, longitude, region,
+                    description, source_url, source_name, source_id, active,
+                    field_test_scope
+                ) VALUES (
+                    %s, 'Bell Park', 'regional', 49.0918726, -123.0600868,
+                    'Lower Mainland', 'Retired staging fixture',
+                    'https://example.test/bell-park', 'Test fixture', 'legacy',
+                    FALSE, 'staging'
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    active = FALSE,
+                    field_test_scope = 'staging'
+                """,
+                (RETIRED_PLACE_ID,),
+            )
+            conn.execute(migration)
+
+            assert conn.execute(
+                "SELECT active, field_test_scope FROM places WHERE id = %s",
+                (RETIRED_PLACE_ID,),
+            ).fetchone() == (False, None)
+            assert conn.execute(
+                f"SELECT id FROM places WHERE {place_visibility_clause()} "
+                "AND id = %s",
+                (True, [RETIRED_PLACE_ID], RETIRED_PLACE_ID),
+            ).fetchone() is None
+        finally:
+            conn.rollback()
 
 
 def test_staging_field_place_sync_rejects_canonical_id_collision(
@@ -243,10 +291,10 @@ def test_staging_field_place_sync_rejects_canonical_id_collision(
     if not os.environ.get("DATABASE_URL"):
         return
     collision_path = tmp_path / "collision.json"
-    place = json.loads(
-        (ROOT / "data/staging-field-places.json").read_text(encoding="utf-8")
-    )[0]
-    place["id"] = "provincial-goldstream-park"
+    place = staging_fixture_place(
+        place_id="provincial-goldstream-park",
+        name="Goldstream Park staged collision",
+    )
     collision_path.write_text(json.dumps([place]), encoding="utf-8")
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
@@ -280,36 +328,40 @@ def test_future_canonical_seed_promotes_scoped_row_without_losing_history(
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
 
-    place = json.loads(
-        (ROOT / "data/staging-field-places.json").read_text(encoding="utf-8")
-    )[0]
-    place["name"] = "Bell Park canonical"
+    place = staging_fixture_place(
+        place_id="regional-promoted-field-fixture",
+        name="Promoted fixture canonical",
+    )
+    staging_source = tmp_path / "staging-places.json"
+    staging_source.write_text(json.dumps([place]), encoding="utf-8")
     canonical_source = tmp_path / "places.json"
     canonical_source.write_text(json.dumps([place]), encoding="utf-8")
     generator.SOURCE = canonical_source
-    seed_sql = generator.render_for_target(Path("0020_promote_bell_park.sql"))
+    seed_sql = generator.render_for_target(Path("0020_promote_field_fixture.sql"))
 
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         try:
-            sync_staging_field_places(conn, enabled=True)
+            sync_staging_field_places(
+                conn, enabled=True, source_path=staging_source
+            )
             account_id = conn.execute(
                 "INSERT INTO accounts (email) VALUES (%s) RETURNING id",
                 (f"promotion-{uuid.uuid4()}@example.com",),
             ).fetchone()[0]
             conn.execute(
                 "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s)",
-                (account_id, PLACE_ID),
+                (account_id, place["id"]),
             )
 
             conn.execute(seed_sql)
 
             assert conn.execute(
                 "SELECT name, active, field_test_scope FROM places WHERE id = %s",
-                (PLACE_ID,),
-            ).fetchone() == ("Bell Park canonical", True, None)
+                (place["id"],),
+            ).fetchone() == ("Promoted fixture canonical", True, None)
             assert conn.execute(
                 "SELECT 1 FROM account_visits WHERE account_id = %s AND place_id = %s",
-                (account_id, PLACE_ID),
+                (account_id, place["id"]),
             ).fetchone() is not None
         finally:
             # The generated catalogue update is intentionally exercised as one
@@ -376,42 +428,86 @@ def test_lifespan_orders_pool_sync_registry_then_id_validation(monkeypatch) -> N
     assert "photo_deletion_worker" not in inspect.getsource(api.lifespan)
 
 
-def test_enabled_staging_startup_lists_and_recommends_bell(monkeypatch) -> None:
+def test_enabled_staging_startup_hides_retired_bell_and_keeps_canonical_parks(
+    monkeypatch,
+) -> None:
     if not os.environ.get("DATABASE_URL"):
         return
-    email = f"bell-field-{uuid.uuid4()}@example.com"
+    email = f"empty-overlay-{uuid.uuid4()}@example.com"
     claims.get_boundary_registry.cache_clear()
     monkeypatch.setattr(api.settings, "enable_staging_field_places", True)
     monkeypatch.setattr(api.settings, "app_environment", "staging")
     monkeypatch.setattr(api.settings, "railway_environment_name", "staging")
     try:
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            conn.execute(
+                """
+                INSERT INTO places (
+                    id, name, category, latitude, longitude, region,
+                    description, source_url, source_name, source_id, active,
+                    field_test_scope
+                ) VALUES (
+                    %s, 'Bell Park', 'regional', 49.0918726, -123.0600868,
+                    'Lower Mainland', 'Retired staging fixture',
+                    'https://example.test/bell-park', 'Test fixture', 'legacy',
+                    FALSE, 'staging'
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    active = FALSE,
+                    field_test_scope = 'staging'
+                """,
+                (RETIRED_PLACE_ID,),
+            )
+            conn.commit()
+
         with TestClient(api.app) as client:
             registration = client.post(
                 "/api/auth/register",
-                json={"email": email, "password": "bell field password"},
+                json={"email": email, "password": "goldstream qa password"},
             )
             assert registration.status_code == 201, registration.text
             registered = registration.json()
             headers = {"Authorization": f"Bearer {registered['token']}"}
             places = client.get("/api/places", headers=headers)
             assert places.status_code == 200
-            assert PLACE_ID in {place["id"] for place in places.json()["places"]}
+            listed_ids = {place["id"] for place in places.json()["places"]}
+            assert PLACE_ID in listed_ids
+            assert CANONICAL_BELLHOUSE_ID in listed_ids
+            assert RETIRED_PLACE_ID not in listed_ids
             search = client.get(
                 "/api/places/search",
                 headers=headers,
                 params={"query": "Bell Park"},
             )
             assert search.status_code == 200, search.text
-            assert [place["id"] for place in search.json()["places"]] == [PLACE_ID]
-            detail = client.get(f"/api/places/{PLACE_ID}", headers=headers)
+            assert RETIRED_PLACE_ID not in {
+                place["id"] for place in search.json()["places"]
+            }
+            assert client.get(
+                f"/api/places/{RETIRED_PLACE_ID}", headers=headers
+            ).status_code == 404
+            bellhouse_search = client.get(
+                "/api/places/search",
+                headers=headers,
+                params={"query": "Bellhouse Park"},
+            )
+            assert bellhouse_search.status_code == 200, bellhouse_search.text
+            assert [place["id"] for place in bellhouse_search.json()["places"]] == [
+                CANONICAL_BELLHOUSE_ID
+            ]
+            detail = client.get(
+                f"/api/places/{CANONICAL_BELLHOUSE_ID}", headers=headers
+            )
             assert detail.status_code == 200, detail.text
             group = client.post(
                 "/api/groups",
                 headers=headers,
-                json={"name": "Field check", "placeIds": [PLACE_ID]},
+                json={"name": "Field check", "placeIds": [CANONICAL_BELLHOUSE_ID]},
             )
             assert group.status_code == 201, group.text
-            assert [place["id"] for place in group.json()["places"]] == [PLACE_ID]
+            assert [place["id"] for place in group.json()["places"]] == [
+                CANONICAL_BELLHOUSE_ID
+            ]
             assert client.get("/ready").json()["boundaryVersion"] == (
                 claims.get_boundary_registry(True).version
             )

@@ -3,6 +3,7 @@
 .field-guide-shell .parkdex-nav button { min-height: 52px; font-size: 12px; gap: 3px; }
 .field-guide-shell .feature-panel { inset: max(12px,env(safe-area-inset-top)) 12px calc(88px + env(safe-area-inset-bottom)); width: auto; max-height: none; padding: 20px; border-radius: 20px; background: var(--paper-bright); }
 .field-guide-shell .feature-collection { top: calc(76px + env(safe-area-inset-top)); padding: 0; }
+.field-guide-shell .feature-collection .collection-view { height: 100%; padding: 16px 12px 0; }
 .guide-view-switch { position: absolute; z-index: 8; top: max(12px,env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; align-items: center; gap: 4px; width: auto; padding: 5px; border-radius: 16px; background: var(--paper-bright); box-shadow: var(--soft-shadow); }
 .guide-view-switch > span { margin-right: auto; padding-inline: 10px; font-size: 17px; font-weight: 950; }
 .guide-view-switch button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; cursor: pointer; font-weight: 850; }
@@ -15,6 +16,7 @@
 .field-guide-shell .map-utility .map-mode-switch button { min-width: 0; min-height: 44px; }
 .field-guide-shell .map-utility .locate-button,
 .field-guide-shell .map-utility .search-toggle { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+.field-guide-shell .map-utility .search-dock.collapsed .search-toggle { border-radius: 50%; }
 .field-guide-shell .map-mode-switch { grid-template-columns: minmax(0,1fr) 44px; display: grid; flex: 1; }
 .field-guide-shell .map-mode-switch button { min-height: 44px; }
 .field-guide-shell .map-mode-switch button[role=switch] { display: flex; flex-direction: row; gap: 7px; font-size: 13px; }
@@ -72,9 +74,11 @@
   .field-guide-shell .group-detail-actions { justify-content: flex-end; }
 }
 @media (min-width: 860px) {
+  .field-guide-shell .view-collection .map-wrap { right: 0; }
   .field-guide-shell .feature-panel { left: 50%; right: auto; width: min(720px,calc(100% - 48px)); transform: translateX(-50%); }
   .guide-view-switch { right: auto; width: 370px; left: 24px; top: 20px; }
   .field-guide-shell .map-utility { left: 24px; right: auto; width: 370px; top: auto; bottom: 92px; }
+  .field-guide-shell .global-progress { right: auto; left: 404px; bottom: 92px; min-height: 54px; }
   .map-visit-filter { left: 24px; top: 84px; }
   .field-guide-shell .applied-map-search { left: 24px; right: auto; width: 370px; top: 138px; }
   .field-guide-shell .search-results, .field-guide-shell .filter-tray { left: 24px; right: auto; width: 370px; top: auto; bottom: 154px; }
