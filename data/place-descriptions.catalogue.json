@@ -1,0 +1,1060 @@
+{
+  "checkedAt": "2026-09-23",
+  "sourceName": "BC Parks",
+  "descriptionMethod": "Original concise summaries based on each page overview; source page and section are recorded per entry.",
+  "entries": {
+    "provincial-arbutus-grove-park": {
+      "status": "summary",
+      "description": "This park protects a representative stand of arbutus, Canada's only native broadleaf evergreen. BC Parks describes the grove as a quiet nature-viewing spot used by local hikers; the site has no facilities or road access.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Arbutus Grove Provincial Park Purpose Statement and Zoning Plan",
+      "sourceUrl": "https://nrs.objectstore.gov.bc.ca/kuwyyf/arbutus_grove_zoningplan_89e9a73c51.pdf",
+      "sourceSection": "Primary Role and Secondary Role",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-artlish-caves-park": {
+      "status": "summary",
+      "description": "Artlish Caves protects nationally significant limestone karst, with large cave entrances, an underground river and old-growth forest. The area is remote and ecologically sensitive; BC Parks says caving is not recommended until a management plan is in place.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Artlish Caves Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/artlish-caves-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-bamberton-park": {
+      "status": "summary",
+      "description": "A 225-metre sandy beach on Saanich Inlet anchors this small coastal park. Visitors come for swimming, shoreline views toward the Gulf Islands and Mount Baker, and a forested vehicle-accessible campground.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Bamberton Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/bamberton-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-beaver-point-park": {
+      "status": "no-overview",
+      "description": "No visitor overview is available for Beaver Point Park on the current BC Parks page. See the official page for current visitor information.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Beaver Point Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/beaver-point-park/",
+      "sourceSection": "BC Parks page with no published park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-bellhouse-park": {
+      "status": "summary",
+      "description": "This day-use park on Galiano Island looks across Active Pass toward Mayne Island and the Strait of Georgia. A short path through Garry oak meadow leads to a rocky shore, picnic spots and views of passing ferries and marine wildlife.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Bellhouse Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/bellhouse-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-big-bunsby-marine-park": {
+      "status": "summary",
+      "description": "A boat-access marine park among the Bunsby Islands, set beside the Checleset Bay Ecological Reserve. Kayakers and boaters find sheltered anchorages, while low tides reveal pools of intertidal life; wilderness camping is possible on Big Bunsby Island.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Big Bunsby Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/big-bunsby-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-bodega-ridge-park": {
+      "status": "summary",
+      "description": "A day-use ridge park on Galiano Island with a 4-kilometre crest and broad views over Trincomali Channel, Vancouver Island and the Strait of Georgia. Its trail crosses forest and cliff edge, with sandstone shoreline formations, wildflowers and raptor habitat below.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Bodega Ridge Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/bodega-ridge-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-boyle-point-park": {
+      "status": "summary",
+      "description": "At the south end of Denman Island, a forest trail reaches viewpoints over Baynes Sound and Chrome Island Lighthouse. The shoreline attracts seals, sea lions and seabirds, and the park also protects older Douglas fir, cedar and hemlock forest.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Boyle Point Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/boyle-point-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-burgoyne-bay-park": {
+      "status": "summary",
+      "description": "Burgoyne Bay is part of a large connected conservation area on Salt Spring Island, protecting several at-risk ecosystems. Low-impact walks and viewpoints look over Burgoyne Bay, Mount Maxwell and Baynes Peak.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Burgoyne Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/burgoyne-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-cape-scott-park": {
+      "status": "summary",
+      "description": "At Vancouver Island's northwestern tip, Cape Scott protects a vast stretch of rugged coast, remote beaches, estuaries, bogs and old-growth forest. Visitors explore by day hike or multi-day backpacking trip, including routes to San Josef Bay and Nels Bight.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Cape Scott Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/cape-scott-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-carmanah-walbran-park": {
+      "status": "summary",
+      "description": "The Carmanah and Walbran valleys contain some of Vancouver Island's largest Sitka spruce and ancient western red cedars, within a protected old-growth forest system. Valley trails reach notable trees and waterways, though routes can be very muddy and demanding.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Carmanah Walbran Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/carmanah-walbran-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-chemainus-river-park": {
+      "status": "summary",
+      "description": "This park addition follows the Chemainus River about 3 kilometres northwest of Duncan. It is cooperatively managed by the Cowichan Valley Regional District, so facilities and services may differ from other BC Parks sites.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Chemainus River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/chemainus-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-claud-elliott-lake-park": {
+      "status": "summary",
+      "description": "This protected area sits in the upper Tsitika watershed, within a river system recognized for its importance to Vancouver Island fish. It helps conserve montane forest and winter habitat for deer and Roosevelt elk alongside neighboring ecological reserves.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Claud Elliott Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/claud-elliott-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-clayoquot-arm-park": {
+      "status": "summary",
+      "description": "On Vancouver Island's west coast, the park protects the lower Clayoquot River, Clayoquot Lake and forested slopes beside Kennedy Lake. Boat, canoe or kayak access opens onto old-growth Sitka spruce, sandy beaches, small islands and cultural sites.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Clayoquot Arm Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/clayoquot-arm-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-clayoquot-plateau-park": {
+      "status": "summary",
+      "description": "A high, remote plateau protects old-growth forest, rare plants, karst features, sinkholes and small lakes. There are no developed trails, and access is difficult, so visits are best suited to experienced backcountry travellers.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Clayoquot Plateau Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/clayoquot-plateau-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-collinson-point-park": {
+      "status": "summary",
+      "description": "BC Parks identifies Collinson Point as a park established through private land acquisition. Its current visitor page provides little additional overview information; check the official page for updates before planning a visit.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Collinson Point Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/collinson-point-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-cowichan-river-park": {
+      "status": "summary",
+      "description": "This riverside park protects sections of the Cowichan River, a designated Canadian Heritage River known for salmon and steelhead. The area supports swimming, paddling, fishing, hiking and camping, with opportunities to enjoy the river corridor and its forested banks.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Cowichan River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/cowichan-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-dawley-passage-park": {
+      "status": "summary",
+      "description": "Accessible by boat in Clayoquot Sound, Dawley Passage offers a quiet stop along Fortune Channel between Meares Island and Vancouver Island. Sheltered water draws paddlers and boaters, with opportunities for fishing, wildlife viewing and wilderness camping.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Dawley Passage Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/dawley-passage-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-denman-island-park": {
+      "status": "summary",
+      "description": "This park protects forest and the Chicadee watershed within the uncommon Coastal Douglas-fir zone on Denman Island. The area also provides habitat for species at risk, including Taylor's checkerspot butterfly.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Denman Island Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/denman-island-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-dionisio-point-park": {
+      "status": "summary",
+      "description": "Boat-accessible Dionisio Point sits at the north end of Galiano Island beside Porlier Pass. Rocky headlands, sandstone shelves, beaches and flower meadows frame rich tidal habitat, with opportunities for paddling, fishing, wildlife viewing and walk-in camping.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Dionisio Point Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/dionisio-point-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-drumbeg-park": {
+      "status": "summary",
+      "description": "On Gabriola Island, this coastal park overlooks Gabriola Passage and the Strait of Georgia. It protects Garry oak and Douglas-fir ecosystems, forest and marine habitat, where visitors can picnic, walk, dive and explore the shoreline.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Drumbeg Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/drumbeg-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-elk-falls-park": {
+      "status": "summary",
+      "description": "A dramatic waterfall, forest trails and a salmon-rich river make Elk Falls a popular stop near Campbell River. Visitors can explore riverside viewpoints, fish in season and camp among the trees close to the Quinsam River and hatchery.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Elk Falls Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/elk-falls-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-englishman-river-falls-park": {
+      "status": "summary",
+      "description": "Two waterfalls descend through a deep canyon along the Englishman River, surrounded by lush old-growth and second-growth forest. The park offers a scenic place to walk beside the river and explore the forest north of Nanaimo.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Englishman River Falls Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/englishman-river-falls-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-eves-park": {
+      "status": "no-overview",
+      "description": "No visitor overview is available for Eves Park on the current BC Parks page. See the official page for current visitor information.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Eves Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/eves-park/",
+      "sourceSection": "BC Parks page with no published park overview",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-fillongley-park": {
+      "status": "summary",
+      "description": "This quiet picnic park on northern Denman Island was once a developed estate before its land was donated to the province. Mature trees, gardens and shoreline create a calm setting for a short walk or afternoon by the water.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Fillongley Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/fillongley-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-flores-island-park": {
+      "status": "summary",
+      "description": "A large wilderness park in Clayoquot Sound, Flores Island offers coastal hiking, paddling, whale watching and beach camping. It protects old-growth Sitka spruce, salmon habitat, rocky shore, beaches and a range of coastal and marine ecosystems.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Flores Island Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/flores-island-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-fossli-park": {
+      "status": "summary",
+      "description": "On Sproat Lake's Stirling Arm, this undeveloped day-use park has a short forest trail to an old homestead site. A grassy lakeside area and pebble beach offer a place to pause and take in the lake views.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Fossli Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/fossli-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-french-beach-park": {
+      "status": "summary",
+      "description": "A broad lawn meets a sand-and-pebble beach on the Strait of Juan de Fuca, with views toward the Olympic Mountains. Forest trails and a campground add to the appeal, while spring whale migrations make the shoreline a popular place to watch the water.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "French Beach Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/french-beach-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-gabriola-sands-park": {
+      "status": "summary",
+      "description": "Two sandy beaches join across a narrow isthmus between Taylor Bay and Pilot Bay on Gabriola Island. This popular day-use park has open lawns for picnics and swimming, and its beaches and shallows support shorebirds and marine life.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Gabriola Sands Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/gabriola-sands-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-gibson-marine-park": {
+      "status": "summary",
+      "description": "This marine park beside Flores Island Park has sheltered anchorage in Matilda Inlet and a natural warm spring on the shore. A historic, unmaintained route connects the spring area with the sandy beaches at Whitesand Cove.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Gibson Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/gibson-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-gold-muchalat-park": {
+      "status": "summary",
+      "description": "Northwest of Gold River, Gold Muchalat is an undeveloped wilderness area with opportunities for fishing, wildlife watching and rustic hiking. The park also protects winter habitat for Roosevelt elk and deer, plus salmon waters in the Muchalat River.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Gold Muchalat Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/gold-muchalat-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-goldstream-park": {
+      "status": "summary",
+      "description": "Close to Victoria, Goldstream combines old forest, waterfalls, river trails and seasonal wildflowers. In autumn, chum salmon return to spawn and draw eagles and visitors to the river; the park also has a visitor centre, picnic areas and camping.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Goldstream Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/goldstream-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-gordon-bay-park": {
+      "status": "summary",
+      "description": "On the shore of Lake Cowichan, Gordon Bay is a family camping destination with a sandy swimming beach and warm summer water. The surrounding lake and valley also draw anglers, boaters and visitors interested in the area's local history.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Gordon Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/gordon-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-gowlland-tod-park": {
+      "status": "summary",
+      "description": "This day-use park preserves much of the Gowlland Range and part of Tod Inlet, a large natural area near Greater Victoria. More than 25 kilometres of trails cross varied terrain and provide viewpoints for hiking, nature watching and picnics.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Gowlland Tod Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/gowlland-tod-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park": {
+      "status": "summary",
+      "description": "Also known as Von Donop Marine Park, Háthayim is a long, sheltered inlet on Cortes Island and a favored anchorage for boaters exploring the Discovery Islands. This undeveloped marine wilderness includes lakes, estuaries, a saltwater lagoon and old-growth forest, with wilderness camping permitted.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Háthayim Marine Park [a.k.a. Von Donop Marine Park] | BC Parks",
+      "sourceUrl": "https://bcparks.ca/hathayim-marine-park-aka-von-donop-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-helliwell-park": {
+      "status": "summary",
+      "description": "A coastal trail follows the bluffs at St. John's Point on Hornby Island, passing old-growth Douglas fir and Garry oak. The exposed headland looks across the Strait of Georgia to the Coast Mountains and offers chances to spot marine wildlife.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Helliwell Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/helliwell-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hemer-park": {
+      "status": "summary",
+      "description": "Easy trails wind through mature forest beside Holden Lake and its marshes south of Nanaimo. A viewing platform overlooks the wetland, making this a popular place for bird watching and quiet walks.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Hemer Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/hemer-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hesquiat-lake-park": {
+      "status": "summary",
+      "description": "This remote wilderness park on Clayoquot Sound's Hesquiat Lake is reached by boat or float plane. Mature forest surrounds the lake, where visitors can fish and observe nature; there are no developed facilities and few visitors.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Hesquiat Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/hesquiat-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hesquiat-peninsula-park": {
+      "status": "summary",
+      "description": "Hesquiat Peninsula protects a rugged stretch of the eastern shore of Nootka Sound and is known for coastal hiking, boating and sea kayaking. Nearby, Cougar Annie's Garden reflects the history of a homesteading family on this remote coast.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Hesquiat Peninsula Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/hesquiat-peninsula-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hitchie-creek-park": {
+      "status": "summary",
+      "description": "Within the Nitinat Lake watershed, Hitchie Creek protects lowland old-growth rainforest and river and lake habitats. The creek corridor supports wildlife movement and a wide range of plants and animals.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Hitchie Creek Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/hitchie-creek-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-horne-lake-caves-park": {
+      "status": "summary",
+      "description": "Horne Lake Caves protects an extensive underground limestone world, part of Vancouver Island's remarkable cave network. The caves and their fragile mineral formations are the focus of the park, which was established to conserve them from damage.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Horne Lake Caves Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/horne-lake-caves-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-hwsalu-utsum-park": {
+      "status": "summary",
+      "description": "Near the Koksilah River in the Cowichan Valley, Hwsalu-Utsum protects pocket grasslands and old-growth forest that provide habitat for vulnerable wildlife. The province says Cowichan people have used this land since time immemorial and that it holds spiritual and cultural importance.",
+      "sourceName": "Government of British Columbia",
+      "sourceTitle": "Conservation, culture at the heart of newly protected areas",
+      "sourceUrl": "https://news.gov.bc.ca/releases/2021ENV0054-001907",
+      "sourceSection": "Hwsalu-Utsum description",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-juan-de-fuca-park": {
+      "status": "summary",
+      "description": "This west-coast park follows the Strait of Juan de Fuca, with surf, forest and marine wildlife along its rugged shore. The Juan de Fuca Marine Trail is the main draw, while China Beach and Botanical Beach offer additional coastal access.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Juan de Fuca Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/juan-de-fuca-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-kennedy-lake-park": {
+      "status": "summary",
+      "description": "Two day-use sites on Kennedy Lake's south shore provide access to swimming, kayaking, fishing and windsurfing. In autumn, visitors may see sockeye spawning along the beach, with black bears also active in the area.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Kennedy Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/kennedy-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-kennedy-river-bog-park": {
+      "status": "summary",
+      "description": "This small day-use park protects a distinctive bog beside the Kennedy River on Vancouver Island's west coast. Its wetland and surrounding trees attract ospreys, eagles, ducks and songbirds, making it a quiet spot for bird watching.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Kennedy River Bog Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/kennedy-river-bog-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-kin-beach-park": {
+      "status": "summary",
+      "description": "Overlooking the Strait of Georgia in the Comox Valley, Kin Beach has a campground and a day-use area with picnic facilities and a playground. Visitors can explore the rocky shore or relax in the shade of mature Douglas fir.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Kin Beach Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/kin-beach-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-kitty-coleman-beach-park": {
+      "status": "summary",
+      "description": "This oceanfront park on the Strait of Georgia offers swimming, boating, fishing and shoreline camping. Its facilities include picnic areas, boat launches and nature trails, while the protected area includes mature forest and the Kitty Coleman Creek estuary.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Kitty Coleman Beach Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/kitty-coleman-beach-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-koksilah-river-park": {
+      "status": "summary",
+      "description": "West of Shawnigan Lake, this undeveloped park follows the scenic Koksilah River and canyon. Visitors come for hiking, fishing, swimming and picnics beside the river.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Koksilah River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/koksilah-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-lawn-point-park": {
+      "status": "summary",
+      "description": "Lawn Point lies on a remote stretch between Brooks Peninsula and Quatsino Sound, with a broad coastal bench unlike the area's steep rocky shoreline. Kayakers use this undeveloped park as a wilderness camping stop, with open views along the coast.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Lawn Point Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/lawn-point-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-little-qualicum-falls-park": {
+      "status": "summary",
+      "description": "Waterfalls carve a rocky gorge along the Little Qualicum River, while the park also reaches the south shore of Cameron Lake. Forested trails, picnic areas, lake swimming and camping make it a popular stop in central Vancouver Island.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Little Qualicum Falls Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/little-qualicum-falls-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-loveland-bay-park": {
+      "status": "summary",
+      "description": "This quiet, rustic campground near Campbell River sits beside Campbell Lake and has a boat launch. Visitors can swim, fish or relax by the water, or use the park as a base for exploring nearby North Island communities and islands.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Loveland Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/loveland-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-lower-nimpkish-park": {
+      "status": "summary",
+      "description": "A long undeveloped strip of parkland protects both banks of the Lower Nimpkish River near the north end of Nimpkish Lake. The river corridor supports fishing and nature viewing, and safeguards riparian habitat used by nesting eagles and threatened marbled murrelets.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Lower Nimpkish Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/lower-nimpkish-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-lower-tsitika-river-park": {
+      "status": "summary",
+      "description": "This park protects upland parts of the Tsitika watershed beside the Robson Bight orca habitat. It is lightly visited, and entry to the Tsitika River estuary is prohibited; the protected landscape spans low-elevation forest through alpine tundra.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Lower Tsitika River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/lower-tsitika-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-au-welnew-john-dean-park": {
+      "status": "summary",
+      "description": "Atop Mount Newton, this park looks across the Saanich Peninsula, Gulf Islands and Cascade Mountains. It protects remaining old-growth Douglas fir and Garry oak on the peninsula, while the mountain and surrounding landscape hold cultural significance for First Nations.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "ȽÁU,WELṈEW̱/John Dean Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/lau-welnew-john-dean-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-macmillan-park": {
+      "status": "summary",
+      "description": "MacMillan Park protects an internationally significant old-growth Douglas-fir forest. Cathedral Grove is its best-known area, with an accessible stand of giant trees and forest paths that make the landscape easy to experience on foot.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "MacMillan Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/macmillan-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-main-lake-park": {
+      "status": "summary",
+      "description": "On Quadra Island, Main Lake Park protects a chain of six lakes and a diverse freshwater ecosystem. Canoeing, kayaking and wilderness camping are among the ways to explore its waterways, forest and abundant bird and wildlife habitat.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Main Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/main-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-mansons-landing-park": {
+      "status": "summary",
+      "description": "This Cortes Island park fronts both Hague Lake and Manson Bay. Visitors can swim in the lake and watch marine life in Mansons Lagoon; camping is available at nearby Smelt Bay Park rather than within this park.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mansons Landing Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/mansons-landing-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-marble-river-park": {
+      "status": "summary",
+      "description": "A 4.2-kilometre trail along the Marble River supports hiking, biking and access to salmon viewing points. The river is also a destination for freshwater and tidal angling, especially during seasonal fish runs.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Marble River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/marble-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-memory-island-park": {
+      "status": "summary",
+      "description": "This tiny day-use island in Shawnigan Lake offers a quiet place to picnic and observe nature. It is accessible by boat, canoe or kayak and provides habitat for birds, small mammals, amphibians and other species.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Memory Island Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/memory-island-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-miracle-beach-park": {
+      "status": "summary",
+      "description": "A broad sandy beach is the centrepiece of this popular family destination in the Comox Valley. Forest trails, picnic areas, a playground, showers, vehicle-accessible campsites and group camping make it an easy place to spend a full day or overnight.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Miracle Beach Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/miracle-beach-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-mitlenatch-island-nature-park": {
+      "status": "summary",
+      "description": "Mitlenatch is home to the Strait of Georgia's largest seabird colony, with thousands of nesting gulls, cormorants, guillemots and other birds. The protected marine area also safeguards intertidal and underwater life around the island.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mitlenatch Island Nature Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/mitlenatch-island-nature-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-montague-harbour-marine-park": {
+      "status": "summary",
+      "description": "On Galiano Island, this park combines sheltered harbour, beaches, tidal lagoons, meadows and forest. Boaters can moor in the harbour, while visitors arriving by ferry can use the vehicle and walk-in campsites and explore the shoreline.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Montague Harbour Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/montague-harbour-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-morden-colliery-historic-park": {
+      "status": "summary",
+      "description": "This small day-use park preserves the last remaining coal tipple on Vancouver Island, a concrete industrial structure built for the Morden coal mine in the early 1900s. It offers a direct connection to the island's coal-mining history.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Morden Colliery Historic Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/morden-colliery-historic-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-morton-lake-park": {
+      "status": "summary",
+      "description": "Morton Lake is a destination for trout fishing, swimming, canoeing and boating in the Campbell River lake district. A sandy beach provides a place to relax, and the park also offers camping among the surrounding forest.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Morton Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/morton-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-mount-erskine-park": {
+      "status": "summary",
+      "description": "Mount Erskine on Salt Spring Island combines coastal Douglas-fir forest, mossy rock outcrops, Garry oak habitat and open bluffs. Hiking trails climb toward the summit, where visitors find broad island views.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mount Erskine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/mount-erskine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-mount-geoffrey-escarpment-park": {
+      "status": "summary",
+      "description": "A trail network on Hornby Island crosses the Mount Geoffrey escarpment and opens onto striking coastal views. Hiking and mountain biking are popular, with care needed to stay on trails and protect the islands' dry, sensitive ecosystems.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mount Geoffery Escarpment Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/mount-geoffrey-escarpment-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-mount-maxwell-park": {
+      "status": "summary",
+      "description": "Baynes Peak, one of Salt Spring Island's highest points, is the centre of this day-use park and its expansive Gulf Island views. Trails also pass old-growth Douglas fir, Garry oak meadows and salmon-bearing creeks near the island's largest undeveloped estuary.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mount Maxwell Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/mount-maxwell-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-muqqiwn-brooks-peninsula-park": {
+      "status": "summary",
+      "description": "This remote park protects Brooks Peninsula on northwestern Vancouver Island, a storm-exposed headland with rugged coastline and pockets of shelter. Its dual name recognizes the Che:k'tles7et'h' connection to this distinctive wilderness landscape.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Mᑫuqʷin/Brooks Peninsula Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/muqqiwn-brooks-peninsula-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-nimpkish-lake-park": {
+      "status": "summary",
+      "description": "A rugged wilderness area at the south end of Nimpkish Lake, this park protects old-growth forest in the Tlakwa Creek watershed. Remote recreation includes nature viewing, backcountry skiing, mountaineering and wilderness camping.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Nimpkish Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/nimpkish-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-nismaakqin-park": {
+      "status": "summary",
+      "description": "Known for mux̣ʷšiƛa, or Hot Springs Cove, this remote Clayoquot Sound park features mineral springs that cascade down a waterfall into a sequence of six rocky pools. Ocean water cools the pools as it moves through them.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Nism̓aakqin Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/nismaakqin-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-nitinat-river-park": {
+      "status": "summary",
+      "description": "The Nitinat River flows through lush forest and supports salmon and wildlife, with deep significance to local Indigenous communities. This wilderness park protects rare plants but has no developed day-use or camping facilities.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Nitinat River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/nitinat-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-nuchatlitz-park": {
+      "status": "summary",
+      "description": "At the northwestern tip of Nootka Island, Nuchatlitz includes many small island groups and quiet channels. Paddlers can explore by kayak and camp along the coast, with opportunities for boating, fishing and wildlife viewing.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Nuchatlitz Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/nuchatlitz-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-octopus-islands-marine-park": {
+      "status": "summary",
+      "description": "A group of small islands provides sheltered anchorages along the Inside Passage, making this a favourite marine stop for boaters and paddlers. Visitors also come to swim, hike, fish, dive, camp and connect with a rough portage route across Quadra Island.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Octopus Islands Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/octopus-islands-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-petroglyph-park": {
+      "status": "summary",
+      "description": "At the south end of Nanaimo, this small park protects a notable concentration of ancient rock carvings created by First Nations peoples. The petroglyphs offer a window into cultural history more than a thousand years old.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Petroglyph Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/petroglyph-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-pirates-cove-marine-park": {
+      "status": "summary",
+      "description": "This sheltered marine park on De Courcy Island is a popular anchorage south of Nanaimo. Kayaking, camping, swimming, hiking, picnicking and shoreline exploration offer ways to experience its quiet coves and wildlife.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Pirates Cove Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/pirates-cove-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-quatsino-park": {
+      "status": "summary",
+      "description": "Quatsino Park protects rugged coastline and large old-growth trees beside Quatsino Sound. It is a scenic stop on a popular sea-kayaking route, with an inland wilderness lake adding more room to explore.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Quatsino Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/quatsino-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-raft-cove-park": {
+      "status": "summary",
+      "description": "A long crescent beach at the Macjack River mouth defines this remote park on northwestern Vancouver Island. Day hikers and backpackers visit for its sandy shore, coastal headlands and exposed wilderness setting; bring warm clothing and rain gear.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Raft Cove Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/raft-cove-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-rathtrevor-beach-park": {
+      "status": "summary",
+      "description": "Parksville's wide sandy shore, old-growth woodland and ocean sunsets make Rathtrevor a popular Vancouver Island destination. Campsites sit among the trees, with an expansive beach revealed at low tide.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Rathtrevor Beach Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/rathtrevor-beach-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-read-island-park": {
+      "status": "summary",
+      "description": "Read Island protects a mix of old and second-growth forest, bog and lowland habitat, including nesting areas for bald eagles. The varied landscape supports wildlife from deer and otters to seals and sea lions.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Read Island Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/read-island-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-rebecca-spit-marine-park": {
+      "status": "summary",
+      "description": "A narrow sandy spit on Quadra Island has beaches on both sides and views over sheltered Drew Harbour. Walking trails, picnic areas, swimming, kayaking and fishing make it a popular day-use park.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Rebecca Spit Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/rebecca-spit-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-roberts-memorial-park": {
+      "status": "summary",
+      "description": "A short forest trail leads to a rocky beach on Stewart Channel near Nanaimo. The park's distinctive sandstone ledges preserve a record of ancient seabeds and provide haul-out places for sea lions.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Roberts Memorial Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/roberts-memorial-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-rock-bay-marine-park": {
+      "status": "summary",
+      "description": "This foreshore-only park sits where Discovery Passage meets Johnstone Strait and serves boaters exploring the area. Otter Cove provides sheltered anchorage, while nearby land access and operations are private.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Rock Bay Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/rock-bay-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-rosewall-creek-park": {
+      "status": "summary",
+      "description": "A small day-use park follows Rosewall Creek through conifers and broadleaf maple south of Fanny Bay. Two picnic areas and a short riverside path make it a quiet place to watch the creek, especially in autumn.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Rosewall Creek Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/rosewall-creek-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-ruckle-park": {
+      "status": "summary",
+      "description": "Seven kilometres of rocky shoreline, coves and bays make Ruckle a rewarding place to explore Salt Spring Island's coast. Forest, fields and shore support abundant wildlife, while campsites overlook Swanson Channel and working farmland preserves local history.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Ruckle Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/ruckle-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-rugged-point-marine-park": {
+      "status": "summary",
+      "description": "Accessible only by boat, Rugged Point is a coastal stop on northern Vancouver Island's west side. Sheltered beaches on the peninsula's north contrast with surf-exposed outer shores, with safe anchorages for boaters in suitable conditions.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Rugged Point Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/rugged-point-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sandwell-park": {
+      "status": "summary",
+      "description": "A short wooded walk on Gabriola Island ends at a picnic area above a sandy beach with views across the Strait of Georgia. At low tide, visitors can reach a sandstone petroglyph east of the day-use area.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sandwell Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sandwell-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-santa-gertrudis-boca-del-infierno-park": {
+      "status": "summary",
+      "description": "This boat-access park in Nootka Sound supports kayaking, boating, wilderness camping, fishing and wildlife viewing. Sheltered anchorages at Boca del Infierno Bay and Santa Gertrudis Cove lie within a landscape shaped by Indigenous history and coastal travel.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Santa Gertrudis-Boca del Infierno Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/santa-gertrudis-boca-del-infierno-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-saysutshun-newcastle-island-marine-park": {
+      "status": "summary",
+      "description": "A short passenger-ferry ride from Nanaimo reaches Saysutshun, an island park with steep sandstone shores and a long history of cultural and recreational use. Visitors can explore its paths and beaches, camp, and learn about the island's stories.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Saysutshun (Newcastle Island Marine) Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/saysutshun-newcastle-island-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-schoen-lake-park": {
+      "status": "summary",
+      "description": "Northwest of Campbell River, Schoen Lake pairs a quiet lake with surrounding mountain wilderness. Hiking, backpacking, boating, fishing, swimming and camping are possible, with a more primitive setting than developed destination parks.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Schoen Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/schoen-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-small-inlet-marine-park": {
+      "status": "summary",
+      "description": "At Quadra Island's north end, Small Inlet offers a protected anchorage near tidal rapids and a route to Newton Lake. A rough trail reaches the lake, and a longer portage links the park to Waiatt Bay in Octopus Islands Marine Park.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Small Inlet Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/small-inlet-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-smelt-bay-park": {
+      "status": "summary",
+      "description": "At the south end of Cortes Island, Smelt Bay is named for capelin that spawn along the shore in early autumn. Its beach is suited to low-tide marine exploration, with camping and views along the bay toward Sutil Point.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Smelt Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/smelt-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sooke-mountain-park": {
+      "status": "summary",
+      "description": "Established near Victoria to protect wilderness, wildlife and scenic values, Sooke Mountain preserves rugged hills, lakes, forest slopes and watershed. Visitors can hike, cycle, ride horses, fish and watch wildlife in this part of the Sooke Hills greenbelt.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sooke Mountain Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sooke-mountain-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sooke-potholes-park": {
+      "status": "summary",
+      "description": "The Sooke River has carved deep, smooth rock pools beside this popular day-use area. The potholes formed through glacial action and swirling stones during the last ice age, creating distinctive swimming holes and river scenery.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sooke Potholes Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sooke-potholes-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-spectacle-lake-park": {
+      "status": "summary",
+      "description": "Mature forest, wetlands and a spring-fed lake create a compact nature area northwest of Victoria. Visitors can swim, fish, walk a trail that circles the lake, and in winter sometimes skate when conditions allow.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Spectacle Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/spectacle-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-spider-lake-park": {
+      "status": "summary",
+      "description": "Warm water and a small sandy beach make Spider Lake a popular place for swimming and picnics. Canoeists and kayakers can follow the shoreline into quieter bays west of Qualicum Beach.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Spider Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/spider-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sproat-lake-park": {
+      "status": "summary",
+      "description": "Sproat Lake draws visitors for swimming, fishing, water skiing and windsurfing in the Alberni Valley. Short paths reach the shore and the K’ak’awin petroglyph panel, an important prehistoric carving site beside the lake.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sproat Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sproat-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-squitty-bay-park": {
+      "status": "summary",
+      "description": "A small protected bay on Lasqueti Island is enclosed by rocky headlands and dry terrain. Visitors can picnic, walk out onto the point and take in distant views of Mount Baker and the Comox Glacier.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Squitty Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/squitty-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-stamp-river-park": {
+      "status": "summary",
+      "description": "Trails follow the Stamp River through forest and rapids to waterfalls and viewing points. Thousands of salmon gather below Stamp Falls each year before climbing the fish ladders, making the seasonal run a highlight for visitors.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Stamp River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/stamp-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-strathcona-westmin-park": {
+      "status": "summary",
+      "description": "This unusual park encloses the active Myra Falls mine within the wider Strathcona wilderness. Away from the industrial site, its rugged forest setting offers hiking and backcountry camping opportunities.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Strathcona-Westmin Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/strathcona-westmin-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-strathcona-park": {
+      "status": "summary",
+      "description": "Established in 1911, Strathcona is British Columbia's oldest park and a vast mountain wilderness near the centre of Vancouver Island. Snowy peaks, alpine plateaus, lakes, waterfalls and forest draw hikers and campers through the warmer months and backcountry skiers in winter.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Strathcona Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/strathcona-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sulphur-passage-park": {
+      "status": "summary",
+      "description": "This undeveloped wilderness park in Clayoquot Sound includes a fjord, estuary and old-growth Sitka spruce forest. Its remote shore and productive marine habitat support wildlife viewing, including whales and other marine mammals.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sulphur Passage Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sulphur-passage-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-surge-narrows-park": {
+      "status": "summary",
+      "description": "Strong tidal currents converge near Maurelle Island to create the rapids that give Surge Narrows its name. The changing water supports abundant marine life, including sea stars, anemones, urchins and sea cucumbers.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Surge Narrows Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/surge-narrows-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-sydney-inlet-park": {
+      "status": "summary",
+      "description": "Sydney Inlet protects a striking fjord in northern Clayoquot Sound, with old-growth Sitka spruce and Douglas fir, the Sydney River and its estuary. Boaters and sea kayakers use the sheltered inlet to explore the remote west coast.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Sydney Inlet Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/sydney-inlet-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-tahsish-kwois-park": {
+      "status": "summary",
+      "description": "A rugged, isolated park in Kyuquot Sound protects old-growth forest, two lakes, a river canyon and broad valleys. The Tahsish River Ecological Reserve is surrounded by the park, adding to the area's value as a large connected wilderness landscape.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Tahsish-Kwois Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/tahsish-kwois-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-taylor-arm-park": {
+      "status": "summary",
+      "description": "Taylor Arm provides group camping close to Sproat Lake, with a trail and highway underpass connecting campers to the water. Wooded grounds, undeveloped beaches and two day-use areas make it useful for lakeside outings.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Taylor Arm Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/taylor-arm-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-thurston-bay-marine-park": {
+      "status": "summary",
+      "description": "Boat access reaches two sections of this marine park on Sonora Island beside Johnstone Strait. Sheltered anchorages, small beaches, paddling, fishing and hiking make it a useful Inside Passage stop; rustic camping is allowed, but facilities are undeveloped.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Thurston Bay Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/thurston-bay-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-tranquil-creek-park": {
+      "status": "summary",
+      "description": "Around Paradise Lake, steep forested slopes rise to alpine meadows at the head of Tranquil Creek. This remote wilderness has no trails and is reached by float plane, offering rustic hiking and camping for experienced visitors.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Tranquil Creek Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/tranquil-creek-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-tribune-bay-park": {
+      "status": "summary",
+      "description": "Hornby Island's long white-sand beach slopes into the warm waters of the Strait of Georgia and is lined by distinctive rock formations. A frontcountry campground beside the bay adds campsites, cabins and a playground near the popular swimming shore.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Tribune Bay Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/tribune-bay-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-vargas-island-park": {
+      "status": "summary",
+      "description": "Near Tofino, Vargas Island is a popular destination for paddling, wilderness camping and wildlife watching, including gray whales around Ahous Bay. The park protects rugged coastline, offshore islets and interior bogs in Clayoquot Sound.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Vargas Island Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/vargas-island-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-wakes-cove-park": {
+      "status": "summary",
+      "description": "Wakes Cove offers a sheltered anchorage in the central Gulf Islands, along with rustic walking trails, picnic spots and wildlife viewing. Camping is not allowed, and visitors need to stay within park boundaries beside neighboring private land.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Wakes Cove Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/wakes-cove-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-wallace-island-marine-park": {
+      "status": "summary",
+      "description": "Between Salt Spring and Galiano islands, Wallace Island's beaches, coves and offshore islets create sheltered paddling routes. Boaters and kayakers visit for day trips or overnight camping, with eagles, deer, mink and harbour seals among the wildlife.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Wallace Island Marine Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/wallace-island-marine-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-west-shawnigan-lake-park": {
+      "status": "summary",
+      "description": "A small day-use park on Shawnigan Lake protects Douglas-fir forest and provides beach access for swimming and paddling. Picnic tables, toilets and short walking paths support relaxed summer visits.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "West Shawnigan Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/west-shawnigan-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-weymer-creek-park": {
+      "status": "summary",
+      "description": "Weymer Creek protects an extensive karst landscape and cave system near Tahsis, including habitat for the red-listed Keen's long-eared myotis bat. Caves are ecologically sensitive, and BC Parks cautions against caving until a management plan is complete.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Weymer Creek Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/weymer-creek-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-white-ridge-park": {
+      "status": "summary",
+      "description": "White Ridge rises behind Gold River and protects internationally notable white limestone karst, caves and wildlife habitat. Its underground features are sensitive, so BC Parks advises against caving until a management plan is complete.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "White Ridge Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/white-ridge-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-white-river-park": {
+      "status": "summary",
+      "description": "This small wilderness park protects old-growth forest and habitat for Roosevelt elk and black bears beside the White River. A short loop trail descends through large Douglas fir and red cedar to the water.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "White River Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/white-river-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-wood-mountain-ski-park": {
+      "status": "summary",
+      "description": "North of Comox Lake and west of Courtenay, Wood Mountain Ski Park is a roughly 240-acre park established in 1966. The provincial geographical names record says it was named for Clinton S. Wood and designated for recreation and wildlife preservation.",
+      "sourceName": "BC Geographical Names Office",
+      "sourceTitle": "Wood Mountain Ski Park | BC Geographical Names",
+      "sourceUrl": "https://apps.gov.bc.ca/pub/bcgnws/names/23998.html",
+      "sourceSection": "Description and history",
+      "reviewedAt": "2026-09-23"
+    },
+    "provincial-woss-lake-park": {
+      "status": "summary",
+      "description": "South of Woss on northern Vancouver Island, this undeveloped park protects part of Woss Lake and the steep forested slopes and snowfields of Rugged Mountain. Its remote lake and mountain setting offers a wilderness experience.",
+      "sourceName": "BC Parks",
+      "sourceTitle": "Woss Lake Park | BC Parks",
+      "sourceUrl": "https://bcparks.ca/woss-lake-park/",
+      "sourceSection": "Highlights in this park",
+      "reviewedAt": "2026-09-23"
+    }
+  }
+}
