@@ -16,7 +16,9 @@ const routes = places.map(({ id, name, description }) => {
 });
 const content = `${JSON.stringify(routes, null, 2)}\n`;
 if (process.argv.includes("--check")) {
-  if (readFileSync(output, "utf8") !== content) throw new Error("Park routes are out of sync with data/places.json");
+  if (readFileSync(output, "utf8").replace(/\r\n/g, "\n") !== content) {
+    throw new Error("Park routes are out of sync with data/places.json");
+  }
 } else {
   writeFileSync(output, content);
 }
