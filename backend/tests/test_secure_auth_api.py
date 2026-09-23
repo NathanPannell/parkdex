@@ -134,11 +134,11 @@ def test_resend_provider_delivers_registration_and_reset_links(monkeypatch) -> N
         assert all(request["url"] == "https://api.resend.com/emails" for request in requests)
         assert all(request["headers"] == {"Authorization": "Bearer re_test_key"} for request in requests)
         assert requests[0]["json"]["from"] == "Parkdex <test@example.com>"
-        assert "https://preview.example.test/#verificationToken=" in requests[0]["json"]["text"]
-        assert "https://preview.example.test/#verificationToken=" in requests[0]["json"]["html"]
+        assert "https://preview.example.test/account#verificationToken=" in requests[0]["json"]["text"]
+        assert "https://preview.example.test/account#verificationToken=" in requests[0]["json"]["html"]
         assert ">Confirm email</a>" in requests[0]["json"]["html"]
-        assert "https://preview.example.test/#resetToken=" in requests[1]["json"]["text"]
-        assert "https://preview.example.test/#resetToken=" in requests[1]["json"]["html"]
+        assert "https://preview.example.test/account#resetToken=" in requests[1]["json"]["text"]
+        assert "https://preview.example.test/account#resetToken=" in requests[1]["json"]["html"]
         assert ">Reset password</a>" in requests[1]["json"]["html"]
     finally:
         clean(email)

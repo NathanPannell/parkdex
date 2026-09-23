@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore, type SetStateAction } from "react";
 import { hasAccountCallback, navigationUrl, readNavigation, type PublicNavigation } from "./navigation";
 
 const navigationEvent = "parkdex:navigation";
@@ -15,13 +15,25 @@ const getServerSnapshot = () => "/";
 export function usePublicNavigation() {
   const href = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const state = useMemo(() => readNavigation(href), [href]);
+  useEffect(() => {
+    const url = new URL(href, window.location.origin);
+    if (url.pathname !== "/" || hasAccountCallback(url) ||
+      !["view", "place", "mapQuery", "query"].some((key) => url.searchParams.has(key))) return;
+    const next = navigationUrl(href, readNavigation(href));
+    if (next === `${url.pathname}${url.search}${url.hash}`) return;
+    window.history.replaceState(window.history.state, "", next);
+    window.dispatchEvent(new Event(navigationEvent));
+  }, [href]);
   const update = useCallback((patch: Partial<PublicNavigation>, history: "push" | "replace" = "replace") => {
     // AccountView consumes its one-use credentials before ordinary navigation can write history.
     if (hasAccountCallback(new URL(window.location.href))) return;
     const next = navigationUrl(window.location.href, { ...readNavigation(window.location.href), ...patch });
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (next === current) return;
-    window.history[history === "push" ? "pushState" : "replaceState"](window.history.state, "", next);
+    const currentState = window.history.state;
+    const depth = Number.isSafeInteger(currentState?.parkdexRouteDepth) ? Math.max(0, currentState.parkdexRouteDepth) : 0;
+    const nextState = history === "push" ? { ...currentState, parkdexRouteDepth: depth + 1 } : currentState;
+    window.history[history === "push" ? "pushState" : "replaceState"](nextState, "", next);
     window.dispatchEvent(new Event(navigationEvent));
   }, []);
   const set = <K extends keyof PublicNavigation>(key: K, value: SetStateAction<PublicNavigation[K]>) => {
