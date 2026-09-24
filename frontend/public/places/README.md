@@ -1,6 +1,6 @@
 # Place photos
 
-These images depict the named park or a documented feature within its boundary. Source landing pages and available API metadata were rechecked on 2026-09-11 for the named location, creator, original file, and reusable license. When a source description names only a feature, the manifest links an official park page that documents the feature inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
+These images depict the named park or a documented feature within its boundary. The 2026-09-11 coverage pass and the 2026-09-23 provincial parks batch record their source review dates in the catalogue credit index and task ledger. Source pages and available API metadata are checked for the named location, creator, original file, and reusable license. When a source description names only a feature, the manifest links metadata or an official park page that confirms the feature is inside the park. The manifest records the location evidence and URL, alt text, source and original links, license link, and changes for every image.
 
 Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wide and 64 KB for collection lists; the detail file is at most 960 pixels wide and 425 KB for place cards. Neither variant is upscaled. The interface may center-crop a variant to fit its responsive frame, and Next.js may negotiate a smaller encoded response for the device.
 
@@ -25,11 +25,11 @@ Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wid
 | East Sooke Regional Park | [East Sooke Park](https://commons.wikimedia.org/wiki/File:East_Sooke_Park_BC.jpg) | Brandon Godfrey | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
 | Little Huson Cave Regional Park | [Natural Bridge](https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 
-The [expanded catalogue credit index](./CATALOGUE_CREDITS.md) lists the photos added by the 2026-09-11 coverage pass. Ordinary thumbnail contexts use the local text-free tree placeholder when a park has no verified, freely licensed image; group members omit missing media and place details elevate their factual metadata instead. The task ledger links the search report for all reviewed gaps.
+The [expanded catalogue credit index](./CATALOGUE_CREDITS.md) lists photos by coverage batch. Each catalogue record includes its original file and location evidence. Ordinary thumbnail contexts use the local text-free tree placeholder when a park has no verified, freely licensed image; group members omit missing media and place details elevate their factual metadata instead.
 
 To contribute a photo:
 
 1. Use a source page that explicitly names the tracked park or a documented feature inside its boundary. Nearby scenery and inferred locations are not sufficient.
 2. Confirm that the license permits local redistribution and presentation. Record the creator, source page, original asset URL, license name and URL, location evidence, descriptive alt text, and every resize, conversion, or crop.
 3. Create both WebP variants within the width and file-size budgets above. Do not overwrite or repurpose badge assets in `public/badges`.
-4. Add the record to `lib/place-images.ts` and run `npm test -- place-images` from `frontend`. The integrity checks reject unknown IDs, duplicate or missing paths, oversized files, incomplete provenance, and unsupported licenses.
+4. Add the record to `lib/place-images.catalogue.json` (or `lib/place-images.ts` for the base entries) and run `npm test -- place-images` from `frontend`. The integrity checks reject unknown IDs, duplicate or missing paths, oversized files, incomplete provenance, and unsupported licenses.

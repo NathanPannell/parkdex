@@ -37,7 +37,7 @@ vi.mock("@/lib/photo-processing", () => ({
   isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
   normalizeVisitPhoto: vi.fn(async (photo) => photo),
 }));
-vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showResetControl = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showResetControl?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => { const [moved, setMoved] = useState(false); return <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button><button onClick={() => setMoved(true)}>Displace map</button>{moved && showResetControl && <button onClick={() => setMoved(false)}>Reset map view</button>}</div>; } }));
+vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showZoomControls = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showZoomControls?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button>{showZoomControls && <><button>Zoom in</button><button>Zoom out</button></>}</div> }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
 afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.syncMessage = ""; journal.storageUnavailable = false; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
@@ -1161,20 +1161,21 @@ describe("Parkdex navigation", () => {
     expect((screen.getByRole("textbox", { name: "Search places" }) as HTMLInputElement).value).toBe("Park");
   });
 
-  it("keeps the moved-map reset control off non-map panels and restores its behavior on Map", () => {
+  it("shows zoom controls only on the Map panel", () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
-    fireEvent.click(screen.getByRole("button", { name: "Displace map" }));
-    expect(screen.getByRole("button", { name: "Reset map view" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zoom out" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Collections" }));
-    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Zoom in" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "My Dex" }));
-    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Zoom in" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Field Guide" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reset map view" }));
-    expect(screen.queryByRole("button", { name: "Reset map view" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeTruthy();
   });
 
   it("keeps location in the utility toolbar and closes filters when search regains focus", () => {

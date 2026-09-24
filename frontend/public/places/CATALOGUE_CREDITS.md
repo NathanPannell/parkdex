@@ -1,6 +1,6 @@
 # Catalogue photo credits added in the coverage pass
 
-These local variants were verified against the linked Wikimedia Commons file metadata on 2026-09-11. The interface presents the creator and license beside every image; this table is the repository-level attribution index for the expanded catalogue.
+The entries below record the source review date for each batch. The 2026-09-11 coverage pass and the 2026-09-23 provincial parks batch were checked against their linked Wikimedia Commons file metadata. The interface presents the creator and license beside every image; these tables are the repository-level attribution index for the expanded catalogue.
 
 | Place | Wikimedia Commons source | Creator | License |
 | --- | --- | --- | --- |
@@ -99,3 +99,21 @@ These local variants were verified against the linked Wikimedia Commons file met
 | Mansons Landing Park | [Mansons Lagoon](https://www.flickr.com/photos/davidstanleytravel/50273045731/) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 | Morden Colliery Historic Park | [Morden Colliery Historic Provincial Park](https://www.flickr.com/photos/davidstanleytravel/51220708427/) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 | Spider Lake Park | [Spider Lake Provincial Park](https://www.flickr.com/photos/kurt-b/49616838462/) | Kurayba | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
+
+
+## 2026-09-23 notable provincial parks batch
+
+These ten local WebP pairs were checked against the Commons source pages and file metadata on 2026-09-23. The catalogue retains the original asset links and location evidence.
+
+| Place | Wikimedia Commons source | Creator | License |
+| --- | --- | --- | --- |
+| Joffre Lakes Park | [Middle Joffre Lake Nicolas May](https://commons.wikimedia.org/wiki/File:Middle_Joffre_Lake_Nicolas_May.jpg) | Nicolas May | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Garibaldi Park | [Garibaldi Lake - Garibaldi Provincial Park](https://commons.wikimedia.org/wiki/File:Garibaldi_Lake_-_Garibaldi_Provincial_Park.jpg) | Dunmaghlas | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Golden Ears Park | [Golden Ears Provincial Park](https://commons.wikimedia.org/wiki/File:Golden_Ears_Provincial_Park.jpg) | Laura Barron 64 | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| E.C. Manning Park | [E.C. Manning Provincial Park](https://commons.wikimedia.org/wiki/File:E.C._Manning_Provincial_Park.jpg) | Andrew Plowright | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Mount Robson Park | [Kenney Lake reflection, Mount Robson Provincial Park](https://commons.wikimedia.org/wiki/File:Kenney_Lake_reflection,_Mount_Robson_Provincial_Park.jpg) | amanderson2 | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
+| Cypress Park | [Cypress Provincial Park](https://commons.wikimedia.org/wiki/File:Cypress_Provincial_Park.jpg) | Andrew Plowright | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Brandywine Falls Park | [Brandywine Falls Provincial Park](https://commons.wikimedia.org/wiki/File:Brandywine_Falls_Provincial_Park.jpg) | Paul Mannix | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
+| Ancient Forest/Chun T'oh Whudujut Park | [Eingang zum Ancient Forest Provincial Park](https://commons.wikimedia.org/wiki/File:Eingang_zum_Ancient_Forest_Provincial_Park.jpg) | Pam.schulz | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Bowron Lake Park | [Spectacle Lakes, Bowron Lake Provincial Park (DSCF3713)](https://commons.wikimedia.org/wiki/File:Spectacle_Lakes,_Bowron_Lake_Provincial_Park_(DSCF3713).jpg) | Trougnouf (Benoit Brummer) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) |
+| Stawamus Chief Park | [Stawamus Chief Provincial Park, BC (DSCF7828)](https://commons.wikimedia.org/wiki/File:Stawamus_Chief_Provincial_Park,_BC_(DSCF7828).jpg) | Trougnouf | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |

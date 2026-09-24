@@ -2358,5 +2358,225 @@
     "locationEvidence": "Commons caption describes Klemtu as being on the east coast of Swindle Island, and its categories identify Swindle Island.",
     "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bighouse_and_Ceremonial_Canoe,_Klemtu,_BC.jpg",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-joffre-lakes-park": {
+    "thumbnail": {
+      "src": "/places/joffre-lakes-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/joffre-lakes.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Turquoise Middle Joffre Lake beneath snowy peaks and evergreen forest",
+    "creator": "Nicolas May",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Middle_Joffre_Lake_Nicolas_May.jpg",
+    "sourceTitle": "Middle Joffre Lake Nicolas May",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2b/Middle_Joffre_Lake_Nicolas_May.jpg",
+    "locationEvidence": "The Commons description identifies Middle Joffre Lake in Joffre Lakes Provincial Park, and its file metadata gives coordinates 50.352431, -122.482122.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Middle_Joffre_Lake_Nicolas_May.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-garibaldi-park": {
+    "thumbnail": {
+      "src": "/places/garibaldi-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/garibaldi.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Forested shore, wildflowers, and mountains across Garibaldi Lake in Garibaldi Provincial Park",
+    "creator": "Dunmaghlas",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Garibaldi_Lake_-_Garibaldi_Provincial_Park.jpg",
+    "sourceTitle": "Garibaldi Lake - Garibaldi Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9d/Garibaldi_Lake_-_Garibaldi_Provincial_Park.jpg",
+    "locationEvidence": "The Commons description identifies Garibaldi Lake at the top of Garibaldi Provincial Park, and the protected-area metadata names the park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Garibaldi_Lake_-_Garibaldi_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-golden-ears-park": {
+    "thumbnail": {
+      "src": "/places/golden-ears-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/golden-ears.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Paddleboarders on a blue lake beneath the forested mountains of Golden Ears Provincial Park",
+    "creator": "Laura Barron 64",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Golden_Ears_Provincial_Park.jpg",
+    "sourceTitle": "Golden Ears Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Golden_Ears_Provincial_Park.jpg",
+    "locationEvidence": "The Commons file title and description identify the paddling scene as Golden Ears Provincial Park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Golden_Ears_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-e-c-manning-park": {
+    "thumbnail": {
+      "src": "/places/manning-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/manning.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Golden autumn larches across a mountain valley in E.C. Manning Provincial Park",
+    "creator": "Andrew Plowright",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:E.C._Manning_Provincial_Park.jpg",
+    "sourceTitle": "E.C. Manning Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/bd/E.C._Manning_Provincial_Park.jpg",
+    "locationEvidence": "The Commons caption identifies the autumn panoramic view as E.C. Manning Provincial Park, and its protected-area metadata names the park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:E.C._Manning_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-mount-robson-park": {
+    "thumbnail": {
+      "src": "/places/mount-robson-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/mount-robson.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "Still lake reflecting forested mountains in Mount Robson Provincial Park",
+    "creator": "amanderson2",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kenney_Lake_reflection,_Mount_Robson_Provincial_Park.jpg",
+    "sourceTitle": "Kenney Lake reflection, Mount Robson Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Kenney_Lake_reflection%2C_Mount_Robson_Provincial_Park.jpg",
+    "locationEvidence": "The Commons caption identifies the reflected lake scene at Kenney Lake in Mount Robson Provincial Park, British Columbia.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kenney_Lake_reflection,_Mount_Robson_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-cypress-park": {
+    "thumbnail": {
+      "src": "/places/cypress-thumb.webp",
+      "width": 320,
+      "height": 137
+    },
+    "detail": {
+      "src": "/places/cypress.webp",
+      "width": 960,
+      "height": 410
+    },
+    "alt": "Rocky trail looking over the forested mountains and inlets of Cypress Provincial Park",
+    "creator": "Andrew Plowright",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cypress_Provincial_Park.jpg",
+    "sourceTitle": "Cypress Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Cypress_Provincial_Park.jpg",
+    "locationEvidence": "The Commons caption locates the panorama on the Howe Sound Crest Trail, and the protected-area metadata identifies Cypress Provincial Park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Cypress_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-brandywine-falls-park": {
+    "thumbnail": {
+      "src": "/places/brandywine-falls-thumb.webp",
+      "width": 320,
+      "height": 427
+    },
+    "detail": {
+      "src": "/places/brandywine-falls.webp",
+      "width": 960,
+      "height": 1280
+    },
+    "alt": "Brandywine Falls plunging into a forested canyon inside Brandywine Falls Provincial Park",
+    "creator": "Paul Mannix",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Brandywine_Falls_Provincial_Park.jpg",
+    "sourceTitle": "Brandywine Falls Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Brandywine_Falls_Provincial_Park.jpg",
+    "locationEvidence": "The Commons title and caption identify Brandywine Falls Provincial Park in British Columbia, Canada; the depicted feature is the park namesake.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Brandywine_Falls_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-ancient-forest-chun-t-oh-whudujut-park": {
+    "thumbnail": {
+      "src": "/places/ancient-forest-thumb.webp",
+      "width": 320,
+      "height": 240
+    },
+    "detail": {
+      "src": "/places/ancient-forest.webp",
+      "width": 960,
+      "height": 720
+    },
+    "alt": "The Ancient Forest / Chun T’oh Whudujut Provincial Park entrance sign among green forest and rock",
+    "creator": "Pam.schulz",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Eingang_zum_Ancient_Forest_Provincial_Park.jpg",
+    "sourceTitle": "Eingang zum Ancient Forest Provincial Park",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/34/Eingang_zum_Ancient_Forest_Provincial_Park.jpg",
+    "locationEvidence": "The Commons title and description identify the entrance to Ancient Forest / Chun T’oh Whudujut Provincial Park; the photo visibly shows the park entrance sign.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Eingang_zum_Ancient_Forest_Provincial_Park.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-bowron-lake-park": {
+    "thumbnail": {
+      "src": "/places/bowron-lake-thumb.webp",
+      "width": 320,
+      "height": 214
+    },
+    "detail": {
+      "src": "/places/bowron-lake.webp",
+      "width": 960,
+      "height": 643
+    },
+    "alt": "A pale sandbar beside shallow Spectacle Lakes and evergreen forest in Bowron Lake Provincial Park",
+    "creator": "Trougnouf (Benoit Brummer)",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Spectacle_Lakes,_Bowron_Lake_Provincial_Park_(DSCF3713).jpg",
+    "sourceTitle": "Spectacle Lakes, Bowron Lake Provincial Park (DSCF3713)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/53/Spectacle_Lakes%2C_Bowron_Lake_Provincial_Park_%28DSCF3713%29.jpg",
+    "locationEvidence": "The Commons description identifies the sand bank on Spectacle Lakes in Bowron Lake Provincial Park, British Columbia; the file category and coordinates are park-specific.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Spectacle_Lakes,_Bowron_Lake_Provincial_Park_(DSCF3713).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "provincial-stawamus-chief-park": {
+    "thumbnail": {
+      "src": "/places/stawamus-chief-thumb.webp",
+      "width": 320,
+      "height": 214
+    },
+    "detail": {
+      "src": "/places/stawamus-chief.webp",
+      "width": 960,
+      "height": 641
+    },
+    "alt": "Forest-covered cliffs and distant mountains viewed from the Stawamus Chief's North Summit",
+    "creator": "Trougnouf",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Stawamus_Chief_Provincial_Park,_BC_(DSCF7828).jpg",
+    "sourceTitle": "Stawamus Chief Provincial Park, BC (DSCF7828)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/17/Stawamus_Chief_Provincial_Park%2C_BC_%28DSCF7828%29.jpg",
+    "locationEvidence": "The Commons description says the view was made from the third peak (North Summit) during the Chief hike inside Stawamus Chief Provincial Park, British Columbia.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Stawamus_Chief_Provincial_Park,_BC_(DSCF7828).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
   }
 }
