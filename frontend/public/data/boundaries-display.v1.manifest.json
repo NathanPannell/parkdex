@@ -2,9 +2,9 @@
   "version": 1,
   "input": "data/boundaries.geojson",
   "output": "frontend/public/data/boundaries-display.v1.geojson",
-  "inputSha256": "74c7c74580a7bd7616659ab5be796b6e6c7c2e2f5a840833cf1834430af58322",
-  "outputSha256": "43ca65f8ea3e621edca7c002fde4ab9fc6880aa16edd74cf94e39f879700bc5a",
-  "featureCount": 198,
+  "inputSha256": "0eb64ae05370800570a29d4011fdb3455548b0d3f6cf38607cece968475da410",
+  "outputSha256": "decd7c743085aa5bd1ff8edfc76798ef38bfde9296c34771ad261a3b9412e58e",
+  "featureCount": 1030,
   "algorithm": {
     "name": "adaptive-simplify-rounded-category-offset",
     "parkBufferMeters": 0,
@@ -17,10 +17,10 @@
     "simplifyPerRounding": 0.3,
     "bufferSteps": 8,
     "coordinatePrecisionCounts": {
-      "6": 88,
-      "7": 89,
-      "8": 5,
-      "unrounded": 16
+      "6": 497,
+      "7": 412,
+      "8": 38,
+      "unrounded": 83
     }
   }
 }

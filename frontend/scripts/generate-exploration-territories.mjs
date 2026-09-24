@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import polygonClipping from "polygon-clipping";
 import buffer from "@turf/buffer";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import simplify from "@turf/simplify";
 
 import {
@@ -14,11 +15,14 @@ import {
 import { readCatalogueSource, readScopedBoundaryCollection } from "./catalogue-scope.mjs";
 
 const outputUrl = new URL("../public/data/exploration-territories.v1.geojson", import.meta.url);
-const CIRCLE_STEPS = 192;
+const CIRCLE_STEPS = 96;
 const EXPLORATION_PARK_PADDING_METERS = 180;
 const EXPLORATION_ISLAND_PADDING_METERS = 220;
 const EXPLORATION_PADDING_STEPS = 8;
-const EXPLORATION_SIMPLIFY_PER_PADDING = 0.3;
+// The completion overlay is display-only. About 270 m shoreline tolerance
+// keeps the provincewide GeoJSON under the 6 MB static-asset budget while
+// canonical visit boundaries remain at their original precision.
+const EXPLORATION_SIMPLIFY_PER_PADDING = 1.5;
 const [canonicalPlaces, scoped, bcLand] = await Promise.all([
   readCatalogueSource("places.json").then(JSON.parse),
   readScopedBoundaryCollection(),
@@ -71,9 +75,18 @@ function paddedLandFeature(feature) {
 // Exploration land intentionally starts from canonical boundaries and owns
 // its own rounded padding. It must not inherit presentation changes from the
 // per-park display asset used by the discover map.
-// Add catalogued boundaries to the generalized provincial coastline so parks
-// on small islands and staging fixtures remain in the exploration scope.
-const landInputs = [bcLand, ...canonical.features.map(paddedLandFeature)].flatMap(exteriorPolygons);
+// Only offshore footprints need to extend the province land outline. Adding
+// every mainland park duplicates highly detailed geometry in every estimated
+// territory and makes the shipped overlay several times larger. Island
+// features remain explicit so their nearshore visual padding is preserved.
+const placeById = new Map(places.map((place) => [place.id, place]));
+const offshoreFeatures = canonical.features.filter((feature) => {
+  if (feature.properties?.category === "island") return true;
+  const place = placeById.get(feature.properties?.id);
+  if (!place) throw new Error(`Missing exploration place for boundary ${feature.properties?.id}`);
+  return !booleanPointInPolygon([place.longitude, place.latitude], bcLand);
+});
+const landInputs = [bcLand, ...offshoreFeatures.map(paddedLandFeature)].flatMap(exteriorPolygons);
 const land = polygonClipping.union(landInputs[0], ...landInputs.slice(1));
 
 function everyPair(multiPolygon) {
@@ -422,6 +435,9 @@ const asset = {
       park: EXPLORATION_PARK_PADDING_METERS,
       island: EXPLORATION_ISLAND_PADDING_METERS,
     },
+    simplifyPerPadding: EXPLORATION_SIMPLIFY_PER_PADDING,
+    maximumAssetBytes: 6_000_000,
+    landExtensionRule: "islands and offshore park representatives",
     note: "Display-only completion estimate; it does not represent land travelled, access, or ownership.",
   },
   features: [{
@@ -431,6 +447,9 @@ const asset = {
   }, ...features, ...edgeFeatures],
 };
 const serialized = `${JSON.stringify(asset)}\n`;
+if (Buffer.byteLength(serialized) >= 6_000_000) {
+  throw new Error(`Exploration territory asset exceeds 6 MB display budget (${Buffer.byteLength(serialized)} bytes)`);
+}
 
 if (process.argv.includes("--check")) {
   const current = await readFile(fileURLToPath(outputUrl), "utf8").catch(() => "");
