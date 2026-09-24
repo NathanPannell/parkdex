@@ -8,7 +8,7 @@ const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json')
 const audit = JSON.parse(fs.readFileSync(path.join(root, 'data', 'coverage-audit.json'), 'utf8'));
 const visitorPages = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'visitor-information.catalogue.json'), 'utf8'));
 const publishedDescriptionSources = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'place-description-sources.catalogue.json'), 'utf8'));
-const descriptionFiles = ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json'];
+const descriptionFiles = ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json', 'bc-expansion-descriptions.catalogue.json'];
 const descriptionEntries = new Map();
 for (const filename of descriptionFiles) {
   const catalogue = JSON.parse(fs.readFileSync(path.join(root, 'data', filename), 'utf8'));
@@ -17,7 +17,7 @@ for (const filename of descriptionFiles) {
   }
   for (const [id, entry] of Object.entries(catalogue.entries)) {
     if (descriptionEntries.has(id)) throw new Error(`duplicate description entry: ${id}`);
-    if (!['summary', 'no-overview'].includes(entry.status)
+    if (!['summary', 'no-overview', 'source-derived'].includes(entry.status)
         || typeof entry.description !== 'string' || entry.description.trim().length < 40
         || !URL.canParse(entry.sourceUrl) || !entry.sourceUrl.startsWith('https://')
         || !entry.sourceName || !entry.sourceTitle || !entry.sourceSection
@@ -41,7 +41,7 @@ for (const place of places) {
   ids.add(place.id);
   if (!categories.has(place.category)) throw new Error(`${place.id}: invalid category`);
   if (!Number.isFinite(place.latitude) || !Number.isFinite(place.longitude)) throw new Error(`${place.id}: invalid coordinate`);
-  if (place.latitude < 48.15 || place.latitude > 51.25 || place.longitude < -128.9 || place.longitude > -123) throw new Error(`${place.id}: coordinate outside catalogue extent`);
+  if (place.latitude < 47 || place.latitude > 61 || place.longitude < -141 || place.longitude > -113) throw new Error(`${place.id}: coordinate outside British Columbia extent`);
   if (!URL.canParse(place.sourceUrl) || !place.sourceUrl.startsWith('https://')) throw new Error(`${place.id}: sourceUrl must be HTTPS`);
   const description = descriptionEntries.get(place.id);
   if (!description) throw new Error(`${place.id}: missing visitor-facing description source`);
@@ -80,6 +80,13 @@ const supplementalProvincialSources = new Map([
 ]);
 for (const place of places.filter((item) => item.category === 'provincial')) {
   const description = descriptionEntries.get(place.id);
+  if (description.status === 'source-derived') {
+    if (description.sourceUrl !== place.sourceUrl || description.sourceName !== 'BC Parks / DataBC'
+        || !description.description.includes('provincial park')) {
+      throw new Error(`${place.id}: source-derived provincial description provenance mismatch`);
+    }
+    continue;
+  }
   if (provincialDescriptionGaps.has(place.id)) {
     if (description.status !== 'no-overview') throw new Error(`${place.id}: source gap must remain explicit`);
     if (description.sourceName !== 'BC Parks' || description.sourceUrl !== visitorPages[place.id]?.url) {
@@ -131,11 +138,11 @@ for (const [id, sourceId] of reviewedRegionalPointSources) {
   }
 }
 
-const excludedMainlandIds = [
+const requiredMainlandIds = [
   'provincial-alice-lake-park', 'provincial-garibaldi-park', 'provincial-shannon-falls-park',
   'provincial-stawamus-chief-park', 'provincial-tantalus-park',
 ];
-for (const id of excludedMainlandIds) if (ids.has(id)) throw new Error(`mainland scope regression: ${id}`);
+for (const id of requiredMainlandIds) if (!ids.has(id)) throw new Error(`mainland coverage regression: ${id}`);
 
 const excludedRegionalIds = [
   'regional-siddoo-regional-park',
@@ -144,8 +151,10 @@ const excludedRegionalIds = [
   'regional-bute-island-regional-park',
 ];
 for (const id of excludedRegionalIds) if (ids.has(id)) throw new Error(`ineligible regional feature regression: ${id}`);
-for (const id of ['provincial-apodaca-park', 'provincial-buccaneer-bay-park']) {
-  if (ids.has(id)) throw new Error(`out-of-scope Sunshine Coast feature regression: ${id}`);
+for (const id of ['national-glacier-national-park', 'national-gwaii-haanas-national-park-reserve',
+  'national-kootenay-national-park', 'national-mount-revelstoke-national-park', 'national-yoho-national-park',
+  'provincial-apodaca-park', 'provincial-buccaneer-bay-park']) {
+  if (!ids.has(id)) throw new Error(`British Columbia coverage regression: ${id}`);
 }
 if (places.some((place) => place.category === 'regional' && /\btrail\b/i.test(place.name))) {
   throw new Error('regional trail regression: trail emitted as a park');

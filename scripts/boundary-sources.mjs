@@ -2,7 +2,7 @@ export const boundarySources = Object.freeze({
   bcParks: Object.freeze({
     name: 'BC Parks / DataBC — TANTALIS protected areas',
     page: 'https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas',
-    data: 'https://openmaps.gov.bc.ca/geo/pub/WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&outputFormat=json&srsName=EPSG:4326&bbox=48.2,-128.8,51.2,-123.0,urn:ogc:def:crs:EPSG::4326',
+    data: 'https://openmaps.gov.bc.ca/geo/pub/WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&outputFormat=json&srsName=EPSG:4326&CQL_FILTER=PROTECTED_LANDS_DESIGNATION%3D%27PROVINCIAL%20PARK%27&count=1000',
   }),
   crd: Object.freeze({
     name: 'Capital Regional District — Park GIS layer',
@@ -22,7 +22,7 @@ export const boundarySources = Object.freeze({
   national: Object.freeze({
     name: 'Natural Resources Canada — Canada Lands Survey System',
     page: 'https://open.canada.ca/data/en/dataset/9e1507cd-f25c-4c64-995b-6563bf9d65bd',
-    data: "https://proxyinternet.nrcan-rncan.gc.ca/arcgis/rest/services/CLSS-SATC/CLSS_Administrative_Boundaries/MapServer/1/query?where=adminAreaId%20IN%20(%27PRIM%27%2C%27GULF%27)&outFields=adminAreaId%2CadminAreaNameEng%2CNID&returnGeometry=true&outSR=4326&f=geojson",
+    data: "https://proxyinternet.nrcan-rncan.gc.ca/arcgis/rest/services/CLSS-SATC/CLSS_Administrative_Boundaries/MapServer/1/query?where=adminAreaId%20IN%20(%27PRIM%27%2C%27GULF%27%2C%27GLAC%27%2C%27GWAA%27%2C%27KOOT%27%2C%27REVE%27%2C%27YOHO%27)&outFields=adminAreaId%2CadminAreaNameEng%2CNID&returnGeometry=true&outSR=4326&f=geojson",
   }),
   osm: Object.freeze({
     name: 'OpenStreetMap contributors',
@@ -54,8 +54,13 @@ export const osmObjects = new Map([
 ]);
 
 const nationalSourceIds = new Map([
+  ['national-glacier-national-park', '5b8da81dba3611d892e2'],
   ['national-gulf-islands-national-park-reserve', 'a8532b93849c20c344c7'],
+  ['national-gwaii-haanas-national-park-reserve', '5b328fccba3611d892e2'],
+  ['national-kootenay-national-park', '5baeebbeba3611d892e2'],
+  ['national-mount-revelstoke-national-park', '5bd70d2fba3611d892e2'],
   ['national-pacific-rim-national-park-reserve', '5bf78d80ba3611d892e2'],
+  ['national-yoho-national-park', '5c141631ba3611d892e2'],
 ]);
 
 const crdSourceIds = new Map([
@@ -96,10 +101,10 @@ const crdSourceIds = new Map([
 ]);
 
 export const expectedSourceCounts = Object.freeze({
-  [boundarySources.bcParks.name]: 117,
+  [boundarySources.bcParks.name]: 693,
   [boundarySources.crd.name]: 34,
   [boundarySources.cvrd.name]: 3,
-  [boundarySources.national.name]: 2,
+  [boundarySources.national.name]: 7,
   [boundarySources.osm.name]: 28,
   [boundarySources.rdn.name]: 14,
 });

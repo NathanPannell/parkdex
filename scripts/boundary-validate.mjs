@@ -36,8 +36,17 @@ function geometryContainsPoint(geometry, point) {
 }
 
 function ringArea(ring) {
+  // Translate coordinates before the shoelace sum. Tiny legal parcels can
+  // lose their nonzero area to cancellation at BC longitude/latitude values.
+  const [originX, originY] = ring[0];
   let area = 0;
-  for (let i = 0; i < ring.length - 1; i += 1) area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const x1 = ring[i][0] - originX;
+    const y1 = ring[i][1] - originY;
+    const x2 = ring[i + 1][0] - originX;
+    const y2 = ring[i + 1][1] - originY;
+    area += x1 * y2 - x2 * y1;
+  }
   return area / 2;
 }
 
@@ -71,7 +80,7 @@ for (let featureIndex = 0; featureIndex < boundaries.features.length; featureInd
       positionCount += ring.length;
       const first = ring[0]; const last = ring.at(-1);
       if (first[0] !== last[0] || first[1] !== last[1]) throw new Error(`${id}: ring is not closed`);
-      if (Math.abs(ringArea(ring)) < 1e-12) throw new Error(`${id}: ring has zero area`);
+      if (Math.abs(ringArea(ring)) < 1e-16) throw new Error(`${id}: ring has zero area`);
       for (const position of ring) {
         if (!Array.isArray(position) || position.length < 2 || !Number.isFinite(position[0]) || !Number.isFinite(position[1])) throw new Error(`${id}: invalid position`);
         if (position[0] < -180 || position[0] > 180 || position[1] < -90 || position[1] > 90) throw new Error(`${id}: position is outside WGS84 bounds`);
@@ -118,6 +127,10 @@ for (const id of topologyWarningIds) if (!confirmedTopologyWarnings.has(id)) thr
 if (audit.totalParts !== partCount || audit.totalHoles !== holeCount || audit.totalPositions !== positionCount) throw new Error('boundary audit geometry totals mismatch');
 if (audit.sourceParts !== partCount || audit.sourceHoles !== holeCount) throw new Error('source parts or holes were lost from the serialized artifact');
 if (audit.payloadBytes !== boundaryBuffer.length) throw new Error('boundary audit payload size mismatch');
-if (boundaryBuffer.length > 5_000_000) throw new Error(`boundary payload exceeds 5 MB mobile budget: ${boundaryBuffer.length}`);
+// Keep legal geometry accurate for claim containment while enforcing transfer
+// and decode ceilings for the expanded province-wide catalogue.
+if (boundaryBuffer.length > 15_000_000) throw new Error(`boundary payload exceeds 15 MB raw budget: ${boundaryBuffer.length}`);
+const compressedBytes = gzipSync(boundaryBuffer).length;
+if (compressedBytes > 4_000_000) throw new Error(`boundary payload exceeds 4 MB gzip budget: ${compressedBytes}`);
 
-console.log(`Validated ${ids.size} boundaries, ${partCount} parts, ${holeCount} holes; ${boundaryBuffer.length} bytes raw / ${gzipSync(boundaryBuffer).length} bytes gzip.`);
+console.log(`Validated ${ids.size} boundaries, ${partCount} parts, ${holeCount} holes; ${boundaryBuffer.length} bytes raw / ${compressedBytes} bytes gzip.`);

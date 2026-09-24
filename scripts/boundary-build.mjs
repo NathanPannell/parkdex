@@ -25,9 +25,18 @@ function titleCaseParkName(name) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { 'user-agent': 'every-park-data-builder/1.0 (https://github.com/NathanPannell/every-park)' } });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
-  return response.json();
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { 'user-agent': 'every-park-data-builder/1.0 (https://github.com/NathanPannell/every-park)' } });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+  throw new Error(`Boundary source failed after three immediate attempts: ${url}`, { cause: lastError });
 }
 
 async function fetchBuffer(url) {
@@ -216,9 +225,18 @@ async function buildRdn() {
 
 async function buildNational() {
   const collection = await fetchJson(sources.national.data);
-  const ids = new Map([['PRIM', 'national-pacific-rim-national-park-reserve'], ['GULF', 'national-gulf-islands-national-park-reserve']]);
+  const ids = new Map([
+    ['PRIM', 'national-pacific-rim-national-park-reserve'],
+    ['GULF', 'national-gulf-islands-national-park-reserve'],
+    ['GLAC', 'national-glacier-national-park'],
+    ['GWAA', 'national-gwaii-haanas-national-park-reserve'],
+    ['KOOT', 'national-kootenay-national-park'],
+    ['REVE', 'national-mount-revelstoke-national-park'],
+    ['YOHO', 'national-yoho-national-park'],
+  ]);
   return collection.features.map((feature) => {
     const id = ids.get(feature.properties.adminAreaId);
+    if (!id) throw new Error(`Unexpected national park source identity: ${feature.properties.adminAreaId}`);
     return makeFeature(requirePlace(id), feature.geometry, sources.national, feature.properties.NID || feature.properties.adminAreaId);
   });
 }

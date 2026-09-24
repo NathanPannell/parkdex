@@ -3,10 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import { provincialNameCorrections } from './place-name-corrections.mjs';
+import { classifyBcRegion } from './bc-regions.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const dataDir = path.join(root, 'data');
+const existingPlaces = JSON.parse(await fs.readFile(path.join(dataDir, 'places.json'), 'utf8'));
 const polygonInteriorFallbacks = [];
 const placeDescriptionEntries = new Map();
 
@@ -36,12 +38,20 @@ for (const filename of ['place-descriptions.catalogue.json', 'nonprovincial-desc
     placeDescriptionEntries.set(id, entry);
   }
 }
+const existingProvincialBySourceId = new Map(existingPlaces.filter((place) => place.category === 'provincial'
+  && placeDescriptionEntries.has(place.id)).map((place) => [String(place.sourceId), place]));
+// These mainland valleys fall inside the Strathcona Regional District,
+// whose broad administrative footprint otherwise maps to Northern Vancouver Island.
+const mainlandDistrictRegionOverrides = new Map([
+  ['505', 'Central Coast'], // Bishop River Park, east of Bute Inlet
+  ['751', 'Central Coast'], // Homathko Estuary Park, at the Bute Inlet head
+]);
 
 const sources = {
   bcParks: {
     name: 'BC Parks / DataBC — TANTALIS protected areas',
     page: 'https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas',
-    data: 'https://openmaps.gov.bc.ca/geo/pub/WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&outputFormat=json&srsName=EPSG:4326&bbox=48.2,-128.8,51.2,-123.0,urn:ogc:def:crs:EPSG::4326',
+    data: 'https://openmaps.gov.bc.ca/geo/pub/WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=pub:WHSE_TANTALIS.TA_PARK_ECORES_PA_SVW&outputFormat=json&srsName=EPSG:4326&CQL_FILTER=PROTECTED_LANDS_DESIGNATION%3D%27PROVINCIAL%20PARK%27&count=1000',
   },
   crd: {
     name: 'Capital Regional District — Park GIS layer',
@@ -315,31 +325,19 @@ async function buildProvincial() {
   const collection = await fetchJson(sources.bcParks.data);
   const excluded = [];
   const included = collection.features.filter((feature) => feature.properties.PROTECTED_LANDS_DESIGNATION === 'PROVINCIAL PARK')
-    .map((feature) => ({ feature, point: geometryRepresentative(feature.geometry) }))
-    .filter(({ feature, point }) => {
-      const name = feature.properties.PROTECTED_LANDS_NAME;
-      if (outOfScopeOffshoreParks.has(name.toUpperCase())) {
-        excluded.push({ name, latitude: point.latitude, longitude: point.longitude, reason: 'outside-supported-islands' });
-        return false;
-      }
-      const keep = pointInPolygon([point.longitude, point.latitude], mainIslandMask) || nearbyIslandParks.has(name.toUpperCase()) || provincialNameCorrections.has(String(feature.properties.ADMIN_AREA_SID));
-      if (!keep) excluded.push({ name, latitude: point.latitude, longitude: point.longitude });
-      return keep;
-    });
+    .map((feature) => ({ feature, point: geometryRepresentative(feature.geometry) }));
 
   const places = included.map(({ feature, point }) => {
     const p = feature.properties;
+    const existing = existingProvincialBySourceId.get(String(p.ADMIN_AREA_SID));
     const correction = provincialNameCorrections.get(String(p.ADMIN_AREA_SID));
-    const name = correction?.name ?? titleCaseParkName(p.PROTECTED_LANDS_NAME);
+    const name = correction?.name ?? existing?.name ?? titleCaseParkName(p.PROTECTED_LANDS_NAME);
     if (point.method !== 'centroid') polygonInteriorFallbacks.push({ source: 'BC Parks', name, method: point.method });
-    const canonicalName = p.PROTECTED_LANDS_NAME.toUpperCase();
-    const offshoreRegion = correction?.region ?? parkIslandRegions.get(canonicalName);
-    const onMainIsland = pointInPolygon([point.longitude, point.latitude], mainIslandMask)
-      || mainIslandParkNames.has(canonicalName);
-    if (!offshoreRegion && !onMainIsland) throw new Error(`Missing explicit island region for ${name}`);
-    const region = offshoreRegion || mainIslandRegion(point.latitude);
+    const region = correction?.region ?? existing?.region
+      ?? mainlandDistrictRegionOverrides.get(String(p.ADMIN_AREA_SID))
+      ?? classifyBcRegion(point.longitude, point.latitude);
     return {
-      id: correction?.id ?? `provincial-${slugify(name)}`, name, category: 'provincial',
+      id: correction?.id ?? existing?.id ?? `provincial-${slugify(name)}`, name, category: 'provincial',
       latitude: round(point.latitude), longitude: round(point.longitude), region,
       description: `${correction ? `${correction.alias} ` : ''}A BC provincial park in the ${region} collection. The map pin represents the largest official park polygon, not an entrance or trailhead.`,
       sourceUrl: sources.bcParks.page, sourceName: sources.bcParks.name,
@@ -434,9 +432,14 @@ function buildNational() {
   return [
     ['Pacific Rim National Park Reserve', 49.060406, -125.722799, 'West Coast', 'https://parks.canada.ca/pn-np/bc/pacificrim'],
     ['Gulf Islands National Park Reserve', 48.66552, -123.407929, 'Gulf Islands', 'https://parks.canada.ca/pn-np/bc/gulf'],
+    ['Glacier National Park', 51.2679, -117.5235, 'Kootenays', 'https://parks.canada.ca/pn-np/bc/glacier'],
+    ['Gwaii Haanas National Park Reserve', 52.39, -131.41, 'North Coast & Haida Gwaii', 'https://parks.canada.ca/pn-np/bc/gwaiihaanas'],
+    ['Kootenay National Park', 50.944013, -115.983967, 'Kootenays', 'https://parks.canada.ca/pn-np/bc/kootenay'],
+    ['Mount Revelstoke National Park', 51.0938, -118.0451, 'Kootenays', 'https://parks.canada.ca/pn-np/bc/revelstoke'],
+    ['Yoho National Park', 51.398117, -116.491798, 'Kootenays', 'https://parks.canada.ca/pn-np/bc/yoho'],
   ].map(([name, latitude, longitude, region, sourceUrl]) => ({
     id: `national-${slugify(name)}`, name, category: 'national', latitude, longitude, region,
-    description: 'A Parks Canada national park reserve. This single check-off represents the whole reserve; its map pin is a representative location, not an entrance or trailhead.',
+    description: 'A Parks Canada national park or park reserve. This single check-off represents the whole park; its map pin is a representative location, not an entrance or trailhead.',
     sourceUrl, sourceName: sources.parksCanada.name,
   }));
 }
@@ -526,7 +529,7 @@ function validate(places) {
     if (ids.has(place.id)) throw new Error(`Duplicate id: ${place.id}`);
     ids.add(place.id);
     if (!['national', 'provincial', 'regional', 'island'].includes(place.category)) throw new Error(`${place.id}: invalid category`);
-    if (place.latitude < 48.15 || place.latitude > 51.25 || place.longitude < -128.9 || place.longitude > -123.0) throw new Error(`${place.id}: coordinate outside product scope`);
+    if (place.latitude < 47 || place.latitude > 61 || place.longitude < -141 || place.longitude > -113) throw new Error(`${place.id}: coordinate outside British Columbia scope`);
   }
   for (const required of [
     'Strathcona Park', 'Cape Scott Park', 'Pacific Rim National Park Reserve', 'Gulf Islands National Park Reserve',
@@ -538,13 +541,11 @@ function validate(places) {
   ]) {
     if (!places.some((place) => place.name === required)) throw new Error(`Required coverage missing: ${required}`);
   }
-  const mainlandExclusions = ['Alice Lake Park', 'Garibaldi Park', 'Shannon Falls Park', 'Stawamus Chief Park'];
-  for (const excluded of mainlandExclusions) {
-    if (places.some((place) => place.name === excluded)) throw new Error(`Mainland scope regression: ${excluded}`);
+  for (const required of ['Alice Lake Park', 'Garibaldi Park', 'Shannon Falls Park', 'Stawamus Chief Park']) {
+    if (!places.some((place) => place.name === required)) throw new Error(`Mainland coverage missing: ${required}`);
   }
   for (const excluded of [
     'Siddoo Regional Park', 'Stocking/Heart Lake Regional Park', 'Morden Colliery Regional Trail',
-    'Apodaca Park', 'Buccaneer Bay Park',
   ]) {
     if (places.some((place) => place.name === excluded)) throw new Error(`Ineligible regional feature regression: ${excluded}`);
   }
@@ -557,23 +558,42 @@ function validate(places) {
   for (const name of ['Arbutus Grove Park', 'Hemer Park', 'Morden Colliery Historic Park', 'Petroglyph Park', 'Rathtrevor Beach Park', 'Roberts Memorial Park']) {
     if (!places.some((place) => place.name === name && place.region === 'Central Island')) throw new Error(`Main-island region regression: ${name}`);
   }
-  for (const [name, region] of parkIslandRegions) {
-    if (outOfScopeOffshoreParks.has(name)) continue;
-    const placeName = titleCaseParkName(name);
-    if (!places.some((place) => place.name === placeName && place.region === region)) throw new Error(`Park island region regression: ${placeName}`);
+  for (const existing of existingProvincialBySourceId.values()) {
+    if (!places.some((place) => place.sourceId === existing.sourceId && place.id === existing.id && place.region === existing.region)) {
+      throw new Error(`Existing provincial identity or region changed: ${existing.id}`);
+    }
   }
 }
 
 const [provincial, crd, cvrd, rdn, islands] = await Promise.all([buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildIslands()]);
 const places = [...buildNational(), ...buildVerifiedRegionalPoints(), ...provincial.places, ...crd, ...cvrd, ...rdn, ...islands]
   .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'en-CA'));
+const generatedDescriptionEntries = {};
 for (const place of places) {
-  const entry = placeDescriptionEntries.get(place.id);
+  let entry = placeDescriptionEntries.get(place.id);
+  if (!entry && ['provincial', 'national'].includes(place.category)) {
+    entry = {
+      status: 'source-derived',
+      description: place.description,
+      sourceName: place.category === 'provincial' ? 'BC Parks / DataBC' : 'Parks Canada',
+      sourceTitle: place.category === 'provincial' ? 'Parks, Ecological Reserves and Protected Areas' : place.name,
+      sourceUrl: place.sourceUrl,
+      sourceSection: place.category === 'provincial' ? 'Designation and geometry attributes' : 'National park listing',
+      reviewedAt: new Date().toISOString().slice(0, 10),
+    };
+    placeDescriptionEntries.set(place.id, entry);
+    generatedDescriptionEntries[place.id] = entry;
+  }
   if (!entry) throw new Error(`Missing visitor-facing description entry: ${place.id}`);
   place.description = entry.description;
 }
 if (placeDescriptionEntries.size !== places.length) throw new Error('Description catalogues contain unknown place ids');
 validate(places);
+await fs.writeFile(path.join(dataDir, 'bc-expansion-descriptions.catalogue.json'), `${JSON.stringify({
+  checkedAt: new Date().toISOString().slice(0, 10),
+  descriptionMethod: 'Source-derived designation and representative-point descriptions; no visitor activity claims.',
+  entries: generatedDescriptionEntries,
+}, null, 2)}\n`);
 await fs.writeFile(path.join(dataDir, 'places.json'), `${JSON.stringify(places, null, 2)}\n`);
 const descriptionSources = Object.fromEntries([...placeDescriptionEntries].sort(([a], [b]) => a.localeCompare(b)).map(([id, entry]) => [id, {
   status: entry.status,
@@ -590,15 +610,7 @@ await fs.writeFile(path.join(dataDir, 'coverage-audit.json'), `${JSON.stringify(
   polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length,
   polygonInteriorFallbacks,
   excludedCvrdRegionalParks: [...cvrdEligibilityExclusions].map(([name, evidence]) => ({ name, ...evidence })),
-  scopeRetirements: [
-    { id: 'island-vancouver-island', name: 'Vancouver Island', reason: 'main island is the map focus, not a collectible' },
-    ...[...outOfScopeOffshoreParks].sort().map((name) => ({
-      id: `provincial-${slugify(titleCaseParkName(name))}`,
-      name: titleCaseParkName(name),
-      reason: 'published boundary does not intersect Vancouver Island or a supported major island',
-    })),
-    { id: 'regional-bute-island-regional-park', name: 'Bute Island Regional Park', reason: 'published boundary does not intersect Vancouver Island or a supported major island' },
-  ],
+  scopeRetirements: [],
   excludedProvincialParksOutsideMask: provincial.excluded.sort((a, b) => a.name.localeCompare(b.name)),
   extents: { south: Math.min(...places.map((p) => p.latitude)), north: Math.max(...places.map((p) => p.latitude)), west: Math.min(...places.map((p) => p.longitude)), east: Math.max(...places.map((p) => p.longitude)) },
 }, null, 2)}\n`);
