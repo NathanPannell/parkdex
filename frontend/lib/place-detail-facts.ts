@@ -12,8 +12,7 @@ import type { Place } from "./places";
  *
  * These are approximate mapped-footprint areas, not official acreage or an
  * access measure. The boundary source is heterogeneous and compacted to a
- * 0.00004 degree tolerance where valid; spherical versus WGS84 ellipsoid area
- * differs by at most about 0.36% across the current 198 features.
+ * 0.00004 degree tolerance where valid.
  */
 const placeAreas = catalogue as Record<string, number>;
 const EARTH_MEAN_RADIUS_METERS = 6_371_008.8;

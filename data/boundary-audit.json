@@ -1,30 +1,55 @@
 {
-  "generatedAt": "2026-09-11T08:50:14.572Z",
-  "placeCount": 198,
-  "featureCount": 198,
+  "generatedAt": "2026-09-24T01:35:57.232Z",
+  "placeCount": 1030,
+  "featureCount": 1030,
   "missingIds": [],
   "duplicateIds": [],
   "sourceCounts": {
-    "BC Parks / DataBC — TANTALIS protected areas": 117,
+    "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces": 22,
+    "BC Parks / DataBC — TANTALIS protected areas": 693,
     "Capital Regional District — Park GIS layer": 34,
+    "Central Coast Regional District via BC Local and Regional Greenspaces": 1,
+    "Central Kootenay Regional District via BC Local and Regional Greenspaces": 21,
+    "Columbia-Shuswap Regional District via BC Local and Regional Greenspaces": 1,
+    "Comox Valley Regional District via BC Local and Regional Greenspaces": 38,
     "Cowichan Valley Regional District — Parks GIS layer": 3,
-    "Natural Resources Canada — Canada Lands Survey System": 2,
-    "OpenStreetMap contributors": 28,
-    "Regional District of Nanaimo — Regional Parks spatial data": 14
+    "East Kootenay Regional District via BC Local and Regional Greenspaces": 4,
+    "Fraser Valley Regional District via BC Local and Regional Greenspaces": 12,
+    "Kootenay Boundary Regional District via BC Local and Regional Greenspaces": 1,
+    "Metro Vancouver Regional Parks": 24,
+    "Natural Resources Canada — Canada Lands Survey System": 7,
+    "North Okanagan Regional District via BC Local and Regional Greenspaces": 3,
+    "Northern Rockies Regional Municipality via BC Local and Regional Greenspaces": 2,
+    "Okanagan-Similkameen Regional District via BC Local and Regional Greenspaces": 13,
+    "OpenStreetMap contributors": 41,
+    "Peace River Regional District via BC Local and Regional Greenspaces": 7,
+    "Regional District of Central Okanagan Regional Parks": 30,
+    "Regional District of Fraser-Fort George Regional Parks GIS": 11,
+    "Regional District of Nanaimo — Regional Parks spatial data": 14,
+    "Squamish-Lillooet Regional District via BC Local and Regional Greenspaces": 1,
+    "Strathcona Regional District via BC Local and Regional Greenspaces": 21,
+    "Sunshine Coast Regional District via BC Local and Regional Greenspaces": 14,
+    "Thompson-Nicola Regional District via BC Local and Regional Greenspaces": 2,
+    "qathet Regional District via BC Local and Regional Greenspaces": 10
   },
   "geometryCounts": {
-    "Polygon": 137,
-    "MultiPolygon": 61
+    "Polygon": 664,
+    "MultiPolygon": 366
   },
-  "totalParts": 426,
-  "totalHoles": 96,
-  "sourceParts": 426,
-  "sourceHoles": 96,
-  "totalPositions": 68105,
-  "payloadBytes": 1565077,
+  "totalParts": 2207,
+  "totalHoles": 231,
+  "sourceParts": 2207,
+  "sourceHoles": 231,
+  "totalPositions": 463723,
+  "payloadBytes": 10603975,
   "nationalParts": {
+    "national-glacier-national-park": 1,
     "national-gulf-islands-national-park-reserve": 80,
-    "national-pacific-rim-national-park-reserve": 20
+    "national-gwaii-haanas-national-park-reserve": 121,
+    "national-kootenay-national-park": 1,
+    "national-mount-revelstoke-national-park": 1,
+    "national-pacific-rim-national-park-reserve": 20,
+    "national-yoho-national-park": 1
   },
   "islandSourceObjects": {
     "island-cormorant-island": "R8357754",
@@ -50,8 +75,26 @@
     "island-south-pender-island": "R8335965",
     "island-thetis-island": "R5553191",
     "island-valdes-island": "R8338288",
-    "island-vargas-island": "R8371770"
+    "island-vargas-island": "R8371770",
+    "island-graham-island": "R2145001",
+    "island-moresby-island": "R2145060",
+    "island-bowen-island": "R2143957",
+    "island-texada-island": "R2143897",
+    "island-princess-royal-island": "R2144713",
+    "island-pitt-island": "R2144805",
+    "island-banks-island": "R2144803",
+    "island-porcher-island": "R2144867",
+    "island-kaien-island": "R8399414",
+    "island-calvert-island": "R2144098",
+    "island-campbell-island": "R2144099",
+    "island-denny-island": "R2144100",
+    "island-swindle-island": "R2144150"
   },
   "sourceTopologyPreserved": true,
-  "topologyWarnings": []
+  "topologyWarnings": [
+    {
+      "id": "regional-metro-vancouver-kan",
+      "reason": "Source polygon fails strict self-intersection topology validation; geometry retained without vertex simplification."
+    }
+  ]
 }

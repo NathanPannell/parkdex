@@ -1,7 +1,7 @@
 {
   "name": "Parkdex",
   "short_name": "Parkdex",
-  "description": "Collect the parks and major islands of Vancouver Island on a playful interactive map.",
+  "description": "Collect the parks and major islands of British Columbia on a playful interactive map.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

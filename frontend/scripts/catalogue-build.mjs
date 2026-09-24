@@ -18,7 +18,7 @@ const generatedAssetNames = [
   "boundaries-index.v1.json",
   "boundaries-display.v1.geojson",
   "boundaries-display.v1.manifest.json",
-  "vancouver-island-focus-mask.v1.geojson",
+  "bc-focus-mask.v1.geojson",
   "exploration-territories.v1.geojson",
 ];
 const generationScripts = [

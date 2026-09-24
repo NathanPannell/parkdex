@@ -44,6 +44,7 @@ describe("PlaceImage", () => {
     expect(screen.getByRole("link", { name: "Ian mckenzie" }).getAttribute("href")).toContain("commons.wikimedia.org");
     expect(screen.getByRole("link", { name: "Original" }).getAttribute("href")).toContain("upload.wikimedia.org");
     expect(screen.getByRole("link", { name: "CC BY-SA 3.0" }).getAttribute("href")).toContain("creativecommons.org");
+    expect(screen.getByText(/Changes: Resized without upscaling, converted to WebP/)).toBeTruthy();
   });
 
   it("uses the text-free tree placeholder when no verified photo exists", () => {

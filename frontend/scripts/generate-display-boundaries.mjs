@@ -58,10 +58,20 @@ function containedDisplayBoundary(feature, canonical) {
   // in polygon-clipping while retaining sub-metre display detail.
   const displayCoordinates = roundCoordinatesTo(feature.geometry.coordinates, 6);
   const canonicalCoordinates = roundCoordinatesTo(canonical.geometry.coordinates, 6);
-  const coordinates = polygonClipping.intersection(
-    feature.geometry.type === "Polygon" ? [displayCoordinates] : displayCoordinates,
-    canonical.geometry.type === "Polygon" ? [canonicalCoordinates] : canonicalCoordinates,
-  );
+  let coordinates;
+  try {
+    coordinates = polygonClipping.intersection(
+      feature.geometry.type === "Polygon" ? [displayCoordinates] : displayCoordinates,
+      canonical.geometry.type === "Polygon" ? [canonicalCoordinates] : canonicalCoordinates,
+    );
+  } catch (error) {
+    // Highly detailed source rings can make polygon-clipping lose a segment
+    // while intersecting the rounded presentation shape. The reviewed
+    // canonical outline is the conservative display fallback: it cannot
+    // invent land outside the visit-eligible boundary.
+    console.warn(`Using canonical display boundary for ${canonical.properties?.id}: ${error.message}`);
+    return canonical;
+  }
   if (!coordinates.length) throw new Error(`Could not contain display boundary for ${canonical.properties?.id ?? "unknown"}`);
   return {
     ...feature,

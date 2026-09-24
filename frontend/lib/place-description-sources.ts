@@ -1,7 +1,7 @@
 import catalogue from "./place-description-sources.catalogue.json";
 
 export type PlaceDescriptionSource = {
-  status: "summary" | "no-overview";
+  status: "summary" | "no-overview" | "source-derived";
   sourceName: string;
   sourceTitle: string;
   sourceUrl: string;
@@ -13,5 +13,5 @@ const sources: Record<string, PlaceDescriptionSource> = catalogue as Record<stri
 
 export function getPlaceDescriptionSource(placeId: string): PlaceDescriptionSource | undefined {
   const entry = Object.hasOwn(sources, placeId) ? sources[placeId] : undefined;
-  return entry?.sourceUrl.startsWith("https://") ? entry : undefined;
+  return entry?.sourceUrl.startsWith("https://") && ["summary", "no-overview", "source-derived"].includes(entry.status) ? entry : undefined;
 }

@@ -274,7 +274,7 @@ describe("Parkdex navigation", () => {
     fireEvent.focus(screen.getByRole("textbox", { name: "Search places" }));
     const browser = screen.getByRole("complementary", { name: "Places on the map" });
     expect(within(browser).getByRole("heading", { name: "Explore places" })).toBeTruthy();
-    expect(within(browser).getByRole("heading", { name: /South Island/ })).toBeTruthy();
+    expect(within(browser).getByRole("heading", { name: /Southern Vancouver Island/ })).toBeTruthy();
     fireEvent.click(within(browser).getByRole("button", { name: /Goldstream Park/ }));
 
     expect(screen.getByRole("heading", { name: "Goldstream Park" })).toBeTruthy();
@@ -300,6 +300,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(detail.getByText("Map data and photo credits"));
     expect(credits.open).toBe(true);
     expect(within(credits).getByRole("link", { name: /Place source/ }).getAttribute("href")).toBe(goldstream.sourceUrl);
+    expect(credits.textContent).toContain("Changes: Resized without upscaling, converted to WebP");
 
     fireEvent.click(detail.getByRole("button", { name: "Browse more from BC Parks" }));
     expect(screen.getByRole("heading", { name: "Find your next place" })).toBeTruthy();
@@ -429,7 +430,7 @@ describe("Parkdex navigation", () => {
     journal.places = ["Capital Regional District", "Cowichan Valley Regional District", "Regional District of Nanaimo", "Regional District of Mount Waddington"].map((sourceName, index) => ({ ...place, id: `regional-${index}`, category: "regional", sourceName }));
     window.history.replaceState({}, "", "/?view=collection");
     render(<ParkdexApp apiBaseUrl="" />);
-    expect(screen.getByText("South Island").closest("summary")?.textContent).toContain("0/4");
+    expect(screen.getByText("Southern Vancouver Island").closest("summary")?.textContent).toContain("0/4");
     for (const item of journal.places) expect(screen.queryByText(item.sourceName)).toBeNull();
   });
 
@@ -1816,11 +1817,11 @@ describe("Parkdex navigation", () => {
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: "List" }));
     expect(screen.queryByText("Browse by collection")).toBeNull();
-    const westCoastRegion = screen.getByText("West Coast").closest("details");
-    expect(westCoastRegion?.hasAttribute("open")).toBe(false);
-    expect(screen.getByText("South Island")).toBeTruthy();
+    expect(screen.getByText("Explore parks and islands across BC.")).toBeTruthy();
+    const southernIslandRegion = screen.getByText("Southern Vancouver Island").closest("details");
+    expect(southernIslandRegion?.hasAttribute("open")).toBe(false);
     fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Pacific" } });
-    expect(screen.getByText("West Coast").closest("details")?.hasAttribute("open")).toBe(true);
+    expect(screen.getByText("Southern Vancouver Island").closest("details")?.hasAttribute("open")).toBe(true);
     expect(screen.getByRole("button", { name: /Pacific Rim National Park Reserve/ })).toBeTruthy();
   });
 

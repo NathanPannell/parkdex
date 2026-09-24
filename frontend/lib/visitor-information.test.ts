@@ -14,7 +14,7 @@ describe("verified visitor information", () => {
       expect(place, id).toBeTruthy();
       expect(new URL(entry.url).protocol).toBe("https:");
       expect(entry.title.length).toBeGreaterThan(3);
-      expect(entry.verifiedAt).toMatch(/^2026-09-12/);
+      expect(entry.verifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(getVisitorInformation(id)?.url).toBe(entry.url);
     }
     expect(getVisitorInformation("provincial-goldstream-park")?.url).not.toBe(places.find((place) => place.id === "provincial-goldstream-park")?.sourceUrl);

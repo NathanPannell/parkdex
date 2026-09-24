@@ -190,13 +190,21 @@ export function verifyUnvisitedCatalogues(placeId, payloads) {
   return true;
 }
 
-export function provisionRailwayApiService({ projectId, environmentId, environmentName, apiServiceId, listEnvironments, recordIntent, commitPatch, readConfig }) {
+export function provisionRailwayApiService({ projectId, environmentId, environmentName, apiServiceId, listEnvironments, recordIntent, commitPatch, readConfig, maxReadAttempts = 1, waitForRead = () => {} }) {
   const matches = listEnvironments().filter((environment) => environment.id === environmentId && environment.name === environmentName);
   if (matches.length !== 1) throw new Error("Railway preview environment identity was not verified before service creation");
   const request = buildRailwayApiServiceMutation(environmentId, apiServiceId);
   recordIntent({ projectId, environmentId, serviceIds: Object.keys(request.variables.patch.services).sort() });
   commitPatch(request);
-  const config = readConfig();
-  verifyRailwayApiServicePatchResult(config, apiServiceId);
-  return config;
+  for (let attempt = 1; attempt <= maxReadAttempts; attempt++) {
+    const config = readConfig();
+    try {
+      verifyRailwayApiServicePatchResult(config, apiServiceId);
+      return config;
+    } catch (error) {
+      const pending = error.message === "Railway service configuration was not returned" || error.message === "Railway API service configuration was not verified";
+      if (!pending || attempt === maxReadAttempts) throw error;
+      waitForRead();
+    }
+  }
 }

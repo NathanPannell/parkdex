@@ -60,6 +60,14 @@ async function savePhotoReview() {
 }
 
 describe("ClaimFlowBanner", () => {
+  it("credits the original photo, license, and display changes on arrival", () => {
+    setup(null);
+    const credit = document.querySelector<HTMLElement>(".impression-arrival-credit")!;
+    expect(credit.textContent).toContain("Changes: Resized without upscaling, converted to WebP");
+    expect(credit.querySelector('a[href*="upload.wikimedia.org"]')).toBeTruthy();
+    expect(credit.querySelector('a[href*="creativecommons.org"]')).toBeTruthy();
+  });
+
   it("keeps the recommendation untouched when the camera is cancelled", async () => {
     const handlers = setup(null);
     fireEvent.click(await screen.findByRole("button", { name: "Log visit + photo" }));

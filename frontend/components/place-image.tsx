@@ -103,6 +103,7 @@ export function PlaceImage({
           <a href={image.licenseUrl} target="_blank" rel="noreferrer">
             {image.license}
           </a>
+          {" · Changes: "}{image.changes}
         </figcaption>
       ) : null}
     </figure>

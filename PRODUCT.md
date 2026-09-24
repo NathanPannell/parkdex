@@ -12,7 +12,7 @@ Delegated by the user: Next.js mobile web client, FastAPI service, and Neon Post
 
 ## Users
 
-People exploring Vancouver Island, often outdoors on a phone, who want a satisfying record of parks and major islands they have visited.
+People exploring British Columbia, often outdoors on a phone, who want a satisfying record of parks and selected major islands they have visited.
 
 ## Product Purpose
 
@@ -28,11 +28,12 @@ The primary session is one-handed mobile use while planning or travelling. Conne
 
 ## Capabilities and Constraints
 
-- Cover national, provincial, and regional parks on Vancouver Island plus major nearby islands represented in the verified dataset.
+- Cover British Columbia's national and provincial park inventories, regional parks with verified public sources, and selected major islands with reviewed identities and outlines.
+- Group dozens of local park authorities into a small set of understandable collection regions while retaining the managing authority on each place.
 - Provide a clustered interactive map, searchable and filterable collection list, place details, source links, checkoff and undo, and total/category progress.
 - Anonymous progress must be isolated by an unpredictable client identity and persist across reloads.
 - The map must work without a paid or secret tile API key.
-- Dataset coverage and limitations must be stated honestly; descriptions and attributions must come from sourced data.
+- Dataset coverage and limitations must be stated honestly; descriptions, photos, and attributions must come from sourced data with reviewed reuse terms.
 
 ## Brand Commitments
 

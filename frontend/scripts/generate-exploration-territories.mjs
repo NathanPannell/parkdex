@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import polygonClipping from "polygon-clipping";
 import buffer from "@turf/buffer";
+import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import simplify from "@turf/simplify";
 
 import {
@@ -14,22 +15,18 @@ import {
 import { readCatalogueSource, readScopedBoundaryCollection } from "./catalogue-scope.mjs";
 
 const outputUrl = new URL("../public/data/exploration-territories.v1.geojson", import.meta.url);
-const CIRCLE_STEPS = 192;
+const CIRCLE_STEPS = 96;
 const EXPLORATION_PARK_PADDING_METERS = 180;
 const EXPLORATION_ISLAND_PADDING_METERS = 220;
 const EXPLORATION_PADDING_STEPS = 8;
-const EXPLORATION_SIMPLIFY_PER_PADDING = 0.3;
-const EXCURSION_IDS = new Set([
-  "provincial-mitlenatch-island-nature-park",
-  "provincial-pirates-cove-marine-park",
-  "provincial-saysutshun-newcastle-island-marine-park",
-  "provincial-wallace-island-marine-park",
-]);
-
-const [canonicalPlaces, scoped, mainIsland] = await Promise.all([
+// The completion overlay is display-only. About 270 m shoreline tolerance
+// keeps the provincewide GeoJSON under the 6 MB static-asset budget while
+// canonical visit boundaries remain at their original precision.
+const EXPLORATION_SIMPLIFY_PER_PADDING = 1.5;
+const [canonicalPlaces, scoped, bcLand] = await Promise.all([
   readCatalogueSource("places.json").then(JSON.parse),
   readScopedBoundaryCollection(),
-  readCatalogueSource("vancouver-island-focus.geojson").then(JSON.parse),
+  readCatalogueSource("bc-land-focus.geojson").then(JSON.parse),
 ]);
 
 function validateStagingPlaces(value) {
@@ -78,21 +75,18 @@ function paddedLandFeature(feature) {
 // Exploration land intentionally starts from canonical boundaries and owns
 // its own rounded padding. It must not inherit presentation changes from the
 // per-park display asset used by the discover map.
-const nearbyIslands = canonical.features.filter((feature) => feature.properties?.category === "island");
-const excursionParks = canonical.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
-if (excursionParks.length !== EXCURSION_IDS.size) throw new Error("Exploration territory excursion geometry is incomplete");
-// Staging-only boundaries are treated as excursion footprints as well,
-// without hard-coding ids that may change with the field fixture.
-const landFeatures = new Map([
-  ...nearbyIslands.map((feature) => [feature.properties?.id, feature]),
-  ...excursionParks.map((feature) => [feature.properties?.id, feature]),
-  ...canonical.features.filter((feature) => scoped.stagingIds.has(feature.properties?.id))
-    .map((feature) => [feature.properties?.id, feature]),
-]);
-const landInputs = [mainIsland, ...landFeatures.values()].map((feature) => (
-  feature === mainIsland ? feature : paddedLandFeature(feature)
-))
-  .flatMap(exteriorPolygons);
+// Only offshore footprints need to extend the province land outline. Adding
+// every mainland park duplicates highly detailed geometry in every estimated
+// territory and makes the shipped overlay several times larger. Island
+// features remain explicit so their nearshore visual padding is preserved.
+const placeById = new Map(places.map((place) => [place.id, place]));
+const offshoreFeatures = canonical.features.filter((feature) => {
+  if (feature.properties?.category === "island") return true;
+  const place = placeById.get(feature.properties?.id);
+  if (!place) throw new Error(`Missing exploration place for boundary ${feature.properties?.id}`);
+  return !booleanPointInPolygon([place.longitude, place.latitude], bcLand);
+});
+const landInputs = [bcLand, ...offshoreFeatures.map(paddedLandFeature)].flatMap(exteriorPolygons);
 const land = polygonClipping.union(landInputs[0], ...landInputs.slice(1));
 
 function everyPair(multiPolygon) {
@@ -179,6 +173,22 @@ function circleIntersectsPolygon(circle, multiPolygon) {
     && y - circle.radius <= cellBounds.maxY;
 }
 
+function halfPlaneRelation({ x, y, limit }, multiPolygon) {
+  const bounds = polygonBounds(multiPolygon);
+  const min = x * (x < 0 ? bounds.maxX : bounds.minX) + y * (y < 0 ? bounds.maxY : bounds.minY);
+  const max = x * (x < 0 ? bounds.minX : bounds.maxX) + y * (y < 0 ? bounds.minY : bounds.maxY);
+  if (min > limit + 1e-9) return "outside";
+  if (max <= limit + 1e-9) return "inside";
+  return "crossing";
+}
+
+function circleContainsBounds({ center: [x, y], radius }, multiPolygon) {
+  const bounds = polygonBounds(multiPolygon);
+  const farX = Math.max(Math.abs(bounds.minX - x), Math.abs(bounds.maxX - x));
+  const farY = Math.max(Math.abs(bounds.minY - y), Math.abs(bounds.maxY - y));
+  return farX ** 2 + farY ** 2 <= radius ** 2;
+}
+
 function projectedTerritory(owner) {
   let cell = [[boundsRing]];
   const constraints = places
@@ -186,23 +196,33 @@ function projectedTerritory(owner) {
     .map((competitor) => ({
       constraint: weightedTerritoryConstraint(owner, competitor),
       pairKey: [owner.id, competitor.id].sort().join("|"),
+      distance: weightedDistanceScore(owner, competitor),
     }))
     .sort((left, right) => {
       const order = (constraint) => constraint.kind === "empty" ? 0
         : constraint.kind === "circle" && constraint.keep === "inside" ? 1
           : constraint.kind === "half-plane" ? 2 : constraint.kind === "circle" ? 3 : 4;
-      return order(left.constraint) - order(right.constraint);
+      return order(left.constraint) - order(right.constraint)
+        || left.distance - right.distance
+        || left.pairKey.localeCompare(right.pairKey);
     });
   for (const { constraint, pairKey } of constraints) {
     if (!cell.length || constraint.kind === "empty") return [];
     if (constraint.kind === "all") continue;
     if (constraint.kind === "half-plane") {
+      const relation = halfPlaneRelation(constraint, cell);
+      if (relation === "outside") return [];
+      if (relation === "inside") continue;
       const allowed = halfPlanePolygon(constraint);
       cell = allowed.length ? polygonClipping.intersection(cell, allowed) : [];
       continue;
     }
     if (!circleIntersectsPolygon(constraint, cell)) {
       if (constraint.keep === "inside") return [];
+      continue;
+    }
+    if (circleContainsBounds(constraint, cell)) {
+      if (constraint.keep === "outside") return [];
       continue;
     }
     const circle = circlePolygon(constraint, pairKey);
@@ -408,11 +428,16 @@ const asset = {
     coastEdgeSegmentCount,
     interiorEdgeSegmentCount,
     ...(scoped.scope === "staging" ? { catalogueScope: scoped.scope } : {}),
-    landSource: scoped.scope === "canonical" ? "canonical-boundaries-independent-padded" : "scoped-boundaries-independent-padded",
+    landSource: scoped.scope === "canonical"
+      ? "bc-cartographic-boundary-plus-canonical-boundaries-independent-padded"
+      : "bc-cartographic-boundary-plus-scoped-boundaries-independent-padded",
     explorationPaddingMeters: {
       park: EXPLORATION_PARK_PADDING_METERS,
       island: EXPLORATION_ISLAND_PADDING_METERS,
     },
+    simplifyPerPadding: EXPLORATION_SIMPLIFY_PER_PADDING,
+    maximumAssetBytes: 6_000_000,
+    landExtensionRule: "islands and offshore park representatives",
     note: "Display-only completion estimate; it does not represent land travelled, access, or ownership.",
   },
   features: [{
@@ -422,6 +447,9 @@ const asset = {
   }, ...features, ...edgeFeatures],
 };
 const serialized = `${JSON.stringify(asset)}\n`;
+if (Buffer.byteLength(serialized) >= 6_000_000) {
+  throw new Error(`Exploration territory asset exceeds 6 MB display budget (${Buffer.byteLength(serialized)} bytes)`);
+}
 
 if (process.argv.includes("--check")) {
   const current = await readFile(fileURLToPath(outputUrl), "utf8").catch(() => "");

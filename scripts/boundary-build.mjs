@@ -6,6 +6,7 @@ import { inflateRawSync } from 'node:zlib';
 import booleanValid from '@turf/boolean-valid';
 
 import { boundarySources as sources, osmObjects } from './boundary-sources.mjs';
+import { fetchOfficialRegionalParks, officialRegionalSources } from './bc-regional-catalogue.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data');
@@ -25,9 +26,18 @@ function titleCaseParkName(name) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { 'user-agent': 'every-park-data-builder/1.0 (https://github.com/NathanPannell/every-park)' } });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${url}`);
-  return response.json();
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { 'user-agent': 'every-park-data-builder/1.0 (https://github.com/NathanPannell/every-park)' } });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+  throw new Error(`Boundary source failed after three immediate attempts: ${url}`, { cause: lastError });
 }
 
 async function fetchBuffer(url) {
@@ -216,10 +226,32 @@ async function buildRdn() {
 
 async function buildNational() {
   const collection = await fetchJson(sources.national.data);
-  const ids = new Map([['PRIM', 'national-pacific-rim-national-park-reserve'], ['GULF', 'national-gulf-islands-national-park-reserve']]);
+  const ids = new Map([
+    ['PRIM', 'national-pacific-rim-national-park-reserve'],
+    ['GULF', 'national-gulf-islands-national-park-reserve'],
+    ['GLAC', 'national-glacier-national-park'],
+    ['GWAA', 'national-gwaii-haanas-national-park-reserve'],
+    ['KOOT', 'national-kootenay-national-park'],
+    ['REVE', 'national-mount-revelstoke-national-park'],
+    ['YOHO', 'national-yoho-national-park'],
+  ]);
   return collection.features.map((feature) => {
     const id = ids.get(feature.properties.adminAreaId);
+    if (!id) throw new Error(`Unexpected national park source identity: ${feature.properties.adminAreaId}`);
     return makeFeature(requirePlace(id), feature.geometry, sources.national, feature.properties.NID || feature.properties.adminAreaId);
+  });
+}
+
+async function buildOfficialRegional() {
+  const imported = await fetchOfficialRegionalParks();
+  const sourceByName = new Map(Object.values(officialRegionalSources).map((source) => [source.name, source]));
+  return imported.features.map((feature) => {
+    const source = sourceByName.get(feature.properties.sourceName)
+      ?? (feature.properties.sourceName.endsWith(' via BC Local and Regional Greenspaces')
+        ? { name: feature.properties.sourceName, page: officialRegionalSources.greenspaces.page }
+        : null);
+    if (!source) throw new Error(`${feature.id}: unknown official regional boundary source`);
+    return makeFeature(requirePlace(feature.id), feature.geometry, source, feature.properties.sourceId);
   });
 }
 
@@ -249,7 +281,9 @@ function coordinateStats(geometry) {
   };
 }
 
-const groups = await Promise.all([buildNational(), buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOsm()]);
+const groups = await Promise.all([
+  buildNational(), buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOfficialRegional(), buildOsm(),
+]);
 const features = groups.flat().sort((a, b) => a.properties.id.localeCompare(b.properties.id));
 const emittedIds = new Set(features.map((feature) => feature.properties.id));
 const missingIds = places.filter((place) => !emittedIds.has(place.id)).map((place) => place.id);

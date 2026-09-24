@@ -304,6 +304,22 @@ test("Railway empty-environment shim journals, patches, then verifies readback",
   assert.deepEqual(events[0][1], { projectId: "project-id", environmentId: "environment-id", serviceIds: ["api-id"] });
 });
 
+test("Railway service readback tolerates a brief missing configuration", () => {
+  const events = [];
+  let reads = 0;
+  provisionRailwayApiService({
+    projectId: "project-id", environmentId: "environment-id", environmentName: "lp-pr-1-abcdef01-12345678", apiServiceId: "api-id",
+    listEnvironments: () => [{ id: "environment-id", name: "lp-pr-1-abcdef01-12345678" }],
+    recordIntent: () => events.push("intent"),
+    commitPatch: () => events.push("patch"),
+    readConfig: () => { reads++; return reads === 1 ? {} : buildRailwayApiServicePatch("api-id"); },
+    maxReadAttempts: 2,
+    waitForRead: () => events.push("wait"),
+  });
+  assert.equal(reads, 2);
+  assert.deepEqual(events, ["intent", "patch", "wait"]);
+});
+
 test("Railway patch failure remains journaled and stops before readback", () => {
   const events = [];
   assert.throws(() => provisionRailwayApiService({

@@ -112,11 +112,9 @@ from backend.app.groups import (
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
 COVERAGE_NOTE = (
-    "Official-source v0: two whole national park reserves, designated provincial parks, "
-    "and named regional parks from CRD, RDN, CVRD, and Bere Point. Regional coverage is "
-    "strongest in those districts; parks without a clean authoritative point, including "
-    "China Creek and Kwaksistah, are not guessed. The 24 nearby islands are a curated "
-    "collection; Vancouver Island frames the map rather than acting as a collectible. "
+    "Official-source British Columbia collection: Parks Canada destinations, designated "
+    "provincial parks, selected regional parks, and curated major islands. Regional coverage "
+    "varies by authority and is not a complete inventory of municipal or First Nations parks. "
     "Pins are representative centres, not entrances or trailheads."
 )
 CLAIM_RECOMMENDATION_ACCOUNT_LIMIT = 60

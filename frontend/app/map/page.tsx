@@ -3,7 +3,7 @@ import { ParkdexPage } from "../_components/parkdex-page";
 
 export const metadata: Metadata = {
   title: "Map · Parkdex",
-  description: "Explore parks and islands around Vancouver Island on the Parkdex map.",
+  description: "Explore parks and islands across British Columbia on the Parkdex map.",
   alternates: { canonical: "/map" },
   openGraph: { url: "/map" },
 };

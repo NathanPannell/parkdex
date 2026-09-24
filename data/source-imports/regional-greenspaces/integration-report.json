@@ -1,0 +1,1738 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-24T01:15:19.359Z",
+  "sources": {
+    "primaryPolygons": {
+      "name": "BC Local and Regional Greenspaces",
+      "datasetId": "6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "cataloguePage": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "serviceUrl": "https://openmaps.gov.bc.ca/geo/pub/WHSE_BASEMAPPING.GBA_LOCAL_REG_GREENSPACES_SP/ows",
+      "featureType": "pub:WHSE_BASEMAPPING.GBA_LOCAL_REG_GREENSPACES_SP",
+      "filter": "PARK_TYPE='Regional' AND PARK_PRIMARY_USE='Park'",
+      "pagination": {
+        "pageSize": 100,
+        "matchedCount": 405,
+        "retrievedFeatureCount": 405
+      },
+      "licence": "Open Government Licence - British Columbia",
+      "licenceUrl": "https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc",
+      "attribution": "Contains information licensed under the Open Government Licence - British Columbia.",
+      "sourceUpdateField": "WHEN_UPDATED",
+      "sourceUpdateRange": {
+        "earliestWhenUpdated": "2017-10-02Z",
+        "latestWhenUpdated": "2026-03-16Z"
+      }
+    },
+    "officialCrossCheck": {
+      "name": "GeoBC provincial base mapping service, Local and Regional Greenspaces layer 40",
+      "serviceUrl": "https://delivery.maps.gov.bc.ca/arcgis/rest/services/whse/bcgw_pub_whse_basemapping/MapServer/40",
+      "queryUrl": "https://delivery.maps.gov.bc.ca/arcgis/rest/services/whse/bcgw_pub_whse_basemapping/MapServer/40/query",
+      "filter": "PARK_TYPE='Regional' AND PARK_PRIMARY_USE='Park'",
+      "pagination": {
+        "pageSize": 1000,
+        "matchedCount": 380,
+        "retrievedFeatureCount": 380
+      },
+      "purpose": "Independent count and LOCAL_REG_GREENSPACE_ID cross-check. WFS supplies output polygon geometry."
+    }
+  },
+  "sourceDiscrepancy": {
+    "wfsFilteredFeatureCount": 405,
+    "arcgisLayer40FilteredFeatureCount": 380,
+    "commonLocalGreenspaceIdCount": 18,
+    "wfsOnlyLocalGreenspaceIds": [
+      "166",
+      "167",
+      "170",
+      "175",
+      "311",
+      "312",
+      "313",
+      "314",
+      "315",
+      "316",
+      "319",
+      "327",
+      "328",
+      "331",
+      "437",
+      "495",
+      "541",
+      "603",
+      "607",
+      "608",
+      "733",
+      "762",
+      "977",
+      "978",
+      "979",
+      "980",
+      "981",
+      "982",
+      "983",
+      "984",
+      "985",
+      "988",
+      "1002",
+      "1063",
+      "1206",
+      "1207",
+      "1297",
+      "1298",
+      "1299",
+      "1300",
+      "1301",
+      "1302",
+      "1303",
+      "1386",
+      "2277",
+      "3102",
+      "3103",
+      "3139",
+      "3354",
+      "3420",
+      "3785",
+      "3812",
+      "3818",
+      "3880",
+      "3905",
+      "3907",
+      "3908",
+      "3910",
+      "3911",
+      "3923",
+      "3924",
+      "3925",
+      "3928",
+      "3929",
+      "3930",
+      "3931",
+      "3936",
+      "3937",
+      "3944",
+      "3949",
+      "3950",
+      "3951",
+      "3952",
+      "3953",
+      "3954",
+      "3955",
+      "3956",
+      "3957",
+      "3958",
+      "3959",
+      "3960",
+      "3961",
+      "3962",
+      "3963",
+      "3971",
+      "3972",
+      "3973",
+      "3974",
+      "3975",
+      "3976",
+      "4033",
+      "4039",
+      "4040",
+      "4041",
+      "4042",
+      "4043",
+      "4045",
+      "4049",
+      "4050",
+      "4068",
+      "4069",
+      "4070",
+      "4071",
+      "4075",
+      "4076",
+      "4077",
+      "4098",
+      "4111",
+      "4113",
+      "4114",
+      "4333",
+      "4334",
+      "4336",
+      "4340",
+      "4341",
+      "4342",
+      "4344",
+      "4345",
+      "4347",
+      "4348",
+      "4349",
+      "4351",
+      "4357",
+      "4499",
+      "4500",
+      "4501",
+      "4502",
+      "4503",
+      "4504",
+      "4505",
+      "4506",
+      "4522",
+      "4525",
+      "4540",
+      "4552",
+      "4553",
+      "4563",
+      "4575",
+      "4641",
+      "4701",
+      "4728",
+      "4774",
+      "4800",
+      "4806",
+      "4810",
+      "4812",
+      "4815",
+      "4816",
+      "4818",
+      "4821",
+      "4822",
+      "4825",
+      "4827",
+      "4831",
+      "4837",
+      "4840",
+      "4841",
+      "4843",
+      "4847",
+      "4848",
+      "4849",
+      "4853",
+      "4854",
+      "4856",
+      "4858",
+      "4859",
+      "4860",
+      "4861",
+      "4862",
+      "4865",
+      "4866",
+      "4867",
+      "4869",
+      "4870",
+      "4871",
+      "4872",
+      "4873",
+      "4874",
+      "4875",
+      "4876",
+      "4879",
+      "4884",
+      "4887",
+      "4890",
+      "4891",
+      "4892",
+      "4894",
+      "4903",
+      "4904",
+      "4910",
+      "4911",
+      "4912",
+      "4913",
+      "4922",
+      "5255",
+      "5256",
+      "5261",
+      "5262",
+      "5264",
+      "5270",
+      "5272",
+      "5274",
+      "5276",
+      "5277",
+      "5278",
+      "5280",
+      "5281",
+      "5285",
+      "5286",
+      "5287",
+      "5288",
+      "5290",
+      "5293",
+      "5294",
+      "5295",
+      "5296",
+      "5300",
+      "5305",
+      "5467",
+      "5639",
+      "5778",
+      "5931",
+      "5932",
+      "5933",
+      "5934",
+      "5935",
+      "5936",
+      "5937",
+      "5938",
+      "5940",
+      "6056",
+      "6066",
+      "6690",
+      "6711",
+      "6935",
+      "6956",
+      "6960",
+      "6977",
+      "6981",
+      "6993",
+      "7003",
+      "7018",
+      "7022",
+      "7026",
+      "7046",
+      "7054",
+      "7075",
+      "7081",
+      "7087",
+      "7093",
+      "7096",
+      "7103",
+      "7104",
+      "7106",
+      "7111",
+      "7112",
+      "7154",
+      "7155",
+      "7157",
+      "7160",
+      "7174",
+      "7178",
+      "7188",
+      "7189",
+      "7191",
+      "7193",
+      "7196",
+      "7197",
+      "7198",
+      "7199",
+      "7200",
+      "7201",
+      "7202",
+      "7203",
+      "7204",
+      "7205",
+      "7207",
+      "7208",
+      "7209",
+      "7212",
+      "7213",
+      "7214",
+      "7215",
+      "7220",
+      "7475",
+      "7505",
+      "7753",
+      "7754",
+      "8438",
+      "8439",
+      "8583",
+      "8786",
+      "8787",
+      "8788",
+      "8789",
+      "8790",
+      "8792",
+      "8793",
+      "8794",
+      "8797",
+      "8799",
+      "8800",
+      "8801",
+      "8802",
+      "8803",
+      "8805",
+      "8806",
+      "8807",
+      "8808",
+      "8809",
+      "8810",
+      "8813",
+      "8815",
+      "8849",
+      "8850",
+      "8851",
+      "8852",
+      "8853",
+      "8854",
+      "8855",
+      "8856",
+      "8857",
+      "8858",
+      "8894",
+      "8895",
+      "8896",
+      "8897",
+      "8898",
+      "8899",
+      "8900",
+      "8901",
+      "8902",
+      "8903",
+      "8904",
+      "8906",
+      "8907",
+      "8908",
+      "8909",
+      "8910",
+      "8911",
+      "8912",
+      "8913",
+      "8915",
+      "8916",
+      "9293",
+      "9294",
+      "9295",
+      "9296",
+      "9299",
+      "9300",
+      "9302",
+      "9304",
+      "9305",
+      "9306",
+      "9307",
+      "9309",
+      "9311",
+      "9312",
+      "9313",
+      "9316",
+      "9317",
+      "9318",
+      "9319",
+      "9320",
+      "9325",
+      "9329",
+      "9330",
+      "9331",
+      "9332",
+      "9334",
+      "9335",
+      "9336",
+      "9337",
+      "9338",
+      "9339",
+      "9340",
+      "9341",
+      "9342",
+      "9355",
+      "9390",
+      "9391",
+      "9415",
+      "9441",
+      "9444",
+      "9445",
+      "9448",
+      "9449"
+    ],
+    "arcgisOnlyLocalGreenspaceIds": [
+      "130",
+      "143",
+      "321",
+      "323",
+      "778",
+      "779",
+      "780",
+      "781",
+      "782",
+      "802",
+      "847",
+      "848",
+      "850",
+      "851",
+      "853",
+      "854",
+      "856",
+      "857",
+      "858",
+      "859",
+      "864",
+      "871",
+      "877",
+      "878",
+      "879",
+      "880",
+      "1203",
+      "1276",
+      "1277",
+      "1314",
+      "1333",
+      "1343",
+      "1372",
+      "1388",
+      "1389",
+      "1390",
+      "1391",
+      "1392",
+      "1393",
+      "1394",
+      "1445",
+      "1446",
+      "1447",
+      "1448",
+      "1449",
+      "1451",
+      "1452",
+      "1453",
+      "1454",
+      "1455",
+      "1456",
+      "1457",
+      "1460",
+      "1462",
+      "1463",
+      "1464",
+      "1465",
+      "1503",
+      "1504",
+      "1507",
+      "1512",
+      "1652",
+      "1655",
+      "1657",
+      "1658",
+      "1659",
+      "1661",
+      "1665",
+      "1666",
+      "1667",
+      "1671",
+      "1675",
+      "1676",
+      "1680",
+      "1681",
+      "1683",
+      "1684",
+      "1685",
+      "1686",
+      "1687",
+      "1688",
+      "1691",
+      "1692",
+      "1695",
+      "1722",
+      "1723",
+      "1805",
+      "1806",
+      "1879",
+      "1891",
+      "1901",
+      "1935",
+      "1969",
+      "2028",
+      "2029",
+      "2062",
+      "2068",
+      "2069",
+      "2070",
+      "2071",
+      "2072",
+      "2073",
+      "2076",
+      "2077",
+      "2079",
+      "2081",
+      "2082",
+      "2083",
+      "2084",
+      "2085",
+      "2088",
+      "2194",
+      "2252",
+      "2298",
+      "2477",
+      "2495",
+      "2515",
+      "2516",
+      "2532",
+      "2554",
+      "2558",
+      "2559",
+      "2684",
+      "2713",
+      "2928",
+      "2929",
+      "2930",
+      "2931",
+      "2932",
+      "2933",
+      "2934",
+      "2935",
+      "2936",
+      "2939",
+      "2953",
+      "3014",
+      "3156",
+      "3157",
+      "3158",
+      "3248",
+      "3249",
+      "3250",
+      "3251",
+      "3252",
+      "3253",
+      "3254",
+      "3337",
+      "3338",
+      "4230",
+      "4691",
+      "5056",
+      "5057",
+      "5093",
+      "5308",
+      "5374",
+      "5766",
+      "5772",
+      "5834",
+      "5859",
+      "5861",
+      "5862",
+      "5864",
+      "5865",
+      "5877",
+      "5878",
+      "5879",
+      "5882",
+      "5883",
+      "5884",
+      "5885",
+      "5890",
+      "5891",
+      "5898",
+      "5903",
+      "5904",
+      "5905",
+      "5906",
+      "5907",
+      "5908",
+      "5909",
+      "5910",
+      "5911",
+      "5912",
+      "5913",
+      "5914",
+      "5915",
+      "5916",
+      "5917",
+      "5925",
+      "5926",
+      "5929",
+      "5987",
+      "5993",
+      "5994",
+      "5995",
+      "5996",
+      "5997",
+      "5999",
+      "6003",
+      "6004",
+      "6022",
+      "6023",
+      "6024",
+      "6025",
+      "6029",
+      "6030",
+      "6031",
+      "6052",
+      "6065",
+      "6067",
+      "6068",
+      "6287",
+      "6288",
+      "6290",
+      "6294",
+      "6296",
+      "6298",
+      "6299",
+      "6301",
+      "6302",
+      "6303",
+      "6305",
+      "6311",
+      "6453",
+      "6454",
+      "6455",
+      "6456",
+      "6457",
+      "6458",
+      "6459",
+      "6460",
+      "6476",
+      "6479",
+      "6494",
+      "6506",
+      "6507",
+      "6517",
+      "6529",
+      "6595",
+      "6655",
+      "6682",
+      "6728",
+      "6754",
+      "6760",
+      "6764",
+      "6766",
+      "6769",
+      "6770",
+      "6772",
+      "6775",
+      "6776",
+      "6779",
+      "6781",
+      "6785",
+      "6791",
+      "6794",
+      "6795",
+      "6797",
+      "6801",
+      "6802",
+      "6803",
+      "6807",
+      "6808",
+      "6810",
+      "6812",
+      "6813",
+      "6814",
+      "6815",
+      "6816",
+      "6819",
+      "6820",
+      "6821",
+      "6823",
+      "6824",
+      "6825",
+      "6826",
+      "6827",
+      "6828",
+      "6829",
+      "6830",
+      "6833",
+      "6838",
+      "6841",
+      "6844",
+      "6845",
+      "6846",
+      "6848",
+      "6857",
+      "6858",
+      "6864",
+      "6865",
+      "6866",
+      "6867",
+      "6877",
+      "7219",
+      "7225",
+      "7227",
+      "7229",
+      "7231",
+      "7232",
+      "7233",
+      "7235",
+      "7236",
+      "7240",
+      "7241",
+      "7242",
+      "7243",
+      "7245",
+      "7248",
+      "7249",
+      "7250",
+      "7251",
+      "7255",
+      "7260",
+      "7422",
+      "7594",
+      "7694",
+      "7733",
+      "7882",
+      "7883",
+      "7885",
+      "7886",
+      "7887",
+      "7888",
+      "7889",
+      "7890",
+      "7891",
+      "7892",
+      "7893",
+      "7895",
+      "8011",
+      "8021",
+      "8250",
+      "8647",
+      "8665",
+      "8669",
+      "8893",
+      "8918",
+      "8935",
+      "8939",
+      "8951",
+      "8961",
+      "8976",
+      "8980",
+      "8984",
+      "9004",
+      "9012",
+      "9033",
+      "9039",
+      "9045",
+      "9051",
+      "9054",
+      "9061",
+      "9062",
+      "9064",
+      "9069",
+      "9070",
+      "9112",
+      "9113",
+      "9115",
+      "9118",
+      "9136"
+    ],
+    "comparisonField": "LOCAL_REG_GREENSPACE_ID",
+    "note": "The WFS and ArcGIS layer 40 are separate official service publications. Their count and ID differences are recorded as a source discrepancy, not treated as pagination loss or silently reconciled."
+  },
+  "coverage": {
+    "officialRegionalDistrictCount": 27,
+    "districtsRepresentedByFilteredWfsRecords": 22,
+    "districtsWithNoFilteredWfsRecords": [
+      "Bulkley-Nechako",
+      "Cariboo",
+      "Kitimat-Stikine",
+      "Mount Waddington",
+      "North Coast"
+    ],
+    "byRegionalDistrict": [
+      {
+        "regionalDistrict": "Alberni-Clayoquot",
+        "wfsFilteredSourceFeatureCount": 22,
+        "normalizedIntegrationCandidateParkCount": 22,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Bulkley-Nechako",
+        "wfsFilteredSourceFeatureCount": 0,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": false
+      },
+      {
+        "regionalDistrict": "Capital",
+        "wfsFilteredSourceFeatureCount": 29,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 29,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Cariboo",
+        "wfsFilteredSourceFeatureCount": 0,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": false
+      },
+      {
+        "regionalDistrict": "Central Coast",
+        "wfsFilteredSourceFeatureCount": 1,
+        "normalizedIntegrationCandidateParkCount": 1,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Central Kootenay",
+        "wfsFilteredSourceFeatureCount": 22,
+        "normalizedIntegrationCandidateParkCount": 22,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Central Okanagan",
+        "wfsFilteredSourceFeatureCount": 43,
+        "normalizedIntegrationCandidateParkCount": 42,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Columbia-Shuswap",
+        "wfsFilteredSourceFeatureCount": 1,
+        "normalizedIntegrationCandidateParkCount": 1,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Comox Valley",
+        "wfsFilteredSourceFeatureCount": 47,
+        "normalizedIntegrationCandidateParkCount": 41,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Cowichan Valley",
+        "wfsFilteredSourceFeatureCount": 3,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 3,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "East Kootenay",
+        "wfsFilteredSourceFeatureCount": 4,
+        "normalizedIntegrationCandidateParkCount": 4,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Fraser-Fort George",
+        "wfsFilteredSourceFeatureCount": 18,
+        "normalizedIntegrationCandidateParkCount": 13,
+        "excludedSourceFeatureCount": 3,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Fraser Valley",
+        "wfsFilteredSourceFeatureCount": 25,
+        "normalizedIntegrationCandidateParkCount": 12,
+        "excludedSourceFeatureCount": 12,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Kitimat-Stikine",
+        "wfsFilteredSourceFeatureCount": 0,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": false
+      },
+      {
+        "regionalDistrict": "Kootenay Boundary",
+        "wfsFilteredSourceFeatureCount": 2,
+        "normalizedIntegrationCandidateParkCount": 2,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Metro Vancouver",
+        "wfsFilteredSourceFeatureCount": 80,
+        "normalizedIntegrationCandidateParkCount": 18,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Mount Waddington",
+        "wfsFilteredSourceFeatureCount": 0,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": false
+      },
+      {
+        "regionalDistrict": "Nanaimo",
+        "wfsFilteredSourceFeatureCount": 16,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 16,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "North Coast",
+        "wfsFilteredSourceFeatureCount": 0,
+        "normalizedIntegrationCandidateParkCount": 0,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": false
+      },
+      {
+        "regionalDistrict": "North Okanagan",
+        "wfsFilteredSourceFeatureCount": 3,
+        "normalizedIntegrationCandidateParkCount": 3,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Okanagan-Similkameen",
+        "wfsFilteredSourceFeatureCount": 15,
+        "normalizedIntegrationCandidateParkCount": 15,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Peace River",
+        "wfsFilteredSourceFeatureCount": 7,
+        "normalizedIntegrationCandidateParkCount": 7,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "qathet",
+        "wfsFilteredSourceFeatureCount": 10,
+        "normalizedIntegrationCandidateParkCount": 10,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Squamish-Lillooet",
+        "wfsFilteredSourceFeatureCount": 1,
+        "normalizedIntegrationCandidateParkCount": 1,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Strathcona",
+        "wfsFilteredSourceFeatureCount": 24,
+        "normalizedIntegrationCandidateParkCount": 22,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Sunshine Coast",
+        "wfsFilteredSourceFeatureCount": 27,
+        "normalizedIntegrationCandidateParkCount": 22,
+        "excludedSourceFeatureCount": 5,
+        "representedByFilteredSource": true
+      },
+      {
+        "regionalDistrict": "Thompson-Nicola",
+        "wfsFilteredSourceFeatureCount": 2,
+        "normalizedIntegrationCandidateParkCount": 2,
+        "excludedSourceFeatureCount": 0,
+        "representedByFilteredSource": true
+      }
+    ],
+    "nonRegionalDistrictAuthorities": [
+      {
+        "authority": "Northern Rockies Regional Municipality",
+        "wfsFilteredSourceFeatureCount": 2
+      },
+      {
+        "authority": "Stikine Region",
+        "wfsFilteredSourceFeatureCount": 1
+      }
+    ]
+  },
+  "selection": {
+    "requestedFilter": "PARK_TYPE='Regional' AND PARK_PRIMARY_USE='Park'",
+    "sourceFeatureCount": 405,
+    "normalizedIntegrationCandidateParkCount": 263,
+    "candidateSourceFeatureCount": 337,
+    "excludedSourceFeatureCount": 68,
+    "exclusionCounts": {
+      "undeveloped_site_not_confirmed_as_a_visitor_park": 13,
+      "park_name_missing": 7,
+      "existing_local_authority_inventory_has_precedence": 48
+    },
+    "reviewItems": [
+      {
+        "sourceId": "607",
+        "sourceObjectId": 3440670,
+        "name": "Ness Lake (undeveloped)",
+        "regionalDistrict": "Fraser-Fort George",
+        "sourceRegionalDistrict": "Fraser-Fort George",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "608",
+        "sourceObjectId": 3440671,
+        "name": "Ness Lake (undeveloped)",
+        "regionalDistrict": "Fraser-Fort George",
+        "sourceRegionalDistrict": "Fraser-Fort George",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "1002",
+        "sourceObjectId": 3441065,
+        "name": "Ness Lake (undeveloped)",
+        "regionalDistrict": "Fraser-Fort George",
+        "sourceRegionalDistrict": "Fraser-Fort George",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4499",
+        "sourceObjectId": 3444562,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4500",
+        "sourceObjectId": 3444563,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4501",
+        "sourceObjectId": 3444564,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4502",
+        "sourceObjectId": 3444565,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4504",
+        "sourceObjectId": 3444567,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4505",
+        "sourceObjectId": 3444568,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4506",
+        "sourceObjectId": 3444569,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4525",
+        "sourceObjectId": 3444588,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4540",
+        "sourceObjectId": 3444603,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4553",
+        "sourceObjectId": 3444616,
+        "name": null,
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "4563",
+        "sourceObjectId": 3444626,
+        "name": "Undeveloped Green Space",
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "undeveloped_site_not_confirmed_as_a_visitor_park"
+      },
+      {
+        "sourceId": "4575",
+        "sourceObjectId": 3444638,
+        "name": null,
+        "regionalDistrict": "Fraser Valley",
+        "sourceRegionalDistrict": "Fraser Valley",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "7081",
+        "sourceObjectId": 3447144,
+        "name": "<Null>",
+        "regionalDistrict": "Sunshine Coast",
+        "sourceRegionalDistrict": "Sunshine Coast",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "7103",
+        "sourceObjectId": 3447166,
+        "name": "<Null>",
+        "regionalDistrict": "Sunshine Coast",
+        "sourceRegionalDistrict": "Sunshine Coast",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "7112",
+        "sourceObjectId": 3447175,
+        "name": "<Null>",
+        "regionalDistrict": "Sunshine Coast",
+        "sourceRegionalDistrict": "Sunshine Coast",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "7154",
+        "sourceObjectId": 3447217,
+        "name": "<Null>",
+        "regionalDistrict": "Sunshine Coast",
+        "sourceRegionalDistrict": "Sunshine Coast",
+        "reason": "park_name_missing"
+      },
+      {
+        "sourceId": "7178",
+        "sourceObjectId": 3447241,
+        "name": "<Null>",
+        "regionalDistrict": "Sunshine Coast",
+        "sourceRegionalDistrict": "Sunshine Coast",
+        "reason": "park_name_missing"
+      }
+    ],
+    "duplicateNameGroupCount": 18,
+    "mergedAdditionalSourceFeatureCount": 74,
+    "duplicateNameGroups": [
+      {
+        "regionalDistrict": "Capital",
+        "names": [
+          "Mount Work Regional Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "7196",
+          "7505"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Central Okanagan",
+        "names": [
+          "Mt Boucherie Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "9342",
+          "9444"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Comox Valley",
+        "names": [
+          "Driftwood Marine Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "4853",
+          "4854"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Comox Valley",
+        "names": [
+          "Dyke Road Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "4843",
+          "4856"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Comox Valley",
+        "names": [
+          "Seal Bay Nature Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "4840",
+          "4841"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Comox Valley",
+        "names": [
+          "Union Bay Nature Park"
+        ],
+        "sourceFeatureCount": 4,
+        "additionalPolygonFeatureCount": 3,
+        "sourceIds": [
+          "4910",
+          "4911",
+          "4912",
+          "4913"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Fraser Valley",
+        "names": [],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "4553",
+          "4575"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Fraser Valley",
+        "names": [
+          "Ridgedale Bar Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "4357",
+          "4503"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Fraser Valley",
+        "names": [
+          "Undeveloped Green Space"
+        ],
+        "sourceFeatureCount": 10,
+        "additionalPolygonFeatureCount": 9,
+        "sourceIds": [
+          "4499",
+          "4500",
+          "4501",
+          "4502",
+          "4504",
+          "4505",
+          "4506",
+          "4525",
+          "4540",
+          "4563"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Fraser-Fort George",
+        "names": [
+          "Harold Mann Regional Park Lot 2"
+        ],
+        "sourceFeatureCount": 3,
+        "additionalPolygonFeatureCount": 2,
+        "sourceIds": [
+          "977",
+          "1386",
+          "1387"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Fraser-Fort George",
+        "names": [
+          "Ness Lake (undeveloped)"
+        ],
+        "sourceFeatureCount": 3,
+        "additionalPolygonFeatureCount": 2,
+        "sourceIds": [
+          "607",
+          "608",
+          "1002"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Metro Vancouver",
+        "names": [
+          "Belcarra"
+        ],
+        "sourceFeatureCount": 4,
+        "additionalPolygonFeatureCount": 3,
+        "sourceIds": [
+          "3102",
+          "3103",
+          "3139",
+          "4334"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Metro Vancouver",
+        "names": [
+          "Burnaby Lake Regional Nature Park"
+        ],
+        "sourceFeatureCount": 60,
+        "additionalPolygonFeatureCount": 59,
+        "sourceIds": [
+          "3785",
+          "3812",
+          "3818",
+          "3880",
+          "3905",
+          "3907",
+          "3908",
+          "3910",
+          "3911",
+          "3923",
+          "3924",
+          "3925",
+          "3928",
+          "3929",
+          "3930",
+          "3931",
+          "3936",
+          "3937",
+          "3944",
+          "3949",
+          "3950",
+          "3951",
+          "3952",
+          "3953",
+          "3954",
+          "3955",
+          "3956",
+          "3957",
+          "3958",
+          "3959",
+          "3960",
+          "3961",
+          "3962",
+          "3963",
+          "3971",
+          "3972",
+          "3973",
+          "3974",
+          "3975",
+          "3976",
+          "4033",
+          "4039",
+          "4040",
+          "4041",
+          "4042",
+          "4043",
+          "4045",
+          "4049",
+          "4050",
+          "4068",
+          "4069",
+          "4070",
+          "4071",
+          "4075",
+          "4076",
+          "4077",
+          "4098",
+          "4111",
+          "4113",
+          "4114"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Nanaimo",
+        "names": [
+          "Mount Arrowsmith Massif Regional Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "5928",
+          "5940"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Nanaimo",
+        "names": [
+          "Three Lagoon Islands Park"
+        ],
+        "sourceFeatureCount": 3,
+        "additionalPolygonFeatureCount": 2,
+        "sourceIds": [
+          "5639",
+          "5739",
+          "5778"
+        ],
+        "includedInCandidateGeojson": false
+      },
+      {
+        "regionalDistrict": "Strathcona",
+        "names": [
+          "Siskin Forest Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "5255",
+          "5256"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Strathcona",
+        "names": [
+          "Whaletown Commons Park"
+        ],
+        "sourceFeatureCount": 2,
+        "additionalPolygonFeatureCount": 1,
+        "sourceIds": [
+          "5296",
+          "5305"
+        ],
+        "includedInCandidateGeojson": true
+      },
+      {
+        "regionalDistrict": "Sunshine Coast",
+        "names": [
+          "<Null>"
+        ],
+        "sourceFeatureCount": 5,
+        "additionalPolygonFeatureCount": 4,
+        "sourceIds": [
+          "7081",
+          "7103",
+          "7112",
+          "7154",
+          "7178"
+        ],
+        "includedInCandidateGeojson": false
+      }
+    ],
+    "grouping": "Features are grouped by canonical regional district and normalized park name. Their polygon components are retained together as a MultiPolygon, and every LOCAL_REG_GREENSPACE_ID and OBJECTID remains in properties.sourceRecords."
+  },
+  "existingLocalAuthorityPrecedence": [
+    {
+      "authority": "Capital",
+      "existingInventorySource": "Capital Regional District park GIS",
+      "existingCatalogueRecordCount": 34,
+      "wfsFilteredFeatureCount": 29,
+      "wfsDistinctNamedParkCount": 28,
+      "exactNormalizedNameMatchCount": 25,
+      "exactNormalizedNameMatches": [
+        {
+          "catalogueName": "Albert Head Lagoon Regional Park",
+          "sourceName": "Albert Head Lagoon Regional Park"
+        },
+        {
+          "catalogueName": "Bear Hill Regional Park",
+          "sourceName": "Bear Hill Regional Park"
+        },
+        {
+          "catalogueName": "Brooks Point Regional Park",
+          "sourceName": "Brooks Point Regional Park"
+        },
+        {
+          "catalogueName": "Coles Bay Regional Park",
+          "sourceName": "Coles Bay Regional Park"
+        },
+        {
+          "catalogueName": "Devonian Regional Park",
+          "sourceName": "Devonian Regional Park"
+        },
+        {
+          "catalogueName": "East Point Regional Park",
+          "sourceName": "East Point Regional Park"
+        },
+        {
+          "catalogueName": "East Sooke Regional Park",
+          "sourceName": "East Sooke Regional Park"
+        },
+        {
+          "catalogueName": "Elk/Beaver Lake Regional Park",
+          "sourceName": "Elk/Beaver Lake Regional Park"
+        },
+        {
+          "catalogueName": "Francis/King Regional Park",
+          "sourceName": "Francis/King Regional Park"
+        },
+        {
+          "catalogueName": "Horth Hill Regional Park",
+          "sourceName": "Horth Hill Regional Park"
+        },
+        {
+          "catalogueName": "Island View Beach Regional Park",
+          "sourceName": "Island View Beach Regional Park"
+        },
+        {
+          "catalogueName": "Jordan River Regional Park",
+          "sourceName": "Jordan River Regional Park"
+        },
+        {
+          "catalogueName": "Lone Tree Hill Regional Park",
+          "sourceName": "Lone Tree Hill Regional Park"
+        },
+        {
+          "catalogueName": "Matheson Lake Regional Park",
+          "sourceName": "Matheson Lake Regional Park"
+        },
+        {
+          "catalogueName": "Mill Hill Regional Park",
+          "sourceName": "Mill Hill Regional Park"
+        },
+        {
+          "catalogueName": "Mount Wells Regional Park",
+          "sourceName": "Mount Wells Regional Park"
+        },
+        {
+          "catalogueName": "Mount Work Regional Park",
+          "sourceName": "Mount Work Regional Park"
+        },
+        {
+          "catalogueName": "Mountain Forest Regional Park",
+          "sourceName": "Mountain Forest Regional Park"
+        },
+        {
+          "catalogueName": "Roche Cove Regional Park",
+          "sourceName": "Roche Cove Regional Park"
+        },
+        {
+          "catalogueName": "Sea to Sea Regional Park",
+          "sourceName": "Sea to Sea Regional Park"
+        },
+        {
+          "catalogueName": "Sooke Hills Wilderness Regional Park",
+          "sourceName": "Sooke Hills Wilderness Regional Park"
+        },
+        {
+          "catalogueName": "Sooke Potholes Regional Park",
+          "sourceName": "Sooke Potholes Regional Park"
+        },
+        {
+          "catalogueName": "St. John Point Regional Park",
+          "sourceName": "St. John Point Regional Park"
+        },
+        {
+          "catalogueName": "Thetis Lake Regional Park",
+          "sourceName": "Thetis Lake Regional Park"
+        },
+        {
+          "catalogueName": "Witty's Lagoon Regional Park",
+          "sourceName": "Witty's Lagoon Regional Park"
+        }
+      ],
+      "catalogueNamesWithoutExactWfsMatch": [
+        "Ayum Creek Regional Park",
+        "George Hill Regional Park",
+        "Gonzales Hill Regional Park",
+        "Kapoor Regional Park",
+        "Matthews Point Regional Park",
+        "Mill Farm Regional Park",
+        "Mount Parke Regional Park",
+        "Sooke River Park",
+        "Wrigglesworth Lake Regional Park"
+      ],
+      "wfsNamesWithoutExactCatalogueMatch": [
+        "Blue Heron Park",
+        "Jubilee Park",
+        "Sooke River Regional Park"
+      ],
+      "note": "Name comparison uses normalized spelling only. Unmatched names need review and do not prove that either inventory is complete."
+    },
+    {
+      "authority": "Cowichan Valley",
+      "existingInventorySource": "Cowichan Valley Regional District parks GIS",
+      "existingCatalogueRecordCount": 3,
+      "wfsFilteredFeatureCount": 3,
+      "wfsDistinctNamedParkCount": 3,
+      "exactNormalizedNameMatchCount": 1,
+      "exactNormalizedNameMatches": [
+        {
+          "catalogueName": "Stoney Hill Regional Park",
+          "sourceName": "Stoney Hill Regional Park"
+        }
+      ],
+      "catalogueNamesWithoutExactWfsMatch": [
+        "Osborne Bay Regional Park",
+        "Sandy Pool Regional Park"
+      ],
+      "wfsNamesWithoutExactCatalogueMatch": [
+        "Bute Island Regional Park",
+        "Siddoo Regional Park"
+      ],
+      "note": "Name comparison uses normalized spelling only. Unmatched names need review and do not prove that either inventory is complete."
+    },
+    {
+      "authority": "Nanaimo",
+      "existingInventorySource": "Regional District of Nanaimo regional parks spatial data",
+      "existingCatalogueRecordCount": 14,
+      "wfsFilteredFeatureCount": 16,
+      "wfsDistinctNamedParkCount": 13,
+      "exactNormalizedNameMatchCount": 11,
+      "exactNormalizedNameMatches": [
+        {
+          "catalogueName": "Beachcomber Regional Park",
+          "sourceName": "Beachcomber Regional Park"
+        },
+        {
+          "catalogueName": "Benson Creek Falls Regional Park",
+          "sourceName": "Benson Creek Falls Regional Park"
+        },
+        {
+          "catalogueName": "Coats Marsh Regional Park",
+          "sourceName": "Coats Marsh Regional Park"
+        },
+        {
+          "catalogueName": "Descanso Bay Regional Park",
+          "sourceName": "Descanso Bay Regional Park"
+        },
+        {
+          "catalogueName": "Englishman River Regional Park",
+          "sourceName": "Englishman River Regional Park"
+        },
+        {
+          "catalogueName": "Horne Lake Regional Park",
+          "sourceName": "Horne Lake Regional Park"
+        },
+        {
+          "catalogueName": "Little Qualicum River Regional Park",
+          "sourceName": "Little Qualicum River Regional Park"
+        },
+        {
+          "catalogueName": "Moorecroft Regional Park",
+          "sourceName": "Moorecroft Regional Park"
+        },
+        {
+          "catalogueName": "Mount Arrowsmith Massif Regional Park",
+          "sourceName": "Mount Arrowsmith Massif Regional Park"
+        },
+        {
+          "catalogueName": "Mount Benson Regional Park",
+          "sourceName": "Mount Benson Regional Park"
+        },
+        {
+          "catalogueName": "Nanaimo River Regional Park",
+          "sourceName": "Nanaimo River Regional Park"
+        }
+      ],
+      "catalogueNamesWithoutExactWfsMatch": [
+        "Hamilton Marsh Regional Park and Conservation Area",
+        "Little Qualicum River Estuary Regional Conservation Area",
+        "Mount Arrowsmith Regional Park (ACRD)"
+      ],
+      "wfsNamesWithoutExactCatalogueMatch": [
+        "Robin's Den Park",
+        "Three Lagoon Islands Park"
+      ],
+      "note": "Name comparison uses normalized spelling only. Unmatched names need review and do not prove that either inventory is complete."
+    },
+    {
+      "authority": "Mount Waddington",
+      "existingInventorySource": "Regional District of Mount Waddington verified park records",
+      "existingCatalogueRecordCount": 4,
+      "wfsFilteredFeatureCount": 0,
+      "wfsDistinctNamedParkCount": 0,
+      "exactNormalizedNameMatchCount": 0,
+      "exactNormalizedNameMatches": [],
+      "catalogueNamesWithoutExactWfsMatch": [
+        "Bere Point Regional Park",
+        "Kwaksistah Regional Park",
+        "Little Huson Cave Regional Park",
+        "Mount Cain Alpine Park"
+      ],
+      "wfsNamesWithoutExactCatalogueMatch": [],
+      "note": "Name comparison uses normalized spelling only. Unmatched names need review and do not prove that either inventory is complete."
+    }
+  ],
+  "integrationNotes": [
+    "Use the local Capital, Cowichan Valley, and Nanaimo GIS inventories where they are already integrated. Their provincial WFS records are excluded from the candidate GeoJSON and listed in the authority comparison.",
+    "The WFS has no filtered source features for Mount Waddington. Parkdex already has four Mount Waddington records; retain that existing source until an authority polygon source is available.",
+    "Blank park names and names containing Undeveloped are excluded for review because the filter alone does not confirm an identifiable visitor park.",
+    "Repeated name rows in one district are merged as geometry components, without dissolving polygon topology. Review the grouped source IDs before treating the result as final park boundaries.",
+    "The dataset is an irregularly updated official inventory. A zero count means no feature matched this dataset filter at retrieval time, not that the regional district has no parks."
+  ]
+}

@@ -1,9 +1,9 @@
 export type LayoutRect = { top: number; right: number; bottom: number; left: number; width: number; height: number };
 export type CameraPadding = { top: number; right: number; bottom: number; left: number };
 
-export const VANCOUVER_ISLAND_OVERVIEW_BOUNDS: [[number, number], [number, number]] = [
-  [-128.52, 48.25],
-  [-123.0, 50.92],
+export const BC_OVERVIEW_BOUNDS: [[number, number], [number, number]] = [
+  [-139.1, 48.25],
+  [-114.0, 60.05],
 ];
 
 export function overviewPadding(viewportWidth: number): CameraPadding {
