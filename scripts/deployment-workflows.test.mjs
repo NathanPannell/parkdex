@@ -80,7 +80,7 @@ test("the API and frontend are queued concurrently without waiting for provider 
   assert.match(release, /release_id: \$\{\{ steps\.metadata\.outputs\.release_id \}\}/);
   assert.match(release, /Release ID: \\`\$RELEASE_ID\\`/);
   assert.match(release, /if \[\[ "\$TARGET_ENVIRONMENT" == staging \]\]; then[\s\S]*frontend\/catalogue-build-data/);
-  for (const name of ["boundaries.geojson", "places.json", "vancouver-island-focus.geojson", "staging-field-boundaries.geojson", "staging-field-places.json"]) {
+  for (const name of ["boundaries.geojson", "places.json", "vancouver-island-focus.geojson", "bc-land-focus.geojson", "staging-field-boundaries.geojson", "staging-field-places.json"]) {
     assert.match(release, new RegExp(`data/${name.replaceAll(".", "\\.")}`));
   }
   assert.match(release, /--build-env "PARKDEX_CATALOGUE_SCOPE=\$\{\{ inputs\.target == 'staging' && 'staging' \|\| 'canonical' \}\}"/);
