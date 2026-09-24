@@ -6,15 +6,19 @@ import { getPlaceImage, PLACE_IMAGE_COUNT, PLACE_IMAGES } from "./place-images";
 
 const assetDirectory = fileURLToPath(new URL("../public", import.meta.url));
 const places = JSON.parse(readFileSync(resolve(process.cwd(), "../data/places.json"), "utf8")) as Array<{ id: string }>;
+const majorIslandSource = readFileSync(resolve(process.cwd(), "../scripts/bc-major-islands.mjs"), "utf8");
+const curatedIslandIds = [...majorIslandSource.matchAll(/name:\s*'([^']+)'/g)].map(([, name]) =>
+  `island-${name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+);
 const THUMBNAIL_BUDGET = 64_000;
 const DETAIL_BUDGET = 425_000;
 
 describe("place image manifest", () => {
   it("only references tracked places and distinct local assets", () => {
-    const knownIds = new Set(places.map((place) => place.id));
+    const knownIds = new Set([...places.map((place) => place.id), ...curatedIslandIds]);
     const imagePaths = Object.values(PLACE_IMAGES).flatMap((image) => [image.thumbnail.src, image.detail.src]);
 
-    expect(PLACE_IMAGE_COUNT).toBe(117);
+    expect(PLACE_IMAGE_COUNT).toBe(130);
     expect(new Set(imagePaths).size).toBe(imagePaths.length);
     for (const [placeId, image] of Object.entries(PLACE_IMAGES)) {
       expect(knownIds.has(placeId), `unknown place ID: ${placeId}`).toBe(true);
