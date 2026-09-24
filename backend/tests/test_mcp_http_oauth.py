@@ -21,6 +21,12 @@ OTHER_EMAIL = "hosted-mcp-other@example.com"
 PASSWORD = "hosted mcp password"
 
 
+def test_oauth_document_uses_bc_brand_footer() -> None:
+    document = oauth._oauth_document(title="Connect to Parkdex", content="<p>Connect</p>")
+
+    assert "A completionist map of British Columbia" in document
+
+
 def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", ([EMAIL, OTHER_EMAIL],))

@@ -76,7 +76,7 @@ def _auth_email(
     ]
     if security_note:
         text_sections.append(f"Security note\n{security_note}")
-    text_sections.extend([ignore_note, "— Parkdex\nA completionist map of Vancouver Island"])
+    text_sections.extend([ignore_note, "— Parkdex\nA completionist map of British Columbia"])
     text = "\n\n".join(text_sections) + "\n"
     security_panel = ""
     if security_note:
@@ -191,7 +191,7 @@ def _auth_email(
             <tr>
               <td class="email-padding" style="padding:22px 48px 26px; background-color:#f6f0dc; border-top:1px solid #e3ddc8;">
                 <p style="margin:0 0 4px; color:#173d32; font-family:Arial,sans-serif; font-size:13px; font-weight:800; line-height:18px;">Parkdex</p>
-                <p style="margin:0; color:#59675f; font-family:Arial,sans-serif; font-size:12px; line-height:18px;">A completionist map of Vancouver Island</p>
+                <p style="margin:0; color:#59675f; font-family:Arial,sans-serif; font-size:12px; line-height:18px;">A completionist map of British Columbia</p>
               </td>
             </tr>
           </table>
