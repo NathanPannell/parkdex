@@ -37,6 +37,7 @@ it("introduces the real Field Guide, Collections, and My Dex journey", () => {
   expect(screen.getByRole("dialog")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "Find your next park." })).toBeTruthy();
   expect(screen.getByText(/map or list/i)).toBeTruthy();
+  expect(screen.getByText(/Search BC parks and islands/i)).toBeTruthy();
   expect(document.querySelector(".field-guide-onboarding__map-seal")).toBeTruthy();
   expect(document.querySelector(".field-guide-onboarding__map-lines")).toBeNull();
   expect(document.querySelector(".field-guide-onboarding__map-pin")).toBeNull();
@@ -69,6 +70,7 @@ it("skips, restores focus, and does not invent account or device-backup promises
   render(<FieldGuideOnboarding onComplete={onComplete} />);
 
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Continue" })));
+  expect(screen.getByText("British Columbia")).toBeTruthy();
   expect(screen.queryByText(/no account needed|on this device|backup|sync/i)).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "Skip" }));
