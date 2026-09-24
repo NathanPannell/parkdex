@@ -93,6 +93,8 @@ let status = "success";
 let failure = "";
 try {
   run("photo source audit tests", "python", ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_photo_source*.py", "-q"]);
+  run("photo review server tests", "python", ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_photo_review_server.py", "-q"]);
+  run("photo review browser script syntax", "node", ["--check", "scripts/photo-review/app.js"]);
   if (suite === "all" || suite === "backend") {
     const databaseName = `parkdex_ci_${process.pid}_${Date.now()}_${randomBytes(4).toString("hex")}`;
     const databaseUrl = `${databaseAdminUrl.slice(0, databaseAdminUrl.lastIndexOf("/") + 1)}${databaseName}`;

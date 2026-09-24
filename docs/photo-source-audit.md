@@ -32,6 +32,8 @@ python scripts/photo_source_audit.py --sources commons,openverse,inaturalist,fli
 
 Before importing a candidate, open the original source page and verify the photo license, photographer, exact place or documented feature, image resolution, and required credit. For geotagged iNaturalist observations, also verify the image actually depicts the park rather than only a species photographed nearby. Keep source and location evidence in the place-image manifest. The accepted catalogue policy is in [`frontend/public/places/README.md`](../frontend/public/places/README.md).
 
+The fixed 299-candidate shortlist from the September 2026 sweep can be reviewed with the [local photo review page](photo-review.md). Its approvals remain local and do not import or publish photos.
+
 iNaturalist's observation response gives the license family but may omit its version. For BY and BY-SA candidates, `license_url` points to the photo page where the exact version must be checked. These biodiversity leads are excluded from projected park-photo coverage.
 
 ## Source terms
