@@ -48,6 +48,16 @@ def commons_page(page_id, title, description):
 
 
 class PhotoSourceAdapterTests(unittest.TestCase):
+    def test_commons_does_not_return_video_as_photo(self):
+        def handler(_url, params):
+            if params["generator"] == "search":
+                return {"query": {"pages": [commons_page(1, "Tuya Mountains Park.webm", "Tuya Mountains Park, BC")]}}
+            return {"query": {"pages": [commons_page(2, "Tuya Mountains Park.jpg", "Tuya Mountains Park, BC")]}}
+
+        client = Client(handler)
+        result = search_commons(client, {"name": "Tuya Mountains Park", "latitude": 59.17, "longitude": -130.5})
+        self.assertEqual([item["source_id"] for item in result], ["2"])
+
     def test_commons_geosearch_runs_after_unrelated_licensed_result(self):
         def handler(_url, params):
             if params["generator"] == "search":

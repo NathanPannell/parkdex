@@ -179,6 +179,9 @@ def _commons_results(payload: dict[str, Any], query: str, limit: int) -> list[di
     for page in pages:
         if not isinstance(page, dict):
             continue
+        title = _clean_text(_value(page, "title")) or ""
+        if re.search(r"\.(?:webm|ogv|ogg|mp4|mov|avi|svg|pdf|gif)$", title, re.IGNORECASE):
+            continue
         imageinfo = page.get("imageinfo") or []
         if not imageinfo or not isinstance(imageinfo[0], dict):
             continue
@@ -198,7 +201,6 @@ def _commons_results(payload: dict[str, Any], query: str, limit: int) -> list[di
         description = _clean_text(extmetadata.get("ImageDescription"))
         if description:
             raw_location = "; ".join(part for part in (raw_location, description) if part)
-        title = _clean_text(_value(page, "title")) or ""
         # Use the page's own URL as the canonical license-bearing landing page.
         landing_url = info.get("descriptionurl")
         if not landing_url and title:

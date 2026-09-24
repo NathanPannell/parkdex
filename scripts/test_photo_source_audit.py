@@ -12,6 +12,7 @@ from photo_source_audit import (  # noqa: E402
     license_status,
     name_in_metadata,
     point_in_geometry,
+    photo_candidate,
     read_checkpoint,
     save_checkpoint,
     usable_lead,
@@ -20,6 +21,10 @@ from photo_source_audit import (  # noqa: E402
 
 
 class PhotoSourceAuditTests(unittest.TestCase):
+    def test_checkpointed_video_is_not_a_photo_lead(self):
+        self.assertFalse(photo_candidate({"title": "Lake in BC.webm", "image_url": "https://example.org/file.webm"}))
+        self.assertTrue(photo_candidate({"title": "Lake in BC.jpg", "image_url": "https://example.org/file.jpg"}))
+
     def test_boundary_hole_and_multipart_location(self):
         geometry = {
             "type": "MultiPolygon",

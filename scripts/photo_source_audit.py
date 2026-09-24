@@ -202,12 +202,21 @@ def enrich(place: dict, candidate: dict, boundary: dict | None) -> dict:
 
 def usable_lead(candidate: dict) -> bool:
     return (
-        candidate["license_status"] == "compatible_claim"
+        photo_candidate(candidate)
+        and candidate["license_status"] == "compatible_claim"
         and candidate["name_in_metadata"]
         and (candidate["inside_boundary"] or candidate["bc_in_metadata"])
         and bool(candidate.get("landing_url") and candidate.get("image_url") and candidate.get("license_url") and candidate.get("creator"))
         and str(candidate.get("source") or "").casefold() != "inaturalist"
     )
+
+
+def photo_candidate(candidate: dict) -> bool:
+    """Exclude known non-photo media, including files in older checkpoints."""
+    excluded = re.compile(r"\.(?:webm|ogv|ogg|mp4|mov|avi|svg|pdf|gif)$", re.IGNORECASE)
+    title = str(candidate.get("title") or "")
+    image_path = urlparse(str(candidate.get("image_url") or "")).path
+    return not (excluded.search(title) or excluded.search(image_path))
 
 
 def key_for(row: dict) -> tuple[str, str]:
@@ -264,7 +273,7 @@ def write_reports(output: Path, records: dict, places: list[dict], existing: set
             errors[f"{place_id}:{source}"] = record["error"]
             continue
         completed[source] = completed.get(source, 0) + 1
-        candidates.extend(record.get("candidates", []))
+        candidates.extend(candidate for candidate in record.get("candidates", []) if photo_candidate(candidate))
     candidates.sort(key=lambda row: (row["place_id"], row["source"], row.get("source_id") or ""))
     unique = {}
     for candidate in candidates:
