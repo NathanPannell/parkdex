@@ -1,0 +1,184 @@
+{
+  "source": "https://bcparks.api.gov.bc.ca/graphql",
+  "verifiedAt": "2026-09-23",
+  "apiRecords": 1052,
+  "provincialPlaces": 693,
+  "linkedProvincialPlaces": 664,
+  "unmatchedCount": 29,
+  "unmatched": [
+    {
+      "id": "provincial-adams-lake-marine-park-spillman-beach-site",
+      "name": "Adams Lake Marine Park - Spillman Beach Site",
+      "sourceId": "453",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-anhluut-ukwsim-laxmihl-anwinga-asanakwhl-nisga-a",
+      "name": "Anhluut'ukwsim Laxmihl Anwinga'asanakwhl Nisga'a",
+      "sourceId": "927",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-arrow-lakes-park-eagle-site",
+      "name": "Arrow Lakes Park - Eagle Site",
+      "sourceId": "468",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-arrow-lakes-park-fauquier-site",
+      "name": "Arrow Lakes Park - Fauquier Site",
+      "sourceId": "469",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-atlin-a-teix-gi-aan-tlein-park",
+      "name": "Atlin/A Teix'gi Aan Tlein Park",
+      "sourceId": "474",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-babine-lake-marine-park-hook-deep-bay-site",
+      "name": "Babine Lake Marine Park - Hook (Deep Bay) Site",
+      "sourceId": "5140",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-green-lake-park-little-arrow-site",
+      "name": "Green Lake Park- Little Arrow Site",
+      "sourceId": "722",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-green-lake-park-nolan-creek",
+      "name": "Green Lake Park - Nolan Creek",
+      "sourceId": "723",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-jaji7em-and-kw-ulh-marine-park",
+      "name": "Jáji7em and Kw'ulh Marine Park",
+      "sourceId": "1027",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-khutzeymateen-park",
+      "name": "Khutzeymateen Park",
+      "sourceId": "790",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-kootenay-lake-park-coffee-creek-site",
+      "name": "Kootenay Lake Park - Coffee Creek Site",
+      "sourceId": "817",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-neneikekh-nanika-kidprice-park",
+      "name": "Neneikekh/Nanika-Kidprice Park",
+      "sourceId": "5308",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-sechelt-inlets-marine-park-halfway-beach-site",
+      "name": "Sechelt Inlets Marine Park - Halfway Beach Site",
+      "sourceId": "1041",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-sechelt-inlets-marine-park-kunechin-point-site",
+      "name": "Sechelt Inlets Marine Park - Kunechin Point Site",
+      "sourceId": "1042",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-aline-hill-site",
+      "name": "Shuswap Lake Marine Park - Aline Hill Site",
+      "sourceId": "1056",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-bughouse-bay-site",
+      "name": "Shuswap Lake Marine Park -  Bughouse Bay Site",
+      "sourceId": "5113",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-cottonwood-beach-site",
+      "name": "Shuswap Lake Marine Park - Cottonwood Beach Site",
+      "sourceId": "1061",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-hungry-cove-site",
+      "name": "Shuswap Lake Marine Park - Hungry Cove Site",
+      "sourceId": "1067",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-mara-point-site",
+      "name": "Shuswap Lake Marine Park - Mara Point Site",
+      "sourceId": "5452",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-marble-point-site",
+      "name": "Shuswap Lake Marine Park - Marble Point Site",
+      "sourceId": "1068",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-nielsen-beach-site",
+      "name": "Shuswap Lake Marine Park - Nielsen Beach Site",
+      "sourceId": "1069",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-paradise-point-site",
+      "name": "Shuswap Lake Marine Park - Paradise Point Site",
+      "sourceId": "1070",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-roberts-bay-site",
+      "name": "Shuswap Lake Marine Park - Roberts Bay Site",
+      "sourceId": "4905",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-st-ives-site",
+      "name": "Shuswap Lake Marine Park - St. Ives Site",
+      "sourceId": "1073",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-tiilis-beach-site",
+      "name": "Shuswap Lake Marine Park - Tiilis Beach Site",
+      "sourceId": "1074",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-twin-bays-site",
+      "name": "Shuswap Lake Marine Park - Twin Bays Site",
+      "sourceId": "1075",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-two-mile-site",
+      "name": "Shuswap Lake Marine Park - Two Mile Site",
+      "sourceId": "1076",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-shuswap-lake-marine-park-woods-landing-south-sit",
+      "name": "Shuswap Lake Marine Park - Woods Landing South Sit",
+      "sourceId": "1078",
+      "reason": "no_exact_published_match"
+    },
+    {
+      "id": "provincial-stuart-river-park-lower-site",
+      "name": "Stuart River Park - Lower Site",
+      "sourceId": "4813",
+      "reason": "no_exact_published_match"
+    }
+  ]
+}
