@@ -300,6 +300,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(detail.getByText("Map data and photo credits"));
     expect(credits.open).toBe(true);
     expect(within(credits).getByRole("link", { name: /Place source/ }).getAttribute("href")).toBe(goldstream.sourceUrl);
+    expect(credits.textContent).toContain("Changes: Resized without upscaling, converted to WebP");
 
     fireEvent.click(detail.getByRole("button", { name: "Browse more from BC Parks" }));
     expect(screen.getByRole("heading", { name: "Find your next place" })).toBeTruthy();
