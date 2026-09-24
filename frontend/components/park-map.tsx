@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Focus, X } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
 import { PostcardPrint, type PostcardPhotoState } from "@/components/postcard-print";
@@ -32,7 +32,7 @@ import {
   explorationBoundaryFilter,
   explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
-import { BC_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
+import { VANCOUVER_ISLAND_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Visit } from "@/lib/account";
 import type { Place } from "@/lib/places";
@@ -118,7 +118,7 @@ export type ParkMapProps = {
   selectedId: string | null;
   selectedIds?: ReadonlySet<string>;
   resetViewRequest?: number;
-  showResetControl?: boolean;
+  showZoomControls?: boolean;
   onSelect: (id: string) => void;
   onBoundaryLoadState?: (state: BoundaryLoadState) => void;
   recentPostcard?: RecentPostcard;
@@ -226,15 +226,15 @@ function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<G
 function fitOverview(map: MapLibreMap, animated: boolean) {
   const padding = measuredCameraPadding(map.getContainer(), false);
   map.fitBounds(
-    BC_OVERVIEW_BOUNDS,
-    { padding, maxZoom: 7, duration: animated ? 520 : 0 },
+    VANCOUVER_ISLAND_OVERVIEW_BOUNDS,
+    { padding, maxZoom: 8, duration: animated ? 520 : 0 },
   );
 }
 
 function overviewCameraSnapshot(map: MapLibreMap): MapCameraSnapshot | null {
-  const camera = map.cameraForBounds(BC_OVERVIEW_BOUNDS, {
+  const camera = map.cameraForBounds(VANCOUVER_ISLAND_OVERVIEW_BOUNDS, {
     padding: measuredCameraPadding(map.getContainer(), false),
-    maxZoom: 7,
+    maxZoom: 8,
   });
   if (!camera?.center || camera.zoom == null) return null;
   const center = Array.isArray(camera.center)
@@ -391,7 +391,7 @@ export function ParkMap({
   selectedId,
   selectedIds = new Set<string>(),
   resetViewRequest = 0,
-  showResetControl = true,
+  showZoomControls = true,
   onSelect,
   onBoundaryLoadState,
   recentPostcard,
@@ -419,7 +419,7 @@ export function ParkMap({
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
   const [boundaryRevision, setBoundaryRevision] = useState(0);
-  const [viewDiffersFromDefault, setViewDiffersFromDefault] = useState(false);
+  const [mapZoom, setMapZoom] = useState(6);
   const [mapReady, setMapReady] = useState(false);
   const [postcardPhoto, setPostcardPhoto] = useState<PostcardPhoto>({ key: "", state: "empty" });
   const [postcardMarkerPosition, setPostcardMarkerPosition] = useState<PostcardMarkerPosition | null>(null);
@@ -474,8 +474,8 @@ export function ParkMap({
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: FIELD_GUIDE_STYLE,
-        center: [-126.5, 54.1],
-        zoom: 4.6,
+        center: [-125.8, 49.8],
+        zoom: 6,
         minZoom: 3.4,
         maxZoom: 15,
         fadeDuration: 0,
@@ -486,7 +486,6 @@ export function ParkMap({
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const setViewDiffers = (differs: boolean) => {
         viewDiffersRef.current = differs;
-        setViewDiffersFromDefault(differs);
       };
       const moveToOverview = (animated: boolean) => {
         overviewCameraRef.current = overviewCameraSnapshot(map);
@@ -495,6 +494,7 @@ export function ParkMap({
       };
       resetOverviewRef.current = () => moveToOverview(!reduceMotion);
       map.on("moveend", () => {
+        setMapZoom(map.getZoom());
         const overview = overviewCameraRef.current;
         if (overview) setViewDiffers(cameraViewDiffers(cameraSnapshot(map), overview));
       });
@@ -861,21 +861,14 @@ export function ParkMap({
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of British Columbia parks and major islands" />
       {postcard}
-      {showResetControl && !selectedId && viewDiffersFromDefault && (
-        <button
-          type="button"
-          className="map-reset-button"
-          aria-label="Reset map view"
-          title="Reset map view"
-          onClick={() => resetOverviewRef.current?.()}
-        >
-          <Focus size={20} aria-hidden="true" />
-        </button>
-      )}
-      {mode === "explored" && visited.size > 0 && (
-        <div className="exploration-map-key">
-          <span className="exploration-map-key__swatch" aria-hidden="true" />
-          <span>Estimated explored area from your visits; open gaps mark parks still waiting.</span>
+      {showZoomControls && (
+        <div className="map-zoom-controls" role="group" aria-label="Map zoom">
+          <button type="button" aria-label="Zoom in" title="Zoom in" disabled={!mapReady || mapZoom >= 14.95} onClick={() => mapRef.current?.zoomIn({ duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })}>
+            <Plus size={20} aria-hidden="true" />
+          </button>
+          <button type="button" aria-label="Zoom out" title="Zoom out" disabled={!mapReady || mapZoom <= 3.45} onClick={() => mapRef.current?.zoomOut({ duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })}>
+            <Minus size={20} aria-hidden="true" />
+          </button>
         </div>
       )}
       {mode === "explored" && explorationFailed && (

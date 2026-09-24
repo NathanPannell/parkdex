@@ -172,23 +172,35 @@ button { color: inherit; }
 .map-utility .search-dock.collapsed .search-toggle { background: var(--lime); color: var(--forest); }
 .filter-button.active, .filter-tray button.selected { background: var(--sun); color: var(--forest); }
 
-.map-reset-button {
+.map-zoom-controls {
   position: absolute;
   z-index: 12;
-  top: max(88px,calc(env(safe-area-inset-top) + 88px));
+  top: max(130px,calc(env(safe-area-inset-top) + 130px));
   right: 16px;
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  border-radius: 12px;
+  background: var(--paper-bright);
+  color: var(--forest);
+  box-shadow: var(--soft-shadow);
+  overflow: hidden;
+}
+.map-zoom-controls button {
   display: grid;
   width: 44px;
   height: 44px;
   padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 12px;
-  background: var(--paper-bright);
-  color: var(--forest);
-  box-shadow: var(--soft-shadow);
+  background: transparent;
+  color: inherit;
   cursor: pointer;
 }
+.map-zoom-controls button + button { border-top: 1px solid #d4dacb; }
+.map-zoom-controls button:hover:not(:disabled) { background: #e8efdb; }
+.map-zoom-controls button:focus-visible { outline: 3px solid var(--water); outline-offset: -3px; }
+.map-zoom-controls button:disabled { opacity: .4; cursor: default; }
 
 .wishlist-group-card {
   grid-template-columns: 46px minmax(0,1fr) 20px;
@@ -298,7 +310,7 @@ button { color: inherit; }
 @media (width < 860px) {
   .map-utility.search-open .map-mode-switch { order: 2; }
   .map-utility.search-open .search-dock { order: 1; }
-  .map-reset-button { top: max(72px,calc(env(safe-area-inset-top) + 72px)); right: 8px; }
+  .map-zoom-controls { top: max(72px,calc(env(safe-area-inset-top) + 72px)); right: 8px; }
   .group-item { grid-template-columns: 74px minmax(0,1fr) 20px; min-height: 94px; }
   .group-cover { width: 74px; height: 74px; }
 }
@@ -333,8 +345,6 @@ button { color: inherit; }
 .first-adventure strong { font: 730 20px/1.05 var(--font-display); }
 .first-adventure span { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .first-adventure button { display: flex; align-items: center; justify-content: center; min-height: 42px; gap: 7px; margin-top: 5px; border: 0; border-radius: 11px; background: var(--lime); cursor: pointer; font-weight: 950; }
-.exploration-map-key { position: absolute; z-index: 4; right: 10px; bottom: 78px; display: flex; align-items: center; gap: 7px; max-width: 190px; padding: 8px 10px; border-radius: 11px; background: var(--paper-bright); color: var(--forest); box-shadow: 0 5px 16px rgba(23,61,50,.18); font-size: 10px; font-weight: 850; line-height: 1.25; }
-.exploration-map-key__swatch { flex: 0 0 auto; width: 20px; height: 14px; border: 2px solid var(--forest); border-radius: 6px; background: color-mix(in srgb, var(--lime) 72%, transparent); }
 .exploration-status-note { position: absolute; z-index: 6; right: 12px; bottom: 82px; left: 12px; width: fit-content; max-width: min(360px,calc(100vw - 24px)); margin: 0; padding: 8px 10px; border-radius: 11px; background: var(--paper-bright); color: var(--muted); box-shadow: 0 5px 16px rgba(23,61,50,.18); font-size: 10px; font-weight: 800; line-height: 1.35; }
 
 .feature-panel { position: absolute; z-index: 8; inset: max(86px, calc(env(safe-area-inset-top) + 86px)) 10px 78px; overflow-y: auto; padding: 18px 16px 28px; border-radius: 16px; background: var(--paper); box-shadow: var(--soft-shadow); }
@@ -1059,7 +1069,6 @@ button { color: inherit; }
 .group-add-controls label { display: flex; min-width: 0; min-height: 46px; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid #b8c3b1; border-radius: 11px; background: var(--paper-bright); color: var(--water); }
 .group-add-controls input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--forest); font: 700 13px var(--font-body); }
 .group-add .group-add-menu { position: static; max-height: 240px; }
-.map-reset-button { display: none; }
 
 @media (width < 860px) {
   .thumb-nav { right: 10px; left: 10px; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); width: auto; max-width: none; padding-top: 5px; background: var(--paper-bright); }
@@ -1096,7 +1105,6 @@ button { color: inherit; }
 
 /* Final cascade for issues 52–59. */
 .filter-button.active, .filter-tray button.selected { background: var(--sun); color: var(--forest); }
-.map-reset-button { top: max(88px,calc(env(safe-area-inset-top) + 88px)); right: 16px; display: grid; }
 .wishlist-group-card { grid-template-columns: 46px minmax(0,1fr) 20px; min-height: 76px; padding: 10px 13px; }
 .wishlist-group-icon { width: 46px; height: 46px; border-radius: 12px; }
 .wishlist-group-card strong { font-size: 23px; }
@@ -1113,7 +1121,6 @@ button { color: inherit; }
 .account-shelf .shelf-row { padding-bottom: 0; }
 
 @media (width < 860px) {
-  .map-reset-button { top: max(72px,calc(env(safe-area-inset-top) + 72px)); right: 8px; }
   .group-item { grid-template-columns: 74px minmax(0,1fr) 20px; min-height: 94px; }
 }
 

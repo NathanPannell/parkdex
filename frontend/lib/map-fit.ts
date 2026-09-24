@@ -6,6 +6,11 @@ export const BC_OVERVIEW_BOUNDS: [[number, number], [number, number]] = [
   [-114.0, 60.05],
 ];
 
+export const VANCOUVER_ISLAND_OVERVIEW_BOUNDS: [[number, number], [number, number]] = [
+  [-128.8, 48.25],
+  [-123.1, 51.3],
+];
+
 export function overviewPadding(viewportWidth: number): CameraPadding {
   return viewportWidth < 640
     ? { top: 156, right: 12, bottom: 112, left: 12 }

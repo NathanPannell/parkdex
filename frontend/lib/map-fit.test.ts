@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BC_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, type LayoutRect } from "./map-fit";
+import { BC_OVERVIEW_BOUNDS, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, overviewPadding, selectedPlacePadding, type LayoutRect } from "./map-fit";
 
 const rect = (left: number, top: number, width: number, height: number): LayoutRect => ({
   left,
@@ -14,6 +14,7 @@ const rect = (left: number, top: number, width: number, height: number): LayoutR
 describe("selected boundary camera padding", () => {
   it("frames all of British Columbia with phone-safe overlay padding", () => {
     expect(BC_OVERVIEW_BOUNDS).toEqual([[-139.1, 48.25], [-114, 60.05]]);
+    expect(VANCOUVER_ISLAND_OVERVIEW_BOUNDS).toEqual([[-128.8, 48.25], [-123.1, 51.3]]);
     expect(overviewPadding(390)).toEqual({ top: 156, right: 12, bottom: 112, left: 12 });
   });
 
