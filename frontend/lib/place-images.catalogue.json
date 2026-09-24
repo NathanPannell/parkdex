@@ -2066,5 +2066,115 @@
     "locationEvidence": "The source title identifies Spider Lake Provincial Park and describes its warm water and small beach; BC Parks independently identifies the same park features.",
     "locationEvidenceUrl": "https://bcparks.ca/spider-lake-park/",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "national-glacier-national-park": {
+    "thumbnail": {
+      "src": "/places/glacier-national-park-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/glacier-national-park.webp",
+      "width": 960,
+      "height": 638
+    },
+    "alt": "A lakeshore meadow of wildflowers and dark evergreen forest beneath misty peaks in Glacier National Park",
+    "creator": "naserke",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Glacier_National_Park_valley.jpg",
+    "sourceTitle": "Glacier National Park valley",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/47/Glacier_National_Park_valley.jpg",
+    "locationEvidence": "Commons describes the view as being in Glacier National Park near Rogers Pass (translated from French); its categories also identify Glacier National Park (Canada) and the Illecillewaet River.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Glacier_National_Park_valley.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "national-gwaii-haanas-national-park-reserve": {
+    "thumbnail": {
+      "src": "/places/gwaii-haanas-national-park-thumb.webp",
+      "width": 320,
+      "height": 239
+    },
+    "detail": {
+      "src": "/places/gwaii-haanas-national-park.webp",
+      "width": 960,
+      "height": 718
+    },
+    "alt": "Sea lions rest on a seaweed-covered rock beside the forested shore at Gwaii Haanas",
+    "creator": "Dale Simonson",
+    "license": "CC BY-SA 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sea_lion_colony,_Gwaii_Haanas.jpg",
+    "sourceTitle": "Sea lion colony, Gwaii Haanas",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/11/Sea_lion_colony%2C_Gwaii_Haanas.jpg",
+    "locationEvidence": "Commons describes this sea lion colony as being on the southwestern edge of Gwaii Haanas, Haida Gwaii, and categorizes the file in Gwaii Haanas National Park Reserve.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sea_lion_colony,_Gwaii_Haanas.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "national-kootenay-national-park": {
+    "thumbnail": {
+      "src": "/places/kootenay-national-park-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/kootenay-national-park.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Turquoise Kootenay River runs between pale limestone walls in Marble Canyon",
+    "creator": "Chris Woodrich",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Marble_Canyon,_Kootenay_National_Park,_British_Columbia,_2025-07-11_07.jpg",
+    "sourceTitle": "Marble Canyon, Kootenay National Park, British Columbia, 2025-07-11 07",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f7/Marble_Canyon%2C_Kootenay_National_Park%2C_British_Columbia%2C_2025-07-11_07.jpg",
+    "locationEvidence": "Commons caption identifies Marble Canyon and the Kootenay River from above within Kootenay National Park, British Columbia.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Marble_Canyon,_Kootenay_National_Park,_British_Columbia,_2025-07-11_07.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "national-mount-revelstoke-national-park": {
+    "thumbnail": {
+      "src": "/places/mount-revelstoke-national-park-thumb.webp",
+      "width": 320,
+      "height": 213
+    },
+    "detail": {
+      "src": "/places/mount-revelstoke-national-park.webp",
+      "width": 960,
+      "height": 640
+    },
+    "alt": "Evergreen forest reflected in Heather Lake, with wildflowers along the shore in Mount Revelstoke National Park",
+    "creator": "Ymblanter",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Heather_Lake_Mount_Revelstoke_NP.jpg",
+    "sourceTitle": "Heather Lake Mount Revelstoke NP",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Heather_Lake_Mount_Revelstoke_NP.jpg",
+    "locationEvidence": "Commons caption says Heather Lake (from the south), Mount Revelstoke NP; its categories identify Mount Revelstoke National Park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Heather_Lake_Mount_Revelstoke_NP.jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+  },
+  "national-yoho-national-park": {
+    "thumbnail": {
+      "src": "/places/yoho-national-park-thumb.webp",
+      "width": 320,
+      "height": 180
+    },
+    "detail": {
+      "src": "/places/yoho-national-park.webp",
+      "width": 960,
+      "height": 540
+    },
+    "alt": "Takakkaw Falls descends from a pale mountain ridge above evergreen forest, with Waputik Glacier behind it",
+    "creator": "Christoph Strässler from Oberdorf BL, Schweiz",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Takakkaw_Falls_and_Waputik_Glacier,_Yoho_National_Park,_Canada_(54881204831).jpg",
+    "sourceTitle": "Takakkaw Falls and Waputik Glacier, Yoho National Park, Canada (54881204831)",
+    "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/87/Takakkaw_Falls_and_Waputik_Glacier%2C_Yoho_National_Park%2C_Canada_%2854881204831%29.jpg",
+    "locationEvidence": "Commons caption names Takakkaw Falls and Waputik Glacier in Yoho National Park, Canada; categories also list mountains and forests in Yoho National Park.",
+    "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Takakkaw_Falls_and_Waputik_Glacier,_Yoho_National_Park,_Canada_(54881204831).jpg",
+    "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
   }
 }
