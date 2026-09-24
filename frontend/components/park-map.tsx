@@ -32,7 +32,7 @@ import {
   explorationBoundaryFilter,
   explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
-import { cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, VANCOUVER_ISLAND_OVERVIEW_BOUNDS, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
+import { BC_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
 import type { Visit } from "@/lib/account";
 import type { Place } from "@/lib/places";
@@ -158,7 +158,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   sources: {
     shadedRelief: { type: "raster", tiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 6 },
     openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
-    focusMask: { type: "geojson", data: "/data/vancouver-island-focus-mask.v1.geojson", tolerance: 0 },
+    focusMask: { type: "geojson", data: "/data/bc-focus-mask.v1.geojson", tolerance: 0 },
   },
   layers: [
     { id: "paper", type: "background", paint: { "background-color": "#f6f0dc" } },
@@ -226,13 +226,13 @@ function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<G
 function fitOverview(map: MapLibreMap, animated: boolean) {
   const padding = measuredCameraPadding(map.getContainer(), false);
   map.fitBounds(
-    VANCOUVER_ISLAND_OVERVIEW_BOUNDS,
+    BC_OVERVIEW_BOUNDS,
     { padding, maxZoom: 7, duration: animated ? 520 : 0 },
   );
 }
 
 function overviewCameraSnapshot(map: MapLibreMap): MapCameraSnapshot | null {
-  const camera = map.cameraForBounds(VANCOUVER_ISLAND_OVERVIEW_BOUNDS, {
+  const camera = map.cameraForBounds(BC_OVERVIEW_BOUNDS, {
     padding: measuredCameraPadding(map.getContainer(), false),
     maxZoom: 7,
   });
@@ -474,9 +474,9 @@ export function ParkMap({
       const map = new maplibregl.Map({
         container: containerRef.current,
         style: FIELD_GUIDE_STYLE,
-        center: [-125.25, 49.65],
-        zoom: 5.55,
-        minZoom: 4.6,
+        center: [-126.5, 54.1],
+        zoom: 4.6,
+        minZoom: 3.4,
         maxZoom: 15,
         fadeDuration: 0,
         attributionControl: false,
@@ -859,7 +859,7 @@ export function ParkMap({
 
   return (
     <div className="map-wrap">
-      <div className="map" ref={containerRef} aria-label="Interactive map of Vancouver Island parks and major islands" />
+      <div className="map" ref={containerRef} aria-label="Interactive map of British Columbia parks and major islands" />
       {postcard}
       {showResetControl && !selectedId && viewDiffersFromDefault && (
         <button

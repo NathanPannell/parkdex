@@ -19,17 +19,10 @@ const EXPLORATION_PARK_PADDING_METERS = 180;
 const EXPLORATION_ISLAND_PADDING_METERS = 220;
 const EXPLORATION_PADDING_STEPS = 8;
 const EXPLORATION_SIMPLIFY_PER_PADDING = 0.3;
-const EXCURSION_IDS = new Set([
-  "provincial-mitlenatch-island-nature-park",
-  "provincial-pirates-cove-marine-park",
-  "provincial-saysutshun-newcastle-island-marine-park",
-  "provincial-wallace-island-marine-park",
-]);
-
-const [canonicalPlaces, scoped, mainIsland] = await Promise.all([
+const [canonicalPlaces, scoped, bcLand] = await Promise.all([
   readCatalogueSource("places.json").then(JSON.parse),
   readScopedBoundaryCollection(),
-  readCatalogueSource("vancouver-island-focus.geojson").then(JSON.parse),
+  readCatalogueSource("bc-land-focus.geojson").then(JSON.parse),
 ]);
 
 function validateStagingPlaces(value) {
@@ -78,21 +71,9 @@ function paddedLandFeature(feature) {
 // Exploration land intentionally starts from canonical boundaries and owns
 // its own rounded padding. It must not inherit presentation changes from the
 // per-park display asset used by the discover map.
-const nearbyIslands = canonical.features.filter((feature) => feature.properties?.category === "island");
-const excursionParks = canonical.features.filter((feature) => EXCURSION_IDS.has(feature.properties?.id));
-if (excursionParks.length !== EXCURSION_IDS.size) throw new Error("Exploration territory excursion geometry is incomplete");
-// Staging-only boundaries are treated as excursion footprints as well,
-// without hard-coding ids that may change with the field fixture.
-const landFeatures = new Map([
-  ...nearbyIslands.map((feature) => [feature.properties?.id, feature]),
-  ...excursionParks.map((feature) => [feature.properties?.id, feature]),
-  ...canonical.features.filter((feature) => scoped.stagingIds.has(feature.properties?.id))
-    .map((feature) => [feature.properties?.id, feature]),
-]);
-const landInputs = [mainIsland, ...landFeatures.values()].map((feature) => (
-  feature === mainIsland ? feature : paddedLandFeature(feature)
-))
-  .flatMap(exteriorPolygons);
+// Add catalogued boundaries to the generalized provincial coastline so parks
+// on small islands and staging fixtures remain in the exploration scope.
+const landInputs = [bcLand, ...canonical.features.map(paddedLandFeature)].flatMap(exteriorPolygons);
 const land = polygonClipping.union(landInputs[0], ...landInputs.slice(1));
 
 function everyPair(multiPolygon) {
@@ -179,6 +160,22 @@ function circleIntersectsPolygon(circle, multiPolygon) {
     && y - circle.radius <= cellBounds.maxY;
 }
 
+function halfPlaneRelation({ x, y, limit }, multiPolygon) {
+  const bounds = polygonBounds(multiPolygon);
+  const min = x * (x < 0 ? bounds.maxX : bounds.minX) + y * (y < 0 ? bounds.maxY : bounds.minY);
+  const max = x * (x < 0 ? bounds.minX : bounds.maxX) + y * (y < 0 ? bounds.minY : bounds.maxY);
+  if (min > limit + 1e-9) return "outside";
+  if (max <= limit + 1e-9) return "inside";
+  return "crossing";
+}
+
+function circleContainsBounds({ center: [x, y], radius }, multiPolygon) {
+  const bounds = polygonBounds(multiPolygon);
+  const farX = Math.max(Math.abs(bounds.minX - x), Math.abs(bounds.maxX - x));
+  const farY = Math.max(Math.abs(bounds.minY - y), Math.abs(bounds.maxY - y));
+  return farX ** 2 + farY ** 2 <= radius ** 2;
+}
+
 function projectedTerritory(owner) {
   let cell = [[boundsRing]];
   const constraints = places
@@ -186,23 +183,33 @@ function projectedTerritory(owner) {
     .map((competitor) => ({
       constraint: weightedTerritoryConstraint(owner, competitor),
       pairKey: [owner.id, competitor.id].sort().join("|"),
+      distance: weightedDistanceScore(owner, competitor),
     }))
     .sort((left, right) => {
       const order = (constraint) => constraint.kind === "empty" ? 0
         : constraint.kind === "circle" && constraint.keep === "inside" ? 1
           : constraint.kind === "half-plane" ? 2 : constraint.kind === "circle" ? 3 : 4;
-      return order(left.constraint) - order(right.constraint);
+      return order(left.constraint) - order(right.constraint)
+        || left.distance - right.distance
+        || left.pairKey.localeCompare(right.pairKey);
     });
   for (const { constraint, pairKey } of constraints) {
     if (!cell.length || constraint.kind === "empty") return [];
     if (constraint.kind === "all") continue;
     if (constraint.kind === "half-plane") {
+      const relation = halfPlaneRelation(constraint, cell);
+      if (relation === "outside") return [];
+      if (relation === "inside") continue;
       const allowed = halfPlanePolygon(constraint);
       cell = allowed.length ? polygonClipping.intersection(cell, allowed) : [];
       continue;
     }
     if (!circleIntersectsPolygon(constraint, cell)) {
       if (constraint.keep === "inside") return [];
+      continue;
+    }
+    if (circleContainsBounds(constraint, cell)) {
+      if (constraint.keep === "outside") return [];
       continue;
     }
     const circle = circlePolygon(constraint, pairKey);
@@ -408,7 +415,9 @@ const asset = {
     coastEdgeSegmentCount,
     interiorEdgeSegmentCount,
     ...(scoped.scope === "staging" ? { catalogueScope: scoped.scope } : {}),
-    landSource: scoped.scope === "canonical" ? "canonical-boundaries-independent-padded" : "scoped-boundaries-independent-padded",
+    landSource: scoped.scope === "canonical"
+      ? "bc-cartographic-boundary-plus-canonical-boundaries-independent-padded"
+      : "bc-cartographic-boundary-plus-scoped-boundaries-independent-padded",
     explorationPaddingMeters: {
       park: EXPLORATION_PARK_PADDING_METERS,
       island: EXPLORATION_ISLAND_PADDING_METERS,

@@ -114,7 +114,7 @@ describe("weighted exploration territory", () => {
 
   it("gives every active catalogue representative its own deterministic nearest score", () => {
     const places = catalogue();
-    expect(places).toHaveLength(198);
+    expect(places.length).toBeGreaterThan(700);
     places.forEach((place) => expect(nearestWeightedExplorationPoint(place, places)?.id).toBe(place.id));
   });
 
@@ -128,12 +128,12 @@ describe("weighted exploration territory", () => {
       feature.properties.kind === "estimated-territory" && feature.geometry.type === "MultiPolygon"
     ));
     expect(scope).toBeDefined();
-    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(3_000_000);
+    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(6_000_000);
     expect(asset.metadata).toMatchObject({
-      activePlaceCount: 198,
-      territoryCount: 198,
+      activePlaceCount: places.length,
+      territoryCount: places.length,
       categoryWeights: EXPLORATION_CATEGORY_WEIGHTS,
-      landSource: "canonical-boundaries-independent-padded",
+      landSource: "bc-cartographic-boundary-plus-canonical-boundaries-independent-padded",
       explorationPaddingMeters: { park: 180, island: 220 },
     });
     expect(new Set(territories.map((feature) => feature.properties.id)))
@@ -143,16 +143,16 @@ describe("weighted exploration territory", () => {
     // A deterministic land sample catches both offshore fill and gaps/overlaps
     // without running an unstable 195-way polygon boolean in the test process.
     let landSamples = 0;
-    for (let latitude = 48.31; latitude <= 50.88; latitude += 0.04) {
-      for (let longitude = -128.44; longitude <= -123.04; longitude += 0.04) {
+    for (let latitude = 48.31; latitude <= 59.95; latitude += 0.3) {
+      for (let longitude = -138.95; longitude <= -114.05; longitude += 0.3) {
         const location = [longitude + 0.013, latitude + 0.017] as const;
         if (!geometryContains(location, scope!.geometry)) continue;
         landSamples += 1;
         expect(territories.filter((feature) => geometryContains(location, feature.geometry))).toHaveLength(1);
       }
     }
-    expect(landSamples).toBeGreaterThan(1_500);
-  }, 20_000);
+    expect(landSamples).toBeGreaterThan(1_000);
+  }, 60_000);
 
   it("ships a rounded display-edge topology with no shared seam between visited neighbors", () => {
     const places = catalogue();
