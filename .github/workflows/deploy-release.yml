@@ -141,7 +141,7 @@ jobs:
 
           if [[ "$TARGET_ENVIRONMENT" == staging ]]; then
             mkdir -p frontend/catalogue-build-data
-            cp data/boundaries.geojson data/places.json data/vancouver-island-focus.geojson \
+            cp data/boundaries.geojson data/places.json data/vancouver-island-focus.geojson data/bc-land-focus.geojson \
               data/staging-field-boundaries.geojson data/staging-field-places.json \
               frontend/catalogue-build-data/
           fi
