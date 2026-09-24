@@ -81,6 +81,16 @@ def atomic_write_text(path: Path, text: str) -> None:
         raise
 
 
+def csv_safe(value: Any) -> Any:
+    """Prevent data fields from becoming formulas when a CSV is opened."""
+    if not isinstance(value, str):
+        return value
+    inspected = value.lstrip(" \t\r\n")
+    if inspected.startswith(("=", "+", "-", "@")) or value.startswith(("\t", "\r", "\n")):
+        return "'" + value
+    return value
+
+
 class ReviewStore:
     def __init__(self, shortlist_path: Path, state_path: Path):
         self.shortlist_path = shortlist_path.resolve()
@@ -93,6 +103,14 @@ class ReviewStore:
         self.candidates_by_id = {row["candidate_id"]: row for row in self.candidates}
         if len(self.candidates_by_id) != len(self.candidates):
             raise ReviewDataError("The shortlist contains duplicate candidate identities")
+        self._exports_need_recovery = self.state_path.exists()
+        self._export_warning: str | None = None
+        try:
+            self._recover_exports()
+        except ReviewDataError as exc:
+            # Keep the server available to report the state error without
+            # modifying either a corrupt file or one tied to another shortlist.
+            self._export_warning = str(exc)
 
     def _read_candidates(self) -> tuple[list[dict[str, str]], list[str]]:
         with self.shortlist_path.open("r", encoding="utf-8-sig", newline="") as stream:
@@ -144,7 +162,8 @@ class ReviewStore:
     def api_data(self) -> dict[str, Any]:
         with self._lock:
             state = self.load_state()
-            return {
+            self._recover_exports(state)
+            result = {
                 "candidates": self.candidates,
                 "decisions": state["decisions"],
                 "shortlist_sha256": self.shortlist_sha256,
@@ -152,8 +171,11 @@ class ReviewStore:
                 "approved_export_path": str(self.approved_export_path),
                 "rejected_export_path": str(self.rejected_export_path),
             }
+            if self._export_warning:
+                result["warning"] = self._export_warning
+            return result
 
-    def save_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def save_decision(self, payload: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
         candidate_key = payload.get("candidate_id")
         status = payload.get("status")
         note = payload.get("note", "")
@@ -178,8 +200,24 @@ class ReviewStore:
             }
             state["updated_at"] = decided_at
             atomic_write_text(self.state_path, json.dumps(state, indent=2, ensure_ascii=False) + "\n")
-            self._write_exports(state)
-            return state["decisions"][candidate_key]
+            self._exports_need_recovery = True
+            self._recover_exports(state)
+            return state["decisions"][candidate_key], self._export_warning
+
+    def _recover_exports(self, state: dict[str, Any] | None = None) -> None:
+        if not self._exports_need_recovery:
+            return
+        try:
+            current_state = state if state is not None else self.load_state()
+            self._write_exports(current_state)
+        except (OSError, UnicodeError) as exc:
+            self._export_warning = (
+                "The decision was saved, but CSV exports could not be refreshed. "
+                f"They will be retried on the next request: {exc}"
+            )
+            return
+        self._exports_need_recovery = False
+        self._export_warning = None
 
     def _write_exports(self, state: dict[str, Any]) -> None:
         export_fields = ["candidate_id", *self.csv_fields, "status", "note", "decided_at"]
@@ -198,7 +236,7 @@ class ReviewStore:
                     "note": decision.get("note", ""),
                     "decided_at": decision.get("decided_at", ""),
                 })
-                writer.writerow(export_row)
+                writer.writerow({key: csv_safe(value) for key, value in export_row.items()})
             output.append(buffer.value)
             atomic_write_text(path, "".join(output))
 
@@ -206,6 +244,7 @@ class ReviewStore:
         """Return a current download without weakening state fingerprint checks."""
         with self._lock:
             state = self.load_state()
+            self._recover_exports(state)
             if status == "all":
                 content = (json.dumps(state, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
                 return "photo-review-decisions.json", "application/json; charset=utf-8", content
@@ -225,7 +264,7 @@ class ReviewStore:
                     "note": decision.get("note", ""),
                     "decided_at": decision.get("decided_at", ""),
                 })
-                writer.writerow(export_row)
+                writer.writerow({key: csv_safe(value) for key, value in export_row.items()})
             filename = f"photo-review-{status}.csv"
             return filename, "text/csv; charset=utf-8", buffer.value.encode("utf-8")
 
@@ -280,6 +319,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         return parsed.scheme == "http" and parsed.netloc.lower() == host
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._loopback_host():
+            self._json(HTTPStatus.FORBIDDEN, {"error": "Only loopback requests are allowed"})
+            return
         parsed_request = urlsplit(self.path)
         path = parsed_request.path
         if path == "/api/data":
@@ -332,7 +374,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 raise ValueError("JSON body must be an object")
-            decision = self.review_server.store.save_decision(payload)
+            decision, warning = self.review_server.store.save_decision(payload)
         except json.JSONDecodeError:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "Request body is not valid JSON"})
             return
@@ -345,7 +387,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         except ReviewDataError as exc:
             self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
             return
-        self._json(HTTPStatus.OK, {"decision": decision})
+        response: dict[str, Any] = {"decision": decision}
+        if warning:
+            response["warning"] = warning
+        self._json(HTTPStatus.OK, response)
 
     def _serve_static(self, request_path: str) -> None:
         relative = "index.html" if request_path == "/" else unquote(request_path).lstrip("/")

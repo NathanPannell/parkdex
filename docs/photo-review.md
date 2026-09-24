@@ -12,7 +12,7 @@ python scripts/photo_review_server.py
 
 The script opens `http://127.0.0.1:8765/` in your browser. If it does not open automatically, visit that URL yourself. Keep the terminal open while reviewing; press Ctrl+C to stop the server. To use another port, pass `--port 8766`. The server binds to `127.0.0.1` only.
 
-The page groups candidates by park and shows a thumbnail, source page, original image, creator, license claim, license terms, and location lead. You can approve or reject each image, approve multiple images for one park, clear a decision, and add an optional note. A decision is written to disk after each click. Notes save when you leave their field. The page supports park search, status filters, previous/next navigation, and left/right arrow keys outside form fields.
+The page groups candidates by park and shows a thumbnail, source page, original image, creator, license claim, license terms, and location lead. You can approve or reject each image, approve multiple images for one park, clear a decision, and add an optional note. A decision is written to disk after each click. Notes save when you leave their field or choose **Save note now**; the browser warns if you try to close it with an unsaved note or decision. The page supports park search, status filters, previous/next navigation, and left/right arrow keys outside form fields.
 
 ## Saved files
 
@@ -25,6 +25,8 @@ The server writes these ignored local files after the first decision:
 | `.codex/photo-source-audit-v3/photo-review-rejected.csv` | Rejected candidates with all source fields and review notes. |
 
 The three download links at the bottom of the page provide copies for backup or sharing. The saved files remain available after you close the browser or restart the server. Codex can read the local JSON and CSV files later when you ask it to process or send the results. No results leave your computer automatically.
+
+The CSV files prefix spreadsheet-formula-like text with an apostrophe so opening them in a spreadsheet does not run source metadata or notes as formulas. The JSON source of truth keeps the original text.
 
 The reviewer refuses to mix decisions with a changed shortlist. If you intentionally replace the input, first keep a copy of the existing decisions and exports. You can point the server at another shortlist and state file with `--shortlist` and `--state`.
 

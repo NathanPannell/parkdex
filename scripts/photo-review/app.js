@@ -33,6 +33,7 @@ const state = {
   search: "",
   pending: new Set(),
   queues: new Map(),
+  dirtyNotes: new Set(),
   toastTimer: null,
 };
 
@@ -254,8 +255,20 @@ function candidateCard(candidate) {
   content.append(noteLabel);
   const noteStatus = document.createElement("p");
   noteStatus.className = "note-status";
-  noteStatus.textContent = "Saved when you leave this field";
+  noteStatus.textContent = "Notes save when you leave this field";
   content.append(noteStatus);
+  const saveNote = document.createElement("button");
+  saveNote.type = "button";
+  saveNote.className = "reset-button save-note-button";
+  saveNote.textContent = "Save note now";
+  saveNote.hidden = true;
+  content.append(saveNote);
+  note.addEventListener("input", () => {
+    state.dirtyNotes.add(candidate.candidate_id);
+    noteStatus.textContent = "Unsaved note";
+    saveNote.hidden = false;
+  });
+  saveNote.addEventListener("click", () => saveDecision(candidate, statusFor(candidate), note.value));
   note.addEventListener("blur", (event) => {
     if (event.relatedTarget?.closest(".card-actions, .reset-button")) return;
     if (note.value !== (state.decisions[candidate.candidate_id]?.note || "")) saveDecision(candidate, statusFor(candidate), note.value);
@@ -270,6 +283,17 @@ function renderCurrent() {
   if (!place) return;
   const counts = placeCounts(place);
   const visible = filteredPlaces();
+  if (!visible.length) {
+    ui.position.textContent = "0 of 0";
+    ui.previous.disabled = true;
+    ui.next.disabled = true;
+    ui.placeName.textContent = "No parks found";
+    ui.placeSummary.textContent = "Try another search or filter.";
+    ui.placeStatus.hidden = true;
+    ui.grid.replaceChildren();
+    return;
+  }
+  ui.placeStatus.hidden = false;
   const position = visible.findIndex((item) => item.id === place.id);
   ui.position.textContent = position >= 0 ? `${position + 1} of ${visible.length}` : `${state.places.findIndex((item) => item.id === place.id) + 1} of ${state.places.length}`;
   ui.previous.disabled = position <= 0;
@@ -314,10 +338,22 @@ function movePlace(delta) {
 }
 
 async function saveDecision(candidate, status, note) {
-  if (state.pending.has(candidate.candidate_id)) return;
+  const previous = state.queues.get(candidate.candidate_id) || Promise.resolve();
+  const operation = previous.catch(() => {}).then(() => performSave(candidate, status, note));
+  state.queues.set(candidate.candidate_id, operation);
+  try {
+    await operation;
+  } finally {
+    if (state.queues.get(candidate.candidate_id) === operation) state.queues.delete(candidate.candidate_id);
+  }
+}
+
+async function performSave(candidate, status, note) {
   state.pending.add(candidate.candidate_id);
   const card = [...ui.grid.children].find((item) => item.dataset.candidateId === candidate.candidate_id);
   card?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  const noteField = card?.querySelector(".review-note");
+  if (noteField) noteField.disabled = true;
   try {
     const response = await fetch("/api/decision", {
       method: "POST",
@@ -327,10 +363,12 @@ async function saveDecision(candidate, status, note) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `Save failed (${response.status})`);
     state.decisions[candidate.candidate_id] = result.decision;
+    state.dirtyNotes.delete(candidate.candidate_id);
     renderAll();
-    showToast(status === "approved" ? "Approval saved locally" : status === "rejected" ? "Rejection saved locally" : "Decision saved locally");
+    showToast(result.warning ? `Saved locally. ${result.warning}` : status === "approved" ? "Approval saved locally" : status === "rejected" ? "Rejection saved locally" : "Decision saved locally", Boolean(result.warning));
   } catch (error) {
     card?.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+    if (noteField) noteField.disabled = false;
     showToast(`Could not save: ${error.message}`, true);
   } finally {
     state.pending.delete(candidate.candidate_id);
@@ -359,6 +397,7 @@ async function load() {
     ui.loading.hidden = true;
     ui.content.hidden = false;
     renderAll();
+    if (data.warning) showToast(data.warning, true);
   } catch (error) {
     ui.loading.hidden = true;
     ui.error.hidden = false;
@@ -367,7 +406,7 @@ async function load() {
 }
 
 ui.retry.addEventListener("click", load);
-ui.search.addEventListener("input", () => { state.search = ui.search.value; renderRail(); renderCurrent(); });
+ui.search.addEventListener("input", () => { state.search = ui.search.value; renderAll(); });
 for (const button of ui.filters) button.addEventListener("click", () => {
   state.filter = button.dataset.filter;
   const first = filteredPlaces()[0];
@@ -381,5 +420,10 @@ document.addEventListener("keydown", (event) => {
   if (event.altKey || event.ctrlKey || event.metaKey || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
   if (event.key === "ArrowLeft") { event.preventDefault(); movePlace(-1); }
   if (event.key === "ArrowRight") { event.preventDefault(); movePlace(1); }
+});
+window.addEventListener("beforeunload", (event) => {
+  if (!state.dirtyNotes.size && !state.pending.size) return;
+  event.preventDefault();
+  event.returnValue = "";
 });
 load();

@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import http.client
 import sys
 import tempfile
 import threading
@@ -8,9 +9,11 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import photo_review_server
 from photo_review_server import ReviewDataError, ReviewHTTPServer, ReviewStore
 
 
@@ -146,6 +149,67 @@ class ReviewServerTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_http_rejects_non_loopback_host_for_api_export_and_static(self):
+        store = ReviewStore(self.shortlist, self.state)
+        server = ReviewHTTPServer(("127.0.0.1", 0), store, self.static)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for path in ("/api/data", "/api/export?status=all", "/"):
+                connection = http.client.HTTPConnection("127.0.0.1", server.server_port)
+                connection.putrequest("GET", path, skip_host=True)
+                connection.putheader("Host", "evil.example")
+                connection.endheaders()
+                response = connection.getresponse()
+                self.assertEqual(403, response.status, path)
+                response.read()
+                connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_export_failure_reports_warning_and_recovers_from_saved_json(self):
+        store = ReviewStore(self.shortlist, self.state)
+        key = store.candidates[0]["candidate_id"]
+        real_atomic_write = photo_review_server.atomic_write_text
+
+        def fail_csv(path, text):
+            if Path(path).suffix == ".csv":
+                raise OSError("temporary export failure")
+            return real_atomic_write(path, text)
+
+        with patch("photo_review_server.atomic_write_text", side_effect=fail_csv):
+            decision, warning = store.save_decision({"candidate_id": key, "status": "approved"})
+        self.assertEqual("approved", decision["status"])
+        self.assertIn("decision was saved", warning)
+        self.assertEqual("approved", json.loads(self.state.read_text(encoding="utf-8"))["decisions"][key]["status"])
+
+        data = store.api_data()
+        self.assertNotIn("warning", data)
+        with store.approved_export_path.open(encoding="utf-8", newline="") as stream:
+            self.assertEqual(["First"], [row["title"] for row in csv.DictReader(stream)])
+
+    def test_csv_exports_neutralize_formula_values_but_json_stays_raw(self):
+        store = ReviewStore(self.shortlist, self.state)
+        candidate = store.candidates[0]
+        candidate["title"] = "=HYPERLINK(\"https://evil.example\")"
+        candidate["creator"] = "  +cmd"
+        note = "@SUM(1+1)"
+        store.save_decision({"candidate_id": candidate["candidate_id"], "status": "approved", "note": note})
+
+        saved = json.loads(self.state.read_text(encoding="utf-8"))
+        self.assertEqual(note, saved["decisions"][candidate["candidate_id"]]["note"])
+        self.assertEqual("=HYPERLINK(\"https://evil.example\")", store.api_data()["candidates"][0]["title"])
+        with store.approved_export_path.open(encoding="utf-8", newline="") as stream:
+            row = next(csv.DictReader(stream))
+        self.assertEqual("'=HYPERLINK(\"https://evil.example\")", row["title"])
+        self.assertEqual("'  +cmd", row["creator"])
+        self.assertEqual("'@SUM(1+1)", row["note"])
+        _, _, download = store.export_bytes("approved")
+        downloaded = next(csv.DictReader(io.StringIO(download.decode("utf-8"))))
+        self.assertEqual("'=HYPERLINK(\"https://evil.example\")", downloaded["title"])
 
     def test_http_exports_csv_and_decision_json(self):
         store = ReviewStore(self.shortlist, self.state)

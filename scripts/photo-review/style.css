@@ -119,6 +119,7 @@ h1 { margin: 0; font-size: 1.55rem; line-height: 1.15; letter-spacing: -.025em; 
 .review-note { display: block; width: 100%; min-height: 48px; max-height: 150px; padding: 8px 10px; resize: vertical; border: 1px solid #a4b49f; border-radius: 8px; background: #fffef9; color: var(--forest); font-size: .8rem; }
 .review-note::placeholder { color: #637968; }
 .note-status { min-height: 16px; margin: 3px 0 0; color: #527158; font-size: .7rem; }
+.save-note-button { margin-top: 3px; }
 
 .review-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 24px 0 0; margin-top: 34px; border-top: 1px solid var(--line); }
 .review-footer h2 { margin: 0 0 5px; font-size: 1rem; }
