@@ -287,6 +287,8 @@ function createRailwayApiService(cwd, state, journalPath, token) {
       return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview API create" });
     },
     readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview API inventory" }), "Railway preview API inventory"),
+    maxReadAttempts: 20,
+    waitForRead: () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500),
   });
   updateJournal(journalPath, state, { status: "railway-api-created" });
 }
