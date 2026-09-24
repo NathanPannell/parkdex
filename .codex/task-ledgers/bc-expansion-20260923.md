@@ -25,6 +25,17 @@ Expand the Parkdex staging catalogue from Vancouver Island to all of British Col
 - Include only named parks with source-backed identity. Record missing boundary/photo coverage honestly; no synthetic visitor URLs or invented imagery.
 - Preserve canonical IDs for existing places and use published polygon geometry where possible.
 
-## Release journal
+## Progress, 2026-09-23
 
-Pending implementation and provider audit.
+- BC Parks and Parks Canada imports now produce 693 provincial and seven national records, with source polygons and preserved existing identities.
+- The ten broad list headings, BC map camera and land mask, verified BC Parks visitor links, five new national photos, and thirteen reviewed major-island identities are implemented.
+- Official Metro Vancouver, Central Okanagan, Fraser-Fort George, and province-wide greenspaces feeds have been researched and normalized. Regional park integration, complete data generation, and validation are in progress.
+- The province-wide greenspaces WFS and its ArcGIS mirror disagree materially. The importer records counts and IDs; individual regional inventories take precedence.
+- The baseline staging mobile list screenshot was captured. Preview, staging release, browser verification, and owned teardown are pending.
+
+## Integration checkpoint
+
+- Catalogue quality review now retains 1,030 places: 693 provincial, seven national, 293 regional, and 37 islands. The 293 regional records include 55 existing and 238 new entries from four official feeds.
+- All 198 existing place IDs remain present. The route manifest preserves all 198 published slugs and assigns unique routes to the new records.
+- The first 1,044-boundary build passed geometry and provenance validation. An audited source-ID exclusion list removed 14 unmistakable nonparks or ambiguous civic labels from the DataBC candidates; final 1,030-boundary generation is in progress.
+- Provider preflight found authenticated local GitHub, Railway, Neon, and Vercel credentials and verified target project identities. No preview resources have been created yet.
