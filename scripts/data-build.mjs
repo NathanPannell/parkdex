@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import { provincialNameCorrections } from './place-name-corrections.mjs';
 import { classifyBcRegion } from './bc-regions.mjs';
+import { BC_MAJOR_ISLANDS } from './bc-major-islands.mjs';
+import { fetchOfficialRegionalParks } from './bc-regional-catalogue.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -170,6 +172,10 @@ const curatedIslandRegions = new Map([
     'Gabriola Island', 'Galiano Island', 'Mayne Island', 'North Pender Island', 'Penelakut Island',
     'Saltspring Island', 'Saturna Island', 'South Pender Island', 'Thetis Island', 'Valdes Island',
   ].map((name) => [name, 'Gulf Islands']),
+  ...BC_MAJOR_ISLANDS.map(({ name, displayGroup }) => [name,
+    displayGroup === 'Haida Gwaii' || displayGroup === 'North Coast' ? 'North Coast & Haida Gwaii'
+      : displayGroup === 'Howe Sound' || displayGroup === 'Northern Strait of Georgia' ? 'South Coast'
+        : 'Central Coast']),
 ]);
 
 const islandNames = [
@@ -179,6 +185,7 @@ const islandNames = [
   'Quadra Island', 'Cortes Island', 'Read Island', 'Sonora Island', 'Maurelle Island',
   'Malcolm Island', 'Cormorant Island', 'Nootka Island', 'Flores Island', 'Meares Island',
   'Vargas Island',
+  ...BC_MAJOR_ISLANDS.map(({ name }) => name),
 ];
 
 function slugify(value) {
@@ -428,6 +435,27 @@ async function buildRdn() {
     });
 }
 
+async function buildOfficialRegional() {
+  const imported = await fetchOfficialRegionalParks();
+  const places = imported.features.map((feature) => {
+    const point = geometryRepresentative(feature.geometry);
+    const sourceName = feature.properties.sourceName;
+    const region = sourceName.includes('Metro Vancouver') ? 'South Coast'
+      : sourceName.includes('Central Okanagan') ? 'Thompson & Okanagan'
+        : sourceName.includes('Fraser-Fort George') ? 'Cariboo & Central Interior'
+          : classifyBcRegion(point.longitude, point.latitude);
+    if (point.method !== 'centroid') polygonInteriorFallbacks.push({ source: sourceName, name: feature.properties.name, method: point.method });
+    return {
+      id: feature.id, name: feature.properties.name, category: 'regional',
+      latitude: round(point.latitude), longitude: round(point.longitude), region,
+      description: `An officially mapped regional park in the ${region} collection. The pin represents its largest published polygon, not an entrance or trailhead.`,
+      sourceUrl: feature.properties.sourceUrl, sourceName,
+      sourceId: feature.properties.sourceId,
+    };
+  });
+  return { places, counts: imported.counts, excludedGreenspaces: imported.excludedGreenspaces };
+}
+
 function buildNational() {
   return [
     ['Pacific Rim National Park Reserve', 49.060406, -125.722799, 'West Coast', 'https://parks.canada.ca/pn-np/bc/pacificrim'],
@@ -508,10 +536,20 @@ async function buildIslands() {
     if (!feature) throw new Error(`No exact official island result for ${requestedName}`);
     const p = feature.properties;
     const name = p.name;
+    const reviewed = BC_MAJOR_ISLANDS.find((candidate) => candidate.name === name);
+    if (reviewed) {
+      // The URI suffix is the BCGN name-page ID; feature.id is the separate
+      // source identity retained in place.sourceId below.
+      const nameIdMatch = String(p.uri).match(/\/names\/(\d+)$/);
+      const bcgnNameId = nameIdMatch ? Number(nameIdMatch[1]) : NaN;
+      if (bcgnNameId !== reviewed.bcgnNameId || Number(p.feature.id) !== reviewed.bcgnFeatureId) {
+        throw new Error(`Official name identity changed for ${name}: name ${p.uri}, feature ${p.feature.id}`);
+      }
+    }
     places.push({
       id: `island-${slugify(name)}`, name, category: 'island', latitude: round(Number(p.featurePoint.lat)),
       longitude: round(Number(p.featurePoint.lon)), region: curatedIslandRegions.get(name),
-      description: `${p.relativeLocation || 'An officially named island near Vancouver Island'}. The pin is the official approximate centre of the feature.`,
+      description: `${p.relativeLocation || 'An officially named island in British Columbia'}. The pin is the official approximate centre of the feature.`,
       sourceUrl: `https://${p.uri}.html`, sourceName: sources.bcNames.name, sourceId: String(p.feature.id),
     });
   }
@@ -565,20 +603,23 @@ function validate(places) {
   }
 }
 
-const [provincial, crd, cvrd, rdn, islands] = await Promise.all([buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildIslands()]);
-const places = [...buildNational(), ...buildVerifiedRegionalPoints(), ...provincial.places, ...crd, ...cvrd, ...rdn, ...islands]
+const [provincial, crd, cvrd, rdn, officialRegional, islands] = await Promise.all([
+  buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOfficialRegional(), buildIslands(),
+]);
+const places = [...buildNational(), ...buildVerifiedRegionalPoints(), ...provincial.places,
+  ...crd, ...cvrd, ...rdn, ...officialRegional.places, ...islands]
   .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'en-CA'));
 const generatedDescriptionEntries = {};
 for (const place of places) {
   let entry = placeDescriptionEntries.get(place.id);
-  if (!entry && ['provincial', 'national'].includes(place.category)) {
+  if (!entry && ['provincial', 'national', 'island', 'regional'].includes(place.category)) {
     entry = {
       status: 'source-derived',
       description: place.description,
-      sourceName: place.category === 'provincial' ? 'BC Parks / DataBC' : 'Parks Canada',
+      sourceName: place.category === 'provincial' ? 'BC Parks / DataBC' : place.category === 'national' ? 'Parks Canada' : place.category === 'island' ? sources.bcNames.name : place.sourceName,
       sourceTitle: place.category === 'provincial' ? 'Parks, Ecological Reserves and Protected Areas' : place.name,
       sourceUrl: place.sourceUrl,
-      sourceSection: place.category === 'provincial' ? 'Designation and geometry attributes' : 'National park listing',
+      sourceSection: place.category === 'provincial' ? 'Designation and geometry attributes' : place.category === 'national' ? 'National park listing' : place.category === 'island' ? 'Official island name and approximate centre' : 'Official regional park GIS record and boundary',
       reviewedAt: new Date().toISOString().slice(0, 10),
     };
     placeDescriptionEntries.set(place.id, entry);
@@ -607,7 +648,9 @@ await fs.writeFile(path.join(root, 'frontend', 'lib', 'place-description-sources
 await fs.writeFile(path.join(dataDir, 'coverage-audit.json'), `${JSON.stringify({
   generatedAt: new Date().toISOString(), counts: Object.fromEntries(['national', 'provincial', 'regional', 'island'].map((category) => [category, places.filter((p) => p.category === category).length])),
   bcParksBroadBboxFeatures: provincial.sourceFeatures,
-  polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length,
+  polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length + officialRegional.places.length,
+  officialRegionalSourceCounts: officialRegional.counts,
+  excludedOfficialGreenspaces: officialRegional.excludedGreenspaces,
   polygonInteriorFallbacks,
   excludedCvrdRegionalParks: [...cvrdEligibilityExclusions].map(([name, evidence]) => ({ name, ...evidence })),
   scopeRetirements: [],

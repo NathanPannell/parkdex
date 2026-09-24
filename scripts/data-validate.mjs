@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hasBalancedNameDelimiters, provincialNameCorrections } from './place-name-corrections.mjs';
+import { officialRegionalSources } from './bc-regional-catalogue.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json'), 'utf8'));
@@ -202,9 +203,24 @@ const polygonSources = new Set([
   'Capital Regional District — Park GIS layer',
   'Cowichan Valley Regional District — Parks GIS layer',
   'Regional District of Nanaimo — Regional Parks spatial data',
+  ...Object.values(officialRegionalSources).map((source) => source.name),
 ]);
-const polygonPinCount = places.filter((place) => polygonSources.has(place.sourceName)).length;
+const polygonPinCount = places.filter((place) => polygonSources.has(place.sourceName)
+  || place.sourceName.endsWith(' via BC Local and Regional Greenspaces')).length;
 if (audit.polygonPinsVerified !== polygonPinCount) throw new Error('polygon pin containment audit does not match catalogue');
+const expectedRegionalCounts = { metro: 24, rdco: 30, rdffg: 11, greenspaces: 173 };
+for (const [key, expectedCount] of Object.entries(expectedRegionalCounts)) {
+  const sourceName = officialRegionalSources[key].name;
+  const actualCount = places.filter((place) => key === 'greenspaces'
+    ? place.sourceName.endsWith(' via BC Local and Regional Greenspaces')
+    : place.sourceName === sourceName).length;
+  if (audit.officialRegionalSourceCounts?.[key] !== expectedCount || actualCount !== expectedCount) {
+    throw new Error(`${sourceName}: reviewed regional source count differs from catalogue`);
+  }
+}
+if (audit.excludedOfficialGreenspaces?.length !== 17) {
+  throw new Error('Reviewed nonpark and trail exclusions differ from catalogue audit');
+}
 if (!Array.isArray(audit.polygonInteriorFallbacks)
     || !audit.polygonInteriorFallbacks.some((entry) => entry.source === 'BC Parks' && entry.name === 'Cape Scott Park')) {
   throw new Error('polygon interior fallback audit is missing Cape Scott Park');

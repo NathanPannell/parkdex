@@ -1,3 +1,6 @@
+import { BC_MAJOR_ISLANDS } from './bc-major-islands.mjs';
+import { officialRegionalSources } from './bc-regional-catalogue.mjs';
+
 export const boundarySources = Object.freeze({
   bcParks: Object.freeze({
     name: 'BC Parks / DataBC — TANTALIS protected areas',
@@ -47,6 +50,10 @@ export const osmObjects = new Map([
   ['island-south-pender-island', 'R8335965'], ['island-thetis-island', 'R5553191'],
   ['island-valdes-island', 'R8338288'],
   ['island-vargas-island', 'R8371770'],
+  ...BC_MAJOR_ISLANDS.map(({ name, osmRelationId }) => [
+    `island-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    `R${osmRelationId}`,
+  ]),
   ['regional-bere-point-regional-park', 'W449016643'],
   ['regional-kwaksistah-regional-park', 'W827164115'],
   ['regional-little-huson-cave-regional-park', 'W816998556'],
@@ -104,8 +111,11 @@ export const expectedSourceCounts = Object.freeze({
   [boundarySources.bcParks.name]: 693,
   [boundarySources.crd.name]: 34,
   [boundarySources.cvrd.name]: 3,
+  [officialRegionalSources.metro.name]: 24,
   [boundarySources.national.name]: 7,
-  [boundarySources.osm.name]: 28,
+  [boundarySources.osm.name]: 28 + BC_MAJOR_ISLANDS.length,
+  [officialRegionalSources.rdco.name]: 30,
+  [officialRegionalSources.rdffg.name]: 11,
   [boundarySources.rdn.name]: 14,
 });
 
@@ -118,6 +128,15 @@ export function expectedBoundarySource(place) {
   if (place.sourceName === boundarySources.crd.name) return { source: boundarySources.crd, sourceId: crdSourceIds.get(place.id) };
   if (place.sourceName === boundarySources.cvrd.name) return { source: boundarySources.cvrd, sourceId: place.sourceId == null ? null : String(place.sourceId) };
   if (place.sourceName === boundarySources.rdn.name) return { source: boundarySources.rdn, sourceId: `rdn-${place.id.slice('regional-'.length)}` };
+  for (const source of Object.values(officialRegionalSources)) {
+    if (place.sourceName === source.name) return { source, sourceId: String(place.sourceId) };
+  }
+  if (place.sourceName.endsWith(' via BC Local and Regional Greenspaces')) {
+    return {
+      source: { name: place.sourceName, page: officialRegionalSources.greenspaces.page },
+      sourceId: String(place.sourceId),
+    };
+  }
   return null;
 }
 
@@ -130,11 +149,17 @@ export function validateBoundarySource(place, properties) {
 }
 
 export function countBoundarySources(features) {
-  return Object.fromEntries(Object.keys(expectedSourceCounts).map((name) => [name, features.filter((feature) => feature.properties.sourceName === name).length]));
+  const names = [...new Set([...Object.keys(expectedSourceCounts), ...features.map((feature) => feature.properties.sourceName)])].sort();
+  return Object.fromEntries(names.map((name) => [name, features.filter((feature) => feature.properties.sourceName === name).length]));
 }
 
 export function validateBoundarySourceCounts(features, auditCounts) {
   const actual = countBoundarySources(features);
-  if (JSON.stringify(actual) !== JSON.stringify(expectedSourceCounts)) throw new Error('boundary source counts differ from reviewed contract');
+  for (const [name, count] of Object.entries(expectedSourceCounts)) {
+    if (actual[name] !== count) throw new Error('boundary source counts differ from reviewed contract');
+  }
+  const greenspaceCount = Object.entries(actual).filter(([name]) => name.endsWith(' via BC Local and Regional Greenspaces'))
+    .reduce((sum, [, count]) => sum + count, 0);
+  if (greenspaceCount !== 173) throw new Error('boundary greenspace counts differ from reviewed contract');
   if (JSON.stringify(actual) !== JSON.stringify(auditCounts)) throw new Error('boundary audit source counts mismatch');
 }

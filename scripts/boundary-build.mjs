@@ -6,6 +6,7 @@ import { inflateRawSync } from 'node:zlib';
 import booleanValid from '@turf/boolean-valid';
 
 import { boundarySources as sources, osmObjects } from './boundary-sources.mjs';
+import { fetchOfficialRegionalParks, officialRegionalSources } from './bc-regional-catalogue.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data');
@@ -241,6 +242,19 @@ async function buildNational() {
   });
 }
 
+async function buildOfficialRegional() {
+  const imported = await fetchOfficialRegionalParks();
+  const sourceByName = new Map(Object.values(officialRegionalSources).map((source) => [source.name, source]));
+  return imported.features.map((feature) => {
+    const source = sourceByName.get(feature.properties.sourceName)
+      ?? (feature.properties.sourceName.endsWith(' via BC Local and Regional Greenspaces')
+        ? { name: feature.properties.sourceName, page: officialRegionalSources.greenspaces.page }
+        : null);
+    if (!source) throw new Error(`${feature.id}: unknown official regional boundary source`);
+    return makeFeature(requirePlace(feature.id), feature.geometry, source, feature.properties.sourceId);
+  });
+}
+
 async function buildOsm() {
   const url = new URL(sources.osm.lookup);
   url.searchParams.set('osm_ids', [...osmObjects.values()].join(','));
@@ -267,7 +281,9 @@ function coordinateStats(geometry) {
   };
 }
 
-const groups = await Promise.all([buildNational(), buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOsm()]);
+const groups = await Promise.all([
+  buildNational(), buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOfficialRegional(), buildOsm(),
+]);
 const features = groups.flat().sort((a, b) => a.properties.id.localeCompare(b.properties.id));
 const emittedIds = new Set(features.map((feature) => feature.properties.id));
 const missingIds = places.filter((place) => !emittedIds.has(place.id)).map((place) => place.id);
