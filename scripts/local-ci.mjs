@@ -92,6 +92,7 @@ function run(label, command, args, cwd = root, extraEnv = {}) {
 let status = "success";
 let failure = "";
 try {
+  run("photo source audit tests", "python", ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_photo_source*.py", "-q"]);
   if (suite === "all" || suite === "backend") {
     const databaseName = `parkdex_ci_${process.pid}_${Date.now()}_${randomBytes(4).toString("hex")}`;
     const databaseUrl = `${databaseAdminUrl.slice(0, databaseAdminUrl.lastIndexOf("/") + 1)}${databaseName}`;
