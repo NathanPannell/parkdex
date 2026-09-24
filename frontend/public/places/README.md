@@ -25,7 +25,7 @@ Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wid
 | East Sooke Regional Park | [East Sooke Park](https://commons.wikimedia.org/wiki/File:East_Sooke_Park_BC.jpg) | Brandon Godfrey | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/) |
 | Little Huson Cave Regional Park | [Natural Bridge](https://commons.wikimedia.org/wiki/File:Natural_Bridge_(28723312295).jpg) | David Stanley | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/) |
 
-The [expanded catalogue credit index](./CATALOGUE_CREDITS.md) lists photos by coverage batch. The 2026-09-23 provincial parks batch and source evidence are recorded in [the photo batch ledger](../../../.codex/task-ledgers/photo-batch-20260923.md). Ordinary thumbnail contexts use the local text-free tree placeholder when a park has no verified, freely licensed image; group members omit missing media and place details elevate their factual metadata instead. The task ledger links the search report for all reviewed gaps.
+The [expanded catalogue credit index](./CATALOGUE_CREDITS.md) lists photos by coverage batch. Each catalogue record includes its original file and location evidence. Ordinary thumbnail contexts use the local text-free tree placeholder when a park has no verified, freely licensed image; group members omit missing media and place details elevate their factual metadata instead.
 
 To contribute a photo:
 
