@@ -15,8 +15,8 @@ const appPublicUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://web.parkdex.app
 
 export const metadata: Metadata = {
   metadataBase: new URL(appPublicUrl),
-  title: "Parkdex · Vancouver Island field guide",
-  description: "Collect the parks and major islands of Vancouver Island on a playful interactive map.",
+  title: "Parkdex · British Columbia field guide",
+  description: "Collect the parks and major islands of British Columbia on a playful interactive map.",
   applicationName: "Parkdex",
   alternates: { canonical: "/" },
   icons: {
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "Parkdex · Vancouver Island field guide",
-    description: "Collect Vancouver Island parks and major islands in your Parkdex.",
+    title: "Parkdex · British Columbia field guide",
+    description: "Collect British Columbia parks and major islands in your Parkdex.",
     url: appPublicUrl,
     siteName: "Parkdex",
     type: "website",
