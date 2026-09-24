@@ -34,6 +34,8 @@ const state = {
   pending: new Set(),
   queues: new Map(),
   dirtyNotes: new Set(),
+  draftNotes: new Map(),
+  failedDecisions: new Set(),
   toastTimer: null,
 };
 
@@ -250,27 +252,30 @@ function candidateCard(candidate) {
   note.rows = 2;
   note.maxLength = 1000;
   note.placeholder = "Why this image fits or does not fit";
-  note.value = state.decisions[candidate.candidate_id]?.note || "";
+  note.value = state.draftNotes.has(candidate.candidate_id)
+    ? state.draftNotes.get(candidate.candidate_id)
+    : state.decisions[candidate.candidate_id]?.note || "";
   noteLabel.append(note);
   content.append(noteLabel);
   const noteStatus = document.createElement("p");
   noteStatus.className = "note-status";
-  noteStatus.textContent = "Notes save when you leave this field";
+  noteStatus.textContent = state.dirtyNotes.has(candidate.candidate_id) ? "Unsaved note" : "Notes save when you leave this field";
   content.append(noteStatus);
   const saveNote = document.createElement("button");
   saveNote.type = "button";
   saveNote.className = "reset-button save-note-button";
   saveNote.textContent = "Save note now";
-  saveNote.hidden = true;
+  saveNote.hidden = !state.dirtyNotes.has(candidate.candidate_id);
   content.append(saveNote);
   note.addEventListener("input", () => {
     state.dirtyNotes.add(candidate.candidate_id);
+    state.draftNotes.set(candidate.candidate_id, note.value);
     noteStatus.textContent = "Unsaved note";
     saveNote.hidden = false;
   });
   saveNote.addEventListener("click", () => saveDecision(candidate, statusFor(candidate), note.value));
   note.addEventListener("blur", (event) => {
-    if (event.relatedTarget?.closest(".card-actions, .reset-button")) return;
+    if (event.relatedTarget && card.contains(event.relatedTarget) && event.relatedTarget.closest(".card-actions, .reset-button")) return;
     if (note.value !== (state.decisions[candidate.candidate_id]?.note || "")) saveDecision(candidate, statusFor(candidate), note.value);
   });
 
@@ -363,10 +368,15 @@ async function performSave(candidate, status, note) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `Save failed (${response.status})`);
     state.decisions[candidate.candidate_id] = result.decision;
-    state.dirtyNotes.delete(candidate.candidate_id);
+    state.failedDecisions.delete(candidate.candidate_id);
+    if (state.draftNotes.get(candidate.candidate_id) === note) {
+      state.draftNotes.delete(candidate.candidate_id);
+      state.dirtyNotes.delete(candidate.candidate_id);
+    }
     renderAll();
     showToast(result.warning ? `Saved locally. ${result.warning}` : status === "approved" ? "Approval saved locally" : status === "rejected" ? "Rejection saved locally" : "Decision saved locally", Boolean(result.warning));
   } catch (error) {
+    state.failedDecisions.add(candidate.candidate_id);
     card?.querySelectorAll("button").forEach((button) => { button.disabled = false; });
     if (noteField) noteField.disabled = false;
     showToast(`Could not save: ${error.message}`, true);
@@ -422,7 +432,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowRight") { event.preventDefault(); movePlace(1); }
 });
 window.addEventListener("beforeunload", (event) => {
-  if (!state.dirtyNotes.size && !state.pending.size) return;
+  if (!state.dirtyNotes.size && !state.pending.size && !state.failedDecisions.size) return;
   event.preventDefault();
   event.returnValue = "";
 });
