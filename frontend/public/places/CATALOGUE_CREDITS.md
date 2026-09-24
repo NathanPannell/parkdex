@@ -103,7 +103,7 @@ The entries below record the source review date for each batch. The 2026-09-11 c
 
 ## 2026-09-23 notable provincial parks batch
 
-These ten local WebP pairs were checked against the Commons source pages and file metadata on 2026-09-23. The catalogue and [batch ledger](../../../.codex/task-ledgers/photo-batch-20260923.md) retain the original asset links and location evidence.
+These ten local WebP pairs were checked against the Commons source pages and file metadata on 2026-09-23. The catalogue retains the original asset links and location evidence.
 
 | Place | Wikimedia Commons source | Creator | License |
 | --- | --- | --- | --- |
