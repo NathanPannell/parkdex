@@ -4,17 +4,17 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { cameraPaddingWithContentMargin } from "@/lib/map-fit";
 import {
   cameraViewDiffers,
-  collectionData,
   loadPostcardPhotoUrl,
+  mapViewportSnapshot,
   measuredCameraPadding,
   postcardMarkerCoordinates,
   postcardPhotoKey,
   POSTCARD_MARKER_FOOTPRINT,
   POSTCARD_MARKER_MIN_ZOOM,
   projectPostcardMarker,
-  visiblePlaces,
   type MapCameraSnapshot,
 } from "./park-map";
+import { placeMarkerData, visiblePlaces } from "@/lib/map-presentation";
 
 const overview: MapCameraSnapshot = {
   longitude: -125.25,
@@ -81,6 +81,17 @@ describe("map reset visibility state", () => {
   });
 });
 
+describe("map viewport reporting", () => {
+  it("reports current geographic bounds and zoom to the application controller", () => {
+    const map = {
+      getBounds: () => ({ getWest: () => -125, getSouth: () => 48, getEast: () => -123, getNorth: () => 50 }),
+      getZoom: () => 9.25,
+    } as unknown as MapLibreMap;
+
+    expect(mapViewportSnapshot(map)).toEqual({ west: -125, south: 48, east: -123, north: 50, zoom: 9.25 });
+  });
+});
+
 describe("map place visibility and progress mode", () => {
   const unvisited = {
     ...place,
@@ -93,7 +104,7 @@ describe("map place visibility and progress mode", () => {
 
   it.each(["explored", "discover"] as const)("keeps unvisited markers in %s mode", (mode) => {
     expect(visiblePlaces(places, visited, mode)).toEqual(places);
-    expect(collectionData(places, visited, mode, new Set()).features.map((feature) => feature.properties?.id)).toEqual([
+    expect(placeMarkerData(places, visited, new Set()).features.map((feature) => feature.properties.id)).toEqual([
       place.id,
       unvisited.id,
     ]);
@@ -102,8 +113,7 @@ describe("map place visibility and progress mode", () => {
   it("honors the externally supplied place subset in either mode", () => {
     const suppliedFilter = [unvisited];
 
-    expect(collectionData(suppliedFilter, visited, "explored", new Set()).features.map((feature) => feature.properties?.id)).toEqual([unvisited.id]);
-    expect(collectionData(suppliedFilter, visited, "discover", new Set()).features.map((feature) => feature.properties?.id)).toEqual([unvisited.id]);
+    expect(placeMarkerData(suppliedFilter, visited, new Set()).features.map((feature) => feature.properties.id)).toEqual([unvisited.id]);
   });
 });
 

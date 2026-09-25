@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Place } from "./places";
 import { registerNativePlatformStorage, resetPlatformStorageForTests, type KeyValueStore } from "./platform-storage";
-import { accountGroupsCacheKey, accountGroupsOutboxKey, useGroups } from "./use-groups";
+import { accountGroupsCacheKey, accountGroupsOutboxKey, accountGroupsResetKey, useGroups } from "./use-groups";
 
 const place: Place = {
   id: "park-1",
@@ -159,6 +159,7 @@ describe("useGroups account isolation", () => {
     }));
     await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["old-group"]));
 
+    await act(async () => { await result.current.prepareForReset(); });
     let refreshing!: Promise<void>;
     act(() => { refreshing = result.current.refreshAfterReset(); });
     await waitFor(() => expect(result.current.groups).toEqual([]));
@@ -168,6 +169,102 @@ describe("useGroups account isolation", () => {
     });
     expect(result.current.groups.map((group) => group.id)).toEqual(["new-wishlist"]);
     expect(result.current.selectedGroupId).toBeNull();
+  });
+
+  it("waits for an active collection mutation before allowing progress reset", async () => {
+    const mutation = deferred<Response>();
+    const request = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/groups") return json([{ id: "coast", name: "Coast", placeIds: [] }]);
+      if (init?.method === "POST") return mutation.promise;
+      return json([{ id: "coast", name: "Coast", placeIds: [place.id] }]);
+    });
+    const { result } = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [place],
+      request,
+    }));
+    await waitFor(() => expect(result.current.groups.map((group) => group.id)).toEqual(["coast"]));
+
+    let changing!: Promise<void>;
+    act(() => { changing = result.current.addPlace("coast", place.id); });
+    await waitFor(() => expect(request).toHaveBeenCalledWith(
+      "/api/groups/coast/places",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    let preparing!: Promise<void>;
+    act(() => { preparing = result.current.prepareForReset(); });
+    await waitFor(() => expect(result.current.resetPreparationPending).toBe(true));
+    let prepared = false;
+    void preparing.then(() => { prepared = true; });
+    await act(async () => { await Promise.resolve(); });
+    expect(prepared).toBe(false);
+
+    await act(async () => {
+      mutation.resolve(await json([{ id: "coast", name: "Coast", placeIds: [place.id] }]));
+      await Promise.all([changing, preparing]);
+    });
+    expect(result.current.resetPreparationPending).toBe(true);
+    expect(prepared).toBe(true);
+  });
+
+  it("keeps a committed reset barrier until stale cache and membership outbox are both removed", async () => {
+    const credentials = memoryStore();
+    const accountId = "account-a";
+    const journal = memoryStore({
+      [accountGroupsCacheKey(accountId)]: JSON.stringify([{ id: "old", name: "Old", placeIds: [] }]),
+      [accountGroupsOutboxKey(accountId)]: JSON.stringify({ old: { "park-1": { included: true, revision: 1 } } }),
+      [accountGroupsResetKey(accountId)]: JSON.stringify({ phase: "committed" }),
+    });
+    let failOutboxRemoval = true;
+    const remove = journal.removeItem;
+    journal.removeItem = vi.fn(async (key: string) => {
+      if (failOutboxRemoval && key === accountGroupsOutboxKey(accountId)) throw new Error("storage unavailable");
+      await remove(key);
+    });
+    setNative();
+    registerNativePlatformStorage(async () => ({ credentials, journal }));
+    const request = vi.fn((path: string, init?: RequestInit) => init?.method
+      ? failed(500, "unexpected mutation")
+      : json([{ id: "wishlist", name: "Wishlist", isWishlist: true, placeIds: [] }]));
+    const first = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: accountId,
+      places: [place],
+      request,
+    }));
+    await waitFor(() => expect(first.result.current.resetCleanupRequired).toBe(true));
+    expect(first.result.current.groups).toEqual([]);
+    expect(request).not.toHaveBeenCalled();
+    expect(journal.values.has(accountGroupsOutboxKey(accountId))).toBe(true);
+    expect(journal.values.get(accountGroupsResetKey(accountId))).toBe(JSON.stringify({ phase: "committed" }));
+    first.unmount();
+
+    resetPlatformStorageForTests();
+    registerNativePlatformStorage(async () => ({ credentials, journal }));
+    const restarted = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: accountId,
+      places: [place],
+      request,
+    }));
+    await waitFor(() => expect(restarted.result.current.resetCleanupRequired).toBe(true));
+    expect(restarted.result.current.groups).toEqual([]);
+    expect(request).not.toHaveBeenCalled();
+    expect(journal.values.has(accountGroupsOutboxKey(accountId))).toBe(true);
+
+    failOutboxRemoval = false;
+    await act(async () => { await restarted.result.current.retry(); });
+    await waitFor(() => expect(restarted.result.current.groups.map((group) => group.id)).toEqual(["wishlist"]));
+    expect(JSON.parse(journal.values.get(accountGroupsCacheKey(accountId)) ?? "null")).toEqual([
+      expect.objectContaining({ id: "wishlist", isWishlist: true, placeIds: [] }),
+    ]);
+    expect(JSON.parse(journal.values.get(accountGroupsOutboxKey(accountId)) ?? "null")).toEqual({});
+    expect(journal.values.has(accountGroupsResetKey(accountId))).toBe(false);
+    expect(request.mock.calls.map(([path]) => path)).toEqual(["/api/groups"]);
   });
 });
 

@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlaceImage } from "./place-image";
 
 vi.mock("next/image", () => ({
-  default: ({ preload, alt = "", ...props }: ImgHTMLAttributes<HTMLImageElement> & { preload?: boolean }) => (
+  default: ({ preload, unoptimized, alt = "", ...props }: ImgHTMLAttributes<HTMLImageElement> & { preload?: boolean; unoptimized?: boolean }) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img alt={alt} data-preload={preload ? "true" : undefined} {...props} />
+    <img alt={alt} data-preload={preload ? "true" : undefined} data-unoptimized={unoptimized ? "true" : undefined} {...props} />
   ),
 }));
 
@@ -45,6 +45,21 @@ describe("PlaceImage", () => {
     expect(screen.getByRole("link", { name: "Original" }).getAttribute("href")).toContain("upload.wikimedia.org");
     expect(screen.getByRole("link", { name: "CC BY-SA 3.0" }).getAttribute("href")).toContain("creativecommons.org");
     expect(screen.getByText(/Changes: Resized without upscaling, converted to WebP/)).toBeTruthy();
+  });
+
+  it("uses the cached full-photo URL while retaining the verified photo credits", () => {
+    render(
+      <PlaceImage
+        place={{ id: "provincial-artlish-caves-park", name: "Artlish Caves Park" }}
+        variant="card"
+        photoUrl="blob:cached-full-photo"
+      />,
+    );
+
+    const image = screen.getByRole("img", { name: /rocky entrance/i });
+    expect(image.getAttribute("src")).toBe("blob:cached-full-photo");
+    expect(image.getAttribute("data-unoptimized")).toBe("true");
+    expect(screen.getByRole("link", { name: "Ian mckenzie" }).getAttribute("href")).toContain("commons.wikimedia.org");
   });
 
   it("uses the text-free tree placeholder when no verified photo exists", () => {

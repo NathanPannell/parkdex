@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -31,6 +31,7 @@ class Place(BaseModel):
 class VisitClaimCapability(BaseModel):
     supported: bool = True
     enforcement: Literal["compatible", "required"]
+    offline_supported: bool = Field(default=False, serialization_alias="offlineSupported")
 
 
 class PlaceCollection(BaseModel):
@@ -159,6 +160,27 @@ class CreateClaimResponse(BaseModel):
     visited_count: int = Field(serialization_alias="visitedCount")
     visited_at: datetime = Field(serialization_alias="visitedAt")
     claim: VisitClaim
+
+
+class OfflineClaimGrantResponse(BaseModel):
+    grant_token: str = Field(serialization_alias="grantToken")
+    issued_at: datetime = Field(serialization_alias="issuedAt")
+    expires_at: datetime = Field(serialization_alias="expiresAt")
+    boundary_version: str = Field(serialization_alias="boundaryVersion")
+
+
+class OfflineClaimRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    requestId: UUID
+    grantToken: str = Field(min_length=43, max_length=43)
+    expectedPlaceId: str = Field(min_length=1, max_length=200)
+    location: ClaimLocation
+
+
+class OfflinePlaceBundle(BaseModel):
+    place: Place
+    boundary: dict[str, Any] | None
+    boundary_version: str = Field(serialization_alias="boundaryVersion")
 
 
 class VisitPhoto(BaseModel):

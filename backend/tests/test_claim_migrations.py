@@ -89,3 +89,26 @@ def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
         sql = (MIGRATION_DIR / name).read_text(encoding="utf-8").upper()
         assert "DROP TABLE" not in sql
         assert "DROP COLUMN" not in sql
+
+
+def test_offline_claim_migration_is_additive_and_account_scoped():
+    sql = (MIGRATION_DIR / "0025_add_offline_claims.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_grants" in sql
+    assert "token_hash CHAR(64) PRIMARY KEY" in sql
+    assert "REFERENCES accounts(id) ON DELETE CASCADE" in sql
+    assert "boundary_version CHAR(64) NOT NULL" in sql
+    assert "INTERVAL '30 days'" in sql
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_requests" in sql
+    assert "PRIMARY KEY (account_id, request_id)" in sql
+    assert "request_fingerprint CHAR(64) NOT NULL" in sql
+    assert "confirmation JSONB NOT NULL" in sql
+    assert "invalidated_at TIMESTAMPTZ" in sql
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_undo_tombstones" in sql
+    assert "PRIMARY KEY (account_id, place_id)" in sql
+    assert "REFERENCES accounts(id) ON DELETE CASCADE" in sql
+    assert "place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE" in sql
+    assert "undone_at TIMESTAMPTZ NOT NULL DEFAULT NOW()" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "DROP COLUMN" not in sql.upper()

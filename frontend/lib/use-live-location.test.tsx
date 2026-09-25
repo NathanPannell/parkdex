@@ -17,10 +17,13 @@ const sample = (capturedAtEpochMs = Date.now(), accuracyMeters = 7): LocationSam
 });
 
 let restore: () => void = () => undefined;
+let restoreNetworkState: () => void = () => undefined;
 
 afterEach(() => {
   cleanup();
   restore();
+  restoreNetworkState();
+  restoreNetworkState = () => undefined;
   publishNativeAppState(true);
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -444,6 +447,45 @@ describe("useLiveLocation", () => {
 });
 
 describe("useLiveClaimRecommendation", () => {
+  it("checks immediately on offline and reconnect transitions without periodic offline retries", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-16T12:00:00Z"));
+    const onlineDescriptor = Object.getOwnPropertyDescriptor(navigator, "onLine");
+    restoreNetworkState = () => {
+      if (onlineDescriptor) Object.defineProperty(navigator, "onLine", onlineDescriptor);
+      else Reflect.deleteProperty(navigator, "onLine");
+    };
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    const recommend = vi.fn().mockResolvedValue({ status: "none" as const });
+    const location = sample();
+    renderHook(() => useLiveClaimRecommendation({
+      enabled: true,
+      sessionKey: "account-1",
+      location,
+      recommend,
+    }));
+    await act(async () => { await Promise.resolve(); });
+    expect(recommend).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    act(() => window.dispatchEvent(new Event("offline")));
+    await act(async () => { await Promise.resolve(); });
+    expect(navigator.onLine).toBe(false);
+    expect(recommend).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    expect(navigator.onLine).toBe(true);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(recommend).toHaveBeenCalledTimes(3);
+    restoreNetworkState();
+    restoreNetworkState = () => undefined;
+  });
+
   it("checks immediately and never calls the server more often than every 30 seconds", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-16T12:00:00Z"));

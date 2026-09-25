@@ -11,6 +11,7 @@ type PlaceImageProps = {
   preload?: boolean;
   className?: string;
   showCredit?: boolean;
+  photoUrl?: string | null;
 };
 
 export function PlaceImage({
@@ -20,6 +21,7 @@ export function PlaceImage({
   preload = false,
   className = "",
   showCredit = true,
+  photoUrl = null,
 }: PlaceImageProps) {
   const image = getPlaceImage(place.id);
   const rootClassName = `place-image place-image--${variant}${className ? ` ${className}` : ""}`;
@@ -67,11 +69,12 @@ export function PlaceImage({
       <span className={rootClassName}>
         <Image
           className="place-image__photo"
-          src={asset.src}
+          src={photoUrl ?? asset.src}
           alt={image.alt}
           width={asset.width}
           height={asset.height}
           sizes={sizes ?? "72px"}
+          {...(photoUrl ? { unoptimized: true } : {})}
           {...(preload ? { preload: true } : { loading: "lazy" as const })}
         />
       </span>
@@ -82,11 +85,12 @@ export function PlaceImage({
     <figure className={rootClassName}>
       <Image
         className="place-image__photo"
-        src={asset.src}
+        src={photoUrl ?? asset.src}
         alt={image.alt}
         width={asset.width}
         height={asset.height}
         sizes={sizes ?? "(max-width: 760px) calc(100vw - 40px), 520px"}
+        {...(photoUrl ? { unoptimized: true } : {})}
         {...(preload ? { preload: true } : { loading: "lazy" as const })}
       />
       {variant === "card" && showCredit ? (

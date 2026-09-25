@@ -71,6 +71,30 @@ def seed_owned_rows(account_id: str, email: str, photo_key: str) -> dict[str, st
         )
         conn.execute(
             """
+            INSERT INTO offline_claim_grants (
+                token_hash, account_id, boundary_version, issued_at, expires_at
+            ) VALUES (%s, %s, %s, NOW(), NOW() + INTERVAL '30 days')
+            """,
+            ("8" * 64, account_id, boundary_version),
+        )
+        conn.execute(
+            """
+            INSERT INTO offline_claim_requests (
+                account_id, request_id, request_fingerprint, confirmation
+            ) VALUES (%s, %s, %s, '{}'::jsonb)
+            """,
+            (account_id, uuid4(), "9" * 64),
+        )
+        conn.execute(
+            """
+            INSERT INTO offline_claim_undo_tombstones (
+                account_id, place_id, undone_at
+            ) VALUES (%s, %s, NOW())
+            """,
+            (account_id, PLACE_ID),
+        )
+        conn.execute(
+            """
             INSERT INTO account_visit_claims (
                 account_id, place_id, recommendation_hash, captured_at,
                 latitude, longitude, accuracy_m, boundary_version, match_kind,
@@ -281,6 +305,9 @@ def test_account_delete_removes_owned_rows_preserves_other_account_and_retries_e
                 ).fetchone() is None
                 for table in (
                     "account_sessions",
+                    "offline_claim_grants",
+                    "offline_claim_requests",
+                    "offline_claim_undo_tombstones",
                     "account_visits",
                     "account_visit_claims",
                     "account_groups",

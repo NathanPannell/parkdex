@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager, contextmanager
 import hashlib
+import json
 import logging
 import re
 import secrets
@@ -52,6 +53,13 @@ from backend.app.claims import (
     recommendation_token_hash,
     validate_location_sample,
 )
+from backend.app.offline_claims import (
+    OFFLINE_GRANT_VALIDITY,
+    create_offline_grant_token,
+    offline_request_fingerprint,
+    offline_grant_token_hash,
+    validate_offline_location_sample,
+)
 from backend.app.object_storage import (
     ObjectStorage,
     ObjectStorageError,
@@ -84,6 +92,9 @@ from backend.app.schemas import (
     GroupPlaceMutation,
     GroupRename,
     GuestImportResult,
+    OfflineClaimGrantResponse,
+    OfflineClaimRequest,
+    OfflinePlaceBundle,
     PlaceCollection,
     PlaceSearchResult,
     SearchPlace,
@@ -119,6 +130,10 @@ COVERAGE_NOTE = (
 )
 CLAIM_RECOMMENDATION_ACCOUNT_LIMIT = 60
 CLAIM_RECOMMENDATION_GLOBAL_LIMIT = 5_000
+OFFLINE_CLAIM_GRANT_ACCOUNT_LIMIT = 10
+OFFLINE_CLAIM_GRANT_GLOBAL_LIMIT = 5_000
+OFFLINE_CLAIM_ACCOUNT_LIMIT = 60
+OFFLINE_CLAIM_GLOBAL_LIMIT = 5_000
 PHOTO_UPLOAD_ACCOUNT_LIMIT = 30
 PHOTO_UPLOAD_GLOBAL_LIMIT = 2_000
 CLAIM_ABUSE_WINDOW = timedelta(minutes=15)
@@ -610,16 +625,23 @@ def guest_progress_state(
 
 @app.get("/api/places", response_model=PlaceCollection)
 def list_places(
+    summary: bool = Query(default=False),
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
     x_collection_key: str | None = Header(default=None),
 ):
     identity = resolve_identity(conn, authorization, x_collection_key)
     include_staging_field_places = settings.staging_field_places_enabled
+    summary_columns = (
+        "''::text AS description, ''::text AS source_url"
+        if summary
+        else "description, source_url"
+    )
     places = conn.execute(
         f"""
-        SELECT id, name, category, latitude, longitude, region, description,
-               source_url, source_name, source_id
+        SELECT id, name, category, latitude, longitude, region,
+               {summary_columns},
+               source_name, source_id
         FROM places WHERE {place_visibility_clause()} ORDER BY name
         """,
         place_visibility_params(include_staging_field_places),
@@ -649,6 +671,7 @@ def list_places(
         "visit_claims": {
             "supported": True,
             "enforcement": settings.visit_claim_enforcement,
+            "offline_supported": True,
         },
     }
 
@@ -732,6 +755,34 @@ def get_place_details(
     if row is None:
         raise HTTPException(status_code=404, detail="Place not found")
     return row
+
+
+@app.get("/api/places/{place_id}/offline-bundle", response_model=OfflinePlaceBundle)
+def get_offline_place_bundle(
+    place_id: str,
+    response: Response,
+    conn: Connection = Depends(connection),
+):
+    response.headers["Cache-Control"] = "public, max-age=300"
+    row = conn.execute(
+        f"""
+        SELECT id, name, category, latitude, longitude, region, description,
+               source_url, source_name, source_id
+        FROM places WHERE id = %s AND {place_visibility_clause()}
+        """,
+        (
+            place_id,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    return {
+        "place": row,
+        "boundary": registry.feature(place_id),
+        "boundary_version": registry.offline_version,
+    }
 
 
 @app.get("/api/groups", response_model=list[Group])
@@ -1197,6 +1248,13 @@ def recommend_claim(
     identity = revalidate_locked_claim_identity(
         conn, identity, authorization, x_collection_key
     )
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        candidate.place_id,
+        sample.captured_at,
+        error_code="claim_location_precedes_place_undo",
+    )
     token, token_hash = create_recommendation_token()
     expires_at = sample.captured_at + timedelta(seconds=60)
     conn.execute(
@@ -1235,6 +1293,108 @@ def recommend_claim(
             "distance_meters": round(candidate.distance_meters, 3),
         },
     }
+
+
+@app.post(
+    "/api/offline-claim-grants",
+    response_model=OfflineClaimGrantResponse,
+    status_code=201,
+)
+def create_offline_claim_grant(
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = require_bearer(conn, authorization)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    reserve_rate_limit(
+        conn,
+        "offline_claim_grant_global",
+        "global",
+        OFFLINE_CLAIM_GRANT_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "offline_claim_grant",
+        identity.account_id,
+        OFFLINE_CLAIM_GRANT_ACCOUNT_LIMIT,
+        timedelta(days=1),
+    )
+    conn.execute(
+        "DELETE FROM offline_claim_grants "
+        "WHERE account_id = %s AND (expires_at <= NOW() OR revoked_at IS NOT NULL)",
+        (identity.account_id,),
+    )
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    issued_at = datetime.now(timezone.utc)
+    expires_at = issued_at + OFFLINE_GRANT_VALIDITY
+    grant_token, token_hash = create_offline_grant_token()
+    conn.execute(
+        """
+        INSERT INTO offline_claim_grants (
+            token_hash, account_id, boundary_version, issued_at, expires_at
+        ) VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            token_hash,
+            identity.account_id,
+            registry.offline_version,
+            issued_at,
+            expires_at,
+        ),
+    )
+    conn.commit()
+    return {
+        "grant_token": grant_token,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+        "boundary_version": registry.offline_version,
+    }
+
+
+def reserve_offline_claim_capacity(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(
+        conn,
+        "offline_claim_global",
+        "global",
+        OFFLINE_CLAIM_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "offline_claim",
+        account_id,
+        OFFLINE_CLAIM_ACCOUNT_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    # Persist this reservation before the exact-geometry and claim writes.
+    # The handler re-locks and revalidates account/session state afterward.
+    conn.commit()
+
+
+def reject_location_before_place_undo(
+    conn: Connection,
+    account_id: str,
+    place_id: str,
+    captured_at: datetime,
+    *,
+    error_code: str,
+) -> None:
+    tombstone = conn.execute(
+        """
+        SELECT undone_at FROM offline_claim_undo_tombstones
+        WHERE account_id = %s AND place_id = %s
+        """,
+        (account_id, place_id),
+    ).fetchone()
+    if tombstone is not None and captured_at <= tombstone["undone_at"]:
+        raise claim_error(
+            410,
+            error_code,
+            "This saved location was captured before the place was removed",
+        )
 
 
 @app.post("/api/claims", response_model=CreateClaimResponse)
@@ -1317,6 +1477,272 @@ def create_claim(
     )
 
 
+@app.post("/api/offline-claims", response_model=CreateClaimResponse)
+def create_offline_claim(
+    payload: OfflineClaimRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    fingerprint = offline_request_fingerprint(
+        grant_token=payload.grantToken,
+        expected_place_id=payload.expectedPlaceId,
+        latitude=payload.location.latitude,
+        longitude=payload.location.longitude,
+        accuracy_meters=payload.location.accuracy_meters,
+        captured_at_epoch_ms=payload.location.captured_at_epoch_ms,
+    )
+    prior = conn.execute(
+        """
+        SELECT request_fingerprint, confirmation, invalidated_at
+        FROM offline_claim_requests
+        WHERE account_id = %s AND request_id = %s
+        """,
+        (identity.account_id, payload.requestId),
+    ).fetchone()
+    if prior is not None:
+        if prior["request_fingerprint"] != fingerprint:
+            raise claim_error(
+                409,
+                "offline_claim_request_id_conflict",
+                "This request ID was already used for a different offline claim",
+            )
+        if prior["invalidated_at"] is not None:
+            raise claim_error(
+                410,
+                "offline_claim_receipt_invalidated",
+                "This offline claim receipt was invalidated after the visit was removed or account progress was reset",
+            )
+        return prior["confirmation"]
+
+    token_hash = offline_grant_token_hash(payload.grantToken)
+    if token_hash is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    grant = conn.execute(
+        """
+        SELECT account_id, boundary_version, issued_at, expires_at, revoked_at
+        FROM offline_claim_grants
+        WHERE token_hash = %s AND account_id = %s
+        FOR UPDATE
+        """,
+        (token_hash, identity.account_id),
+    ).fetchone()
+    if grant is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    now = datetime.now(timezone.utc)
+    if grant["revoked_at"] is not None:
+        raise claim_error(
+            410,
+            "offline_claim_grant_revoked",
+            "Offline claim grant has been revoked",
+        )
+    if now > grant["expires_at"]:
+        raise claim_error(
+            410,
+            "offline_claim_grant_expired",
+            "Offline claim grant has expired",
+        )
+
+    # The grant version scopes client-side offline recommendations. Deferred
+    # claims remain eligible across registry updates, but must fit the current
+    # canonical boundary below and are recorded against this current version.
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    try:
+        sample = validate_offline_location_sample(
+            payload.location.latitude,
+            payload.location.longitude,
+            payload.location.accuracy_meters,
+            payload.location.captured_at_epoch_ms,
+            grant_issued_at=grant["issued_at"],
+            grant_expires_at=grant["expires_at"],
+            now=now,
+        )
+    except ClaimInputError as exc:
+        raise claim_error(422, exc.code, str(exc)) from exc
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        payload.expectedPlaceId,
+        sample.captured_at,
+        error_code="offline_claim_precedes_place_undo",
+    )
+
+    reserve_offline_claim_capacity(conn, identity.account_id)
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    prior = conn.execute(
+        """
+        SELECT request_fingerprint, confirmation, invalidated_at
+        FROM offline_claim_requests
+        WHERE account_id = %s AND request_id = %s
+        """,
+        (identity.account_id, payload.requestId),
+    ).fetchone()
+    if prior is not None:
+        if prior["request_fingerprint"] != fingerprint:
+            raise claim_error(
+                409,
+                "offline_claim_request_id_conflict",
+                "This request ID was already used for a different offline claim",
+            )
+        if prior["invalidated_at"] is not None:
+            raise claim_error(
+                410,
+                "offline_claim_receipt_invalidated",
+                "This offline claim receipt was invalidated after the visit was removed or account progress was reset",
+            )
+        return prior["confirmation"]
+
+    grant = conn.execute(
+        """
+        SELECT account_id, boundary_version, issued_at, expires_at, revoked_at
+        FROM offline_claim_grants
+        WHERE token_hash = %s AND account_id = %s
+        FOR UPDATE
+        """,
+        (token_hash, identity.account_id),
+    ).fetchone()
+    if grant is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    now = datetime.now(timezone.utc)
+    if grant["revoked_at"] is not None:
+        raise claim_error(
+            410,
+            "offline_claim_grant_revoked",
+            "Offline claim grant has been revoked",
+        )
+    if now > grant["expires_at"]:
+        raise claim_error(
+            410,
+            "offline_claim_grant_expired",
+            "Offline claim grant has expired",
+        )
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    try:
+        sample = validate_offline_location_sample(
+            payload.location.latitude,
+            payload.location.longitude,
+            payload.location.accuracy_meters,
+            payload.location.captured_at_epoch_ms,
+            grant_issued_at=grant["issued_at"],
+            grant_expires_at=grant["expires_at"],
+            now=now,
+        )
+    except ClaimInputError as exc:
+        raise claim_error(422, exc.code, str(exc)) from exc
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        payload.expectedPlaceId,
+        sample.captured_at,
+        error_code="offline_claim_precedes_place_undo",
+    )
+
+    if not conn.execute(
+        f"SELECT 1 FROM places WHERE id = %s AND {place_visibility_clause()}",
+        (
+            payload.expectedPlaceId,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone():
+        raise claim_error(
+            409,
+            "claim_place_unavailable",
+            "The requested place is no longer available",
+        )
+    if not registry.contains_exact(
+        payload.expectedPlaceId, sample.latitude, sample.longitude
+    ):
+        raise claim_error(
+            422,
+            "offline_location_outside_boundary",
+            "The saved location is outside the requested place boundary",
+        )
+    existing_claim = conn.execute(
+        "SELECT 1 FROM account_visit_claims WHERE account_id = %s AND place_id = %s",
+        (identity.account_id, payload.expectedPlaceId),
+    ).fetchone()
+    if existing_claim:
+        raise claim_error(
+            409,
+            "claim_place_already_claimed",
+            "This place already has a location claim",
+        )
+
+    claim_key = hashlib.sha256(
+        f"parkdex-offline-claim:{identity.account_id}:{payload.requestId}".encode(
+            "ascii"
+        )
+    ).hexdigest()
+    conn.execute(
+        "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        (identity.account_id, payload.expectedPlaceId),
+    )
+    conn.execute(
+        """
+        INSERT INTO account_visit_claims (
+            account_id, place_id, recommendation_hash, captured_at, latitude,
+            longitude, accuracy_m, boundary_version, match_kind, distance_m
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'exact', 0)
+        """,
+        (
+            identity.account_id,
+            payload.expectedPlaceId,
+            claim_key,
+            sample.captured_at,
+            sample.latitude,
+            sample.longitude,
+            sample.accuracy_meters,
+            registry.offline_version,
+        ),
+    )
+    created = fetch_claim(conn, identity.account_id, payload.expectedPlaceId)
+    confirmation = CreateClaimResponse.model_validate(
+        claim_response_from_row(
+            created,
+            owner_visit_count(
+                conn,
+                identity.account_id,
+                include_staging_field_places=settings.staging_field_places_enabled,
+            ),
+        )
+    ).model_dump(mode="json")
+    conn.execute(
+        """
+        INSERT INTO offline_claim_requests (
+            account_id, request_id, request_fingerprint, confirmation
+        ) VALUES (%s, %s, %s, %s::jsonb)
+        """,
+        (
+            identity.account_id,
+            payload.requestId,
+            fingerprint,
+            json.dumps(confirmation, separators=(",", ":")),
+        ),
+    )
+    conn.commit()
+    return confirmation
+
+
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
 def update_visit(
     place_id: str,
@@ -1372,6 +1798,34 @@ def update_visit(
             enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
             conn.execute(
                 "DELETE FROM account_visits WHERE account_id = %s AND place_id = %s",
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                "DELETE FROM claim_recommendations "
+                "WHERE account_id = %s AND place_id = %s AND consumed_at IS NULL",
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                """
+                UPDATE offline_claim_requests SET invalidated_at = NOW()
+                WHERE account_id = %s AND invalidated_at IS NULL
+                  AND COALESCE(
+                      confirmation->>'placeId', confirmation->>'place_id'
+                  ) = %s
+                """,
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO offline_claim_undo_tombstones (
+                    account_id, place_id, undone_at
+                ) VALUES (%s, %s, clock_timestamp())
+                ON CONFLICT (account_id, place_id) DO UPDATE
+                SET undone_at = GREATEST(
+                    offline_claim_undo_tombstones.undone_at,
+                    EXCLUDED.undone_at
+                )
+                """,
                 (identity.account_id, place_id),
             )
         count = conn.execute(
@@ -1798,6 +2252,7 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
             raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE offline_claim_grants SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (row["account_id"],))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
@@ -2072,6 +2527,16 @@ def reset_account_progress(
     enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
     conn.execute(
         "DELETE FROM claim_recommendations WHERE account_id = %s",
+        (identity.account_id,),
+    )
+    conn.execute(
+        "UPDATE offline_claim_grants SET revoked_at = NOW() "
+        "WHERE account_id = %s AND revoked_at IS NULL",
+        (identity.account_id,),
+    )
+    conn.execute(
+        "UPDATE offline_claim_requests SET invalidated_at = NOW() "
+        "WHERE account_id = %s AND invalidated_at IS NULL",
         (identity.account_id,),
     )
     conn.execute(

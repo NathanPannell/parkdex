@@ -1,4 +1,5 @@
 import cataloguePlaceImages from "./place-images.catalogue.json";
+import { publicAssetUrl } from "./public-assets";
 
 export type PlaceImageAsset = {
   src: string;
@@ -286,5 +287,11 @@ export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
 export const PLACE_IMAGE_COUNT = Object.keys(PLACE_IMAGES).length;
 
 export function getPlaceImage(placeId: string): PlaceImageRecord | undefined {
-  return PLACE_IMAGES[placeId];
+  const image = PLACE_IMAGES[placeId];
+  if (!image) return undefined;
+  return {
+    ...image,
+    thumbnail: { ...image.thumbnail, src: publicAssetUrl(image.thumbnail.src) },
+    detail: { ...image.detail, src: publicAssetUrl(image.detail.src) },
+  };
 }
