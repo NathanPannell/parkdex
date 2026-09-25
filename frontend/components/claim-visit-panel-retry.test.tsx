@@ -145,7 +145,8 @@ describe("ClaimVisitPanel durable photo retry", () => {
   it("keeps an offline detail visit pending without reporting success or offering another check-in", async () => {
     const onClaimed = vi.fn();
     const createClaim = vi.fn().mockResolvedValue({ ...confirmation, pendingSync: true });
-    const handlers = { authenticated: true, place, busy: false, ownerKey: "account:first", recommendClaim: vi.fn().mockResolvedValue(recommendation), createClaim, uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined), onClaimed };
+    const recommendClaim = vi.fn().mockImplementation(async () => ({ ...recommendation, expiresAt: new Date(Date.now() + 60_000).toISOString() }));
+    const handlers = { authenticated: true, place, busy: false, ownerKey: "account:first", recommendClaim, createClaim, uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined), onClaimed };
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null) });
 
     render(<ClaimVisitPanel {...handlers} />);

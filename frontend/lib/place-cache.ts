@@ -5,7 +5,7 @@ import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
 import type { BoundaryFeature } from "./boundaries";
 import { formatPlaceArea } from "./place-detail-facts";
 import { getPlaceDescriptionSource, type PlaceDescriptionSource } from "./place-description-sources";
-import { getPlaceImage, type PlaceImageRecord } from "./place-images";
+import { getPlaceImages, type PlaceImageRecord } from "./place-images";
 import type { Place } from "./places";
 import { getVisitorInformation, type VisitorInformation } from "./visitor-information";
 
@@ -25,6 +25,12 @@ export type PlaceSourceAttribution = {
   photo: { creator: string; license: string; licenseUrl: string; sourceUrl: string; originalUrl: string } | null;
 };
 
+export type CachedGalleryPhoto = {
+  image: PlaceImageRecord;
+  photo: Blob | null;
+  photoError: string | null;
+};
+
 export type CachedPlaceBundle = {
   place: Place;
   boundary: BoundaryFeature | null;
@@ -36,6 +42,8 @@ export type CachedPlaceBundle = {
   sourceAttribution: PlaceSourceAttribution;
   photo: Blob | null;
   photoError: string | null;
+  /** Approved alternate photos in the same order as getPlaceImages() after the primary image. */
+  galleryPhotos: CachedGalleryPhoto[];
   viewedAt: number;
 };
 
@@ -151,6 +159,22 @@ function samePhotoSource(left: PlaceImageRecord | null, right: PlaceImageRecord 
     && left.originalUrl === right.originalUrl);
 }
 
+function preservePhotoOnSameSourceFailure<T extends { image: PlaceImageRecord | null; photo: Blob | null; photoError: string | null }>(
+  fresh: T,
+  prior: { image: PlaceImageRecord | null; photo: Blob | null } | undefined,
+): T {
+  if (fresh.photo || !fresh.photoError || !prior?.photo || !samePhotoSource(prior.image, fresh.image)) return fresh;
+  return { ...fresh, photo: prior.photo, photoError: null } as T;
+}
+
+function normalizeCachedPlaceBundle(bundle: CachedPlaceBundle): CachedPlaceBundle {
+  const storedGalleryPhotos = (bundle as CachedPlaceBundle & { galleryPhotos?: CachedGalleryPhoto[] }).galleryPhotos;
+  return {
+    ...bundle,
+    galleryPhotos: Array.isArray(storedGalleryPhotos) ? storedGalleryPhotos : [],
+  };
+}
+
 function defaultAssetUrl(src: string, apiBaseUrl: string) {
   if (/^https?:\/\//i.test(src)) return src;
   if (typeof window !== "undefined") return new URL(src, window.location.origin).toString();
@@ -217,16 +241,26 @@ async function fetchPlaceBundle(
   const boundaryVersion = typeof value.boundaryVersion === "string" || typeof value.boundaryVersion === "number"
     ? value.boundaryVersion
     : null;
-  const image = getPlaceImage(place.id) ?? null;
-  let photo: Blob | null = null;
-  let photoError: string | null = null;
-  if (image) {
+  const images = getPlaceImages(place.id);
+  const fetchedImages = await Promise.all(images.map(async (image) => {
     try {
-      photo = await fetchPhotoWithDeadline(fetcher, image.detail.src, apiBaseUrl, resolveAssetUrl);
+      return {
+        image,
+        photo: await fetchPhotoWithDeadline(fetcher, image.detail.src, apiBaseUrl, resolveAssetUrl),
+        photoError: null,
+      } satisfies CachedGalleryPhoto;
     } catch (error) {
-      photoError = error instanceof Error ? error.message : "The place photo could not be cached.";
+      return {
+        image,
+        photo: null,
+        photoError: error instanceof Error ? error.message : "The place photo could not be cached.",
+      } satisfies CachedGalleryPhoto;
     }
-  }
+  }));
+  const [primary, ...galleryPhotos] = fetchedImages;
+  const image = primary?.image ?? null;
+  const photo = primary?.photo ?? null;
+  const photoError = primary?.photoError ?? null;
   const attribution: PlaceSourceAttribution = {
     place: placeAttribution(place),
     boundary: boundaryAttribution(boundary),
@@ -244,6 +278,7 @@ async function fetchPlaceBundle(
     sourceAttribution: attribution,
     photo,
     photoError,
+    galleryPhotos,
     viewedAt,
   };
 }
@@ -343,7 +378,7 @@ export function createIndexedDbRecentPlaceStore(factory: IDBFactory): RecentPlac
       request.onsuccess = () => {
         const current = request.result as RecentPlaceCacheRecord[];
         const prior = current.find((entry) => entry.placeId === record.placeId);
-        const nextRecord = prior && prior.viewedAt >= record.viewedAt ? prior : record;
+        const nextRecord = prior && prior.viewedAt > record.viewedAt ? prior : record;
         const candidates = current.filter((entry) => entry.placeId !== record.placeId).concat(nextRecord).sort(compareRecent);
         const keep = candidates.slice(0, RECENT_PLACE_CACHE_LIMIT);
         const keepIds = new Set(keep.map((entry) => entry.placeId));
@@ -380,15 +415,38 @@ export function createIndexedDbRecentPlaceStore(factory: IDBFactory): RecentPlac
   };
 }
 
-type NativeManifestEntry = { placeId: string; viewedAt: number; path: string; photoPath: string | null };
-type NativeManifest = { version: 1; lastViewedAt: number; entries: NativeManifestEntry[] };
-type NativeSerializedRecord = {
-  record: Omit<RecentPlaceCacheRecord, "bundle"> & { bundle: Omit<CachedPlaceBundle, "photo"> };
-  photoType: string | null;
+type NativeManifestEntry = {
+  placeId: string;
+  viewedAt: number;
+  path: string;
+  photoPath: string | null;
+  /** Distinguishes same-view metadata touches from a fresh replacement bundle. */
+  fileId?: string;
+  /** Optional for manifests written before gallery photos were cached. */
+  galleryPhotoPaths?: Array<string | null>;
 };
-type ParsedNativeRecord = { record: RecentPlaceCacheRecord; photoType: string | null };
+type NativeManifest = { version: 1; lastViewedAt: number; entries: NativeManifestEntry[] };
+type NativeBundleMetadata = Omit<CachedPlaceBundle, "photo" | "galleryPhotos"> & {
+  galleryPhotos: Array<Omit<CachedGalleryPhoto, "photo">>;
+};
+type NativeSerializedRecord = {
+  record: Omit<RecentPlaceCacheRecord, "bundle"> & { bundle: NativeBundleMetadata };
+  photoType: string | null;
+  galleryPhotoTypes: Array<string | null>;
+};
+type ParsedNativeRecord = {
+  record: RecentPlaceCacheRecord;
+  photoType: string | null;
+  galleryPhotoTypes: Array<string | null>;
+};
 
 let nativeMutationTail: Promise<unknown> = Promise.resolve();
+let nativeFileSequence = 0;
+
+function nextNativeFileId() {
+  nativeFileSequence += 1;
+  return `${Date.now().toString(36)}-${nativeFileSequence.toString(36)}`;
+}
 
 function serializeNative<T>(operation: () => Promise<T>): Promise<T> {
   const result = nativeMutationTail.then(operation);
@@ -409,13 +467,22 @@ function parseNativeManifest(value: string | null): NativeManifest {
     if (!isRecord(parsed) || parsed.version !== 1 || !Number.isFinite(parsed.lastViewedAt) || !Array.isArray(parsed.entries)) {
       throw new Error("Invalid recent place index.");
     }
-    const entries = parsed.entries.filter((entry): entry is NativeManifestEntry => isRecord(entry)
-      && typeof entry.placeId === "string"
-      && Number.isFinite(entry.viewedAt)
-      && typeof entry.path === "string"
-      && isNativeRecordPath(entry.path, entry.placeId, Number(entry.viewedAt))
-      && (entry.photoPath === null || (typeof entry.photoPath === "string"
-        && isNativePhotoPath(entry.photoPath, entry.placeId, Number(entry.viewedAt)))));
+    const entries = parsed.entries.filter((entry): entry is NativeManifestEntry => {
+      if (!isRecord(entry)
+        || typeof entry.placeId !== "string"
+        || !Number.isFinite(entry.viewedAt)
+        || (entry.fileId !== undefined && (typeof entry.fileId !== "string" || !/^[a-z0-9-]{1,32}$/.test(entry.fileId)))
+        || typeof entry.path !== "string") return false;
+      const fileId = typeof entry.fileId === "string" ? entry.fileId : undefined;
+      if (!isNativeRecordPath(entry.path, entry.placeId, Number(entry.viewedAt), fileId)
+        || !(entry.photoPath === null || (typeof entry.photoPath === "string"
+          && isNativePhotoPath(entry.photoPath, entry.placeId, Number(entry.viewedAt), fileId)))) return false;
+      if (entry.galleryPhotoPaths === undefined) return true;
+      return Array.isArray(entry.galleryPhotoPaths)
+        && entry.galleryPhotoPaths.length <= 20
+        && entry.galleryPhotoPaths.every((path, index) => path === null || (typeof path === "string"
+          && isNativeGalleryPhotoPath(path, entry.placeId as string, Number(entry.viewedAt), index, fileId)));
+    });
     if (entries.length !== parsed.entries.length || entries.length > RECENT_PLACE_CACHE_LIMIT
       || new Set(entries.map((entry) => entry.placeId)).size !== entries.length) {
       throw new Error("Invalid recent place index entries.");
@@ -452,15 +519,29 @@ function imageFromBase64(value: string | null, mimeType: string | null): Blob | 
   return new Blob([bytes], { type: mimeType });
 }
 
-function serializeNativeRecord(record: RecentPlaceCacheRecord): Promise<{ metadata: string; photoBase64: string | null }> {
-  return imageBase64(record.bundle.photo).then((photoBase64) => {
-    const { photo, ...bundle } = record.bundle;
-    const value: NativeSerializedRecord = {
-      record: { ...record, bundle },
-      photoType: photo?.type || null,
-    };
-    return { metadata: JSON.stringify(value), photoBase64 };
-  });
+async function serializeNativeRecord(record: RecentPlaceCacheRecord): Promise<{
+  metadata: string;
+  photoBase64: string | null;
+  galleryPhotoBase64: Array<string | null>;
+}> {
+  const bundle = normalizeCachedPlaceBundle(record.bundle);
+  const [photoBase64, ...galleryPhotoBase64] = await Promise.all([
+    imageBase64(bundle.photo),
+    ...bundle.galleryPhotos.map((entry) => imageBase64(entry.photo)),
+  ]);
+  const { photo, ...bundleMetadata } = bundle;
+  const value: NativeSerializedRecord = {
+    record: {
+      ...record,
+      bundle: {
+        ...bundleMetadata,
+        galleryPhotos: bundle.galleryPhotos.map(({ image, photoError }) => ({ image, photoError })),
+      },
+    },
+    photoType: photo?.type || null,
+    galleryPhotoTypes: bundle.galleryPhotos.map((entry) => entry.photo?.type || null),
+  };
+  return { metadata: JSON.stringify(value), photoBase64, galleryPhotoBase64 };
 }
 
 function parseNativeRecord(value: string): ParsedNativeRecord {
@@ -469,14 +550,22 @@ function parseNativeRecord(value: string): ParsedNativeRecord {
     || typeof parsed.record.placeId !== "string" || !Number.isFinite(parsed.record.viewedAt)) {
     throw new Error("Cached place data is corrupt.");
   }
-  const bundle = parsed.record.bundle as unknown as Omit<CachedPlaceBundle, "photo">;
+  const rawBundle = parsed.record.bundle as unknown as Omit<CachedPlaceBundle, "photo"> & {
+    galleryPhotos?: Array<Omit<CachedGalleryPhoto, "photo">>;
+  };
+  const galleryPhotos = Array.isArray(rawBundle.galleryPhotos)
+    ? rawBundle.galleryPhotos.map((entry) => ({ ...entry, photo: null }))
+    : [];
   return {
     record: {
       placeId: parsed.record.placeId,
       viewedAt: Number(parsed.record.viewedAt),
-      bundle: { ...bundle, photo: null },
+      bundle: { ...rawBundle, photo: null, galleryPhotos } as CachedPlaceBundle,
     },
     photoType: typeof parsed.photoType === "string" ? parsed.photoType : null,
+    galleryPhotoTypes: Array.isArray(parsed.galleryPhotoTypes)
+      ? parsed.galleryPhotoTypes.map((value) => typeof value === "string" ? value : null)
+      : [],
   };
 }
 
@@ -490,15 +579,15 @@ async function removeNativeFile(path: string) {
 }
 
 async function readNativeMetadata(entry: NativeManifestEntry): Promise<ParsedNativeRecord | null> {
-  if (!isNativeRecordPath(entry.path, entry.placeId, entry.viewedAt)) {
+  if (!isNativeRecordPath(entry.path, entry.placeId, entry.viewedAt, entry.fileId)) {
     throw new Error("Recent place storage index contains an unsafe file path.");
   }
   try {
     const file = await Filesystem.readFile({ path: entry.path, directory: Directory.Data, encoding: Encoding.UTF8 });
     const content = typeof file.data === "string" ? file.data : await file.data.text();
-    const { record, photoType } = parseNativeRecord(content);
+    const { record, photoType, galleryPhotoTypes } = parseNativeRecord(content);
     if (record.placeId !== entry.placeId || record.viewedAt !== entry.viewedAt) return null;
-    return { record, photoType };
+    return { record, photoType, galleryPhotoTypes };
   } catch (error) {
     if (isMissingFileError(error)) return null;
     throw error;
@@ -507,22 +596,54 @@ async function readNativeMetadata(entry: NativeManifestEntry): Promise<ParsedNat
 
 async function readNativeRecord(entry: NativeManifestEntry): Promise<RecentPlaceCacheRecord | null> {
   const metadata = await readNativeMetadata(entry);
-  if (!metadata || !entry.photoPath) return metadata?.record ?? null;
-  if (!isNativePhotoPath(entry.photoPath, entry.placeId, entry.viewedAt)) {
-    throw new Error("Recent place storage index contains an unsafe photo path.");
-  }
-  try {
-    const photo = await Filesystem.readFile({ path: entry.photoPath, directory: Directory.Data, encoding: Encoding.UTF8 });
-    const photoBase64 = typeof photo.data === "string" ? photo.data : await photo.data.text();
-    return { ...metadata.record, bundle: { ...metadata.record.bundle, photo: imageFromBase64(photoBase64, metadata.photoType) } };
-  } catch (error) {
-    if (!isMissingFileError(error)) throw error;
-    return { ...metadata.record, bundle: { ...metadata.record.bundle, photoError: "Cached place photo file is missing." } };
-  }
+  if (!metadata) return null;
+  const readPhoto = async (path: string | null, mimeType: string | null, isGallery: boolean, index?: number) => {
+    if (!path) return { photo: null, photoError: null as string | null };
+    const validPath = isGallery && index !== undefined
+      ? isNativeGalleryPhotoPath(path, entry.placeId, entry.viewedAt, index, entry.fileId)
+      : isNativePhotoPath(path, entry.placeId, entry.viewedAt, entry.fileId);
+    if (!validPath) throw new Error("Recent place storage index contains an unsafe photo path.");
+    try {
+      const file = await Filesystem.readFile({ path, directory: Directory.Data, encoding: Encoding.UTF8 });
+      const photoBase64 = typeof file.data === "string" ? file.data : await file.data.text();
+      return { photo: imageFromBase64(photoBase64, mimeType), photoError: null as string | null };
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+      return { photo: null, photoError: isGallery ? "Cached gallery photo file is missing." : "Cached place photo file is missing." };
+    }
+  };
+  const galleryPaths = entry.galleryPhotoPaths ?? [];
+  const [primary, ...galleryPhotos] = await Promise.all([
+    readPhoto(entry.photoPath, metadata.photoType, false),
+    ...metadata.record.bundle.galleryPhotos.map((gallery, index) => readPhoto(
+      galleryPaths[index] ?? null,
+      metadata.galleryPhotoTypes[index] ?? null,
+      true,
+      index,
+    )),
+  ]);
+  const bundle = metadata.record.bundle;
+  return {
+    ...metadata.record,
+    bundle: {
+      ...bundle,
+      photo: primary?.photo ?? null,
+      photoError: primary?.photoError ?? bundle.photoError,
+      galleryPhotos: bundle.galleryPhotos.map((gallery, index) => ({
+        ...gallery,
+        photo: galleryPhotos[index]?.photo ?? null,
+        photoError: galleryPhotos[index]?.photoError ?? gallery.photoError,
+      })),
+    },
+  };
 }
 
 async function removeNativeOrphans(manifest: NativeManifest) {
-  const activePaths = new Set(manifest.entries.flatMap((entry) => entry.photoPath ? [entry.path, entry.photoPath] : [entry.path]));
+  const activePaths = new Set(manifest.entries.flatMap((entry) => [
+    entry.path,
+    ...(entry.photoPath ? [entry.photoPath] : []),
+    ...(entry.galleryPhotoPaths ?? []).filter((path): path is string => path !== null),
+  ]));
   try {
     const listing = await Filesystem.readdir({ path: NATIVE_CACHE_DIRECTORY, directory: Directory.Data });
     for (const entry of listing.files) {
@@ -534,12 +655,16 @@ async function removeNativeOrphans(manifest: NativeManifest) {
   }
 }
 
-function isNativeRecordPath(path: string, placeId: string, viewedAt: number) {
-  return path === `${NATIVE_CACHE_DIRECTORY}/${encodeURIComponent(placeId)}-${viewedAt}.json`;
+function isNativeRecordPath(path: string, placeId: string, viewedAt: number, fileId?: string) {
+  return path === `${NATIVE_CACHE_DIRECTORY}/${encodeURIComponent(placeId)}-${viewedAt}${fileId ? `-${fileId}` : ""}.json`;
 }
 
-function isNativePhotoPath(path: string, placeId: string, viewedAt: number) {
-  return path === `${NATIVE_CACHE_DIRECTORY}/${encodeURIComponent(placeId)}-${viewedAt}.photo`;
+function isNativePhotoPath(path: string, placeId: string, viewedAt: number, fileId?: string) {
+  return path === `${NATIVE_CACHE_DIRECTORY}/${encodeURIComponent(placeId)}-${viewedAt}${fileId ? `-${fileId}` : ""}.photo`;
+}
+
+function isNativeGalleryPhotoPath(path: string, placeId: string, viewedAt: number, index: number, fileId?: string) {
+  return path === `${NATIVE_CACHE_DIRECTORY}/${encodeURIComponent(placeId)}-${viewedAt}${fileId ? `-${fileId}` : ""}.gallery-${index}.photo`;
 }
 
 function assertNativeCachePath(path: string) {
@@ -591,16 +716,21 @@ export function createNativeFilesystemRecentPlaceStore(): RecentPlaceCacheStorag
       const platformStorage = await getPlatformStorage();
       const manifest = await readNativeManifest(platformStorage);
       const prior = manifest.entries.find((entry) => entry.placeId === record.placeId);
-      if (prior && prior.viewedAt >= record.viewedAt) return true;
-      const filename = `${encodeURIComponent(record.placeId)}-${record.viewedAt}`;
+      if (prior && prior.viewedAt > record.viewedAt) return true;
+      const fileId = nextNativeFileId();
+      const filename = `${encodeURIComponent(record.placeId)}-${record.viewedAt}-${fileId}`;
       const path = `${NATIVE_CACHE_DIRECTORY}/${filename}.json`;
-      const photoPath = record.bundle.photo ? `${NATIVE_CACHE_DIRECTORY}/${filename}.photo` : null;
-      const candidate: NativeManifestEntry = { placeId: record.placeId, viewedAt: record.viewedAt, path, photoPath };
+      const bundle = normalizeCachedPlaceBundle(record.bundle);
+      const photoPath = bundle.photo ? `${NATIVE_CACHE_DIRECTORY}/${filename}.photo` : null;
+      const galleryPhotoPaths = bundle.galleryPhotos.map((entry, index) => entry.photo
+        ? `${NATIVE_CACHE_DIRECTORY}/${filename}.gallery-${index}.photo`
+        : null);
+      const candidate: NativeManifestEntry = { placeId: record.placeId, viewedAt: record.viewedAt, path, photoPath, fileId, galleryPhotoPaths };
       const entries = manifest.entries.filter((entry) => entry.placeId !== record.placeId).concat(candidate)
         .sort((left, right) => right.viewedAt - left.viewedAt || left.placeId.localeCompare(right.placeId));
       const keep = entries.slice(0, RECENT_PLACE_CACHE_LIMIT);
       if (!keep.some((entry) => entry.placeId === record.placeId)) return false;
-      const content = await serializeNativeRecord(record);
+      const content = await serializeNativeRecord({ ...record, bundle });
       const nextManifest: NativeManifest = {
         version: 1,
         lastViewedAt: Math.max(manifest.lastViewedAt, record.viewedAt),
@@ -611,10 +741,21 @@ export function createNativeFilesystemRecentPlaceStore(): RecentPlaceCacheStorag
         if (photoPath && content.photoBase64 !== null) {
           await Filesystem.writeFile({ path: photoPath, directory: Directory.Data, data: content.photoBase64, encoding: Encoding.UTF8, recursive: true });
         }
+        const galleryWrites = await Promise.allSettled(galleryPhotoPaths.map(async (galleryPath, index) => {
+          const photoBase64 = content.galleryPhotoBase64[index];
+          if (galleryPath && photoBase64 !== null && photoBase64 !== undefined) {
+            await Filesystem.writeFile({ path: galleryPath, directory: Directory.Data, data: photoBase64, encoding: Encoding.UTF8, recursive: true });
+          }
+        }));
+        const failedGalleryWrite = galleryWrites.find((result): result is PromiseRejectedResult => result.status === "rejected");
+        if (failedGalleryWrite) throw failedGalleryWrite.reason;
         await platformStorage.setItem(NATIVE_CACHE_INDEX_KEY, JSON.stringify(nextManifest));
       } catch (error) {
         await removeNativeFile(path).catch(() => undefined);
         if (photoPath) await removeNativeFile(photoPath).catch(() => undefined);
+        for (const galleryPath of galleryPhotoPaths) {
+          if (galleryPath) await removeNativeFile(galleryPath).catch(() => undefined);
+        }
         throw error;
       }
       await removeNativeOrphans(nextManifest);
@@ -626,6 +767,9 @@ export function createNativeFilesystemRecentPlaceStore(): RecentPlaceCacheStorag
       for (const entry of manifest.entries) {
         await removeNativeFile(entry.path);
         if (entry.photoPath) await removeNativeFile(entry.photoPath);
+        for (const galleryPath of entry.galleryPhotoPaths ?? []) {
+          if (galleryPath) await removeNativeFile(galleryPath);
+        }
       }
       await platformStorage.removeItem(NATIVE_CACHE_INDEX_KEY);
       await removeNativeOrphans({ version: 1, lastViewedAt: 0, entries: [] });
@@ -654,7 +798,8 @@ export function createRecentPlaceCache(options: RecentPlaceCacheOptions = {}): R
   const waitForMutations = () => mutationTail.then(() => undefined);
   const readBundle = async (placeId: string) => {
     await waitForMutations();
-    return (await storage.get(placeId))?.bundle ?? null;
+    const record = await storage.get(placeId);
+    return record ? normalizeCachedPlaceBundle(record.bundle) : null;
   };
   const refreshClaimIndex = async () => {
     claimIndex = null;
@@ -715,10 +860,19 @@ export function createRecentPlaceCache(options: RecentPlaceCacheOptions = {}): R
         }
       }
 
-      if (!fresh.photo && fresh.photoError && fresh.image) {
+      if ((fresh.photoError && fresh.image) || fresh.galleryPhotos.some((entry) => entry.photoError && !entry.photo)) {
         const prior = await readBundle(placeId);
-        if (prior?.photo && samePhotoSource(prior.image, fresh.image)) {
-          fresh = { ...fresh, photo: prior.photo, photoError: null };
+        if (prior) {
+          const preservedPrimary = preservePhotoOnSameSourceFailure(fresh, prior);
+          const priorGallery = prior.galleryPhotos ?? [];
+          fresh = {
+            ...fresh,
+            ...preservedPrimary,
+            galleryPhotos: fresh.galleryPhotos.map((entry) => preservePhotoOnSameSourceFailure(
+              entry,
+              priorGallery.find((priorEntry) => samePhotoSource(priorEntry.image, entry.image)),
+            )),
+          };
         }
       }
 
@@ -736,7 +890,7 @@ export function createRecentPlaceCache(options: RecentPlaceCacheOptions = {}): R
     },
     async list() {
       await waitForMutations();
-      return (await storage.list()).sort(compareRecent).map((record) => record.bundle);
+      return (await storage.list()).sort(compareRecent).map((record) => normalizeCachedPlaceBundle(record.bundle));
     },
     async listForClaims() {
       await waitForMutations();
@@ -767,4 +921,5 @@ export function getRecentPlaceCache(): RecentPlaceCache {
 export function resetRecentPlaceCacheForTests() {
   recentPlaceCache = null;
   nativeMutationTail = Promise.resolve();
+  nativeFileSequence = 0;
 }

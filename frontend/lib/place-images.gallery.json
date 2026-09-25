@@ -1,0 +1,362 @@
+{
+  "provincial-bear-creek-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-bear-creek-park-2-thumb.webp",
+        "width": 320,
+        "height": 215
+      },
+      "detail": {
+        "src": "/places/provincial-bear-creek-park-2.webp",
+        "width": 960,
+        "height": 646
+      },
+      "alt": "A blue lake beneath forested mountain slopes in Bear Creek Park",
+      "creator": "Preeteesh",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Provincial_Park_-_Central_Okanagan,_BC.png",
+      "sourceTitle": "Bear Creek Provincial Park - Central Okanagan, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Bear_Creek_Provincial_Park_-_Central_Okanagan%2C_BC.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (bear, creek). Source description: Bear Creek Provincial Park - Central Okanagan, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Provincial_Park_-_Central_Okanagan,_BC.png",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-blanket-creek-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-blanket-creek-park-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-blanket-creek-park-2.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Sutherland Falls rushing through a rocky, forested gorge in Blanket Creek Park",
+      "creator": "Ksenia Druzhkina",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sutherland_Falls_Blanket_Creek_Provincial_Park,_BC_Canada_-_beautiful_view_by_Kdruzhki.jpg",
+      "sourceTitle": "Sutherland Falls Blanket Creek Provincial Park, BC Canada - beautiful view by Kdruzhki",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ea/Sutherland_Falls_Blanket_Creek_Provincial_Park%2C_BC_Canada_-_beautiful_view_by_Kdruzhki.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Sutherland Falls Blanket Creek Provincial Park, BC Canada - beautiful view by Kdruzhki",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sutherland_Falls_Blanket_Creek_Provincial_Park,_BC_Canada_-_beautiful_view_by_Kdruzhki.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-diana-lake-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-diana-lake-park-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-diana-lake-park-2.webp",
+        "width": 960,
+        "height": 721
+      },
+      "alt": "Mountains and clouds reflected in the calm morning water of Diana Lake",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Calm_Morning_at_Diana_Lake.webp",
+      "sourceTitle": "Calm Morning at Diana Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d8/Calm_Morning_at_Diana_Lake.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (diana, lake). Source description: Calm Morning at Diana Lake, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Calm_Morning_at_Diana_Lake.webp",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-flores-island-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-flores-island-park-2-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-flores-island-park-2.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A broad sandy beach and mountain shoreline along the Wild Side Trail on Flores Island",
+      "creator": "Toni Wöhrl",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wild_Side_Trail_on_Flores_Island.jpg",
+      "sourceTitle": "Wild Side Trail on Flores Island",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/07/Wild_Side_Trail_on_Flores_Island.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Wild Side Trail on Flores Island",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Wild_Side_Trail_on_Flores_Island.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-kalamalka-lake-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-kalamalka-lake-park-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-kalamalka-lake-park-2.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Kalamalka Lake and surrounding hills viewed from a dry hillside near Rattlesnake Point",
+      "creator": "Adam Jones, Ph.D. - Global Photo Archive",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/41000732@N04/29824522981",
+      "sourceTitle": "Scenery around Rattlesnake Point - Kalamalka Lake Provincial Park - Vernon - BC - Canada - 09",
+      "originalUrl": "https://live.staticflickr.com/8530/29824522981_cdf2147157_b.jpg",
+      "locationEvidence": "Source metadata names the place (kalamalka, lake). Source description: Scenery around Rattlesnake Point - Kalamalka Lake Provincial Park - Vernon - BC - Canada - 09 []",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/41000732@N04/29824522981",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-kentucky-alleyne-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-kentucky-alleyne-park-2-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-kentucky-alleyne-park-2.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A turquoise lake beside dense conifer forest in Kentucky-Alleyne Park",
+      "creator": "GoToVan",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/47022937@N03/48663606967",
+      "sourceTitle": "Kentucky Alleyne Provincial Park, Quilchena, BC",
+      "originalUrl": "https://live.staticflickr.com/65535/48663606967_7a21af63dd_b.jpg",
+      "locationEvidence": "Source metadata names the place (kentucky, alleyne). Source description: Kentucky Alleyne Provincial Park, Quilchena, BC",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/47022937@N03/48663606967",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-kokanee-glacier-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-kokanee-glacier-park-2-thumb.webp",
+        "width": 240,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-kokanee-glacier-park-2.webp",
+        "width": 720,
+        "height": 960
+      },
+      "alt": "Rocky alpine terrain and patches of snow beneath misty slopes in Kokanee Glacier Park",
+      "creator": "Adam Jones, Ph.D. - Global Photo Archive",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/41000732@N04/50067531526",
+      "sourceTitle": "Rainy Vista at Gibson Lake - Kokanee Glacier Provincial Park - Kootenays - BC - Canada - 03",
+      "originalUrl": "https://live.staticflickr.com/65535/50067531526_94fd301a65_b.jpg",
+      "locationEvidence": "Source metadata names the place (kokanee, glacier). Source description: Rainy Vista at Gibson Lake - Kokanee Glacier Provincial Park - Kootenays - BC - Canada - 03 []",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/41000732@N04/50067531526",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-momich-lakes-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-momich-lakes-park-2-thumb.webp",
+        "width": 320,
+        "height": 241
+      },
+      "detail": {
+        "src": "/places/provincial-momich-lakes-park-2.webp",
+        "width": 960,
+        "height": 723
+      },
+      "alt": "Cayenne Creek tumbling through shaded forest near Momich Lake",
+      "creator": "Rkwitkoski77",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Momich_Lake_Cayenne_Creek_falls.jpg",
+      "sourceTitle": "Momich Lake Cayenne Creek falls",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b2/Momich_Lake_Cayenne_Creek_falls.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Momich Lakes Provincial Park, Cayenne Creek Falls",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Momich_Lake_Cayenne_Creek_falls.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-mount-assiniboine-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-mount-assiniboine-park-2-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-mount-assiniboine-park-2.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A blue lake surrounded by rugged peaks in Mount Assiniboine Park",
+      "creator": "Kurt Stegmüller",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Assiniboine_Provincial_Park_Lodge.jpg",
+      "sourceTitle": "Mount Assiniboine Provincial Park Lodge",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8c/Mount_Assiniboine_Provincial_Park_Lodge.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Mount Assiniboine Provincial Park. Area of the Lodge and Naiset Huts. Lake Magog on the right. Mount Cautley (2.880 m) and Wonder Peak (2.851 m) left of Wonder Pass (2.395 m). Naiset Point, \"The Towers\" (2.846 m) and Terrapin Mountain...",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Assiniboine_Provincial_Park_Lodge.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-nairn-falls-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-nairn-falls-park-2-thumb.webp",
+        "width": 240,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-nairn-falls-park-2.webp",
+        "width": 720,
+        "height": 960
+      },
+      "alt": "Nairn Falls surging through a narrow rock gorge",
+      "creator": "swbmarshall",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nairnfalls.jpg",
+      "sourceTitle": "Nairnfalls",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Nairnfalls.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (nairn, falls). Source description: Nairn Falls, Green River, Nairn Falls Provincial Park, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Nairnfalls.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-tantalus-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-tantalus-park-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-tantalus-park-2.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Crevassed icefall formations on a glacier in Tantalus Park",
+      "creator": "McKay Savage from London, UK",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trips_06_-_Tantalus_-_03_-_interesting_icefall_formations_(197841093).jpg",
+      "sourceTitle": "Trips 06 - Tantalus - 03 - interesting icefall formations",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Trips_06_-_Tantalus_-_03_-_interesting_icefall_formations_%28197841093%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Trips '06 - Tantalus - 03 - interesting icefall formations",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trips_06_-_Tantalus_-_03_-_interesting_icefall_formations_(197841093).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-tetrahedron-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-tetrahedron-park-2-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-tetrahedron-park-2.webp",
+        "width": 768,
+        "height": 512
+      },
+      "alt": "Snow-covered conifers and a winter trail in Tetrahedron Park",
+      "creator": "McKay Savage from London, UK",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trips_04_-_Tetrahedron_-_30_(90964406).jpg",
+      "sourceTitle": "Trips 04 - Tetrahedron - 30",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/48/Trips_04_-_Tetrahedron_-_30_%2890964406%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: folling the river to McNair Cabin",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trips_04_-_Tetrahedron_-_30_(90964406).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "provincial-top-of-the-world-park": [
+    {
+      "thumbnail": {
+        "src": "/places/provincial-top-of-the-world-park-2-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-top-of-the-world-park-2.webp",
+        "width": 874,
+        "height": 581
+      },
+      "alt": "A pale rocky ridge beneath scattered clouds in Top of the World Park",
+      "creator": "Jody McIntyre from Montreal, Canada",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Top_of_the_World_(5399104411).jpg",
+      "sourceTitle": "Top of the World",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Top_of_the_World_%285399104411%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (top, world). Source description: A view from Top of the World Provincial Park, BC Cross-Canada cycling trip, 2000",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Top_of_the_World_(5399104411).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "regional-greenspaces-comox-valley-bear-creek-nature-park-4816": [
+    {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-comox-valley-bear-creek-nature-park-4816-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-comox-valley-bear-creek-nature-park-4816-2.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A narrow dirt path winding through Bear Creek Nature Park woodland",
+      "creator": "David Stanley from Nanaimo, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Nature_Park_(50242418446).jpg",
+      "sourceTitle": "Bear Creek Nature Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Bear_Creek_Nature_Park_%2850242418446%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Bear Creek Nature Park at Black Creek, British Columbia, Canada, was created in 2010 along the south bank of the Oyster River.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Nature_Park_(50242418446).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ],
+  "regional-metro-vancouver-bar": [
+    {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-bar-2-thumb.webp",
+        "width": 320,
+        "height": 144
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-bar-2.webp",
+        "width": 960,
+        "height": 432
+      },
+      "alt": "A vivid sunset reflected in calm water beside Barnston Island",
+      "creator": "Theodor",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Barnston_Island_Regional_Park_2.jpg",
+      "sourceTitle": "Barnston Island Regional Park 2",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/6d/Barnston_Island_Regional_Park_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (barnston, island). Source description: Barnston Island Regional Park (park in Metro Vancouver, British Columbia, Canada)",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Barnston_Island_Regional_Park_2.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
+  ]
+}

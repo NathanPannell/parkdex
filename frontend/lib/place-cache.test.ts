@@ -2,6 +2,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
 
 import type { BoundaryFeature } from "./boundaries";
+import { getPlaceImages } from "./place-images";
 import {
   createIndexedDbRecentPlaceStore,
   createRecentPlaceCache,
@@ -63,6 +64,7 @@ function record(id: string, viewedAt: number): RecentPlaceCacheRecord {
     },
     photo,
     photoError: null,
+    galleryPhotos: [],
     viewedAt,
   };
   return { placeId: id, viewedAt, bundle };
@@ -106,6 +108,26 @@ describe("recent place cache", () => {
     expect((await store.get("place-20"))?.bundle.boundary?.geometry.type).toBe("Polygon");
   });
 
+  it("evicts alternate gallery photo bytes with the least-recently viewed place", async () => {
+    const store = createIndexedDbRecentPlaceStore(new IDBFactory());
+    const images = getPlaceImages("provincial-bear-creek-park");
+    const victim = record("provincial-bear-creek-park", 1);
+    victim.bundle.image = images[0] ?? null;
+    victim.bundle.galleryPhotos = images.slice(1).map((image) => ({
+      image,
+      photo: new Blob(["alternate full photo"], { type: "image/webp" }),
+      photoError: null,
+    }));
+    await store.saveAndPrune(victim);
+
+    for (let index = 0; index < RECENT_PLACE_CACHE_LIMIT; index += 1) {
+      await store.saveAndPrune(record(`new-place-${index}`, index + 2));
+    }
+
+    expect(await store.get(victim.placeId)).toBeNull();
+    expect(await store.list()).toHaveLength(RECENT_PLACE_CACHE_LIMIT);
+  });
+
   it("does not let an old in-flight completion resurrect a park that has fallen outside the 20 most recent views", async () => {
     let releaseOld!: (response: Response) => void;
     const startedOld = vi.fn();
@@ -147,6 +169,50 @@ describe("recent place cache", () => {
     expect(result.sourceAttribution.photo?.license).toBe(result.image?.license);
     expect(result.area).toBeTruthy();
     expect((await cache.get(result.place.id))?.viewedAt).toBe(result.viewedAt);
+  });
+
+  it("stores the primary and every approved alternate as full-resolution offline gallery photos", async () => {
+    const fetcher = vi.fn(apiFetcher());
+    const cache = createRecentPlaceCache({
+      indexedDB: new IDBFactory(),
+      fetcher,
+      assetUrl: (src) => `https://assets.example.test${src}`,
+    });
+    const result = await cache.view("provincial-bear-creek-park", "https://api.example.test");
+    const images = getPlaceImages(result.place.id);
+
+    expect(images).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(result.image?.detail.src).toBe(images[0]?.detail.src);
+    expect(result.photo?.type).toBe("image/webp");
+    expect(await result.photo?.text()).toBe("full-resolution-photo");
+    expect(result.galleryPhotos).toHaveLength(1);
+    expect(result.galleryPhotos[0]).toMatchObject({
+      image: images[1],
+      photoError: null,
+    });
+    expect(await result.galleryPhotos[0]?.photo?.text()).toBe("full-resolution-photo");
+    expect(result.galleryPhotos[0]?.image.creator).toBe("Preeteesh");
+    expect((await cache.get(result.place.id))?.galleryPhotos[0]?.image.originalUrl).toBe(images[1]?.originalUrl);
+  });
+
+  it("replaces an already-viewed primary-only bundle with newly cached gallery photos", async () => {
+    const storage = createIndexedDbRecentPlaceStore(new IDBFactory());
+    const placeId = "provincial-bear-creek-park";
+    const images = getPlaceImages(placeId);
+    const legacy = record(placeId, 1);
+    legacy.bundle.image = images[0] ?? null;
+    legacy.bundle.photo = new Blob(["previous primary photo"], { type: "image/webp" });
+    await storage.saveAndPrune(legacy);
+
+    const online = createRecentPlaceCache({ storage, fetcher: apiFetcher() });
+    await online.view(placeId, "https://api.example.test");
+    const offline = createRecentPlaceCache({ storage, fetcher: async () => { throw new TypeError("offline"); } });
+    const reopened = await offline.view(placeId, "https://api.example.test");
+
+    expect(reopened.galleryPhotos).toHaveLength(1);
+    expect(await reopened.galleryPhotos[0]?.photo?.text()).toBe("full-resolution-photo");
+    expect(reopened.galleryPhotos[0]?.image.originalUrl).toBe(images[1]?.originalUrl);
   });
 
   it("updates LRU recency as soon as a cached place is actually opened", async () => {
@@ -302,7 +368,7 @@ describe("recent place cache", () => {
   it("retains a same-source full photo when an online refresh cannot download it", async () => {
     const store = createIndexedDbRecentPlaceStore(new IDBFactory());
     const first = createRecentPlaceCache({ storage: store, fetcher: apiFetcher() });
-    const saved = await first.view("provincial-goldstream-park", "https://api.example.test");
+    const saved = await first.view("provincial-bear-creek-park", "https://api.example.test");
     const refreshed = createRecentPlaceCache({ storage: store, fetcher: apiFetcher({ failPhoto: true }) });
 
     const result = await refreshed.view(saved.place.id, "https://api.example.test");
@@ -311,6 +377,8 @@ describe("recent place cache", () => {
     expect(result.photo?.type).toBe(saved.photo?.type);
     expect(result.photoError).toBeNull();
     expect(await (await refreshed.get(saved.place.id))?.photo?.text()).toBe(await saved.photo?.text());
+    expect(await result.galleryPhotos[0]?.photo?.text()).toBe(await saved.galleryPhotos[0]?.photo?.text());
+    expect(result.galleryPhotos[0]?.photoError).toBeNull();
   });
 
   it("prevents a pending fetch from repopulating the cache after clear", async () => {

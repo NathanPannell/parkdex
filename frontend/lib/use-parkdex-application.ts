@@ -121,9 +121,11 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
     selectedId: (view === "map" || claimFlow) && liveClaimPlace && liveClaimPlace.id !== selectedId ? liveClaimPlace.id : null,
     apiBaseUrl,
   });
-  const arrivalPhotoUrl = liveClaimPlace?.id === selectedRecentPlace.selectedId
-    ? selectedRecentPlace.photoUrl
-    : arrivalRecentPlace.photoUrl;
+  const arrivalSelection = liveClaimPlace?.id === selectedRecentPlace.selectedId
+    ? selectedRecentPlace
+    : arrivalRecentPlace;
+  const arrivalPhotoUrl = arrivalSelection.photoUrl;
+  const arrivalImage = arrivalSelection.status === "ready" ? arrivalSelection.bundle?.image : undefined;
   const approximateClaimLocation = Boolean(
     claimsAvailable
     && (preciseLocationRequired || (location && claimLocationFresh && location.accuracyMeters > 50))
@@ -517,6 +519,8 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
       earnedBadges,
       selected,
       selectedPlacePhotoUrl: selectedRecentPlace.photoUrl,
+      selectedPlacePhotoUrls: selectedRecentPlace.photoUrls,
+      selectedPlaceImages: selectedRecentPlace.status === "ready" ? selectedRecentPlace.images : undefined,
       recentPlaceStatus: selectedRecentPlace.status,
       claimsAvailable,
       legacyVisitCreationAvailable,
@@ -527,6 +531,7 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
       displayedRecommendation,
       liveClaimPlace,
       arrivalPhotoUrl,
+      arrivalImage,
       approximateClaimLocation,
       visits,
       photoOwnerKey,

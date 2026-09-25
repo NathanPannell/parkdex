@@ -10,7 +10,7 @@ vi.mock("./place-cache", () => ({
 }));
 
 import type { CachedPlaceBundle } from "./place-cache";
-import { getPlaceImage } from "./place-images";
+import { getPlaceImage, getPlaceImages } from "./place-images";
 import { useRecentPlace } from "./use-recent-place";
 
 function bundle(id: string): CachedPlaceBundle {
@@ -36,6 +36,7 @@ function bundle(id: string): CachedPlaceBundle {
     sourceAttribution: { place: { name: "Example", url: place.sourceUrl }, boundary: null, photo: null },
     photo: new Blob([id], { type: "image/webp" }),
     photoError: null,
+    galleryPhotos: [],
     viewedAt: Date.now(),
   };
 }
@@ -104,13 +105,61 @@ describe("useRecentPlace", () => {
     cacheMock.get.mockResolvedValue(null);
     cacheMock.view
       .mockResolvedValueOnce({ ...bundle(placeId), image, photo: null, photoError: "offline" })
-      .mockResolvedValueOnce(bundle(placeId));
+      .mockResolvedValueOnce({ ...bundle(placeId), image });
 
     const { result } = renderHook(() => useRecentPlace({ selectedId: placeId, apiBaseUrl: "https://api.example.test" }));
-    await waitFor(() => expect(result.current.warning).toContain("not saved for offline use"));
+    await waitFor(() => expect(result.current.warning).toContain("not fully saved for offline use"));
     await act(async () => { window.dispatchEvent(new Event("online")); });
     await waitFor(() => expect(cacheMock.view).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.photo).not.toBeNull());
     expect(result.current.warning).toBeNull();
+  });
+
+  it("keeps saved gallery metadata aligned with its bytes and releases every URL", async () => {
+    const placeId = "provincial-bear-creek-park";
+    const [primary, alternate] = getPlaceImages(placeId);
+    expect(alternate).toBeDefined();
+    const savedAlternate = { ...alternate, alt: "Previously saved description" };
+    const cached = {
+      ...bundle(placeId), image: primary,
+      galleryPhotos: [{ image: savedAlternate, photo: new Blob(["alternate"]), photoError: null }],
+    };
+    const createObjectUrl = vi.fn().mockReturnValueOnce("blob:primary").mockReturnValueOnce("blob:alternate");
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
+    cacheMock.get.mockResolvedValue(cached);
+    cacheMock.view.mockRejectedValue(new Error("offline"));
+    const { result, rerender, unmount } = renderHook(
+      ({ selectedId }: { selectedId: string | null }) => useRecentPlace({ selectedId, apiBaseUrl: "https://api.example.test" }),
+      { initialProps: { selectedId: placeId as string | null } },
+    );
+    await waitFor(() => expect(result.current.photoUrls).toEqual(["blob:primary", "blob:alternate"]));
+    expect(result.current.images).toEqual([primary, savedAlternate]);
+    expect(createObjectUrl.mock.calls.map(([photo]) => photo)).toEqual([cached.photo, cached.galleryPhotos[0].photo]);
+    rerender({ selectedId: null });
+    expect(result.current.photoUrls).toEqual([]);
+    expect(revokeObjectUrl.mock.calls.map(([url]) => url)).toEqual(["blob:primary", "blob:alternate"]);
+    unmount();
+    expect(revokeObjectUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a missing alternate photo on reconnect even when the primary is saved", async () => {
+    const placeId = "provincial-bear-creek-park";
+    const [image, alternate] = getPlaceImages(placeId);
+    const incomplete = { ...bundle(placeId), image,
+      galleryPhotos: [{ image: alternate, photo: null, photoError: "offline" }],
+    };
+    cacheMock.get.mockResolvedValue(null);
+    cacheMock.view.mockResolvedValueOnce(incomplete).mockResolvedValueOnce({
+      ...incomplete, galleryPhotos: [{ image: alternate, photo: new Blob(["alternate"]), photoError: null }],
+    });
+    const { result } = renderHook(() => useRecentPlace({ selectedId: placeId, apiBaseUrl: "https://api.example.test" }));
+    await waitFor(() => expect(result.current.warning).toContain("not fully saved"));
+    expect(result.current.photo).not.toBeNull();
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    await waitFor(() => expect(result.current.warning).toBeNull());
+    expect(result.current.bundle?.galleryPhotos[0].photo).not.toBeNull();
+    expect(cacheMock.view).toHaveBeenCalledTimes(2);
   });
 });

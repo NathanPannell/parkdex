@@ -35,7 +35,7 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
   } = flow;
   const dialogRef = useRef<HTMLElement>(null);
   const dismissFlowRef = useRef(dismissFlow);
-  const placeImage = getPlaceImage(place.id);
+  const placeImage = props.arrivalImage !== undefined ? props.arrivalImage : getPlaceImage(place.id);
 
   useEffect(() => { dismissFlowRef.current = dismissFlow; });
   useEffect(() => addNativeBackConsumer(() => {
@@ -84,7 +84,7 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
 
   return <aside ref={dialogRef} className={`impression-flow impression-flow--${flowScreen}`} role="dialog" aria-modal="true" aria-labelledby="impression-flow-title" aria-live="polite">
     {flowScreen === "arrival" && <section className="impression-arrival">
-      <div className="impression-arrival-art" aria-hidden={heroPhotoUrl ? undefined : "true"}>{heroPhotoUrl ? <img src={heroPhotoUrl} alt={placeImage?.alt ?? `${place.name} park photo`} /> : <div className="impression-arrival-placeholder"><MapPin size={44} /><span>Place boundary</span></div>}{placeImage && <small className="impression-arrival-credit">Photo <a href={placeImage.sourceUrl} target="_blank" rel="noreferrer">{placeImage.creator}</a> · <a href={placeImage.originalUrl} target="_blank" rel="noreferrer">Original</a> · <a href={placeImage.licenseUrl} target="_blank" rel="noreferrer">{placeImage.license}</a><span className="impression-arrival-credit-changes">Changes: {placeImage.changes}</span></small>}</div>
+      <div className="impression-arrival-art" aria-hidden={heroPhotoUrl ? undefined : "true"}>{heroPhotoUrl ? <img src={heroPhotoUrl} alt={placeImage?.alt ?? `${place.name} park photo`} /> : <div className="impression-arrival-placeholder"><MapPin size={44} /><span>Place boundary</span></div>}{placeImage && <small className="impression-arrival-credit">Photo <a href={placeImage.sourceUrl} target="_blank" rel="noreferrer">{placeImage.creator}</a> · <a href={placeImage.originalUrl} target="_blank" rel="noreferrer">Source image</a> · <a href={placeImage.licenseUrl} target="_blank" rel="noreferrer">{placeImage.license}</a><span className="impression-arrival-credit-changes">Changes: {placeImage.changes}</span></small>}</div>
       <header className="impression-header"><span className="impression-brand"><MapPin size={18} /> Parkdex</span>{closeButton}</header>
       <div className="impression-sheet">
         {hydrationStatus === "ready" && !retry && !noPhotoRetry && <ParkSeal place={place} className="impression-arrival-seal" />}

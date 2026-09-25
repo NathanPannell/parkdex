@@ -18,6 +18,7 @@ import {
 } from "@/lib/claim-workflow";
 import { useClaimFlow } from "@/lib/use-claim-flow";
 import type { Place } from "@/lib/places";
+import type { PlaceImageRecord } from "@/lib/place-images";
 
 type FlowScreen = "arrival" | "review" | "upload" | "success";
 type ReviewPhoto = { photo: PhotoAsset; previewUrl: string | null };
@@ -31,6 +32,7 @@ export type ArrivalClaimFlowProps = {
   place: Place;
   /** Cached place imagery supplied by the app layer when available. */
   arrivalPhotoUrl?: string | null;
+  arrivalImage?: PlaceImageRecord | null;
   recommendation: Extract<ClaimRecommendation, { status: "recommended" }>;
   ownerKey: string;
   busy: boolean;

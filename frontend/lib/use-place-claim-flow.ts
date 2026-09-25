@@ -135,7 +135,6 @@ export function usePlaceClaimFlow({
   const restoredCaptureAttemptRef = useRef<string | null>(null);
   const busyRef = useRef(busy);
   const photoPreviewRef = useRef<string | null>(null);
-  const recommendationRef = useRef(recommendation);
   const pendingPhotoRef = useRef<PhotoAsset | null>(pendingPhoto);
   const uploadRetryRef = useRef<UploadRetry | null>(uploadRetry);
 
@@ -151,7 +150,6 @@ export function usePlaceClaimFlow({
   const recommendationText = useMemo(() => recommendation?.status === "none" ? "No eligible park boundary matches this location." : "", [recommendation]);
 
   useEffect(() => { busyRef.current = busy; }, [busy]);
-  useEffect(() => { recommendationRef.current = recommendation; }, [recommendation]);
   useEffect(() => { pendingPhotoRef.current = pendingPhoto; }, [pendingPhoto]);
   useEffect(() => { uploadRetryRef.current = uploadRetry; }, [uploadRetry]);
   useEffect(() => { photoPreviewRef.current = photoPreview; }, [photoPreview]);
@@ -432,8 +430,8 @@ export function usePlaceClaimFlow({
   }
 
   async function claim() {
-    if (recommendationRef.current?.status !== "recommended" || !candidateMatches) return;
-    if (expired || Date.now() >= Date.parse(recommendationRef.current.expiresAt)) {
+    if (recommendation?.status !== "recommended" || !candidateMatches) return;
+    if (expired || Date.now() >= Date.parse(recommendation.expiresAt)) {
       setRecommendationExpired(true);
       setMessage("This recommendation expired. Refresh your location and confirm the park again.");
       return;
@@ -443,9 +441,9 @@ export function usePlaceClaimFlow({
     const epoch = ++operationEpochRef.current;
     setMessage("");
     try {
-      const photo = pendingPhotoRef.current && photoConfirmedFor === placeId ? pendingPhotoRef.current : undefined;
+      const photo = pendingPhoto && photoConfirmedFor === placeId ? pendingPhoto : undefined;
       const outcome = await claimFlow.submit(operation, {
-        recommendation: recommendationRef.current,
+        recommendation,
         ...(photo ? { photo } : {}),
         reconcileFirst: unresolvedClaim,
         unresolvedCreate: unresolvedClaim,

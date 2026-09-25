@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import type { CachedPlaceBundle } from "./place-cache";
 import { getRecentPlaceCache } from "./place-cache";
+import type { PlaceImageRecord } from "./place-images";
+import { getPlaceImages } from "./place-images";
 import type { Place } from "./places";
 
 export type RecentPlaceSelection = {
@@ -11,36 +13,48 @@ export type RecentPlaceSelection = {
   status: "idle" | "loading" | "ready" | "error";
   bundle: CachedPlaceBundle | null;
   place: Place | null;
+  images: readonly PlaceImageRecord[];
   photo: Blob | null;
   photoUrl: string | null;
+  photoUrls: readonly (string | null)[];
   error: string | null;
   warning: string | null;
 };
 
-type ObjectUrlSnapshot = { photo: Blob | null; url: string | null };
+type ObjectUrlSnapshot = { photos: readonly (Blob | null)[]; urls: readonly (string | null)[] };
 
 const EMPTY_SELECTION: RecentPlaceSelection = {
   selectedId: null,
   status: "idle",
   bundle: null,
   place: null,
+  images: [],
   photo: null,
   photoUrl: null,
+  photoUrls: [],
   error: null,
   warning: null,
 };
 
 function selectionForBundle(selectedId: string, bundle: CachedPlaceBundle): RecentPlaceSelection {
+  const galleryPhotos = bundle.galleryPhotos ?? [];
+  const images = bundle.image ? [bundle.image, ...galleryPhotos.map((entry) => entry.image)] : [];
+  const expectedImageCount = getPlaceImages(selectedId).length;
+  const missingPhoto = Boolean((bundle.image && !bundle.photo)
+    || galleryPhotos.some((entry) => !entry.photo)
+    || expectedImageCount > images.length);
   return {
     selectedId,
     status: "ready",
     bundle,
     place: bundle.place,
+    images,
     photo: bundle.photo,
     photoUrl: null,
+    photoUrls: [],
     error: null,
-    warning: bundle.image && !bundle.photo
-      ? "The full-resolution photo is not saved for offline use yet. Connect to retry."
+    warning: missingPhoto
+      ? "The full photo gallery is not fully saved for offline use yet. Connect to retry."
       : null,
   };
 }
@@ -51,42 +65,49 @@ function selectionForError(selectedId: string, error: unknown): RecentPlaceSelec
     status: "error",
     bundle: null,
     place: null,
+    images: [],
     photo: null,
     photoUrl: null,
+    photoUrls: [],
     error: error instanceof Error ? error.message : "Place details are unavailable while offline.",
     warning: null,
   };
 }
 
-function usePhotoObjectUrl(photo: Blob | null) {
-  const current = useRef<ObjectUrlSnapshot>({ photo: null, url: null });
+function usePhotoObjectUrls(photos: readonly (Blob | null)[]) {
+  const emptyUrls = useMemo(() => photos.map(() => null), [photos]);
+  const current = useRef<ObjectUrlSnapshot>({ photos: [], urls: [] });
   const subscribe = useCallback((onChange: () => void) => {
-    if (!photo || typeof URL.createObjectURL !== "function") {
-      current.current = { photo, url: null };
-      return () => undefined;
-    }
-    let url: string;
-    try {
-      url = URL.createObjectURL(photo);
-    } catch {
-      current.current = { photo, url: null };
-      return () => undefined;
-    }
-    current.current = { photo, url };
+    const urls = photos.map((photo) => {
+      if (!photo || typeof URL.createObjectURL !== "function") return null;
+      try {
+        return URL.createObjectURL(photo);
+      } catch {
+        return null;
+      }
+    });
+    current.current = { photos, urls };
     onChange();
     return () => {
-      URL.revokeObjectURL(url);
-      if (current.current.url === url) current.current = { photo: null, url: null };
+      urls.forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+      if (current.current.photos === photos) current.current = { photos: [], urls: [] };
     };
-  }, [photo]);
-  const getSnapshot = useCallback(() => current.current.photo === photo ? current.current.url : null, [photo]);
-  return useSyncExternalStore(subscribe, getSnapshot, () => null);
+  }, [photos]);
+  const getSnapshot = useCallback(() => current.current.photos === photos ? current.current.urls : emptyUrls, [photos, emptyUrls]);
+  const getServerSnapshot = useCallback(() => emptyUrls, [emptyUrls]);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /** Hydrates local detail immediately, then refreshes it while the selected detail view is open. */
 export function useRecentPlace({ selectedId, apiBaseUrl }: { selectedId: string | null; apiBaseUrl: string }) {
   const [selection, setSelection] = useState<RecentPlaceSelection>(EMPTY_SELECTION);
-  const photoUrl = usePhotoObjectUrl(selection.selectedId === selectedId ? selection.photo : null);
+  const currentBundle = selection.selectedId === selectedId ? selection.bundle : null;
+  const photos = useMemo(() => currentBundle
+    ? [currentBundle.photo, ...(currentBundle.galleryPhotos ?? []).map((entry) => entry.photo)]
+    : [], [currentBundle]);
+  const photoUrls = usePhotoObjectUrls(photos);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -108,7 +129,7 @@ export function useRecentPlace({ selectedId, apiBaseUrl }: { selectedId: string 
       return () => { active = false; };
     }
 
-    const needsRetry = () => refreshFailed || Boolean(latestBundle?.image && !latestBundle.photo);
+    const needsRetry = () => refreshFailed || Boolean(latestBundle && selectionForBundle(selectedId, latestBundle).warning);
     const publishBundle = (bundle: CachedPlaceBundle) => {
       latestBundle = bundle;
       setSelection(selectionForBundle(selectedId, bundle));
@@ -166,14 +187,17 @@ export function useRecentPlace({ selectedId, apiBaseUrl }: { selectedId: string 
       status: "loading" as const,
       bundle: null,
       place: null,
+      images: [],
       photo: null,
       photoUrl: null,
+      photoUrls: [],
       error: null,
       warning: null,
     };
   }
   return {
     ...selection,
-    photoUrl,
+    photoUrl: photoUrls[0] ?? null,
+    photoUrls,
   };
 }

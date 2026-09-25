@@ -2578,5 +2578,1787 @@
     "locationEvidence": "The Commons description says the view was made from the third peak (North Summit) during the Chief hike inside Stawamus Chief Provincial Park, British Columbia.",
     "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Stawamus_Chief_Provincial_Park,_BC_(DSCF7828).jpg",
     "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
-  }
+  },
+    "provincial-alexandra-bridge-park": {
+      "thumbnail": {
+        "src": "/places/provincial-alexandra-bridge-park-thumb.webp",
+        "width": 244,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-alexandra-bridge-park.webp",
+        "width": 731,
+        "height": 960
+      },
+      "alt": "A stone arch bridge framed by dense green forest in Alexandra Bridge Park",
+      "creator": "JaninaRitzen",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Alexandra_Bridge.jpg",
+      "sourceTitle": "Alexandra Bridge",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/da/Alexandra_Bridge.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (alexandra, bridge). Source description: A view of the Old Alexandra Bridge in Spuzzum, BC from the north end.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Alexandra_Bridge.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-bear-creek-park": {
+      "thumbnail": {
+        "src": "/places/provincial-bear-creek-park-thumb.webp",
+        "width": 244,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-bear-creek-park.webp",
+        "width": 731,
+        "height": 960
+      },
+      "alt": "People relaxing beside a calm, tree-lined cove in Bear Creek Park",
+      "creator": "Preeteesh",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Provincial_Park,_Central_Okanagan,_BC.png",
+      "sourceTitle": "Bear Creek Provincial Park, Central Okanagan, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/89/Bear_Creek_Provincial_Park%2C_Central_Okanagan%2C_BC.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (bear, creek). Source description: Bear Creek Provincial Park - Central Okanagan, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Provincial_Park,_Central_Okanagan,_BC.png",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-bear-glacier-park": {
+      "thumbnail": {
+        "src": "/places/provincial-bear-glacier-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-bear-glacier-park.webp",
+        "width": 960,
+        "height": 638
+      },
+      "alt": "Bear Glacier flowing through a steep, rocky mountain valley",
+      "creator": "Herbmartin2",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:BearGlacier3.jpg",
+      "sourceTitle": "BearGlacier3",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b0/BearGlacier3.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Bear Glacier from Highway to Stewart B.C.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:BearGlacier3.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-big-bar-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-big-bar-lake-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-big-bar-lake-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Open grassland overlooking wetlands and a lake in Big Bar Lake Park",
+      "creator": "Jason Jackson",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Otter_Marsh_(260317249).jpeg",
+      "sourceTitle": "Otter Marsh",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/13/Otter_Marsh_%28260317249%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 51.323060, -121.819582; 500px provided description: Near Big Bar Lake west of Clinton, BC. [#grass ,#marsh ,#BC ,#British Columbia ,#Cariboo]",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Otter_Marsh_(260317249).jpeg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-blackcomb-glacier-park": {
+      "thumbnail": {
+        "src": "/places/provincial-blackcomb-glacier-park-thumb.webp",
+        "width": 320,
+        "height": 193
+      },
+      "detail": {
+        "src": "/places/provincial-blackcomb-glacier-park.webp",
+        "width": 960,
+        "height": 579
+      },
+      "alt": "Snow-covered mountains in Blackcomb Glacier Park beneath a hazy sun",
+      "creator": "Preeteesh",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Blackcomb_Glacier_Provincial_Park_-_Whistler,_BC.png",
+      "sourceTitle": "Blackcomb Glacier Provincial Park - Whistler, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Blackcomb_Glacier_Provincial_Park_-_Whistler%2C_BC.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (blackcomb, glacier). Source description: Commons coordinates: 50.091389, -122.908333; A gondola ride. Peak to Peak on the Whistler mountains.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Blackcomb_Glacier_Provincial_Park_-_Whistler,_BC.png",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-blanket-creek-park": {
+      "thumbnail": {
+        "src": "/places/provincial-blanket-creek-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-blanket-creek-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A forested mountain reflected in the still blue water of Blanket Creek Park",
+      "creator": "Ksenia Druzhkina",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Blanket_Creek_Provincial_Park,_BC_Canada_Lagune_by_Kdruzhki.jpg",
+      "sourceTitle": "Blanket Creek Provincial Park, BC Canada Lagune by Kdruzhki",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Blanket_Creek_Provincial_Park%2C_BC_Canada_Lagune_by_Kdruzhki.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 50.836769, -118.082475; Blanket Creek Provincial Park, BC Canada Lagune - Morning by Kdruzhki",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Blanket_Creek_Provincial_Park,_BC_Canada_Lagune_by_Kdruzhki.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-bridal-veil-falls-park": {
+      "thumbnail": {
+        "src": "/places/provincial-bridal-veil-falls-park-thumb.webp",
+        "width": 213,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-bridal-veil-falls-park.webp",
+        "width": 638,
+        "height": 960
+      },
+      "alt": "Bridal Veil Falls cascading in thin white streams over a rock face",
+      "creator": "The High Fin Sperm Whale",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bridal_Veil_Falls,_BC,_Canada.jpg",
+      "sourceTitle": "Bridal Veil Falls, BC, Canada",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Bridal_Veil_Falls%2C_BC%2C_Canada.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (bridal, veil, falls). Source description: Bridal Veil Falls, in British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bridal_Veil_Falls,_BC,_Canada.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-broughton-archipelago-park": {
+      "thumbnail": {
+        "src": "/places/provincial-broughton-archipelago-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-broughton-archipelago-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A rocky, forested shoreline beside clear water in Broughton Archipelago Park",
+      "creator": "Laurie MacBride",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Broughton_Archipelago_and_Queen_Charlotte_Strait.jpg",
+      "sourceTitle": "Broughton Archipelago and Queen Charlotte Strait",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Broughton_Archipelago_and_Queen_Charlotte_Strait.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (broughton, archipelago). Source description: Looking towards Queen Charlotte Strait from just outside Sunday Harbour in Broughton Archipelago Marine Provincial Park, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Broughton_Archipelago_and_Queen_Charlotte_Strait.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-buccaneer-bay-park": {
+      "thumbnail": {
+        "src": "/places/provincial-buccaneer-bay-park-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/provincial-buccaneer-bay-park.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "An aerial view of the turquoise water and pale sand spit at Buccaneer Bay",
+      "creator": "BWJinks",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Buccaneer_Bay_Sand_Spit.jpg",
+      "sourceTitle": "Buccaneer Bay Sand Spit",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/9/96/Buccaneer_Bay_Sand_Spit.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (buccaneer, bay). Source description: Photograph of Bucaneer Bay BC taken from a drone",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Buccaneer_Bay_Sand_Spit.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-cathedral-park": {
+      "thumbnail": {
+        "src": "/places/provincial-cathedral-park-thumb.webp",
+        "width": 320,
+        "height": 216
+      },
+      "detail": {
+        "src": "/places/provincial-cathedral-park.webp",
+        "width": 960,
+        "height": 649
+      },
+      "alt": "A rocky alpine trail overlooking a blue lake in Cathedral Park",
+      "creator": "McKay Savage from London, UK",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trips_05_-_Cathedral_Park_-_10_(90968918).jpg",
+      "sourceTitle": "Trips 05 - Cathedral Park - 10",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/fd/Trips_05_-_Cathedral_Park_-_10_%2890968918%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Looking back down at Ladyslipper Lake.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trips_05_-_Cathedral_Park_-_10_(90968918).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-chilliwack-river-park": {
+      "thumbnail": {
+        "src": "/places/provincial-chilliwack-river-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-chilliwack-river-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A shaded forest floor with fallen logs in Chilliwack River Park",
+      "creator": "Ginaima",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Chilliwack_River_Provincial_Park_02.jpg",
+      "sourceTitle": "Chilliwack River Provincial Park 02",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/25/Chilliwack_River_Provincial_Park_02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Chilliwack River Provincial Park",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Chilliwack_River_Provincial_Park_02.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-codville-lagoon-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-codville-lagoon-marine-park-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/provincial-codville-lagoon-marine-park.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "A forested shoreline and small island in Codville Lagoon",
+      "creator": "Laurie macbride",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Shoreline,_Codville_Lagoon.jpg",
+      "sourceTitle": "Shoreline, Codville Lagoon",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/64/Shoreline%2C_Codville_Lagoon.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 52.061847, -127.840336; Codville Lagoon Marine Provincial Park is located on King Island, on the east side of Fitz Hugh Sound, along British Columbia's Inside Passage coastal waterway. It is part of the Great Bear...",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Shoreline,_Codville_Lagoon.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-coquihalla-canyon-park": {
+      "thumbnail": {
+        "src": "/places/provincial-coquihalla-canyon-park-thumb.webp",
+        "width": 240,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-coquihalla-canyon-park.webp",
+        "width": 720,
+        "height": 960
+      },
+      "alt": "The stone entrance to an Othello Tunnel in Coquihalla Canyon Park",
+      "creator": "Clayoquot",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Othello_Tunnels.jpg",
+      "sourceTitle": "Othello Tunnels",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Othello_Tunnels.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (coquihalla, canyon). Source description: A trestle and tunnel entrance in Coquihalla Canyon Provincial Park, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Othello_Tunnels.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-davis-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-davis-lake-park-thumb.webp",
+        "width": 320,
+        "height": 115
+      },
+      "detail": {
+        "src": "/places/provincial-davis-lake-park.webp",
+        "width": 960,
+        "height": 344
+      },
+      "alt": "Davis Lake stretching between forested mountain slopes beneath broken clouds",
+      "creator": "Mhotchin",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Davis_Lake_Provincial_Park_Panorama.jpg",
+      "sourceTitle": "Davis Lake Provincial Park Panorama",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e7/Davis_Lake_Provincial_Park_Panorama.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (davis, lake). Source description: A panorama of Davis Lake, near Mission, BC. The view is to the north-west. The photos were taken Aug 20, 2012.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Davis_Lake_Provincial_Park_Panorama.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-desolation-sound-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-desolation-sound-marine-park-thumb.webp",
+        "width": 320,
+        "height": 212
+      },
+      "detail": {
+        "src": "/places/provincial-desolation-sound-marine-park.webp",
+        "width": 960,
+        "height": 635
+      },
+      "alt": "Calm water and forested shores at Grace Harbour in Desolation Sound",
+      "creator": "A.Davey",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Grace_Harbour,_Desolation_Sound_Marine_Park,_BC.jpg",
+      "sourceTitle": "Grace Harbour, Desolation Sound Marine Park, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Grace_Harbour%2C_Desolation_Sound_Marine_Park%2C_BC.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (desolation, sound). Source description: Grace Harbour, Desolation Sound Marine Park, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Grace_Harbour,_Desolation_Sound_Marine_Park,_BC.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-diana-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-diana-lake-park-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/provincial-diana-lake-park.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "A narrow wooden bridge crossing the water at Diana Lake Park",
+      "creator": "William Matheson",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Diana_Lake_Provincial_Park.jpg",
+      "sourceTitle": "Diana Lake Provincial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Diana_Lake_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 54.219846, -130.166550; Diana Lake Provincial Park",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Diana_Lake_Provincial_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-driftwood-canyon-park": {
+      "thumbnail": {
+        "src": "/places/provincial-driftwood-canyon-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-driftwood-canyon-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A wooden footbridge and park sign in a leafy clearing at Driftwood Canyon",
+      "creator": "David Greenwood",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Driftwood_Canyon_bridge.jpg",
+      "sourceTitle": "Driftwood Canyon bridge",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/62/Driftwood_Canyon_bridge.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (driftwood, canyon). Source description: Bridge over Driftwood Creek at start of interpretive trail in Driftwood Canyon Provincial Park, British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Driftwood_Canyon_bridge.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-duffey-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-duffey-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-duffey-lake-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Snowy peaks and forest reflected in the calm water of Duffey Lake",
+      "creator": "Roger Sylvia",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Duffey_Lake_in_the_Cayoosh_Pass_%5E%5ELac_Duffey_et_Joffre_peak_BC%5E%5EMt_Joffre_in_the_backround%5E%5E_Une_succession_de_lacs_,canyons_et_de_vistas_-_panoramio.jpg",
+      "sourceTitle": "Duffey Lake in the Cayoosh Pass ^^Lac Duffey et Joffre peak BC^^Mt Joffre in the backround^^ Une succession de lacs ,canyons et de vistas - panoramio",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Duffey_Lake_in_the_Cayoosh_Pass_%5E%5ELac_Duffey_et_Joffre_peak_BC%5E%5EMt_Joffre_in_the_backround%5E%5E_Une_succession_de_lacs_%2Ccanyons_et_de_vistas_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Duffey Lake in the Cayoosh Pass. Mt Joffre in the background.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Duffey_Lake_in_the_Cayoosh_Pass_%5E%5ELac_Duffey_et_Joffre_peak_BC%5E%5EMt_Joffre_in_the_backround%5E%5E_Une_succession_de_lacs_,canyons_et_de_vistas_-_panoramio.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-ed-bird-estella-lakes-park": {
+      "thumbnail": {
+        "src": "/places/provincial-ed-bird-estella-lakes-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-ed-bird-estella-lakes-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Bright turquoise alpine lakes surrounded by rocky terrain at Estella Lakes",
+      "creator": "Murray Foubister",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Estella_Lakes,_British_Columbia.jpg",
+      "sourceTitle": "Estella Lakes, British Columbia",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/57/Estella_Lakes%2C_British_Columbia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (bird, estella, lakes). Source description: FDI forest Inventory fieldwork at Williston Lake in Northern BC...colorful small lakes (now joined by spring flooding) just W of Ed Bird Lake...",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Estella_Lakes,_British_Columbia.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-flores-island-park": {
+      "thumbnail": {
+        "src": "/places/provincial-flores-island-park-thumb.webp",
+        "width": 320,
+        "height": 181
+      },
+      "detail": {
+        "src": "/places/provincial-flores-island-park.webp",
+        "width": 960,
+        "height": 542
+      },
+      "alt": "Forested islands, inlets, and distant mountains viewed from above Flores Island",
+      "creator": "Sam Beebe/Ecotrust",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ahousaht_First_Nation,_Flores_Island,_British_Columbia_-_panoramio.jpg",
+      "sourceTitle": "Ahousaht First Nation, Flores Island, British Columbia - panoramio",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Ahousaht_First_Nation%2C_Flores_Island%2C_British_Columbia_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Ahousaht First Nation, Flores Island, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Ahousaht_First_Nation,_Flores_Island,_British_Columbia_-_panoramio.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-francis-point-park": {
+      "thumbnail": {
+        "src": "/places/provincial-francis-point-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-francis-point-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Driftwood on a rocky shoreline overlooking the sea at Francis Point Park",
+      "creator": "Ken McMillan from Sechelt, BC, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Francis_Point_Park_8_(13196156163).jpg",
+      "sourceTitle": "Francis Point Park 8",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/87/Francis_Point_Park_8_%2813196156163%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Looking north up Malaspina Strait",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Francis_Point_Park_8_(13196156163).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-great-glacier-park": {
+      "thumbnail": {
+        "src": "/places/provincial-great-glacier-park-thumb.webp",
+        "width": 320,
+        "height": 78
+      },
+      "detail": {
+        "src": "/places/provincial-great-glacier-park.webp",
+        "width": 960,
+        "height": 234
+      },
+      "alt": "Great Glacier descending from snowy mountains toward a broad river valley",
+      "creator": "TreeChannel",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Terminus_of_Great_Glacier.jpg",
+      "sourceTitle": "Terminus of Great Glacier",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a9/Terminus_of_Great_Glacier.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 56.809430, -131.801420; Great Glacier, as seen from across the lake in Great Glacier Provincial Park in British Columbia, Canada, with tops of floating icebergs are visible in the foreground.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Terminus_of_Great_Glacier.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-harmony-islands-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-harmony-islands-marine-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-harmony-islands-marine-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A small tree-covered island in the calm waters of Harmony Islands Marine Park",
+      "creator": "Laurie MacBride",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Harmony_Islands.jpg",
+      "sourceTitle": "Harmony Islands",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/6d/Harmony_Islands.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (harmony, islands). Source description: Harmony Islands Marine Provincial Park in Hotham Sound, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Harmony_Islands.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-homathko-estuary-park": {
+      "thumbnail": {
+        "src": "/places/provincial-homathko-estuary-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-homathko-estuary-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A steep, forested mountain valley in Homathko Estuary Park",
+      "creator": "David Stanley from Nanaimo, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Homathko_River_Estuary_(50337603711).jpg",
+      "sourceTitle": "Homathko River Estuary",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/54/Homathko_River_Estuary_%2850337603711%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (homathko, estuary). Source description: Commons coordinates: 50.905869, -124.839835; The Homathko River Estuary on Waddington Harbour at the north end of Bute Inlet is surrounded by some of the highest mountains in coastal British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Homathko_River_Estuary_(50337603711).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kalamalka-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kalamalka-lake-park-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/provincial-kalamalka-lake-park.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "A deer standing among dry grass and shrubs near Kalamalka Lake",
+      "creator": "Kay Röllig",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Deer_At_Kalamalka_Lake_(207507925).jpeg",
+      "sourceTitle": "Deer At Kalamalka Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Deer_At_Kalamalka_Lake_%28207507925%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 50.202505, -119.282597; 500px provided description: Summer 2016 in Vernon [#wildlife ,#deer ,#wild ,#wilderness ,#tiere ,#wild animal ,#Canada ,#Vernon ,#British columbia ,#Reh ,#Kanada ,#Kala ,#kalamalka lake]",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Deer_At_Kalamalka_Lake_(207507925).jpeg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kentucky-alleyne-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kentucky-alleyne-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-kentucky-alleyne-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A vivid turquoise lake surrounded by conifer forest in Kentucky-Alleyne Park",
+      "creator": "GoToVan from Vancouver, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kentucky_Alleyne_Provincial_Park,_Quilchena,_BC_(48663104778).jpg",
+      "sourceTitle": "Kentucky Alleyne Provincial Park, Quilchena, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Kentucky_Alleyne_Provincial_Park%2C_Quilchena%2C_BC_%2848663104778%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (kentucky, alleyne). Source description: Kentucky Alleyne Provincial Park www.env.gov.bc.ca/bcparks/explore/parkpgs/kentucky_alleyne/",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kentucky_Alleyne_Provincial_Park,_Quilchena,_BC_(48663104778).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kiskatinaw-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kiskatinaw-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-kiskatinaw-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A winding body of water surrounded by forested hills in Kiskatinaw Park",
+      "creator": "jmmcbeth",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kiskatinaw,_British_Columbia.jpg",
+      "sourceTitle": "Kiskatinaw, British Columbia",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/31/Kiskatinaw%2C_British_Columbia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (kiskatinaw). Source description: View to the historic wooden bridge crossing of the Kiskatinaw, on the original Alaska Highway Route. A very special spot!",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kiskatinaw,_British_Columbia.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kitson-island-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kitson-island-marine-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-kitson-island-marine-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Kitson Island seen across calm coastal water beneath an overcast sky",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kitson_Island_Marine_Provincial_Park_from_the_southwest.webp",
+      "sourceTitle": "Kitson Island Marine Provincial Park from the southwest",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e3/Kitson_Island_Marine_Provincial_Park_from_the_southwest.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (kitson, island). Source description: Kitson Island Marine Provincial Park, British Columbia, Canada, from the southwest",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kitson_Island_Marine_Provincial_Park_from_the_southwest.webp",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kleanza-creek-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kleanza-creek-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-kleanza-creek-park.webp",
+        "width": 960,
+        "height": 721
+      },
+      "alt": "Kleanza Creek rushing between pale boulders in a rocky gorge",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cascades_in_Kleanza_Creek_Provincial_Park.png",
+      "sourceTitle": "Cascades in Kleanza Creek Provincial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Cascades_in_Kleanza_Creek_Provincial_Park.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (kleanza, creek). Source description: Cascades in Kleanza Creek Provincial Park, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Cascades_in_Kleanza_Creek_Provincial_Park.png",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-klewnuggit-inlet-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-klewnuggit-inlet-marine-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-klewnuggit-inlet-marine-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Forested mountains reflected in the still water of Klewnuggit Inlet",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Klewnuggit_Inlet_Marine_Park.webp",
+      "sourceTitle": "Klewnuggit Inlet Marine Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Klewnuggit_Inlet_Marine_Park.webp?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (klewnuggit, inlet). Source description: Klewnuggit Inlet Marine Park, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Klewnuggit_Inlet_Marine_Park.webp",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-kokanee-glacier-park": {
+      "thumbnail": {
+        "src": "/places/provincial-kokanee-glacier-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-kokanee-glacier-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A misty alpine lake and trail surrounded by conifer forest in Kokanee Glacier Park",
+      "creator": "Adam Jones, Ph.D. - Global Photo Archive",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/41000732@N04/50067791332",
+      "sourceTitle": "Rainy Vista at Gibson Lake - Kokanee Glacier Provincial Park - Kootenays - BC - Canada - 02",
+      "originalUrl": "https://live.staticflickr.com/65535/50067791332_f2f5d507c5_b.jpg",
+      "locationEvidence": "Source metadata names the place (kokanee, glacier). Source description: Rainy Vista at Gibson Lake - Kokanee Glacier Provincial Park - Kootenays - BC - Canada - 02 []",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/41000732@N04/50067791332",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-lockhart-beach-park": {
+      "thumbnail": {
+        "src": "/places/provincial-lockhart-beach-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-lockhart-beach-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A wide pebble beach curving along a forested shore at Lockhart Beach Park",
+      "creator": "GabrielVelasquez",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lockhart_Beach_Provicial_Park.jpg",
+      "sourceTitle": "Lockhart Beach Provicial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0b/Lockhart_Beach_Provicial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (lockhart, beach). Source description: North facing shot of Kootney Lake at Lockhart Beach Provicial Park, British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Lockhart_Beach_Provicial_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-mcconnell-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-mcconnell-lake-park-thumb.webp",
+        "width": 320,
+        "height": 148
+      },
+      "detail": {
+        "src": "/places/provincial-mcconnell-lake-park.webp",
+        "width": 960,
+        "height": 443
+      },
+      "alt": "A small wooden dock extending into McConnell Lake beneath an overcast sky",
+      "creator": "Koppertone",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:McConnell_Lake_.jpg",
+      "sourceTitle": "McConnell Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/02/McConnell_Lake_.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 50.522167, -120.454644; View of McConnell Lake in October within McConnell Lake Provincial Park",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:McConnell_Lake_.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-momich-lakes-park": {
+      "thumbnail": {
+        "src": "/places/provincial-momich-lakes-park-thumb.webp",
+        "width": 320,
+        "height": 241
+      },
+      "detail": {
+        "src": "/places/provincial-momich-lakes-park.webp",
+        "width": 960,
+        "height": 723
+      },
+      "alt": "An aerial view of a forested shoreline and blue water at Momich Lakes Park",
+      "creator": "Rkwitkoski77",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Momich_Lake_east_beach.jpg",
+      "sourceTitle": "Momich Lake east beach",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Momich_Lake_east_beach.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 51.330000, -119.330000; Momich Lakes Provincial Park, main Momich Lake east beach",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Momich_Lake_east_beach.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-monashee-park": {
+      "thumbnail": {
+        "src": "/places/provincial-monashee-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-monashee-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A forested mountain reflected in the calm water of Spectrum Lake",
+      "creator": "Juventas",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Spectrum_Lake.jpg",
+      "sourceTitle": "Spectrum Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/16/Spectrum_Lake.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (monashee). Source description: Spectrum Lake in Monashee Provincial Park, British Columbia, Canada. Captured looking southward with the tip of Mount Fosthall in the distant background.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Spectrum_Lake.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-mount-assiniboine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-mount-assiniboine-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-mount-assiniboine-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Mount Assiniboine rising above Sunburst Lake and conifer forest",
+      "creator": "Kurt Stegmüller",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Assiniboine_Sunburst_Lake.jpg",
+      "sourceTitle": "Mount Assiniboine Sunburst Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/bd/Mount_Assiniboine_Sunburst_Lake.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 50.910000, -115.645278; Mount Assiniboine with Sunburst Lake",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Assiniboine_Sunburst_Lake.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-mount-edziza-park": {
+      "thumbnail": {
+        "src": "/places/provincial-mount-edziza-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-mount-edziza-park.webp",
+        "width": 640,
+        "height": 480
+      },
+      "alt": "Mount Edziza rising above a broad volcanic plateau",
+      "creator": "nass5518",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Edziza,_British_Columbia.jpg",
+      "sourceTitle": "Mount Edziza, British Columbia",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/54/Mount_Edziza%2C_British_Columbia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (mount, edziza). Source description: Mount Edziza in northwestern British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Edziza,_British_Columbia.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-muncho-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-muncho-lake-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-muncho-lake-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Mountains and clouds reflected in the glassy water of Muncho Lake",
+      "creator": "Kelly Donaldson",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Muncho_Lake,_BC,_Canada_June2010.jpg",
+      "sourceTitle": "Muncho Lake, BC, Canada June2010",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Muncho_Lake%2C_BC%2C_Canada_June2010.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (muncho, lake). Source description: Muncho Lake along the Alaska Highway is part of Muncho Lake Provincial Park in British Columbia, Canada. This photo was taken on June 16, 2010. The mirror smooth surface of the lake reflects everything around it.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Muncho_Lake,_BC,_Canada_June2010.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-nairn-falls-park": {
+      "thumbnail": {
+        "src": "/places/provincial-nairn-falls-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-nairn-falls-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Turquoise river water flowing between forested banks near Nairn Falls",
+      "creator": "Sébastien Launay",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Nairn_Falls_Campground.jpg",
+      "sourceTitle": "Nairn Falls Campground",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/be/Nairn_Falls_Campground.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Nairn Falls Campground",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Nairn_Falls_Campground.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-niskonlith-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-niskonlith-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-niskonlith-lake-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Clouds and low hills reflected in the still water of Niskonlith Lake",
+      "creator": "Rkwitkoski77",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Neskonlith_Lake.jpg",
+      "sourceTitle": "Neskonlith Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f5/Neskonlith_Lake.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 50.790000, -119.780000; Niskonlith Lake Provincial Park from beach in campsite",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Neskonlith_Lake.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-north-thompson-river-park": {
+      "thumbnail": {
+        "src": "/places/provincial-north-thompson-river-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-north-thompson-river-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A broad bend of the North Thompson River bordered by dense forest",
+      "creator": "Adam Jones",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Riverbank_of_North_Thompson_River.jpg",
+      "sourceTitle": "View from Riverbank of North Thompson River",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c4/View_from_Riverbank_of_North_Thompson_River.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (north, thompson, river). Source description: North Thompson River Provincial Park, located just outside Clearwater, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Riverbank_of_North_Thompson_River.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-northern-rocky-mountains-park": {
+      "thumbnail": {
+        "src": "/places/provincial-northern-rocky-mountains-park-thumb.webp",
+        "width": 320,
+        "height": 217
+      },
+      "detail": {
+        "src": "/places/provincial-northern-rocky-mountains-park.webp",
+        "width": 886,
+        "height": 602
+      },
+      "alt": "A winding river crossing a broad mountain valley in Northern Rocky Mountains Park",
+      "creator": "Gerry from Fort St. John, BC, Canada",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tuchodi_River_valley.jpg",
+      "sourceTitle": "Tuchodi River valley",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Tuchodi_River_valley.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 58.198213, -124.119415; Looking down Dead Dog Creak towards the Tuchodi River, Northern Rocky Mountains Provincial Park, British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Tuchodi_River_valley.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-okeover-arm-park": {
+      "thumbnail": {
+        "src": "/places/provincial-okeover-arm-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-okeover-arm-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A pale beach overlooking blue water and distant mountains at Okeover Arm",
+      "creator": "David Stanley from Nanaimo, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Okeover_Inlet_(9362855892).jpg",
+      "sourceTitle": "Okeover Inlet",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/14/Okeover_Inlet_%289362855892%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (okeover, arm). Source description: Commons coordinates: 49.993063, -124.716153; The view of Okeover Inlet from Okeover Arm Provincial Park near Lund, British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Okeover_Inlet_(9362855892).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-paul-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-paul-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-paul-lake-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Forest and mountains reflected in the calm water of Paul Lake",
+      "creator": "Koppertone",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Paul_Lake_Provincial_Park,_British_Columbia.jpg",
+      "sourceTitle": "Paul Lake Provincial Park, British Columbia",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/04/Paul_Lake_Provincial_Park%2C_British_Columbia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (paul, lake). Source description: This is a view of Paul Lake within Provincial Park Park near Kamloops, British Columbia. This is a view from the community end facing East into the park.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Paul_Lake_Provincial_Park,_British_Columbia.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-pinnacles-park": {
+      "thumbnail": {
+        "src": "/places/provincial-pinnacles-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-pinnacles-park.webp",
+        "width": 960,
+        "height": 638
+      },
+      "alt": "Layered mountain ridges beneath a clear blue sky in Pinnacles Park",
+      "creator": "John Freeland",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Forested_valley_in_Pinnacles_Provincial_Park,_BC.jpg",
+      "sourceTitle": "Forested valley in Pinnacles Provincial Park, BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/45/Forested_valley_in_Pinnacles_Provincial_Park%2C_BC.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (pinnacles). Source description: Forested valley in Pinnacles Provincial Park, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Forested_valley_in_Pinnacles_Provincial_Park,_BC.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-plumper-cove-marine-park": {
+      "thumbnail": {
+        "src": "/places/provincial-plumper-cove-marine-park-thumb.webp",
+        "width": 320,
+        "height": 175
+      },
+      "detail": {
+        "src": "/places/provincial-plumper-cove-marine-park.webp",
+        "width": 960,
+        "height": 525
+      },
+      "alt": "Forested islands and channels viewed from above Plumper Cove Marine Park",
+      "creator": "BWJinks",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Above_Plumper_Cove_Marine_Provincial_Park.jpg",
+      "sourceTitle": "View from Above Plumper Cove Marine Provincial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8b/View_from_Above_Plumper_Cove_Marine_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (plumper, cove). Source description: Drone shot from above Plumper Cove Marine Provincial Park, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:View_from_Above_Plumper_Cove_Marine_Provincial_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-porteau-cove-park": {
+      "thumbnail": {
+        "src": "/places/provincial-porteau-cove-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-porteau-cove-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Snow-dusted mountains across the water at Porteau Cove Park",
+      "creator": "Kyla Duhamel from Saskatoon, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:PorteauCovePP-water-mountains.jpg",
+      "sourceTitle": "PorteauCovePP-water-mountains",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4f/PorteauCovePP-water-mountains.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: A view of Howe Sound and mountains from Porteau Cove Provincial Park",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:PorteauCovePP-water-mountains.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-prudhomme-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-prudhomme-lake-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-prudhomme-lake-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A small dock on calm Prudhomme Lake with mountains in the distance",
+      "creator": "Alan Vernon",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Prudhomme_Lake,_during_a_break_in_the_weather..jpg",
+      "sourceTitle": "Prudhomme Lake, during a break in the weather.",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/6/65/Prudhomme_Lake%2C_during_a_break_in_the_weather..jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (prudhomme, lake). Source description: Prudhomme Lake is situated just a few mile East of Prince Rupert. BC.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Prudhomme_Lake,_during_a_break_in_the_weather..jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-rearguard-falls-park": {
+      "thumbnail": {
+        "src": "/places/provincial-rearguard-falls-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-rearguard-falls-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "White water surging through a forest-lined channel at Rearguard Falls",
+      "creator": "Ralf Lotys (Sicherlich)",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:2019-06_Rearguard_Falls_(02).jpg",
+      "sourceTitle": "2019-06 Rearguard Falls (02)",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2f/2019-06_Rearguard_Falls_%2802%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 52.974423, -119.363105; Die Rearguard Falls sind Wasserfälle im Rearguard Falls Provincial Park in British Columbia, Kanada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:2019-06_Rearguard_Falls_(02).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-red-bluff-park": {
+      "thumbnail": {
+        "src": "/places/provincial-red-bluff-park-thumb.webp",
+        "width": 320,
+        "height": 214
+      },
+      "detail": {
+        "src": "/places/provincial-red-bluff-park.webp",
+        "width": 960,
+        "height": 641
+      },
+      "alt": "Wooden pilings in clear blue water at Red Bluff Park",
+      "creator": "Darren Kirby",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Red_Bluff_Provincial_Park,_British_Columbia.jpg",
+      "sourceTitle": "Red Bluff Provincial Park, British Columbia",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Red_Bluff_Provincial_Park%2C_British_Columbia.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (red, bluff). Source description: Red Bluff Provincial Park, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Red_Bluff_Provincial_Park,_British_Columbia.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-ross-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-ross-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-ross-lake-park.webp",
+        "width": 960,
+        "height": 721
+      },
+      "alt": "Ross Lake and shoreline wetlands beneath low clouds",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Autumn_View_from_Ross_Lake_Provincial_Park.jpg",
+      "sourceTitle": "Autumn View from Ross Lake Provincial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Autumn_View_from_Ross_Lake_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (ross, lake). Source description: Autumn View from Ross Lake Provincial Park, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Autumn_View_from_Ross_Lake_Provincial_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-saltery-bay-park": {
+      "thumbnail": {
+        "src": "/places/provincial-saltery-bay-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-saltery-bay-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A rocky, tree-covered shoreline across the water at Saltery Bay Park",
+      "creator": "Redonebird",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:MermaidsCove.jpg",
+      "sourceTitle": "MermaidsCove",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e7/MermaidsCove.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.779116, -124.190902; Mermaids Cove at Saltery Bay Provincial Park, B.C.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:MermaidsCove.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-seeley-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-seeley-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-seeley-lake-park.webp",
+        "width": 960,
+        "height": 721
+      },
+      "alt": "Reeds and wetland vegetation along the shore of Seeley Lake",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rain_falls_amongst_the_wetlands_on_the_shores_of_Lake_Seeley.png",
+      "sourceTitle": "Rain falls amongst the wetlands on the shores of Lake Seeley",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Rain_falls_amongst_the_wetlands_on_the_shores_of_Lake_Seeley.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (seeley, lake). Source description: Rain falls amongst the wetlands on the shores of Lake Seeley, British Columbia, Canada, with the Hazelton Mountains shrouded in mists in the background",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Rain_falls_amongst_the_wetlands_on_the_shores_of_Lake_Seeley.png",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-shannon-falls-park": {
+      "thumbnail": {
+        "src": "/places/provincial-shannon-falls-park-thumb.webp",
+        "width": 213,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/provincial-shannon-falls-park.webp",
+        "width": 640,
+        "height": 960
+      },
+      "alt": "Shannon Falls plunging down a tall rock face between evergreen trees",
+      "creator": "Mfield , Matthew Field, http://www.photography.mattfield.com",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Shannon_falls_pano.jpg",
+      "sourceTitle": "Shannon falls pano",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/eb/Shannon_falls_pano.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.669627, -123.162059; A vertical panorama of Shannon Falls, located in Shannon Falls Provincial Park, 58 kilometers (36 mi) from Vancouver and 2 kilometers (1 mi) south of Squamish along the Sea to Sky Highway in...",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Shannon_falls_pano.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-silver-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-silver-lake-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-silver-lake-park.webp",
+        "width": 960,
+        "height": 638
+      },
+      "alt": "Silver Lake in a steep green valley beneath a bright blue sky",
+      "creator": "Z S Photography",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Silver_Lake_Bc_(161623637).jpeg",
+      "sourceTitle": "Silver Lake Bc",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/be/Silver_Lake_Bc_%28161623637%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (silver, lake). Source description: 500px provided description: Crystal clean water [#Trees ,#Water ,#Mountain ,#BC ,#Reflection ,#Silverlake]",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Silver_Lake_Bc_(161623637).jpeg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-tantalus-park": {
+      "thumbnail": {
+        "src": "/places/provincial-tantalus-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-tantalus-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Jagged, snow-covered peaks in Tantalus Park beneath a clear sky",
+      "creator": "McKay Savage from London, UK",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tantalus_-_06_-_Tantalus_from_Pelion_shoulder_(7000_ft_pass)_(197841728).jpg",
+      "sourceTitle": "Tantalus - 06 - Tantalus from Pelion shoulder (7000 ft pass)",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/7/7b/Tantalus_-_06_-_Tantalus_from_Pelion_shoulder_%287000_ft_pass%29_%28197841728%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.870692, -123.351568; The impressive Mt. Tantalus from the north. We approached via the shoulder of Pelion as part of a 4-day walk-in ascent of Tantalus. The shot is taken from the 7400ft shoulder of Pelion. Out...",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Tantalus_-_06_-_Tantalus_from_Pelion_shoulder_(7000_ft_pass)_(197841728).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-tetrahedron-park": {
+      "thumbnail": {
+        "src": "/places/provincial-tetrahedron-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-tetrahedron-park.webp",
+        "width": 768,
+        "height": 512
+      },
+      "alt": "A tall weathered tree rising above conifers in Tetrahedron Park",
+      "creator": "McKay Savage from London, UK",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trips_04_-_Tetrahedron_-_38_(90964552).jpg",
+      "sourceTitle": "Trips 04 - Tetrahedron - 38",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/19/Trips_04_-_Tetrahedron_-_38_%2890964552%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Trips '04 - Tetrahedron - 38",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trips_04_-_Tetrahedron_-_38_(90964552).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-top-of-the-world-park": {
+      "thumbnail": {
+        "src": "/places/provincial-top-of-the-world-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/provincial-top-of-the-world-park.webp",
+        "width": 874,
+        "height": 581
+      },
+      "alt": "A blue alpine lake bordered by forest and rocky slopes in Top of the World Park",
+      "creator": "Jody McIntyre from Montreal, Canada",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Fish_Lake_(5399708318).jpg",
+      "sourceTitle": "Fish Lake",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/ce/Fish_Lake_%285399708318%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (top, world). Source description: Fish Lake, Top of the World Provincial Park, BC Cross-Canada cycling trip, 2000",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Fish_Lake_(5399708318).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-wells-gray-park": {
+      "thumbnail": {
+        "src": "/places/provincial-wells-gray-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-wells-gray-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Helmcken Falls dropping into a snow-covered canyon in Wells Gray Park",
+      "creator": "Keira",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/13894502@N00/8555099045",
+      "sourceTitle": "Helmken Falls, Wells Gray Park, BC",
+      "originalUrl": "https://live.staticflickr.com/8240/8555099045_b23edb986e_b.jpg",
+      "locationEvidence": "Source metadata names the place (wells, gray). Source description: Helmken Falls, Wells Gray Park, BC",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/13894502@N00/8555099045",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-whiteswan-lake-park": {
+      "thumbnail": {
+        "src": "/places/provincial-whiteswan-lake-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-whiteswan-lake-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A mountain reflected in the still water of Whiteswan Lake",
+      "creator": "Esce03",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Whiteswan_Lake_Provincial_Park,_BC,_Canada.jpg",
+      "sourceTitle": "Whiteswan Lake Provincial Park, BC, Canada",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Whiteswan_Lake_Provincial_Park%2C_BC%2C_Canada.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (whiteswan, lake). Source description: Whiteswan Lake Provincial Park, BC, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Whiteswan_Lake_Provincial_Park,_BC,_Canada.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "provincial-wrinkly-face-park": {
+      "thumbnail": {
+        "src": "/places/provincial-wrinkly-face-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/provincial-wrinkly-face-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A wildflower meadow overlooking forested hills in Wrinkly Face Park",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Field_of_Wildflowers_in_Wrinkly_Face_Provincial_Park.jpg",
+      "sourceTitle": "Field of Wildflowers in Wrinkly Face Provincial Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/2/22/Field_of_Wildflowers_in_Wrinkly_Face_Provincial_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (wrinkly, face). Source description: Field of Wildflowers in Wrinkly Face Provincial Park, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Field_of_Wildflowers_in_Wrinkly_Face_Provincial_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-george-hill-regional-park": {
+      "thumbnail": {
+        "src": "/places/regional-george-hill-regional-park-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/regional-george-hill-regional-park.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "Trincomali Channel and distant islands framed by evergreen branches",
+      "creator": "Kiwibirdman",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Trincomalli_Channel_from_George_Hill_-_panoramio.jpg",
+      "sourceTitle": "Trincomalli Channel from George Hill - panoramio",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/16/Trincomalli_Channel_from_George_Hill_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Trincomalli Channel from George Hill",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Trincomalli_Channel_from_George_Hill_-_panoramio.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-greenspaces-comox-valley-bear-creek-nature-park-4816": {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-comox-valley-bear-creek-nature-park-4816-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-comox-valley-bear-creek-nature-park-4816.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Tall trees and green undergrowth in Bear Creek Nature Park",
+      "creator": "David Stanley",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Nature_Park.jpg",
+      "sourceTitle": "Bear Creek Nature Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b3/Bear_Creek_Nature_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.861493, -125.160595; A variety of hiking trails wind through Bear Creek Nature Park at Black Creek, British Columbia, Canada.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Bear_Creek_Nature_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-greenspaces-comox-valley-morning-beach-park-4876": {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-comox-valley-morning-beach-park-4876-thumb.webp",
+        "width": 320,
+        "height": 217
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-comox-valley-morning-beach-park-4876.webp",
+        "width": 960,
+        "height": 651
+      },
+      "alt": "A sandy beach viewed through trees and a wooden fence at Morning Beach Park",
+      "creator": "Gerry Thomasen from Nanaimo, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Morning_Beach_Park,_Denman_Island_(49341595687).jpg",
+      "sourceTitle": "Morning Beach Park, Denman Island",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Morning_Beach_Park%2C_Denman_Island_%2849341595687%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.597794, -124.825920; These wooden stairs lead down the Komas Bluffs to a long beach on the northeast part of beautiful Denman Island.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Morning_Beach_Park,_Denman_Island_(49341595687).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-greenspaces-fraser-valley-cascade-falls-regional-park-4812": {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-fraser-valley-cascade-falls-regional-park-4812-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-fraser-valley-cascade-falls-regional-park-4812.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Cascade Falls dropping through a lush forested gorge",
+      "creator": "Casey Yee",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cascade_Falls_Regional_Park_BC.jpg",
+      "sourceTitle": "Cascade Falls Regional Park BC",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e0/Cascade_Falls_Regional_Park_BC.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.275000, -122.213000; Waterfall and forest in Cascade Falls Regional Park, Fraser Valley, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Cascade_Falls_Regional_Park_BC.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-greenspaces-sunshine-coast-cliff-gilker-6977": {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-sunshine-coast-cliff-gilker-6977-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-sunshine-coast-cliff-gilker-6977.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "White water cascading over dark rocks at Cliff Gilker Park",
+      "creator": "Ken McMillan from Sechelt, BC, Canada",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Waterfall_(15782563868).jpg",
+      "sourceTitle": "Waterfall",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b9/Waterfall_%2815782563868%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.428672, -123.641516; Cliff Gilker Park, Roberts Creek, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Waterfall_(15782563868).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-greenspaces-sunshine-coast-coopers-green-7157": {
+      "thumbnail": {
+        "src": "/places/regional-greenspaces-sunshine-coast-coopers-green-7157-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-greenspaces-sunshine-coast-coopers-green-7157.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A sheltered coastal bay and forested shoreline at Coopers Green",
+      "creator": "Mike",
+      "license": "CC BY-SA 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Cooper_Green_Regional_Park.jpg",
+      "sourceTitle": "Cooper Green Regional Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Cooper_Green_Regional_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (coopers, green). Source description: Coopers Green Regional Park in Sunshine Coast Regional District, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Cooper_Green_Regional_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-ald": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-ald-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-ald.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Wildflowers blooming beneath leafless trees in Aldergrove Regional Park",
+      "creator": "waferboard",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Aldergrove_20210411_131605_(51112199261).jpg",
+      "sourceTitle": "Aldergrove 20210411 131605",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Aldergrove_20210411_131605_%2851112199261%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: 20210411_131605",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Aldergrove_20210411_131605_(51112199261).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-bar": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-bar-thumb.webp",
+        "width": 320,
+        "height": 144
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-bar.webp",
+        "width": 960,
+        "height": 432
+      },
+      "alt": "A red bridge spanning calm water beside Barnston Island Regional Park",
+      "creator": "Theodor",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Barnston_Island_Regional_Park.jpg",
+      "sourceTitle": "Barnston Island Regional Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/df/Barnston_Island_Regional_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (barnston, island). Source description: Commons coordinates: 49.193774, -122.673442; Barnston Island Regional Park (park in Metro Vancouver, British Columbia, Canada)",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Barnston_Island_Regional_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-bou": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-bou-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-bou.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A broad tidal beach beneath a cloudy sky at Boundary Bay Regional Park",
+      "creator": "GoToVan",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Boundary_Bay_Regional_Park_in_Tsawwassen.jpg",
+      "sourceTitle": "Boundary Bay Regional Park in Tsawwassen",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Boundary_Bay_Regional_Park_in_Tsawwassen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (boundary, bay). Source description: Boundary Bay Regional Park in Tsawwassen, Delta, BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Boundary_Bay_Regional_Park_in_Tsawwassen.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-cam": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-cam-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-cam.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A paved trail winding through a green meadow at Campbell Valley Regional Park",
+      "creator": "Vranak",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Little_Campbell_River_Park.JPG",
+      "sourceTitle": "Little Campbell River Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Little_Campbell_River_Park.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (campbell, valley). Source description: Footbridge over the 'river' (not visible) in Campbell Valley Regional Park, Langley, BC.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Little_Campbell_River_Park.JPG",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-ion": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-ion-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-ion.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A flat shoreline and open water beneath a hazy sky at Iona Beach Regional Park",
+      "creator": "User:Usgnus",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Iona_Beach_Regional_Park.jpg",
+      "sourceTitle": "Iona Beach Regional Park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3e/Iona_Beach_Regional_Park.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (iona, beach). Source description: Iona Beach Regional Park on Iona Island — Richmond, British Columbia",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Iona_Beach_Regional_Park.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-kan": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-kan-thumb.webp",
+        "width": 320,
+        "height": 112
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-kan.webp",
+        "width": 960,
+        "height": 335
+      },
+      "alt": "A grassy bank beside a calm oxbow at Kanaka Creek Regional Park",
+      "creator": "Kiwibirdman",
+      "license": "CC BY 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Kanaka_Creek_Oxbow_-_panoramio.jpg",
+      "sourceTitle": "Kanaka Creek Oxbow - panoramio",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/7/78/Kanaka_Creek_Oxbow_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Commons coordinates: 49.197826, -122.579794; Kanaka Creek Oxbow. The left arm opens into the Fraser River about 400m from the oxbow.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Kanaka_Creek_Oxbow_-_panoramio.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-min": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-min-thumb.webp",
+        "width": 320,
+        "height": 180
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-min.webp",
+        "width": 960,
+        "height": 540
+      },
+      "alt": "A still pond bordered by dense forest in Minnekhada Regional Park",
+      "creator": "Colin W",
+      "license": "CC BY-SA 3.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Minnekhada_Regional_Park,_Port_Coquitlam_-_panoramio.jpg",
+      "sourceTitle": "Minnekhada Regional Park, Port Coquitlam - panoramio",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5a/Minnekhada_Regional_Park%2C_Port_Coquitlam_-_panoramio.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Minnekhada Regional Park, Port Coquitlam",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Minnekhada_Regional_Park,_Port_Coquitlam_-_panoramio.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-pac": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-pac-thumb.webp",
+        "width": 212,
+        "height": 320
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-pac.webp",
+        "width": 637,
+        "height": 960
+      },
+      "alt": "A narrow trail winding through dense forest in Pacific Spirit Regional Park",
+      "creator": "abdallahh",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/22168167@N00/3868075608",
+      "sourceTitle": "Pacific Spirit Regional Park, Vancouver, BC",
+      "originalUrl": "https://live.staticflickr.com/2584/3868075608_70de05f14a_b.jpg",
+      "locationEvidence": "Source metadata names the place (pacific, spirit). Source description: Pacific Spirit Regional Park, Vancouver, BC",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/22168167@N00/3868075608",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-sur": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-sur-thumb.webp",
+        "width": 320,
+        "height": 172
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-sur.webp",
+        "width": 960,
+        "height": 516
+      },
+      "alt": "A leaf-covered path through woodland in Surrey Bend Regional Park",
+      "creator": "waferboard",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Path_in_the_park_(8028472727).jpg",
+      "sourceTitle": "Path in the park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/8/81/Path_in_the_park_%288028472727%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Surrey Bend park in Surrey, B.C. 120825-21",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Path_in_the_park_(8028472727).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-metro-vancouver-tyn": {
+      "thumbnail": {
+        "src": "/places/regional-metro-vancouver-tyn-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-metro-vancouver-tyn.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "Sunlight filtering through tall trees in Tynehead Regional Park",
+      "creator": "waferboard",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Tynehead_park_(6844861835).jpg",
+      "sourceTitle": "Tynehead park",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Tynehead_park_%286844861835%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source coordinates were inside the Parkdex boundary during candidate discovery. Source description: Tynehead park in Surrey, BC. 120130-11",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Tynehead_park_(6844861835).jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-mount-benson-regional-park": {
+      "thumbnail": {
+        "src": "/places/regional-mount-benson-regional-park-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-mount-benson-regional-park.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "An aerial view of snow-covered Mount Benson and surrounding ridges",
+      "creator": "KenWalker",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Benson_aerial_2.jpg",
+      "sourceTitle": "Mount Benson aerial 2",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/0/05/Mount_Benson_aerial_2.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (mount, benson). Source description: Aerial shot of Mount Benson, Nanaimo BC",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Mount_Benson_aerial_2.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-rdco-2": {
+      "thumbnail": {
+        "src": "/places/regional-rdco-2-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-rdco-2.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "A quiet winter beach beneath a blue sky at Antlers Beach Regional Park",
+      "creator": "Extemporalist",
+      "license": "CC0 1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Antlers_Beach_Regional_Park_in_Late_Winter.JPG",
+      "sourceTitle": "Antlers Beach Regional Park in Late Winter",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/a/af/Antlers_Beach_Regional_Park_in_Late_Winter.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (antlers, beach). Source description: Antlers Beach Regional Park, near Peachland BC.",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Antlers_Beach_Regional_Park_in_Late_Winter.JPG",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-rdffg-prop00003": {
+      "thumbnail": {
+        "src": "/places/regional-rdffg-prop00003-thumb.webp",
+        "width": 320,
+        "height": 240
+      },
+      "detail": {
+        "src": "/places/regional-rdffg-prop00003.webp",
+        "width": 960,
+        "height": 720
+      },
+      "alt": "Swift Creek flowing over a broad gravel bed in George Hicks Regional Park",
+      "creator": "soubhik92",
+      "license": "CC BY 2.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+      "sourceUrl": "https://www.flickr.com/photos/195696549@N02/52099233523",
+      "sourceTitle": "Swift Creek, George Hicks Regional Park, in Valemount, BC",
+      "originalUrl": "https://live.staticflickr.com/65535/52099233523_73aba647d0_b.jpg",
+      "locationEvidence": "Source metadata names the place (george, hicks). Source description: Swift Creek, George Hicks Regional Park, in Valemount, BC",
+      "locationEvidenceUrl": "https://www.flickr.com/photos/195696549@N02/52099233523",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    },
+    "regional-roche-cove-regional-park": {
+      "thumbnail": {
+        "src": "/places/regional-roche-cove-regional-park-thumb.webp",
+        "width": 320,
+        "height": 213
+      },
+      "detail": {
+        "src": "/places/regional-roche-cove-regional-park.webp",
+        "width": 960,
+        "height": 640
+      },
+      "alt": "A narrow, forested inlet with calm water at Roche Cove Regional Park",
+      "creator": "Michal Klajban",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+      "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sooke_Basin,_British_Columbia,_Canada_03.jpg",
+      "sourceTitle": "Sooke Basin, British Columbia, Canada 03",
+      "originalUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Sooke_Basin%2C_British_Columbia%2C_Canada_03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "locationEvidence": "Source metadata names the place (roche, cove). Source description: Sooke Basin from Roche Cove Bridge, British Columbia, Canada",
+      "locationEvidenceUrl": "https://commons.wikimedia.org/wiki/File:Sooke_Basin,_British_Columbia,_Canada_03.jpg",
+      "changes": "Resized without upscaling, converted to WebP, and center-cropped by the interface when needed."
+    }
 }

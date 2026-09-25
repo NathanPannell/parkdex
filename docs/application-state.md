@@ -18,7 +18,7 @@ The map renders supplied features and reports selection or viewport events. It d
 
 ## Storage policy
 
-The durable public catalogue contains a lightweight search and marker index. Complete place bundles retain the 20 most recently opened detail views, including sourced information, the full detail photo when available, and the precise claim boundary. Reading a thumbnail does not increase recency. Eviction removes the whole public bundle.
+The durable public catalogue contains a lightweight search and marker index. Complete place bundles retain the 20 most recently opened detail views, including sourced information, every available full detail/gallery photo, and the precise claim boundary. Reading a thumbnail does not increase recency. Eviction removes the whole public bundle, including all gallery photos.
 
 Browser bundles use IndexedDB. Android bundles use app-private Filesystem storage with a small manifest. Android builds omit the preloaded photo library and large map geometry files. Public content and map imagery are fetched on demand; display geometry remains transient session data. Credentials, progress, unsynchronized claims, and private photo retry records have separate lifecycles and are never evicted by the public content limit.
 

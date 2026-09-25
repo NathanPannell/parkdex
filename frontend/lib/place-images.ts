@@ -1,4 +1,5 @@
 import cataloguePlaceImages from "./place-images.catalogue.json";
+import galleryPlaceImages from "./place-images.gallery.json";
 import { publicAssetUrl } from "./public-assets";
 
 export type PlaceImageAsset = {
@@ -286,6 +287,12 @@ export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
 
 export const PLACE_IMAGE_COUNT = Object.keys(PLACE_IMAGES).length;
 
+export const PLACE_IMAGE_GALLERY: Readonly<Record<string, readonly PlaceImageRecord[]>> =
+  galleryPlaceImages as Record<string, PlaceImageRecord[]>;
+
+export const PLACE_IMAGE_RECORD_COUNT = PLACE_IMAGE_COUNT
+  + Object.values(PLACE_IMAGE_GALLERY).reduce((total, images) => total + images.length, 0);
+
 export function getPlaceImage(placeId: string): PlaceImageRecord | undefined {
   const image = PLACE_IMAGES[placeId];
   if (!image) return undefined;
@@ -294,4 +301,18 @@ export function getPlaceImage(placeId: string): PlaceImageRecord | undefined {
     thumbnail: { ...image.thumbnail, src: publicAssetUrl(image.thumbnail.src) },
     detail: { ...image.detail, src: publicAssetUrl(image.detail.src) },
   };
+}
+
+export function getPlaceImages(placeId: string): readonly PlaceImageRecord[] {
+  const primary = getPlaceImage(placeId);
+  if (!primary) return [];
+  const alternates = PLACE_IMAGE_GALLERY[placeId] ?? [];
+  return [
+    primary,
+    ...alternates.map((image) => ({
+      ...image,
+      thumbnail: { ...image.thumbnail, src: publicAssetUrl(image.thumbnail.src) },
+      detail: { ...image.detail, src: publicAssetUrl(image.detail.src) },
+    })),
+  ];
 }
