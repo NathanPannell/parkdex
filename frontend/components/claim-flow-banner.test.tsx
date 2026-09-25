@@ -30,6 +30,7 @@ function setup(
   uploadPhoto = vi.fn().mockResolvedValue(undefined),
   retryOverrides: Partial<{ save: ReturnType<typeof vi.fn>; load: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; clearOwner: ReturnType<typeof vi.fn> }> = {},
   reconcileClaim = vi.fn().mockResolvedValue(null),
+  manualClaim?: { location: () => typeof location; photo: () => Promise<{ file: File; mimeType: string; processingState: "prepared" }> },
 ) {
   const retry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined), ...retryOverrides };
   const getPhoto = vi.fn().mockResolvedValue(photo ? { file: photo, mimeType: photo.type } : null);
@@ -43,7 +44,7 @@ function setup(
   const onViewAccount = vi.fn();
   const onFlowActiveChange = vi.fn();
   const onClearRecommendation = vi.fn();
-  const props = { place, recommendation, ownerKey: "account:user-1", recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation };
+  const props = { place, recommendation, ownerKey: "account:user-1", recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation, manualClaim };
   const rendered = render(<ClaimFlowBanner {...props} busy={false} />);
   const rerenderBusy = (busy: boolean) => rendered.rerender(<ClaimFlowBanner {...props} busy={busy} />);
   const rerenderReset = (resetSignal: number) => rendered.rerender(<ClaimFlowBanner {...props} busy={false} resetSignal={resetSignal} />);
@@ -60,6 +61,26 @@ async function savePhotoReview() {
 }
 
 describe("ClaimFlowBanner", () => {
+  it("uses a generated test photo and simulated location through the normal claim and upload steps", async () => {
+    const testPhoto = new File(["test jpeg"], "staging-test.jpg", { type: "image/jpeg" });
+    const getTestPhoto = vi.fn().mockResolvedValue({ file: testPhoto, mimeType: "image/jpeg", processingState: "prepared" });
+    const getTestLocation = vi.fn(() => ({ ...location, capturedAtEpochMs: Date.now() }));
+    const handlers = setup(null, undefined, {}, undefined, { location: getTestLocation, photo: getTestPhoto });
+    expect(await screen.findByText(/simulated park location and a generated photo/i)).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Use generated photo" }));
+    expect(await screen.findByRole("button", { name: "Save my visit" })).toBeTruthy();
+    expect(screen.getByText("Generated test photo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
+    await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, testPhoto));
+    expect(handlers.getPhoto).not.toHaveBeenCalled();
+    expect(handlers.getCurrentLocation).not.toHaveBeenCalled();
+    expect(getTestPhoto).toHaveBeenCalledTimes(1);
+    expect(getTestLocation).toHaveBeenCalledTimes(1);
+    expect(handlers.recommendClaim).toHaveBeenCalledWith({ location: expect.objectContaining({ latitude: place.latitude, longitude: place.longitude }) });
+    expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "fresh", expectedPlaceId: place.id, photoExpected: true });
+    expect(await screen.findByRole("heading", { name: "Test visit saved." })).toBeTruthy();
+  });
+
   it("credits the original photo, license, and display changes on arrival", () => {
     setup(null);
     const credit = document.querySelector<HTMLElement>(".impression-arrival-credit")!;

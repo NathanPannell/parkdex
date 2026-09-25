@@ -346,6 +346,7 @@ test("orchestration preserves the isolation and identity contracts", () => {
   assert.doesNotMatch(source, /environment", "new"[^\n]*--(?:copy|duplicate)/);
   assert.doesNotMatch(source, /APP_ENVIRONMENT/);
   assert.match(source, /RAILWAY_ENVIRONMENT_NAME/);
+  assert.match(source, /"--env", "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=1"/);
   assert.match(source, /PREVIEW_DATABASE_URL_UNPOOLED/);
   assert.match(source, /APP_RELEASE_ID/);
   assert.match(source, /API_PUBLIC_URL/);

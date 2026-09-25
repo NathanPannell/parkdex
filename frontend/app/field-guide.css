@@ -59,6 +59,12 @@
 .dex-summary dt { font-size: 11px; font-weight: 850; }
 .dex-summary dd { margin: 0; font: 750 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .dex-account-settings > p { overflow-wrap: anywhere; }
+.manual-claim-setting { margin-block: 24px; padding: 18px; border-radius: 14px; background: #e7eee1; color: var(--forest); }
+.manual-claim-setting h3 { margin: 0 0 6px; }
+.manual-claim-setting p { margin: 0; font-size: 13px; line-height: 1.45; }
+.manual-claim-setting .secondary-action { margin-top: 14px; background: var(--forest); color: var(--paper-bright); }
+.manual-claim-setting .secondary-action:disabled { opacity: .6; cursor: default; }
+.manual-claim-setting .auth-error { margin-top: 10px; }
 .dex-badge-guide { width: 100%; min-height: 48px; margin-block: 12px; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; font-weight: 850; cursor: pointer; }
 .dex-badge-guide svg:last-child { margin-left: auto; }
 .field-guide-shell .group-quick-action { min-width: 92px; }

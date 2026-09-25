@@ -298,14 +298,14 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
     if (!authenticated || recoveryActive || view !== "groups" || !selectedGroup || !groupNavigationAccountId) return;
     rememberGroupNavigation(selectedGroup.id, event.currentTarget.scrollTop, groupNavigationAccountId);
   }, [authenticated, groupNavigationAccountId, recoveryActive, selectedGroup, view]);
-  const choosePlace = useCallback((id: string) => {
+  const choosePlace = useCallback((id: string, compact = false) => {
     const inView = mapFiltered.find((place) => place.id === id)
       ?? collectionFiltered.find((place) => place.id === id)
       ?? placeData.visited.places.find((place) => place.id === id);
     if (inView) void placeData.gateway?.remember(inView, "interaction").catch(() => undefined);
     rememberDepartingGroup();
     const origin = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    updateNavigation({ selectedId: id, detailExpanded: view !== "map", view: view === "collection" ? "collection" : "map" }, "push");
+    updateNavigation({ selectedId: id, detailExpanded: !compact && view !== "map", view: view === "collection" ? "collection" : "map", settingsOpen: false }, "push");
     window.history.replaceState({ ...window.history.state, parkdexDetailOrigin: origin, parkdexDetailId: id }, "");
     rememberGroupNavigation(null, 0, groupNavigationAccountId);
     setNavigationNotice(""); setShowFilters(false); setSearchExpanded(false);

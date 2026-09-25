@@ -48,6 +48,8 @@ export type ArrivalClaimFlowProps = {
   onClearRecommendation: () => void;
   /** Incremented after account progress reset to invalidate any in-flight claim. */
   resetSignal?: number;
+  /** Available only in explicitly enabled staging builds. Uses the normal claim API. */
+  manualClaim?: { location: () => LocationSample; photo: () => Promise<PhotoAsset> };
 };
 
 const RETRY_HYDRATION_TIMEOUT_MS = 8_000;
@@ -90,6 +92,7 @@ export function useArrivalClaimFlow({
   onFlowActiveChange,
   onClearRecommendation,
   resetSignal = 0,
+  manualClaim,
 }: ArrivalClaimFlowProps) {
   const [flowScreen, setFlowScreen] = useState<FlowScreen>("arrival");
   const claimFlow = useClaimFlow(ownerKey, place.id);
@@ -398,7 +401,12 @@ export function useArrivalClaimFlow({
 
   async function freshRecommendation(operation: number, pausedFile?: File, forcePhotoUpload = false) {
     diagnosticRef.current?.stage("location-recheck", { summary: "Confirming a fresh park location" });
-    const result = await claimFlow.recommend(operation, recommendClaim, () => !busyRef.current);
+    const result = await claimFlow.recommend(
+      operation,
+      recommendClaim,
+      () => !busyRef.current,
+      manualClaim ? async () => manualClaim.location() : undefined,
+    );
     if (!result || !claimFlow.isCurrent(operation)) return null;
     diagnosticRef.current?.stage("location-recheck", { summary: "Fresh location received", facts: [{ kind: "elapsed-ms", value: Date.now() - result.startedAt }, { kind: "accuracy-meters", value: result.location.accuracyMeters }] });
     if (pauseForAccountChange(pausedFile, undefined, pausedFile ? "prepared" : undefined, forcePhotoUpload)) {
@@ -464,7 +472,9 @@ export function useArrivalClaimFlow({
     let savedPhoto: PhotoAsset | null = null;
     try {
       claimFlow.setStage(operation, "camera");
-      const capturedPhoto = await getNativeCapabilities().getPhoto({ ownerKey, placeId: place.id, captureAttemptId: restoredCaptureAttemptRef.current ?? createPhotoCaptureAttemptId() });
+      const capturedPhoto = manualClaim
+        ? await manualClaim.photo()
+        : await getNativeCapabilities().getPhoto({ ownerKey, placeId: place.id, captureAttemptId: restoredCaptureAttemptRef.current ?? createPhotoCaptureAttemptId() });
       restoredCaptureAttemptRef.current = null;
       if (!claimFlow.isCurrent(operation)) return;
       if (busyRef.current) { onFlowActiveChangeRef.current(null); return; }
@@ -519,7 +529,9 @@ export function useArrivalClaimFlow({
     setMessage("");
     onFlowActiveChangeRef.current(place.id);
     try {
-      const capturedPhoto = await getNativeCapabilities().getPhoto({ ownerKey, placeId: place.id, captureAttemptId: restoredCaptureAttemptRef.current ?? createPhotoCaptureAttemptId() });
+      const capturedPhoto = manualClaim
+        ? await manualClaim.photo()
+        : await getNativeCapabilities().getPhoto({ ownerKey, placeId: place.id, captureAttemptId: restoredCaptureAttemptRef.current ?? createPhotoCaptureAttemptId() });
       restoredCaptureAttemptRef.current = null;
       if (!claimFlow.isCurrent(operation)) return;
       if (busyRef.current) { setMessage("Your current photo is still saved while the account changes."); return; }
