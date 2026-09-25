@@ -40,10 +40,12 @@ export async function manualClaimPhoto(): Promise<PhotoAsset> {
   context.lineTo(0, 800);
   context.fill();
   context.fillStyle = "#f6f0dc";
-  context.fillRect(60, 60, 565, 105);
+  context.fillRect(420, 50, 360, 135);
   context.fillStyle = "#173d32";
-  context.font = "bold 45px sans-serif";
-  context.fillText("STAGING TEST PHOTO", 88, 128);
+  context.font = "bold 38px sans-serif";
+  context.textAlign = "center";
+  context.fillText("STAGING", 600, 106);
+  context.fillText("TEST PHOTO", 600, 153);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
   canvas.width = 1;
