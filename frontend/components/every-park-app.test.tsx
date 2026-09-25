@@ -15,6 +15,7 @@ const rathtrevor: Place = { id: "provincial-rathtrevor-beach-park", name: "Ratht
 const national: Place = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national", latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const artlish: Place = { ...place, id: "provincial-artlish-caves-park", name: "Artlish Caves Park" };
 const goldstream: Place = { ...place, id: "provincial-goldstream-park", name: "Goldstream Park" };
+const englishman: Place = { ...place, id: "regional-englishman-river-regional-park", name: "Englishman River Regional Park", category: "regional", latitude: 49.287303, longitude: -124.286889, region: "Central Island" };
 const cormorant: Place = { ...place, id: "island-cormorant-island", name: "Cormorant Island", category: "island", region: "Northern Islands", sourceName: "BC Geographical Names Office" };
 const woss: Place = { ...place, id: "provincial-woss-lake-park", name: "Woss Lake Park", region: "North Island" };
 const defaultPlaces = [place, rathtrevor, national];
@@ -70,6 +71,33 @@ beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage
 afterEach(() => { while (getSnapshot().active) dismissNotification(getSnapshot().active?.id); vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.storageUnavailable = false; journal.pendingClaims = 0; journal.offlineClaimRecoveryCount = 0; journal.offlineClaimRecoveryMessage = ""; journal.rejectedClaimCount = 0; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
+  it("opens the staging manual claim on the map for the exact Englishman River park", async () => {
+    journal.places = [...defaultPlaces, englishman];
+    journal.account = { id: "user-1", email: "test@example.com" };
+    journal.authenticated = true;
+    const recommendation = { status: "recommended" as const, recommendationToken: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: englishman.id, matchKind: "exact" as const, distanceMeters: 0 } };
+    const recommendClaim = vi.fn().mockResolvedValue(recommendation);
+    Object.assign(journal, {
+      recommendClaim,
+      createClaim: vi.fn(),
+      reconcileClaim: vi.fn(),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn(),
+      removeVisitPhoto: vi.fn(),
+    });
+    const store = { save: vi.fn(), load: vi.fn().mockResolvedValue(null), remove: vi.fn(), clearOwner: vi.fn() };
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), photoRetry: store });
+    window.history.replaceState({}, "", "/settings");
+    const rendered = render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.queryByRole("button", { name: "Try Englishman River claim" })).toBeNull();
+    rendered.rerender(<ParkdexApp apiBaseUrl="" manualClaimEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Try Englishman River claim" }));
+    await waitFor(() => expect(recommendClaim).toHaveBeenCalledWith({ location: expect.objectContaining({ latitude: englishman.latitude, longitude: englishman.longitude, accuracyMeters: 6 }) }));
+    expect(await screen.findByRole("button", { name: "Use generated photo" })).toBeTruthy();
+    expect(window.location.pathname).toContain("englishman-river-regional-park");
+    expect(screen.getByText(/simulated park location and a generated photo/i)).toBeTruthy();
+  });
+
   it("shows three primary destinations and gives My Dex settings its own route", async () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
