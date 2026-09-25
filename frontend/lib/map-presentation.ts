@@ -14,6 +14,25 @@ export type MapViewport = {
   zoom: number;
 };
 
+/** Normalize MapLibre bounds for APIs that accept one wrapped longitude range. */
+export function normalizeMapViewport(viewport: MapViewport): MapViewport {
+  const longitudeSpan = viewport.east - viewport.west;
+  const coversWorld = longitudeSpan >= 360;
+  const wrapLongitude = (longitude: number) => {
+    const wrapped = ((longitude + 180) % 360 + 360) % 360 - 180;
+    return wrapped === -180 && longitude > 0 ? 180 : wrapped;
+  };
+  const clampLatitude = (latitude: number) => Math.max(-90, Math.min(90, latitude));
+
+  return {
+    west: coversWorld ? -180 : wrapLongitude(viewport.west),
+    south: clampLatitude(viewport.south),
+    east: coversWorld ? 180 : wrapLongitude(viewport.east),
+    north: clampLatitude(viewport.north),
+    zoom: viewport.zoom,
+  };
+}
+
 export type ParkMapMode = "explored" | "discover";
 
 export type RecentPostcard = {
@@ -32,7 +51,9 @@ export type PlaceMarkerProperties = {
 export type PlaceNameProperties = {
   id: string;
   name: string;
+  category: Place["category"];
   areaKm2: number;
+  labelPriority: number;
 };
 
 export type PlaceMarkerData = GeoJSON.FeatureCollection<GeoJSON.Point, PlaceMarkerProperties>;
@@ -65,8 +86,6 @@ export type MapPresentation = {
 
 const EMPTY_BOUNDARIES: BoundaryCollection = { type: "FeatureCollection", features: [] };
 const PLACE_AREAS = placeAreaCatalogue as Record<string, number>;
-export const PARK_NAME_LABEL_MIN_ZOOM = 9;
-export const PARK_NAME_LABEL_EXPANSION_LIMIT = 5;
 
 /** Keep every place point in the data set. Explore/discover only changes the progress overlay. */
 export function visiblePlaces<T extends readonly Place[]>(places: T, _visited: ReadonlySet<string>, _mode: ParkMapMode): T {
@@ -84,6 +103,7 @@ export function placeMarkerData(
     type: "FeatureCollection",
     features: places.map((place) => ({
       type: "Feature",
+      id: place.id,
       geometry: { type: "Point", coordinates: [place.longitude, place.latitude] },
       properties: {
         id: place.id,
@@ -110,39 +130,39 @@ function boundsIntersectViewport(bounds: BoundaryIndex["boundsById"][string], vi
   return east >= viewport.west || west <= viewport.east;
 }
 
-function visibleParkPlaces(places: readonly Place[], viewport: MapViewport | null, index: BoundaryIndex | null): Place[] {
-  if (!viewport) return [];
-  return places.filter((place) => {
-    if (place.category === "island") return false;
-    const bounds = index?.boundsById[place.id];
-    return pointInViewport(place.longitude, place.latitude, viewport)
-      && (!bounds || boundsIntersectViewport(bounds, viewport));
-  });
+function placeLabelPriority(place: Place, areaKm2: number): number {
+  const categoryRank: Record<Place["category"], number> = {
+    national: 0,
+    island: 1,
+    provincial: 2,
+    regional: 3,
+  };
+  return categoryRank[place.category] * 1_000_000 - Math.min(areaKm2, 999_999);
 }
 
 /**
- * Provide one high-priority park label at every zoom. At close zoom, expand to
- * nearby names when five or fewer park boundaries are in the viewport. MapLibre
- * handles text collision placement, keeping labels legible and clickable.
+ * Offer every sampled place name to MapLibre. The renderer places names that
+ * fit around other map labels and leaves the corresponding dot visible when a
+ * name collides.
  */
 export function placeNameData(
   places: readonly Place[],
   viewport: MapViewport | null,
-  boundaryIndex: BoundaryIndex | null,
 ): PlaceNameData {
-  const visible = visibleParkPlaces(places, viewport, boundaryIndex)
-    .map((place) => ({ place, areaKm2: PLACE_AREAS[place.id] ?? 0 }))
-    .sort((left, right) => right.areaKm2 - left.areaKm2 || left.place.name.localeCompare(right.place.name));
-  const labels = viewport && viewport.zoom >= PARK_NAME_LABEL_MIN_ZOOM && visible.length <= PARK_NAME_LABEL_EXPANSION_LIMIT
-    ? visible
-    : visible.slice(0, 1);
+  const candidates = places
+    .filter((place) => !viewport || pointInViewport(place.longitude, place.latitude, viewport))
+    .map((place) => {
+      const areaKm2 = PLACE_AREAS[place.id] ?? 0;
+      return { place, areaKm2, labelPriority: placeLabelPriority(place, areaKm2) };
+    })
+    .sort((left, right) => left.labelPriority - right.labelPriority || left.place.name.localeCompare(right.place.name));
 
   return {
     type: "FeatureCollection",
-    features: labels.map(({ place, areaKm2 }) => ({
+    features: candidates.map(({ place, areaKm2, labelPriority }) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [place.longitude, place.latitude] },
-      properties: { id: place.id, name: place.name, areaKm2 },
+      properties: { id: place.id, name: place.name, category: place.category, areaKm2, labelPriority },
     })),
   };
 }
@@ -153,18 +173,21 @@ export function mapPresentation(input: MapPresentationInput): MapPresentation {
   if (input.selectedId) selected.add(input.selectedId);
 
   const availableIds = input.boundaryIndex ? boundaryPlaceIds(input.boundaryIndex) : new Set<string>();
-  const boundaryIds = new Set<string>();
+  const candidateBoundaryIds = new Set<string>();
   visible.forEach((place) => {
     const bounds = input.boundaryIndex?.boundsById[place.id];
-    if (selected.has(place.id) || (input.viewport && (bounds
+    if (!input.viewport || selected.has(place.id) || (bounds
       ? boundsIntersectViewport(bounds, input.viewport)
-      : pointInViewport(place.longitude, place.latitude, input.viewport)))) {
-      boundaryIds.add(place.id);
+      : pointInViewport(place.longitude, place.latitude, input.viewport))) {
+      candidateBoundaryIds.add(place.id);
     }
   });
 
-  const visibleBoundaryFeatures = input.boundaryAsset?.features.filter((feature) => boundaryIds.has(feature.properties.id)) ?? [];
-  if (input.selectedBoundary && selected.has(input.selectedBoundary.properties.id)) {
+  const includedIds = input.boundaryIndex
+    ? new Set([...candidateBoundaryIds].filter((id) => availableIds.has(id)))
+    : candidateBoundaryIds;
+  const visibleBoundaryFeatures = input.boundaryAsset?.features.filter((feature) => includedIds.has(feature.properties.id)) ?? [];
+  if (input.selectedBoundary && selected.has(input.selectedBoundary.properties.id) && includedIds.has(input.selectedBoundary.properties.id)) {
     const selectedIndex = visibleBoundaryFeatures.findIndex((feature) => feature.properties.id === input.selectedBoundary?.properties.id);
     if (selectedIndex >= 0) visibleBoundaryFeatures[selectedIndex] = input.selectedBoundary;
     else visibleBoundaryFeatures.push(input.selectedBoundary);
@@ -172,9 +195,6 @@ export function mapPresentation(input: MapPresentationInput): MapPresentation {
   const boundaryData = visibleBoundaryFeatures.length
     ? { type: "FeatureCollection" as const, features: visibleBoundaryFeatures }
     : EMPTY_BOUNDARIES;
-  const includedIds = input.boundaryIndex
-    ? new Set([...boundaryIds].filter((id) => availableIds.has(id)))
-    : new Set(boundaryIds);
   const ids = [...includedIds];
   const selectedIds = [...selected].filter((id) => includedIds.has(id));
   const progressIds = input.mode === "explored" ? [...input.visited] : [];
@@ -191,6 +211,6 @@ export function mapPresentation(input: MapPresentationInput): MapPresentation {
       : selectedBoundaryFilter(input.selectedId, ids),
     explorationFilter: explorationVisitedFilter(progressIds),
     explorationEdgeFilter: explorationBoundaryFilter(progressIds),
-    placeNameData: placeNameData(visible, input.viewport, input.boundaryIndex),
+    placeNameData: placeNameData(visible, input.viewport),
   };
 }

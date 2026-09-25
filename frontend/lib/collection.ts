@@ -34,6 +34,7 @@ const listRegionOrder = [
 ];
 
 export function listRegionForPlace(place: Place): string {
+  if (place.listRegion) return place.listRegion;
   if (place.region === "Central Island") {
     // The existing Central Island region spans Nanaimo/Parksville and Comox.
     return place.latitude >= 49.5 ? NORTHERN_VANCOUVER_ISLAND : SOUTHERN_VANCOUVER_ISLAND;
@@ -42,6 +43,7 @@ export function listRegionForPlace(place: Place): string {
 }
 
 export function authorityForPlace(place: Place): string {
+  if (place.authority) return place.authority;
   if (place.category === "national") return "Parks Canada";
   if (place.category === "provincial") return "BC Parks";
   if (place.category === "island") return "Major islands";
