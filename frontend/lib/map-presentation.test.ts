@@ -120,7 +120,7 @@ describe("application map presentation", () => {
     expect(placeNameData(parks, closeViewport).features).toHaveLength(12);
   });
 
-  it("keeps markers and boundaries inside the gateway-supplied sample", () => {
+  it("keeps every viewport boundary independent from the sampled marker set", () => {
     const places = [place("visible", -124)];
     const index: BoundaryIndex = {
       version: 1,
@@ -129,22 +129,66 @@ describe("application map presentation", () => {
         "not-sampled": bounds(-118.1, 48.9, -117.9, 49.1),
       },
     };
-    const boundaryAsset: BoundaryCollection = { type: "FeatureCollection", features: [boundary("visible"), boundary("not-sampled")] };
+    const boundaryAsset: BoundaryCollection = {
+      type: "FeatureCollection",
+      features: [boundary("visible"), boundary("not-sampled"), boundary("third-unsampled")],
+    };
     const result = mapPresentation({
       places,
-      visited: new Set(["visible"]),
+      visited: new Set(),
       mode: "explored",
-      selectedId: "not-sampled",
+      selectedId: null,
       selectedIds: new Set(),
       viewport: closeViewport,
       boundaryIndex: index,
       boundaryAsset,
-      selectedBoundary: boundary("not-sampled"),
     });
 
-    expect(result.boundaryData.features.map((feature) => feature.properties.id)).toEqual(["visible"]);
-    expect([...result.boundaryIds]).toEqual(["visible"]);
+    expect(result.boundaryData.features.map((feature) => feature.properties.id)).toEqual(["visible", "not-sampled", "third-unsampled"]);
+    expect([...result.boundaryIds]).toEqual(["visible", "not-sampled", "third-unsampled"]);
     expect(result.placeData.features.map((feature) => feature.properties.id)).toEqual(["visible"]);
-    expect(result.placeData.features[0].properties.visited).toBe(1);
+    expect(result.placeData.features[0].properties.visited).toBe(0);
+    expect(result.boundaryFilter).toEqual(["has", "id"]);
+    expect(result.parkBoundaryFilter).toEqual(["all", ["has", "id"], ["!=", ["get", "category"], "island"]]);
+  });
+
+  it("reuses boundary IDs and filters when only marker and visit state changes", () => {
+    const boundaryAsset: BoundaryCollection = { type: "FeatureCollection", features: [boundary("stable")] };
+    const input = {
+      places: [place("marker", -124)],
+      visited: new Set<string>(),
+      mode: "explored" as const,
+      selectedId: null,
+      selectedIds: new Set<string>(),
+      viewport: closeViewport,
+      boundaryIndex: null,
+      boundaryAsset,
+    };
+    const first = mapPresentation(input);
+    const second = mapPresentation({ ...input, places: [place("marker-two", -124)], visited: new Set(["stable"]) });
+
+    expect(second.boundaryIds).toBe(first.boundaryIds);
+    expect(second.boundaryFilter).toBe(first.boundaryFilter);
+    expect(second.islandBoundaryFilter).toBe(first.islandBoundaryFilter);
+    expect(second.selectedBoundaryFilter).toBe(first.selectedBoundaryFilter);
+  });
+
+  it("adds an unsampled selected detail boundary so its feature-state highlight can render", () => {
+    const selectedBoundary = boundary("selected-outside-coverage");
+    const result = mapPresentation({
+      places: [place("sampled", -124)],
+      visited: new Set(),
+      mode: "discover",
+      selectedId: selectedBoundary.properties.id,
+      selectedIds: new Set(),
+      viewport: closeViewport,
+      boundaryIndex: null,
+      boundaryAsset: { type: "FeatureCollection", features: [] },
+      selectedBoundary,
+    });
+
+    expect([...result.boundaryIds]).toEqual([selectedBoundary.properties.id]);
+    expect(result.boundaryData.features).toContain(selectedBoundary);
+    expect(result.selectedBoundaryFilter).toEqual(["has", "id"]);
   });
 });

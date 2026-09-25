@@ -14,7 +14,7 @@ const expectedCategoryColor = [
 ];
 
 describe("boundary map style", () => {
-  it("passes MapLibre style validation with zoom and visited-state expressions", () => {
+  it("passes MapLibre style validation with zoom and feature-state expressions", () => {
     const style: StyleSpecification = {
       version: 8,
       sources: {
@@ -85,7 +85,17 @@ describe("boundary map style", () => {
       8, ["case", ["boolean", ["feature-state", "visited"], false], 0.3, 0.23],
       12, ["case", ["boolean", ["feature-state", "visited"], false], 0.38, 0.3],
     ]);
-    expect(selectedFillPaint?.["fill-opacity"]).toEqual(["interpolate", ["linear"], ["zoom"], 5, 0.54, 9, 0.6, 12, 0.66]);
+    expect(selectedFillPaint?.["fill-opacity"]).toEqual([
+      "interpolate", ["linear"], ["zoom"],
+      5, ["case", ["boolean", ["feature-state", "selected"], false], 0.54, 0],
+      9, ["case", ["boolean", ["feature-state", "selected"], false], 0.6, 0],
+      12, ["case", ["boolean", ["feature-state", "selected"], false], 0.66, 0],
+    ]);
+    expect(selectedFill && "filter" in selectedFill ? selectedFill.filter : undefined).toEqual(["has", "id"]);
+    expect((selectedHalo?.paint as Record<string, unknown> | undefined)?.["line-opacity"])
+      .toEqual(["case", ["boolean", ["feature-state", "selected"], false], 0.95, 0]);
+    expect(selectedLinePaint?.["line-opacity"])
+      .toEqual(["case", ["boolean", ["feature-state", "selected"], false], 1, 0]);
     expect((selectedHalo?.paint as Record<string, unknown> | undefined)?.["line-width"])
       .toEqual(["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5]);
     expect((selectedLine?.paint as Record<string, unknown> | undefined)?.["line-width"])

@@ -68,7 +68,12 @@ export function usePlaceData(options: Options): Result {
         : collectionKey ? { "X-Collection-Key": collectionKey } : {},
     })
     : null, [options.apiBaseUrl, options.ownerKey, authorization, collectionKey]);
-  const [mapState, setMapState] = useState<{ key: string; result: PlaceDataResult }>({ key: "", result: EMPTY_RESULT });
+  const [mapState, setMapState] = useState<{
+    scopeKey: string;
+    stableQueryKey: string;
+    gateway: PlaceGateway | null;
+    result: PlaceDataResult;
+  }>({ scopeKey: "", stableQueryKey: "", gateway: null, result: EMPTY_RESULT });
   const [mapSearchState, setMapSearchState] = useState<{ key: string; result: PlaceDataResult }>({ key: "", result: EMPTY_RESULT });
   const [collectionState, setCollectionState] = useState<{ key: string; result: PlaceDataResult }>({ key: "", result: EMPTY_RESULT });
   const [visitedState, setVisitedState] = useState<{ key: string; result: PlaceDataResult }>({ key: "", result: EMPTY_RESULT });
@@ -86,16 +91,24 @@ export function usePlaceData(options: Options): Result {
   const collectionAuthoritiesKey = [...options.collectionAuthorities].sort().join("\u0001");
   const visitedKey = [...options.visitedIds].sort().join("\u0001");
   const groupPlaceIdsKey = options.groupPlaceIds ? [...options.groupPlaceIds].sort().join("\u0001") : "";
-  const mapQueryKey = JSON.stringify([options.ownerKey, options.viewport?.west, options.viewport?.south,
-    options.viewport?.east, options.viewport?.north, options.mapQuery, mapCategoriesKey,
+  const mapScopeKey = JSON.stringify([options.apiBaseUrl, options.ownerKey]);
+  const mapStableQueryKey = JSON.stringify([options.ownerKey, options.mapQuery, mapCategoriesKey,
     mapAuthoritiesKey, options.visitFilter, visitedKey, options.selectedId, options.groupId,
     groupPlaceIdsKey, offline]);
+  const mapQueryKey = JSON.stringify([mapStableQueryKey, options.viewport?.west, options.viewport?.south,
+    options.viewport?.east, options.viewport?.north]);
   const mapSearchQueryKey = JSON.stringify([options.ownerKey, options.searchExpanded, options.searchDraft,
     mapCategoriesKey, mapAuthoritiesKey, options.visitFilter, visitedKey, offline]);
   const collectionQueryKey = JSON.stringify([options.ownerKey, options.view, options.collectionQuery,
     collectionCategoriesKey, collectionAuthoritiesKey, options.visitFilter, visitedKey, offline]);
   const visitedQueryKey = JSON.stringify([options.ownerKey, options.view, visitedKey, offline]);
-  const map = mapState.key === mapQueryKey ? mapState.result : EMPTY_RESULT;
+  // Keep the last complete map sample only across viewport-only requests.
+  // Filter, visit, group, offline, owner, and gateway changes must not show a
+  // result that does not match the active map query.
+  const map = mapState.scopeKey === mapScopeKey && mapState.gateway === gateway
+    && mapState.stableQueryKey === mapStableQueryKey
+    ? mapState.result
+    : EMPTY_RESULT;
   const mapSearch = mapSearchState.key === mapSearchQueryKey ? mapSearchState.result : EMPTY_RESULT;
   const collection = collectionState.key === collectionQueryKey ? collectionState.result : EMPTY_RESULT;
   const visited = visitedState.key === visitedQueryKey ? visitedState.result : EMPTY_RESULT;
@@ -108,13 +121,13 @@ export function usePlaceData(options: Options): Result {
 
   useEffect(() => {
     queueMicrotask(() => {
-      setMapState({ key: "", result: EMPTY_RESULT });
+      setMapState({ scopeKey: "", stableQueryKey: "", gateway: null, result: EMPTY_RESULT });
       setMapSearchState({ key: "", result: EMPTY_RESULT });
       setCollectionState({ key: "", result: EMPTY_RESULT });
       setVisitedState({ key: "", result: EMPTY_RESULT });
       setError("");
     });
-  }, [gateway]);
+  }, [gateway, mapScopeKey]);
 
   useEffect(() => {
     if (!gateway) return;
@@ -142,18 +155,18 @@ export function usePlaceData(options: Options): Result {
       const request = force ? gateway.retryMap(query) : gateway.fetchMap(query);
       void request.then((result) => {
         if (!active) return;
-        setMapState({ key: mapQueryKey, result });
+        setMapState({ scopeKey: mapScopeKey, stableQueryKey: mapStableQueryKey, gateway, result });
         setError("");
       }).catch((failure) => {
         if (active) {
-          setMapState({ key: mapQueryKey, result: EMPTY_RESULT });
           setError(messageFor(failure));
         }
       });
     }, 140);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [gateway, viewport, mapQuery, mapCategoriesKey,
-    mapAuthoritiesKey, visitFilter, visitedKey, options.visitedIds, selectedId, options.groupId, options.groupPlaceIds, groupPlaceIdsKey, mapQueryKey, offline, retryGeneration]);
+  }, [gateway, mapScopeKey, viewport, mapQuery, mapCategoriesKey,
+    mapAuthoritiesKey, visitFilter, visitedKey, options.visitedIds, selectedId, options.groupId, options.groupPlaceIds, groupPlaceIdsKey,
+    mapStableQueryKey, mapQueryKey, offline, retryGeneration]);
 
   useEffect(() => {
     if (!gateway || !options.searchExpanded || !searchDraft.trim()) {

@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager, contextmanager
+import gzip
 import hashlib
 import json
 import logging
 import re
 import secrets
 from datetime import timedelta
+from functools import lru_cache
 from uuid import UUID
 from datetime import datetime, timezone
 from threading import Lock
@@ -60,6 +62,7 @@ from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
 from backend.app.claim_photos import MAX_UPLOAD_BYTES, PhotoInputError, normalize_photo
 from backend.app.claims import (
+    BoundaryRegistry,
     ClaimInputError,
     LocationSample,
     create_recommendation_token,
@@ -909,13 +912,117 @@ def get_map_places(
     return {"places": rows, "total": total, "limit": limit}
 
 
-@app.get("/api/map/boundaries")
+@lru_cache(maxsize=4)
+def _serialized_viewport_boundaries(
+    registry: BoundaryRegistry,
+    registry_version: str,
+    feature_ids: tuple[str, ...],
+) -> tuple[bytes, bytes, str]:
+    """Reuse viewport response bodies for boundary sets shared by nearby views."""
+
+    if registry.version != registry_version:
+        raise ValueError("Boundary registry version changed during serialization")
+    features = [
+        feature
+        for place_id in feature_ids
+        if (
+            feature := registry.display_feature(
+                place_id,
+                DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
+            )
+        )
+        is not None
+    ]
+    payload = {
+        "type": "FeatureCollection",
+        "features": features,
+        "count": len(features),
+    }
+    body = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    compressed_body = gzip.compress(body, compresslevel=6, mtime=0)
+    etag = f'W/"{hashlib.sha256(body).hexdigest()}"'
+    return body, compressed_body, etag
+
+
+@app.get("/api/map/boundaries", response_model=dict)
 def get_map_boundaries(
     response: Response,
     place_id: list[str] | None = Query(default=None),
     place_id_camel: list[str] | None = Query(default=None, alias="placeId"),
+    west: float | None = Query(default=None, ge=-180, le=180),
+    south: float | None = Query(default=None, ge=-90, le=90),
+    east: float | None = Query(default=None, ge=-180, le=180),
+    north: float | None = Query(default=None, ge=-90, le=90),
+    accept_encoding: str = Header(default="", alias="Accept-Encoding"),
+    if_none_match: str = Header(default="", alias="If-None-Match"),
     conn: Connection = Depends(connection),
-) -> dict:
+) -> dict | Response:
+    response.headers["Cache-Control"] = "public, max-age=300"
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    viewport_values = (west, south, east, north)
+    if any(value is not None for value in viewport_values):
+        if place_id or place_id_camel:
+            raise HTTPException(
+                status_code=400,
+                detail="Use either viewport bounds or place IDs, not both",
+            )
+        if any(value is None for value in viewport_values):
+            raise HTTPException(
+                status_code=400,
+                detail="west, south, east, and north must be provided together",
+            )
+        assert west is not None and south is not None
+        assert east is not None and north is not None
+        if south > north:
+            raise HTTPException(
+                status_code=400,
+                detail="south must be less than or equal to north",
+            )
+        visible_ids = {
+            row["id"]
+            for row in conn.execute(
+                f"SELECT p.id FROM places p WHERE {place_visibility_clause('p')}",
+                place_visibility_params(settings.staging_field_places_enabled),
+            ).fetchall()
+        }
+        feature_ids = tuple(
+            viewport_place_id
+            for viewport_place_id in registry.features_intersecting_bounds(
+                west, south, east, north
+            )
+            if viewport_place_id in visible_ids
+        )
+        body, compressed_body, etag = _serialized_viewport_boundaries(
+            registry,
+            registry.version,
+            feature_ids,
+        )
+        response_headers = {
+            "Cache-Control": "public, max-age=300",
+            "ETag": etag,
+            "Vary": "Accept-Encoding",
+        }
+        if if_none_match and any(
+            candidate.strip() in {"*", etag}
+            for candidate in if_none_match.split(",")
+        ):
+            return Response(status_code=304, headers=response_headers)
+        if _accepts_gzip(accept_encoding):
+            return Response(
+                content=compressed_body,
+                media_type="application/json",
+                headers={**response_headers, "Content-Encoding": "gzip"},
+            )
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers=response_headers,
+        )
+
     requested_ids = list(place_id or []) + list(place_id_camel or [])
     if len(requested_ids) > MAP_PLACE_LIMIT:
         raise HTTPException(
@@ -925,7 +1032,6 @@ def get_map_boundaries(
     if any(not value or len(value) > 200 for value in requested_ids):
         raise HTTPException(status_code=400, detail="Invalid place ID")
     unique_ids = list(dict.fromkeys(requested_ids))
-    response.headers["Cache-Control"] = "public, max-age=300"
     if not unique_ids:
         return {"type": "FeatureCollection", "features": []}
     visible_ids = {
@@ -935,23 +1041,34 @@ def get_map_boundaries(
             (unique_ids, *place_visibility_params(settings.staging_field_places_enabled)),
         ).fetchall()
     }
-    registry = get_boundary_registry(settings.staging_field_places_enabled)
     features = []
-    for place_id in unique_ids:
-        if place_id not in visible_ids:
+    for requested_id in unique_ids:
+        if requested_id not in visible_ids:
             continue
-        feature = registry.feature(place_id)
+        feature = registry.display_feature(
+            requested_id,
+            DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
+        )
         if feature is None:
             continue
-        source_geometry = shape(feature["geometry"])
-        display_geometry = source_geometry.simplify(
-            DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
-            preserve_topology=True,
-        )
-        if display_geometry.is_empty or not display_geometry.is_valid:
-            display_geometry = source_geometry
-        features.append({**feature, "geometry": mapping(display_geometry)})
+        features.append(feature)
     return {"type": "FeatureCollection", "features": features}
+
+
+def _accepts_gzip(accept_encoding: str) -> bool:
+    for coding in accept_encoding.split(","):
+        name, *parameters = coding.strip().casefold().split(";")
+        if name != "gzip":
+            continue
+        for parameter in parameters:
+            key, separator, value = parameter.strip().partition("=")
+            if key == "q" and separator:
+                try:
+                    return float(value) > 0
+                except ValueError:
+                    return False
+        return True
+    return False
 
 
 def _record_id(value: str, label: str) -> str:

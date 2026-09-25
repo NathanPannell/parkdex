@@ -1,6 +1,6 @@
 import type { FilterSpecification } from "maplibre-gl";
 
-import { boundaryFilter, boundaryPlaceIds, selectedBoundaryFilter, type BoundaryCollection, type BoundaryFeature, type BoundaryIndex } from "./boundaries";
+import { boundaryFilter, selectedBoundaryFilter, type BoundaryCollection, type BoundaryFeature, type BoundaryIndex } from "./boundaries";
 import { explorationBoundaryFilter, explorationVisitedFilter } from "./exploration-map-style";
 import placeAreaCatalogue from "./place-areas.catalogue.json";
 import type { Place } from "./places";
@@ -13,6 +13,8 @@ export type MapViewport = {
   north: number;
   zoom: number;
 };
+
+export type BoundaryViewport = Pick<MapViewport, "west" | "south" | "east" | "north">;
 
 /** Normalize MapLibre bounds for APIs that accept one wrapped longitude range. */
 export function normalizeMapViewport(viewport: MapViewport): MapViewport {
@@ -86,6 +88,15 @@ export type MapPresentation = {
 
 const EMPTY_BOUNDARIES: BoundaryCollection = { type: "FeatureCollection", features: [] };
 const PLACE_AREAS = placeAreaCatalogue as Record<string, number>;
+const boundaryIdsByCollection = new WeakMap<BoundaryCollection, ReadonlySet<string>>();
+
+function boundaryIdsFor(collection: BoundaryCollection): ReadonlySet<string> {
+  const cached = boundaryIdsByCollection.get(collection);
+  if (cached) return cached;
+  const ids = new Set(collection.features.map((feature) => feature.properties.id));
+  boundaryIdsByCollection.set(collection, ids);
+  return ids;
+}
 
 /** Keep every place point in the data set. Explore/discover only changes the progress overlay. */
 export function visiblePlaces<T extends readonly Place[]>(places: T, _visited: ReadonlySet<string>, _mode: ParkMapMode): T {
@@ -123,7 +134,7 @@ function pointInViewport(longitude: number, latitude: number, viewport: MapViewp
   return inLongitude && latitude >= viewport.south && latitude <= viewport.north;
 }
 
-function boundsIntersectViewport(bounds: BoundaryIndex["boundsById"][string], viewport: MapViewport): boolean {
+export function boundsIntersectViewport(bounds: BoundaryIndex["boundsById"][string], viewport: BoundaryViewport): boolean {
   const [[west, south], [east, north]] = bounds;
   if (north < viewport.south || south > viewport.north) return false;
   if (viewport.west <= viewport.east) return east >= viewport.west && west <= viewport.east;
@@ -169,46 +180,29 @@ export function placeNameData(
 
 export function mapPresentation(input: MapPresentationInput): MapPresentation {
   const visible = visiblePlaces(input.places, input.visited, input.mode);
-  const selected = new Set(input.selectedIds);
-  if (input.selectedId) selected.add(input.selectedId);
 
-  const availableIds = input.boundaryIndex ? boundaryPlaceIds(input.boundaryIndex) : new Set<string>();
-  const candidateBoundaryIds = new Set<string>();
-  visible.forEach((place) => {
-    const bounds = input.boundaryIndex?.boundsById[place.id];
-    if (!input.viewport || selected.has(place.id) || (bounds
-      ? boundsIntersectViewport(bounds, input.viewport)
-      : pointInViewport(place.longitude, place.latitude, input.viewport))) {
-      candidateBoundaryIds.add(place.id);
-    }
-  });
-
-  const includedIds = input.boundaryIndex
-    ? new Set([...candidateBoundaryIds].filter((id) => availableIds.has(id)))
-    : candidateBoundaryIds;
-  const visibleBoundaryFeatures = input.boundaryAsset?.features.filter((feature) => includedIds.has(feature.properties.id)) ?? [];
-  if (input.selectedBoundary && selected.has(input.selectedBoundary.properties.id) && includedIds.has(input.selectedBoundary.properties.id)) {
-    const selectedIndex = visibleBoundaryFeatures.findIndex((feature) => feature.properties.id === input.selectedBoundary?.properties.id);
-    if (selectedIndex >= 0) visibleBoundaryFeatures[selectedIndex] = input.selectedBoundary;
-    else visibleBoundaryFeatures.push(input.selectedBoundary);
+  // The API has already selected every polygon in its buffered viewport. Keep
+  // the complete returned set independent from marker, visit, search, and
+  // group filters. MapLibre clips geometry naturally at the current frame.
+  let boundaryData = input.boundaryAsset ?? EMPTY_BOUNDARIES;
+  let includedIds = boundaryIdsFor(boundaryData);
+  const selectedBoundaryId = input.selectedBoundary?.properties.id;
+  const selectedBoundaryIsActive = selectedBoundaryId != null
+    && (input.selectedId === selectedBoundaryId || input.selectedIds.has(selectedBoundaryId));
+  if (input.selectedBoundary && selectedBoundaryIsActive && !includedIds.has(input.selectedBoundary.properties.id)) {
+    boundaryData = { type: "FeatureCollection", features: [...boundaryData.features, input.selectedBoundary] };
+    includedIds = boundaryIdsFor(boundaryData);
   }
-  const boundaryData = visibleBoundaryFeatures.length
-    ? { type: "FeatureCollection" as const, features: visibleBoundaryFeatures }
-    : EMPTY_BOUNDARIES;
-  const ids = [...includedIds];
-  const selectedIds = [...selected].filter((id) => includedIds.has(id));
   const progressIds = input.mode === "explored" ? [...input.visited] : [];
 
   return {
     placeData: placeMarkerData(visible, input.visited, input.selectedIds),
     boundaryData,
     boundaryIds: includedIds,
-    boundaryFilter: boundaryFilter(ids),
-    islandBoundaryFilter: boundaryFilter(ids, "island"),
-    parkBoundaryFilter: boundaryFilter(ids, "park"),
-    selectedBoundaryFilter: selectedIds.length
-      ? ["in", ["get", "id"], ["literal", selectedIds]] as FilterSpecification
-      : selectedBoundaryFilter(input.selectedId, ids),
+    boundaryFilter: boundaryFilter([]),
+    islandBoundaryFilter: boundaryFilter([], "island"),
+    parkBoundaryFilter: boundaryFilter([], "park"),
+    selectedBoundaryFilter: selectedBoundaryFilter(null, []),
     explorationFilter: explorationVisitedFilter(progressIds),
     explorationEdgeFilter: explorationBoundaryFilter(progressIds),
     placeNameData: placeNameData(visible, input.viewport),
