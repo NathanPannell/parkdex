@@ -1,3 +1,5 @@
+import type { PlaceVisitorDetails } from "./visitor-details";
+
 export type PlaceCategory = "national" | "provincial" | "regional" | "island";
 
 export type Place = {
@@ -11,7 +13,17 @@ export type Place = {
   sourceUrl: string;
   sourceName: string;
   sourceId?: string | null;
+  visitorDetails?: PlaceVisitorDetails | null;
 };
+
+/** Lightweight public place data used outside the bounded full-detail cache. */
+export type PlaceCatalogueSummary = Omit<Place, "visitorDetails">;
+
+export function toPlaceCatalogueSummary(place: Place): PlaceCatalogueSummary {
+  const summary = { ...place };
+  delete summary.visitorDetails;
+  return summary;
+}
 
 export const categoryLabels: Record<PlaceCategory, string> = {
   national: "National",

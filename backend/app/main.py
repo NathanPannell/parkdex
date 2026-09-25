@@ -767,8 +767,11 @@ def get_offline_place_bundle(
     row = conn.execute(
         f"""
         SELECT id, name, category, latitude, longitude, region, description,
-               source_url, source_name, source_id
-        FROM places WHERE id = %s AND {place_visibility_clause()}
+               source_url, source_name, source_id,
+               vd.visitor_details AS visitor_details
+        FROM places p
+        LEFT JOIN place_visitor_details vd ON vd.place_id = p.id
+        WHERE p.id = %s AND {place_visibility_clause("p")}
         """,
         (
             place_id,

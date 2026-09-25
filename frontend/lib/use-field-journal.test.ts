@@ -397,7 +397,7 @@ describe("useFieldJournal identity and progress races", () => {
   });
 
   it("keeps a cached guest catalogue immediately available while offline", async () => {
-    window.localStorage.setItem(JOURNAL_STORAGE.places, JSON.stringify([PLACE]));
+    window.localStorage.setItem(JOURNAL_STORAGE.places, JSON.stringify([{ ...PLACE, visitorDetails: null }]));
     const fetchMock = vi.fn(() => Promise.reject(new TypeError("offline")));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -407,6 +407,7 @@ describe("useFieldJournal identity and progress races", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(result.current.places).toEqual(catalogueIndex([PLACE]));
     expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.places)!)).toEqual(catalogueIndex([PLACE]));
+    expect(result.current.places[0]).not.toHaveProperty("visitorDetails");
     expect(result.current.loadError).toBe("Showing your saved field guide offline.");
   });
 

@@ -12,9 +12,10 @@ import {
   type RecentPlaceCacheRecord,
 } from "./place-cache";
 import type { Place } from "./places";
+import type { PlaceVisitorDetails } from "./visitor-details";
 
-function place(id: string): Place {
-  return {
+function place(id: string, visitorDetails?: PlaceVisitorDetails | null): Place {
+  const value: Place = {
     id,
     name: `Place ${id}`,
     category: "regional",
@@ -25,6 +26,46 @@ function place(id: string): Place {
     sourceUrl: "https://example.test/place",
     sourceName: "Example source",
     sourceId: id,
+  };
+  if (visitorDetails !== undefined) value.visitorDetails = visitorDetails;
+  return value;
+}
+
+function visitorDetails(): PlaceVisitorDetails {
+  return {
+    schemaVersion: "1.0.0",
+    scope: { kind: "park", matchedName: "Example Park", parentName: null, matchMethod: "official title" },
+    source: {
+      primaryUrl: "https://example.test/park",
+      authority: "Example Parks",
+      kind: "visitor_page",
+      geographicSourceUrl: null,
+      retrievedAt: null,
+      status: "partial",
+    },
+    overview: null,
+    areaHectares: 84.2,
+    activities: [{ name: "Hiking", details: null }],
+    facilities: [
+      { name: "Picnic tables", details: null, availability: "seasonal" },
+      { name: "Water", details: "Bring your own.", availability: null },
+    ],
+    access: {
+      directions: null,
+      address: "1 Park Road",
+      transportNotes: null,
+      entryPoints: [{ name: null, latitude: 49.1, longitude: -124.2 }],
+    },
+    trails: [{ name: "Creek loop", description: null, lengthKm: null, elevationGainM: 80, difficulty: "Moderate", mapUrl: null }],
+    maps: [{ title: null, url: null, kind: null }],
+    mapNotes: null,
+    rules: { pets: null, cycling: "Stay on marked paths.", campfires: null, other: null },
+    accessibility: { summary: null, features: [{ name: "Firm path", details: null }] },
+    operations: { hours: null, seasons: "Open year round.", notes: null },
+    camping: { summary: null, reservationRequired: false, bookingUrl: null, reservationNotes: null, fees: null },
+    contacts: [{ name: null, role: "Visitor information", phone: null, email: null, url: null }],
+    background: { history: null, conservation: "Sensitive habitat.", culturalContext: null, wildlife: "Black-tailed deer." },
+    officialUpdatesUrl: null,
   };
 }
 
@@ -46,8 +87,8 @@ function boundary(id: string): BoundaryFeature {
   };
 }
 
-function record(id: string, viewedAt: number): RecentPlaceCacheRecord {
-  const park = place(id);
+function record(id: string, viewedAt: number, details?: PlaceVisitorDetails): RecentPlaceCacheRecord {
+  const park = place(id, details);
   const photo = new Blob([`full photo ${id}`], { type: "image/webp" });
   const bundle: CachedPlaceBundle = {
     place: park,
@@ -70,22 +111,26 @@ function record(id: string, viewedAt: number): RecentPlaceCacheRecord {
   return { placeId: id, viewedAt, bundle };
 }
 
-function apiFetcher({
-  failPhoto = false,
-  deferPlace,
-}: { failPhoto?: boolean; deferPlace?: (placeId: string) => Promise<Response> } = {}): typeof fetch {
+function apiFetcher(options: {
+  failPhoto?: boolean;
+  deferPlace?: (placeId: string) => Promise<Response>;
+  visitorDetails?: unknown;
+} = {}): typeof fetch {
   return async (input) => {
     const url = String(input);
     const match = url.match(/\/api\/places\/([^/]+)\/offline-bundle$/);
     if (match) {
       const id = decodeURIComponent(match[1]);
-      if (deferPlace) return deferPlace(id);
-      return new Response(JSON.stringify({ place: place(id), boundary: boundary(id), boundaryVersion: 1 }), {
+      if (options.deferPlace) return options.deferPlace(id);
+      const placeValue = "visitorDetails" in options
+        ? { ...place(id), visitorDetails: options.visitorDetails }
+        : place(id);
+      return new Response(JSON.stringify({ place: placeValue, boundary: boundary(id), boundaryVersion: 1 }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
     }
-    if (failPhoto) return new Response("unavailable", { status: 503 });
+    if (options.failPhoto) return new Response("unavailable", { status: 503 });
     return new Response(new Blob(["full-resolution-photo"], { type: "image/webp" }), {
       status: 200,
       headers: { "content-type": "image/webp" },
@@ -97,7 +142,7 @@ describe("recent place cache", () => {
   it("keeps a strict durable 20-place LRU and removes the evicted photo and geometry", async () => {
     const store = createIndexedDbRecentPlaceStore(new IDBFactory());
     for (let index = 0; index < RECENT_PLACE_CACHE_LIMIT + 1; index += 1) {
-      await store.saveAndPrune(record(`place-${index}`, index + 1));
+      await store.saveAndPrune(record(`place-${index}`, index + 1, index === 20 ? visitorDetails() : undefined));
     }
 
     const saved = await store.list();
@@ -106,6 +151,8 @@ describe("recent place cache", () => {
     expect(await store.get("place-0")).toBeNull();
     expect((await store.get("place-20"))?.bundle.photo?.size).toBeGreaterThan(0);
     expect((await store.get("place-20"))?.bundle.boundary?.geometry.type).toBe("Polygon");
+    expect((await store.get("place-20"))?.bundle.place.visitorDetails).toEqual(visitorDetails());
+    expect("visitorDetails" in (await store.listMetadata())[0].place).toBe(false);
   });
 
   it("evicts alternate gallery photo bytes with the least-recently viewed place", async () => {
@@ -213,6 +260,68 @@ describe("recent place cache", () => {
     expect(reopened.galleryPhotos).toHaveLength(1);
     expect(await reopened.galleryPhotos[0]?.photo?.text()).toBe("full-resolution-photo");
     expect(reopened.galleryPhotos[0]?.image.originalUrl).toBe(images[1]?.originalUrl);
+  });
+
+  it("preserves public visitor details across persistent reload and an offline reopen", async () => {
+    const store = createIndexedDbRecentPlaceStore(new IDBFactory());
+    const details = visitorDetails();
+    const responseDetails = {
+      ...details,
+      source: { ...details.source, archiveIds: ["internal-archive-id"], extractionMethod: "api_mapping" },
+      reviewFlagIds: ["internal-review-flag"],
+    };
+    const online = createRecentPlaceCache({ storage: store, fetcher: apiFetcher({ visitorDetails: responseDetails }) });
+    const saved = await online.view("metadata-cache-place", "https://api.example.test");
+    const reloaded = createRecentPlaceCache({ storage: store, fetcher: async () => { throw new TypeError("offline"); } });
+
+    expect(saved.place.visitorDetails).toEqual(details);
+    const offline = await reloaded.view(saved.place.id, "https://api.example.test");
+
+    expect(offline.place.visitorDetails).toEqual(details);
+    expect(offline.boundary).toEqual(saved.boundary);
+    expect(offline.boundaryVersion).toBe(saved.boundaryVersion);
+    expect(offline.place.visitorDetails?.camping.reservationRequired).toBe(false);
+    expect(offline.place.visitorDetails?.source.retrievedAt).toBeNull();
+    expect(offline.place.visitorDetails?.background.wildlife).toBe("Black-tailed deer.");
+  });
+
+  it("drops malformed or unsafe visitor metadata while keeping valid place geometry and version", async () => {
+    const details = visitorDetails();
+    const unsafe = {
+      ...details,
+      source: { ...details.source, primaryUrl: "javascript:alert(1)" },
+    };
+    const cache = createRecentPlaceCache({
+      indexedDB: new IDBFactory(),
+      fetcher: apiFetcher({ visitorDetails: unsafe }),
+    });
+
+    const result = await cache.view("unsafe-metadata-place", "https://api.example.test");
+
+    expect(result.place.id).toBe("unsafe-metadata-place");
+    expect(result.place).not.toHaveProperty("visitorDetails");
+    expect(result.boundary).toEqual(boundary("unsafe-metadata-place"));
+    expect(result.boundaryVersion).toBe(1);
+  });
+
+  it("reads old bundles and strips malformed persisted visitor metadata without changing their geometry", async () => {
+    const store = createIndexedDbRecentPlaceStore(new IDBFactory());
+    const oldBundle = record("old-cache-place", 4);
+    await store.saveAndPrune(oldBundle);
+    expect((await store.get("old-cache-place"))?.bundle.place).not.toHaveProperty("visitorDetails");
+
+    const malformedBundle = record("malformed-cache-place", 5);
+    malformedBundle.bundle.place.visitorDetails = {
+      ...visitorDetails(),
+      source: { ...visitorDetails().source, primaryUrl: "javascript:alert(1)" },
+    };
+    await store.saveAndPrune(malformedBundle);
+
+    const loaded = await store.get("malformed-cache-place");
+    expect(loaded?.bundle.place).not.toHaveProperty("visitorDetails");
+    expect(loaded?.bundle.boundary).toEqual(malformedBundle.bundle.boundary);
+    expect(loaded?.bundle.boundaryVersion).toBe(malformedBundle.bundle.boundaryVersion);
+    expect((await store.listMetadata()).map((entry) => entry.placeId)).toEqual(["malformed-cache-place", "old-cache-place"]);
   });
 
   it("updates LRU recency as soon as a cached place is actually opened", async () => {

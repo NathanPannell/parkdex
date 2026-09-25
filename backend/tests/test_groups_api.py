@@ -36,6 +36,20 @@ def test_private_groups_search_and_membership_are_persistent_and_isolated() -> N
             """,
             PLACE_IDS,
         )
+        conn.execute(
+            """
+            INSERT INTO place_visitor_details (
+                place_id, schema_version, snapshot_date, dataset_sha256,
+                source_checked_at, visitor_details
+            )
+            SELECT %s, schema_version, snapshot_date, dataset_sha256,
+                   source_checked_at, visitor_details
+            FROM place_visitor_details
+            WHERE place_id = 'provincial-goldstream-park'
+            ON CONFLICT (place_id) DO NOTHING
+            """,
+            (PLACE_IDS[0],),
+        )
         conn.commit()
 
     try:
@@ -53,6 +67,8 @@ def test_private_groups_search_and_membership_are_persistent_and_isolated() -> N
             group = created.json()
             assert group["name"] == "Island Weekend"
             assert group["placeIds"] == PLACE_IDS[:2]
+            assert group["places"]
+            assert "visitorDetails" not in group["places"][0]
 
             repeated = client.post(
                 f"/api/groups/{group['id']}/places",
@@ -97,6 +113,7 @@ def test_private_groups_search_and_membership_are_persistent_and_isolated() -> N
             )
             assert filtered.status_code == 200
             assert [place["id"] for place in filtered.json()["places"]] == [PLACE_IDS[1]]
+            assert all("visitorDetails" not in place for place in filtered.json()["places"])
 
             nearby = client.get(
                 "/api/places/search",

@@ -1,0 +1,1035 @@
+{
+  "$defs": {
+    "PlaceVisitorDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/VisitorScope"
+        },
+        "source": {
+          "$ref": "#/$defs/VisitorSource"
+        },
+        "overview": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Overview"
+        },
+        "areaHectares": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Areahectares"
+        },
+        "activities": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorActivity"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Activities"
+        },
+        "facilities": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorFacility"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Facilities"
+        },
+        "access": {
+          "$ref": "#/$defs/VisitorAccess"
+        },
+        "trails": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorTrail"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Trails"
+        },
+        "maps": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorMap"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Maps"
+        },
+        "mapNotes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mapnotes"
+        },
+        "rules": {
+          "$ref": "#/$defs/VisitorRules"
+        },
+        "accessibility": {
+          "$ref": "#/$defs/VisitorAccessibility"
+        },
+        "operations": {
+          "$ref": "#/$defs/VisitorOperations"
+        },
+        "camping": {
+          "$ref": "#/$defs/VisitorCamping"
+        },
+        "contacts": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorContact"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Contacts"
+        },
+        "background": {
+          "$ref": "#/$defs/VisitorBackground"
+        },
+        "officialUpdatesUrl": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Officialupdatesurl"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "scope",
+        "source",
+        "overview",
+        "areaHectares",
+        "activities",
+        "facilities",
+        "access",
+        "trails",
+        "maps",
+        "mapNotes",
+        "rules",
+        "accessibility",
+        "operations",
+        "camping",
+        "contacts",
+        "background",
+        "officialUpdatesUrl"
+      ],
+      "title": "PlaceVisitorDetails",
+      "type": "object"
+    },
+    "ReviewedPlace": {
+      "additionalProperties": false,
+      "properties": {
+        "placeId": {
+          "minLength": 1,
+          "title": "Placeid",
+          "type": "string"
+        },
+        "visitorDetails": {
+          "$ref": "#/$defs/PlaceVisitorDetails"
+        }
+      },
+      "required": [
+        "placeId",
+        "visitorDetails"
+      ],
+      "title": "ReviewedPlace",
+      "type": "object"
+    },
+    "VisitorAccess": {
+      "additionalProperties": false,
+      "properties": {
+        "directions": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Directions"
+        },
+        "address": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Address"
+        },
+        "transportNotes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Transportnotes"
+        },
+        "entryPoints": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorEntryPoint"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Entrypoints"
+        }
+      },
+      "required": [
+        "directions",
+        "address",
+        "transportNotes",
+        "entryPoints"
+      ],
+      "title": "VisitorAccess",
+      "type": "object"
+    },
+    "VisitorAccessibility": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Summary"
+        },
+        "features": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorActivity"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Features"
+        }
+      },
+      "required": [
+        "summary",
+        "features"
+      ],
+      "title": "VisitorAccessibility",
+      "type": "object"
+    },
+    "VisitorActivity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Details"
+        }
+      },
+      "required": [
+        "name",
+        "details"
+      ],
+      "title": "VisitorActivity",
+      "type": "object"
+    },
+    "VisitorBackground": {
+      "additionalProperties": false,
+      "properties": {
+        "history": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "History"
+        },
+        "conservation": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Conservation"
+        },
+        "culturalContext": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Culturalcontext"
+        },
+        "wildlife": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wildlife"
+        }
+      },
+      "required": [
+        "history",
+        "conservation",
+        "culturalContext",
+        "wildlife"
+      ],
+      "title": "VisitorBackground",
+      "type": "object"
+    },
+    "VisitorCamping": {
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Summary"
+        },
+        "reservationRequired": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reservationrequired"
+        },
+        "bookingUrl": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bookingurl"
+        },
+        "reservationNotes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reservationnotes"
+        },
+        "fees": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fees"
+        }
+      },
+      "required": [
+        "summary",
+        "reservationRequired",
+        "bookingUrl",
+        "reservationNotes",
+        "fees"
+      ],
+      "title": "VisitorCamping",
+      "type": "object"
+    },
+    "VisitorContact": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Role"
+        },
+        "phone": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Phone"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Email"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        }
+      },
+      "required": [
+        "name",
+        "role",
+        "phone",
+        "email",
+        "url"
+      ],
+      "title": "VisitorContact",
+      "type": "object"
+    },
+    "VisitorEntryPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "latitude",
+        "longitude"
+      ],
+      "title": "VisitorEntryPoint",
+      "type": "object"
+    },
+    "VisitorFacility": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Details"
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "unavailable",
+            "seasonal",
+            "conditional",
+            "unspecified",
+            null
+          ],
+          "title": "Availability"
+        }
+      },
+      "required": [
+        "name",
+        "details",
+        "availability"
+      ],
+      "title": "VisitorFacility",
+      "type": "object"
+    },
+    "VisitorMap": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "kind": {
+          "enum": [
+            "park",
+            "trail",
+            "directions",
+            "other",
+            null
+          ],
+          "title": "Kind"
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "kind"
+      ],
+      "title": "VisitorMap",
+      "type": "object"
+    },
+    "VisitorOperations": {
+      "additionalProperties": false,
+      "properties": {
+        "hours": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hours"
+        },
+        "seasons": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seasons"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "hours",
+        "seasons",
+        "notes"
+      ],
+      "title": "VisitorOperations",
+      "type": "object"
+    },
+    "VisitorRules": {
+      "additionalProperties": false,
+      "properties": {
+        "pets": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pets"
+        },
+        "cycling": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cycling"
+        },
+        "campfires": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Campfires"
+        },
+        "other": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/VisitorActivity"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Other"
+        }
+      },
+      "required": [
+        "pets",
+        "cycling",
+        "campfires",
+        "other"
+      ],
+      "title": "VisitorRules",
+      "type": "object"
+    },
+    "VisitorScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "park",
+            "site",
+            "island",
+            "community",
+            "dataset"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "matchedName": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matchedname"
+        },
+        "parentName": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parentname"
+        },
+        "matchMethod": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Matchmethod"
+        }
+      },
+      "required": [
+        "kind",
+        "matchedName",
+        "parentName",
+        "matchMethod"
+      ],
+      "title": "VisitorScope",
+      "type": "object"
+    },
+    "VisitorSource": {
+      "additionalProperties": false,
+      "properties": {
+        "primaryUrl": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Primaryurl"
+        },
+        "authority": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authority"
+        },
+        "kind": {
+          "enum": [
+            "visitor_page",
+            "official_park_api",
+            "geographic_record",
+            "shared_dataset",
+            "directory"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "geographicSourceUrl": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Geographicsourceurl"
+        },
+        "retrievedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Retrievedat"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "extracted",
+            "partial",
+            "no_park_specific_content",
+            "fetch_failed",
+            "blocked_by_policy",
+            "needs_review"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primaryUrl",
+        "authority",
+        "kind",
+        "geographicSourceUrl",
+        "retrievedAt",
+        "status"
+      ],
+      "title": "VisitorSource",
+      "type": "object"
+    },
+    "VisitorTrail": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "lengthKm": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lengthkm"
+        },
+        "elevationGainM": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Elevationgainm"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Difficulty"
+        },
+        "mapUrl": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "pattern": "^https?://",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mapurl"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "lengthKm",
+        "elevationGainM",
+        "difficulty",
+        "mapUrl"
+      ],
+      "title": "VisitorTrail",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "snapshotDate": {
+      "format": "date",
+      "title": "Snapshotdate",
+      "type": "string"
+    },
+    "places": {
+      "items": {
+        "$ref": "#/$defs/ReviewedPlace"
+      },
+      "title": "Places",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotDate",
+    "places"
+  ],
+  "title": "ReviewedDataset",
+  "type": "object"
+}

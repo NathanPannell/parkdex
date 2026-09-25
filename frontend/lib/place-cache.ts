@@ -6,8 +6,9 @@ import type { BoundaryFeature } from "./boundaries";
 import { formatPlaceArea } from "./place-detail-facts";
 import { getPlaceDescriptionSource, type PlaceDescriptionSource } from "./place-description-sources";
 import { getPlaceImages, type PlaceImageRecord } from "./place-images";
-import type { Place } from "./places";
+import { toPlaceCatalogueSummary, type Place, type PlaceCatalogueSummary } from "./places";
 import { getVisitorInformation, type VisitorInformation } from "./visitor-information";
+import { parsePlaceVisitorDetails } from "./visitor-details";
 
 export const RECENT_PLACE_CACHE_LIMIT = 20;
 export const RECENT_PLACE_PHOTO_TIMEOUT_MS = 15_000;
@@ -56,7 +57,7 @@ export type RecentPlaceCacheRecord = {
 export type CachedPlaceGeometry = {
   placeId: string;
   viewedAt: number;
-  place: Place;
+  place: PlaceCatalogueSummary;
   boundary: BoundaryFeature | null;
   boundaryVersion: string | number | null;
 };
@@ -122,7 +123,50 @@ function parsePlace(value: unknown, expectedId: string): Place {
     || typeof value.sourceName !== "string") {
     throw new Error("The offline place bundle contains invalid place details.");
   }
-  return value as unknown as Place;
+  const place = { ...value } as unknown as Place;
+  delete place.visitorDetails;
+  if ("visitorDetails" in value) {
+    const visitorDetails = parsePlaceVisitorDetails(value.visitorDetails);
+    if (visitorDetails !== undefined) place.visitorDetails = visitorDetails;
+  }
+  return place;
+}
+
+/** Old bundles remain readable. Invalid visitor metadata is omitted without touching the place boundary. */
+function normalizeCachedRecord(value: unknown, expectedPlaceId?: string): RecentPlaceCacheRecord | null {
+  if (!isRecord(value) || !isRecord(value.bundle)
+    || typeof value.placeId !== "string" || !value.placeId
+    || (expectedPlaceId !== undefined && value.placeId !== expectedPlaceId)
+    || !Number.isFinite(value.viewedAt)) return null;
+  try {
+    const place = parsePlace(value.bundle.place, value.placeId);
+    return {
+      placeId: value.placeId,
+      viewedAt: Number(value.viewedAt),
+      bundle: normalizeCachedPlaceBundle({ ...value.bundle, place } as unknown as CachedPlaceBundle),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCachedGeometry(value: unknown): CachedPlaceGeometry | null {
+  if (!isRecord(value) || typeof value.placeId !== "string" || !value.placeId || !Number.isFinite(value.viewedAt)) return null;
+  try {
+    const place = parsePlace(value.place, value.placeId);
+    const boundaryVersion = typeof value.boundaryVersion === "string" || typeof value.boundaryVersion === "number"
+      ? value.boundaryVersion
+      : null;
+    return {
+      placeId: value.placeId,
+      viewedAt: Number(value.viewedAt),
+      place: toPlaceCatalogueSummary(place),
+      boundary: value.boundary as BoundaryFeature | null,
+      boundaryVersion,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function placeAttribution(place: Place): PlaceSourceAttribution["place"] {
@@ -350,23 +394,23 @@ export function createIndexedDbRecentPlaceStore(factory: IDBFactory): RecentPlac
     async get(placeId) {
       const db = await database();
       const transaction = db.transaction(CACHE_BUNDLE_STORE, "readonly");
-      const result = await idbRequest(transaction.objectStore(CACHE_BUNDLE_STORE).get(placeId)) as RecentPlaceCacheRecord | undefined;
+      const result = await idbRequest(transaction.objectStore(CACHE_BUNDLE_STORE).get(placeId));
       await transactionDone(transaction);
-      return result ?? null;
+      return normalizeCachedRecord(result, placeId);
     },
     async list() {
       const db = await database();
       const transaction = db.transaction(CACHE_BUNDLE_STORE, "readonly");
-      const result = await idbRequest(transaction.objectStore(CACHE_BUNDLE_STORE).getAll()) as RecentPlaceCacheRecord[];
+      const result = await idbRequest(transaction.objectStore(CACHE_BUNDLE_STORE).getAll());
       await transactionDone(transaction);
-      return result.sort(compareRecent);
+      return result.map((entry) => normalizeCachedRecord(entry)).filter((entry): entry is RecentPlaceCacheRecord => entry !== null).sort(compareRecent);
     },
     async listMetadata() {
       const db = await database();
       const transaction = db.transaction(CACHE_GEOMETRY_STORE, "readonly");
-      const result = await idbRequest(transaction.objectStore(CACHE_GEOMETRY_STORE).getAll()) as CachedPlaceGeometry[];
+      const result = await idbRequest(transaction.objectStore(CACHE_GEOMETRY_STORE).getAll());
       await transactionDone(transaction);
-      return result.sort(compareRecent);
+      return result.map(normalizeCachedGeometry).filter((entry): entry is CachedPlaceGeometry => entry !== null).sort(compareRecent);
     },
     async saveAndPrune(record) {
       const db = await database();
@@ -393,7 +437,7 @@ export function createIndexedDbRecentPlaceStore(factory: IDBFactory): RecentPlac
             geometryStore.put({
               placeId: record.placeId,
               viewedAt: record.viewedAt,
-              place: record.bundle.place,
+              place: toPlaceCatalogueSummary(record.bundle.place),
               boundary: record.bundle.boundary,
               boundaryVersion: record.bundle.boundaryVersion,
             } satisfies CachedPlaceGeometry);
@@ -556,12 +600,14 @@ function parseNativeRecord(value: string): ParsedNativeRecord {
   const galleryPhotos = Array.isArray(rawBundle.galleryPhotos)
     ? rawBundle.galleryPhotos.map((entry) => ({ ...entry, photo: null }))
     : [];
+  const normalized = normalizeCachedRecord({
+    placeId: parsed.record.placeId,
+    viewedAt: parsed.record.viewedAt,
+    bundle: { ...rawBundle, photo: null, galleryPhotos },
+  });
+  if (!normalized) throw new Error("Cached place details are invalid.");
   return {
-    record: {
-      placeId: parsed.record.placeId,
-      viewedAt: Number(parsed.record.viewedAt),
-      bundle: { ...rawBundle, photo: null, galleryPhotos } as CachedPlaceBundle,
-    },
+    record: { ...normalized, bundle: { ...normalized.bundle, photo: null } },
     photoType: typeof parsed.photoType === "string" ? parsed.photoType : null,
     galleryPhotoTypes: Array.isArray(parsed.galleryPhotoTypes)
       ? parsed.galleryPhotoTypes.map((value) => typeof value === "string" ? value : null)
@@ -707,7 +753,7 @@ export function createNativeFilesystemRecentPlaceStore(): RecentPlaceCacheStorag
       return records.filter((record): record is ParsedNativeRecord => record !== null).map(({ record }) => ({
         placeId: record.placeId,
         viewedAt: record.viewedAt,
-        place: record.bundle.place,
+        place: toPlaceCatalogueSummary(record.bundle.place),
         boundary: record.bundle.boundary,
         boundaryVersion: record.bundle.boundaryVersion,
       })).sort(compareRecent);
