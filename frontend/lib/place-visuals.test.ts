@@ -39,6 +39,22 @@ describe("place visual index", () => {
     expect(parsed.get(placeId)).toEqual({ ...entry, reviewFlags: [] });
   });
 
+  it("preserves only the recognized boundary-free render mode", () => {
+    const legacy = parsePlaceVisualIndex({ version: 1, places: { [placeId]: entry } });
+    const pointCentered = parsePlaceVisualIndex({
+      version: 1,
+      places: { [placeId]: { ...entry, renderMode: "point-centered-boundary-free" } },
+    });
+    const unknown = parsePlaceVisualIndex({
+      version: 1,
+      places: { [placeId]: { ...entry, renderMode: "point-centered" } },
+    });
+
+    expect(legacy.get(placeId)).toEqual(entry);
+    expect(pointCentered.get(placeId)?.renderMode).toBe("point-centered-boundary-free");
+    expect(unknown.has(placeId)).toBe(false);
+  });
+
   it("rejects an unsupported version and skips unsafe place IDs or asset paths", () => {
     expect(() => parsePlaceVisualIndex({ version: 2, places: {} })).toThrow(/unsupported format/i);
     const parsed = parsePlaceVisualIndex({

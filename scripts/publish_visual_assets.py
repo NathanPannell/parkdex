@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import struct
 import tempfile
 import threading
 import time
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +29,11 @@ CANONICAL_PLACE_COUNT = 1030
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 PUBLIC_FILENAMES = ("satellite.avif", "relief.avif")
+CDEM_LEGACY_ATTRIBUTION = "Elevation: Natural Resources Canada CDEM, Open Government Licence, Canada"
+CDEM_PUBLIC_ATTRIBUTION = (
+    "Elevation: Natural Resources Canada CDEM. Contains information licensed under the "
+    "Open Government Licence – Canada. https://open.canada.ca/en/open-government-licence-canada"
+)
 CONTENT_TYPES = {
     "satellite.avif": "image/avif",
     "relief.avif": "image/avif",
@@ -75,6 +82,7 @@ class ValidatedBatch:
     rights_manifest_sha256: str | None = None
     validated_place_count: int | None = None
     held_place_ids: tuple[str, ...] = ()
+    publication_provenance: dict[str, str] | None = None
 
 
 def sha256_bytes(content: bytes) -> str:
@@ -98,6 +106,23 @@ def _load_json(path: Path, description: str) -> Any:
         raise PublishError(f"Could not read {description}: {path}") from exc
 
 
+def _load_json_unique(path: Path, description: str) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise PublishError(f"{description} contains duplicate JSON keys")
+            value[key] = item
+        return value
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+    except FileNotFoundError as exc:
+        raise PublishError(f"Missing {description}: {path}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PublishError(f"Could not read {description}: {path}") from exc
+
+
 def _load_rights_manifest(path: Path) -> Any:
     def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         value: dict[str, Any] = {}
@@ -113,6 +138,29 @@ def _load_rights_manifest(path: Path) -> Any:
         raise PublishError(f"Missing boundary rights manifest: {path}") from exc
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PublishError(f"Could not read boundary rights manifest: {path}") from exc
+
+
+def _load_point_manifest(path: Path) -> tuple[Any, str]:
+    try:
+        content = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise PublishError(f"Missing independent point manifest: {path}") from exc
+    except OSError as exc:
+        raise PublishError(f"Could not read independent point manifest: {path}") from exc
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise PublishError("Independent point manifest contains duplicate JSON keys")
+            value[key] = item
+        return value
+
+    try:
+        records = json.loads(content.decode("utf-8"), object_pairs_hook=unique_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PublishError(f"Could not read independent point manifest: {path}") from exc
+    return records, sha256_bytes(content)
 
 
 def load_catalogue(path: Path) -> dict[str, dict[str, str]]:
@@ -280,16 +328,25 @@ def _normalize_review_flags(manifest: dict[str, Any], place_id: str) -> dict[str
     return {**manifest, "reviewFlags": flags}
 
 
-def _build_index(places: tuple[Place, ...]) -> bytes:
+def _build_index(
+    places: tuple[Place, ...],
+    publication_provenance: dict[str, str] | None = None,
+) -> bytes:
     entries: dict[str, dict[str, Any]] = {}
     for place in places:
         asset_records = {asset.filename: asset for asset in place.assets}
         manifest = place.manifest
+        attribution = _manifest_text_list(manifest, "attribution", place.place_id)
+        if CDEM_LEGACY_ATTRIBUTION in attribution:
+            attribution = [
+                CDEM_PUBLIC_ATTRIBUTION if item == CDEM_LEGACY_ATTRIBUTION else item
+                for item in attribution
+            ]
         entries[place.place_id] = {
             "satellite": f"{place.place_id}/satellite.avif",
             "relief": f"{place.place_id}/relief.avif",
             "model": f"{place.place_id}/{place.place_id}-terrain.glb",
-            "attribution": _manifest_text_list(manifest, "attribution", place.place_id),
+            "attribution": attribution,
             "acquired": _manifest_text_list(manifest, "acquired", place.place_id),
             "needsReview": manifest.get("needsReview"),
             "reviewFlags": _manifest_text_list(manifest, "reviewFlags", place.place_id),
@@ -297,18 +354,27 @@ def _build_index(places: tuple[Place, ...]) -> bytes:
             "assetSha256": {name: asset_records[name].sha256 for name in sorted(asset_records)},
             "assetBytes": {name: asset_records[name].size for name in sorted(asset_records)},
         }
+        if manifest.get("renderMode") == "point-centered-boundary-free":
+            entries[place.place_id]["renderMode"] = "point-centered-boundary-free"
+            entries[place.place_id]["pointSource"] = manifest["pointSource"]
+            if "pointRights" in manifest:
+                entries[place.place_id]["pointRights"] = manifest["pointRights"]
     index = {"version": 1, "places": entries}
+    if publication_provenance is not None:
+        index["publicationProvenance"] = dict(sorted(publication_provenance.items()))
     return (json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _locked_boundary_properties(place: Place) -> dict[str, Any]:
+def _locked_boundary_properties(place: Place, frozen_feature: dict[str, Any]) -> dict[str, Any]:
     if not place.assets:
         raise PublishError(f"{place.place_id}: validated place has no public assets")
-    sources = _load_json(place.assets[0].path.parent / "sources.json", "place source lock")
+    sources = _load_json_unique(place.assets[0].path.parent / "sources.json", "Place source lock")
     boundary = sources.get("boundary") if isinstance(sources, dict) else None
     features = boundary.get("features") if isinstance(boundary, dict) else None
     if not isinstance(features, list) or len(features) != 1:
         raise PublishError(f"{place.place_id}: source lock has no single boundary feature")
+    if features[0] != frozen_feature:
+        raise PublishError(f"{place.place_id}: source lock boundary feature differs from the frozen snapshot")
     properties = features[0].get("properties") if isinstance(features[0], dict) else None
     if not isinstance(properties, dict) or properties.get("id") != place.place_id:
         raise PublishError(f"{place.place_id}: source lock boundary identity differs")
@@ -354,7 +420,7 @@ def apply_rights_gate(
         place_id = properties.get("id") if isinstance(properties, dict) else None
         if not isinstance(place_id, str) or place_id in features_by_id:
             raise PublishError("Boundary snapshot has an invalid or repeated place ID")
-        features_by_id[place_id] = properties
+        features_by_id[place_id] = feature
     if set(features_by_id) != expected_ids:
         raise PublishError("Boundary snapshot IDs do not match the complete validated catalogue")
 
@@ -364,11 +430,12 @@ def apply_rights_gate(
         decision = decisions[place_id]
         if not isinstance(decision, dict):
             raise PublishError(f"{place_id}: boundary rights decision is not an object")
-        feature = features_by_id[place_id]
+        frozen_feature = features_by_id[place_id]
+        feature = frozen_feature["properties"]
         place = place_by_id[place_id]
         if feature.get("name") != place.name or feature.get("category") != place.category:
             raise PublishError(f"{place_id}: boundary snapshot identity differs from the validated place")
-        locked_feature = _locked_boundary_properties(place)
+        locked_feature = _locked_boundary_properties(place, frozen_feature)
         if locked_feature.get("name") != place.name or locked_feature.get("category") != place.category:
             raise PublishError(f"{place_id}: source lock boundary identity differs from the validated place")
         for field, manifest_field in (
@@ -417,6 +484,495 @@ def apply_rights_gate(
         sha256_file(rights_path),
         len(batch.places),
         tuple(held),
+    )
+
+
+POINT_RECORD_KEYS = frozenset({
+    "id", "name", "category", "lon", "lat", "sourceName", "sourceUrl",
+    "sourceId", "licence", "attribution",
+})
+POINT_SOURCE_KEYS = frozenset({"sourceName", "sourceUrl", "sourceId", "licence", "attribution"})
+POINT_RIGHTS_ROW_KEYS = frozenset({
+    "decision", "sourceName", "sourceUrl", "sourceId", "licence", "attribution",
+    "officialTermsUrl", "reviewEvidenceUrl",
+})
+POINT_FRAME_SIDE_M = 8000.0
+POINT_FRAME_TOLERANCE_M = 0.01
+
+
+def _assert_no_boundary_or_geometry_keys(value: Any, *, place_id: str, source: str) -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = str(key).casefold()
+            if "boundary" in normalized or "geometry" in normalized or "polygon" in normalized:
+                raise PublishError(f"{place_id}: {source} contains forbidden boundary or geometry key {key}")
+            _assert_no_boundary_or_geometry_keys(child, place_id=place_id, source=source)
+    elif isinstance(value, list):
+        for child in value:
+            _assert_no_boundary_or_geometry_keys(child, place_id=place_id, source=source)
+
+
+def _glb_json_chunk(path: Path, place_id: str) -> Any:
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        raise PublishError(f"{place_id}: could not read terrain GLB") from exc
+    if len(content) < 20 or content[:4] != b"glTF":
+        raise PublishError(f"{place_id}: terrain model is not a valid GLB file")
+    version, total_length = struct.unpack_from("<II", content, 4)
+    if version != 2 or total_length != len(content):
+        raise PublishError(f"{place_id}: terrain GLB header is invalid")
+
+    offset = 12
+    json_payload = None
+    while offset < len(content):
+        if offset + 8 > len(content):
+            raise PublishError(f"{place_id}: terrain GLB chunk header is truncated")
+        chunk_length, chunk_type = struct.unpack_from("<II", content, offset)
+        offset += 8
+        end = offset + chunk_length
+        if end > len(content):
+            raise PublishError(f"{place_id}: terrain GLB chunk is truncated")
+        if chunk_type == 0x4E4F534A:
+            if json_payload is not None:
+                raise PublishError(f"{place_id}: terrain GLB has multiple JSON chunks")
+            try:
+                json_payload = json.loads(content[offset:end].rstrip(b" \t\r\n\0").decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise PublishError(f"{place_id}: terrain GLB JSON chunk is invalid") from exc
+        offset = end
+    if json_payload is None or not isinstance(json_payload, dict):
+        raise PublishError(f"{place_id}: terrain GLB has no JSON object chunk")
+    return json_payload
+
+
+def _validate_point_record(record: Any, catalogue: dict[str, dict[str, str]]) -> dict[str, Any]:
+    if not isinstance(record, dict) or set(record) != POINT_RECORD_KEYS:
+        raise PublishError("Each point manifest row must have the exact required fields")
+    place_id = record.get("id")
+    if not isinstance(place_id, str) or not ID_PATTERN.fullmatch(place_id):
+        raise PublishError("Point manifest has an invalid place ID")
+    expected = catalogue.get(place_id)
+    if expected is None or record.get("name") != expected["name"] or record.get("category") != expected["category"]:
+        raise PublishError(f"{place_id}: point identity differs from the canonical catalogue")
+    lon, lat = record.get("lon"), record.get("lat")
+    if (isinstance(lon, bool) or not isinstance(lon, (int, float)) or not math.isfinite(lon)
+            or isinstance(lat, bool) or not isinstance(lat, (int, float)) or not math.isfinite(lat)
+            or not -141.0 <= lon <= -114.0 or not 48.0 <= lat <= 61.0):
+        raise PublishError(f"{place_id}: point coordinates must be finite values within British Columbia")
+    for field in POINT_SOURCE_KEYS:
+        value = record.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise PublishError(f"{place_id}: point record has no valid {field}")
+    licence_normalized = re.sub(r"\s+", " ", record["licence"]).strip().casefold()
+    if ("all rights reserved" in licence_normalized or "no redistribution" in licence_normalized
+            or "not for redistribution" in licence_normalized or "non-redistributable" in licence_normalized):
+        raise PublishError(f"{place_id}: point licence explicitly withholds public redistribution")
+    url = urlsplit(record["sourceUrl"])
+    if url.scheme not in {"http", "https"} or not url.netloc:
+        raise PublishError(f"{place_id}: point sourceUrl must be an HTTP or HTTPS URL")
+    return record
+
+
+def _expected_point_utm_frame(record: dict[str, Any]) -> tuple[int, tuple[float, float, float, float]]:
+    try:
+        from pyproj import Transformer
+    except ImportError as exc:
+        raise PublishError("Dual-source point publication requires pyproj; install backend/requirements.txt") from exc
+    longitude, latitude = float(record["lon"]), float(record["lat"])
+    zone = math.floor((longitude + 180.0) / 6.0) + 1
+    epsg = 32600 + zone
+    try:
+        east, north = Transformer.from_crs(4326, epsg, always_xy=True).transform(longitude, latitude)
+    except Exception as exc:
+        raise PublishError(f"{record['id']}: could not project the independent point to UTM") from exc
+    half = POINT_FRAME_SIDE_M / 2
+    return epsg, (east - half, north - half, east + half, north + half)
+
+
+def _validate_bounds_value(value: Any, place_id: str, source: str) -> tuple[float, float, float, float]:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        raise PublishError(f"{place_id}: {source} must contain four UTM bounds")
+    if any(isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(item) for item in value):
+        raise PublishError(f"{place_id}: {source} contains invalid UTM bounds")
+    left, bottom, right, top = (float(item) for item in value)
+    if left >= right or bottom >= top:
+        raise PublishError(f"{place_id}: {source} is not a valid UTM rectangle")
+    return left, bottom, right, top
+
+
+def _validate_point_frame(
+    place_id: str,
+    record: dict[str, Any],
+    sources: dict[str, Any],
+    manifest: dict[str, Any],
+) -> None:
+    expected_epsg, expected_bounds = _expected_point_utm_frame(record)
+    source_epsg = sources.get("epsg")
+    manifest_epsg = manifest.get("projectionEpsg")
+    if (isinstance(source_epsg, bool) or source_epsg != expected_epsg
+            or isinstance(manifest_epsg, bool) or manifest_epsg != expected_epsg):
+        raise PublishError(f"{place_id}: source lock or manifest UTM EPSG differs from the independent point")
+    config = sources.get("config")
+    if not isinstance(config, dict) or config.get("pointSideM") != POINT_FRAME_SIDE_M:
+        raise PublishError(f"{place_id}: source lock does not declare the fixed 8 km point frame")
+
+    source_bounds = _validate_bounds_value(sources.get("boundsM"), place_id, "source lock boundsM")
+    manifest_bounds = _validate_bounds_value(manifest.get("boundsM"), place_id, "manifest boundsM")
+    for actual, expected in zip(source_bounds, expected_bounds):
+        if abs(actual - expected) > POINT_FRAME_TOLERANCE_M:
+            raise PublishError(f"{place_id}: source lock boundsM are not centered on the fixed point frame")
+    for actual, expected in zip(manifest_bounds, expected_bounds):
+        if abs(actual - expected) > POINT_FRAME_TOLERANCE_M:
+            raise PublishError(f"{place_id}: manifest boundsM are not centered on the fixed point frame")
+    for source_value, manifest_value in zip(source_bounds, manifest_bounds):
+        if abs(source_value - manifest_value) > POINT_FRAME_TOLERANCE_M:
+            raise PublishError(f"{place_id}: source lock and manifest boundsM differ")
+
+    width, height = source_bounds[2] - source_bounds[0], source_bounds[3] - source_bounds[1]
+    if abs(width - POINT_FRAME_SIDE_M) > POINT_FRAME_TOLERANCE_M or abs(height - POINT_FRAME_SIDE_M) > POINT_FRAME_TOLERANCE_M:
+        raise PublishError(f"{place_id}: point frame is not an 8 km square")
+
+
+def _load_point_rights_manifest(
+    path: Path,
+    records_by_id: dict[str, dict[str, Any]],
+    point_snapshot_sha256: str,
+) -> tuple[dict[str, dict[str, str]], str]:
+    try:
+        content = path.read_bytes()
+    except FileNotFoundError as exc:
+        raise PublishError(f"Missing independent point rights manifest: {path}") from exc
+    except OSError as exc:
+        raise PublishError(f"Could not read independent point rights manifest: {path}") from exc
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise PublishError("Point rights manifest contains duplicate JSON keys")
+            value[key] = item
+        return value
+
+    try:
+        manifest = json.loads(content.decode("utf-8"), object_pairs_hook=unique_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PublishError(f"Could not read independent point rights manifest: {path}") from exc
+    if not isinstance(manifest, dict) or set(manifest) != {"version", "pointManifestSha256", "places"}:
+        raise PublishError("Point rights manifest has an invalid schema")
+    if manifest.get("version") != 1 or manifest.get("pointManifestSha256") != point_snapshot_sha256:
+        raise PublishError("Point rights manifest does not bind to the exact point manifest SHA-256")
+    decisions = manifest.get("places")
+    if not isinstance(decisions, dict) or set(decisions) != set(records_by_id):
+        raise PublishError("Point rights decisions must cover the exact point-manifest IDs")
+
+    validated: dict[str, dict[str, str]] = {}
+    for place_id, record in records_by_id.items():
+        decision = decisions[place_id]
+        if not isinstance(decision, dict) or set(decision) - POINT_RIGHTS_ROW_KEYS:
+            raise PublishError(f"{place_id}: point rights decision has an invalid schema")
+        for field in POINT_RIGHTS_ROW_KEYS:
+            if field not in decision:
+                if field in {"officialTermsUrl", "reviewEvidenceUrl"}:
+                    raise PublishError(f"{place_id}: point rights decision has no {field}")
+                raise PublishError(f"{place_id}: point rights decision is missing {field}")
+        if decision.get("decision") != "approved":
+            raise PublishError(f"{place_id}: point source is not explicitly approved for publication")
+        for field in POINT_SOURCE_KEYS:
+            value = decision.get(field)
+            if not isinstance(value, str) or not value.strip() or value != record[field]:
+                raise PublishError(f"{place_id}: point rights {field} differs from the independent source record")
+        for field in ("officialTermsUrl", "reviewEvidenceUrl"):
+            value = decision.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise PublishError(f"{place_id}: point rights decision has no {field}")
+            parsed_url = urlsplit(value)
+            if (parsed_url.scheme != "https" or not parsed_url.netloc
+                    or any(character.isspace() for character in value)):
+                raise PublishError(f"{place_id}: {field} must be an absolute HTTPS URL")
+        validated[place_id] = {
+            "officialTermsUrl": decision["officialTermsUrl"],
+            "reviewEvidenceUrl": decision["reviewEvidenceUrl"],
+        }
+    return validated, sha256_bytes(content)
+
+
+def _validate_boundary_free_point_place(
+    place: Place,
+    record: dict[str, Any],
+    point_rights: dict[str, str],
+    point_snapshot_sha256: str,
+) -> Place:
+    place_id = place.place_id
+    manifest = place.manifest
+    if manifest.get("renderMode") != "point-centered-boundary-free":
+        raise PublishError(f"{place_id}: point manifest renderMode differs")
+    if manifest.get("pointSnapshotSha256") != point_snapshot_sha256:
+        raise PublishError(f"{place_id}: generated point snapshot SHA-256 differs")
+    expected_source = {key: record[key] for key in POINT_SOURCE_KEYS}
+    point_source = manifest.get("pointSource")
+    if not isinstance(point_source, dict) or set(point_source) != POINT_SOURCE_KEYS or point_source != expected_source:
+        raise PublishError(f"{place_id}: generated point source identity, licence, or attribution differs")
+    pin = manifest.get("representativePin")
+    if not isinstance(pin, list) or len(pin) != 2 or pin != [record["lon"], record["lat"]]:
+        raise PublishError(f"{place_id}: representative pin differs from the independent point manifest")
+
+    place_root = place.assets[0].path.parent
+    for path in place_root.rglob("*"):
+        if "boundary" in path.name.casefold():
+            raise PublishError(f"{place_id}: generated output contains boundary-related file {path.name}")
+        if path.is_symlink():
+            raise PublishError(f"{place_id}: generated point output contains a symbolic link")
+    if not isinstance(manifest.get("sourceLockSha256"), str):
+        raise PublishError(f"{place_id}: generated point manifest has no source-lock SHA-256")
+    _validate_source_lock(place_id, place_root, manifest)
+    strict_manifest = _load_json_unique(place_root / "manifest.json", "Point place manifest")
+    if not isinstance(strict_manifest, dict) or strict_manifest.get("placeId") != place_id:
+        raise PublishError(f"{place_id}: generated point manifest is invalid")
+    source_path = place_root / "sources.json"
+    sources = _load_json_unique(source_path, "Point source lock")
+    if not isinstance(sources, dict):
+        raise PublishError(f"{place_id}: point source lock root is not an object")
+    if sources.get("renderMode") != "point-centered-boundary-free":
+        raise PublishError(f"{place_id}: source lock renderMode differs")
+    if sources.get("inputSha256") != point_snapshot_sha256:
+        raise PublishError(f"{place_id}: source lock point snapshot SHA-256 differs")
+    if sources.get("inputRecord") != record:
+        raise PublishError(f"{place_id}: source lock input record differs from the independent point manifest")
+    _validate_point_frame(place_id, record, sources, manifest)
+
+    _assert_no_boundary_or_geometry_keys(strict_manifest, place_id=place_id, source="generated manifest")
+    _assert_no_boundary_or_geometry_keys(sources, place_id=place_id, source="source lock")
+    for metadata_path in place_root.rglob("*.json"):
+        if metadata_path in {place_root / "manifest.json", source_path}:
+            continue
+        metadata = _load_json_unique(metadata_path, "point terrain metadata")
+        _assert_no_boundary_or_geometry_keys(metadata, place_id=place_id, source=metadata_path.name)
+
+    model = next((asset for asset in place.assets if asset.filename.endswith("-terrain.glb")), None)
+    if model is None:
+        raise PublishError(f"{place_id}: point render has no public terrain GLB")
+    glb_json = _glb_json_chunk(model.path, place_id)
+    _assert_no_boundary_or_geometry_keys(glb_json, place_id=place_id, source="terrain GLB")
+
+    attribution = list(dict.fromkeys([
+        *_manifest_text_list(manifest, "attribution", place_id),
+        record["attribution"],
+        f"Point source: {record['sourceName']} (record {record['sourceId']}); licence: {record['licence']}; {record['sourceUrl']}",
+        f"Point licence terms: {point_rights['officialTermsUrl']}",
+    ]))
+    return Place(
+        place.place_id,
+        place.category,
+        place.name,
+        {
+            **manifest,
+            "attribution": attribution,
+            "pointSource": expected_source,
+            "pointRights": point_rights,
+        },
+        place.assets,
+    )
+
+
+def _load_boundary_rights_context(
+    rights_path: Path,
+    boundaries_path: Path,
+    catalogue: dict[str, dict[str, str]],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]], dict[str, Any], set[str], set[str]]:
+    rights = _load_rights_manifest(rights_path)
+    boundaries = _load_json(boundaries_path, "boundary snapshot")
+    if not isinstance(rights, dict) or rights.get("version") != 1:
+        raise PublishError("Boundary rights manifest must have version 1")
+    snapshot_hash = rights.get("boundarySnapshotSha256")
+    if not isinstance(snapshot_hash, str) or not SHA256_PATTERN.fullmatch(snapshot_hash):
+        raise PublishError("Boundary rights manifest has no valid snapshot SHA-256")
+    if sha256_file(boundaries_path) != snapshot_hash:
+        raise PublishError("Boundary snapshot SHA-256 differs from the rights manifest")
+    if not isinstance(boundaries, dict) or boundaries.get("type") != "FeatureCollection":
+        raise PublishError("Boundary snapshot is not a FeatureCollection")
+    features = boundaries.get("features")
+    decisions = rights.get("places")
+    expected_ids = set(catalogue)
+    if not isinstance(features, list) or not isinstance(decisions, dict) or set(decisions) != expected_ids:
+        raise PublishError("Boundary rights manifest and snapshot must cover the complete catalogue")
+    features_by_id: dict[str, dict[str, Any]] = {}
+    for feature in features:
+        properties = feature.get("properties") if isinstance(feature, dict) else None
+        place_id = properties.get("id") if isinstance(properties, dict) else None
+        if not isinstance(place_id, str) or place_id in features_by_id:
+            raise PublishError("Boundary snapshot has an invalid or repeated place ID")
+        features_by_id[place_id] = feature
+    if set(features_by_id) != expected_ids:
+        raise PublishError("Boundary snapshot IDs do not match the complete catalogue")
+
+    approved: set[str] = set()
+    held: set[str] = set()
+    for place_id, expected in catalogue.items():
+        feature = features_by_id[place_id]["properties"]
+        if feature.get("name") != expected["name"] or feature.get("category") != expected["category"]:
+            raise PublishError(f"{place_id}: boundary snapshot identity differs from the canonical catalogue")
+        decision = decisions[place_id]
+        if not isinstance(decision, dict):
+            raise PublishError(f"{place_id}: boundary rights decision is not an object")
+        for field in ("sourceName", "sourceUrl", "sourceId"):
+            value = decision.get(field)
+            if not isinstance(value, str) or not value.strip() or value != feature.get(field):
+                raise PublishError(f"{place_id}: rights decision {field} differs from the boundary snapshot")
+        status = decision.get("decision")
+        if status == "approved":
+            attribution = decision.get("rightsAttribution")
+            if not isinstance(attribution, list) or not attribution or any(
+                not isinstance(item, str) or not item.strip() for item in attribution
+            ):
+                raise PublishError(f"{place_id}: approved boundary has no rights attribution")
+            approved.add(place_id)
+        elif status == "hold":
+            reason = decision.get("reason")
+            if not isinstance(reason, str) or not reason.strip():
+                raise PublishError(f"{place_id}: held boundary has no reason")
+            held.add(place_id)
+        else:
+            raise PublishError(f"{place_id}: boundary rights decision must be approved or hold")
+    if approved & held or approved | held != expected_ids:
+        raise PublishError("Boundary rights decisions do not partition the complete catalogue")
+    return rights, features_by_id, decisions, approved, held
+
+
+def apply_dual_source_gate(
+    boundary_generated_root: Path,
+    rights_path: Path,
+    boundaries_path: Path,
+    point_generated_root: Path,
+    point_manifest_path: Path,
+    point_rights_manifest_path: Path,
+    catalogue_path: Path,
+) -> ValidatedBatch:
+    """Merge licensed boundary renders with independently sourced boundary-free point renders."""
+    try:
+        boundary_root = boundary_generated_root.resolve(strict=True)
+        point_root = point_generated_root.resolve(strict=True)
+        point_manifest_file = point_manifest_path.resolve(strict=True)
+        point_rights_file = point_rights_manifest_path.resolve(strict=True)
+    except OSError as exc:
+        raise PublishError("The boundary root, point-generated root, point manifest, or point rights manifest is missing") from exc
+    if not boundary_root.is_dir():
+        raise PublishError("The boundary-generated root is not a directory")
+    if (boundary_root == point_root or boundary_root in point_root.parents or point_root in boundary_root.parents):
+        raise PublishError("Boundary and point generated roots must be separate directories")
+    if not point_manifest_file.is_file():
+        raise PublishError("Independent point manifest is not a regular file")
+    if not point_rights_file.is_file():
+        raise PublishError("Independent point rights manifest is not a regular file")
+    independent_files = (point_manifest_file, point_rights_file)
+    if point_manifest_file == point_rights_file:
+        raise PublishError("Point manifest and point rights manifest must be separate files")
+    if any(path.is_relative_to(boundary_root) or path.is_relative_to(point_root) for path in independent_files):
+        raise PublishError("Point and point rights manifests must be stored outside generated output directories")
+
+    catalogue = load_catalogue(catalogue_path)
+    rights, features_by_id, decisions, approved_ids, held_ids = _load_boundary_rights_context(
+        rights_path, boundaries_path, catalogue,
+    )
+    boundary_batch = validate_batch(
+        boundary_root,
+        catalogue_path,
+        requested_ids=tuple(sorted(approved_ids)),
+    )
+    approved_places: list[Place] = []
+    for place in boundary_batch.places:
+        frozen_feature = features_by_id[place.place_id]
+        feature = frozen_feature["properties"]
+        locked_feature = _locked_boundary_properties(place, frozen_feature)
+        if (feature.get("name") != place.name or feature.get("category") != place.category
+                or locked_feature.get("name") != place.name or locked_feature.get("category") != place.category):
+            raise PublishError(f"{place.place_id}: boundary identity differs from the approved snapshot")
+        decision = decisions[place.place_id]
+        for field, manifest_field in (
+            ("sourceName", "boundarySource"),
+            ("sourceUrl", "boundarySourceUrl"),
+            ("sourceId", "boundarySourceId"),
+        ):
+            source_value = decision[field]
+            if (feature.get(field) != source_value or place.manifest.get(manifest_field) != source_value
+                    or locked_feature.get(field) != source_value):
+                raise PublishError(f"{place.place_id}: boundary {field} differs from the approved source")
+        attribution = list(dict.fromkeys([
+            *_manifest_text_list(place.manifest, "attribution", place.place_id),
+            *decision["rightsAttribution"],
+        ]))
+        approved_places.append(Place(
+            place.place_id,
+            place.category,
+            place.name,
+            {**place.manifest, "attribution": attribution},
+            place.assets,
+        ))
+    if {place.place_id for place in approved_places} != approved_ids:
+        raise PublishError("Approved boundary outputs do not exactly match the rights-approved place IDs")
+
+    point_records, point_snapshot_sha256 = _load_point_manifest(point_manifest_file)
+    if not isinstance(point_records, list) or not point_records:
+        raise PublishError("Independent point manifest must be a non-empty JSON array")
+    records_by_id: dict[str, dict[str, Any]] = {}
+    for raw_record in point_records:
+        record = _validate_point_record(raw_record, catalogue)
+        place_id = record["id"]
+        if place_id in records_by_id:
+            raise PublishError(f"Independent point manifest repeats ID {place_id}")
+        records_by_id[place_id] = record
+    point_ids = set(records_by_id)
+    if point_ids != held_ids or point_ids & approved_ids or point_ids | approved_ids != set(catalogue):
+        raise PublishError("Point manifest IDs must exactly match held places and complete the disjoint catalogue")
+    point_rights, point_rights_sha256 = _load_point_rights_manifest(
+        point_rights_file, records_by_id, point_snapshot_sha256,
+    )
+
+    try:
+        point_directories = {
+            child.name for child in point_root.iterdir()
+            if child.is_dir() and not child.is_symlink()
+        }
+        symlink_directories = [child.name for child in point_root.iterdir() if child.is_dir() and child.is_symlink()]
+    except OSError as exc:
+        raise PublishError("Could not list the point-generated directory") from exc
+    if symlink_directories or point_directories != point_ids:
+        raise PublishError("Point-generated directories must exactly match the held point-manifest IDs")
+
+    point_batch = validate_batch(
+        point_root,
+        catalogue_path,
+        requested_ids=tuple(sorted(point_ids)),
+    )
+    validated_point_places = tuple(
+        _validate_boundary_free_point_place(
+            place,
+            records_by_id[place.place_id],
+            point_rights[place.place_id],
+            point_snapshot_sha256,
+        )
+        for place in point_batch.places
+    )
+
+    places = tuple(sorted((*approved_places, *validated_point_places), key=lambda place: place.place_id))
+    if len(places) != CANONICAL_PLACE_COUNT or {place.place_id for place in places} != set(catalogue):
+        raise PublishError("Dual-source publication does not cover every canonical place exactly once")
+    provenance = {
+        "boundaryRightsManifestSha256": sha256_file(rights_path),
+        "boundarySnapshotSha256": rights["boundarySnapshotSha256"],
+        "pointManifestSha256": point_snapshot_sha256,
+        "pointRightsManifestSha256": point_rights_sha256,
+    }
+    index_bytes = _build_index(places, provenance)
+    return ValidatedBatch(
+        places=places,
+        index_bytes=index_bytes,
+        index_sha256=sha256_bytes(index_bytes),
+        asset_bytes=sum(asset.size for place in places for asset in place.assets),
+        rights_manifest_sha256=provenance["boundaryRightsManifestSha256"],
+        validated_place_count=len(catalogue),
+        held_place_ids=(),
+        publication_provenance=provenance,
     )
 
 
@@ -544,6 +1100,13 @@ def summarize(batch: ValidatedBatch) -> dict[str, Any]:
             "heldPlaceCount": len(batch.held_place_ids),
             "heldPlaceIds": list(batch.held_place_ids),
         })
+    if batch.publication_provenance is not None:
+        report["publicationProvenance"] = batch.publication_provenance
+        point_count = sum(place.manifest.get("renderMode") == "point-centered-boundary-free" for place in batch.places)
+        report["approvedPlaceCount"] = len(batch.places) - point_count
+        report["pointRenderedPlaceCount"] = point_count
+        report["heldPlaceCount"] = 0
+        report["heldPlaceIds"] = []
     return report
 
 
@@ -650,6 +1213,29 @@ def normalize_key_prefix(prefix: str) -> str:
 def _require_rights_gated_batch(batch: ValidatedBatch) -> None:
     if batch.rights_manifest_sha256 is None or batch.validated_place_count != CANONICAL_PLACE_COUNT:
         raise PublishError("Public upload requires a complete validated batch and an explicit boundary rights gate")
+    point_places = [place for place in batch.places if place.manifest.get("renderMode") == "point-centered-boundary-free"]
+    if point_places:
+        provenance = batch.publication_provenance
+        required_hashes = (
+            "boundaryRightsManifestSha256", "boundarySnapshotSha256",
+            "pointManifestSha256", "pointRightsManifestSha256",
+        )
+        if (not isinstance(provenance, dict)
+                or any(not isinstance(provenance.get(field), str)
+                       or not SHA256_PATTERN.fullmatch(provenance[field])
+                       for field in required_hashes)
+                or provenance["boundaryRightsManifestSha256"] != batch.rights_manifest_sha256):
+            raise PublishError("Point-rendered public upload requires a validated point rights manifest")
+        for place in point_places:
+            point_rights = place.manifest.get("pointRights")
+            if not isinstance(point_rights, dict) or set(point_rights) != {"officialTermsUrl", "reviewEvidenceUrl"}:
+                raise PublishError(f"{place.place_id}: public upload has no validated point rights evidence")
+            for field in ("officialTermsUrl", "reviewEvidenceUrl"):
+                value = point_rights[field]
+                parsed = urlsplit(value) if isinstance(value, str) else None
+                if (parsed is None or parsed.scheme != "https" or not parsed.netloc
+                        or any(character.isspace() for character in value)):
+                    raise PublishError(f"{place.place_id}: public upload has invalid point rights evidence")
 
 
 def publish_to_s3(
@@ -928,6 +1514,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ids", help="Comma-separated IDs for dry-run or local staging only")
     parser.add_argument("--rights-manifest", type=Path, help="Explicit per-place boundary rights decisions; required for public upload")
     parser.add_argument("--boundaries", type=Path, help="Exact boundary GeoJSON snapshot named by the rights manifest")
+    parser.add_argument("--point-generated", type=Path, help="Independent point-centered boundary-free generated root for held places")
+    parser.add_argument("--point-manifest", type=Path, help="Immutable independent point/source manifest for held places")
+    parser.add_argument("--point-rights-manifest", type=Path, help="Per-place reviewed publication approvals and official terms for point sources")
     parser.add_argument("--wrangler-workers", type=int, default=2, help="Parallel Wrangler transfers, 1 to 8 (default: 2)")
     parser.add_argument("--wrangler-delay-seconds", type=float, default=0.5, help="Minimum time between Wrangler command starts (default: 0.5)")
     return parser
@@ -950,19 +1539,40 @@ def main(argv: list[str] | None = None) -> int:
             raise PublishError("--wrangler-delay-seconds must be a finite non-negative number")
         if (args.rights_manifest is None) != (args.boundaries is None):
             raise PublishError("--rights-manifest and --boundaries must be supplied together")
+        if (args.point_generated is None) != (args.point_manifest is None):
+            raise PublishError("--point-generated and --point-manifest must be supplied together")
+        if args.point_generated is not None and args.point_rights_manifest is None:
+            raise PublishError("Dual-source publication requires --point-rights-manifest")
+        if args.point_generated is not None and args.rights_manifest is None:
+            raise PublishError("Dual-source publication requires --rights-manifest and --boundaries")
+        if args.point_generated is None and args.point_rights_manifest is not None:
+            raise PublishError("--point-rights-manifest requires --point-generated and --point-manifest")
+        if args.point_generated is not None and requested_ids is not None:
+            raise PublishError("Dual-source publication always validates the complete catalogue; --ids is not allowed")
         if (args.upload or args.upload_wrangler) and args.rights_manifest is None:
             raise PublishError("Public upload requires --rights-manifest and --boundaries")
-        if args.stage_dir is not None and args.rights_manifest is not None:
+        if args.stage_dir is not None and (args.rights_manifest is not None or args.point_generated is not None):
             raise PublishError("Rights-gated staging requires a complete batch; use --dry-run or public upload")
 
-        batch = validate_batch(
-            args.generated,
-            args.catalogue,
-            requested_ids=requested_ids,
-            require_exact_directories=requested_ids is None,
-        )
-        if args.rights_manifest is not None:
-            batch = apply_rights_gate(batch, args.rights_manifest, args.boundaries)
+        if args.point_generated is not None:
+            batch = apply_dual_source_gate(
+                args.generated,
+                args.rights_manifest,
+                args.boundaries,
+                args.point_generated,
+                args.point_manifest,
+                args.point_rights_manifest,
+                args.catalogue,
+            )
+        else:
+            batch = validate_batch(
+                args.generated,
+                args.catalogue,
+                requested_ids=requested_ids,
+                require_exact_directories=requested_ids is None,
+            )
+            if args.rights_manifest is not None:
+                batch = apply_rights_gate(batch, args.rights_manifest, args.boundaries)
         report: dict[str, Any] = summarize(batch)
 
         if args.dry_run:

@@ -6,6 +6,7 @@ export type PlaceVisualEntry = {
   satellite: string;
   relief: string;
   model: string;
+  renderMode?: "point-centered-boundary-free";
   attribution: string[];
   acquired: string[];
   needsReview: boolean;
@@ -36,6 +37,7 @@ function isTextList(value: unknown): value is string[] {
 
 function parseEntry(placeId: string, value: unknown): PlaceVisualEntry | null {
   if (!isSafePlaceVisualId(placeId) || !isRecord(value)) return null;
+  if ("renderMode" in value && value.renderMode !== "point-centered-boundary-free") return null;
   const expected = {
     satellite: `${placeId}/satellite.avif`,
     relief: `${placeId}/relief.avif`,
@@ -48,6 +50,7 @@ function parseEntry(placeId: string, value: unknown): PlaceVisualEntry | null {
   return {
     placeId,
     ...expected,
+    ...(value.renderMode === "point-centered-boundary-free" ? { renderMode: value.renderMode } : {}),
     attribution: value.attribution,
     acquired: value.acquired,
     needsReview: value.needsReview,

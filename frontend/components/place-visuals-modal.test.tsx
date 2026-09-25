@@ -50,6 +50,7 @@ describe("PlaceVisualsModal", () => {
     expect(dialog.textContent).toContain("Contains modified Copernicus Sentinel data 2025");
     expect(dialog.textContent).toContain("2025-06-01");
     expect(dialog.textContent).toContain("Satellite source footprint is partial");
+    expect(screen.queryByText(/8 km square centered/i)).toBeNull();
     expect(dialog.querySelector("a")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Relief" }));
@@ -66,5 +67,29 @@ describe("PlaceVisualsModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close map views" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Map views Forest Park" })).toBeNull());
     expect(document.activeElement).toBe(launcher);
+  });
+
+  it("explains boundary-free coverage and safely links source URLs", async () => {
+    render(
+      <PlaceVisualsModal
+        placeName="Remote Park"
+        entry={{
+          ...entry,
+          renderMode: "point-centered-boundary-free",
+          attribution: ["Open data terms: https://example.test/open-data"],
+        }}
+        baseUrl="/park-visuals-fixture"
+        onClose={() => undefined}
+      />,
+    );
+
+    const boundaryNote = await screen.findByText(/This view covers an 8 km square centered/i);
+    expect(boundaryNote.getAttribute("role")).toBe("note");
+    expect(boundaryNote.textContent)
+      .toBe("This view covers an 8 km square centered on an independently sourced park point. It does not depict a park boundary.");
+    const sourceLink = screen.getByRole("link", { name: "https://example.test/open-data" });
+    expect(sourceLink.getAttribute("href")).toBe("https://example.test/open-data");
+    expect(sourceLink.getAttribute("target")).toBe("_blank");
+    expect(sourceLink.getAttribute("rel")).toBe("noopener noreferrer");
   });
 });

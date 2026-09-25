@@ -2,9 +2,11 @@ import hashlib
 import importlib.util
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
+import struct
 import threading
 
 import pytest
@@ -47,7 +49,7 @@ def make_fixture(root: Path) -> tuple[Path, Path, tuple[str, ...]]:
             files[filename] = {"bytes": len(content), "sha256": _sha(content)}
 
         sources = json.dumps({
-            "boundary": {"features": [{"properties": {
+            "boundary": {"features": [{"type": "Feature", "geometry": None, "properties": {
                 **place,
                 "sourceName": f"source-{place['id']}",
                 "sourceUrl": f"https://example.test/{place['id']}",
@@ -110,6 +112,122 @@ def gate_fixture_batch(batch, catalogue, root, monkeypatch, *, held=()):
     monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(batch.places))
     rights, boundaries = make_rights_fixture(root, catalogue, held=held)
     return publisher.apply_rights_gate(batch, rights, boundaries)
+
+
+def make_glb(json_document: dict) -> bytes:
+    chunk = json.dumps(json_document, separators=(",", ":")).encode("utf-8")
+    chunk += b" " * ((4 - len(chunk) % 4) % 4)
+    total_length = 12 + 8 + len(chunk)
+    return b"glTF" + struct.pack("<II", 2, total_length) + struct.pack("<II", len(chunk), 0x4E4F534A) + chunk
+
+
+def make_point_fixture(root: Path, catalogue: Path, ids: tuple[str, ...]) -> tuple[Path, Path]:
+    point_root = root / "point-generated"
+    point_root.mkdir()
+    point_records = []
+    catalogue_rows = {row["id"]: row for row in json.loads(catalogue.read_text(encoding="utf-8"))}
+    for position, place_id in enumerate(ids):
+        catalogue_row = catalogue_rows[place_id]
+        point_records.append({
+            **catalogue_row,
+            "lon": -125.0 - position / 10,
+            "lat": 52.0 + position / 10,
+            "sourceName": f"open point source {place_id}",
+            "sourceUrl": f"https://example.test/points/{place_id}",
+            "sourceId": f"point-{position}",
+            "licence": "Open Government Licence - Canada",
+            "attribution": f"Coordinate record credited to provider for {place_id}",
+        })
+    point_manifest = root / "independent-points.json"
+    point_manifest.write_text(json.dumps(point_records, separators=(",", ":")), encoding="utf-8")
+    point_snapshot_sha256 = publisher.sha256_file(point_manifest)
+
+    for record in point_records:
+        place_id = record["id"]
+        place_root = point_root / place_id
+        place_root.mkdir()
+        epsg, bounds = publisher._expected_point_utm_frame(record)
+        public_files = {
+            "satellite.avif": f"point-satellite-{place_id}".encode(),
+            "relief.avif": f"point-relief-{place_id}".encode(),
+            f"{place_id}-terrain.glb": make_glb({"asset": {"version": "2.0"}, "scenes": [{"nodes": []}], "scene": 0}),
+        }
+        files = {}
+        for filename, content in public_files.items():
+            (place_root / filename).write_bytes(content)
+            files[filename] = {"bytes": len(content), "sha256": _sha(content)}
+        source_lock = json.dumps({
+            "version": 1,
+            "config": {"pointSideM": publisher.POINT_FRAME_SIDE_M, "demResolutionM": 30},
+            "renderMode": "point-centered-boundary-free",
+            "inputSha256": point_snapshot_sha256,
+            "inputRecord": record,
+            "epsg": epsg,
+            "boundsM": list(bounds),
+            "scenes": [],
+            "sceneQuality": [],
+            "demUrl": "https://example.test/dem",
+        }, sort_keys=True).encode()
+        (place_root / "sources.json").write_bytes(source_lock)
+        (place_root / "terrain.json").write_text(json.dumps({"surface": "terrain mesh", "sideKm": 8.0}), encoding="utf-8")
+        manifest = {
+            "version": 4,
+            "placeId": place_id,
+            "park": record["name"],
+            "category": record["category"],
+            "renderMode": "point-centered-boundary-free",
+            "pointSnapshotSha256": point_snapshot_sha256,
+            "pointSource": {key: record[key] for key in publisher.POINT_SOURCE_KEYS},
+            "representativePin": [record["lon"], record["lat"]],
+            "projectionEpsg": epsg,
+            "boundsM": list(bounds),
+            "files": files,
+            "sourceLockSha256": _sha(source_lock),
+            "attribution": ["Contains modified Copernicus Sentinel data 2026"],
+            "acquired": ["2026-09-16T19:20:43Z"],
+            "needsReview": False,
+            "reviewFlags": [],
+        }
+        (place_root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return point_root, point_manifest
+
+
+def make_point_rights_fixture(root: Path, point_manifest: Path) -> Path:
+    records = json.loads(point_manifest.read_text(encoding="utf-8"))
+    decisions = {}
+    for record in records:
+        decisions[record["id"]] = {
+            "decision": "approved",
+            **{key: record[key] for key in publisher.POINT_SOURCE_KEYS},
+            "officialTermsUrl": "https://example.test/terms",
+            "reviewEvidenceUrl": "https://example.test/review-evidence",
+        }
+    rights_path = root / "point-rights.json"
+    rights_path.write_text(json.dumps({
+        "version": 1,
+        "pointManifestSha256": publisher.sha256_file(point_manifest),
+        "places": decisions,
+    }, separators=(",", ":")), encoding="utf-8")
+    return rights_path
+
+
+def apply_dual_fixture(generated, rights_path, boundaries_path, point_root, point_manifest, catalogue):
+    point_rights = make_point_rights_fixture(point_manifest.parent, point_manifest)
+    return publisher.apply_dual_source_gate(
+        generated, rights_path, boundaries_path, point_root, point_manifest, point_rights, catalogue,
+    )
+
+
+def gate_dual_fixture(root: Path, catalogue: Path, ids: tuple[str, ...], monkeypatch, *, held: tuple[str, ...]):
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    rights_path, boundaries_path = make_rights_fixture(root, catalogue, held=held)
+    point_ids = tuple(sorted(held))
+    point_root, point_manifest = make_point_fixture(root, catalogue, point_ids)
+    point_rights = make_point_rights_fixture(root, point_manifest)
+    batch = publisher.apply_dual_source_gate(
+        root / "generated", rights_path, boundaries_path, point_root, point_manifest, point_rights, catalogue,
+    )
+    return batch, rights_path, boundaries_path, point_root, point_manifest, point_rights
 
 
 class NotFound(Exception):
@@ -198,6 +316,21 @@ def test_validates_canonical_manifests_source_locks_and_builds_stable_index(tmp_
         "relief.avif",
         f"{ids[0]}-terrain.glb",
     }
+
+
+def test_public_index_adds_exact_cdem_credit_to_legacy_batch_manifests(tmp_path):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    manifest_path = generated / ids[0] / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["attribution"].append(publisher.CDEM_LEGACY_ATTRIBUTION)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    batch = publisher.validate_batch(generated, catalogue)
+    entries = json.loads(batch.index_bytes)["places"]
+    assert publisher.CDEM_PUBLIC_ATTRIBUTION in entries[ids[0]]["attribution"]
+    assert publisher.CDEM_LEGACY_ATTRIBUTION not in entries[ids[0]]["attribution"]
+    assert "https://open.canada.ca/en/open-government-licence-canada" in publisher.CDEM_PUBLIC_ATTRIBUTION
+    assert entries[ids[1]]["attribution"] == ["Contains modified Copernicus Sentinel data 2026"]
 
 
 def test_stage_copies_only_selected_public_files_and_index(tmp_path):
@@ -447,6 +580,293 @@ def test_rights_gate_validates_full_batch_then_omits_held_place_from_both_upload
     assert all(ids[1] not in key for key in runner.values)
 
 
+def test_dual_source_gate_uses_812_boundary_and_218_point_partition_and_skips_held_polygons(tmp_path, monkeypatch):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    (generated / held_id / "relief.avif").unlink()
+
+    batch, _, _, point_root, _, _ = gate_dual_fixture(
+        tmp_path, catalogue, ids, monkeypatch, held=(held_id,),
+    )
+    index = json.loads(batch.index_bytes)
+    assert set(index["places"]) == set(ids)
+    assert batch.validated_place_count == len(ids)
+    assert batch.held_place_ids == ()
+    assert index["places"][held_id]["renderMode"] == "point-centered-boundary-free"
+    point_entry = index["places"][held_id]
+    assert point_entry["pointSource"]["licence"] == "Open Government Licence - Canada"
+    assert any("Coordinate record credited" in credit for credit in point_entry["attribution"])
+    assert any("Point source:" in credit for credit in point_entry["attribution"])
+    assert set(index["publicationProvenance"]) == {
+        "boundaryRightsManifestSha256", "boundarySnapshotSha256", "pointManifestSha256",
+        "pointRightsManifestSha256",
+    }
+    assert len(batch.places) == len(ids)
+    assert all((point_root / place_id).is_dir() for place_id in (held_id,))
+
+    client = FakeS3()
+    result = publisher.publish_to_s3(client, batch, bucket="public-assets", prefix="assets")
+    assert result["uploaded"] == 7
+    assert all(any(place_id in key for place_id in ids) or key.endswith("index.json") for _, key in client.events)
+    point_satellite_key = f"{result['prefix']}/{held_id}/satellite.avif"
+    assert client.values[point_satellite_key][0] == (point_root / held_id / "satellite.avif").read_bytes()
+
+    runner = FakeWrangler()
+    result = publisher.publish_to_wrangler(batch, bucket="public-assets", prefix="assets", runner=runner)
+    assert result["uploaded"] == 7
+    assert all(any(place_id in key for place_id in ids) or key.endswith("index.json") for key in runner.values)
+
+
+@pytest.mark.parametrize("corruption", ["missing-provenance", "missing-place-evidence"])
+def test_both_upload_backends_fail_closed_before_writes_for_point_rights_drift(tmp_path, monkeypatch, corruption):
+    catalogue, _, ids = make_fixture(tmp_path)
+    batch, *_ = gate_dual_fixture(tmp_path, catalogue, ids, monkeypatch, held=(ids[1],))
+    if corruption == "missing-provenance":
+        provenance = dict(batch.publication_provenance)
+        del provenance["pointRightsManifestSha256"]
+        batch = replace(batch, publication_provenance=provenance)
+    else:
+        places = list(batch.places)
+        point_index = next(i for i, place in enumerate(places) if place.manifest.get("renderMode") == "point-centered-boundary-free")
+        manifest = dict(places[point_index].manifest)
+        manifest.pop("pointRights")
+        places[point_index] = publisher.Place(
+            places[point_index].place_id,
+            places[point_index].category,
+            places[point_index].name,
+            manifest,
+            places[point_index].assets,
+        )
+        batch = replace(batch, places=tuple(places))
+
+    client = FakeS3()
+    with pytest.raises(publisher.PublishError, match="point rights"):
+        publisher.publish_to_s3(client, batch, bucket="public-assets", prefix="assets")
+    assert client.events == []
+
+    runner = FakeWrangler()
+    with pytest.raises(publisher.PublishError, match="point rights"):
+        publisher.publish_to_wrangler(batch, bucket="public-assets", prefix="assets", runner=runner)
+    assert runner.events == []
+
+
+@pytest.mark.parametrize("mutation,expected", [
+    ("snapshot", "point snapshot SHA-256 differs"),
+    ("boundary-file", "boundary-related file"),
+    ("geometry-key", "forbidden boundary or geometry key"),
+    ("polygon-key", "forbidden boundary or geometry key"),
+    ("missing-public-hash", "SHA-256 does not match its manifest"),
+    ("boundary-rings-in-glb", "forbidden boundary or geometry key"),
+    ("bad-licence", "point source identity, licence, or attribution differs"),
+    ("source-lock-hash", "source-lock SHA-256 does not match its manifest"),
+    ("record-drift", "source lock input record differs"),
+])
+def test_dual_source_gate_rejects_point_snapshot_and_boundary_contamination(tmp_path, monkeypatch, mutation, expected):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    place_root = point_root / held_id
+    if mutation == "snapshot":
+        point_manifest.write_bytes(point_manifest.read_bytes() + b" ")
+    elif mutation == "boundary-file":
+        (place_root / "boundary.geojson").write_text("{}", encoding="utf-8")
+    elif mutation == "geometry-key":
+        (place_root / "terrain.json").write_text(json.dumps({"geometry": {"type": "Polygon"}}), encoding="utf-8")
+    elif mutation == "polygon-key":
+        (place_root / "terrain.json").write_text(json.dumps({"polygon": []}), encoding="utf-8")
+    elif mutation == "missing-public-hash":
+        satellite_path = place_root / "satellite.avif"
+        satellite_path.write_bytes(b"x" * satellite_path.stat().st_size)
+    elif mutation == "boundary-rings-in-glb":
+        model_path = place_root / f"{held_id}-terrain.glb"
+        model_path.write_bytes(make_glb({
+            "asset": {"version": "2.0"},
+            "extras": {"boundaryRings": []},
+        }))
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        model_record = manifest["files"][f"{held_id}-terrain.glb"]
+        model_content = model_path.read_bytes()
+        model_record.update({"bytes": len(model_content), "sha256": _sha(model_content)})
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        source_lock = place_root / "sources.json"
+        manifest["sourceLockSha256"] = publisher.sha256_file(source_lock)
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    elif mutation == "bad-licence":
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["pointSource"]["licence"] = ""
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    elif mutation == "source-lock-hash":
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["sourceLockSha256"] = "0" * 64
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    elif mutation == "record-drift":
+        source_lock_path = place_root / "sources.json"
+        sources = json.loads(source_lock_path.read_text(encoding="utf-8"))
+        sources["inputRecord"]["sourceId"] = "wrong-record"
+        source_bytes = json.dumps(sources, sort_keys=True).encode()
+        source_lock_path.write_bytes(source_bytes)
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["sourceLockSha256"] = _sha(source_bytes)
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(publisher.PublishError, match=expected):
+        apply_dual_fixture(
+            generated, rights_path, boundaries_path, point_root, point_manifest, catalogue,
+        )
+
+
+@pytest.mark.parametrize("mutation,expected", [
+    ("source-epsg", "source lock or manifest UTM EPSG differs"),
+    ("manifest-epsg", "source lock or manifest UTM EPSG differs"),
+    ("source-bounds", "source lock boundsM are not centered"),
+    ("manifest-bounds", "manifest boundsM are not centered"),
+    ("wrong-side", "fixed 8 km point frame"),
+])
+def test_dual_source_gate_recomputes_point_utm_frame(tmp_path, monkeypatch, mutation, expected):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    place_root = point_root / held_id
+    if mutation in {"source-epsg", "source-bounds", "wrong-side"}:
+        source_path = place_root / "sources.json"
+        sources = json.loads(source_path.read_text(encoding="utf-8"))
+        if mutation == "source-epsg":
+            sources["epsg"] += 1
+        elif mutation == "source-bounds":
+            sources["boundsM"][0] += 10
+        else:
+            sources["config"]["pointSideM"] = 4000
+        source_path.write_text(json.dumps(sources, sort_keys=True), encoding="utf-8")
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["sourceLockSha256"] = publisher.sha256_file(source_path)
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    else:
+        manifest_path = place_root / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["projectionEpsg"] += 1
+        if mutation == "manifest-bounds":
+            manifest["projectionEpsg"] -= 1
+            manifest["boundsM"][2] -= 10
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(publisher.PublishError, match=expected):
+        apply_dual_fixture(generated, rights_path, boundaries_path, point_root, point_manifest, catalogue)
+
+
+@pytest.mark.parametrize("mutation,expected", [
+    ("stale-snapshot", "exact point manifest SHA-256"),
+    ("missing-id", "exact point-manifest IDs"),
+    ("held", "not explicitly approved"),
+    ("changed-attribution", "point rights attribution differs"),
+    ("missing-terms", "no officialTermsUrl"),
+    ("missing-evidence", "no reviewEvidenceUrl"),
+    ("non-https", "absolute HTTPS URL"),
+])
+def test_dual_source_gate_requires_exact_point_rights_decisions(tmp_path, monkeypatch, mutation, expected):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    boundary_rights, boundaries = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    point_rights = make_point_rights_fixture(tmp_path, point_manifest)
+    document = json.loads(point_rights.read_text(encoding="utf-8"))
+    row = document["places"][held_id]
+    if mutation == "stale-snapshot":
+        document["pointManifestSha256"] = "0" * 64
+    elif mutation == "missing-id":
+        del document["places"][held_id]
+    elif mutation == "held":
+        row["decision"] = "hold"
+    elif mutation == "changed-attribution":
+        row["attribution"] = "A different credit"
+    elif mutation == "missing-terms":
+        del row["officialTermsUrl"]
+    elif mutation == "missing-evidence":
+        del row["reviewEvidenceUrl"]
+    elif mutation == "non-https":
+        row["reviewEvidenceUrl"] = "http://example.test/evidence"
+    point_rights.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(publisher.PublishError, match=expected):
+        publisher.apply_dual_source_gate(
+            generated, boundary_rights, boundaries, point_root, point_manifest, point_rights, catalogue,
+        )
+
+
+def test_dual_source_gate_rejects_all_rights_reserved_point_source(tmp_path, monkeypatch):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    boundary_rights, boundaries = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    records = json.loads(point_manifest.read_text(encoding="utf-8"))
+    records[0]["licence"] = "All rights reserved"
+    point_manifest.write_text(json.dumps(records), encoding="utf-8")
+    point_rights = make_point_rights_fixture(tmp_path, point_manifest)
+    with pytest.raises(publisher.PublishError, match="explicitly withholds public redistribution"):
+        publisher.apply_dual_source_gate(
+            generated, boundary_rights, boundaries, point_root, point_manifest, point_rights, catalogue,
+        )
+
+
+def test_dual_source_gate_rejects_overlapping_point_ids_and_directories(tmp_path, monkeypatch):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    (point_root / ids[0]).mkdir()
+    with pytest.raises(publisher.PublishError, match="directories must exactly match"):
+        apply_dual_fixture(
+            generated, rights_path, boundaries_path, point_root, point_manifest, catalogue,
+        )
+
+
+def test_dual_source_gate_requires_points_for_held_ids_only(tmp_path, monkeypatch):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id, approved_id = ids[1], ids[0]
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    record = json.loads(point_manifest.read_text(encoding="utf-8"))[0]
+    approved = next(row for row in json.loads(catalogue.read_text(encoding="utf-8")) if row["id"] == approved_id)
+    record.update({"id": approved_id, "name": approved["name"], "category": approved["category"]})
+    point_manifest.write_text(json.dumps([record]), encoding="utf-8")
+    with pytest.raises(publisher.PublishError, match="must exactly match held places"):
+        apply_dual_fixture(
+            generated, rights_path, boundaries_path, point_root, point_manifest, catalogue,
+        )
+
+
+def test_unapproved_polygon_output_is_never_opened_by_dual_source_cli(tmp_path, monkeypatch):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held_id = ids[1]
+    (generated / held_id / "manifest.json").write_text("not json", encoding="utf-8")
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=(held_id,))
+    point_root, point_manifest = make_point_fixture(tmp_path, catalogue, (held_id,))
+    point_rights = make_point_rights_fixture(tmp_path, point_manifest)
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+    result = publisher.main([
+        "--generated", str(generated), "--catalogue", str(catalogue),
+        "--rights-manifest", str(rights_path), "--boundaries", str(boundaries_path),
+        "--point-generated", str(point_root), "--point-manifest", str(point_manifest),
+        "--point-rights-manifest", str(point_rights), "--dry-run",
+    ])
+    assert result == 0
+    assert publisher.main([
+        "--generated", str(generated), "--catalogue", str(catalogue),
+        "--rights-manifest", str(rights_path), "--boundaries", str(boundaries_path),
+        "--point-generated", str(point_root), "--point-manifest", str(point_manifest), "--dry-run",
+    ]) == 2
+
+
 @pytest.mark.parametrize("mutation,expected", [
     ("snapshot", "snapshot SHA-256"),
     ("missing-decision", "decisions do not match"),
@@ -491,6 +911,36 @@ def test_rights_gate_rejects_generated_source_drift_before_upload(tmp_path, monk
         publisher.apply_rights_gate(batch, rights_path, boundaries_path)
 
 
+@pytest.mark.parametrize("gate", ["rights", "dual-source"])
+def test_publication_gates_reject_locked_boundary_geometry_drift(tmp_path, monkeypatch, gate):
+    catalogue, generated, ids = make_fixture(tmp_path)
+    held = (ids[1],) if gate == "dual-source" else ()
+    rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue, held=held)
+    source_path = generated / ids[0] / "sources.json"
+    sources = json.loads(source_path.read_text(encoding="utf-8"))
+    sources["boundary"]["features"][0]["geometry"] = {
+        "type": "Polygon",
+        "coordinates": [[[0, 0], [1, 0], [0, 1], [0, 0]]],
+    }
+    source_path.write_text(json.dumps(sources), encoding="utf-8")
+    manifest_path = generated / ids[0] / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sourceLockSha256"] = publisher.sha256_file(source_path)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", len(ids))
+
+    if gate == "rights":
+        batch = publisher.validate_batch(generated, catalogue)
+        with pytest.raises(publisher.PublishError, match="source lock boundary feature differs"):
+            publisher.apply_rights_gate(batch, rights_path, boundaries_path)
+    else:
+        point_root, point_manifest = make_point_fixture(tmp_path, catalogue, held)
+        with pytest.raises(publisher.PublishError, match="source lock boundary feature differs"):
+            apply_dual_fixture(
+                generated, rights_path, boundaries_path, point_root, point_manifest, catalogue,
+            )
+
+
 def test_rights_gate_rejects_source_lock_boundary_drift_even_with_valid_hash(tmp_path, monkeypatch):
     catalogue, generated, ids = make_fixture(tmp_path)
     rights_path, boundaries_path = make_rights_fixture(tmp_path, catalogue)
@@ -504,7 +954,7 @@ def test_rights_gate_rejects_source_lock_boundary_drift_even_with_valid_hash(tmp
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr(publisher, "CANONICAL_PLACE_COUNT", 2)
     batch = publisher.validate_batch(generated, catalogue)
-    with pytest.raises(publisher.PublishError, match="boundary sourceId differs"):
+    with pytest.raises(publisher.PublishError, match="source lock boundary feature differs"):
         publisher.apply_rights_gate(batch, rights_path, boundaries_path)
 
 

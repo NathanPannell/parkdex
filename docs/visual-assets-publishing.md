@@ -10,6 +10,38 @@ The rights manifest has `version: 1`, `boundarySnapshotSha256`, and a `places` o
 
 For the frozen 2026-09-24 snapshot, `data/visual-boundary-rights-20260924.json` approves 812 places and holds 218. The 218 holds include 91 from direct regional GIS sources with unresolved or restrictive redistribution terms and 127 aggregate regional rows whose matched upstream licence comment is blank. The 46 aggregate rows with explicit provider comments are approved after separate review of their six provider licence families. `data/visual-boundary-rights-audit-20260924.json` records the source IDs, reasons, provider terms, and exact frozen comments. The public index uses the current required provider attribution from that review; the original comments remain in the rights manifest as evidence.
 
+The imagery and elevation sources have separate open terms. The [Copernicus Sentinel Data Legal Notice](https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice) permits modified Sentinel-2 derivatives with the `Contains modified Copernicus Sentinel data [Year]` credit already recorded in generated manifests. The [NRCan CDEM dataset](https://open.canada.ca/data/en/dataset/7f245e4d-76c2-4caa-951a-45d1d2051333) uses the [Open Government Licence, Canada](https://open.canada.ca/en/open-government-licence-canada). The public index normalizes the older CDEM credit to include the licence's fallback attribution phrase and URL, which the app displays as a link. Keep each `sources.json` scene URL and DEM URL in the private generation audit; the publisher uploads only the derived public assets.
+
+## Publish the held places from independent points
+
+The optional dual-source mode fills the 218 held slots using a separate point-centered, boundary-free render batch. It reads the rights manifest and frozen boundary snapshot first, then validates only the 812 approved polygon output directories. It does not open held polygon manifests, source locks, or assets. The point manifest and point output directories must match the 218 held IDs exactly, and the 812 plus 218 sets must be disjoint and cover the full catalogue.
+
+The independent point manifest is a JSON array of rows with exactly these keys: `id`, `name`, `category`, `lon`, `lat`, `sourceName`, `sourceUrl`, `sourceId`, `licence`, and `attribution`. Coordinates must be finite and inside British Columbia. Each point source name, URL, record ID, licence, and attribution must be non-empty; the source URL must use HTTP or HTTPS. Store this file outside both generated roots. Its SHA-256 covers its exact bytes, including whitespace and line endings.
+
+Dual-source mode also requires a separate `--point-rights-manifest`, stored outside both generated roots and the point input file. Its schema is `{ "version": 1, "pointManifestSha256": "<sha256>", "places": { "<id>": { "decision": "approved", "sourceName": "...", "sourceUrl": "...", "sourceId": "...", "licence": "...", "attribution": "...", "officialTermsUrl": "https://...", "reviewEvidenceUrl": "https://..." } } }`. Each approved decision must cover exactly one point ID, match every source field byte-for-byte, and link to HTTPS terms and review evidence. A missing decision, hold, mismatch, or licence that explicitly withholds public redistribution fails before either upload backend writes an object. The merged index records the point-rights manifest hash and publishes its terms and evidence URLs with the point-source credit.
+
+Each point render is an 8 km square centered on its independent pin in the pin's UTM zone. The publisher recomputes the EPSG and square bounds from the point, and checks the values in both `sources.json` and `manifest.json`. It requires `pyproj` for this dual-source check and reports a clear install error if unavailable. Install it with `python -m pip install -r backend/requirements.txt`. The existing 812-only boundary publication path does not import or require `pyproj`.
+
+Every point output has the standard three public assets and their byte counts and SHA-256 values in `manifest.json`. Its manifest and `sources.json` both bind to the raw point manifest SHA-256; `sources.json.inputRecord` must match the original point row exactly. Both record `renderMode: "point-centered-boundary-free"`, and the place manifest includes the copied `pointSource` record and exact `representativePin`. The publisher rejects boundary files and any recursively nested keys containing `boundary`, `geometry`, or `polygon`. It also checks the source-lock hash and all three public asset hashes before either upload backend can write anything.
+
+The mixed index preserves the current index schema and adds top-level `publicationProvenance` hashes for the boundary rights manifest, boundary snapshot, independent point manifest, and point rights manifest. Point-rendered entries carry `renderMode`, their public `pointSource`, and `pointRights` with the official terms and review evidence URLs. Their `attribution` includes the point provider's attribution, licence, source record, and terms URL. Boundary-only publication remains available with the existing command and publishes only the 812 approved places.
+
+Once both batches are prepared, validate the combined output without uploading:
+
+```powershell
+python .\scripts\publish_visual_assets.py `
+  --generated C:\path\to\parkdex-all-1030-20260924 `
+  --catalogue .\data\places.json `
+  --rights-manifest .\data\visual-boundary-rights-20260924.json `
+  --boundaries C:\path\to\parkdex-boundaries-1030.geojson `
+  --point-generated C:\path\to\point-centered-held-places `
+  --point-manifest C:\path\to\independent-point-manifest.json `
+  --point-rights-manifest C:\path\to\point-source-rights.json `
+  --dry-run
+```
+
+Replace the mode with `--upload` or `--upload-wrangler` only after reviewing the dry-run report and point-source credits.
+
 The decisions can be rebuilt deterministically from the exact frozen boundary snapshot, regional source import, and checked-in rights audit. The builder rejects changed input hashes, missing source-record matches, unverified provider families, or a count other than 812 approved and 218 held:
 
 ```powershell

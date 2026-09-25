@@ -4,7 +4,7 @@
 
 import { LoaderCircle, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { addNativeBackConsumer } from "@/lib/native-back";
 import { placeVisualAssetUrls, type PlaceVisualEntry } from "@/lib/place-visuals";
 
@@ -60,6 +60,22 @@ function useModalFocus(onClose: () => void) {
     };
   }, []);
   return ref;
+}
+
+function SourceAttribution({ source }: { source: string }) {
+  const parts = source.split(/(https?:\/\/[^\s]+)/gi);
+  return <>{parts.map((part, index) => {
+    if (!/^https?:\/\//i.test(part)) return part;
+    const urlText = part.replace(/[.,;:!?)}\]]+$/, "");
+    const trailingText = part.slice(urlText.length);
+    try {
+      const url = new URL(urlText);
+      if (url.protocol !== "https:" && url.protocol !== "http:") return part;
+      return <Fragment key={index}><a href={url.href} target="_blank" rel="noopener noreferrer">{urlText}</a>{trailingText}</Fragment>;
+    } catch {
+      return part;
+    }
+  })}</>;
 }
 
 export function PlaceVisualsModal({ placeName, entry, baseUrl, onClose }: PlaceVisualsModalProps) {
@@ -123,6 +139,11 @@ export function PlaceVisualsModal({ placeName, entry, baseUrl, onClose }: PlaceV
         </div>
 
         <div id="place-visual-panel" className="place-visuals-panel" role="tabpanel" aria-labelledby={`place-visual-tab-${tab}`} tabIndex={0}>
+          {entry.renderMode === "point-centered-boundary-free" && (
+            <p className="place-visuals-render-note" role="note">
+              This view covers an 8 km square centered on an independently sourced park point. It does not depict a park boundary.
+            </p>
+          )}
           {tab === "model" ? (
             <Suspense fallback={<p className="place-visuals-status" role="status"><LoaderCircle size={18} className="place-visuals-spin" />Loading 3D viewer…</p>}>
               <TerrainViewer key={entry.placeId} src={urls.model} label={`${placeName} 3D terrain`} />
@@ -152,7 +173,7 @@ export function PlaceVisualsModal({ placeName, entry, baseUrl, onClose }: PlaceV
         <div className="place-visuals-attribution" aria-label="Map view sources and dates">
           <section>
             <h3>Sources</h3>
-            {entry.attribution.length ? <ul>{entry.attribution.map((source, index) => <li key={`${source}-${index}`}>{source}</li>)}</ul> : <p>Source attribution unavailable.</p>}
+            {entry.attribution.length ? <ul>{entry.attribution.map((source, index) => <li key={`${source}-${index}`}><SourceAttribution source={source} /></li>)}</ul> : <p>Source attribution unavailable.</p>}
           </section>
           <section>
             <h3>Acquired</h3>
