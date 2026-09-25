@@ -85,6 +85,8 @@ test("the API and frontend are queued concurrently without waiting for provider 
   }
   assert.match(release, /--build-env "PARKDEX_CATALOGUE_SCOPE=\$\{\{ inputs\.target == 'staging' && 'staging' \|\| 'canonical' \}\}"/);
   assert.match(release, /--build-env "PARKDEX_KEEP_SCOPED_ASSETS=\$\{\{ inputs\.target == 'staging' && '1' \|\| '0' \}\}"/);
+  assert.match(release, /PARK_VISUALS_BASE_URL: \$\{\{ vars\.PARK_VISUALS_BASE_URL \}\}/);
+  assert.match(release, /--build-env "NEXT_PUBLIC_PARK_VISUALS_BASE_URL=\$PARK_VISUALS_BASE_URL"/);
   assert.match(release, /--env "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=\$\{\{ inputs\.target == 'staging' && '1' \|\| '0' \}\}"/);
   assert.doesNotMatch(release, /railway deployment list|--ci|wait-for-railway|wait-for-worker|verify-railway-deployments|smoke-catalogue|curl --fail|sleep [0-9]/);
   assert.doesNotMatch(release, /\.status.*SUCCESS|status.*ready|readyState/);

@@ -59,6 +59,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       API_URL: ${{ inputs.target == 'staging' && 'https://api-staging-882c.up.railway.app' || 'https://api-production-e72df.up.railway.app' }}
       FRONTEND_URL: ${{ inputs.target == 'staging' && 'https://staging.web.parkdex.app' || 'https://web.parkdex.app' }}
+      PARK_VISUALS_BASE_URL: ${{ vars.PARK_VISUALS_BASE_URL }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -152,6 +153,7 @@ jobs:
           vercel deploy --yes --no-wait --prod --skip-domain --cwd frontend \
             --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
             --build-env "NEXT_PUBLIC_APP_URL=$FRONTEND_URL" \
+            --build-env "NEXT_PUBLIC_PARK_VISUALS_BASE_URL=$PARK_VISUALS_BASE_URL" \
             --build-env "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --env "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --build-env "PARKDEX_CATALOGUE_SCOPE=${{ inputs.target == 'staging' && 'staging' || 'canonical' }}" \
