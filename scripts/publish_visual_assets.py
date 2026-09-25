@@ -10,11 +10,16 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
+import threading
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +31,9 @@ CONTENT_TYPES = {
     "satellite.avif": "image/avif",
     "relief.avif": "image/avif",
 }
+IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+WRANGLER_VERSION = "4.139.0"
+WRANGLER_MISSING_MESSAGE = "The specified key does not exist."
 
 
 class PublishError(Exception):
@@ -64,6 +72,9 @@ class ValidatedBatch:
     index_bytes: bytes
     index_sha256: str
     asset_bytes: int
+    rights_manifest_sha256: str | None = None
+    validated_place_count: int | None = None
+    held_place_ids: tuple[str, ...] = ()
 
 
 def sha256_bytes(content: bytes) -> str:
@@ -85,6 +96,23 @@ def _load_json(path: Path, description: str) -> Any:
         raise PublishError(f"Missing {description}: {path}") from exc
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PublishError(f"Could not read {description}: {path}") from exc
+
+
+def _load_rights_manifest(path: Path) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise PublishError("Boundary rights manifest contains duplicate JSON keys")
+            value[key] = item
+        return value
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+    except FileNotFoundError as exc:
+        raise PublishError(f"Missing boundary rights manifest: {path}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PublishError(f"Could not read boundary rights manifest: {path}") from exc
 
 
 def load_catalogue(path: Path) -> dict[str, dict[str, str]]:
@@ -273,6 +301,125 @@ def _build_index(places: tuple[Place, ...]) -> bytes:
     return (json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _locked_boundary_properties(place: Place) -> dict[str, Any]:
+    if not place.assets:
+        raise PublishError(f"{place.place_id}: validated place has no public assets")
+    sources = _load_json(place.assets[0].path.parent / "sources.json", "place source lock")
+    boundary = sources.get("boundary") if isinstance(sources, dict) else None
+    features = boundary.get("features") if isinstance(boundary, dict) else None
+    if not isinstance(features, list) or len(features) != 1:
+        raise PublishError(f"{place.place_id}: source lock has no single boundary feature")
+    properties = features[0].get("properties") if isinstance(features[0], dict) else None
+    if not isinstance(properties, dict) or properties.get("id") != place.place_id:
+        raise PublishError(f"{place.place_id}: source lock boundary identity differs")
+    return properties
+
+
+def apply_rights_gate(
+    batch: ValidatedBatch,
+    rights_path: Path,
+    boundaries_path: Path,
+) -> ValidatedBatch:
+    """Bind explicit publication decisions to the source snapshot and generated manifests."""
+    if batch.rights_manifest_sha256 is not None:
+        raise PublishError("The batch has already passed a rights gate")
+    if len(batch.places) != CANONICAL_PLACE_COUNT:
+        raise PublishError(f"Rights gate requires all {CANONICAL_PLACE_COUNT} validated places")
+
+    rights = _load_rights_manifest(rights_path)
+    boundaries = _load_json(boundaries_path, "boundary snapshot")
+    if not isinstance(rights, dict) or rights.get("version") != 1:
+        raise PublishError("Boundary rights manifest must have version 1")
+    expected_snapshot_hash = rights.get("boundarySnapshotSha256")
+    if not isinstance(expected_snapshot_hash, str) or not SHA256_PATTERN.fullmatch(expected_snapshot_hash):
+        raise PublishError("Boundary rights manifest has no valid snapshot SHA-256")
+    if sha256_file(boundaries_path) != expected_snapshot_hash:
+        raise PublishError("Boundary snapshot SHA-256 differs from the rights manifest")
+    if not isinstance(boundaries, dict) or boundaries.get("type") != "FeatureCollection":
+        raise PublishError("Boundary snapshot is not a FeatureCollection")
+    features = boundaries.get("features")
+    if not isinstance(features, list):
+        raise PublishError("Boundary snapshot has no features array")
+    decisions = rights.get("places")
+    if not isinstance(decisions, dict):
+        raise PublishError("Boundary rights manifest has no places object")
+
+    place_by_id = {place.place_id: place for place in batch.places}
+    expected_ids = set(place_by_id)
+    if set(decisions) != expected_ids:
+        raise PublishError("Boundary rights decisions do not match the complete validated catalogue")
+    features_by_id: dict[str, dict[str, Any]] = {}
+    for feature in features:
+        properties = feature.get("properties") if isinstance(feature, dict) else None
+        place_id = properties.get("id") if isinstance(properties, dict) else None
+        if not isinstance(place_id, str) or place_id in features_by_id:
+            raise PublishError("Boundary snapshot has an invalid or repeated place ID")
+        features_by_id[place_id] = properties
+    if set(features_by_id) != expected_ids:
+        raise PublishError("Boundary snapshot IDs do not match the complete validated catalogue")
+
+    approved: list[Place] = []
+    held: list[str] = []
+    for place_id in sorted(expected_ids):
+        decision = decisions[place_id]
+        if not isinstance(decision, dict):
+            raise PublishError(f"{place_id}: boundary rights decision is not an object")
+        feature = features_by_id[place_id]
+        place = place_by_id[place_id]
+        if feature.get("name") != place.name or feature.get("category") != place.category:
+            raise PublishError(f"{place_id}: boundary snapshot identity differs from the validated place")
+        locked_feature = _locked_boundary_properties(place)
+        if locked_feature.get("name") != place.name or locked_feature.get("category") != place.category:
+            raise PublishError(f"{place_id}: source lock boundary identity differs from the validated place")
+        for field, manifest_field in (
+            ("sourceName", "boundarySource"),
+            ("sourceUrl", "boundarySourceUrl"),
+            ("sourceId", "boundarySourceId"),
+        ):
+            source_value = decision.get(field)
+            if not isinstance(source_value, str) or not source_value.strip():
+                raise PublishError(f"{place_id}: rights decision has no {field}")
+            if (source_value != feature.get(field) or source_value != place.manifest.get(manifest_field)
+                    or source_value != locked_feature.get(field)):
+                raise PublishError(f"{place_id}: boundary {field} differs from the rights decision")
+        status = decision.get("decision")
+        if status == "approved":
+            rights_attribution = decision.get("rightsAttribution")
+            if not isinstance(rights_attribution, list) or not rights_attribution or any(
+                not isinstance(value, str) or not value.strip() for value in rights_attribution
+            ):
+                raise PublishError(f"{place_id}: approved boundary has no rights attribution")
+            attribution = list(dict.fromkeys([
+                *_manifest_text_list(place.manifest, "attribution", place_id),
+                *rights_attribution,
+            ]))
+            approved.append(Place(
+                place.place_id, place.category, place.name,
+                {**place.manifest, "attribution": attribution}, place.assets,
+            ))
+        elif status == "hold":
+            reason = decision.get("reason")
+            if not isinstance(reason, str) or not reason.strip():
+                raise PublishError(f"{place_id}: held boundary has no reason")
+            held.append(place_id)
+        else:
+            raise PublishError(f"{place_id}: boundary rights decision must be approved or hold")
+
+    if not approved:
+        raise PublishError("Boundary rights manifest approves no places")
+    places = tuple(approved)
+    index_bytes = _build_index(places)
+    return ValidatedBatch(
+        places,
+        index_bytes,
+        sha256_bytes(index_bytes),
+        sum(asset.size for place in places for asset in place.assets),
+        sha256_file(rights_path),
+        len(batch.places),
+        tuple(held),
+    )
+
+
 def validate_batch(
     generated_root: Path,
     catalogue_path: Path,
@@ -377,7 +524,7 @@ def summarize(batch: ValidatedBatch) -> dict[str, Any]:
     category_counts: dict[str, int] = {}
     for place in batch.places:
         category_counts[place.category] = category_counts.get(place.category, 0) + 1
-    return {
+    report = {
         "placeCount": len(batch.places),
         "categoryCounts": dict(sorted(category_counts.items())),
         "assetCount": sum(len(place.assets) for place in batch.places),
@@ -389,6 +536,15 @@ def summarize(batch: ValidatedBatch) -> dict[str, Any]:
         "reviewFlagCounts": dict(sorted(flag_counts.items())),
         "reviewPlaces": review_places,
     }
+    if batch.rights_manifest_sha256 is not None:
+        report.update({
+            "rightsManifestSha256": batch.rights_manifest_sha256,
+            "validatedPlaceCount": batch.validated_place_count,
+            "approvedPlaceCount": len(batch.places),
+            "heldPlaceCount": len(batch.held_place_ids),
+            "heldPlaceIds": list(batch.held_place_ids),
+        })
+    return report
 
 
 def stage_subset(batch: ValidatedBatch, stage_directory: Path, generated_root: Path) -> None:
@@ -475,7 +631,7 @@ def _ensure_s3_object(
             Body=body,
             ContentLength=expected_size,
             ContentType=content_type,
-            CacheControl="public, max-age=31536000, immutable",
+            CacheControl=IMMUTABLE_CACHE_CONTROL,
             Metadata={"sha256": expected_sha256},
         )
     return True
@@ -487,8 +643,13 @@ def normalize_key_prefix(prefix: str) -> str:
         part in {"", ".", ".."} or not re.fullmatch(r"[A-Za-z0-9._-]+", part)
         for part in path.parts
     ):
-        raise PublishError("S3 key prefix must contain only safe path segments")
+        raise PublishError("Asset key prefix must contain only safe path segments")
     return str(path)
+
+
+def _require_rights_gated_batch(batch: ValidatedBatch) -> None:
+    if batch.rights_manifest_sha256 is None or batch.validated_place_count != CANONICAL_PLACE_COUNT:
+        raise PublishError("Public upload requires a complete validated batch and an explicit boundary rights gate")
 
 
 def publish_to_s3(
@@ -498,6 +659,7 @@ def publish_to_s3(
     bucket: str,
     prefix: str,
 ) -> dict[str, int | str]:
+    _require_rights_gated_batch(batch)
     prefix = normalize_key_prefix(prefix)
     versioned_prefix = f"{prefix}/{batch.index_sha256}"
     uploaded = 0
@@ -536,6 +698,173 @@ def publish_to_s3(
         "uploaded": uploaded,
         "skipped": skipped,
     }
+
+
+class WranglerRunner:
+    """Run pinned Wrangler commands with a global cooldown between starts."""
+
+    def __init__(self, *, delay_seconds: float):
+        npx = shutil.which("npx")
+        if not npx:
+            raise PublishError("Wrangler upload requires Node.js npx on PATH")
+        self.command = (npx, "--yes", f"wrangler@{WRANGLER_VERSION}")
+        self.delay_seconds = delay_seconds
+        self._lock = threading.Lock()
+        self._next_start = 0.0
+
+    def __call__(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        with self._lock:
+            now = time.monotonic()
+            start_at = max(now, self._next_start)
+            self._next_start = start_at + self.delay_seconds
+        if start_at > now:
+            time.sleep(start_at - now)
+        try:
+            return subprocess.run(
+                [*self.command, *arguments],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+        except OSError as exc:
+            # OS errors may include user paths. Never echo them into batch logs.
+            raise PublishError(f"Could not start Wrangler ({type(exc).__name__})") from exc
+
+
+def _wrangler_remote_hash(
+    runner: Callable[..., subprocess.CompletedProcess[str]],
+    bucket: str,
+    key: str,
+    expected_size: int,
+) -> str | None:
+    with tempfile.TemporaryDirectory(prefix="parkdex-visual-read-") as temporary:
+        destination = Path(temporary) / "object"
+        result = runner("r2", "object", "get", f"{bucket}/{key}", "--remote", "--file", str(destination))
+        if result.returncode != 0:
+            if WRANGLER_MISSING_MESSAGE in result.stderr or WRANGLER_MISSING_MESSAGE in result.stdout:
+                return None
+            raise PublishError(f"Wrangler could not inspect remote object: {key}")
+        if not destination.is_file():
+            raise PublishError(f"Wrangler returned no bytes for remote object: {key}")
+        if destination.stat().st_size != expected_size:
+            return "<conflict>"
+        return sha256_file(destination)
+
+
+def _ensure_wrangler_object(
+    runner: Callable[..., subprocess.CompletedProcess[str]],
+    bucket: str,
+    key: str,
+    *,
+    local_path: Path,
+    expected_size: int,
+    expected_sha256: str,
+    content_type: str,
+) -> bool:
+    existing_hash = _wrangler_remote_hash(runner, bucket, key, expected_size)
+    if existing_hash is not None:
+        if existing_hash != expected_sha256:
+            raise PublishError(f"Immutable object key has conflicting bytes: {key}")
+        return False
+
+    try:
+        local_matches = local_path.stat().st_size == expected_size and sha256_file(local_path) == expected_sha256
+    except OSError as exc:
+        raise PublishError(f"Could not read validated local asset: {key}") from exc
+    if not local_matches:
+        raise PublishError(f"Validated local asset changed before upload: {key}")
+
+    result = runner(
+        "r2", "object", "put", f"{bucket}/{key}", "--remote", "--force",
+        "--file", str(local_path), "--content-type", content_type,
+        "--cache-control", IMMUTABLE_CACHE_CONTROL,
+    )
+    if result.returncode != 0:
+        raise PublishError(f"Wrangler could not upload remote object: {key}")
+    return True
+
+
+def publish_to_wrangler(
+    batch: ValidatedBatch,
+    *,
+    bucket: str,
+    prefix: str,
+    runner: Callable[..., subprocess.CompletedProcess[str]],
+    workers: int = 2,
+    progress: Callable[[int, int], None] | None = None,
+) -> dict[str, int | str]:
+    """Upload validated assets with bounded parallelism, then publish the index."""
+    _require_rights_gated_batch(batch)
+    prefix = normalize_key_prefix(prefix)
+    versioned_prefix = f"{prefix}/{batch.index_sha256}"
+    assets = [asset for place in batch.places for asset in place.assets]
+    uploaded = 0
+    skipped = 0
+    iterator = iter(assets)
+
+    def transfer(asset: Asset) -> bool:
+        return _ensure_wrangler_object(
+            runner, bucket, f"{versioned_prefix}/{asset.key}",
+            local_path=asset.path,
+            expected_size=asset.size,
+            expected_sha256=asset.sha256,
+            content_type=asset.content_type,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        pending = {}
+
+        def fill_pending() -> None:
+            while len(pending) < workers * 2:
+                asset = next(iterator, None)
+                if asset is None:
+                    break
+                pending[executor.submit(transfer, asset)] = asset
+
+        fill_pending()
+        while pending:
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                pending.pop(future)
+                try:
+                    did_upload = future.result()
+                except Exception:
+                    for remaining in pending:
+                        remaining.cancel()
+                    raise
+                uploaded += int(did_upload)
+                skipped += int(not did_upload)
+                completed = uploaded + skipped
+                if progress is not None and (completed % 100 == 0 or completed == len(assets)):
+                    progress(completed, len(assets))
+            fill_pending()
+
+    index_key = f"{versioned_prefix}/index.json"
+    with tempfile.TemporaryDirectory(prefix="parkdex-visual-index-") as temporary:
+        index_path = Path(temporary) / "index.json"
+        index_path.write_bytes(batch.index_bytes)
+        did_upload = _ensure_wrangler_object(
+            runner, bucket, index_key,
+            local_path=index_path,
+            expected_size=len(batch.index_bytes),
+            expected_sha256=batch.index_sha256,
+            content_type="application/json; charset=utf-8",
+        )
+    uploaded += int(did_upload)
+    skipped += int(not did_upload)
+    return {"prefix": versioned_prefix, "indexKey": index_key, "uploaded": uploaded, "skipped": skipped}
+
+
+def _wrangler_configuration() -> tuple[str, str]:
+    bucket = os.environ.get("PARKDEX_VISUAL_ASSETS_WRANGLER_BUCKET", "").strip()
+    if bucket != "parkdex-visual-assets":
+        raise PublishError("PARKDEX_VISUAL_ASSETS_WRANGLER_BUCKET must be parkdex-visual-assets")
+    if bucket == os.environ.get("R2_BUCKET", "").strip():
+        raise PublishError("The public visual-assets bucket must be separate from the private postcard bucket")
+    prefix = normalize_key_prefix(os.environ.get("PARKDEX_VISUAL_ASSETS_WRANGLER_PREFIX", "parkdex/visual-assets/v1").strip())
+    return bucket, prefix
 
 
 def _s3_client_from_environment() -> tuple[Any, str, str]:
@@ -594,8 +923,13 @@ def build_parser() -> argparse.ArgumentParser:
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--dry-run", action="store_true", help="Validate and print a report without writing")
     modes.add_argument("--stage-dir", type=Path, help="Copy a selected subset into an empty local fixture directory")
-    modes.add_argument("--upload", action="store_true", help="Upload all 1,030 validated places to the configured public bucket")
+    modes.add_argument("--upload", action="store_true", help="Upload all 1,030 validated places through S3")
+    modes.add_argument("--upload-wrangler", action="store_true", help="Upload all 1,030 validated places through Cloudflare Wrangler")
     parser.add_argument("--ids", help="Comma-separated IDs for dry-run or local staging only")
+    parser.add_argument("--rights-manifest", type=Path, help="Explicit per-place boundary rights decisions; required for public upload")
+    parser.add_argument("--boundaries", type=Path, help="Exact boundary GeoJSON snapshot named by the rights manifest")
+    parser.add_argument("--wrangler-workers", type=int, default=2, help="Parallel Wrangler transfers, 1 to 8 (default: 2)")
+    parser.add_argument("--wrangler-delay-seconds", type=float, default=0.5, help="Minimum time between Wrangler command starts (default: 0.5)")
     return parser
 
 
@@ -604,10 +938,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         requested_ids = parse_ids(args.ids)
-        if args.upload and requested_ids is not None:
+        if (args.upload or args.upload_wrangler) and requested_ids is not None:
             raise PublishError("Upload mode always publishes the complete 1,030-place catalogue; --ids is not allowed")
         if args.stage_dir is not None and requested_ids is None:
             raise PublishError("Local staging requires an explicit --ids subset")
+        if args.upload_wrangler and not 1 <= args.wrangler_workers <= 8:
+            raise PublishError("--wrangler-workers must be between 1 and 8")
+        if args.upload_wrangler and (
+            not math.isfinite(args.wrangler_delay_seconds) or args.wrangler_delay_seconds < 0
+        ):
+            raise PublishError("--wrangler-delay-seconds must be a finite non-negative number")
+        if (args.rights_manifest is None) != (args.boundaries is None):
+            raise PublishError("--rights-manifest and --boundaries must be supplied together")
+        if (args.upload or args.upload_wrangler) and args.rights_manifest is None:
+            raise PublishError("Public upload requires --rights-manifest and --boundaries")
+        if args.stage_dir is not None and args.rights_manifest is not None:
+            raise PublishError("Rights-gated staging requires a complete batch; use --dry-run or public upload")
 
         batch = validate_batch(
             args.generated,
@@ -615,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
             requested_ids=requested_ids,
             require_exact_directories=requested_ids is None,
         )
+        if args.rights_manifest is not None:
+            batch = apply_rights_gate(batch, args.rights_manifest, args.boundaries)
         report: dict[str, Any] = summarize(batch)
 
         if args.dry_run:
@@ -625,12 +973,35 @@ def main(argv: list[str] | None = None) -> int:
             report["stageDirectory"] = str(args.stage_dir.resolve())
         else:
             catalogue = load_catalogue(args.catalogue)
-            if len(catalogue) != CANONICAL_PLACE_COUNT or len(batch.places) != CANONICAL_PLACE_COUNT:
+            if len(catalogue) != CANONICAL_PLACE_COUNT or batch.validated_place_count != CANONICAL_PLACE_COUNT:
                 raise PublishError(
                     f"Upload requires exactly {CANONICAL_PLACE_COUNT} canonical places; found {len(catalogue)}"
                 )
-            client, bucket, prefix = _s3_client_from_environment()
-            report.update(publish_to_s3(client, batch, bucket=bucket, prefix=prefix))
+            if args.upload_wrangler:
+                bucket, prefix = _wrangler_configuration()
+                runner = WranglerRunner(delay_seconds=args.wrangler_delay_seconds)
+                preflight = runner("--version")
+                if preflight.returncode != 0 or WRANGLER_VERSION not in preflight.stdout:
+                    raise PublishError(f"Could not start pinned Wrangler {WRANGLER_VERSION}")
+
+                def print_progress(completed: int, total: int) -> None:
+                    print(
+                        json.dumps({"status": "uploading", "completedAssets": completed, "totalAssets": total}, separators=(",", ":")),
+                        file=sys.stderr,
+                        flush=True,
+                    )
+
+                report.update(publish_to_wrangler(
+                    batch,
+                    bucket=bucket,
+                    prefix=prefix,
+                    runner=runner,
+                    workers=args.wrangler_workers,
+                    progress=print_progress,
+                ))
+            else:
+                client, bucket, prefix = _s3_client_from_environment()
+                report.update(publish_to_s3(client, batch, bucket=bucket, prefix=prefix))
             report["status"] = "uploaded"
 
         print(json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")))

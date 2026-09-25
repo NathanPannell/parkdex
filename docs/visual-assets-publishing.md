@@ -1,8 +1,26 @@
 # Publishing Parkdex visual assets
 
-`scripts/publish_visual_assets.py` validates the generated visual batch against `data/places.json`, then either stages a small local fixture or publishes a complete immutable version to a dedicated public S3-compatible bucket. It publishes `satellite.avif`, `relief.avif`, and `<place-id>-terrain.glb` for each place. It does not publish working files, manifests, source locks, height grids, textures, or boundary files.
+`scripts/publish_visual_assets.py` validates the generated visual batch against `data/places.json`, then either stages a small local fixture or publishes an immutable, rights-approved version to a dedicated public bucket through S3 or Cloudflare Wrangler. It publishes `satellite.avif`, `relief.avif`, and `<place-id>-terrain.glb` for each approved place. It does not publish working files, manifests, source locks, height grids, textures, or boundary files.
 
 The batch must include one generated directory per canonical place. Each `manifest.json` must match the place ID, name, and category in the catalogue and must list the size and SHA-256 for each public asset. When `sourceLockSha256` is present, the command verifies it against the sibling `sources.json` before staging or upload. A missing or mismatched asset stops publishing.
+
+Public upload also requires an explicit boundary rights manifest. The publisher validates all 1,030 generated places first, then limits the public index and uploaded assets to entries marked `approved`. Places marked `hold` remain absent from the public index, so the app does not offer Map views for them. Both S3 and Wrangler reject an ungated batch before any object is written.
+
+The rights manifest has `version: 1`, `boundarySnapshotSha256`, and a `places` object containing exactly one decision for each catalogue ID. Each decision must repeat the snapshot feature's `sourceName`, `sourceUrl`, and `sourceId`; an approved entry uses `"decision": "approved"` and a non-empty `rightsAttribution` string array, while a held entry uses `"decision": "hold"` and a non-empty `reason`. The publisher checks the snapshot's byte hash, all IDs and source fields, and each generated place manifest and hashed `sources.json` boundary feature. It appends approved `rightsAttribution` strings to the public index's attribution list, which the app displays. Any missing decision, credit, or source drift stops publication. Keep the reviewed rights manifest and its exact boundary GeoJSON snapshot together when publishing.
+
+For the frozen 2026-09-24 snapshot, `data/visual-boundary-rights-20260924.json` approves 812 places and holds 218. The 218 holds include 91 from direct regional GIS sources with unresolved or restrictive redistribution terms and 127 aggregate regional rows whose matched upstream licence comment is blank. The 46 aggregate rows with explicit provider comments are approved after separate review of their six provider licence families. `data/visual-boundary-rights-audit-20260924.json` records the source IDs, reasons, provider terms, and exact frozen comments. The public index uses the current required provider attribution from that review; the original comments remain in the rights manifest as evidence.
+
+The decisions can be rebuilt deterministically from the exact frozen boundary snapshot, regional source import, and checked-in rights audit. The builder rejects changed input hashes, missing source-record matches, unverified provider families, or a count other than 812 approved and 218 held:
+
+```powershell
+python .\scripts\build_visual_rights_manifest.py `
+  --boundaries C:\path\to\parkdex-boundaries-1030.geojson `
+  --regional-import C:\path\to\new-regional-parks.geojson `
+  --rights-audit .\data\visual-boundary-rights-audit-20260924.json `
+  --output .\data\visual-boundary-rights-20260924.json
+```
+
+Use the original 1,030-feature boundary snapshot. The batch's `catalogue-boundaries.geojson` copy has semantically identical features but different bytes, so it does not match the reviewed snapshot SHA-256.
 
 ## Validate the complete batch
 
@@ -12,6 +30,8 @@ Run a dry validation after the data batch finishes. This checks all catalogue pl
 python .\scripts\publish_visual_assets.py `
   --generated C:\path\to\parkdex-all-1030-20260924 `
   --catalogue .\data\places.json `
+  --rights-manifest .\data\visual-boundary-rights-20260924.json `
+  --boundaries C:\path\to\parkdex-boundaries-1030.geojson `
   --dry-run
 ```
 
@@ -119,7 +139,7 @@ AWS S3 uses an array of CORS rules with capitalized field names. Use this format
 
 Keep the public read policy limited to the visual-asset prefix. Set a long cache lifetime for the immutable hashed prefix. The publisher sets `Cache-Control: public, max-age=31536000, immutable` on each uploaded object.
 
-## Upload the complete batch
+## Upload the complete batch through S3
 
 Install `boto3` in the Python environment used for publishing, then set task-specific variables for the dedicated public bucket. The access key and secret must never point to the private postcard bucket:
 
@@ -139,9 +159,32 @@ Then upload with no `--ids` argument:
 python .\scripts\publish_visual_assets.py `
   --generated C:\path\to\parkdex-all-1030-20260924 `
   --catalogue .\data\places.json `
+  --rights-manifest .\data\visual-boundary-rights-20260924.json `
+  --boundaries C:\path\to\parkdex-boundaries-1030.geojson `
   --upload
 ```
 
-Upload requires exactly 1,030 canonical catalogue places and a complete validated output for every one. It computes the deterministic index first, then stores assets under `<prefix>/<index-sha256>/` and writes `index.json` last. Existing objects with matching SHA-256 metadata or matching bytes are skipped. A key with different bytes is rejected; the hashed prefix is immutable. Re-running the same complete batch is safe. The JSON report includes the index hash and key, bytes, review-flag counts and affected place IDs, and uploaded or skipped object counts. Error logs omit SDK exception text and credentials.
+Upload requires exactly 1,030 canonical catalogue places and a complete validated output for every one, plus the rights manifest and snapshot. It computes an index for approved places only, then stores their assets under `<prefix>/<index-sha256>/` and writes `index.json` last. Existing objects with matching SHA-256 metadata or matching bytes are skipped. A key with different bytes is rejected; the hashed prefix is immutable. Re-running the same complete batch is safe. The JSON report includes validated, approved, and held counts, the index hash and key, bytes, review-flag counts and affected place IDs, and uploaded or skipped object counts. Error logs omit SDK exception text and credentials.
+
+## Upload the complete batch through Cloudflare Wrangler
+
+Use this path when the dedicated R2 bucket is available through `wrangler login` but scoped S3 API credentials are unavailable. The script pins Wrangler 4.139.0 through `npx`; Node.js and npx must be on `PATH`. Wrangler must already be authenticated to the Cloudflare account containing the public bucket. For this Parkdex run, the Wrangler backend accepts only the dedicated `parkdex-visual-assets` bucket, including when the private bucket variable is unset. This mode uses the remote bucket explicitly and never writes to Wrangler's local R2 emulator.
+
+```powershell
+$env:PARKDEX_VISUAL_ASSETS_WRANGLER_BUCKET = 'parkdex-visual-assets'
+$env:PARKDEX_VISUAL_ASSETS_WRANGLER_PREFIX = 'parkdex/visual-assets/v1'
+python .\scripts\publish_visual_assets.py `
+  --generated C:\path\to\parkdex-all-1030-20260924 `
+  --catalogue .\data\places.json `
+  --rights-manifest .\data\visual-boundary-rights-20260924.json `
+  --boundaries C:\path\to\parkdex-boundaries-1030.geojson `
+  --upload-wrangler `
+  --wrangler-workers 2 `
+  --wrangler-delay-seconds 0.5
+```
+
+The default is two concurrent transfers and at least 0.5 seconds between Wrangler command starts across all workers. Reduce workers or increase the delay if the account experiences rate limiting. The script prints a secret-free progress record after every 100 assets. Each fresh key is checked for absence, its local bytes are rehashed against the validated manifest immediately before upload, and the object is stored with the correct MIME type and `Cache-Control: public, max-age=31536000, immutable`. On retry, each existing remote object is downloaded to a temporary file and SHA-256 checked before it is skipped. A mismatched key stops the run; the publisher never overwrites conflicting bytes. Temporary downloads are removed automatically.
+
+The same 1,030-place validation, rights gate, index-hash prefix, and index-last rule apply to both upload backends. A failed or interrupted Wrangler run may leave approved asset objects in the hashed prefix but no index. Re-run the exact command to resume; matching objects are skipped, remaining objects are sent, and `index.json` is published only after every asset succeeds. Wrangler failures print a generic key-specific error without exposing CLI output, tokens, or endpoint details.
 
 After upload, configure the GitHub Actions **staging environment** variable `PARK_VISUALS_BASE_URL` with the public origin followed by the reported versioned `prefix`, for example `https://assets.example.com/parkdex/visual-assets/v1/<index-sha256>`. The release workflow passes this value to Vercel as `NEXT_PUBLIC_PARK_VISUALS_BASE_URL`. The app appends `/index.json` and resolves the index's relative asset paths from that directory. When the variable is unset, the app keeps its local fixture fallback.
