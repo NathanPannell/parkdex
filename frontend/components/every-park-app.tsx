@@ -103,10 +103,10 @@ export function ParkdexApp(props: { apiBaseUrl: string; googleAuthAllowed?: bool
   const mapStageRef = useRef<HTMLElement>(null);
   const connectionStatusRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [manualClaimActive, setManualClaimActive] = useState(false);
+  const [manualClaimOwnerId, setManualClaimOwnerId] = useState<string | null>(null);
   const [manualClaimStarting, setManualClaimStarting] = useState(false);
   const [manualClaimError, setManualClaimError] = useState("");
-  useEffect(() => { setManualClaimActive(false); }, [account?.id, authenticated]);
+  const manualClaimActive = authenticated && !!account?.id && manualClaimOwnerId === account.id;
 
   async function startManualClaim() {
     if (!props.manualClaimEnabled || !claimsAvailable || !recommendClaim || manualClaimStarting) return;
@@ -122,7 +122,7 @@ export function ParkdexApp(props: { apiBaseUrl: string; googleAuthAllowed?: bool
         setManualClaimError("The test park could not be confirmed. Try again in a moment.");
         return;
       }
-      setManualClaimActive(true);
+      setManualClaimOwnerId(account?.id ?? null);
       setClaimFlow({ placeId: MANUAL_CLAIM_PLACE_ID, recommendation });
       choosePlace(MANUAL_CLAIM_PLACE_ID, true);
     } catch (error) {
@@ -160,7 +160,7 @@ export function ParkdexApp(props: { apiBaseUrl: string; googleAuthAllowed?: bool
 
     <FieldDiagnosticRegion />
     {view === "map" && approximateClaimLocation && <aside className="in-park-banner precise-location-banner" role={preciseLocationMessage ? "alert" : "status"} aria-live="polite"><span className="in-park-marker"><LocateFixed size={21} /></span><div className="in-park-copy"><strong>Improve location to confirm visits</strong><p>{preciseLocationMessage || (preciseLocationRequired ? "Precise location access changed. Enable it again to check park boundaries." : `Your pin is approximate (±${Math.round(location?.accuracyMeters ?? 0)} m). Precise location is needed to check park boundaries.`)}</p></div><button className="in-park-claim" type="button" disabled={preciseLocationBusy} onClick={() => void enablePreciseLocation()}>{preciseLocationBusy ? "Checking…" : "Enable precise location"}</button></aside>}
-    {claimsAvailable && (view === "map" || claimFlow) && liveClaimPlace && displayedRecommendation && recommendClaim && createClaim && reconcileClaim && uploadVisitPhoto && <ClaimFlowBanner key={`${photoOwnerKey}:${liveClaimPlace.id}:${manualClaimActive}`} place={liveClaimPlace} recommendation={displayedRecommendation} ownerKey={photoOwnerKey} arrivalPhotoUrl={arrivalPhotoUrl} arrivalImage={arrivalImage} busy={transitionBusy} resetSignal={claimFlowResetSignal} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadVisitPhoto} manualClaim={manualClaimActive && props.manualClaimEnabled && claimFlow?.placeId === MANUAL_CLAIM_PLACE_ID && liveClaimPlace.id === MANUAL_CLAIM_PLACE_ID ? { location: manualClaimLocation, photo: manualClaimPhoto } : undefined} onClaimed={rememberImpression} onDismiss={() => { setManualClaimActive(false); dismissArrival(); }} onViewAccount={() => navigate("account")} onFlowActiveChange={(placeId) => { if (manualClaimActive && !placeId) return; setClaimFlow(placeId ? { placeId, recommendation: displayedRecommendation } : null); }} onClearRecommendation={clearLiveClaim} />}
+    {claimsAvailable && (view === "map" || claimFlow) && liveClaimPlace && displayedRecommendation && recommendClaim && createClaim && reconcileClaim && uploadVisitPhoto && <ClaimFlowBanner key={`${photoOwnerKey}:${liveClaimPlace.id}:${manualClaimActive}`} place={liveClaimPlace} recommendation={displayedRecommendation} ownerKey={photoOwnerKey} arrivalPhotoUrl={arrivalPhotoUrl} arrivalImage={arrivalImage} busy={transitionBusy} resetSignal={claimFlowResetSignal} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadVisitPhoto} manualClaim={manualClaimActive && props.manualClaimEnabled && claimFlow?.placeId === MANUAL_CLAIM_PLACE_ID && liveClaimPlace.id === MANUAL_CLAIM_PLACE_ID ? { location: manualClaimLocation, photo: manualClaimPhoto } : undefined} onClaimed={rememberImpression} onDismiss={() => { setManualClaimOwnerId(null); dismissArrival(); }} onViewAccount={() => navigate("account")} onFlowActiveChange={(placeId) => { if (manualClaimActive && !placeId) return; setClaimFlow(placeId ? { placeId, recommendation: displayedRecommendation } : null); }} onClearRecommendation={clearLiveClaim} />}
     {view === "map" && recentPostcard && !displayedRecommendation && !selected && <aside className="impression-map-receipt" aria-label="Your saved postcard"><header><Check size={22} /><div><h2>One more place. Yours.</h2><p>{recentPostcard.place.name}</p></div><button className="impression-icon-button" aria-label="Dismiss saved postcard" onClick={() => setRecentImpression(null)}><X size={18} /></button></header><button className="impression-primary" onClick={() => navigate("account")}>Open your postcard<ArrowUpRight size={18} /></button></aside>}
     {groupMapMode && <button className="group-map-exit" onClick={() => navigate("groups")}><ArrowLeft size={17} />Back to collection</button>}
     {groupMapMode && !selected && <div className="map-visit-filter segmented" role="group" aria-label="Visit status">{(["all", "visited", "unseen"] as VisitFilter[]).map((value) => <button key={value} aria-pressed={collectionVisitFilter === value} className={collectionVisitFilter === value ? "active" : ""} onClick={() => setCollectionVisitFilter(value)}>{value === "all" ? "All" : value === "visited" ? "Visited" : "Unvisited"}</button>)}</div>}
