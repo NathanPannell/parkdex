@@ -78,8 +78,9 @@ function page(prefix: string, count: number, total = count, scope: "full" | "cac
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 let offlineStatus: PlaceGatewayStatus;
@@ -154,6 +155,62 @@ describe("usePlaceData", () => {
     await waitFor(() => expect(result.current.map.places.map((item) => item.id)).toEqual(["saved-0"]));
     expect(result.current.map.scope).toBe("cached");
     expect(gatewayMock.fetchMap).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the last map sample visible through a viewport request and swaps it on success", async () => {
+    const nextViewportResponse = deferred<PlaceDataResult>();
+    gatewayMock.fetchMap.mockImplementation((query: { viewport: typeof viewport }) =>
+      query.viewport.west === viewport.west ? Promise.resolve(page("first", 2)) : nextViewportResponse.promise,
+    );
+    const { result, rerender } = renderHook(
+      ({ currentViewport }: { currentViewport: typeof viewport }) => usePlaceData({ ...baseOptions, viewport: currentViewport, view: "map" }),
+      { initialProps: { currentViewport: viewport } },
+    );
+
+    await waitFor(() => expect(result.current.map.places.map((item) => item.id)).toEqual(["first-0", "first-1"]));
+    const nextViewport = { ...viewport, west: -128, east: -113 };
+    rerender({ currentViewport: nextViewport });
+    await waitFor(() => expect(gatewayMock.fetchMap).toHaveBeenCalledTimes(2));
+    expect(result.current.map.places.map((item) => item.id)).toEqual(["first-0", "first-1"]);
+
+    await act(async () => { nextViewportResponse.resolve(page("second", 1)); await nextViewportResponse.promise; });
+    expect(result.current.map.places.map((item) => item.id)).toEqual(["second-0"]);
+  });
+
+  it("clears a stale sample when the active map filter changes and keeps it cleared on failure", async () => {
+    const filteredResponse = deferred<PlaceDataResult>();
+    gatewayMock.fetchMap.mockImplementation((query: { categories: string[] }) => query.categories.includes("regional")
+      ? filteredResponse.promise
+      : Promise.resolve(page("provincial", 1)));
+    const { result, rerender } = renderHook(
+      ({ mapCategories }: { mapCategories: ReadonlySet<PlaceDataItem["category"]> }) => usePlaceData({
+        ...baseOptions,
+        viewport,
+        view: "map",
+        mapCategories,
+      }),
+      { initialProps: { mapCategories: new Set<PlaceDataItem["category"]>() } },
+    );
+    await waitFor(() => expect(result.current.map.places.map((item) => item.id)).toEqual(["provincial-0"]));
+
+    rerender({ mapCategories: new Set<PlaceDataItem["category"]>(["regional"]) });
+    expect(result.current.map.places).toEqual([]);
+    await waitFor(() => expect(gatewayMock.fetchMap).toHaveBeenCalledTimes(2));
+    await act(async () => { filteredResponse.reject(new Error("filtered query failed")); await Promise.resolve(); });
+    expect(result.current.map.places).toEqual([]);
+  });
+
+  it("does not expose the prior owner map sample during an account transition", async () => {
+    gatewayMock.fetchMap.mockResolvedValue(page("owner-a", 1));
+    const { result, rerender } = renderHook(
+      ({ ownerKey }: { ownerKey: string }) => usePlaceData({ ...baseOptions, ownerKey, viewport, view: "map" }),
+      { initialProps: { ownerKey: "account:a" } },
+    );
+    await waitFor(() => expect(result.current.map.places.map((item) => item.id)).toEqual(["owner-a-0"]));
+
+    gatewayMock.fetchMap.mockImplementation(() => new Promise(() => undefined));
+    rerender({ ownerKey: "account:b" });
+    expect(result.current.map.places).toEqual([]);
   });
 
   it("reuses the same map sample across views but forces Map on explicit retry", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   boundaryFilter,
+  boundaryFeatureStateUpdates,
   geometryBounds,
   parseBoundaryCollection,
   parseBoundaryIndex,
@@ -34,19 +35,38 @@ describe("boundary geometry", () => {
 });
 
 describe("boundary map filters", () => {
-  it("keeps boundaries in lockstep with visible place ids", () => {
+  it("uses stable category filters for the viewport-scoped boundary source", () => {
     expect(boundaryFilter(["park-a"], "park")).toEqual([
       "all",
-      ["in", ["get", "id"], ["literal", ["park-a"]]],
+      ["has", "id"],
       ["!=", ["get", "category"], "island"],
     ]);
-    expect(selectedBoundaryFilter("park-b", ["park-a"])).toEqual(["==", ["get", "id"], ""]);
+    expect(boundaryFilter(["park-a"])).toEqual(["has", "id"]);
+    expect(selectedBoundaryFilter("park-b", ["park-a"])).toEqual(["has", "id"]);
+    expect(boundaryFilter([])).toBe(boundaryFilter(Array.from({ length: 1_030 }, (_, index) => `park-${index}`)));
   });
 
   it("keeps the first terminal source result when events arrive out of order", () => {
     expect(settleBoundaryLoadStatus("failed", "ready")).toBe("failed");
     expect(settleBoundaryLoadStatus("ready", "failed")).toBe("ready");
     expect(settleBoundaryLoadStatus("loading", "ready")).toBe("ready");
+  });
+});
+
+describe("boundary feature state refresh", () => {
+  it("clears a deselected and unvisited polygon when it returns after an offscreen wave", () => {
+    const polygonId = "regional-returning-park";
+    const mapState = new Map<string, { visited: boolean; selected: boolean }>();
+    const firstWave = boundaryFeatureStateUpdates(new Set([polygonId]), new Set([polygonId]), new Set([polygonId]));
+    firstWave.forEach(({ id, state }) => mapState.set(id, state));
+    expect(mapState.get(polygonId)).toEqual({ visited: true, selected: true });
+
+    boundaryFeatureStateUpdates(new Set(), new Set(), new Set()).forEach(({ id, state }) => mapState.set(id, state));
+    expect(mapState.get(polygonId)).toEqual({ visited: true, selected: true });
+
+    const returnedWave = boundaryFeatureStateUpdates(new Set([polygonId]), new Set(), new Set());
+    returnedWave.forEach(({ id, state }) => mapState.set(id, state));
+    expect(mapState.get(polygonId)).toEqual({ visited: false, selected: false });
   });
 });
 
@@ -67,5 +87,18 @@ describe("overlapping boundary selection", () => {
     const places = [place("island", "island", -125), place("park-far", "regional", -124), place("park-near", "provincial", -125.1)];
     const features = places.map((candidate) => ({ properties: { id: candidate.id } }));
     expect(pickBoundaryPlace(features, places, { lng: -125, lat: 49 })).toBe("park-near");
+  });
+
+  it("opens an unsampled park hit by its boundary feature ID", () => {
+    const polygon = (west: number, south: number, east: number, north: number) => ({
+      type: "Polygon" as const,
+      coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
+    });
+    const features = [
+      { properties: { id: "island-unsampled", category: "island" }, geometry: polygon(-125.02, 48.98, -124.98, 49.02) },
+      { properties: { id: "park-unsampled", category: "regional" }, geometry: polygon(-125.3, 48.8, -124.7, 49.2) },
+    ];
+
+    expect(pickBoundaryPlace(features, [], { lng: -125, lat: 49 })).toBe("park-unsampled");
   });
 });

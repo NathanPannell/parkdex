@@ -15,6 +15,15 @@ const boundaryCategoryColor: ExpressionSpecification = [
   "national", PLACE_CATEGORY_COLORS.national,
   "#8B7F6B",
 ];
+const selectedState: ExpressionSpecification = ["boolean", ["feature-state", "selected"], false];
+const selectedFillOpacity: ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5, ["case", selectedState, 0.54, 0],
+  9, ["case", selectedState, 0.6, 0],
+  12, ["case", selectedState, 0.66, 0],
+];
 
 export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID): LayerSpecification[] {
   const unfiltered = boundaryFilter([]);
@@ -99,7 +108,7 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       filter: selectedBoundaryFilter(null, []),
       paint: {
         "fill-color": boundaryCategoryColor,
-        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.54, 9, 0.6, 12, 0.66],
+        "fill-opacity": selectedFillOpacity,
       },
     },
     {
@@ -108,7 +117,11 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       source: displaySource,
       filter: selectedBoundaryFilter(null, []),
       layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#fffaf0", "line-opacity": 0.95, "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5] },
+      paint: {
+        "line-color": "#fffaf0",
+        "line-opacity": ["case", selectedState, 0.95, 0],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 4.5, 12, 8.5],
+      },
     },
     {
       id: "boundary-selected-line",
@@ -118,7 +131,7 @@ export function boundaryLayerSpecifications(displaySource = BOUNDARY_SOURCE_ID):
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": boundaryCategoryColor,
-        "line-opacity": 1,
+        "line-opacity": ["case", selectedState, 1, 0],
         "line-width": ["interpolate", ["linear"], ["zoom"], 5, 2.8, 12, 5.5],
       },
     },

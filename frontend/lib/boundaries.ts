@@ -1,5 +1,5 @@
 import type { Place, PlaceCategory } from "./places";
-import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
+import type { FilterSpecification } from "maplibre-gl";
 
 export const BOUNDARY_DATA_URL = "/data/boundaries.v1.geojson";
 export const BOUNDARY_INDEX_URL = "/data/boundaries-index.v1.json";
@@ -23,6 +23,18 @@ export type BoundaryLoadState =
   | { status: "ready"; placeIds: ReadonlySet<string> }
   | { status: "failed"; placeIds: ReadonlySet<string> };
 export type BoundaryLoadStatus = BoundaryLoadState["status"];
+
+const ALL_VIEWPORT_BOUNDARIES_FILTER: FilterSpecification = ["has", "id"];
+const VIEWPORT_ISLAND_BOUNDARIES_FILTER: FilterSpecification = [
+  "all",
+  ALL_VIEWPORT_BOUNDARIES_FILTER,
+  ["==", ["get", "category"], "island"],
+];
+const VIEWPORT_PARK_BOUNDARIES_FILTER: FilterSpecification = [
+  "all",
+  ALL_VIEWPORT_BOUNDARIES_FILTER,
+  ["!=", ["get", "category"], "island"],
+];
 
 export function settleBoundaryLoadStatus(current: BoundaryLoadStatus, signal: "ready" | "failed"): BoundaryLoadStatus {
   return current === "loading" ? signal : current;
@@ -87,21 +99,32 @@ export function boundaryPlaceIds(index: BoundaryIndex): ReadonlySet<string> {
   return new Set(Object.keys(index.boundsById));
 }
 
-export function boundaryFilter(
-  visibleIds: readonly string[],
-  category: "island" | "park" | "all" = "all",
-): FilterSpecification {
-  const visible: ExpressionSpecification = ["in", ["get", "id"], ["literal", visibleIds]];
-  if (category === "all") return visible;
-  const categoryExpression: ExpressionSpecification = category === "island"
-    ? ["==", ["get", "category"], "island"]
-    : ["!=", ["get", "category"], "island"];
-  return ["all", visible, categoryExpression];
+export function boundaryFeatureStateUpdates(
+  boundaryIds: ReadonlySet<string>,
+  visitedIds: ReadonlySet<string>,
+  selectedIds: ReadonlySet<string>,
+): Array<{ id: string; state: { visited: boolean; selected: boolean } }> {
+  return [...boundaryIds].map((id) => ({
+    id,
+    state: { visited: visitedIds.has(id), selected: selectedIds.has(id) },
+  }));
 }
 
-export function selectedBoundaryFilter(selectedId: string | null, visibleIds: readonly string[]): FilterSpecification {
-  if (!selectedId || !visibleIds.includes(selectedId)) return ["==", ["get", "id"], ""];
-  return ["==", ["get", "id"], selectedId];
+export function boundaryFilter(
+  _visibleIds: readonly string[],
+  category: "island" | "park" | "all" = "all",
+): FilterSpecification {
+  if (category === "island") return VIEWPORT_ISLAND_BOUNDARIES_FILTER;
+  if (category === "park") return VIEWPORT_PARK_BOUNDARIES_FILTER;
+  return ALL_VIEWPORT_BOUNDARIES_FILTER;
+}
+
+export function selectedBoundaryFilter(_selectedId: string | null, _visibleIds: readonly string[]): FilterSpecification {
+  // Selection is a feature-state paint effect. Keep every viewport feature
+  // eligible for the selected layers so these filters remain constant.
+  void _selectedId;
+  void _visibleIds;
+  return ALL_VIEWPORT_BOUNDARIES_FILTER;
 }
 
 function visitPositions(value: unknown, visit: (longitude: number, latitude: number) => void) {
@@ -133,15 +156,36 @@ export function boundsForPlace(index: BoundaryIndex, placeId: string): BoundaryB
 }
 
 export function pickBoundaryPlace(
-  features: readonly { properties: unknown }[],
+  features: readonly { properties: unknown; geometry?: unknown }[],
   places: readonly Place[],
   click: { lng: number; lat: number },
 ): string | null {
   const byId = new Map(places.map((place) => [place.id, place]));
   const candidates = features
-    .map((feature) => isRecord(feature.properties) && typeof feature.properties.id === "string" ? byId.get(feature.properties.id) : undefined)
-    .filter((place): place is Place => Boolean(place));
-  const parks = candidates.filter((place) => place.category !== "island");
+    .flatMap((feature) => {
+      if (!isRecord(feature.properties) || typeof feature.properties.id !== "string") return [];
+      const place = byId.get(feature.properties.id);
+      const rawCategory = feature.properties.category;
+      const category = place?.category ?? (rawCategory === "national" || rawCategory === "provincial" || rawCategory === "regional" || rawCategory === "island"
+        ? rawCategory
+        : null);
+      let longitude = place?.longitude;
+      let latitude = place?.latitude;
+      const geometry = feature.geometry;
+      if ((longitude == null || latitude == null)
+        && isRecord(geometry)
+        && (geometry.type === "Polygon" || geometry.type === "MultiPolygon")
+        && Array.isArray(geometry.coordinates)) {
+        const bounds = geometryBounds(geometry as unknown as BoundaryGeometry);
+        if (bounds) {
+          longitude = (bounds[0][0] + bounds[1][0]) / 2;
+          latitude = (bounds[0][1] + bounds[1][1]) / 2;
+        }
+      }
+      if (!category || longitude == null || latitude == null) return [];
+      return [{ id: feature.properties.id, category, longitude, latitude }];
+    });
+  const parks = candidates.filter((candidate) => candidate.category !== "island");
   const pool = parks.length ? parks : candidates;
   pool.sort((a, b) => {
     const aDistance = (a.longitude - click.lng) ** 2 + (a.latitude - click.lat) ** 2;

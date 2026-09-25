@@ -11,7 +11,7 @@ from backend.app.claims import (
     validate_location_sample,
 )
 from backend.app.offline_claims import validate_offline_location_sample
-from shapely.geometry import Point, shape
+from shapely.geometry import Point, box, shape
 
 
 def feature(place_id, category, coordinates):
@@ -35,6 +35,54 @@ def sample(latitude, longitude, accuracy=20):
     return LocationSample(
         latitude, longitude, accuracy, datetime.now(timezone.utc)
     )
+
+
+def test_viewport_boundary_query_uses_polygon_intersection_not_anchor(tmp_path):
+    edge_park = feature(
+        "edge-park",
+        "provincial",
+        [[
+            [-123.2, 48.8],
+            [-122.8, 48.8],
+            [-122.8, 49.2],
+            [-123.2, 49.2],
+            [-123.2, 48.8],
+        ]],
+    )
+    registry = registry_for(tmp_path, [edge_park])
+    viewport = box(-123.19, 48.95, -123.15, 49.05)
+    geometry = shape(registry.feature("edge-park")["geometry"])
+
+    assert not viewport.covers(geometry.representative_point())
+    assert registry.features_intersecting_bounds(
+        -123.19, 48.95, -123.15, 49.05
+    ) == ("edge-park",)
+
+
+def test_viewport_boundary_query_supports_world_and_antimeridian_bounds(tmp_path):
+    west_edge = feature(
+        "west-edge",
+        "island",
+        [[[-179.8, 0], [-179.2, 0], [-179.2, 1], [-179.8, 1], [-179.8, 0]]],
+    )
+    east_edge = feature(
+        "east-edge",
+        "island",
+        [[[179.2, 0], [179.8, 0], [179.8, 1], [179.2, 1], [179.2, 0]]],
+    )
+    center = feature(
+        "center",
+        "regional",
+        [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+    )
+    registry = registry_for(tmp_path, [west_edge, east_edge, center])
+
+    assert registry.features_intersecting_bounds(
+        179.5, -1, -179.5, 2
+    ) == ("west-edge", "east-edge")
+    assert registry.features_intersecting_bounds(
+        -180, -90, 180, 90
+    ) == ("west-edge", "east-edge", "center")
 
 
 def test_exact_containment_precedes_buffer_and_park_precedes_island(tmp_path):

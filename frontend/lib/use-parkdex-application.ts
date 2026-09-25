@@ -498,6 +498,7 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   } : undefined;
   const mapPresentation = useMapPresentation({
     apiBaseUrl,
+    identityKey: journal.catalogueOwnerKey,
     active: view === "map",
     places: mapPlaces,
     visited,

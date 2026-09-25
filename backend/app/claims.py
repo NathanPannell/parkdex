@@ -11,8 +11,17 @@ import secrets
 from typing import Iterable
 
 from pyproj import Transformer
-from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon, mapping, shape
+from shapely.geometry import (
+    GeometryCollection,
+    MultiPolygon,
+    Point,
+    Polygon,
+    box,
+    mapping,
+    shape,
+)
 from shapely.ops import transform, unary_union
+from shapely.strtree import STRtree
 from shapely.validation import make_valid
 
 
@@ -150,6 +159,12 @@ class BoundaryRegistry:
         self.place_ids = frozenset(seen)
         self.features = features
         self._exact_geometries = exact_geometries
+        self._viewport_feature_ids = tuple(features)
+        self._viewport_geometries = tuple(
+            exact_geometries[place_id] for place_id in self._viewport_feature_ids
+        )
+        self._viewport_tree = STRtree(self._viewport_geometries)
+        self._display_features: dict[tuple[str, float], dict] = {}
         offline_digest = hashlib.sha256(b"parkdex-offline-boundary-v1\0")
         for payload in payloads:
             offline_digest.update(len(payload).to_bytes(8, "big"))
@@ -179,6 +194,59 @@ class BoundaryRegistry:
         """Return the unsimplified canonical WGS84 feature for a place."""
 
         return self.features.get(place_id)
+
+    def display_feature(self, place_id: str, tolerance: float) -> dict | None:
+        """Return a cached, simplified feature for repeated map responses."""
+
+        feature = self.feature(place_id)
+        if feature is None:
+            return None
+        cache_key = (place_id, tolerance)
+        if cache_key not in self._display_features:
+            source_geometry = shape(feature["geometry"])
+            display_geometry = source_geometry.simplify(
+                tolerance,
+                preserve_topology=True,
+            )
+            if display_geometry.is_empty or not display_geometry.is_valid:
+                display_geometry = source_geometry
+            self._display_features[cache_key] = {
+                **feature,
+                "geometry": mapping(display_geometry),
+            }
+        return self._display_features[cache_key]
+
+    def features_intersecting_bounds(
+        self, west: float, south: float, east: float, north: float
+    ) -> tuple[str, ...]:
+        """Return every boundary polygon intersecting a WGS84 viewport.
+
+        A west value greater than east represents a viewport crossing the
+        antimeridian. Results stay in source catalogue order for stable API
+        responses.
+        """
+
+        viewport_parts = (
+            (box(west, south, east, north),)
+            if west <= east
+            else (
+                box(west, south, 180, north),
+                box(-180, south, east, north),
+            )
+        )
+        candidate_indices: set[int] = set()
+        for viewport in viewport_parts:
+            candidate_indices.update(
+                int(index) for index in self._viewport_tree.query(viewport)
+            )
+        return tuple(
+            self._viewport_feature_ids[index]
+            for index in sorted(candidate_indices)
+            if any(
+                self._viewport_geometries[index].intersects(viewport)
+                for viewport in viewport_parts
+            )
+        )
 
     def contains_exact(self, place_id: str, latitude: float, longitude: float) -> bool:
         """Test the captured point against the canonical polygon without a buffer."""

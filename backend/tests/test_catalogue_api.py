@@ -1,17 +1,137 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
+import json
 import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import psycopg
 import pytest
+from fastapi import Response
 from fastapi.testclient import TestClient
 
+import backend.app.main as api
 from backend.app.achievements import achievements
 from backend.app.catalogue import normalize_categories, normalize_visit_filter
-from backend.app.main import app
+from backend.app.claims import BoundaryRegistry, get_boundary_registry
+from backend.app.main import app, settings
+
+
+def test_viewport_boundary_route_returns_all_intersections_with_gzip_and_etag(
+    tmp_path, monkeypatch
+) -> None:
+    api._serialized_viewport_boundaries.cache_clear()
+
+    def polygon(place_id: str, west: float, south: float, east: float, north: float):
+        return {
+            "type": "Feature",
+            "properties": {"id": place_id, "category": "regional"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [west, south],
+                    [east, south],
+                    [east, north],
+                    [west, north],
+                    [west, south],
+                ]],
+            },
+        }
+
+    features = [
+        polygon(f"viewport-visible-{index}", -123 + index * 0.01, 49, -122.995 + index * 0.01, 49.005)
+        for index in range(60)
+    ]
+    features.extend(
+        [
+            polygon("edge-park", -123.2, 48.8, -122.8, 49.2),
+            polygon("hidden-park", -123.2, 48.8, -122.8, 49.2),
+            polygon("outside-park", -120, 48, -119.9, 48.1),
+        ]
+    )
+    boundary_path = tmp_path / "viewport-boundaries.geojson"
+    boundary_path.write_text(
+        json.dumps({"type": "FeatureCollection", "features": features}),
+        encoding="utf-8",
+    )
+    registry = BoundaryRegistry(boundary_path)
+    visible_ids = {
+        *(f"viewport-visible-{index}" for index in range(60)),
+        "edge-park",
+        "outside-park",
+    }
+    monkeypatch.setattr(api, "get_boundary_registry", lambda _enabled: registry)
+
+    class FakeCursor:
+        def __init__(self, ids):
+            self.rows = [{"id": place_id} for place_id in ids]
+
+        def fetchall(self):
+            return self.rows
+
+    class FakeConnection:
+        def execute(self, query, params=()):
+            if "WHERE p.id = ANY(%s)" in query:
+                requested_ids = params[0]
+                return FakeCursor(place_id for place_id in requested_ids if place_id in visible_ids)
+            return FakeCursor(visible_ids)
+
+    conn = FakeConnection()
+
+    def get_viewport(*, bounds, accept_encoding="", if_none_match=""):
+        west, south, east, north = bounds
+        return api.get_map_boundaries(
+            Response(),
+            place_id=None,
+            place_id_camel=None,
+            west=west,
+            south=south,
+            east=east,
+            north=north,
+            accept_encoding=accept_encoding,
+            if_none_match=if_none_match,
+            conn=conn,
+        )
+
+    response = get_viewport(bounds=(-180, -90, 180, 90), accept_encoding="gzip")
+    payload = json.loads(gzip.decompress(response.body))
+    returned_ids = {item["properties"]["id"] for item in payload["features"]}
+    assert response.status_code == 200
+    assert response.headers["Content-Encoding"] == "gzip"
+    assert response.headers["Vary"] == "Accept-Encoding"
+    assert payload["count"] == 62
+    assert len(returned_ids) > 50
+    assert "hidden-park" not in returned_ids
+    assert "outside-park" in returned_ids
+    assert api._serialized_viewport_boundaries.cache_info().misses == 1
+    assert api._serialized_viewport_boundaries.cache_info().maxsize == 4
+
+    edge_response = get_viewport(bounds=(-123.19, 48.95, -123.15, 49.05))
+    assert {
+        item["properties"]["id"]
+        for item in json.loads(edge_response.body)["features"]
+    } == {"edge-park"}
+    assert api._serialized_viewport_boundaries.cache_info().misses == 2
+
+    same_boundary_set = get_viewport(
+        bounds=(-124, 47, -119, 50),
+        accept_encoding="gzip",
+    )
+    assert same_boundary_set.headers["ETag"] == response.headers["ETag"]
+    assert api._serialized_viewport_boundaries.cache_info().hits == 1
+
+    cache_before_304 = api._serialized_viewport_boundaries.cache_info()
+    unchanged = get_viewport(
+        bounds=(-180, -90, 180, 90),
+        if_none_match=response.headers["ETag"],
+    )
+    assert unchanged.status_code == 304
+    cache_after_304 = api._serialized_viewport_boundaries.cache_info()
+    assert cache_after_304.hits == cache_before_304.hits + 1
+    assert cache_after_304.misses == cache_before_304.misses
+    api._serialized_viewport_boundaries.cache_clear()
 
 
 def test_catalogue_filter_normalization_accepts_multi_category_and_visit_aliases() -> None:
@@ -209,6 +329,8 @@ def test_map_sampling_search_and_progress_are_bounded_and_identity_aware() -> No
                 params={"place_id": "provincial-goldstream-park"},
             )
             assert boundary_page.status_code == 200, boundary_page.text
+            assert "Content-Encoding" not in boundary_page.headers
+            assert "ETag" not in boundary_page.headers
             assert {
                 feature["properties"]["id"]
                 for feature in boundary_page.json()["features"]
@@ -218,6 +340,55 @@ def test_map_sampling_search_and_progress_are_bounded_and_identity_aware() -> No
                 params=[("place_id", place_ids[0])] * 51,
             )
             assert over_limit.status_code == 400
+
+            viewport_boundaries = client.get(
+                "/api/map/boundaries",
+                params={
+                    **broad_bounds,
+                    "category": "national",
+                    "visited": "visited",
+                },
+                headers={"Accept-Encoding": "gzip"},
+            )
+            assert viewport_boundaries.status_code == 200
+            assert viewport_boundaries.headers["Content-Encoding"] == "gzip"
+            assert viewport_boundaries.headers["Vary"] == "Accept-Encoding"
+            assert viewport_boundaries.headers["Cache-Control"] == "public, max-age=300"
+            viewport_boundary_ids = {
+                feature["properties"]["id"]
+                for feature in viewport_boundaries.json()["features"]
+            }
+            canonical_boundary_ids = get_boundary_registry(
+                settings.staging_field_places_enabled
+            ).place_ids
+            expected_boundary_ids = {
+                place["id"]
+                for place in all_places
+                if place["id"] in canonical_boundary_ids
+            }
+            assert viewport_boundaries.json()["count"] == len(viewport_boundary_ids)
+            assert len(viewport_boundary_ids) > 50
+            assert viewport_boundary_ids == expected_boundary_ids
+            unchanged = client.get(
+                "/api/map/boundaries",
+                params={
+                    **broad_bounds,
+                    "category": "national",
+                    "visited": "visited",
+                },
+                headers={"If-None-Match": viewport_boundaries.headers["ETag"]},
+            )
+            assert unchanged.status_code == 304
+            incomplete_bounds = client.get(
+                "/api/map/boundaries",
+                params={"west": -180},
+            )
+            assert incomplete_bounds.status_code == 400
+            mixed_boundary_modes = client.get(
+                "/api/map/boundaries",
+                params={**broad_bounds, "place_id": place_ids[0]},
+            )
+            assert mixed_boundary_modes.status_code == 400
 
             # A viewport with one fixture returns the complete sparse result.
             sparse = client.get(
