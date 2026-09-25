@@ -1,4 +1,5 @@
 import cataloguePlaceImages from "./place-images.catalogue.json";
+import galleryPlaceImages from "./place-images.gallery.json";
 
 export type PlaceImageAsset = {
   src: string;
@@ -285,6 +286,18 @@ export const PLACE_IMAGES: Readonly<Record<string, PlaceImageRecord>> = {
 
 export const PLACE_IMAGE_COUNT = Object.keys(PLACE_IMAGES).length;
 
+export const PLACE_IMAGE_GALLERY: Readonly<Record<string, readonly PlaceImageRecord[]>> =
+  galleryPlaceImages as Record<string, PlaceImageRecord[]>;
+
+export const PLACE_IMAGE_RECORD_COUNT = PLACE_IMAGE_COUNT
+  + Object.values(PLACE_IMAGE_GALLERY).reduce((total, images) => total + images.length, 0);
+
 export function getPlaceImage(placeId: string): PlaceImageRecord | undefined {
   return PLACE_IMAGES[placeId];
+}
+
+export function getPlaceImages(placeId: string): readonly PlaceImageRecord[] {
+  const primary = getPlaceImage(placeId);
+  if (!primary) return [];
+  return [primary, ...(PLACE_IMAGE_GALLERY[placeId] ?? [])];
 }
