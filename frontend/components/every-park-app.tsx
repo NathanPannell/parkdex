@@ -29,6 +29,7 @@ import type { Visit } from "@/lib/account";
 import { getVisitorInformation } from "@/lib/visitor-information";
 import { getPlaceDescriptionSource } from "@/lib/place-description-sources";
 import { formatPlaceArea, shortOriginForPlace } from "@/lib/place-detail-facts";
+import { makeOverviewLead, PlaceVisitorDetails as PlaceVisitorDetailsView } from "@/components/place-visitor-details";
 import { useParkdexApplication } from "@/lib/use-parkdex-application";
 import { cleanAuthParams, useAccountController } from "@/lib/use-account-controller";
 import type { useGroups } from "@/lib/use-groups";
@@ -214,12 +215,21 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
   const image = images[photoIndex];
   const hasImage = Boolean(image);
   const visitor = getVisitorInformation(place.id);
+  const visitorDetails = place.visitorDetails ?? null;
   const descriptionSource = getPlaceDescriptionSource(place.id);
   const area = formatPlaceArea(place.id);
+  const publishedAreaHectares = visitorDetails?.areaHectares;
+  const publishedArea = publishedAreaHectares !== null && publishedAreaHectares !== undefined && publishedAreaHectares > 0
+    ? publishedAreaHectares < 100
+      ? `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: 2 }).format(publishedAreaHectares)} ha`
+      : `${new Intl.NumberFormat("en-CA", { maximumFractionDigits: publishedAreaHectares / 100 < 10 ? 2 : publishedAreaHectares / 100 < 100 ? 1 : 0 }).format(publishedAreaHectares / 100)} km²`
+    : null;
   const origin = shortOriginForPlace(place) ?? (place.sourceName.trim() || "Source unavailable");
   const firstSentence = place.description.split(/(?<=\.)\s+/)[0];
   const genericDescription = /collection\.$|regional park(?: or conservation area)?\.$|national park reserve\.$|officially named island|^No visitor overview is available/i.test(firstSentence);
-  const placeStory = descriptionSource?.status === "no-overview" || genericDescription ? null : place.description.trim();
+  const curatedStory = descriptionSource?.status === "no-overview" || genericDescription ? null : place.description.trim();
+  const reviewedOverview = visitorDetails?.overview?.trim() || null;
+  const placeStory = curatedStory ?? (reviewedOverview ? makeOverviewLead(reviewedOverview) : null);
   const pullStartY = useRef<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   useEffect(() => {
@@ -232,14 +242,14 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
     <div className="place-sheet-hero" onTouchStart={(event) => { pullStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { if (pullStartY.current === null) return; const distance = event.changedTouches[0]?.clientY - pullStartY.current; pullStartY.current = null; if (distance != null && (expanded ? distance > 45 : distance < -45)) onExpand(); }}><PlaceImage place={place} variant="card" showCredit={false} preload gallery selectedIndex={photoIndex} onSelectedIndexChange={(index) => setPhotoSelection({ placeId: place.id, index })} photoUrl={photoUrl} photoUrls={photoUrls} images={images} /><button className="sheet-pull-handle" onClick={onExpand} aria-label={expanded ? "Collapse place details" : "Open fullscreen place details"} /></div>
     <header className="place-sheet-header"><div><button className={`place-category category-${place.category}`} onClick={() => openCollection(place.category)} aria-label={`Browse ${categoryLabels[place.category]} places`}>{categoryLabels[place.category]}<ChevronRight size={13} /></button><h2 id="place-detail-title">{place.name}</h2></div><button className="sheet-close" onClick={onClose} aria-label="Close place details"><X size={20} /></button></header>
     <div className="place-sheet-content">
-      <div className="place-facts"><span><MapPin size={17} /><span><small>Origin</small><strong>{origin}</strong></span></span>{area && <span><LandPlot size={17} /><span><small>Size</small><strong>{area}</strong></span></span>}</div>
+      <div className="place-facts"><span><MapPin size={17} /><span><small>Origin</small><strong>{origin}</strong></span></span>{publishedArea ? <span aria-label={`Published area${visitorDetails?.source.authority ? ` from ${visitorDetails.source.authority}` : ""}: ${publishedArea}`}><LandPlot size={17} /><span><small>Published area</small><strong>{publishedArea}</strong></span></span> : area && <span aria-label={`Approximate mapped footprint area: ${area}`}><LandPlot size={17} /><span><small>Size</small><strong>{area}</strong></span></span>}</div>
       {showSheetActions && <div className="sheet-actions" data-action-track={authenticated ? "account" : "visit"}>{(visited || legacyVisitCreationAvailable) && <button aria-label={visited ? "Undo visited place" : "Mark as visited"} title={visited ? "Undo visited place" : "Mark as visited"} aria-pressed={visited} disabled={busy} className={`visit-button place-primary-action ${visited ? "is-visited" : ""}`} onClick={onToggle}>{visited ? <RotateCcw size={20} /> : <Check size={20} />}<span className="action-hint">{visited ? "Undo visited" : "Mark visited"}</span></button>}
         {authenticated && <GroupActions place={place} groups={groupsState.groups} busy={groupsState.busy} offline={groupsState.offline} onFeedback={setFeedback} onCreate={async (name, placeIds) => { const created = await groupsState.create(name, placeIds); groupsState.selectGroup(null); return created; }} onAddPlace={groupsState.addPlace} onRemovePlace={groupsState.removePlace} />}
       </div>}
       {((visit?.claim && claimsAvailable) || (!authenticated && typeof recommendClaim === "function")) && recommendClaim && createClaim && uploadPhoto && loadPhoto && removePhoto && <div className="place-primary-action-panel" data-primary-action="visit"><ClaimVisitPanel authenticated={authenticated} place={place} visit={visit} busy={busy} recommendClaim={recommendClaim} createClaim={createClaim} reconcileClaim={reconcileClaim} uploadPhoto={uploadPhoto} loadPhoto={loadPhoto} removePhoto={removePhoto} onClaimed={onClaimed} ownerKey={ownerKey} onOpenPlace={onOpenPlace} /></div>}
       {feedback && <p className={`place-action-feedback ${feedback.kind}`} role={feedback.kind === "error" ? "alert" : "status"}>{feedback.text}</p>}
       {placeStory && <section className="place-story"><h3>About this place</h3>{placeStory.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</section>}
-      <section className="place-visit-info"><h3>Plan your visit</h3>{visitor ? <a className="official-visitor-link" href={visitor.url} target="_blank" rel="noreferrer"><span><strong>Official visitor information</strong><small>Access, facilities and current notices</small></span><ArrowUpRight size={18} /></a> : <p className="place-visitor-unavailable">Official visitor information is not available for this place yet.</p>}</section>
+      <PlaceVisitorDetailsView details={visitorDetails} visitorFallback={visitor} leadOverview={placeStory} />
       <button className="place-collection-link" onClick={() => openCollection(undefined, authorityForPlace(place))}>Browse more from {origin}<ChevronRight size={17} /></button>
       <details className="place-credits"><summary>Map data and photo credits<ChevronDown size={17} /></summary><div><p className="place-pin-note">Map pin: {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}. The pin may be within the park rather than at an entrance.</p><PlaceProvenance place={place} boundaryState={boundaryState} />{descriptionSource && <p className="place-description-source"><a href={descriptionSource.sourceUrl} target="_blank" rel="noreferrer" title={`${descriptionSource.sourceTitle}, ${descriptionSource.sourceSection}`}>{descriptionSource.status === "no-overview" ? "Visitor overview check" : "Description source"}: {descriptionSource.sourceName}</a></p>}{image && <p className="place-photo-credit">Photo by <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.originalUrl} target="_blank" rel="noreferrer">Source image</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a> · Changes: {image.changes}</p>}{!placeStory && <p className="place-listing-note">{place.description}</p>}</div></details>
     </div>

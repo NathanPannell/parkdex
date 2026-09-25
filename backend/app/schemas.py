@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from backend.app.visitor_details import PlaceVisitorDetails
+
 PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
 
@@ -26,6 +28,11 @@ class Place(BaseModel):
     source_url: str = Field(serialization_alias="sourceUrl")
     source_name: str = Field(serialization_alias="sourceName")
     source_id: str | None = Field(default=None, serialization_alias="sourceId")
+    visitor_details: PlaceVisitorDetails | None = Field(
+        default=None,
+        serialization_alias="visitorDetails",
+        exclude_if=lambda value: value is None,
+    )
 
 
 class VisitClaimCapability(BaseModel):

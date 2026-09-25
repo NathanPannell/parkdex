@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
+import type { PlaceVisitorDetails as PlaceVisitorDetailsRecord } from "@/lib/visitor-details";
 import { LocationCapabilityError, publishNativeAppState, registerNativeCapabilities, type LocationSample } from "@/lib/native-capabilities";
 import { dispatchNativeBack } from "@/lib/native-back";
 import { dismissNotification, getSnapshot } from "@/lib/application-notifications";
@@ -17,6 +18,28 @@ const goldstream: Place = { ...place, id: "provincial-goldstream-park", name: "G
 const cormorant: Place = { ...place, id: "island-cormorant-island", name: "Cormorant Island", category: "island", region: "Northern Islands", sourceName: "BC Geographical Names Office" };
 const woss: Place = { ...place, id: "provincial-woss-lake-park", name: "Woss Lake Park", region: "North Island" };
 const defaultPlaces = [place, rathtrevor, national];
+function visitorDetailsRecord(overview: string, areaHectares: number | null = null): PlaceVisitorDetailsRecord {
+  return {
+    schemaVersion: "1.0.0",
+    scope: { kind: "park", matchedName: "Goldstream Park", parentName: null, matchMethod: "reviewed_name" },
+    source: { primaryUrl: "https://bcparks.ca/parks/goldstream/", authority: "BC Parks", kind: "visitor_page", geographicSourceUrl: "https://bcparks.ca/parks/goldstream/", retrievedAt: "2026-09-24T04:00:00Z", status: "partial" },
+    overview,
+    areaHectares,
+    activities: null,
+    facilities: null,
+    access: { directions: null, address: null, transportNotes: null, entryPoints: null },
+    trails: null,
+    maps: null,
+    mapNotes: null,
+    rules: { pets: null, cycling: null, campfires: null, other: null },
+    accessibility: { summary: null, features: null },
+    operations: { hours: null, seasons: null, notes: null },
+    camping: { summary: null, reservationRequired: null, bookingUrl: null, reservationNotes: null, fees: null },
+    contacts: null,
+    background: { history: null, conservation: null, culturalContext: null, wildlife: null },
+    officialUpdatesUrl: null,
+  };
+}
 const journal = {
   places: defaultPlaces.slice(), visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
   account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
@@ -307,6 +330,52 @@ describe("Parkdex navigation", () => {
     expect(document.querySelector(".collection-filter-summary")?.textContent).toContain("Provincial Parks");
     expect(screen.getByRole("button", { name: "Clear active place filters" })).toBeTruthy();
     expect(window.location.pathname).toBe("/places");
+  });
+
+  it("keeps the curated lead, discloses the longer reviewed overview, and uses small published area in hectares", () => {
+    journal.places = [{
+      ...goldstream,
+      visitorDetails: visitorDetailsRecord(
+        "Goldstream protects an old-growth forest near Victoria. The park is known for seasonal salmon runs and waterfalls. Visitors can explore trails beside the river.",
+        0.7,
+      ),
+    }];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search places" }), { target: { value: "Goldstream" } });
+    fireEvent.click(within(document.querySelector<HTMLElement>(".search-results")!).getByRole("button", { name: /Goldstream Park/ }));
+
+    const sheet = screen.getByRole("heading", { name: "Goldstream Park" }).closest(".place-sheet") as HTMLElement;
+    const story = within(sheet).getByRole("heading", { name: "About this place" }).closest("section")!;
+    expect(story.querySelector("p")?.textContent).toBe("A forest park.");
+    const overview = within(sheet).getByText("More about this place", { exact: true }).closest("details")!;
+    expect(overview.open).toBe(false);
+    expect(within(sheet).getByText("Published area")).toBeTruthy();
+    expect(within(sheet).getByLabelText("Published area from BC Parks: 0.7 ha")).toBeTruthy();
+    expect(sheet.querySelector(".place-facts")?.textContent).toContain("0.7 ha");
+    expect(sheet.querySelector(".place-facts")?.textContent).not.toContain("Approx.");
+    expect(within(sheet).getByRole("link", { name: /Official visitor information/ }).getAttribute("href")).toBe("https://bcparks.ca/parks/goldstream/");
+    expect(within(sheet).getByText("Source checked Sep 24, 2026")).toBeTruthy();
+    expect(sheet.querySelector(".place-visit-info")?.textContent).not.toContain("Geographic source");
+
+    fireEvent.click(within(overview).getByText("More about this place"));
+    expect(within(overview).getByText(/The park is known for seasonal salmon runs and waterfalls/)).toBeTruthy();
+  });
+
+  it("uses the reviewed overview when the catalogue story is generic", () => {
+    const overview = "The island has a sheltered harbour and forested shoreline. Visitors can reach the community by ferry.";
+    journal.places = [{
+      ...goldstream,
+      description: "Officially named island.",
+      visitorDetails: visitorDetailsRecord(overview),
+    }];
+    window.history.replaceState({}, "", "/parks/goldstream-park");
+    render(<ParkdexApp apiBaseUrl="" />);
+
+    const sheet = screen.getByRole("heading", { name: "Goldstream Park" }).closest(".place-sheet") as HTMLElement;
+    const story = within(sheet).getByRole("heading", { name: "About this place" }).closest("section")!;
+    expect(story.querySelector("p")?.textContent).toBe(overview);
+    expect(within(sheet).queryByText("More about this place", { exact: true })).toBeNull();
   });
 
   it("shows one concise origin and an unavailable visitor note when no official page is listed", () => {

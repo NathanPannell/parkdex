@@ -176,6 +176,24 @@ def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
         assert groups_payload["isWishlist"] is True
         assert "is_wishlist" not in groups_payload
 
+        hosted_detail = client.post("/mcp", headers=headers, json={
+            "jsonrpc": "2.0", "id": 21, "method": "tools/call",
+            "params": {"name": "get_place_details", "arguments": {"place_id": "provincial-goldstream-park"}},
+        })
+        assert hosted_detail.status_code == 200
+        hosted_detail_payload = json.loads(hosted_detail.json()["result"]["content"][0]["text"])
+        assert hosted_detail_payload["visitorDetails"]["schemaVersion"] == "1.0.0"
+        assert "archiveIds" not in hosted_detail_payload["visitorDetails"]["source"]
+
+        hosted_search = client.post("/mcp", headers=headers, json={
+            "jsonrpc": "2.0", "id": 22, "method": "tools/call",
+            "params": {"name": "search_places", "arguments": {"query": "Goldstream", "limit": 1}},
+        })
+        assert hosted_search.status_code == 200
+        hosted_search_payload = json.loads(hosted_search.json()["result"]["content"][0]["text"])
+        assert hosted_search_payload["places"]
+        assert "visitorDetails" not in hosted_search_payload["places"][0]
+
         created_group = client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 31, "method": "tools/call", "params": {"name": "create_group", "arguments": {"name": "Private MCP group"}}})
         created_payload = json.loads(created_group.json()["result"]["content"][0]["text"])
         assert created_payload["name"] == "Private MCP group" and "placeIds" in created_payload

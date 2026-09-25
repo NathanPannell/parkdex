@@ -80,10 +80,14 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
         found_payload = _payload(found)
         assert found_payload["places"][0]["id"] == place["id"]
         assert found_payload["places"][0]["distanceKm"] == 0
+        assert "visitorDetails" not in found_payload["places"][0]
 
         details = await client.call_tool("get_place_details", {"place_id": place["id"]})
         assert not details.is_error
-        assert _payload(details)["id"] == place["id"]
+        detail_payload = _payload(details)
+        assert detail_payload["id"] == place["id"]
+        assert detail_payload["visitorDetails"]["schemaVersion"] == "1.0.0"
+        assert "archiveIds" not in detail_payload["visitorDetails"]["source"]
 
         wishlist = await client.call_tool("get_wishlist", {})
         assert not wishlist.is_error
@@ -95,6 +99,7 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
         assert not wishlist.is_error
         wishlist_payload = _payload(wishlist)
         assert wishlist_payload["placeIds"] == [place["id"]]
+        assert all("visitorDetails" not in item for item in wishlist_payload["places"])
 
         created = await client.call_tool(
             "create_group",

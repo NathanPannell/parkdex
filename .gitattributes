@@ -2,3 +2,7 @@
 *.geojson text eol=lf
 frontend/public/data/boundaries*.json text eol=lf
 *.sh text eol=lf
+# Reviewed snapshot hashes and generated import must survive Windows checkouts.
+data/park-details.reviewed.json text eol=lf
+data/park-details.reviewed.schema.json text eol=lf
+database/migrations/0027_import_place_visitor_details.sql text eol=lf

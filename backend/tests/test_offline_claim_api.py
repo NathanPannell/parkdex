@@ -70,6 +70,7 @@ def test_offline_grants_bundle_replay_and_reset_are_account_scoped():
             assert summary_place["description"] == ""
             assert summary_place["sourceUrl"] == ""
             assert summary_place["sourceName"]
+            assert "visitorDetails" not in summary_place
             assert summary.json()["visitClaims"] == {
                 "supported": True,
                 "enforcement": api.settings.visit_claim_enforcement,
@@ -79,6 +80,14 @@ def test_offline_grants_bundle_replay_and_reset_are_account_scoped():
             bundle = client.get(f"/api/places/{PLACE_ID}/offline-bundle")
             assert bundle.status_code == 200, bundle.text
             assert bundle.json()["place"]["id"] == PLACE_ID
+            visitor_details = bundle.json()["place"]["visitorDetails"]
+            assert visitor_details["schemaVersion"] == "1.0.0"
+            assert visitor_details["areaHectares"] == 477
+            assert visitor_details["activities"]
+            assert "placeId" not in visitor_details
+            assert "identity" not in visitor_details
+            assert "archiveIds" not in visitor_details["source"]
+            assert "extractionMethod" not in visitor_details["source"]
             assert bundle.json()["boundary"]["type"] == "Feature"
             assert bundle.json()["boundary"]["geometry"]["type"] in {
                 "Polygon",
@@ -90,6 +99,17 @@ def test_offline_grants_bundle_replay_and_reset_are_account_scoped():
             second = register(client, emails[1])
             first_headers = bearer(first["token"])
             second_headers = bearer(second["token"])
+            full_detail = client.get(f"/api/places/{PLACE_ID}", headers=first_headers)
+            assert full_detail.status_code == 200, full_detail.text
+            assert full_detail.json()["visitorDetails"] == visitor_details
+            search = client.get(
+                "/api/places/search",
+                headers=first_headers,
+                params={"query": "Goldstream"},
+            )
+            assert search.status_code == 200, search.text
+            assert search.json()["places"]
+            assert "visitorDetails" not in search.json()["places"][0]
             issued = client.post(
                 "/api/offline-claim-grants", headers=first_headers
             )
