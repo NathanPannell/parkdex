@@ -625,10 +625,10 @@ def guest_progress_state(
 
 @app.get("/api/places", response_model=PlaceCollection)
 def list_places(
-    summary: bool = Query(default=False),
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
     x_collection_key: str | None = Header(default=None),
+    summary: bool = False,
 ):
     identity = resolve_identity(conn, authorization, x_collection_key)
     include_staging_field_places = settings.staging_field_places_enabled
