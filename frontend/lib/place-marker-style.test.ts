@@ -1,18 +1,19 @@
 import { validateStyleMin, type StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
 
-import { CLUSTER_COLOR, PLACE_CATEGORY_COLORS, placeMarkerLayerSpecifications } from "./place-marker-style";
+import { PLACE_CATEGORY_COLORS, placeMarkerLayerSpecifications, placeNameLayerSpecifications } from "./place-marker-style";
 
 describe("place marker map style", () => {
-  const layers = placeMarkerLayerSpecifications();
+  const layers = [...placeMarkerLayerSpecifications(), ...placeNameLayerSpecifications()];
 
-  it("uses one yellow for every cluster and an instant count label", () => {
-    expect(layers.find((layer) => layer.id === "clusters")).toMatchObject({
-      paint: { "circle-color": CLUSTER_COLOR },
-    });
-    expect(layers.find((layer) => layer.id === "cluster-count")).toMatchObject({
-      paint: { "text-opacity-transition": { duration: 0, delay: 0 } },
-    });
+  it("renders individual pins and has no cluster or count layers", () => {
+    expect(layers.map((layer) => layer.id)).toEqual([
+      "place-hit-targets",
+      "place-points",
+      "place-checks",
+      "place-name-labels",
+    ]);
+    expect(layers.some((layer) => layer.id.includes("cluster"))).toBe(false);
   });
 
   it("keeps visible category markers smaller than their touch targets", () => {
@@ -31,10 +32,23 @@ describe("place marker map style", () => {
     });
   });
 
+  it("lets MapLibre hide colliding park names and gives larger areas priority", () => {
+    expect(layers.find((layer) => layer.id === "place-name-labels")).toMatchObject({
+      layout: {
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "symbol-sort-key": ["-", 0, ["get", "areaKm2"]],
+      },
+    });
+  });
+
   it("passes MapLibre style validation", () => {
     const style: StyleSpecification = {
       version: 8,
-      sources: { places: { type: "geojson", data: { type: "FeatureCollection", features: [] } } },
+      sources: {
+        places: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+        "place-names": { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      },
       layers,
     };
     expect(validateStyleMin(style).map((error) => error.message)).toEqual([]);

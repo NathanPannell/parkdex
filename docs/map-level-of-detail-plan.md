@@ -1,5 +1,7 @@
 # Map loading plan for all of BC
 
+The September 24 application-state revision supersedes this plan's clustering recommendations: all pins remain individual at every zoom, with collision-aware labels. Its remaining geometry-delivery recommendations are future performance work.
+
 ## Current cost
 
 The staging catalogue has 1,030 places. `data/places.json` is about 59 KB after local gzip. The four map geometry assets are about 7.28 MB after local gzip: canonical boundaries 2.73 MB, display boundaries 2.67 MB, exploration territories 1.42 MB, and the BC focus mask 0.46 MB. These are local compression estimates, not observed CDN transfer sizes. The display boundaries and territories are already simplified, but the browser still receives whole-province geometry at every zoom. The map browser and Field Guide can also mount roughly 1,030 place rows at once.

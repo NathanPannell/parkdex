@@ -80,8 +80,8 @@ describe("place image manifest", () => {
 
     expect(primary).toBeDefined();
     expect(gallery).toHaveLength(2);
-    expect(gallery[0]).toBe(primary);
-    expect(gallery[1]).toBe(PLACE_IMAGE_GALLERY["provincial-bear-creek-park"]?.[0]);
+    expect(gallery[0]?.detail.src).toBe(primary?.detail.src);
+    expect(gallery[1]?.detail.src).toBe(PLACE_IMAGE_GALLERY["provincial-bear-creek-park"]?.[0]?.detail.src);
     expect(getPlaceImages("provincial-woss-lake-park")).toEqual([]);
   });
 });

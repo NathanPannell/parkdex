@@ -7,7 +7,6 @@ export const PLACE_CATEGORY_COLORS = Object.freeze({
   national: "#7C4DFF",
 });
 
-export const CLUSTER_COLOR = "#F4C84A";
 export const MAP_INK = "#173D32";
 
 const categoryColor: ExpressionSpecification = [
@@ -20,57 +19,19 @@ const categoryColor: ExpressionSpecification = [
   "#F6F0DC",
 ];
 
+/** Each point stays an individual map feature, including coincident points. */
 export function placeMarkerLayerSpecifications(): LayerSpecification[] {
   return [
-    {
-      id: "cluster-hit-targets",
-      type: "circle",
-      source: "places",
-      filter: ["has", "point_count"],
-      paint: {
-        "circle-radius": ["step", ["get", "point_count"], 32, 12, 37, 35, 42],
-        "circle-color": "rgba(0,0,0,0)",
-      },
-    },
-    {
-      id: "clusters",
-      type: "circle",
-      source: "places",
-      filter: ["has", "point_count"],
-      paint: {
-        "circle-color": CLUSTER_COLOR,
-        "circle-radius": ["step", ["get", "point_count"], 20, 12, 25, 35, 30],
-        "circle-stroke-color": MAP_INK,
-        "circle-stroke-width": 3,
-      },
-    },
-    {
-      id: "cluster-count",
-      type: "symbol",
-      source: "places",
-      filter: ["has", "point_count"],
-      layout: {
-        "text-field": ["get", "point_count_abbreviated"],
-        "text-font": ["Noto Sans Bold"],
-        "text-size": 14,
-      },
-      paint: {
-        "text-color": MAP_INK,
-        "text-opacity-transition": { duration: 0, delay: 0 },
-      },
-    },
     {
       id: "place-hit-targets",
       type: "circle",
       source: "places",
-      filter: ["!", ["has", "point_count"]],
       paint: { "circle-radius": 30, "circle-color": "rgba(0,0,0,0)" },
     },
     {
       id: "place-points",
       type: "circle",
       source: "places",
-      filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-color": categoryColor,
         "circle-radius": ["case", ["==", ["get", "groupSelected"], 1], 16, ["==", ["get", "visited"], 1], 13, 10],
@@ -82,9 +43,38 @@ export function placeMarkerLayerSpecifications(): LayerSpecification[] {
       id: "place-checks",
       type: "symbol",
       source: "places",
-      filter: ["all", ["!", ["has", "point_count"]], ["==", ["get", "visited"], 1]],
+      filter: ["==", ["get", "visited"], 1],
       layout: { "text-field": "✓", "text-size": 15, "text-font": ["Noto Sans Bold"] },
       paint: { "text-color": "#FFFAF0" },
+    },
+  ];
+}
+
+/** MapLibre hides colliding labels automatically, while visible names remain clickable. */
+export function placeNameLayerSpecifications(): LayerSpecification[] {
+  return [
+    {
+      id: "place-name-labels",
+      type: "symbol",
+      source: "place-names",
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 11, 12, 13],
+        "text-anchor": "top",
+        "text-offset": [0, 1.25],
+        "text-padding": 5,
+        "text-max-width": 18,
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "symbol-sort-key": ["-", 0, ["get", "areaKm2"]],
+      },
+      paint: {
+        "text-color": MAP_INK,
+        "text-halo-color": "#FFFAF0",
+        "text-halo-width": 2,
+        "text-halo-blur": 0.25,
+      },
     },
   ];
 }

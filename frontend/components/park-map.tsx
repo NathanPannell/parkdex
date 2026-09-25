@@ -1,45 +1,33 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Minus, Plus, X } from "lucide-react";
-import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { X } from "lucide-react";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, PaddingOptions, StyleSpecification } from "maplibre-gl";
 
-import { PostcardPrint, type PostcardPhotoState } from "@/components/postcard-print";
+import { PostcardPrint } from "@/components/postcard-print";
+import { postcardMarkerCoordinates } from "@/lib/use-map-presentation";
 import {
-  boundaryFilter,
-  boundaryPlaceIds,
   boundsForPlace,
-  BOUNDARY_DATA_URL,
-  loadBoundaryIndex,
   pickBoundaryPlace,
-  selectedBoundaryFilter,
+  type BoundaryCollection,
   type BoundaryIndex,
   type BoundaryLoadState,
 } from "@/lib/boundaries";
 import { BOUNDARY_DISPLAY_SOURCE_ID, BOUNDARY_SOURCE_ID, boundaryLayerSpecifications } from "@/lib/boundary-style";
 import {
-  initialBoundarySourceReadiness,
-  settleBoundarySourceReadiness,
-  type BoundarySourceKey,
-} from "@/lib/boundary-source-status";
-import { clusterFitForLeaves, fetchClusterLeaves } from "@/lib/cluster-fit";
-import {
   CURRENT_LOCATION_SOURCE_ID,
   currentLocationLayerSpecifications,
-  EXPLORATION_TERRITORY_DATA_URL,
   EXPLORATION_TERRITORY_SOURCE_ID,
   explorationLayerSpecifications,
-  explorationBoundaryFilter,
-  explorationVisitedFilter,
 } from "@/lib/exploration-map-style";
 import { VANCOUVER_ISLAND_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
-import { placeMarkerLayerSpecifications } from "@/lib/place-marker-style";
-import type { Visit } from "@/lib/account";
+import { placeMarkerLayerSpecifications, placeNameLayerSpecifications } from "@/lib/place-marker-style";
+import type { MapViewport, ParkMapMode, RecentPostcard } from "@/lib/map-presentation";
+import type { UseMapPresentationResult } from "@/lib/use-map-presentation";
 import type { Place } from "@/lib/places";
 import { distanceKm } from "@/lib/discovery";
 
 const BOUNDARY_SOURCE = BOUNDARY_SOURCE_ID;
-const BOUNDARY_DISPLAY_DATA_URL = "/data/boundaries-display.v1.geojson";
 const BOUNDARY_SELECTED_LAYERS = ["boundary-selected-fill", "boundary-selected-halo", "boundary-selected-line"] as const;
 const BOUNDARY_VISIBLE_LAYERS = [
   "boundary-island-buffer",
@@ -50,10 +38,6 @@ const BOUNDARY_VISIBLE_LAYERS = [
   "boundary-park-line",
 ] as const;
 
-/**
- * The receipt marker belongs to the close map view. At this zoom the normal
- * place source has expanded its clusters, while the wide map remains quiet.
- */
 export const POSTCARD_MARKER_MIN_ZOOM = 11;
 /**
  * Approximate the compact print's rendered footprint, including its seal and
@@ -66,54 +50,14 @@ export const POSTCARD_MARKER_FOOTPRINT = {
   anchorGap: 28,
 } as const;
 
-export type RecentPostcard = {
-  place: Place;
-  visit: Visit;
-};
-
-export function postcardPhotoKey(ownerKey: string, postcard?: RecentPostcard): string {
-  const hasPhoto = postcard?.visit.claim?.hasPhoto === true;
-  return `${ownerKey}:${postcard?.place.id ?? "none"}:${postcard?.visit.visitedAt ?? "none"}:${hasPhoto ? "photo" : "visit"}`;
-}
-
-export function postcardMarkerCoordinates(postcard?: RecentPostcard): Pick<Place, "latitude" | "longitude"> | null {
-  if (!postcard) return null;
-  const claimed = postcard.visit.claim?.coordinates;
-  if (claimed && Number.isFinite(claimed.latitude) && Number.isFinite(claimed.longitude)) {
-    return { latitude: claimed.latitude, longitude: claimed.longitude };
-  }
-  if (Number.isFinite(postcard.place.latitude) && Number.isFinite(postcard.place.longitude)) {
-    return { latitude: postcard.place.latitude, longitude: postcard.place.longitude };
-  }
-  return null;
-}
-
-export function loadPostcardPhotoUrl(
-  loadPhoto: (placeId: string) => Promise<Blob>,
-  placeId: string,
-  key: string,
-  onLoaded: (url: string, key: string) => void,
-  onFailed: (key: string) => void,
-): () => void {
-  let active = true;
-  let objectUrl: string | null = null;
-  void loadPhoto(placeId).then((blob) => {
-    if (!active) return;
-    objectUrl = URL.createObjectURL(blob);
-    onLoaded(objectUrl, key);
-  }).catch(() => {
-    if (active) onFailed(key);
-  });
-  return () => {
-    active = false;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-  };
-}
+export { postcardMarkerCoordinates, postcardPhotoKey, loadPostcardPhotoUrl } from "@/lib/use-map-presentation";
+export type { RecentPostcard } from "@/lib/map-presentation";
 
 export type ParkMapProps = {
   places: Place[];
   visited: Set<string>;
   mode?: ParkMapMode;
+  presentation: UseMapPresentationResult;
   currentLocation?: MapLocation | null;
   selectedId: string | null;
   selectedIds?: ReadonlySet<string>;
@@ -121,14 +65,13 @@ export type ParkMapProps = {
   showZoomControls?: boolean;
   onSelect: (id: string) => void;
   onBoundaryLoadState?: (state: BoundaryLoadState) => void;
+  onViewportChange?: (viewport: MapViewport) => void;
   recentPostcard?: RecentPostcard;
-  loadPhoto?: (placeId: string) => Promise<Blob>;
-  photoOwnerKey?: string;
   onOpenPostcard?: () => void;
   onDismissPostcard?: () => void;
 };
 
-export type ParkMapMode = "explored" | "discover";
+export type { ParkMapMode } from "@/lib/map-presentation";
 export type MapLocation = {
   latitude: number;
   longitude: number;
@@ -158,7 +101,7 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
   sources: {
     shadedRelief: { type: "raster", tiles: ["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 6 },
     openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
-    focusMask: { type: "geojson", data: "/data/bc-focus-mask.v1.geojson", tolerance: 0 },
+    focusMask: { type: "geojson", data: { type: "FeatureCollection", features: [] }, tolerance: 0 },
   },
   layers: [
     { id: "paper", type: "background", paint: { "background-color": "#f6f0dc" } },
@@ -174,34 +117,6 @@ const FIELD_GUIDE_STYLE: StyleSpecification = {
     { id: "focus-mask", type: "fill", source: "focusMask", paint: { "fill-color": "#6f7773", "fill-opacity": 0.58 } },
   ],
 };
-
-/**
- * Place visibility follows the collection supplied by the parent. The map
- * mode controls the progress overlay only, so explored/discover cannot
- * silently remove unvisited markers or make them unavailable to hit testing.
- */
-export function visiblePlaces(places: Place[], _visited: ReadonlySet<string>, _mode: ParkMapMode) {
-  void _visited;
-  void _mode;
-  return places;
-}
-
-export function collectionData(places: Place[], visited: Set<string>, mode: ParkMapMode, selectedIds: ReadonlySet<string>): GeoJSON.FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: visiblePlaces(places, visited, mode).map((place) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [place.longitude, place.latitude] },
-      properties: {
-        id: place.id,
-        name: place.name,
-        category: place.category,
-        visited: visited.has(place.id) ? 1 : 0,
-        groupSelected: selectedIds.has(place.id) ? 1 : 0,
-      },
-    })),
-  };
-}
 
 function locationData(location: MapLocation | null): GeoJSON.FeatureCollection<GeoJSON.Point> {
   if (!location || !Number.isFinite(location.longitude) || !Number.isFinite(location.latitude)) {
@@ -290,6 +205,17 @@ function cameraSnapshot(map: MapLibreMap): MapCameraSnapshot {
   };
 }
 
+export function mapViewportSnapshot(map: MapLibreMap): MapViewport {
+  const bounds = map.getBounds();
+  return {
+    west: bounds.getWest(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    north: bounds.getNorth(),
+    zoom: map.getZoom(),
+  };
+}
+
 export function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
   const selectors = [
     ".guide-view-switch",
@@ -320,12 +246,6 @@ type PostcardMarkerPosition = {
   top: number;
 };
 
-type PostcardPhoto = {
-  key: string;
-  url?: string;
-  state: PostcardPhotoState;
-};
-
 export function projectPostcardMarker(map: MapLibreMap, place: Pick<Place, "longitude" | "latitude">): PostcardMarkerPosition | null {
   if (!Number.isFinite(place.longitude) || !Number.isFinite(place.latitude) || map.getZoom() < POSTCARD_MARKER_MIN_ZOOM) {
     return null;
@@ -353,63 +273,57 @@ export function projectPostcardMarker(map: MapLibreMap, place: Pick<Place, "long
   }
 }
 
-function addBoundaryLayers(map: MapLibreMap) {
+function addBoundaryLayers(map: MapLibreMap, boundaryData: BoundaryCollection) {
   map.addSource(BOUNDARY_SOURCE, {
     type: "geojson",
-    data: BOUNDARY_DATA_URL,
+    data: boundaryData,
     promoteId: "id",
     attribution: "Boundary geometry: sourced map datasets",
   });
   map.addSource(BOUNDARY_DISPLAY_SOURCE_ID, {
     type: "geojson",
-    data: BOUNDARY_DISPLAY_DATA_URL,
+    data: boundaryData,
     promoteId: "id",
   });
-  const beforeId = "clusters";
+  const beforeId = "place-hit-targets";
   boundaryLayerSpecifications(BOUNDARY_DISPLAY_SOURCE_ID).forEach((layer) => map.addLayer(layer, beforeId));
 }
 
-function updateBoundaryFilters(map: MapLibreMap, places: Place[], selectedId: string | null, selectedIds: ReadonlySet<string> = new Set()) {
+type BoundaryMapFilters = Pick<UseMapPresentationResult, "boundaryFilter" | "islandBoundaryFilter" | "parkBoundaryFilter" | "selectedBoundaryFilter">;
+
+function updateBoundaryFilters(map: MapLibreMap, presentation: BoundaryMapFilters) {
   if (!map.getSource(BOUNDARY_SOURCE)) return;
-  const ids = places.map((place) => place.id);
-  const idsInView = new Set(ids);
   BOUNDARY_VISIBLE_LAYERS.forEach((layer) => {
-    map.setFilter(layer, boundaryFilter(ids, layer.includes("island") ? "island" : "park"));
+    map.setFilter(layer, layer.includes("island") ? presentation.islandBoundaryFilter : presentation.parkBoundaryFilter);
   });
-  map.setFilter("boundary-hit", boundaryFilter(ids));
-  const selected: FilterSpecification = selectedIds.size
-    ? ["in", ["get", "id"], ["literal", [...selectedIds].filter((id) => idsInView.has(id))]]
-    : selectedBoundaryFilter(selectedId, ids);
-  BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, selected));
+  map.setFilter("boundary-hit", presentation.boundaryFilter);
+  BOUNDARY_SELECTED_LAYERS.forEach((layer) => map.setFilter(layer, presentation.selectedBoundaryFilter));
 }
 
 export function ParkMap({
   places,
   visited,
   mode = "explored",
+  presentation,
   currentLocation = null,
   selectedId,
   selectedIds = new Set<string>(),
   resetViewRequest = 0,
-  showZoomControls = true,
   onSelect,
   onBoundaryLoadState,
+  onViewportChange,
   recentPostcard,
-  loadPhoto,
-  photoOwnerKey = "current",
   onOpenPostcard,
   onDismissPostcard,
 }: ParkMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const loadPhotoRef = useRef(loadPhoto);
-  const dataRef = useRef({ places, visited, mode, currentLocation, selectedIds });
+  const dataRef = useRef({ places, visited, mode, currentLocation, selectedIds, presentation });
   const selectedRef = useRef(selectedId);
   const selectRef = useRef(onSelect);
   const boundaryStateRef = useRef(onBoundaryLoadState);
-  const boundaryDataRef = useRef<BoundaryIndex | null>(null);
+  const viewportChangeRef = useRef(onViewportChange);
   const boundaryVisitedRef = useRef<Set<string>>(new Set());
-  const clusterFitRequestRef = useRef(0);
   const overviewCameraRef = useRef<MapCameraSnapshot | null>(null);
   const resetOverviewRef = useRef<(() => void) | null>(null);
   const handledResetRequestRef = useRef(resetViewRequest);
@@ -418,29 +332,42 @@ export function ParkMap({
   const locationAnimationRef = useRef(0);
   const [mapFailed, setMapFailed] = useState(false);
   const [explorationFailed, setExplorationFailed] = useState(false);
-  const [boundaryRevision, setBoundaryRevision] = useState(0);
-  const [mapZoom, setMapZoom] = useState(6);
   const [mapReady, setMapReady] = useState(false);
-  const [postcardPhoto, setPostcardPhoto] = useState<PostcardPhoto>({ key: "", state: "empty" });
   const [postcardMarkerPosition, setPostcardMarkerPosition] = useState<PostcardMarkerPosition | null>(null);
 
-  const postcardPlaceId = recentPostcard?.place.id;
-  const postcardHasPhoto = recentPostcard?.visit.claim?.hasPhoto === true;
   const markerCoordinates = postcardMarkerCoordinates(recentPostcard);
   const postcardMarkerLatitude = markerCoordinates?.latitude;
   const postcardMarkerLongitude = markerCoordinates?.longitude;
-  const currentPostcardPhotoKey = postcardPhotoKey(photoOwnerKey, recentPostcard);
-  const matchingPostcardPhoto = postcardPhoto.key === currentPostcardPhotoKey ? postcardPhoto : null;
-  const canCreatePhotoUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function";
-  const postcardPhotoUrl = matchingPostcardPhoto?.url;
-  const postcardPhotoState: PostcardPhotoState = matchingPostcardPhoto?.state
-    ?? (postcardHasPhoto && loadPhoto && canCreatePhotoUrl ? "loading" : postcardHasPhoto ? "failed" : "empty");
+  const boundaryStatus = presentation.boundaryLoadState.status;
+  const boundaryPlaceIdsKey = [...presentation.boundaryLoadState.placeIds].sort().join("\u0000");
+  const boundaryLoadState = useMemo(() => ({
+    status: boundaryStatus,
+    placeIds: new Set(boundaryPlaceIdsKey ? boundaryPlaceIdsKey.split("\u0000") : []),
+  }), [boundaryStatus, boundaryPlaceIdsKey]);
+  const {
+    placeData,
+    boundaryData,
+    boundaryIds,
+    explorationData,
+    focusMaskData,
+    placeNameData,
+    explorationFilter,
+    explorationEdgeFilter,
+    boundaryFilter,
+    islandBoundaryFilter,
+    parkBoundaryFilter,
+    selectedBoundaryFilter: selectedBoundaryFilterValue,
+    boundaryIndex,
+  } = presentation;
 
-  useEffect(() => { dataRef.current = { places, visited, mode, currentLocation, selectedIds }; }, [places, visited, mode, currentLocation, selectedIds]);
-  useEffect(() => { loadPhotoRef.current = loadPhoto; }, [loadPhoto]);
+  useEffect(() => { dataRef.current = { places, visited, mode, currentLocation, selectedIds, presentation }; }, [places, visited, mode, currentLocation, selectedIds, presentation]);
   useEffect(() => { selectedRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { boundaryStateRef.current = onBoundaryLoadState; }, [onBoundaryLoadState]);
+  useEffect(() => { viewportChangeRef.current = onViewportChange; }, [onViewportChange]);
+  useEffect(() => {
+    boundaryStateRef.current?.(boundaryLoadState);
+  }, [boundaryLoadState, onBoundaryLoadState]);
   useEffect(() => {
     if (handledResetRequestRef.current === resetViewRequest) return;
     handledResetRequestRef.current = resetViewRequest;
@@ -448,24 +375,9 @@ export function ParkMap({
   }, [resetViewRequest]);
 
   useEffect(() => {
-    if (!postcardPlaceId || !postcardHasPhoto || !loadPhotoRef.current || !canCreatePhotoUrl) {
-      return;
-    }
-
-    return loadPostcardPhotoUrl(
-      loadPhotoRef.current,
-      postcardPlaceId,
-      currentPostcardPhotoKey,
-      (url, key) => setPostcardPhoto({ key, url, state: "empty" }),
-      (key) => setPostcardPhoto({ key, state: "failed" }),
-    );
-  }, [canCreatePhotoUrl, currentPostcardPhotoKey, postcardHasPhoto, postcardPlaceId]);
-
-  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     let disposed = false;
     let loadDeadline: number | undefined;
-    let boundaryLoadDeadline: number | undefined;
     let resizeFrame = 0;
     let mapResizeObserver: ResizeObserver | undefined;
     void import("maplibre-gl").then((maplibregl) => {
@@ -480,13 +392,13 @@ export function ParkMap({
         maxZoom: 15,
         fadeDuration: 0,
         attributionControl: false,
+        transformRequest: (url: string) => ({ url, cache: "no-store" }),
       });
       mapRef.current = map;
       setMapReady(true);
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      const setViewDiffers = (differs: boolean) => {
-        viewDiffersRef.current = differs;
-      };
+      const setViewDiffers = (differs: boolean) => { viewDiffersRef.current = differs; };
+      const reportViewport = () => viewportChangeRef.current?.(mapViewportSnapshot(map));
       const moveToOverview = (animated: boolean) => {
         overviewCameraRef.current = overviewCameraSnapshot(map);
         setViewDiffers(false);
@@ -494,165 +406,97 @@ export function ParkMap({
       };
       resetOverviewRef.current = () => moveToOverview(!reduceMotion);
       map.on("moveend", () => {
-        setMapZoom(map.getZoom());
         const overview = overviewCameraRef.current;
         if (overview) setViewDiffers(cameraViewDiffers(cameraSnapshot(map), overview));
+        reportViewport();
       });
+      map.on("resize", reportViewport);
       loadDeadline = window.setTimeout(() => {
-        if (!map.isStyleLoaded()) {
-          setMapFailed(true);
-        }
+        if (!map.isStyleLoaded()) setMapFailed(true);
       }, 12_000);
       let collectionReady = false;
       let boundarySetup = false;
-      let boundarySourceReadiness = initialBoundarySourceReadiness();
-      let reportedBoundaryStatus: BoundaryLoadState["status"] = "loading";
-      const reportBoundaryStatus = (source: BoundarySourceKey, signal: "ready" | "failed") => {
-        const settled = settleBoundarySourceReadiness(boundarySourceReadiness, source, signal);
-        boundarySourceReadiness = settled.sources;
-        const status = settled.status;
-        if (status === "loading") return;
-        if (reportedBoundaryStatus === status) return;
-        reportedBoundaryStatus = status;
-        if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
-        boundaryStateRef.current?.({ status, placeIds: status === "ready" && boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set() });
-      };
-      map.on("sourcedata", (event) => {
-        if (event.sourceId === EXPLORATION_TERRITORY_SOURCE_ID && map.isSourceLoaded(EXPLORATION_TERRITORY_SOURCE_ID)) {
-          setExplorationFailed(false);
-        }
-        if (event.sourceId === BOUNDARY_SOURCE && map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("canonical", "ready");
-        if (event.sourceId === BOUNDARY_DISPLAY_SOURCE_ID && map.isSourceLoaded(BOUNDARY_DISPLAY_SOURCE_ID)) reportBoundaryStatus("display", "ready");
-      });
-      map.on("error", (event) => {
-        const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
-        if (sourceId === EXPLORATION_TERRITORY_SOURCE_ID || event.error?.message.includes(EXPLORATION_TERRITORY_DATA_URL)) {
-          setExplorationFailed(true);
-        }
-        if (sourceId === BOUNDARY_SOURCE || event.error?.message.includes(BOUNDARY_DATA_URL)) reportBoundaryStatus("canonical", "failed");
-        if (sourceId === BOUNDARY_DISPLAY_SOURCE_ID || event.error?.message.includes(BOUNDARY_DISPLAY_DATA_URL)) reportBoundaryStatus("display", "failed");
-      });
-      const setupBoundaries = (index: BoundaryIndex) => {
-        if (boundarySetup || !map.getLayer("clusters")) return;
+
+      const setupBoundaries = () => {
+        if (boundarySetup || !map.getLayer("place-points")) return;
         boundarySetup = true;
-        addBoundaryLayers(map);
-        boundaryLoadDeadline = window.setTimeout(() => {
-          if (!map.isSourceLoaded(BOUNDARY_SOURCE)) reportBoundaryStatus("canonical", "failed");
-          if (!map.isSourceLoaded(BOUNDARY_DISPLAY_SOURCE_ID)) reportBoundaryStatus("display", "failed");
-        }, 12_000);
-        const { places: currentPlaces, visited: currentVisited, mode: currentMode, selectedIds: currentSelectedIds } = dataRef.current;
-        const currentVisiblePlaces = visiblePlaces(currentPlaces, currentVisited, currentMode);
-        updateBoundaryFilters(map, currentVisiblePlaces, selectedRef.current, currentSelectedIds);
-        const availableIds = boundaryPlaceIds(index);
-        currentVisited.forEach((id) => {
-          if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
+        const current = dataRef.current;
+        addBoundaryLayers(map, current.presentation.boundaryData);
+        updateBoundaryFilters(map, current.presentation);
+        current.visited.forEach((id) => {
+          if (current.presentation.boundaryIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
         });
-        boundaryVisitedRef.current = new Set([...currentVisited].filter((id) => availableIds.has(id)));
+        boundaryVisitedRef.current = new Set([...current.visited].filter((id) => current.presentation.boundaryIds.has(id)));
         map.on("click", "boundary-hit", (event: MapLayerMouseEvent) => {
-          if (map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets", "place-hit-targets"] }).length) return;
+          if (map.queryRenderedFeatures(event.point, { layers: ["place-hit-targets", "place-name-labels"] }).length) return;
           const features = map.queryRenderedFeatures(event.point, { layers: ["boundary-hit"] });
-          const current = dataRef.current;
-          const id = pickBoundaryPlace(features, visiblePlaces(current.places, current.visited, current.mode), event.lngLat);
+          const currentData = dataRef.current;
+          const id = pickBoundaryPlace(features, currentData.places, event.lngLat);
           if (id) selectRef.current(id);
         });
         map.on("mouseenter", "boundary-hit", () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", "boundary-hit", () => { map.getCanvas().style.cursor = ""; });
         const selected = selectedRef.current;
-        if (selected && currentPlaces.some((place) => place.id === selected) && containerRef.current) {
-          fitBoundary(map, index, selected, !reduceMotion, measuredSelectionPadding(containerRef.current));
+        if (selected && current.places.some((place) => place.id === selected) && containerRef.current) {
+          const index = current.presentation.boundaryIndex;
+          if (index) fitBoundary(map, index, selected, !reduceMotion, measuredSelectionPadding(containerRef.current));
         }
       };
+
+      map.on("error", (event) => {
+        const sourceId = (event as typeof event & { sourceId?: string }).sourceId;
+        if (sourceId === EXPLORATION_TERRITORY_SOURCE_ID) setExplorationFailed(true);
+        if (sourceId === BOUNDARY_SOURCE || sourceId === BOUNDARY_DISPLAY_SOURCE_ID) {
+          boundaryStateRef.current?.({ status: "failed", placeIds: new Set() });
+        }
+      });
+
       const setupCollection = () => {
         if (collectionReady) return;
         try {
-        collectionReady = true;
-        window.clearTimeout(loadDeadline);
-        setMapFailed(false);
-        const {
-          places: currentPlaces,
-          visited: currentVisited,
-          mode: currentMode,
-          currentLocation: initialLocation,
-          selectedIds: initialSelectedIds,
-        } = dataRef.current;
-        const explorationIds = currentMode === "explored" ? [...currentVisited] : [];
-        map.addSource(EXPLORATION_TERRITORY_SOURCE_ID, {
-          type: "geojson",
-          data: EXPLORATION_TERRITORY_DATA_URL,
-        });
-        explorationLayerSpecifications(explorationIds).forEach((layer) => map.addLayer(layer));
-        map.addSource("places", {
-          type: "geojson",
-          data: collectionData(currentPlaces, currentVisited, currentMode, initialSelectedIds),
-          cluster: true,
-          clusterMaxZoom: 10,
-          clusterRadius: 52,
-        });
-        placeMarkerLayerSpecifications().forEach((layer) => map.addLayer(layer));
-        map.addSource(CURRENT_LOCATION_SOURCE_ID, {
-          type: "geojson",
-          data: locationData(initialLocation),
-        });
-        currentLocationLayerSpecifications().forEach((layer) => map.addLayer(layer));
-        map.on("click", "cluster-hit-targets", async (event: MapLayerMouseEvent) => {
-          const feature = map.queryRenderedFeatures(event.point, { layers: ["cluster-hit-targets"] })[0];
-          const clusterId = Number(feature?.properties?.cluster_id);
-          const pointCount = Number(feature?.properties?.point_count);
-          if (!Number.isFinite(clusterId) || !Number.isFinite(pointCount) || pointCount < 1) return;
-          const source = map.getSource("places") as GeoJSONSource;
-          const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
-          const request = ++clusterFitRequestRef.current;
-          const requestIsCurrent = () => request === clusterFitRequestRef.current
-            && mapRef.current === map
-            && map.getSource("places") === source;
-          try {
-            const leaves = await fetchClusterLeaves(source, clusterId, pointCount);
-            if (!requestIsCurrent()) return;
-            const fit = clusterFitForLeaves(leaves);
-            if (!fit) return;
-            const overlayPadding = measuredCameraPadding(map.getContainer(), true);
-            const mapRect = map.getContainer().getBoundingClientRect();
-            const padding = cameraPaddingWithContentMargin(mapRect, overlayPadding);
-            if (!hasUsableCameraViewport(mapRect, padding)) return;
-            if (fit.coincident) {
-              map.easeTo({ center: fit.center, offset: cameraOffsetForPadding(padding), zoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 480 });
-              return;
-            }
-            map.fitBounds(fit.bounds, { padding, maxZoom: map.getMaxZoom(), duration: reduceMotion ? 0 : 560 });
-          } catch {
-            if (!requestIsCurrent()) return;
-            try {
-              const zoom = await source.getClusterExpansionZoom(clusterId);
-              if (requestIsCurrent()) {
-                const mapRect = map.getContainer().getBoundingClientRect();
-                const padding = cameraPaddingWithContentMargin(mapRect, measuredCameraPadding(map.getContainer(), true));
-                map.easeTo({ center: coordinates, offset: cameraOffsetForPadding(padding), zoom, duration: reduceMotion ? 0 : 420 });
-              }
-            } catch {
-              // The source changed while MapLibre was resolving this cluster.
-            }
-          }
-        });
-        map.on("click", "place-hit-targets", (event: MapLayerMouseEvent) => {
-          const id = event.features?.[0]?.properties?.id;
-          if (typeof id === "string") selectRef.current(id);
-        });
-        ["cluster-hit-targets", "place-hit-targets"].forEach((layer) => {
-          map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
-          map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
-        });
-        moveToOverview(false);
-        mapResizeObserver = new ResizeObserver(() => {
-          window.cancelAnimationFrame(resizeFrame);
-          resizeFrame = window.requestAnimationFrame(() => {
-            map.resize();
-            if (!selectedRef.current && !dataRef.current.selectedIds.size && !viewDiffersRef.current && map.isStyleLoaded()) {
-              moveToOverview(!reduceMotion);
-            }
+          collectionReady = true;
+          window.clearTimeout(loadDeadline);
+          setMapFailed(false);
+          const current = dataRef.current;
+          map.addSource(EXPLORATION_TERRITORY_SOURCE_ID, { type: "geojson", data: current.presentation.explorationData });
+          explorationLayerSpecifications().forEach((layer) => map.addLayer(layer));
+          map.addSource("places", { type: "geojson", data: current.presentation.placeData });
+          placeMarkerLayerSpecifications().forEach((layer) => map.addLayer(layer));
+          map.addSource("place-names", { type: "geojson", data: current.presentation.placeNameData });
+          placeNameLayerSpecifications().forEach((layer) => map.addLayer(layer));
+          map.addSource(CURRENT_LOCATION_SOURCE_ID, { type: "geojson", data: locationData(current.currentLocation) });
+          currentLocationLayerSpecifications().forEach((layer) => map.addLayer(layer));
+          (map.getSource("focusMask") as GeoJSONSource).setData(current.presentation.focusMaskData);
+          map.setFilter("exploration-fill", current.presentation.explorationFilter);
+          map.setFilter("exploration-edge-glow", current.presentation.explorationEdgeFilter);
+          map.setFilter("exploration-edge", current.presentation.explorationEdgeFilter);
+
+          map.on("click", "place-hit-targets", (event: MapLayerMouseEvent) => {
+            const id = event.features?.[0]?.properties?.id;
+            if (typeof id === "string") selectRef.current(id);
           });
-        });
-        mapResizeObserver.observe(map.getContainer());
-        if (boundaryDataRef.current) setupBoundaries(boundaryDataRef.current);
+          map.on("click", "place-name-labels", (event: MapLayerMouseEvent) => {
+            const id = event.features?.[0]?.properties?.id;
+            if (typeof id === "string") selectRef.current(id);
+          });
+          ["place-hit-targets", "place-name-labels"].forEach((layer) => {
+            map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
+            map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
+          });
+
+          setupBoundaries();
+          moveToOverview(false);
+          mapResizeObserver = new ResizeObserver(() => {
+            window.cancelAnimationFrame(resizeFrame);
+            resizeFrame = window.requestAnimationFrame(() => {
+              map.resize();
+              if (!selectedRef.current && !dataRef.current.selectedIds.size && !viewDiffersRef.current && map.isStyleLoaded()) {
+                moveToOverview(!reduceMotion);
+              }
+              reportViewport();
+            });
+          });
+          mapResizeObserver.observe(map.getContainer());
         } catch {
           collectionReady = false;
           setMapFailed(true);
@@ -660,22 +504,12 @@ export function ParkMap({
       };
       map.on("style.load", setupCollection);
       window.setTimeout(setupCollection, 0);
-      void loadBoundaryIndex().then((index) => {
-        if (disposed) return;
-        boundaryDataRef.current = index;
-        setupBoundaries(index);
-        setBoundaryRevision((revision) => revision + 1);
-      }).catch(() => {
-        if (!disposed) reportBoundaryStatus("canonical", "failed");
-      });
     }).catch(() => setMapFailed(true));
     return () => {
       disposed = true;
-      clusterFitRequestRef.current += 1;
       window.cancelAnimationFrame(resizeFrame);
       mapResizeObserver?.disconnect();
       if (loadDeadline) window.clearTimeout(loadDeadline);
-      if (boundaryLoadDeadline) window.clearTimeout(boundaryLoadDeadline);
       mapRef.current?.remove();
       mapRef.current = null;
       setMapReady(false);
@@ -709,25 +543,29 @@ export function ParkMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    clusterFitRequestRef.current += 1;
-    const source = map.getSource("places") as GeoJSONSource | undefined;
-    source?.setData(collectionData(places, visited, mode, selectedIds));
-    const explorationFilter = explorationVisitedFilter(mode === "explored" ? [...visited] : []);
-    const explorationEdgeFilter = explorationBoundaryFilter(mode === "explored" ? [...visited] : []);
+    (map.getSource("places") as GeoJSONSource | undefined)?.setData(placeData);
+    (map.getSource("place-names") as GeoJSONSource | undefined)?.setData(placeNameData);
+    (map.getSource(EXPLORATION_TERRITORY_SOURCE_ID) as GeoJSONSource | undefined)?.setData(explorationData);
+    (map.getSource("focusMask") as GeoJSONSource | undefined)?.setData(focusMaskData);
+    const canonical = map.getSource(BOUNDARY_SOURCE) as GeoJSONSource | undefined;
+    const display = map.getSource(BOUNDARY_DISPLAY_SOURCE_ID) as GeoJSONSource | undefined;
+    canonical?.setData(boundaryData);
+    display?.setData(boundaryData);
     if (map.getLayer("exploration-fill")) map.setFilter("exploration-fill", explorationFilter);
     if (map.getLayer("exploration-edge-glow")) map.setFilter("exploration-edge-glow", explorationEdgeFilter);
     if (map.getLayer("exploration-edge")) map.setFilter("exploration-edge", explorationEdgeFilter);
-    if (!map.getSource(BOUNDARY_SOURCE)) return;
-        updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId, selectedIds);
-    const availableIds = boundaryDataRef.current ? boundaryPlaceIds(boundaryDataRef.current) : new Set<string>();
+    updateBoundaryFilters(map, { boundaryFilter, islandBoundaryFilter, parkBoundaryFilter, selectedBoundaryFilter: selectedBoundaryFilterValue });
+    if (!display) return;
     boundaryVisitedRef.current.forEach((id) => {
-      if (!visited.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: false });
+      if (!visited.has(id) || !boundaryIds.has(id)) {
+        map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: false });
+      }
     });
     visited.forEach((id) => {
-      if (availableIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
+      if (boundaryIds.has(id)) map.setFeatureState({ source: BOUNDARY_DISPLAY_SOURCE_ID, id }, { visited: true });
     });
-    boundaryVisitedRef.current = new Set([...visited].filter((id) => availableIds.has(id)));
-  }, [places, visited, mode, selectedId, selectedIds]);
+    boundaryVisitedRef.current = new Set([...visited].filter((id) => boundaryIds.has(id)));
+  }, [placeData, placeNameData, explorationData, focusMaskData, boundaryData, boundaryIds, explorationFilter, explorationEdgeFilter, boundaryFilter, islandBoundaryFilter, parkBoundaryFilter, selectedBoundaryFilterValue, visited]);
 
   useEffect(() => {
     const source = mapRef.current?.getSource(CURRENT_LOCATION_SOURCE_ID) as GeoJSONSource | undefined;
@@ -766,7 +604,6 @@ export function ParkMap({
   }, [currentLocation]);
 
   useEffect(() => {
-    clusterFitRequestRef.current += 1;
     if ((!selectedId && !selectedIds.size) || !mapRef.current) return;
     const place = selectedId ? places.find((candidate) => candidate.id === selectedId) : undefined;
     const groupPlaces = places.filter((candidate) => selectedIds.has(candidate.id));
@@ -774,7 +611,6 @@ export function ParkMap({
     const map = mapRef.current;
     const container = containerRef.current;
     if (!container) return;
-    updateBoundaryFilters(map, visiblePlaces(places, visited, mode), selectedId, selectedIds);
     let animationFrame = 0;
     const fitSelected = () => {
       window.cancelAnimationFrame(animationFrame);
@@ -784,7 +620,7 @@ export function ParkMap({
         const padding = measuredSelectionPadding(container);
         const mapRect = container.getBoundingClientRect();
         if (!hasUsableCameraViewport(mapRect, padding)) return;
-        if (place && boundaryDataRef.current && fitBoundary(map, boundaryDataRef.current, place.id, !reduceMotion, padding)) return;
+        if (place && boundaryIndex && fitBoundary(map, boundaryIndex, place.id, !reduceMotion, padding)) return;
         if (place) {
           map.easeTo({ center: [place.longitude, place.latitude], offset: cameraOffsetForPadding(padding), zoom: Math.max(map.getZoom(), 9), duration: reduceMotion ? 0 : 500 });
           return;
@@ -811,7 +647,7 @@ export function ParkMap({
       resizeObserver.disconnect();
       window.removeEventListener("resize", fitSelected);
     };
-  }, [selectedId, places, visited, mode, boundaryRevision, selectedIds]);
+  }, [selectedId, places, boundaryIndex, selectedIds]);
 
   const postcard = recentPostcard && postcardMarkerPosition ? (
     <div
@@ -834,11 +670,11 @@ export function ParkMap({
       >
         <PostcardPrint
           place={recentPostcard.place}
-          photoUrl={postcardPhotoUrl ?? undefined}
+          photoUrl={presentation.postcardPhotoState.url}
           visitedAt={recentPostcard.visit.visitedAt}
           sealed
           compact
-          photoState={postcardPhotoState}
+          photoState={presentation.postcardPhotoState.state}
         />
       </div>
       {onDismissPostcard && (
@@ -861,16 +697,6 @@ export function ParkMap({
     <div className="map-wrap">
       <div className="map" ref={containerRef} aria-label="Interactive map of British Columbia parks and major islands" />
       {postcard}
-      {showZoomControls && (
-        <div className="map-zoom-controls" role="group" aria-label="Map zoom">
-          <button type="button" aria-label="Zoom in" title="Zoom in" disabled={!mapReady || mapZoom >= 14.95} onClick={() => mapRef.current?.zoomIn({ duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })}>
-            <Plus size={20} aria-hidden="true" />
-          </button>
-          <button type="button" aria-label="Zoom out" title="Zoom out" disabled={!mapReady || mapZoom <= 3.45} onClick={() => mapRef.current?.zoomOut({ duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220 })}>
-            <Minus size={20} aria-hidden="true" />
-          </button>
-        </div>
-      )}
       {mode === "explored" && explorationFailed && (
         <div className="exploration-status-note" role="status">
           Completion map unavailable. Visited places are still marked.

@@ -5,12 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nativeCamera = vi.hoisted(() => ({ clearRestoredCameraPhoto: vi.fn() }));
 vi.mock("./capacitor-native-capabilities", () => nativeCamera);
-const nativePhoto = vi.hoisted(() => ({ clearPhotoRetryOwner: vi.fn() }));
+const nativePhoto = vi.hoisted(() => ({
+  clearPhotoRetryOwner: vi.fn(),
+  getNativeCapabilities: vi.fn(() => ({})),
+  currentNativeAppState: vi.fn(() => true),
+  NATIVE_APP_STATE_EVENT: "parkdex:native-app-state",
+}));
 vi.mock("./native-capabilities", () => nativePhoto);
+const recentPlaceCache = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn() }));
+vi.mock("./place-cache", () => ({ getRecentPlaceCache: () => recentPlaceCache }));
 
-import { ACCOUNT_TOKEN_KEY } from "./account";
+import { ACCOUNT_TOKEN_KEY, type Visit } from "./account";
+import { markUnresolvedClaim } from "./claim-recovery";
 import { JOURNAL_STORAGE, accountPendingKey, importedGuestKey } from "./field-journal-state";
-import { useFieldJournal } from "./use-field-journal";
+import { catalogueIndex, useFieldJournal } from "./use-field-journal";
 
 const API = "https://api.example.test";
 const KEY = "k".repeat(43);
@@ -66,6 +74,89 @@ function catalogue(visitedIds: string[] = [], completedTrailIds: string[] = []) 
   };
 }
 
+function offlineCatalogue(visitedIds: string[] = []) {
+  return {
+    ...catalogue(visitedIds),
+    visitClaims: { supported: true, enforcement: "required" as const, offlineSupported: true },
+  };
+}
+
+function offlinePlaceBundle() {
+  const boundary = {
+    type: "Feature" as const,
+    properties: {
+      id: PLACE.id,
+      name: PLACE.name,
+      category: PLACE.category,
+      sourceName: PLACE.sourceName,
+      sourceUrl: PLACE.sourceUrl,
+      sourceId: null,
+    },
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [[[-125, 48], [-123, 48], [-123, 50], [-125, 50], [-125, 48]]],
+    },
+  };
+  return { place: PLACE, boundary, boundaryVersion: "v1" };
+}
+
+function storedOfflineQueue(items: Array<Record<string, unknown>> = [{
+  requestId: "offline-request-one",
+  recommendationId: "offline-recommendation-one",
+  ownerId: ACCOUNT.id,
+  grantId: "offline-grant-one",
+  placeId: PLACE.id,
+  location: { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() - 1_000 },
+  boundaryVersion: "v1",
+  createdAt: new Date(Date.now() - 1_000).toISOString(),
+  state: "pending",
+  photoState: "none",
+  attemptCount: 0,
+  pendingConfirmation: { ...CLAIM_CONFIRMATION, pendingSync: true },
+}]) {
+  return {
+    version: 1,
+    ownerId: ACCOUNT.id,
+    items,
+  };
+}
+
+function storedConfirmedOfflineItem({
+  requestId = "offline-confirmed-one",
+  placeId = PLACE.id,
+  photoState = "none",
+}: { requestId?: string; placeId?: string; photoState?: string } = {}) {
+  const confirmation = { ...CLAIM_CONFIRMATION, placeId };
+  return {
+    ...storedOfflineQueue().items[0],
+    requestId,
+    placeId,
+    state: "confirmed",
+    photoState,
+    pendingConfirmation: { ...confirmation, pendingSync: true },
+    serverConfirmation: confirmation,
+  };
+}
+
+function storeOfflineGrant() {
+  window.localStorage.setItem(`parkdex:offline-claims:grants:v1:${encodeURIComponent(ACCOUNT.id)}`, JSON.stringify({
+    version: 1,
+    ownerId: ACCOUNT.id,
+    items: [{
+      id: "offline-grant-one",
+      ownerId: ACCOUNT.id,
+      grantToken: "offline-grant-token",
+      issuedAt: new Date(Date.now() - 1_000).toISOString(),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      boundaryVersion: "v1",
+    }],
+  }));
+}
+
+function offlineQueueStorageKey() {
+  return `parkdex:offline-claims:queue:v1:${encodeURIComponent(ACCOUNT.id)}`;
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -88,6 +179,9 @@ function setNavigatorOnline(value: boolean) {
 beforeEach(() => {
   nativeCamera.clearRestoredCameraPhoto.mockReset();
   nativePhoto.clearPhotoRetryOwner.mockReset();
+  nativePhoto.getNativeCapabilities.mockReset().mockReturnValue({});
+  recentPlaceCache.get.mockReset().mockResolvedValue(null);
+  recentPlaceCache.list.mockReset().mockResolvedValue([]);
   window.localStorage.clear();
   window.localStorage.setItem(JOURNAL_STORAGE.collectionKey, KEY);
 });
@@ -97,6 +191,7 @@ afterEach(() => {
   restoreNavigatorOnline = undefined;
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -119,7 +214,7 @@ describe("useFieldJournal identity and progress races", () => {
   it("retries a fresh guest catalogue as soon as the native network reports online", async () => {
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
-      if (!String(url).endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      if (!String(url).endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
       catalogueAttempts += 1;
       return catalogueAttempts === 1 ? Promise.reject(new TypeError("network not ready")) : json(catalogue());
     }));
@@ -242,7 +337,7 @@ describe("useFieldJournal identity and progress races", () => {
       if (path.endsWith("/api/auth/login")) {
         return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
       }
-      if (!path.endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      if (!path.endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
       if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
         accountCatalogueAttempts += 1;
         return json(catalogue([PLACE.id]));
@@ -279,7 +374,7 @@ describe("useFieldJournal identity and progress races", () => {
       if (path.endsWith("/api/auth/login")) {
         return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
       }
-      if (!path.endsWith("/api/places")) throw new Error(`Unexpected request: ${url}`);
+      if (!path.endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
       if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
         accountCatalogueAttempts += 1;
         return json(catalogue([PLACE.id]));
@@ -310,7 +405,8 @@ describe("useFieldJournal identity and progress races", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.places).toEqual(catalogueIndex([PLACE]));
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.places)!)).toEqual(catalogueIndex([PLACE]));
     expect(result.current.loadError).toBe("Showing your saved field guide offline.");
   });
 
@@ -456,7 +552,7 @@ describe("useFieldJournal identity and progress races", () => {
     let accountCatalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
-      if (path.endsWith("/api/places")) {
+      if (path.endsWith("/api/places?summary=true")) {
         if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
           accountCatalogueAttempts += 1;
           return json(catalogue([PLACE.id]));
@@ -605,6 +701,7 @@ describe("useFieldJournal identity and progress races", () => {
       await resetting;
     });
     expect(resetStarted).toBe(true);
+    expect(result.current.progressRevision).toBe(1);
     expect(result.current.visited).toEqual(new Set());
     expect(result.current.completedTrails).toEqual(new Set());
     expect(result.current.visitTimestamps).toEqual({});
@@ -615,9 +712,10 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.syncMessage).toBe("Your progress has been reset.");
     act(() => vi.advanceTimersByTime(1));
     expect(result.current.syncMessage).toBe("");
+    expect(result.current.progressRevision).toBe(1);
   });
 
-  it("clears account photo retry and restored camera state before resetting remote progress", async () => {
+  it("resets remote progress before clearing account photo retry and restored camera state", async () => {
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
     window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
     const resetCalls: string[] = [];
@@ -639,11 +737,11 @@ describe("useFieldJournal identity and progress races", () => {
 
     expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
     expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalledWith();
-    expect(resetCalls).toEqual(["photo", "camera", "remote"]);
+    expect(resetCalls).toEqual(["remote", "photo", "camera"]);
     expect(result.current.syncMessage).toBe("Your progress has been reset.");
   });
 
-  it("does not reset remote progress or report success when local photo cleanup fails", async () => {
+  it("keeps the reset committed and exposes cleanup retry when local photo cleanup fails", async () => {
     window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
     window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [] }));
     let remoteResetCalled = false;
@@ -660,13 +758,13 @@ describe("useFieldJournal identity and progress races", () => {
 
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    let failure!: Promise<void>;
-    await act(async () => { failure = result.current.resetProgress(); await failure.catch(() => undefined); });
-    await expect(failure).rejects.toThrow("Private photo storage is busy.");
+    await act(() => result.current.resetProgress());
 
-    expect(remoteResetCalled).toBe(false);
-    expect(nativeCamera.clearRestoredCameraPhoto).not.toHaveBeenCalled();
-    expect(result.current.syncMessage).toBe("Private photo storage is busy.");
+    expect(remoteResetCalled).toBe(true);
+    expect(nativeCamera.clearRestoredCameraPhoto).toHaveBeenCalled();
+    expect(result.current.visited).toEqual(new Set());
+    expect(result.current.syncMessage).toMatch(/progress has been reset, but private device cleanup still needs a retry/i);
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountProgressResetCleanup)).not.toBeNull();
   });
 
   it("deletes owner-bound account state while preserving the separate guest journal", async () => {
@@ -687,7 +785,7 @@ describe("useFieldJournal identity and progress races", () => {
         requestId = JSON.parse(String(init.body)).requestId;
         return json({ deleted: true, photoCleanupPending: false });
       }
-      if (path.endsWith("/api/places")) return json({ ...catalogue([PLACE.id], ["account-trail"]), visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json({ ...catalogue([PLACE.id], ["account-trail"]), visits: [CLAIM_VISIT] });
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -726,7 +824,7 @@ describe("useFieldJournal identity and progress races", () => {
         if (deletionAttempts === 1) return Promise.reject(new TypeError("connection lost after the request was sent"));
         return json({ detail: "Session is no longer valid." }, 401);
       }
-      if (path.endsWith("/api/places")) return json(catalogue([PLACE.id]));
+      if (path.endsWith("/api/places?summary=true")) return json(catalogue([PLACE.id]));
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -767,7 +865,7 @@ describe("useFieldJournal identity and progress races", () => {
         accountLoads += 1;
         return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] });
       }
-      if (path.endsWith("/api/places")) return json(catalogue());
+      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -793,7 +891,7 @@ describe("useFieldJournal identity and progress races", () => {
       void _init;
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
-      if (path.endsWith("/api/places")) return json(catalogue());
+      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -818,7 +916,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
-      if (path.endsWith("/api/places")) return json(catalogue());
+      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -841,7 +939,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places")) return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
       if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "PUT") return photoResponse.promise;
       if (path.endsWith("/api/account") && init?.method === "DELETE") return json({ deleted: true, photoCleanupPending: false });
       throw new Error(`Unexpected request: ${url}`);
@@ -943,7 +1041,7 @@ describe("useFieldJournal identity and progress races", () => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return accountSnapshot.promise;
       if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
-      if (path.endsWith("/api/places")) return catalogueSnapshot.promise;
+      if (path.endsWith("/api/places?summary=true")) return catalogueSnapshot.promise;
       return json({});
     }));
 
@@ -956,7 +1054,7 @@ describe("useFieldJournal identity and progress races", () => {
       accountSnapshot.resolve(await json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
       await Promise.resolve();
     });
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places`, expect.anything()));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places?summary=true`, expect.anything()));
     await act(async () => {
       catalogueSnapshot.resolve(await json(catalogue()));
     });
@@ -975,12 +1073,12 @@ describe("useFieldJournal identity and progress races", () => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
       if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
-      if (path.endsWith("/api/places")) return catalogueSnapshot.promise;
+      if (path.endsWith("/api/places?summary=true")) return catalogueSnapshot.promise;
       return json({});
     }));
 
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places`, expect.anything()));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places?summary=true`, expect.anything()));
     expect(result.current.createClaim).toBeUndefined();
     await act(async () => { catalogueSnapshot.resolve(await json(catalogue())); });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -990,6 +1088,578 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.visited.has(PLACE.id)).toBe(true);
     expect(result.current.visitTimestamps[PLACE.id]).toBe(CLAIM_VISIT.visitedAt);
     expect(result.current.visitMetadata[PLACE.id]).toEqual(CLAIM_VISIT);
+  });
+
+  it("keeps offline claims durable across restart and marks a visit only after server acknowledgement", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    const bundle = offlinePlaceBundle();
+    recentPlaceCache.get.mockImplementation(async (placeId: string) => placeId === PLACE.id ? bundle : null);
+    recentPlaceCache.list.mockResolvedValue([bundle]);
+    let apiReachable = true;
+    const offlineClaimRequests: RequestInit[] = [];
+    const fetchMock = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (!apiReachable) return Promise.reject(new TypeError("offline"));
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue());
+      if (path.endsWith("/api/offline-claim-grants")) return json({
+        grantToken: "offline-grant-v1",
+        issuedAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1_000).toISOString(),
+        boundaryVersion: "v1",
+      });
+      if (path.endsWith("/api/offline-claims")) {
+        offlineClaimRequests.push(init ?? {});
+        return json(CLAIM_CONFIRMATION);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${API}/api/offline-claim-grants`, expect.anything()));
+
+    setNavigatorOnline(false);
+    let recommendation!: Awaited<ReturnType<NonNullable<typeof first.result.current.recommendClaim>>>;
+    await act(async () => {
+      recommendation = await first.result.current.recommendClaim!({
+        location: { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() - 1_000 },
+      });
+    });
+    expect(recommendation.status).toBe("recommended");
+    if (recommendation.status !== "recommended") throw new Error("Expected an offline recommendation.");
+    const recommended = recommendation as Extract<typeof recommendation, { status: "recommended" }>;
+    let localConfirmation!: Awaited<ReturnType<NonNullable<typeof first.result.current.createClaim>>>;
+    await act(async () => {
+      localConfirmation = await first.result.current.createClaim!({
+        recommendationToken: recommended.recommendationToken,
+        expectedPlaceId: PLACE.id,
+      });
+    });
+    expect(localConfirmation.pendingSync).toBe(true);
+    expect(first.result.current.visited.has(PLACE.id)).toBe(false);
+    expect(first.result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    await waitFor(() => expect(first.result.current.pendingClaims).toBe(1));
+    let retryFailure!: Promise<void>;
+    await act(async () => {
+      retryFailure = first.result.current.retryPendingClaims();
+      await retryFailure.catch(() => undefined);
+    });
+    await expect(retryFailure).rejects.toThrow(/waiting for a connection/i);
+    expect(first.result.current.pendingClaims).toBe(1);
+    await act(() => first.result.current.logout());
+    expect(first.result.current.authenticated).toBe(true);
+    expect(window.localStorage.getItem(ACCOUNT_TOKEN_KEY)).toBe("account-token");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/auth/logout"))).toBe(false);
+    expect(first.result.current.syncMessage).toMatch(/offline visit is still waiting to sync/i);
+    first.unmount();
+
+    apiReachable = false;
+    const restarted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(restarted.result.current.loading).toBe(false));
+    await waitFor(() => expect(restarted.result.current.pendingClaims).toBe(1));
+    expect(restarted.result.current.visited.has(PLACE.id)).toBe(false);
+
+    apiReachable = true;
+    setNavigatorOnline(true);
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    await waitFor(() => expect(restarted.result.current.visited.has(PLACE.id)).toBe(true));
+    await waitFor(() => expect(restarted.result.current.pendingClaims).toBe(0));
+    expect(restarted.result.current.visitMetadata[PLACE.id]).toEqual(CLAIM_VISIT);
+    expect(offlineClaimRequests).toHaveLength(1);
+    expect(new Headers(offlineClaimRequests[0].headers).get("Authorization")).toBe("Bearer account-token");
+  });
+
+  it("does not recommend an already visited park for another offline claim", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [CLAIM_VISIT],
+    }));
+    const bundle = offlinePlaceBundle();
+    recentPlaceCache.get.mockImplementation(async (placeId: string) => placeId === PLACE.id ? bundle : null);
+    recentPlaceCache.list.mockResolvedValue([bundle]);
+    const fetchMock = vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/offline-claim-grants")) return json({
+        grantToken: "offline-grant-v1",
+        issuedAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        boundaryVersion: "v1",
+      });
+      return json(offlineCatalogue([PLACE.id]));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${API}/api/offline-claim-grants`, expect.anything()));
+    setNavigatorOnline(false);
+
+    let recommendation!: Awaited<ReturnType<NonNullable<typeof result.current.recommendClaim>>>;
+    await act(async () => {
+      recommendation = await result.current.recommendClaim!({
+        location: { latitude: 49, longitude: -124, accuracyMeters: 8, capturedAtEpochMs: Date.now() - 1_000 },
+      });
+    });
+
+    expect(recommendation).toEqual({ status: "none" });
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+  });
+
+  it("discards only rejected offline claims and keeps active photo drafts queued", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [],
+      completedTrailIds: [],
+      visits: [],
+    }));
+    const queueKey = offlineQueueStorageKey();
+    const base = storedOfflineQueue().items[0];
+    const rejected = {
+      ...base,
+      requestId: "offline-rejected-one",
+      state: "rejected",
+      photoState: "pending",
+      lastError: "The server rejected this saved visit.",
+    };
+    const pending = {
+      ...base,
+      requestId: "offline-pending-one",
+      state: "pending",
+      photoState: "pending",
+    };
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue([rejected, pending])));
+    const photoRetry = {
+      save: vi.fn(async () => undefined),
+      load: vi.fn(async () => null),
+      remove: vi.fn(async () => undefined),
+      clearOwner: vi.fn(async () => undefined),
+    };
+    nativePhoto.getNativeCapabilities.mockReturnValue({ photoRetry });
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      return json(offlineCatalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => {
+      expect(result.current.pendingClaims).toBe(1);
+      expect(result.current.rejectedClaimCount).toBe(1);
+    });
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+
+    let removed!: number;
+    await act(async () => { removed = await result.current.discardRejectedClaims(); });
+
+    expect(removed).toBe(1);
+    expect(result.current.pendingClaims).toBe(1);
+    expect(result.current.rejectedClaimCount).toBe(0);
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(photoRetry.remove).not.toHaveBeenCalled();
+    const saved = JSON.parse(window.localStorage.getItem(queueKey) ?? "{}") as { items?: Array<{ requestId: string; state: string; photoState: string }> };
+    expect(saved.items).toEqual([expect.objectContaining({
+      requestId: "offline-pending-one",
+      state: "pending",
+      photoState: "pending",
+    })]);
+  });
+
+  it("cancels only the undone place after saving its false intent and clears its ambiguous marker", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [CLAIM_VISIT],
+    }));
+    const queueKey = offlineQueueStorageKey();
+    const samePlace = storedConfirmedOfflineItem({ photoState: "retry" });
+    const otherPlace = {
+      ...storedOfflineQueue().items[0],
+      requestId: "offline-other-place",
+      placeId: "other-park",
+      state: "pending",
+      pendingConfirmation: { ...CLAIM_CONFIRMATION, placeId: "other-park", pendingSync: true },
+    };
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue([samePlace, otherPlace])));
+    const photoRetry = {
+      save: vi.fn(async () => undefined),
+      load: vi.fn(async () => null),
+      remove: vi.fn(async () => undefined),
+      clearOwner: vi.fn(async () => undefined),
+    };
+    nativePhoto.getNativeCapabilities.mockReturnValue({ photoRetry });
+    const recoveryKey = `parkdex:claim-recovery:v1:${encodeURIComponent(`account:${ACCOUNT.id}`)}`;
+    await markUnresolvedClaim(`account:${ACCOUNT.id}`, PLACE.id, true);
+    let queueAtUndo: string[] = [];
+    const cancelOrdering: string[] = [];
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === accountPendingKey(ACCOUNT.id, "visits")
+        && JSON.parse(value)[PLACE.id]?.visited === false) cancelOrdering.push("false-intent");
+      if (key === queueKey && !(JSON.parse(value).items as Array<{ placeId: string }>).some((item) => item.placeId === PLACE.id)) {
+        cancelOrdering.push("queue-cancelled");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
+        queueAtUndo = (JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items ?? []).map((item: { placeId: string }) => item.placeId);
+        return json({ detail: { message: "Temporarily offline" } }, 503);
+      }
+      return json(offlineCatalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    await act(() => result.current.toggleVisit(PLACE.id));
+
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(cancelOrdering.indexOf("false-intent")).toBeLessThan(cancelOrdering.indexOf("queue-cancelled"));
+    expect(queueAtUndo).toEqual(["other-park"]);
+    expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")[PLACE.id])
+      .toMatchObject({ visited: false });
+    expect(window.localStorage.getItem(recoveryKey)).toBeNull();
+    expect(photoRetry.remove).not.toHaveBeenCalled();
+    expect(JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items.map((item: { placeId: string }) => item.placeId))
+      .toEqual(["other-park"]);
+  });
+
+  it("cancels hydrated offline claims before replaying a saved visit undo", async () => {
+    setNavigatorOnline(true);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [CLAIM_VISIT],
+    }));
+    const queueKey = offlineQueueStorageKey();
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue([
+      storedConfirmedOfflineItem({ photoState: "retry" }),
+    ])));
+    window.localStorage.setItem(accountPendingKey(ACCOUNT.id, "visits"), JSON.stringify({
+      [PLACE.id]: { visited: false, revision: 2 },
+    }));
+    const photoRetry = {
+      save: vi.fn(async () => undefined),
+      load: vi.fn(async () => null),
+      remove: vi.fn(async () => undefined),
+      clearOwner: vi.fn(async () => undefined),
+    };
+    nativePhoto.getNativeCapabilities.mockReturnValue({ photoRetry });
+    const recoveryKey = `parkdex:claim-recovery:v1:${encodeURIComponent(`account:${ACCOUNT.id}`)}`;
+    await markUnresolvedClaim(`account:${ACCOUNT.id}`, PLACE.id, true);
+    let queueAtUndo: string[] = [];
+    const claimRequests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
+        queueAtUndo = (JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items ?? []).map((item: { placeId: string }) => item.placeId);
+        return json({ visited: false, visitedAt: null });
+      }
+      if (path.endsWith("/api/offline-claims")) {
+        claimRequests.push(path);
+        return json(CLAIM_CONFIRMATION);
+      }
+      return json(offlineCatalogue());
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}"))
+      .toEqual({}));
+
+    expect(queueAtUndo).toEqual([]);
+    expect(claimRequests).toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items ?? []).toEqual([]);
+    expect(window.localStorage.getItem(recoveryKey)).toBeNull();
+    expect(photoRetry.remove).not.toHaveBeenCalled();
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+  });
+
+  it("does not let an in-flight offline confirmation re-add a place being undone", async () => {
+    setNavigatorOnline(true);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [CLAIM_VISIT],
+    }));
+    storeOfflineGrant();
+    window.localStorage.setItem(offlineQueueStorageKey(), JSON.stringify(storedOfflineQueue([{
+      ...storedOfflineQueue().items[0],
+      requestId: "offline-in-flight-one",
+      photoState: "none",
+    }])));
+    const receipt = deferred<Response>();
+    let undoCalls = 0;
+    const claimCalls: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/offline-claims")) {
+        claimCalls.push(init ?? {});
+        return receipt.promise;
+      }
+      if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
+        undoCalls += 1;
+        return json({ visited: false, visitedAt: null });
+      }
+      return json(offlineCatalogue([PLACE.id]));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(claimCalls).toHaveLength(1));
+
+    let pendingUndo!: Promise<void>;
+    act(() => { pendingUndo = result.current.toggleVisit(PLACE.id); });
+    await waitFor(() => {
+      expect(result.current.visited.has(PLACE.id)).toBe(false);
+      expect(JSON.parse(window.localStorage.getItem(accountPendingKey(ACCOUNT.id, "visits")) ?? "{}")[PLACE.id])
+        .toMatchObject({ visited: false });
+    });
+    expect(undoCalls).toBe(0);
+
+    await act(async () => {
+      receipt.resolve(await json(CLAIM_CONFIRMATION));
+      await pendingUndo;
+    });
+
+    expect(undoCalls).toBe(1);
+    expect(result.current.visited.has(PLACE.id)).toBe(false);
+    expect(result.current.visitMetadata[PLACE.id]).toBeUndefined();
+    expect(JSON.parse(window.localStorage.getItem(offlineQueueStorageKey()) ?? "{}").items ?? []).toEqual([]);
+  });
+
+  it("cancels queued photo retry before remote photo removal while keeping its confirmed visit", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    const visitWithPhoto: Visit = {
+      ...CLAIM_VISIT,
+      claim: { ...CLAIM_VISIT.claim, hasPhoto: true },
+    };
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [visitWithPhoto],
+    }));
+    const queueKey = offlineQueueStorageKey();
+    const samePlace = storedConfirmedOfflineItem({ photoState: "retry" });
+    const otherPlace = {
+      ...storedOfflineQueue().items[0],
+      requestId: "offline-other-place",
+      placeId: "other-park",
+      state: "pending",
+      pendingConfirmation: { ...CLAIM_CONFIRMATION, placeId: "other-park", pendingSync: true },
+    };
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue([samePlace, otherPlace])));
+    const sequence: string[] = [];
+    const photoRetry = {
+      save: vi.fn(async () => undefined),
+      load: vi.fn(async () => null),
+      remove: vi.fn(async () => { sequence.push("local-photo"); }),
+      clearOwner: vi.fn(async () => undefined),
+    };
+    nativePhoto.getNativeCapabilities.mockReturnValue({ photoRetry });
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [visitWithPhoto] });
+      if (path.endsWith("/api/places?summary=true")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
+      if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "DELETE") {
+        sequence.push("remote-photo");
+        const rows = JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items as Array<{ placeId: string; state: string; photoState: string }>;
+        expect(rows).toEqual([
+          expect.objectContaining({ placeId: PLACE.id, state: "confirmed", photoState: "none" }),
+          expect.objectContaining({ placeId: "other-park", state: "pending" }),
+        ]);
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return json(offlineCatalogue([PLACE.id]));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.removeVisitPhoto!(PLACE.id));
+
+    expect(sequence).toEqual(["local-photo", "remote-photo"]);
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id].claim?.hasPhoto).toBe(false);
+  });
+
+  it("skips remote photo deletion when private retry bytes cannot be removed", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    const visitWithPhoto: Visit = {
+      ...CLAIM_VISIT,
+      claim: { ...CLAIM_VISIT.claim, hasPhoto: true },
+    };
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({
+      account: ACCOUNT,
+      visitedIds: [PLACE.id],
+      completedTrailIds: [],
+      visits: [visitWithPhoto],
+    }));
+    const queueKey = offlineQueueStorageKey();
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue([
+      storedConfirmedOfflineItem({ photoState: "retry" }),
+    ])));
+    const photoRetry = {
+      save: vi.fn(async () => undefined),
+      load: vi.fn(async () => null),
+      remove: vi.fn(async () => { throw new Error("Private photo storage is busy."); }),
+      clearOwner: vi.fn(async () => undefined),
+    };
+    nativePhoto.getNativeCapabilities.mockReturnValue({ photoRetry });
+    let remoteDeletes = 0;
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [visitWithPhoto] });
+      if (path.endsWith("/api/places?summary=true")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
+      if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "DELETE") {
+        remoteDeletes += 1;
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return json(offlineCatalogue([PLACE.id]));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let removal!: Promise<void>;
+    await act(async () => {
+      removal = result.current.removeVisitPhoto!(PLACE.id);
+      await removal.catch(() => undefined);
+    });
+
+    await expect(removal).rejects.toThrow("Private photo storage is busy.");
+    expect(photoRetry.remove).toHaveBeenCalledWith(`account:${ACCOUNT.id}`, PLACE.id);
+    expect(remoteDeletes).toBe(0);
+    expect(JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items).toEqual([
+      expect.objectContaining({ placeId: PLACE.id, state: "confirmed", photoState: "none" }),
+    ]);
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(result.current.visitMetadata[PLACE.id].claim?.hasPhoto).toBe(true);
+  });
+
+  it("keeps the offline claim and photo queue when a server progress reset fails", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] }));
+    const queueKey = offlineQueueStorageKey();
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue()));
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/account/progress")) return json({ detail: { message: "Temporary reset failure" } }, 503);
+      return json(catalogue([PLACE.id]));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.pendingClaims).toBe(1));
+
+    let resetFailure!: Promise<void>;
+    await act(async () => {
+      resetFailure = result.current.resetProgress();
+      await resetFailure.catch(() => undefined);
+    });
+    await expect(resetFailure).rejects.toThrow();
+
+    expect(result.current.visited.has(PLACE.id)).toBe(true);
+    expect(window.localStorage.getItem(queueKey)).not.toBeNull();
+    expect(nativePhoto.clearPhotoRetryOwner).not.toHaveBeenCalled();
+  });
+
+  it("does not restore old journal progress when reset cleanup fails after server confirmation", async () => {
+    setNavigatorOnline(false);
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] }));
+    const queueKey = offlineQueueStorageKey();
+    const recoveryKey = `parkdex:claim-recovery:v1:${encodeURIComponent(`account:${ACCOUNT.id}`)}`;
+    window.localStorage.setItem(queueKey, JSON.stringify(storedOfflineQueue()));
+    await markUnresolvedClaim(`account:${ACCOUNT.id}`, PLACE.id, true);
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/account/progress") && init?.method === "DELETE") return Promise.resolve(new Response(null, { status: 204 }));
+      return json(catalogue([PLACE.id]));
+    }));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.pendingClaims).toBe(1));
+    let failQueueRemoval = true;
+    const originalRemoveItem = Storage.prototype.removeItem;
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, key: string) {
+      if (key === queueKey && failQueueRemoval) {
+        failQueueRemoval = false;
+        throw new Error("Offline queue storage is busy.");
+      }
+      return originalRemoveItem.call(this, key);
+    });
+
+    await act(() => result.current.resetProgress());
+
+    expect(result.current.visited).toEqual(new Set());
+    expect(result.current.visitMetadata).toEqual({});
+    expect(result.current.syncMessage).toMatch(/progress has been reset, but private device cleanup still needs a retry/i);
+    expect(window.localStorage.getItem(queueKey)).not.toBeNull();
+    expect(window.localStorage.getItem(recoveryKey)).not.toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.accountSnapshot) ?? "{}").visitedIds).toEqual([]);
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountProgressResetCleanup)).not.toBeNull();
+
+    await act(() => result.current.retrySync());
+    expect(window.localStorage.getItem(queueKey)).toBeNull();
+    expect(window.localStorage.getItem(recoveryKey)).toBeNull();
+    expect(window.localStorage.getItem(JOURNAL_STORAGE.accountProgressResetCleanup)).toBeNull();
+    expect(nativePhoto.clearPhotoRetryOwner).toHaveBeenCalledWith(`account:${ACCOUNT.id}`);
+    expect(result.current.visited).toEqual(new Set());
+  });
+
+  it("preserves unresolved claim recovery and retry photos across successful sign-out", async () => {
+    window.localStorage.setItem(ACCOUNT_TOKEN_KEY, "account-token");
+    window.localStorage.setItem(JOURNAL_STORAGE.accountSnapshot, JSON.stringify({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
+    const recoveryKey = `parkdex:claim-recovery:v1:${encodeURIComponent(`account:${ACCOUNT.id}`)}`;
+    await markUnresolvedClaim(`account:${ACCOUNT.id}`, PLACE.id, true);
+    const fetchMock = vi.fn((url: string | URL | Request) => {
+      const path = String(url);
+      if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
+      if (path.endsWith("/api/auth/logout")) return Promise.resolve(new Response(null, { status: 204 }));
+      return json(catalogue());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(() => result.current.logout());
+
+    expect(result.current.authenticated).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/auth/logout"))).toBe(true);
+    expect(window.localStorage.getItem(recoveryKey)).not.toBeNull();
+    expect(nativePhoto.clearPhotoRetryOwner).not.toHaveBeenCalled();
   });
 
   it("durably rolls back location_claim_required so an offline restart stays unvisited", async () => {
@@ -1275,7 +1945,7 @@ describe("useFieldJournal identity and progress races", () => {
   });
 
   it("does not send claim or photo requests for a logged-out guest", async () => {
-    const fetchMock = vi.fn((url: string | URL | Request) => String(url).endsWith("/api/places") ? json(catalogue()) : json(catalogue()));
+    const fetchMock = vi.fn((url: string | URL | Request) => String(url).endsWith("/api/places?summary=true") ? json(catalogue()) : json(catalogue()));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     await waitFor(() => expect(result.current.loading).toBe(false));

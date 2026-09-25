@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
 import { LocationCapabilityError, publishNativeAppState, registerNativeCapabilities, type LocationSample } from "@/lib/native-capabilities";
 import { dispatchNativeBack } from "@/lib/native-back";
+import { dismissNotification, getSnapshot } from "@/lib/application-notifications";
 import { createBrowserPhotoRetryStore } from "@/lib/photo-retry";
 import { ParkdexApp } from "./every-park-app";
 
@@ -23,16 +23,20 @@ const journal = {
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
   authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined), deleteAccount: vi.fn(async () => ({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false })),
+  pendingClaims: 0, offlineClaimRecoveryCount: 0, offlineClaimRecoveryMessage: "", rejectedClaimCount: 0,
+  retryPendingClaims: vi.fn(async () => undefined), discardRejectedClaims: vi.fn(async () => 0),
 };
 const groupState = {
   groups: [] as Array<{ id: string; name: string; isWishlist?: boolean; places: Place[] }>, selectedGroupId: null as string | null,
   offline: false, syncStatus: "idle" as "idle" | "syncing" | "offline" | "error", syncMessage: "", pendingMemberships: 0,
-  loading: false, error: "", busy: false, retry: vi.fn(async () => undefined), refreshAfterReset: vi.fn(async () => undefined), selectGroup: vi.fn(), create: vi.fn(async () => null), rename: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), addPlace: vi.fn(async () => undefined), removePlace: vi.fn(async () => undefined),
+  loading: false, error: "", busy: false, resetPreparationPending: false, resetCancellationAllowed: false, resetCleanupRequired: false,
+  retry: vi.fn(async () => undefined), prepareForReset: vi.fn(async () => undefined), cancelResetPreparation: vi.fn(async () => undefined), refreshAfterReset: vi.fn(async () => undefined), selectGroup: vi.fn(), create: vi.fn(async () => null), rename: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), addPlace: vi.fn(async () => undefined), removePlace: vi.fn(async () => undefined),
 };
 let restoreNative: () => void = () => undefined;
 
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
+vi.mock("@/lib/use-map-presentation", () => ({ useMapPresentation: () => ({}) }));
 vi.mock("@/lib/photo-processing", () => ({
   isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
   normalizeVisitPhoto: vi.fn(async (photo) => photo),
@@ -40,7 +44,7 @@ vi.mock("@/lib/photo-processing", () => ({
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showZoomControls = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showZoomControls?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button>{showZoomControls && <><button>Zoom in</button><button>Zoom out</button></>}</div> }));
 beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
-afterEach(() => { vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.syncMessage = ""; journal.storageUnavailable = false; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { while (getSnapshot().active) dismissNotification(getSnapshot().active?.id); vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.storageUnavailable = false; journal.pendingClaims = 0; journal.offlineClaimRecoveryCount = 0; journal.offlineClaimRecoveryMessage = ""; journal.rejectedClaimCount = 0; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
   it("shows three primary destinations and gives My Dex settings its own route", async () => {
@@ -133,7 +137,7 @@ describe("Parkdex navigation", () => {
     window.history.replaceState({ framework: "preserved" }, "", "/?code=expired&state=expired");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false })))));
     render(<ParkdexApp apiBaseUrl="" />);
-    expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in expired. Please try again.");
+    expect(await screen.findByText("Google sign-in expired. Please try again.")).toBeTruthy();
     expect(window.location.pathname).toBe("/account");
     expect(window.location.search).toBe("");
     expect(window.history.state.framework).toBe("preserved");
@@ -143,9 +147,9 @@ describe("Parkdex navigation", () => {
     expect(window.location.pathname).toBe("/map");
   });
 
-  it("keeps the previous owner cleanup retry visible across logout", async () => {
+  it("preserves owner-scoped photo retry data across logout", async () => {
     const store = createBrowserPhotoRetryStore();
-    const clearOwner = vi.fn().mockRejectedValueOnce(new Error("storage busy")).mockResolvedValueOnce(undefined);
+    const clearOwner = vi.fn().mockResolvedValue(undefined);
     store.clearOwner = clearOwner;
     restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), photoRetry: store });
     journal.authenticated = true;
@@ -155,12 +159,8 @@ describe("Parkdex navigation", () => {
     journal.authenticated = false;
     journal.account = null;
     rerender(<ParkdexApp apiBaseUrl="" />);
-    expect(await screen.findByRole("button", { name: "Retry private photo cleanup" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Retry private photo cleanup" }));
-    await waitFor(() => expect(clearOwner).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry private photo cleanup" })).toBeNull());
-    expect(clearOwner.mock.calls[0]).toEqual(["account:owner"]);
-    expect(clearOwner.mock.calls[1]).toEqual(["account:owner"]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "My Dex" })).toBeTruthy());
+    expect(clearOwner).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("restores a bookmarked place after catalogue initialization (visited: %s)", async (wasVisited) => {
@@ -648,9 +648,30 @@ describe("Parkdex navigation", () => {
     expect(status).toBeTruthy();
     expect(document.querySelectorAll(".connection-status")).toHaveLength(1);
     expect(status?.getAttribute("role")).toBe("status");
-    expect(status?.querySelector(".connection-note")?.textContent).toContain("Could not load");
+    expect(screen.getByRole("alert").textContent).toContain("Could not load the catalogue.");
     expect(status?.querySelector(".sync-note")?.textContent).toContain("waiting to sync");
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("keeps rejected offline visits actionable and confirms removing only rejected attempts", async () => {
+    journal.pendingClaims = 1;
+    journal.rejectedClaimCount = 2;
+    journal.offlineClaimRecoveryCount = 1;
+    journal.offlineClaimRecoveryMessage = "One saved visit needs attention.";
+    journal.discardRejectedClaims.mockResolvedValueOnce(2);
+    const confirm = vi.fn((message: string) => message.length > 0);
+    vi.stubGlobal("confirm", confirm);
+    render(<ParkdexApp apiBaseUrl="" />);
+
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain("1 saved visit is waiting to sync on this device.");
+    expect(status.textContent).toContain("2 saved visits were rejected and need attention.");
+    expect(within(status).getByRole("button", { name: "Retry visit sync" })).toBeTruthy();
+    fireEvent.click(within(status).getByRole("button", { name: "Dismiss rejected visits" }));
+    await waitFor(() => expect(journal.discardRejectedClaims).toHaveBeenCalledTimes(1));
+    expect(confirm.mock.calls[0]?.[0]).toContain("This removes only rejected attempts.");
+    expect(confirm.mock.calls[0]?.[0]).toContain("waiting to sync");
+    await waitFor(() => expect([getSnapshot().active, ...getSnapshot().queued].some((item) => item?.message === "2 rejected visits were dismissed.")).toBe(true));
   });
 
   it("links place categories, collections, and published boundaries from the place card", () => {
@@ -771,7 +792,9 @@ describe("Parkdex navigation", () => {
 
     await waitFor(() => expect(journal.resetProgress).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Reset all progress?" })).toBeNull());
-    expect(await screen.findByText(/Progress was reset, but saved collection data still needs cleanup/)).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toBe("Progress reset. Some saved collection data still needs cleanup.");
+    expect(await screen.findByText("Saved collection cleanup is still pending.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry collection cleanup" })).toBeTruthy();
   });
 
   it("carries collection restrictions into Map when switching Field Guide views", () => {
@@ -966,7 +989,7 @@ describe("Parkdex navigation", () => {
     window.history.replaceState({}, "", "/?error=access_denied&state=oauth-state");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ googleEnabled: true, emailEnabled: false }), { headers: { "Content-Type": "application/json" } }))));
     render(<ParkdexApp apiBaseUrl="https://api.example.test" />);
-    expect((await screen.findByRole("alert")).textContent).toBe("Google sign-in was cancelled. You can try again.");
+    expect(await screen.findByText("Google sign-in was cancelled. You can try again.")).toBeTruthy();
     expect(window.location.pathname).toBe("/account");
     expect(window.location.search).toBe("");
     expect(window.sessionStorage.getItem("parkdex:google-code-verifier:v1")).toBeNull();
@@ -1304,12 +1327,48 @@ describe("Parkdex navigation", () => {
     expect(createClaim).not.toHaveBeenCalled();
     expect(uploadVisitPhoto).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
-    await waitFor(() => expect(createClaim).toHaveBeenCalledWith({ recommendationToken: "signed", expectedPlaceId: place.id }));
+    await waitFor(() => expect(createClaim).toHaveBeenCalledWith({ recommendationToken: "signed", expectedPlaceId: place.id, photoExpected: true }));
     await waitFor(() => expect(uploadVisitPhoto).toHaveBeenCalledWith(place.id, photo));
     expect(await screen.findByRole("heading", { name: "You were here." })).toBeTruthy();
     expect(await screen.findByRole("button", { name: /Back to (?:my )?map/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /See my collection|Back to (?:my )?account/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Claim my badge" })).toBeNull();
+  });
+
+  it("keeps a queued offline claim out of confirmed progress and badge celebration", async () => {
+    const pendingConfirmation = { placeId: place.id, visited: true as const, visitedCount: 1, visitedAt: "2026-09-08T12:00:00Z", pendingSync: true, claim: { claimedAt: "2026-09-08T12:00:00Z", capturedAt: "2026-09-08T12:00:00Z", coordinates: { latitude: place.latitude, longitude: place.longitude }, accuracyMeters: 8, boundaryVersion: "v1", matchKind: "exact" as const, distanceMeters: 0, hasPhoto: false } };
+    journal.authenticated = true;
+    journal.account = { id: "owner", email: "owner@example.test" };
+    journal.pendingClaims = 1;
+    const createClaim = vi.fn().mockResolvedValue(pendingConfirmation);
+    const recommendClaim = vi.fn().mockResolvedValue({ status: "recommended", recommendationToken: "signed", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: place.id, matchKind: "exact", distanceMeters: 0 } });
+    Object.assign(journal, {
+      visitClaimMode: "compatible",
+      visitMetadata: {},
+      recommendClaim,
+      createClaim,
+      reconcileClaim: vi.fn().mockResolvedValue(null),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn().mockResolvedValue(new Blob()),
+      removeVisitPhoto: vi.fn().mockResolvedValue(undefined),
+    });
+    let publish: ((sample: LocationSample) => void) | undefined;
+    const watchLocation = vi.fn((_options: unknown, onLocation: (sample: LocationSample) => void) => {
+      publish = onLocation;
+      return vi.fn();
+    });
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }), getPhoto: vi.fn(), photoRetry: { save: vi.fn(), load: vi.fn().mockResolvedValue(null), remove: vi.fn(), clearOwner: vi.fn().mockResolvedValue(undefined) }, watchLocation });
+    render(<ParkdexApp apiBaseUrl="" automaticLocationAllowed />);
+    await waitFor(() => expect(watchLocation).toHaveBeenCalledTimes(1));
+    act(() => publish?.({ latitude: place.latitude, longitude: place.longitude, accuracyMeters: 8, capturedAtEpochMs: Date.now() }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log without photo" }));
+    await waitFor(() => expect(createClaim).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getAllByText("Saved on this device. Syncs when online.").length).toBeGreaterThan(0));
+    expect(journal.visited).toEqual(new Set());
+    expect((journal as Record<string, unknown>).visitMetadata).toEqual({});
+    expect(screen.queryByRole("heading", { name: "You were here." })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Claim my badge" })).toBeNull();
+    expect(screen.getByText("1 saved visit is waiting to sync on this device.")).toBeTruthy();
   });
 
   it("keeps a dismissed arrival hidden until the server confirms departure", async () => {

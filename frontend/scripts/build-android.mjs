@@ -1,4 +1,5 @@
 import { runNextBuild } from "./run-next-build.mjs";
+import { pruneAndroidCatalogueAssets } from "./prune-android-catalogue-assets.mjs";
 
 const stagingApiUrl = "https://api-staging-882c.up.railway.app";
 const productionApiUrl = "https://api-production-e72df.up.railway.app";
@@ -58,6 +59,8 @@ if (apiBaseUrl.username || apiBaseUrl.password || apiBaseUrl.pathname !== "/" ||
 const result = await runNextBuild({
   ...process.env,
   NEXT_PUBLIC_API_BASE_URL: apiBaseUrl.origin,
+  NEXT_PUBLIC_ASSET_BASE_URL: apiBaseUrl.origin === productionApiUrl
+    ? "https://web.parkdex.app" : "https://staging.web.parkdex.app",
   NEXT_PUBLIC_FIELD_DIAGNOSTICS: releaseBuild
     ? "0"
     : requestedDiagnostics || (requestedScope === "canonical" ? "0" : "1"),
@@ -65,4 +68,5 @@ const result = await runNextBuild({
   ...(releaseBuild || requestedReleaseTarget ? { PARKDEX_ANDROID_RELEASE_TARGET: releaseTarget } : {}),
   PARKDEX_CATALOGUE_SCOPE: releaseBuild ? "canonical" : requestedScope || "staging",
 });
+if (result === 0) await pruneAndroidCatalogueAssets(new URL("../out/", import.meta.url));
 process.exit(result);

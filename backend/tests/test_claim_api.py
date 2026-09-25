@@ -108,7 +108,11 @@ def test_claim_capability_bridges_old_account_clients_before_enforcement(
 
             monkeypatch.setattr(api.settings, "visit_claim_enforcement", "compatible")
             capability = client.get("/api/places", headers=headers).json()["visitClaims"]
-            assert capability == {"supported": True, "enforcement": "compatible"}
+            assert capability == {
+                "supported": True,
+                "enforcement": "compatible",
+                "offlineSupported": True,
+            }
 
             # The immediately previous authenticated client can still create
             # progress while the claim-aware frontend rolls out.
@@ -133,6 +137,7 @@ def test_claim_capability_bridges_old_account_clients_before_enforcement(
             assert client.get("/api/places", headers=headers).json()["visitClaims"] == {
                 "supported": True,
                 "enforcement": "required",
+                "offlineSupported": True,
             }
             enforced = client.put(
                 f"/api/visits/{place_id}", headers=headers, json={"visited": True}

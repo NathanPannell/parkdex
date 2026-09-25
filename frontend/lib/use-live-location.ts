@@ -358,11 +358,13 @@ export function useLiveClaimRecommendation({
   recommend?: (input: { location: LocationSample }) => Promise<ClaimRecommendation>;
 }) {
   const [state, setState] = useState<RecommendationState>({ recommendation: null, checking: false, error: "" });
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine !== false);
   const requestRef = useRef({ at: 0, sequence: 0 });
   const cooldownUntilRef = useRef(0);
   const inFlightRef = useRef<Promise<ClaimRecommendation | null> | null>(null);
   const latestLocationRef = useRef(location);
   const recommendationRef = useRef(state.recommendation);
+  const previousOnlineRef = useRef(online);
   latestLocationRef.current = location;
   recommendationRef.current = state.recommendation;
 
@@ -420,9 +422,10 @@ export function useLiveClaimRecommendation({
 
   useEffect(() => {
     if (!enabled) return;
+    if (!online) return;
     const timer = window.setInterval(() => void refresh(), RECOMMENDATION_REFRESH_MS + 250);
     return () => window.clearInterval(timer);
-  }, [enabled, refresh]);
+  }, [enabled, online, refresh]);
 
   useEffect(() => {
     if (state.recommendation?.status !== "recommended") return;
@@ -431,27 +434,59 @@ export function useLiveClaimRecommendation({
     return () => window.clearTimeout(timer);
   }, [state.recommendation]);
 
+  const invalidate = useCallback(() => {
+    requestRef.current = { at: 0, sequence: requestRef.current.sequence + 1 };
+    inFlightRef.current = null;
+    recommendationRef.current = null;
+    setState({ recommendation: null, checking: false, error: "" });
+  }, []);
+
   useEffect(() => {
-    const clear = () => {
-      if (document.visibilityState === "hidden" || !navigator.onLine) {
-        requestRef.current = { at: 0, sequence: requestRef.current.sequence + 1 };
-        inFlightRef.current = null;
-        setState({ recommendation: null, checking: false, error: "" });
-      }
-    };
-    document.addEventListener("visibilitychange", clear);
-    window.addEventListener("offline", clear);
+    const updateNetwork = () => setOnline(typeof navigator === "undefined" || navigator.onLine !== false);
+    window.addEventListener("online", updateNetwork);
+    window.addEventListener("offline", updateNetwork);
     return () => {
-      document.removeEventListener("visibilitychange", clear);
-      window.removeEventListener("offline", clear);
+      window.removeEventListener("online", updateNetwork);
+      window.removeEventListener("offline", updateNetwork);
     };
   }, []);
 
+  useEffect(() => {
+    if (previousOnlineRef.current === online) return;
+    previousOnlineRef.current = online;
+    invalidate();
+    if (enabled && location && document.visibilityState !== "hidden" && currentNativeAppState()) void refresh();
+  }, [enabled, invalidate, location, online, refresh]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden" || !currentNativeAppState()) {
+        invalidate();
+      } else {
+        invalidate();
+        if (enabled && location) void refresh();
+      }
+    };
+    const onNativeAppState = (event: Event) => {
+      const active = (event as CustomEvent<{ isActive?: boolean }>).detail?.isActive !== false;
+      if (!active || document.visibilityState === "hidden") {
+        invalidate();
+      } else {
+        invalidate();
+        if (enabled && location) void refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener(NATIVE_APP_STATE_EVENT, onNativeAppState);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener(NATIVE_APP_STATE_EVENT, onNativeAppState);
+    };
+  }, [enabled, invalidate, location, refresh]);
+
   const clear = useCallback(() => {
-    requestRef.current = { at: 0, sequence: requestRef.current.sequence + 1 };
-    inFlightRef.current = null;
-    setState({ recommendation: null, checking: false, error: "" });
-  }, []);
+    invalidate();
+  }, [invalidate]);
 
   return { ...state, refresh, clear };
 }

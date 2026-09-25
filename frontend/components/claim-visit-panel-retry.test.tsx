@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Visit } from "@/lib/account";
 import { registerNativeCapabilities } from "@/lib/native-capabilities";
 import { createBrowserPhotoRetryStore } from "@/lib/photo-retry";
+import { markUnresolvedClaim } from "@/lib/claim-recovery";
 import { ClaimVisitPanel } from "./claim-visit-panel";
 
 const place = { id: "provincial-juan-de-fuca-park", name: "Forest Park", category: "provincial" as const, latitude: 49, longitude: -124, region: "South Island", description: "Forest", sourceUrl: "https://example.test", sourceName: "BC Parks" };
@@ -14,7 +15,7 @@ const confirmation = { placeId: place.id, visited: true as const, visitedCount: 
 
 let restore: () => void = () => undefined;
 
-afterEach(() => { cleanup(); restore(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); window.localStorage.clear(); restore(); vi.restoreAllMocks(); });
 
 async function clickCamera() {
   const button = screen.getByRole("button", { name: "Take an optional visit photo" }) as HTMLButtonElement;
@@ -59,7 +60,7 @@ describe("ClaimVisitPanel durable photo retry", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
     fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
-    expect(await screen.findByText("request lost")).toBeTruthy();
+    expect(await screen.findByText(/Parkdex could not confirm whether your visit saved.*Reconnect before retrying/i)).toBeTruthy();
     await expect(store.load("account:first", place.id).then((value) => value?.file.text())).resolves.toBe("private photo");
 
     first.unmount();
@@ -107,21 +108,56 @@ describe("ClaimVisitPanel durable photo retry", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Retry private photo cleanup" })).toBeNull());
   });
 
-  it("keeps the old owner available for cleanup retry after an ownership cleanup failure", async () => {
+  it("preserves the previous owner's private photo across an account identity change", async () => {
     const store = createBrowserPhotoRetryStore();
-    const clearOwner = vi.fn().mockRejectedValueOnce(new Error("storage busy")).mockResolvedValueOnce(undefined);
+    const photo = new File(["private photo"], "visit.jpg", { type: "image/jpeg" });
+    await store.save("account:first", place.id, { file: photo, mimeType: photo.type });
+    const clearOwner = vi.fn().mockResolvedValue(undefined);
     store.clearOwner = clearOwner;
     const handlers = { authenticated: true, place, busy: false, ownerKey: "account:first", recommendClaim: vi.fn().mockResolvedValue(recommendation), createClaim: vi.fn().mockResolvedValue(confirmation), uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined) };
     restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null), photoRetry: store });
 
     const { rerender } = render(<ClaimVisitPanel {...handlers} />);
     rerender(<ClaimVisitPanel {...handlers} ownerKey="account:second" />);
-    expect(await screen.findByRole("button", { name: "Retry private photo cleanup" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Retry private photo cleanup" }));
-    await waitFor(() => expect(clearOwner).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry private photo cleanup" })).toBeNull());
-    expect(clearOwner.mock.calls[0]).toEqual(["account:first"]);
-    expect(clearOwner.mock.calls[1]).toEqual(["account:first"]);
+    await waitFor(async () => expect(await store.load("account:first", place.id)).not.toBeNull());
+    expect(clearOwner).not.toHaveBeenCalled();
+    expect(screen.queryByText("Photo ready for Forest Park")).toBeNull();
+  });
+
+  it("hydrates a no-photo ambiguous create and keeps retry reconciliation-first", async () => {
+    const store = createBrowserPhotoRetryStore();
+    await markUnresolvedClaim("account:first", place.id, false);
+    const reconcileClaim = vi.fn().mockRejectedValue(new Error("offline"));
+    const recommendClaim = vi.fn().mockResolvedValue(recommendation);
+    const createClaim = vi.fn().mockResolvedValue(confirmation);
+    const handlers = { authenticated: true, place, busy: false, ownerKey: "account:first", recommendClaim, createClaim, reconcileClaim, uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined) };
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null), photoRetry: store });
+
+    render(<ClaimVisitPanel {...handlers} />);
+    expect(await screen.findByRole("button", { name: "Retry saved visit" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry saved visit" }));
+    expect(await screen.findByText(/Reconnect before retrying/)).toBeTruthy();
+    expect(reconcileClaim).toHaveBeenCalledWith(place.id);
+    expect(recommendClaim).not.toHaveBeenCalled();
+    expect(createClaim).not.toHaveBeenCalled();
+  });
+
+  it("keeps an offline detail visit pending without reporting success or offering another check-in", async () => {
+    const onClaimed = vi.fn();
+    const createClaim = vi.fn().mockResolvedValue({ ...confirmation, pendingSync: true });
+    const recommendClaim = vi.fn().mockImplementation(async () => ({ ...recommendation, expiresAt: new Date(Date.now() + 60_000).toISOString() }));
+    const handlers = { authenticated: true, place, busy: false, ownerKey: "account:first", recommendClaim, createClaim, uploadPhoto: vi.fn().mockResolvedValue(undefined), loadPhoto: vi.fn().mockResolvedValue(new Blob(["photo"], { type: "image/jpeg" })), removePhoto: vi.fn().mockResolvedValue(undefined), onClaimed };
+    restore = registerNativeCapabilities({ getCurrentLocation: vi.fn().mockResolvedValue(location), getPhoto: vi.fn().mockResolvedValue(null) });
+
+    render(<ClaimVisitPanel {...handlers} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm this visit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
+
+    expect(await screen.findByText("Saved on this device. Syncs when online.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Confirm this visit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Take an optional visit photo" })).toBeNull();
+    expect(onClaimed).not.toHaveBeenCalled();
+    expect(createClaim).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces transient saved-photo load failures and blocks replacement until recovery", async () => {
@@ -194,7 +230,7 @@ describe("ClaimVisitPanel durable photo retry", () => {
     await expect(store.load("account:first", place.id)).resolves.toBeNull();
   });
 
-  it("clears the previous account's retry when ownership changes", async () => {
+  it("keeps a previous account's private photo fenced when ownership changes", async () => {
     const store = createBrowserPhotoRetryStore();
     const photo = new File(["private photo"], "visit.jpg", { type: "image/jpeg" });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:preview") });
@@ -207,11 +243,14 @@ describe("ClaimVisitPanel durable photo retry", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Use photo" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm this visit" }));
     fireEvent.click(await screen.findByRole("button", { name: "Log this visit" }));
+    await waitFor(() => expect(handlers.createClaim).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledTimes(1));
     await screen.findByText(/photo did not upload/i);
 
     rerender(<ClaimVisitPanel {...handlers} ownerKey="account:second" />);
 
-    await waitFor(async () => expect(await store.load("account:first", place.id)).toBeNull());
+    await waitFor(async () => expect(await store.load("account:first", place.id)).not.toBeNull());
     expect(screen.queryByRole("button", { name: "Retry photo upload" })).toBeNull();
+    expect(screen.queryByText("Photo ready for Forest Park")).toBeNull();
   });
 });

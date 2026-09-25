@@ -12,6 +12,7 @@ export type GroupSyncStatus = "idle" | "syncing" | "offline" | "error";
 
 const GROUPS_FETCH_RETRY_INITIAL_DELAY_MS = 1_000;
 const GROUPS_FETCH_RETRY_MAX_DELAY_MS = 30_000;
+const GROUP_RESET_PREPARATION_TIMEOUT_MS = 15_000;
 
 /** Versioned account-scoped keys keep cached private data separate from guest data. */
 export function accountGroupsCacheKey(accountId: string) {
@@ -21,6 +22,12 @@ export function accountGroupsCacheKey(accountId: string) {
 export function accountGroupsOutboxKey(accountId: string) {
   return `every-park:account-group-memberships:${encodeURIComponent(accountId)}:v1`;
 }
+
+export function accountGroupsResetKey(accountId: string) {
+  return `every-park:account-groups-reset:${encodeURIComponent(accountId)}:v1`;
+}
+
+type GroupResetBarrier = { phase: "prepared" | "committed" };
 
 type GroupState = {
   groups: Group[];
@@ -35,8 +42,13 @@ type GroupState = {
   syncMessage: string;
   /** Number of distinct group/place desired states still awaiting acknowledgement. */
   pendingMemberships: number;
+  resetPreparationPending: boolean;
+  resetCancellationAllowed: boolean;
+  resetCleanupRequired: boolean;
   selectGroup: (id: string | null) => void;
   retry: () => Promise<void>;
+  prepareForReset: () => Promise<void>;
+  cancelResetPreparation: () => Promise<void>;
   refreshAfterReset: () => Promise<void>;
   create: (name: string, placeIds: string[]) => Promise<Group | null>;
   rename: (id: string, name: string) => Promise<void>;
@@ -69,6 +81,20 @@ function isPermanentlyInvalidMembership(error: unknown) {
 
 function isMissingGroup(error: unknown) {
   return error instanceof GroupsApiError && [404, 410].includes(error.status);
+}
+
+function isGroupResetBarrier(value: unknown): value is GroupResetBarrier {
+  return Boolean(value && typeof value === "object" && "phase" in value && (value.phase === "prepared" || value.phase === "committed"));
+}
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error: unknown) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
 }
 
 function compactGroup(group: Group) {
@@ -114,6 +140,9 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const [syncStatus, setSyncStatus] = useState<GroupSyncStatus>(browserIsOffline() ? "offline" : "idle");
   const [syncMessage, setSyncMessage] = useState("");
   const [pendingMemberships, setPendingMemberships] = useState(0);
+  const [resetPreparationPending, setResetPreparationPending] = useState(false);
+  const [resetCancellationAllowed, setResetCancellationAllowed] = useState(false);
+  const [resetCleanupRequired, setResetCleanupRequired] = useState(false);
   const epochRef = useRef(0);
   const requestRef = useRef(request);
   const groupsRef = useRef<Group[]>([]);
@@ -121,6 +150,11 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const [groupsOwner, setGroupsOwner] = useState("");
   const outboxRef = useRef(new GroupOutbox());
   const outboxOwnerRef = useRef("");
+  const resetBarrierRef = useRef<GroupResetBarrier | null>(null);
+  const resetOwnerRef = useRef("");
+  const resetGateRef = useRef(false);
+  const resetCancellationAllowedRef = useRef(false);
+  const activeGroupOperationsRef = useRef(new Set<Promise<void>>());
   const storageRef = useRef<KeyValueStore | null>(null);
   const fetchRetryTimerRef = useRef<{ handle: number; resolve: () => void } | null>(null);
   useEffect(() => { requestRef.current = request; }, [request]);
@@ -146,6 +180,13 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     const target = await getPlatformStorage();
     storageRef.current = target;
     return target;
+  }, []);
+
+  const trackGroupOperation = useCallback(<T,>(operation: Promise<T>) => {
+    const settled = operation.then(() => undefined, () => undefined);
+    activeGroupOperationsRef.current.add(settled);
+    void settled.then(() => activeGroupOperationsRef.current.delete(settled));
+    return operation;
   }, []);
 
   const persistSnapshot = useCallback(async (accountId: string, next: Group[]) => {
@@ -174,6 +215,34 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     outboxOwnerRef.current = accountId;
     setPendingMemberships(next.pendingCount());
     return next;
+  }, [storage]);
+
+  const clearCommittedResetArtifacts = useCallback(async (accountId: string) => {
+    // The committed marker is the safety barrier. Remove both stale snapshots
+    // independently, and remove the barrier only after both removals succeed.
+    // A failed cache removal must never short-circuit outbox cleanup.
+    const target = await storage();
+    outboxRef.current = new GroupOutbox();
+    outboxOwnerRef.current = accountId;
+    setPendingMemberships(0);
+    const [cacheRemoved, outboxRemoved] = await Promise.all([
+      removeStored(target, accountGroupsCacheKey(accountId)),
+      removeStored(target, accountGroupsOutboxKey(accountId)),
+    ]);
+    if (!cacheRemoved || !outboxRemoved) {
+      throw new Error("Private device storage could not finish clearing the saved collections.");
+    }
+    if (!await removeStored(target, accountGroupsResetKey(accountId))) {
+      throw new Error("Private device storage could not finish clearing the saved collections.");
+    }
+    if (resetOwnerRef.current === accountId) {
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      resetCancellationAllowedRef.current = false;
+      setResetCleanupRequired(false);
+    }
   }, [storage]);
 
   const hydrate = useCallback((items: Group[]) => items.map((group) => ({
@@ -303,6 +372,28 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   const load = useCallback(async () => {
     const accountId = identityKey;
     const currentRequest = requestRef.current;
+    if (resetOwnerRef.current && resetOwnerRef.current !== accountId) {
+      resetOwnerRef.current = accountId;
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      resetCancellationAllowedRef.current = false;
+      setResetCleanupRequired(false);
+    } else if (!resetOwnerRef.current) {
+      resetOwnerRef.current = accountId;
+    }
+    if (resetGateRef.current && resetOwnerRef.current === accountId && resetBarrierRef.current?.phase === "prepared") {
+      setCurrentGroups([], accountId);
+      setSelectedGroupId(null);
+      setPendingMemberships(0);
+      setLoading(false);
+      setBusy(false);
+      setResetPreparationPending(true);
+      setSyncStatus("error");
+      setSyncMessage("A progress reset needs to be finished before collection changes can resume.");
+      return;
+    }
     const epoch = ++epochRef.current;
     cancelFetchRetry();
     setRetrying(false);
@@ -323,6 +414,46 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     let outbox: GroupOutbox;
     let cached: Group[];
     try {
+      const target = await storage();
+      const persistedBarrier = await readStored<unknown>(target, accountGroupsResetKey(accountId), null);
+      if (epoch !== epochRef.current) return;
+      if (isGroupResetBarrier(persistedBarrier)) {
+        resetBarrierRef.current = persistedBarrier;
+        resetOwnerRef.current = accountId;
+        resetGateRef.current = true;
+        setCurrentGroups([], accountId);
+        setSelectedGroupId(null);
+        setPendingMemberships(0);
+        setBusy(false);
+        if (persistedBarrier.phase === "prepared") {
+          setResetPreparationPending(true);
+          setResetCancellationAllowed(false);
+          setResetCleanupRequired(false);
+          setLoading(false);
+          setError("");
+          setSyncStatus("error");
+          setSyncMessage("A progress reset needs to be finished before collection changes can resume.");
+          return;
+        }
+        setResetPreparationPending(false);
+        setResetCancellationAllowed(false);
+        resetCancellationAllowedRef.current = false;
+        setResetCleanupRequired(true);
+        setLoading(false);
+        setError("");
+        setSyncStatus("syncing");
+        setSyncMessage("Saved collections are being cleared after the progress reset.");
+        try {
+          await clearCommittedResetArtifacts(accountId);
+        } catch (cleanupError) {
+          if (epoch !== epochRef.current) return;
+          setLoading(false);
+          setError(cleanupError instanceof Error ? cleanupError.message : "Saved collection cleanup is still pending.");
+          setSyncStatus("error");
+          setSyncMessage("Saved collection cleanup is still pending.");
+          return;
+        }
+      }
       const hydrated = await hydrateOutbox(accountId, epoch);
       if (!hydrated || epoch !== epochRef.current) return;
       outbox = hydrated;
@@ -424,7 +555,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
         setBusy(false);
       }
     }
-  }, [apiBaseUrl, authenticated, cancelFetchRetry, drainOutbox, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, setCurrentGroups, storage, waitForFetchRetry]);
+  }, [apiBaseUrl, authenticated, cancelFetchRetry, clearCommittedResetArtifacts, drainOutbox, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, setCurrentGroups, storage, waitForFetchRetry]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -450,6 +581,7 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
   }, [load]);
 
   const mutate = useCallback(async (operation: (request: AuthenticatedRequest) => Promise<Group | void>) => {
+    if (resetGateRef.current) throw new Error("Collection changes are paused while progress is being reset.");
     if (!apiBaseUrl || offline || browserIsOffline()) {
       setOffline(true);
       setSyncStatus("offline");
@@ -486,13 +618,13 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     }
   }, [apiBaseUrl, identityKey, offline, persistSnapshot, setCurrentGroups]);
 
-  const create = useCallback(async (name: string, placeIds: string[]) => {
+  const create = useCallback((name: string, placeIds: string[]) => trackGroupOperation((async () => {
     const result = await mutate((currentRequest) => createGroup(currentRequest, name, placeIds));
     if (result) setSelectedGroupId(result.id);
     return result ?? null;
-  }, [mutate]);
+  })()), [mutate, trackGroupOperation]);
 
-  const rename = useCallback(async (id: string, name: string) => {
+  const rename = useCallback((id: string, name: string) => trackGroupOperation((async () => {
     try {
       await mutate((currentRequest) => updateGroup(currentRequest, id, name));
     } catch (caught) {
@@ -505,9 +637,9 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       }
       throw caught;
     }
-  }, [hydrateOutbox, identityKey, mutate, reconcileGroups]);
+  })()), [hydrateOutbox, identityKey, mutate, reconcileGroups, trackGroupOperation]);
 
-  const remove = useCallback(async (id: string) => {
+  const remove = useCallback((id: string) => trackGroupOperation((async () => {
     const accountId = identityKey;
     const epoch = epochRef.current;
     try {
@@ -531,9 +663,10 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
       if (selectedGroupId === id) setSelectedGroupId(null);
       setPendingMemberships(outbox.pendingCount());
     }
-  }, [hydrateOutbox, identityKey, mutate, persistOutbox, persistSnapshot, reconcileGroups, selectedGroupId, setCurrentGroups]);
+  })()), [hydrateOutbox, identityKey, mutate, persistOutbox, persistSnapshot, reconcileGroups, selectedGroupId, setCurrentGroups, trackGroupOperation]);
 
-  const changeMembership = useCallback(async (groupId: string, placeId: string, included: boolean) => {
+  const changeMembership = useCallback((groupId: string, placeId: string, included: boolean) => trackGroupOperation((async () => {
+    if (resetGateRef.current) throw new Error("Collection changes are paused while progress is being reset.");
     const accountId = identityKey;
     const epoch = epochRef.current;
     if (!authenticated || !accountId) throw new Error("Sign in to manage collections.");
@@ -619,46 +752,237 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     } finally {
       if (epoch === epochRef.current && accountId === identityKey) setBusy(false);
     }
-  }, [apiBaseUrl, authenticated, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, reconcileGroups, sendMembership, setCurrentGroups]);
+  })()), [apiBaseUrl, authenticated, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, reconcileGroups, sendMembership, setCurrentGroups, trackGroupOperation]);
 
   const addPlace = useCallback((groupId: string, placeId: string) => changeMembership(groupId, placeId, true), [changeMembership]);
   const removePlace = useCallback((groupId: string, placeId: string) => changeMembership(groupId, placeId, false), [changeMembership]);
 
-  const refreshAfterReset = useCallback(async () => {
-    // The caller invokes this only after the account reset request succeeds.
-    // Clear first so deleted groups/memberships cannot flash while Wishlist is recreated.
+  const prepareForReset = useCallback(async () => {
     const accountId = identityKey;
-    epochRef.current += 1;
-    const epoch = epochRef.current;
+    if (!authenticated || !accountId) throw new Error("Sign in before resetting account progress.");
+    if (!apiBaseUrl || browserIsOffline()) throw new Error("Connect to the internet before resetting account progress.");
+    if (!requestRef.current) throw new Error("Sign in again before resetting account progress.");
+    if (resetOwnerRef.current && resetOwnerRef.current !== accountId) {
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+    }
+    resetOwnerRef.current = accountId;
+    if (resetBarrierRef.current?.phase === "committed") {
+      throw new Error("The progress reset already completed. Finish saved collection cleanup before starting another reset.");
+    }
+
+    // Close the mutation gate and invalidate collection reads before touching
+    // storage. No new group request may begin while the reset is prepared.
+    resetGateRef.current = true;
+    const epoch = ++epochRef.current;
+    cancelFetchRetry();
+    setRetrying(false);
+    setLoading(false);
+    setBusy(true);
+    setError("");
+    setSyncStatus("syncing");
+    setSyncMessage("Preparing saved collections for the progress reset.");
+
+    const barrier: GroupResetBarrier = { phase: "prepared" };
+    resetBarrierRef.current = barrier;
+    let target: KeyValueStore;
+    let persisted: unknown;
+    try {
+      target = await storage();
+      persisted = await readStored<unknown>(target, accountGroupsResetKey(accountId), null);
+    } catch (caught) {
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      resetCancellationAllowedRef.current = false;
+      setBusy(false);
+      setSyncStatus("error");
+      setSyncMessage("Private device storage could not prepare the collection reset.");
+      throw caught;
+    }
+    if (isGroupResetBarrier(persisted) && persisted.phase === "committed") {
+      resetBarrierRef.current = persisted;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      resetCancellationAllowedRef.current = false;
+      setResetCleanupRequired(true);
+      setBusy(false);
+      throw new Error("The progress reset already completed. Finish saved collection cleanup before starting another reset.");
+    }
+    if (!await writeStored(target, accountGroupsResetKey(accountId), barrier)) {
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      resetCancellationAllowedRef.current = false;
+      setBusy(false);
+      setSyncStatus("error");
+      setSyncMessage("Private device storage could not prepare the collection reset.");
+      throw new Error("Private device storage could not prepare the collection reset.");
+    }
+    setResetPreparationPending(true);
+    setResetCancellationAllowed(true);
+    resetCancellationAllowedRef.current = true;
+    setResetCleanupRequired(false);
+
+    const settleBeforeReset = async () => {
+      await Promise.all([...activeGroupOperationsRef.current]);
+      if (resetOwnerRef.current !== accountId || epoch !== epochRef.current) {
+        throw new Error("Your account changed while preparing the progress reset.");
+      }
+      const outbox = await hydrateOutbox(accountId, epoch);
+      if (!outbox) throw new Error("Saved collections could not be prepared for reset.");
+      await outbox.waitForActive();
+      if (outbox.hasPending()) await drainOutbox(accountId, epoch, requestRef.current);
+      await outbox.waitForActive();
+      if (outbox.hasPending()) {
+        throw new Error("Saved collection changes must sync before progress can be reset. Retry while online.");
+      }
+      if (!await persistOutbox(accountId, outbox)) {
+        throw new Error("Private device storage could not confirm that saved collection changes are settled.");
+      }
+    };
+
+    try {
+      await withTimeout(
+        settleBeforeReset(),
+        GROUP_RESET_PREPARATION_TIMEOUT_MS,
+        "Saved collection requests are still running. Wait for them to finish, then retry the progress reset.",
+      );
+      setBusy(false);
+      setError("");
+      setSyncStatus("idle");
+      setSyncMessage("");
+    } catch (caught) {
+      setBusy(false);
+      setError(messageFor(caught));
+      setSyncStatus(isOfflineFailure(caught) ? "offline" : "error");
+      setSyncMessage("Collection changes are paused until this progress reset is finished or canceled.");
+      throw caught;
+    }
+  }, [apiBaseUrl, authenticated, cancelFetchRetry, drainOutbox, hydrateOutbox, identityKey, persistOutbox, storage]);
+
+  const cancelResetPreparation = useCallback(async () => {
+    const accountId = identityKey;
+    if (!accountId || resetOwnerRef.current !== accountId || !resetGateRef.current) return;
+    if (resetBarrierRef.current?.phase === "committed") {
+      throw new Error("The progress reset already completed, so saved collection cleanup cannot be canceled.");
+    }
+    if (!resetCancellationAllowedRef.current) {
+      throw new Error("This progress reset needs to be confirmed again before collection changes can resume.");
+    }
+
+    const epoch = ++epochRef.current;
+    cancelFetchRetry();
+    setLoading(true);
+    setError("");
+    setSyncStatus("syncing");
+    setSyncMessage("Refreshing saved collections before resuming collection changes.");
+    try {
+      const currentRequest = requestRef.current;
+      if (!apiBaseUrl || browserIsOffline() || !currentRequest) {
+        throw new Error("Reconnect before resuming collection changes after an interrupted progress reset.");
+      }
+      const [target, groups] = await Promise.all([
+        storage(),
+        withTimeout(
+          listGroups(currentRequest),
+          GROUP_RESET_PREPARATION_TIMEOUT_MS,
+          "Saved collections are taking too long to refresh. Retry when the connection is stable.",
+        ),
+      ]);
+      if (resetOwnerRef.current !== accountId || epoch !== epochRef.current) {
+        throw new Error("Your account changed while recovering the progress reset.");
+      }
+      const outbox = outboxOwnerRef.current === accountId
+        ? outboxRef.current
+        : await hydrateOutbox(accountId, epoch);
+      if (!outbox) throw new Error("Saved collection changes could not be recovered.");
+      await outbox.waitForActive();
+      const freshGroups = outbox.applyTo(normalizeGroups(groups));
+      const [snapshotSaved, outboxSaved] = await Promise.all([
+        persistSnapshot(accountId, freshGroups),
+        persistOutbox(accountId, outbox),
+      ]);
+      if (!snapshotSaved || !outboxSaved) {
+        throw new Error("Private device storage could not save the refreshed collections.");
+      }
+      if (!await removeStored(target, accountGroupsResetKey(accountId))) {
+        throw new Error("Private device storage could not resume collection changes.");
+      }
+      resetBarrierRef.current = null;
+      resetGateRef.current = false;
+      resetCancellationAllowedRef.current = false;
+      setResetPreparationPending(false);
+      setResetCancellationAllowed(false);
+      setResetCleanupRequired(false);
+      setCurrentGroups(freshGroups, accountId);
+      setSelectedGroupId(null);
+      setPendingMemberships(outbox.pendingCount());
+      setLoading(false);
+      setBusy(false);
+      setOffline(false);
+      setError("");
+      setSyncStatus(outbox.hasPending() ? "syncing" : "idle");
+      setSyncMessage(outbox.hasPending() ? "Your newer collection changes are saved on this device and waiting to sync." : "");
+      if (outbox.hasPending()) void drainOutbox(accountId, epoch, currentRequest).catch(() => undefined);
+    } catch (caught) {
+      if (epoch === epochRef.current) {
+        setLoading(false);
+        setBusy(false);
+        setError(caught instanceof Error ? caught.message : "Saved collection recovery is still pending.");
+        setSyncStatus(isOfflineFailure(caught) ? "offline" : "error");
+        setSyncMessage("Collection changes are paused until the reset is resolved.");
+      }
+      throw caught;
+    }
+  }, [apiBaseUrl, cancelFetchRetry, drainOutbox, hydrateOutbox, identityKey, persistOutbox, persistSnapshot, setCurrentGroups, storage]);
+
+  const refreshAfterReset = useCallback(async () => {
+    const accountId = identityKey;
+    if (!accountId || resetOwnerRef.current !== accountId || !resetGateRef.current) {
+      throw new Error("Saved collections must be prepared before the progress reset is completed.");
+    }
+    const epoch = ++epochRef.current;
     cancelFetchRetry();
     setRetrying(false);
     setLoading(true);
     setError("");
-    setSyncStatus("idle");
-    setSyncMessage("");
-    // The account reset has already committed on the server. Clear private
-    // in-memory group state before device cleanup so a storage failure cannot
-    // leave deleted groups visible or make the completed reset look undone.
+    setSyncStatus("syncing");
+    setSyncMessage("Saved collections are being cleared after the progress reset.");
     setCurrentGroups([], accountId);
     setSelectedGroupId(null);
     setPendingMemberships(0);
     setBusy(false);
+    setResetPreparationPending(false);
+    setResetCancellationAllowed(false);
+    resetCancellationAllowedRef.current = false;
+    setResetCleanupRequired(true);
+
+    const committed: GroupResetBarrier = { phase: "committed" };
+    resetBarrierRef.current = committed;
     try {
-      const outbox = outboxOwnerRef.current === accountId ? outboxRef.current : await hydrateOutbox(accountId, epoch);
-      if (!outbox || epoch !== epochRef.current) return;
-      await outbox.clearAndWait();
-      if (accountId) {
-        const target = await storage();
-        if (!await removeStored(target, accountGroupsCacheKey(accountId)) || !await persistOutbox(accountId, outbox)) {
-          throw new Error("Private device storage could not clear the saved collections.");
-        }
+      const target = await storage();
+      // If this write fails, the already persisted prepared barrier still
+      // prevents old membership intents from replaying after a reload.
+      if (!await writeStored(target, accountGroupsResetKey(accountId), committed)) {
+        throw new Error("Private device storage could not record the completed progress reset.");
       }
+      const outbox = outboxOwnerRef.current === accountId ? outboxRef.current : new GroupOutbox();
+      await outbox.clearAndWait();
+      await clearCommittedResetArtifacts(accountId);
     } catch (caught) {
-      if (epoch === epochRef.current) setLoading(false);
+      if (epoch === epochRef.current) {
+        setLoading(false);
+        setError(caught instanceof Error ? caught.message : "Saved collection cleanup is still pending.");
+        setSyncStatus("error");
+        setSyncMessage("Saved collection cleanup is still pending.");
+      }
       throw caught;
     }
     await load();
-  }, [cancelFetchRetry, hydrateOutbox, identityKey, load, persistOutbox, setCurrentGroups, storage]);
+  }, [cancelFetchRetry, clearCommittedResetArtifacts, identityKey, load, setCurrentGroups, storage]);
 
   const hydratedGroups = useMemo(() => hydrate(groups), [groups, hydrate]);
   // Until the new identity's effect has hydrated its cache/server response,
@@ -677,13 +1001,18 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     syncStatus,
     syncMessage,
     pendingMemberships,
+    resetPreparationPending,
+    resetCancellationAllowed,
+    resetCleanupRequired,
     selectGroup: setSelectedGroupId,
     retry: load,
+    prepareForReset,
+    cancelResetPreparation,
     refreshAfterReset,
     create,
     rename,
     remove,
     addPlace,
     removePlace,
-  }), [addPlace, busy, create, error, load, loading, offline, pendingMemberships, refreshAfterReset, remove, removePlace, rename, retrying, syncMessage, syncStatus, visibleGroups, visibleSelectedGroupId]);
+  }), [addPlace, busy, cancelResetPreparation, create, error, load, loading, offline, pendingMemberships, prepareForReset, refreshAfterReset, remove, removePlace, rename, resetCancellationAllowed, resetCleanupRequired, resetPreparationPending, retrying, syncMessage, syncStatus, visibleGroups, visibleSelectedGroupId]);
 }

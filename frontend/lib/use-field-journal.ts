@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ACCOUNT_TOKEN_KEY,
@@ -43,9 +43,15 @@ import {
   type ClaimRecommendationInput,
 } from "./claims-client";
 import { clearRestoredCameraPhoto } from "./capacitor-native-capabilities";
-import { clearPhotoRetryOwner } from "./native-capabilities";
+import { clearPhotoRetryOwner, currentNativeAppState, NATIVE_APP_STATE_EVENT } from "./native-capabilities";
+import { clearUnresolvedClaim, clearUnresolvedClaims, hasUnresolvedClaim } from "./claim-recovery";
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
 import { createCollectionKey, type Place } from "./places";
+import {
+  createOfflineClaimsService,
+  type OfflineClaimOwner,
+  type OfflineClaimQueueItem,
+} from "./offline-claims";
 import { VisitOutbox } from "./visit-outbox";
 
 type Identity =
@@ -58,7 +64,7 @@ type CataloguePayload = {
   completedTrailIds?: string[];
   visits?: Visit[];
   coverageNote: string;
-  visitClaims?: { supported: boolean; enforcement: "compatible" | "required" };
+  visitClaims?: { supported: boolean; enforcement: "compatible" | "required"; offlineSupported?: boolean };
 };
 
 export type VisitClaimMode = "unknown" | "legacy" | "compatible" | "required";
@@ -109,10 +115,19 @@ export type FieldJournal = {
   storageUnavailable: boolean;
   guestProgressAvailable: boolean;
   transitionBusy: boolean;
+  /** Advances only when a progress reset has committed, independent of display copy. */
+  progressRevision: number;
+  pendingClaims: number;
+  rejectedClaimCount: number;
+  offlineClaimsAvailable: boolean;
+  offlineClaimRecoveryCount: number;
+  offlineClaimRecoveryMessage: string;
   visitClaimMode: VisitClaimMode;
   toggleVisit: (placeOrId: Pick<Place, "id"> | string) => Promise<void>;
   toggleTrail: (trailId: string) => Promise<void>;
   retrySync: () => Promise<void>;
+  retryPendingClaims: () => Promise<void>;
+  discardRejectedClaims: () => Promise<number>;
   authenticate: (mode: "login" | "register", email: string, password: string) => Promise<void>;
   authenticateWithGoogle: (code: string, state: string, codeVerifier: string) => Promise<void>;
   requestEmailVerification: () => Promise<void>;
@@ -122,7 +137,7 @@ export type FieldJournal = {
   resetProgress: () => Promise<void>;
   deleteAccount: () => Promise<AccountDeletionResult>;
   recommendClaim?: (input: ClaimRecommendationInput) => Promise<ClaimRecommendation>;
-  createClaim?: (input: { recommendationToken: string; expectedPlaceId: string }) => Promise<ClaimConfirmation>;
+  createClaim?: (input: { recommendationToken: string; expectedPlaceId: string; photoExpected?: boolean }) => Promise<ClaimConfirmation>;
   reconcileClaim?: (placeId: string) => Promise<ClaimConfirmation | null>;
   uploadVisitPhoto?: (placeId: string, file: File) => Promise<void>;
   loadVisitPhoto?: (placeId: string) => Promise<Blob>;
@@ -153,6 +168,14 @@ function timestampsFor(visits: Visit[] | undefined): Record<string, string> {
   return Object.fromEntries((visits ?? []).map((visit) => [visit.placeId, visit.visitedAt]));
 }
 
+/** The all-place disk index is for search and pins. Full content belongs to the recent-place cache. */
+export function catalogueIndex(places: Place[]): Place[] {
+  return places.map(({ id, name, category, latitude, longitude, region, sourceName, sourceId }) => ({
+    id, name, category, latitude, longitude, region, sourceName, sourceId,
+    description: "", sourceUrl: "",
+  }));
+}
+
 function metadataFor(visits: Visit[] | undefined, visitedIds?: Iterable<string>, timestamps: Record<string, string> = {}): Record<string, Visit> {
   const visited = visitedIds ? new Set(visitedIds) : undefined;
   const metadata = Object.fromEntries((visits ?? [])
@@ -180,6 +203,25 @@ function claimOwner(identity: Identity): ClaimOwner {
   return { kind: "account", token: identity.token };
 }
 
+function offlineClaimOwner(identity: Identity): OfflineClaimOwner | null {
+  if (identity.kind !== "account" || !identity.account?.id) return null;
+  return { kind: "account", token: identity.token, accountId: identity.account.id };
+}
+
+function browserIsOnline() {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+function isClaimTransportFailure(error: unknown) {
+  if (error instanceof ApiError) return error.status === 408 || error.status >= 500;
+  if (error instanceof Error && ["AbortError", "NetworkError"].includes(error.name)) return true;
+  return error instanceof TypeError;
+}
+
+function browserIsForeground() {
+  return (typeof document === "undefined" || document.visibilityState !== "hidden") && currentNativeAppState();
+}
+
 function sameOwner(left: Identity, right: Identity) {
   return left.kind === right.kind && (left.kind === "account"
     ? left.token === (right.kind === "account" ? right.token : "")
@@ -203,6 +245,10 @@ class VisitMutationJournal {
   reset() {
     this.revision = 0;
     this.entries.clear();
+  }
+
+  isRemoved(placeId: string) {
+    return this.entries.get(placeId)?.visit === null;
   }
 
   rebase(
@@ -303,6 +349,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [guestProgressAvailable, setGuestProgressAvailable] = useState(false);
   const [transitionBusy, setTransitionBusy] = useState(false);
+  const [progressRevision, setProgressRevision] = useState(0);
+  const [pendingClaims, setPendingClaims] = useState(0);
+  const [rejectedClaimCount, setRejectedClaimCount] = useState(0);
+  const [offlineClaimsAvailable, setOfflineClaimsAvailable] = useState(false);
+  const [offlineClaimRecoveryCount, setOfflineClaimRecoveryCount] = useState(0);
+  const [offlineClaimRecoveryMessage, setOfflineClaimRecoveryMessage] = useState("");
   const [visitClaimMode, setVisitClaimMode] = useState<VisitClaimMode>("unknown");
 
   const epochRef = useRef(new IdentityEpoch());
@@ -329,6 +381,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const accountDeletionIntentRef = useRef<AccountDeletionIntent | null>(null);
   const accountDeletionBootReplayRef = useRef(false);
   const visitMutationsRef = useRef(new VisitMutationJournal());
+  const offlineClaimsService = useMemo(() => createOfflineClaimsService({
+    apiBaseUrl,
+    uploadPhoto: (owner, placeId, file) => uploadVisitPhotoRequest(apiBaseUrl, owner, placeId, file),
+  }), [apiBaseUrl]);
+  const offlineClaimsTaskRef = useRef<{ accountId: string; promise: Promise<void> } | null>(null);
+  const pendingProgressResetCleanupRef = useRef("");
+  const pendingLogoutCleanupRef = useRef("");
   const [hydrationReady] = useState(() => {
     let resolve: () => void = () => {};
     const promise = new Promise<void>((ready) => { resolve = ready; });
@@ -513,6 +572,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       guestVisitTimestamps,
       metadataFor(Object.values(storedGuestMetadata), guestVisited, guestVisitTimestamps),
     );
+    setPendingClaims(0);
+    setRejectedClaimCount(0);
+    setOfflineClaimRecoveryCount(0);
+    setOfflineClaimRecoveryMessage("");
     setGuestProgressAvailable(await guestHasProgress());
     if (message) setSyncMessage(message);
     return cleanupSucceeded;
@@ -559,7 +622,16 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       await attempt("Could not clear the cached account journal.", () => removeStored(target, JOURNAL_STORAGE.accountSnapshot));
     }
     await attempt("Could not clear the imported guest marker.", () => removeStored(target, importedGuestKey(accountId)));
-    await attempt("Private photo storage is busy.", () => clearPhotoRetryOwner(`account:${accountId}`));
+    await attempt("Could not clear saved offline visits.", () => offlineClaimsService.clearOwner(accountId));
+    let recoveryStateCleared = false;
+    try {
+      const ownerKey = `account:${accountId}`;
+      if (await hasUnresolvedClaim(ownerKey)) await clearUnresolvedClaims(ownerKey);
+      recoveryStateCleared = true;
+    } catch (error) {
+      failures.push(error instanceof Error ? error : new Error("Could not clear unresolved visit recovery state."));
+    }
+    if (recoveryStateCleared) await attempt("Private photo storage is busy.", () => clearPhotoRetryOwner(`account:${accountId}`));
     if (options.clearRestoredCamera !== false) {
       await attempt("Recovered camera storage is busy.", () => clearRestoredCameraPhoto());
     }
@@ -574,7 +646,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       noteStorageFailure(false);
       throw failures[0];
     }
-  }, [noteStorageFailure, storage]);
+  }, [noteStorageFailure, offlineClaimsService, storage]);
 
   const expireAccount = useCallback((capturedEpoch: number) => {
     if (!epochRef.current.isCurrent(capturedEpoch) || identityRef.current.kind !== "account") return;
@@ -667,11 +739,34 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (!visitWritten || !trailWritten) throw new Error("Could not durably save the pending checkoff.");
   }, [noteStorageFailure, storage]);
 
+  const cancelPendingAccountVisitUndos = useCallback(async (identity: Identity, capturedEpoch: number) => {
+    if (identity.kind !== "account" || !identity.account) return;
+    const owner = offlineClaimOwner(identity);
+    if (!owner) return;
+    const visitBox = accountVisitOutboxRef.current;
+    const pendingUndos = Object.entries(visitBox.snapshot())
+      .filter(([, pending]) => !pending.visited)
+      .map(([placeId]) => placeId);
+    if (pendingUndos.length === 0) return;
+
+    // The false outbox intent must survive a crash before cancelling the
+    // matching offline claim, so retry can finish the cancellation first.
+    await persistOutbox(identity, visitBox.snapshot(), accountTrailOutboxRef.current.snapshot());
+    for (const placeId of pendingUndos) {
+      if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) {
+        throw new Error("Your account changed before saved offline visits could be cancelled.");
+      }
+      await offlineClaimsService.cancelPlace(owner, placeId);
+      await clearUnresolvedClaim(`account:${owner.accountId}`, placeId);
+    }
+  }, [offlineClaimsService, persistOutbox]);
+
   const drainIdentity = useCallback(async (identity: Identity, capturedEpoch: number) => {
     const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
     try {
       await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
+      await cancelPendingAccountVisitUndos(identity, capturedEpoch);
       if (identity.kind === "guest") await persistGuest(); else await persistAccount();
       const results = await Promise.allSettled([
         visitBox.drainAll((id, enabled, revision) => drainVisit(visitBox, id, enabled, identity, capturedEpoch, revision)),
@@ -681,38 +776,269 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     } finally {
       await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot());
     }
-  }, [drainVisit, persistAccount, persistGuest, persistOutbox, putProgress]);
+  }, [cancelPendingAccountVisitUndos, drainVisit, persistAccount, persistGuest, persistOutbox, putProgress]);
+
+  const refreshOfflineClaimState = useCallback(async (identity: Identity, capturedEpoch: number): Promise<OfflineClaimQueueItem[]> => {
+    const owner = offlineClaimOwner(identity);
+    if (!owner) return [];
+    const service = offlineClaimsService;
+    try {
+      const items = await service.list(owner);
+      if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) return [];
+      const queued = items.filter((item) => item.state === "pending");
+      const rejected = items.filter((item) => item.state === "rejected");
+      const recovery = items.filter((item) => item.state !== "pending");
+      setPendingClaims(queued.length);
+      setRejectedClaimCount(rejected.length);
+      setOfflineClaimRecoveryCount(recovery.length);
+      setOfflineClaimRecoveryMessage(recovery.find((item) => item.lastError)?.lastError
+        ?? (recovery.length ? "Some saved offline visits need attention before they can finish syncing." : ""));
+      return items;
+    } catch (error) {
+      if (mountedRef.current && epochRef.current.isCurrent(capturedEpoch) && sameOwner(identityRef.current, identity)) {
+        setOfflineClaimRecoveryMessage(error instanceof Error
+          ? error.message
+          : "Could not read saved offline visits from this device.");
+      }
+      throw error;
+    }
+  }, [offlineClaimsService]);
+
+  const syncOfflineClaims = useCallback(async (identity: Identity, capturedEpoch: number, provision = true) => {
+    const owner = offlineClaimOwner(identity);
+    if (!owner) return;
+    const existing = offlineClaimsTaskRef.current;
+    if (existing?.accountId === owner.accountId) return existing.promise;
+      const service = offlineClaimsService;
+      const isCurrent = () => mountedRef.current
+        && epochRef.current.isCurrent(capturedEpoch)
+        && sameOwner(identityRef.current, identity);
+    const operation = (async () => {
+      let queueBeforeDrain: OfflineClaimQueueItem[] = [];
+      try {
+        await cancelPendingAccountVisitUndos(identity, capturedEpoch);
+        queueBeforeDrain = await refreshOfflineClaimState(identity, capturedEpoch);
+        if (!isCurrent() || !apiBaseUrl || !browserIsOnline() || !browserIsForeground()) return;
+        const mutationCheckpoint = visitMutationsRef.current.checkpoint();
+        const result = await service.drain(owner);
+        if (!isCurrent()) return;
+        const confirmedByPlace = new Map<string, Visit>();
+        const pendingUndos = new Set(Object.entries(accountVisitOutboxRef.current.snapshot())
+          .filter(([, pending]) => !pending.visited)
+          .map(([placeId]) => placeId));
+        for (const confirmation of result.confirmed) {
+          if (confirmation.pendingSync || confirmation.visited !== true || !confirmation.placeId
+            || pendingUndos.has(confirmation.placeId) || visitMutationsRef.current.isRemoved(confirmation.placeId)) continue;
+          confirmedByPlace.set(confirmation.placeId, {
+            placeId: confirmation.placeId,
+            visitedAt: confirmation.visitedAt,
+            claim: confirmation.claim,
+          });
+        }
+        const uploadedPlaceIds = new Set(result.photos.filter((photo) => photo.status === "uploaded").map((photo) => photo.placeId));
+        if (confirmedByPlace.size || uploadedPlaceIds.size) {
+          const nextVisited = new Set(visitedRef.current);
+          const nextTimestamps = { ...visitTimestampsRef.current };
+          const nextMetadata = { ...visitMetadataRef.current };
+          for (const [placeId, visit] of confirmedByPlace) {
+            nextVisited.add(placeId);
+            nextTimestamps[placeId] = visit.visitedAt;
+            nextMetadata[placeId] = visit;
+          }
+          const rebased = visitMutationsRef.current.rebase(
+            nextVisited,
+            nextTimestamps,
+            nextMetadata,
+            mutationCheckpoint,
+          );
+          for (const [placeId, visit] of confirmedByPlace) {
+            if (!rebased.visited.has(placeId)) continue;
+            rebased.timestamps[placeId] = visit.visitedAt;
+            rebased.metadata[placeId] = visit;
+          }
+          for (const placeId of uploadedPlaceIds) {
+            const current = rebased.metadata[placeId];
+            if (!rebased.visited.has(placeId) || !current?.claim) continue;
+            const visit: Visit = { ...current, claim: { ...current.claim, hasPhoto: true } };
+            rebased.metadata[placeId] = visit;
+            confirmedByPlace.set(placeId, visit);
+          }
+          for (const placeId of confirmedByPlace.keys()) {
+            if (rebased.visited.has(placeId) && rebased.metadata[placeId]) {
+              visitMutationsRef.current.record(placeId, rebased.metadata[placeId]);
+            }
+          }
+          updateProgress(rebased.visited, new Set(trailsRef.current), rebased.timestamps, rebased.metadata);
+          await persistAccount();
+          if (!isCurrent()) return;
+        }
+        const queueAfterDrain = await refreshOfflineClaimState(identity, capturedEpoch);
+        if (provision && offlineClaimsAvailable) {
+          try {
+            await service.ensureGrant(owner);
+          } catch (error) {
+            if (isCurrent() && error instanceof ApiError && error.status === 401) expireAccount(capturedEpoch);
+            else if (isCurrent() && queueAfterDrain.every((item) => item.state === "pending")) {
+              setOfflineClaimRecoveryMessage("Offline visit saving could not be prepared. Stay online and retry before leaving coverage.");
+            }
+            if (queueBeforeDrain.length === 0 && queueAfterDrain.length === 0) throw error;
+          }
+        }
+      } catch (error) {
+        if (isCurrent() && error instanceof ApiError && error.status === 401) expireAccount(capturedEpoch);
+        else if (isCurrent()) setOfflineClaimRecoveryMessage(error instanceof Error
+          ? error.message
+          : "Offline visits are saved on this device and waiting to sync.");
+        throw error;
+      }
+    })();
+    const task = { accountId: owner.accountId, promise: operation };
+    offlineClaimsTaskRef.current = task;
+    try {
+      await operation;
+    } finally {
+      if (offlineClaimsTaskRef.current === task) offlineClaimsTaskRef.current = null;
+    }
+  }, [apiBaseUrl, cancelPendingAccountVisitUndos, expireAccount, offlineClaimsAvailable, offlineClaimsService, persistAccount, refreshOfflineClaimState, updateProgress]);
+
+  const finishProgressResetCleanup = useCallback(async (accountId: string) => {
+    await offlineClaimsService.clearOwner(accountId);
+    const ownerKey = `account:${accountId}`;
+    if (await hasUnresolvedClaim(ownerKey)) await clearUnresolvedClaims(ownerKey);
+    const cleanup = await Promise.allSettled([
+      clearPhotoRetryOwner(`account:${accountId}`),
+      clearRestoredCameraPhoto(),
+    ]);
+    const failed = cleanup.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+    if (!await removeStored(storage(), JOURNAL_STORAGE.accountProgressResetCleanup)) {
+      throw new Error("Could not clear the progress-reset cleanup marker.");
+    }
+    pendingProgressResetCleanupRef.current = "";
+  }, [offlineClaimsService, storage]);
+
+  const finishLogoutCleanup = useCallback(async (accountId: string) => {
+    await offlineClaimsService.clearOwner(accountId);
+    if (!await removeStored(storage(), JOURNAL_STORAGE.accountLogoutCleanup)) {
+      throw new Error("Could not clear the sign-out cleanup marker.");
+    }
+    pendingLogoutCleanupRef.current = "";
+  }, [offlineClaimsService, storage]);
 
   const retrySync = useCallback(async () => {
     if (transitionRef.current) return;
     const identity = identityRef.current;
+    let resetCleanup: { accountId: string } | null = null;
+    let logoutCleanup: { accountId: string } | null = null;
+    try {
+      resetCleanup = await readStored<{ accountId: string } | null>(storage(), JOURNAL_STORAGE.accountProgressResetCleanup, null);
+      logoutCleanup = await readStored<{ accountId: string } | null>(storage(), JOURNAL_STORAGE.accountLogoutCleanup, null);
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "Could not read pending account cleanup from this device.");
+      return;
+    }
+    const resetCleanupOwner = resetCleanup?.accountId ?? pendingProgressResetCleanupRef.current;
+    if (resetCleanupOwner) {
+      try {
+        await finishProgressResetCleanup(resetCleanupOwner);
+      } catch (error) {
+        setSyncMessage(error instanceof Error
+          ? `Your progress is reset, but private device cleanup still needs a retry: ${error.message}`
+          : "Your progress is reset, but private device cleanup still needs a retry.");
+        return;
+      }
+    }
+    const logoutCleanupOwner = logoutCleanup?.accountId ?? pendingLogoutCleanupRef.current;
+    if (logoutCleanupOwner) {
+      try {
+        await finishLogoutCleanup(logoutCleanupOwner);
+      } catch (error) {
+        setSyncMessage(error instanceof Error
+          ? `You are signed out, but private offline visit cleanup still needs a retry: ${error.message}`
+          : "You are signed out, but private offline visit cleanup still needs a retry.");
+        return;
+      }
+    }
     if (identity.kind === "guest" && !identity.collectionKey) return;
     const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
     const hasPendingCheckoffs = visitBox.hasPending() || trailBox.hasPending();
-    if (!hasPendingCheckoffs && !guestRevisionPendingRef.current) return;
-    setSyncMessage("Syncing your latest checkoffs…");
+    const hasGuestRevision = guestRevisionPendingRef.current;
+    if (!hasPendingCheckoffs && !hasGuestRevision && identity.kind !== "account") return;
     const capturedEpoch = epochRef.current.capture();
-    try {
-      if (guestRevisionPendingRef.current) {
-        const target = storage();
-        const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
-        if (!await writeStored(target, JOURNAL_STORAGE.guestRevision, revision)) throw new Error("Could not save the guest revision.");
-        guestRevisionPendingRef.current = false;
-        setGuestProgressAvailable(true);
-      }
-      if (hasPendingCheckoffs) await drainIdentity(identity, capturedEpoch);
-      if (epochRef.current.isCurrent(capturedEpoch)) setSyncMessage("");
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 401)) {
-        setSyncMessage(guestRevisionPendingRef.current
-          ? "Your guest photo change is saved and waiting for private storage before account import."
-          : identity.kind === "account"
-          ? "Your account checkoffs are saved on this device and waiting to sync."
-          : "Your guest checkoffs are saved on this device and waiting to sync.");
+    if (hasPendingCheckoffs || hasGuestRevision) {
+      setSyncMessage("Syncing your latest checkoffs…");
+      try {
+        if (guestRevisionPendingRef.current) {
+          const target = storage();
+          const revision = await readStored<number>(target, JOURNAL_STORAGE.guestRevision, 0) + 1;
+          if (!await writeStored(target, JOURNAL_STORAGE.guestRevision, revision)) throw new Error("Could not save the guest revision.");
+          guestRevisionPendingRef.current = false;
+          setGuestProgressAvailable(true);
+        }
+        if (hasPendingCheckoffs) await drainIdentity(identity, capturedEpoch);
+        if (epochRef.current.isCurrent(capturedEpoch)) setSyncMessage("");
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) {
+          setSyncMessage(guestRevisionPendingRef.current
+            ? "Your guest photo change is saved and waiting for private storage before account import."
+            : identity.kind === "account"
+            ? "Your account checkoffs are saved on this device and waiting to sync."
+            : "Your guest checkoffs are saved on this device and waiting to sync.");
+        }
       }
     }
-  }, [drainIdentity, storage]);
+    if (identity.kind === "account") await syncOfflineClaims(identity, capturedEpoch).catch(() => undefined);
+  }, [drainIdentity, finishLogoutCleanup, finishProgressResetCleanup, storage, syncOfflineClaims]);
+
+  const retryPendingClaims = useCallback(async () => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account" || !identity.account) throw new Error("Sign in to retry offline visits.");
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    const capturedEpoch = epochRef.current.capture();
+    try {
+      await syncOfflineClaims(identity, capturedEpoch, true);
+    } catch {
+      // Inspect durable state below. A per-item rejection or a failed grant
+      // refresh can be reported as a completed drain by the service.
+    }
+    if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) {
+      throw new Error("Your account changed before offline visits finished syncing. Refresh your journal and try again.");
+    }
+    const remaining = await refreshOfflineClaimState(identity, capturedEpoch);
+    if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) {
+      throw new Error("Your account changed before offline visits finished syncing. Refresh your journal and try again.");
+    }
+    if (remaining.length) {
+      const recovery = remaining.find((item) => item.state !== "pending");
+      const message = recovery?.lastError
+        ?? (recovery
+          ? "Some saved offline visits need attention before they can finish syncing."
+          : !browserIsOnline()
+            ? "Saved offline visits are waiting for a connection. Retry when you are back online."
+            : "Saved offline visits are still waiting for server confirmation. Retry syncing in a moment.");
+      if (recovery && mountedRef.current && epochRef.current.isCurrent(capturedEpoch)) setOfflineClaimRecoveryMessage(message);
+      throw new Error(message);
+    }
+  }, [refreshOfflineClaimState, syncOfflineClaims]);
+
+  const discardRejectedClaims = useCallback(async () => {
+    const identity = identityRef.current;
+    if (identity.kind !== "account" || !identity.account) throw new Error("Sign in to manage saved offline visits.");
+    if (transitionRef.current) throw new Error("Another account change is still in progress.");
+    const owner = offlineClaimOwner(identity);
+    if (!owner) throw new Error("Sign in to manage saved offline visits.");
+    const capturedEpoch = epochRef.current.capture();
+    const removed = await offlineClaimsService.discardRejected(owner);
+    if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) {
+      throw new Error("Your account changed before rejected offline visits were cleared.");
+    }
+    await refreshOfflineClaimState(identity, capturedEpoch);
+    if (!mountedRef.current || !epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) {
+      throw new Error("Your account changed before rejected offline visits were cleared.");
+    }
+    return removed;
+  }, [offlineClaimsService, refreshOfflineClaimState]);
 
   const refreshCatalogue = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
     const identity = identityRef.current;
@@ -727,7 +1053,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       ? { Authorization: `Bearer ${identity.token}` }
       : { "X-Collection-Key": identity.collectionKey };
     try {
-      const response = await fetch(`${apiBaseUrl}/api/places`, { cache: "no-store", headers });
+      const response = await fetch(`${apiBaseUrl}/api/places?summary=true`, { cache: "no-store", headers });
       if (!response.ok) throw await responseError(response, "Could not load the field guide.");
       const payload = await response.json() as CataloguePayload;
       if (!isActive() || !epochRef.current.isCurrent(catalogueEpoch) || !sameOwner(identityRef.current, identity)) return false;
@@ -736,6 +1062,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       updatePlaces(payload.places);
       setCoverageNote(payload.coverageNote);
       setVisitClaimMode(visitClaimModeFor(payload));
+      setOfflineClaimsAvailable(payload.visitClaims?.offlineSupported === true);
+      noteStorageFailure(await writeStored(storage(), "parkdex:claim-capability:v1", {
+        apiBaseUrl, mode: visitClaimModeFor(payload), offlineSupported: payload.visitClaims?.offlineSupported === true,
+      }));
       const payloadTimestamps = timestampsFor(payload.visits);
       const rebasedVisits = visitMutationsRef.current.rebase(
         snapshotVisited,
@@ -744,7 +1074,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         visitMutationCheckpoint,
       );
       updateProgress(rebasedVisits.visited, nextTrails, rebasedVisits.timestamps, rebasedVisits.metadata);
-      noteStorageFailure(await writeStored(storage(), JOURNAL_STORAGE.places, payload.places));
+      noteStorageFailure(await writeStored(storage(), JOURNAL_STORAGE.places, catalogueIndex(payload.places)));
       if (identity.kind === "guest") await persistGuest(); else await persistAccount();
       if (isActive() && epochRef.current.isCurrent(catalogueEpoch) && sameOwner(identityRef.current, identity)) {
         catalogueReadyRef.current = true;
@@ -848,6 +1178,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       }
       if (!active) return;
       storageRef.current = target;
+      const savedCapability = await readStored<{ apiBaseUrl: string; mode: VisitClaimMode; offlineSupported: boolean } | null>(target, "parkdex:claim-capability:v1", null);
+      if (savedCapability?.apiBaseUrl === apiBaseUrl && savedCapability.offlineSupported
+        && (savedCapability.mode === "compatible" || savedCapability.mode === "required")) {
+        setVisitClaimMode(savedCapability.mode);
+        setOfflineClaimsAvailable(true);
+      }
       guestVisitOutboxRef.current = new VisitOutbox();
       guestTrailOutboxRef.current = new VisitOutbox();
       guestVisitOutboxRef.current.hydrate(await readStored<PendingSnapshot>(target, JOURNAL_STORAGE.guestVisitPending, {}));
@@ -863,7 +1199,9 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       const guestVisitTimestamps = await readStored<Record<string, string>>(target, JOURNAL_STORAGE.guestVisitTimestamps, {});
       const storedGuestMetadata = await readStored<Record<string, Visit>>(target, JOURNAL_STORAGE.guestVisitMetadata, {});
       const guestVisitMetadata = metadataFor(Object.values(storedGuestMetadata), guestVisited, guestVisitTimestamps);
-      const cachedPlaces = await readStored<Place[]>(target, JOURNAL_STORAGE.places, []);
+      const cachedPlaces = catalogueIndex(await readStored<Place[]>(target, JOURNAL_STORAGE.places, []));
+      // Replace legacy full-catalogue cache in place without changing its storage key.
+      if (cachedPlaces.length) noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.places, cachedPlaces));
 
       let savedToken = await target.getItem(ACCOUNT_TOKEN_KEY) ?? "";
       const cachedAccount = await readStored<AccountSnapshot | null>(target, JOURNAL_STORAGE.accountSnapshot, null);
@@ -1026,14 +1364,23 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   useEffect(() => {
     if (loading) return;
-    const timer = window.setTimeout(() => void retrySync(), 0);
-    return () => window.clearTimeout(timer);
-  }, [loading, retrySync]);
+    let active = true;
+    queueMicrotask(() => { if (active) void retrySync(); });
+    return () => { active = false; };
+  }, [account?.id, authenticated, loading, retrySync]);
 
   useEffect(() => {
-    const resume = () => void retrySync();
+    const resume = () => {
+      if (browserIsForeground()) void retrySync();
+    };
     window.addEventListener("online", resume);
-    return () => window.removeEventListener("online", resume);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener(NATIVE_APP_STATE_EVENT, resume);
+    return () => {
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener(NATIVE_APP_STATE_EVENT, resume);
+    };
   }, [retrySync]);
 
   useEffect(() => {
@@ -1096,6 +1443,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setSyncMessage("");
     const capturedEpoch = epochRef.current.capture();
     try {
+      if (kind === "visits" && !enabled) await cancelPendingAccountVisitUndos(identity, capturedEpoch);
       await outbox.drain(id, (pendingId, pendingValue, revision) => kind === "visits"
         ? drainVisit(visitBox, pendingId, pendingValue, identity, capturedEpoch, revision)
         : putProgress(kind, pendingId, pendingValue, identity, capturedEpoch));
@@ -1111,7 +1459,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       try { await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot()); }
       catch { setSyncMessage("Private device storage could not save this checkoff. Try again before leaving this page."); }
     }
-  }, [drainVisit, noteStorageFailure, persistAccount, persistGuest, persistOutbox, putProgress, storage, updateProgress]);
+  }, [cancelPendingAccountVisitUndos, drainVisit, noteStorageFailure, persistAccount, persistGuest, persistOutbox, putProgress, storage, updateProgress]);
 
   const toggleVisit = useCallback((placeOrId: Pick<Place, "id"> | string) => {
     return toggle("visits", typeof placeOrId === "string" ? placeOrId : placeOrId.id);
@@ -1218,22 +1566,93 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     transitionRef.current = true;
     setTransitionBusy(true);
     const identity = identityRef.current;
-    epochRef.current.advance();
+    const capturedEpoch = epochRef.current.capture();
+    const accountId = identity.account?.id;
+    let logoutCommitted = false;
+    let cleanupPending = false;
     try {
-      await logoutAccount(apiBaseUrl, identity.token);
-      await switchToGuest();
-      setSyncMessage("");
+      if (!accountId) {
+        setSyncMessage("Could not verify the saved offline visits for this account. Stay signed in and retry signing out.");
+        return;
+      }
+      const owner = offlineClaimOwner(identity);
+      if (!owner) {
+        setSyncMessage("Could not verify the saved offline visits for this account. Stay signed in and retry signing out.");
+        return;
+      }
+
+      if (browserIsOnline()) {
+        try { await syncOfflineClaims(identity, capturedEpoch, false); } catch { /* inspect the durable queue before deciding whether sign-out is safe */ }
+      }
+      if (!epochRef.current.isCurrent(capturedEpoch) || !sameOwner(identityRef.current, identity)) return;
+
+      let queued: OfflineClaimQueueItem[];
+      try {
+        queued = await offlineClaimsService.list(owner);
+        await refreshOfflineClaimState(identity, capturedEpoch);
+      } catch (error) {
+        setSyncMessage(error instanceof Error
+          ? `Could not verify saved offline visits. Stay signed in and retry: ${error.message}`
+          : "Could not verify saved offline visits. Stay signed in and retry before signing out.");
+        return;
+      }
+      if (queued.length) {
+        const hasRecovery = queued.some((item) => item.state !== "pending");
+        setSyncMessage(hasRecovery
+          ? "Saved offline visits or photos need attention. Retry syncing or reset progress before signing out."
+          : `${queued.length} offline ${queued.length === 1 ? "visit is" : "visits are"} still waiting to sync. Reconnect and retry, or reset progress before signing out.`);
+        return;
+      }
+
+      epochRef.current.advance();
+      try {
+        await logoutAccount(apiBaseUrl, identity.token);
+        logoutCommitted = true;
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) throw error;
+        logoutCommitted = true;
+      }
+
+      if (logoutCommitted) {
+        pendingLogoutCleanupRef.current = accountId;
+        const markerSaved = await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountLogoutCleanup, { accountId })).catch(() => false);
+        noteStorageFailure(markerSaved);
+        try {
+          if (markerSaved) await finishLogoutCleanup(accountId);
+          else {
+            await offlineClaimsService.clearOwner(accountId);
+            if (!await removeStored(storage(), JOURNAL_STORAGE.accountLogoutCleanup)) throw new Error("Could not clear the sign-out cleanup marker.");
+            pendingLogoutCleanupRef.current = "";
+          }
+        } catch {
+          cleanupPending = true;
+          if (!markerSaved) {
+            // Retry once in memory after the server has signed the account out.
+            // A later online/foreground pass will also retry if persistence works.
+            await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountLogoutCleanup, { accountId })).catch(() => false);
+          }
+        }
+        await switchToGuest("", { bestEffort: true });
+        setSyncMessage(cleanupPending
+          ? "You are signed out, but private offline visit cleanup still needs a retry. Reopen Parkdex or try syncing again."
+          : "");
+      }
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        await switchToGuest("Your session had already expired. You are signed out.");
+      if (logoutCommitted) {
+        // The server has already revoked this session. Do not present the
+        // signed-in state if a later local operation fails.
+        try { await switchToGuest("", { bestEffort: true }); } catch { /* the durable marker remains available for recovery */ }
+        setSyncMessage("You are signed out, but private offline visit cleanup still needs a retry. Reopen Parkdex or try syncing again.");
       } else {
-        setSyncMessage("Could not sign out while offline. Your account is still active on this device.");
+        setSyncMessage(error instanceof Error
+          ? `Could not sign out. Your account is still active on this device: ${error.message}`
+          : "Could not sign out. Your account is still active on this device.");
       }
     } finally {
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [apiBaseUrl, switchToGuest]);
+  }, [apiBaseUrl, finishLogoutCleanup, noteStorageFailure, offlineClaimsService, refreshOfflineClaimState, storage, switchToGuest, syncOfflineClaims]);
 
   const deleteAccount = useCallback(async (): Promise<AccountDeletionResult> => {
     const identity = identityRef.current;
@@ -1402,21 +1821,50 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const identity = currentClaimIdentity();
     const capturedEpoch = epochRef.current.capture();
     try {
+      const owner = offlineClaimOwner(identity);
+      if (!browserIsOnline()) {
+        if (!offlineClaimsAvailable || !owner) throw new Error("Offline visit saving is not available for this API. Reconnect to check in.");
+        const recommendation = await offlineClaimsService.recommendLocal(owner, { ...input, excludedPlaceIds: new Set(visitedRef.current) });
+        assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this location. Try again.");
+        return recommendation;
+      }
       const recommendation = await recommendClaimRequest(apiBaseUrl, claimOwner(identity), input);
       assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this location. Try again.");
       return recommendation;
     } catch (error) {
+      const owner = offlineClaimOwner(identity);
+      if (offlineClaimsAvailable && owner && isClaimTransportFailure(error)) {
+        try {
+          const recommendation = await offlineClaimsService.recommendLocal(owner, { ...input, excludedPlaceIds: new Set(visitedRef.current) });
+          assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed while checking this location. Try again.");
+          return recommendation;
+        } catch (offlineError) {
+          handleOwnerError(offlineError, identity, capturedEpoch);
+          throw offlineError;
+        }
+      }
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError]);
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, offlineClaimsAvailable, offlineClaimsService]);
 
-  const createClaim = useCallback(async (input: { recommendationToken: string; expectedPlaceId: string }) => {
+  const createClaim = useCallback(async (input: { recommendationToken: string; expectedPlaceId: string; photoExpected?: boolean }) => {
     const identity = currentClaimIdentity();
     const capturedEpoch = epochRef.current.capture();
     try {
+      const owner = offlineClaimOwner(identity);
+      const service = offlineClaimsService;
+      if (service.isOfflineToken(input.recommendationToken)) {
+        if (!owner) throw new Error("Sign in to save visits and private photos.");
+        const confirmation = await service.createLocal(owner, input);
+        assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this visit finished. Refresh your journal before trying again.");
+        await refreshOfflineClaimState(identity, capturedEpoch).catch(() => undefined);
+        if (browserIsOnline()) void syncOfflineClaims(identity, capturedEpoch, false).catch(() => undefined);
+        return confirmation;
+      }
       const confirmation = await createClaimRequest(apiBaseUrl, claimOwner(identity), input);
       assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this visit finished. Refresh your journal before trying again.");
+      if (confirmation.pendingSync) return confirmation;
       const nextVisited = new Set(visitedRef.current).add(confirmation.placeId);
       const nextTimestamps = { ...visitTimestampsRef.current, [confirmation.placeId]: confirmation.visitedAt };
       const claimedVisit: Visit = { placeId: confirmation.placeId, visitedAt: confirmation.visitedAt, claim: confirmation.claim };
@@ -1432,7 +1880,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, persistCurrentOwner, updateProgress]);
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, offlineClaimsService, persistCurrentOwner, refreshOfflineClaimState, syncOfflineClaims, updateProgress]);
 
   const reconcileClaim = useCallback(async (placeId: string): Promise<ClaimConfirmation | null> => {
     const identity = currentClaimIdentity();
@@ -1518,6 +1966,11 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const identity = currentClaimIdentity();
     const capturedEpoch = epochRef.current.capture();
     try {
+      const owner = offlineClaimOwner(identity);
+      if (owner) {
+        await offlineClaimsService.cancelPhotoRetry(owner, placeId);
+        assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this photo removal finished. Refresh your journal before trying again.");
+      }
       await removeVisitPhotoRequest(apiBaseUrl, claimOwner(identity), placeId);
       assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this photo removal finished. The current account was not updated.");
       await recordGuestOwnerChange(identity);
@@ -1526,7 +1979,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, recordGuestOwnerChange, updatePhotoFlag]);
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, offlineClaimsService, recordGuestOwnerChange, updatePhotoFlag]);
 
   const resetProgress = useCallback(async () => {
     const identity = identityRef.current;
@@ -1537,27 +1990,77 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const capturedEpoch = epochRef.current.advance();
     const visitPending = accountVisitOutboxRef.current.snapshot();
     const trailPending = accountTrailOutboxRef.current.snapshot();
+    let serverConfirmed = false;
+    let cleanupMarkerSaved = false;
     try {
       await Promise.all([
         accountVisitOutboxRef.current.clearAndWait(),
         accountTrailOutboxRef.current.clearAndWait(),
       ]);
       await persistAccountOutboxes(identity.account.id);
-      // Reset is deliberately local-first. If the device cannot remove the
-      // account's private retry/camera state, do not reset the server and then
-      // report success while a failed upload can still rehydrate on restart.
-      await clearPhotoRetryOwner(`account:${identity.account.id}`);
-      await clearRestoredCameraPhoto();
       await resetAccountProgress(apiBaseUrl, identity.token);
+      serverConfirmed = true;
+      pendingProgressResetCleanupRef.current = identity.account.id;
+      try {
+        cleanupMarkerSaved = await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountProgressResetCleanup, { accountId: identity.account.id }));
+      } catch {
+        cleanupMarkerSaved = false;
+      }
+      noteStorageFailure(cleanupMarkerSaved);
       if (!epochRef.current.isCurrent(capturedEpoch)) return;
       visitMutationsRef.current.reset();
       updateProgress(new Set(), new Set(), {}, {});
       await persistAccount();
-      setSyncMessage("Your progress has been reset.");
+      setPendingClaims(0);
+      setRejectedClaimCount(0);
+      setOfflineClaimRecoveryCount(0);
+      setOfflineClaimRecoveryMessage("");
+      setProgressRevision((revision) => revision + 1);
+      let cleanupError: unknown = null;
+      try {
+        await finishProgressResetCleanup(identity.account.id);
+      } catch (error) {
+        if (!cleanupMarkerSaved) {
+          try {
+            cleanupMarkerSaved = await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountProgressResetCleanup, { accountId: identity.account.id }));
+          } catch {
+            cleanupMarkerSaved = false;
+          }
+          noteStorageFailure(cleanupMarkerSaved);
+        }
+        cleanupError = error;
+      }
+      setSyncMessage(cleanupError
+        ? cleanupMarkerSaved
+          ? "Your progress has been reset, but private device cleanup still needs a retry. Reopen Parkdex or try syncing again."
+          : "Your progress has been reset, but device cleanup is unfinished and its retry marker could not be saved. Keep Parkdex open and retry syncing before closing it."
+        : "Your progress has been reset.");
     } catch (error) {
-      accountVisitOutboxRef.current.hydrate(visitPending);
-      accountTrailOutboxRef.current.hydrate(trailPending);
-      await persistAccountOutboxes(identity.account.id);
+      if (!serverConfirmed) {
+        accountVisitOutboxRef.current.hydrate(visitPending);
+        accountTrailOutboxRef.current.hydrate(trailPending);
+        await persistAccountOutboxes(identity.account.id);
+      } else {
+        visitMutationsRef.current.reset();
+        updateProgress(new Set(), new Set(), {}, {});
+        setPendingClaims(0);
+        setRejectedClaimCount(0);
+        setOfflineClaimRecoveryCount(0);
+        setOfflineClaimRecoveryMessage("");
+        setProgressRevision((revision) => revision + 1);
+        if (!cleanupMarkerSaved) {
+          try {
+            cleanupMarkerSaved = await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountProgressResetCleanup, { accountId: identity.account.id }));
+          } catch {
+            cleanupMarkerSaved = false;
+          }
+          noteStorageFailure(cleanupMarkerSaved);
+        }
+        setSyncMessage(cleanupMarkerSaved
+          ? "Your progress has been reset, but private device cleanup still needs a retry. Reopen Parkdex or try syncing again."
+          : "Your progress has been reset, but device cleanup is unfinished and its retry marker could not be saved. Keep Parkdex open and retry syncing before closing it.");
+        return;
+      }
       if (error instanceof ApiError && error.status === 401) {
         expireAccount(capturedEpoch);
       } else {
@@ -1568,7 +2071,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [apiBaseUrl, expireAccount, persistAccount, persistAccountOutboxes, updateProgress]);
+  }, [apiBaseUrl, expireAccount, finishProgressResetCleanup, noteStorageFailure, persistAccount, persistAccountOutboxes, storage, updateProgress]);
 
   useEffect(() => {
     if (syncMessage !== "Your progress has been reset.") return;
@@ -1591,10 +2094,18 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     storageUnavailable,
     guestProgressAvailable,
     transitionBusy,
+    progressRevision,
+    pendingClaims,
+    rejectedClaimCount,
+    offlineClaimsAvailable,
+    offlineClaimRecoveryCount,
+    offlineClaimRecoveryMessage,
     visitClaimMode,
     toggleVisit,
     toggleTrail,
     retrySync,
+    retryPendingClaims,
+    discardRejectedClaims,
     authenticate,
     authenticateWithGoogle,
     requestEmailVerification,
