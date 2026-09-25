@@ -21,7 +21,7 @@ import type { ClaimConfirmation, ClaimRecommendation } from "@/lib/claims-client
 import { authorityForPlace, collectionFilter, groupByRegion, type VisitFilter } from "@/lib/collection";
 import { clearPhotoRetryOwner, type LocationSample } from "@/lib/native-capabilities";
 import { addNativeBackConsumer } from "@/lib/native-back";
-import { getPlaceImage } from "@/lib/place-images";
+import { getPlaceImage, getPlaceImages } from "@/lib/place-images";
 import { categoryLabels, matchesPlaceSearch, type Place, type PlaceCategory } from "@/lib/places";
 import { RELEASE_METADATA } from "@/lib/release";
 import { useFieldJournal } from "@/lib/use-field-journal";
@@ -475,7 +475,12 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
   }, []);
   const modal = expanded && compactLayout;
   const detailRef = useDialogFocus(onClose, modal);
-  const image = getPlaceImage(place.id);
+  const images = getPlaceImages(place.id);
+  const [photoSelection, setPhotoSelection] = useState({ placeId: place.id, index: 0 });
+  const photoIndex = photoSelection.placeId === place.id
+    ? Math.min(photoSelection.index, Math.max(images.length - 1, 0))
+    : 0;
+  const image = images[photoIndex];
   const hasImage = Boolean(image);
   const visitor = getVisitorInformation(place.id);
   const descriptionSource = getPlaceDescriptionSource(place.id);
@@ -493,7 +498,7 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
   }, [feedback]);
   const showSheetActions = authenticated || visited || legacyVisitCreationAvailable;
   return <article ref={detailRef as React.RefObject<HTMLElement>} role="dialog" aria-modal={modal ? "true" : undefined} className={`place-sheet ${expanded ? "place-sheet-full" : ""} ${hasImage ? "with-photo" : "without-photo"} ${authenticated ? "signed-in" : "guest place-sheet-guest"}`} data-authenticated={authenticated ? "true" : "false"} aria-labelledby="place-detail-title">
-    <div className="place-sheet-hero" onTouchStart={(event) => { pullStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { if (pullStartY.current === null) return; const distance = event.changedTouches[0]?.clientY - pullStartY.current; pullStartY.current = null; if (distance != null && (expanded ? distance > 45 : distance < -45)) onExpand(); }}><PlaceImage place={place} variant="card" showCredit={false} preload /><button className="sheet-pull-handle" onClick={onExpand} aria-label={expanded ? "Collapse place details" : "Open fullscreen place details"} /></div>
+    <div className="place-sheet-hero" onTouchStart={(event) => { pullStartY.current = event.touches[0]?.clientY ?? null; }} onTouchEnd={(event) => { if (pullStartY.current === null) return; const distance = event.changedTouches[0]?.clientY - pullStartY.current; pullStartY.current = null; if (distance != null && (expanded ? distance > 45 : distance < -45)) onExpand(); }}><PlaceImage place={place} variant="card" showCredit={false} preload gallery selectedIndex={photoIndex} onSelectedIndexChange={(index) => setPhotoSelection({ placeId: place.id, index })} /><button className="sheet-pull-handle" onClick={onExpand} aria-label={expanded ? "Collapse place details" : "Open fullscreen place details"} /></div>
     <header className="place-sheet-header"><div><button className={`place-category category-${place.category}`} onClick={() => openCollection(place.category)} aria-label={`Browse ${categoryLabels[place.category]} places`}>{categoryLabels[place.category]}<ChevronRight size={13} /></button><h2 id="place-detail-title">{place.name}</h2></div><button className="sheet-close" onClick={onClose} aria-label="Close place details"><X size={20} /></button></header>
     <div className="place-sheet-content">
       <div className="place-facts"><span><MapPin size={17} /><span><small>Origin</small><strong>{origin}</strong></span></span>{area && <span><LandPlot size={17} /><span><small>Size</small><strong>{area}</strong></span></span>}</div>
@@ -505,7 +510,7 @@ function PlaceDetail({ expanded, onExpand, place, visit, visited, busy, authenti
       {placeStory && <section className="place-story"><h3>About this place</h3>{placeStory.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</section>}
       <section className="place-visit-info"><h3>Plan your visit</h3>{visitor ? <a className="official-visitor-link" href={visitor.url} target="_blank" rel="noreferrer"><span><strong>Official visitor information</strong><small>Access, facilities and current notices</small></span><ArrowUpRight size={18} /></a> : <p className="place-visitor-unavailable">Official visitor information is not available for this place yet.</p>}</section>
       <button className="place-collection-link" onClick={() => openCollection(undefined, authorityForPlace(place))}>Browse more from {origin}<ChevronRight size={17} /></button>
-      <details className="place-credits"><summary>Map data and photo credits<ChevronDown size={17} /></summary><div><p className="place-pin-note">Map pin: {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}. The pin may be within the park rather than at an entrance.</p><PlaceProvenance place={place} boundaryState={boundaryState} />{descriptionSource && <p className="place-description-source"><a href={descriptionSource.sourceUrl} target="_blank" rel="noreferrer" title={`${descriptionSource.sourceTitle}, ${descriptionSource.sourceSection}`}>{descriptionSource.status === "no-overview" ? "Visitor overview check" : "Description source"}: {descriptionSource.sourceName}</a></p>}{image && <p className="place-photo-credit">Photo by <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.originalUrl} target="_blank" rel="noreferrer">Original</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a> · Changes: {image.changes}</p>}{!placeStory && <p className="place-listing-note">{place.description}</p>}</div></details>
+      <details className="place-credits"><summary>Map data and photo credits<ChevronDown size={17} /></summary><div><p className="place-pin-note">Map pin: {place.latitude.toFixed(4)}, {place.longitude.toFixed(4)}. The pin may be within the park rather than at an entrance.</p><PlaceProvenance place={place} boundaryState={boundaryState} />{descriptionSource && <p className="place-description-source"><a href={descriptionSource.sourceUrl} target="_blank" rel="noreferrer" title={`${descriptionSource.sourceTitle}, ${descriptionSource.sourceSection}`}>{descriptionSource.status === "no-overview" ? "Visitor overview check" : "Description source"}: {descriptionSource.sourceName}</a></p>}{image && <p className="place-photo-credit">Photo by <a href={image.sourceUrl} target="_blank" rel="noreferrer">{image.creator}</a> · <a href={image.originalUrl} target="_blank" rel="noreferrer">Source image</a> · <a href={image.licenseUrl} target="_blank" rel="noreferrer">{image.license}</a> · Changes: {image.changes}</p>}{!placeStory && <p className="place-listing-note">{place.description}</p>}</div></details>
     </div>
   </article>;
 }

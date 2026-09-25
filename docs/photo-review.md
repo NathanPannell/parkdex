@@ -31,3 +31,7 @@ The CSV files prefix spreadsheet-formula-like text with an apostrophe so opening
 The reviewer refuses to mix decisions with a changed shortlist. If you intentionally replace the input, first keep a copy of the existing decisions and exports. You can point the server at another shortlist and state file with `--shortlist` and `--state`.
 
 An **approval is an editorial choice**, not proof that a photo is ready to publish. Before adding an approved image to Parkdex, verify the actual subject and location, source page, photographer, license terms and version, resolution, and attribution. Follow the [place image policy](../frontend/public/places/README.md).
+
+## September 24 import
+
+The completed review contained 106 approvals. After source and location checks, 96 were imported for 81 places, including 15 second photos in place detail galleries. [Import notes](photo-import-2026-09-24.md) record the ten approvals withheld for wrong or insufficient park-location evidence. The reviewer itself remains local and does not publish changes when an approval is clicked.
