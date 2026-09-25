@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoundaryCollection, BoundaryIndex } from "./boundaries";
-import { mapPresentation, PARK_NAME_LABEL_EXPANSION_LIMIT, PARK_NAME_LABEL_MIN_ZOOM, placeMarkerData, placeNameData, type MapViewport } from "./map-presentation";
+import { mapPresentation, normalizeMapViewport, placeMarkerData, placeNameData, type MapViewport } from "./map-presentation";
 import type { Place } from "./places";
 
 function place(id: string, longitude: number, latitude = 49, category: Place["category"] = "provincial"): Place {
@@ -31,7 +31,33 @@ function boundary(id: string): BoundaryCollection["features"][number] {
   };
 }
 
-const closeViewport: MapViewport = { west: -125, south: 48, east: -123, north: 50, zoom: PARK_NAME_LABEL_MIN_ZOOM };
+const closeViewport: MapViewport = { west: -125, south: 48, east: -123, north: 50, zoom: 10 };
+
+describe("map viewport normalization", () => {
+  it("wraps unbounded longitudes without losing antimeridian or full-world coverage", () => {
+    expect(normalizeMapViewport({ west: 170, south: -95, east: 190, north: 95, zoom: 4 })).toEqual({
+      west: 170,
+      south: -90,
+      east: -170,
+      north: 90,
+      zoom: 4,
+    });
+    expect(normalizeMapViewport({ west: 530, south: 45, east: 550, north: 55, zoom: 5 })).toEqual({
+      west: 170,
+      south: 45,
+      east: -170,
+      north: 55,
+      zoom: 5,
+    });
+    expect(normalizeMapViewport({ west: -200, south: 45, east: 200, north: 55, zoom: 1 })).toEqual({
+      west: -180,
+      south: 45,
+      east: 180,
+      north: 55,
+      zoom: 1,
+    });
+  });
+});
 
 describe("application map presentation", () => {
   it("keeps coincident places as individual pin features without counts", () => {
@@ -39,98 +65,86 @@ describe("application map presentation", () => {
     const data = placeMarkerData(places, new Set(), new Set());
 
     expect(data.features).toHaveLength(2);
+    expect(data.features.map((feature) => feature.id)).toEqual(places.map((item) => item.id));
     expect(data.features.map((feature) => feature.geometry.coordinates)).toEqual([[-124, 49], [-124, 49]]);
     expect(data.features.every((feature) => !("point_count" in (feature.properties ?? {})))).toBe(true);
   });
 
-  it("shows the largest park label when the viewport is broad", () => {
+  it("offers every sampled name to collision placement, including islands", () => {
     const parks = [
-      place("national-glacier-national-park", -124),
+      place("national-glacier-national-park", -124, 49, "national"),
+      place("provincial-denetiah-park", -124.2),
+      place("regional-horne-lake-regional-park", -124.4),
+      place("island-bowen-island", -124.6, 49, "island"),
+      place("outside", -130),
+    ];
+    const labels = placeNameData(parks, closeViewport);
+
+    expect(labels.features.map((feature) => feature.properties.id)).toEqual([
+      "national-glacier-national-park",
+      "island-bowen-island",
+      "provincial-denetiah-park",
+      "regional-horne-lake-regional-park",
+    ]);
+    expect(labels.features.find((feature) => feature.properties.id === "island-bowen-island")?.properties.category).toBe("island");
+  });
+
+  it("does not offer a name when its pin anchor is outside the viewport", () => {
+    const park = place("national-glacier-national-park", -126);
+
+    expect(placeNameData([park], closeViewport).features).toEqual([]);
+  });
+
+  it("offers names for sparse samples and lets MapLibre resolve collisions", () => {
+    const parks = [
+      place("national-glacier-national-park", -124, 49, "national"),
       place("provincial-denetiah-park", -124.2),
       place("regional-horne-lake-regional-park", -124.4),
       place("island-bowen-island", -124.6, 49, "island"),
     ];
-    const index: BoundaryIndex = {
-      version: 1,
-      boundsById: Object.fromEntries(parks.map((item) => [item.id, bounds(item.longitude - 0.01, 48.9, item.longitude + 0.01, 49.1)])),
-    };
-    const labels = placeNameData(parks, { ...closeViewport, zoom: PARK_NAME_LABEL_MIN_ZOOM - 1 }, index);
-
-    expect(labels.features.map((feature) => feature.properties.id)).toEqual(["national-glacier-national-park"]);
-  });
-
-  it("does not place a label for a visible boundary when its pin anchor is outside the viewport", () => {
-    const park = place("national-glacier-national-park", -126);
-    const index: BoundaryIndex = {
-      version: 1,
-      boundsById: { [park.id]: bounds(-124.1, 48.9, -123.9, 49.1) },
-    };
-
-    expect(placeNameData([park], closeViewport, index).features).toEqual([]);
-  });
-
-  it("expands to collision-aware candidate labels for five or fewer visible parks at close zoom", () => {
-    const parks = [
-      place("national-glacier-national-park", -124),
-      place("provincial-denetiah-park", -124.2),
-      place("regional-horne-lake-regional-park", -124.4),
-    ];
-    const index: BoundaryIndex = {
-      version: 1,
-      boundsById: Object.fromEntries(parks.map((item) => [item.id, bounds(item.longitude - 0.01, 48.9, item.longitude + 0.01, 49.1)])),
-    };
-    const labels = placeNameData(parks, closeViewport, index);
+    const labels = placeNameData(parks, closeViewport);
 
     expect(labels.features.map((feature) => feature.properties.id)).toEqual([
       "national-glacier-national-park",
+      "island-bowen-island",
       "provincial-denetiah-park",
       "regional-horne-lake-regional-park",
     ]);
   });
 
-  it("keeps one largest label once more than five parks are visible", () => {
+  it("keeps all candidates in dense samples so dots can represent names that collide", () => {
     const parks = [
-      place("national-glacier-national-park", -124),
-      place("provincial-denetiah-park", -124.2),
-      place("regional-horne-lake-regional-park", -124.4),
-      ...Array.from({ length: PARK_NAME_LABEL_EXPANSION_LIMIT + 1 }, (_, index) => place(`small-${index}`, -124.5 + index * 0.05)),
+      ...Array.from({ length: 12 }, (_, index) => place(`sample-${index}`, -124.5 + index * 0.05)),
     ];
-    const index: BoundaryIndex = {
-      version: 1,
-      boundsById: Object.fromEntries(parks.map((item) => [item.id, bounds(item.longitude - 0.01, 48.9, item.longitude + 0.01, 49.1)])),
-    };
 
-    expect(placeNameData(parks, closeViewport, index).features.map((feature) => feature.properties.id)).toEqual(["national-glacier-national-park"]);
+    expect(placeNameData(parks, closeViewport).features).toHaveLength(12);
   });
 
-  it("prepares only viewport and selected boundary features for the renderer", () => {
-    const places = [
-      place("visible", -124),
-      place("outside", -120),
-      place("selected-outside", -118),
-    ];
+  it("keeps markers and boundaries inside the gateway-supplied sample", () => {
+    const places = [place("visible", -124)];
     const index: BoundaryIndex = {
       version: 1,
       boundsById: {
         visible: bounds(-124.1, 48.9, -123.9, 49.1),
-        outside: bounds(-120.1, 48.9, -119.9, 49.1),
-        "selected-outside": bounds(-118.1, 48.9, -117.9, 49.1),
+        "not-sampled": bounds(-118.1, 48.9, -117.9, 49.1),
       },
     };
-    const boundaryAsset: BoundaryCollection = { type: "FeatureCollection", features: places.map((item) => boundary(item.id)) };
+    const boundaryAsset: BoundaryCollection = { type: "FeatureCollection", features: [boundary("visible"), boundary("not-sampled")] };
     const result = mapPresentation({
       places,
       visited: new Set(["visible"]),
       mode: "explored",
-      selectedId: "selected-outside",
+      selectedId: "not-sampled",
       selectedIds: new Set(),
       viewport: closeViewport,
       boundaryIndex: index,
       boundaryAsset,
+      selectedBoundary: boundary("not-sampled"),
     });
 
-    expect(result.boundaryData.features.map((feature) => feature.properties.id).sort()).toEqual(["selected-outside", "visible"]);
-    expect(result.placeData.features).toHaveLength(3);
+    expect(result.boundaryData.features.map((feature) => feature.properties.id)).toEqual(["visible"]);
+    expect([...result.boundaryIds]).toEqual(["visible"]);
+    expect(result.placeData.features.map((feature) => feature.properties.id)).toEqual(["visible"]);
     expect(result.placeData.features[0].properties.visited).toBe(1);
   });
 });

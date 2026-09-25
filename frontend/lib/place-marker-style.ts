@@ -19,6 +19,13 @@ const categoryColor: ExpressionSpecification = [
   "#F6F0DC",
 ];
 
+const visibleWhenNameDoesNotFit: ExpressionSpecification = [
+  "case",
+  ["boolean", ["feature-state", "nameVisible"], false],
+  0,
+  1,
+];
+
 /** Each point stays an individual map feature, including coincident points. */
 export function placeMarkerLayerSpecifications(): LayerSpecification[] {
   return [
@@ -34,9 +41,11 @@ export function placeMarkerLayerSpecifications(): LayerSpecification[] {
       source: "places",
       paint: {
         "circle-color": categoryColor,
-        "circle-radius": ["case", ["==", ["get", "groupSelected"], 1], 16, ["==", ["get", "visited"], 1], 13, 10],
+        "circle-radius": ["case", ["==", ["get", "groupSelected"], 1], 8, ["==", ["get", "visited"], 1], 6, 5],
+        "circle-opacity": visibleWhenNameDoesNotFit,
         "circle-stroke-color": MAP_INK,
-        "circle-stroke-width": ["case", ["==", ["get", "groupSelected"], 1], 5, 3],
+        "circle-stroke-width": ["case", ["==", ["get", "groupSelected"], 1], 3, 2],
+        "circle-stroke-opacity": visibleWhenNameDoesNotFit,
       },
     },
     {
@@ -45,7 +54,7 @@ export function placeMarkerLayerSpecifications(): LayerSpecification[] {
       source: "places",
       filter: ["==", ["get", "visited"], 1],
       layout: { "text-field": "✓", "text-size": 15, "text-font": ["Noto Sans Bold"] },
-      paint: { "text-color": "#FFFAF0" },
+      paint: { "text-color": "#FFFAF0", "text-opacity": visibleWhenNameDoesNotFit },
     },
   ];
 }
@@ -60,14 +69,14 @@ export function placeNameLayerSpecifications(): LayerSpecification[] {
       layout: {
         "text-field": ["get", "name"],
         "text-font": ["Noto Sans Bold"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 11, 12, 13],
-        "text-anchor": "top",
-        "text-offset": [0, 1.25],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 12, 12, 14, 15, 16],
+        "text-anchor": "center",
+        "text-offset": [0, 0],
         "text-padding": 5,
         "text-max-width": 18,
         "text-allow-overlap": false,
         "text-ignore-placement": false,
-        "symbol-sort-key": ["-", 0, ["get", "areaKm2"]],
+        "symbol-sort-key": ["get", "labelPriority"],
       },
       paint: {
         "text-color": MAP_INK,

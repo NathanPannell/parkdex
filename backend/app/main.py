@@ -15,6 +15,7 @@ from google.auth.exceptions import GoogleAuthError
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
 from psycopg.errors import UniqueViolation
+from shapely.geometry import mapping, shape
 
 from backend.app.auth import (
     DUMMY_PASSWORD_HASH,
@@ -40,6 +41,19 @@ from backend.app.account_deletion import (
     enqueue_photo_object_deletions,
     purge_expired_account_deletion_receipts,
     update_account_deletion_receipt,
+)
+from backend.app.achievements import achievements
+from backend.app.catalogue import (
+    MAP_PLACE_LIMIT,
+    PLACE_CATEGORIES as CATALOGUE_PLACE_CATEGORIES,
+    catalogue_counts,
+    catalogue_place_rows,
+    map_place_rows,
+    normalize_authorities,
+    normalize_categories,
+    normalize_visit_filter,
+    visited_place_rows,
+    active_badge_places,
 )
 from backend.app.auth_emails import AuthEmail, password_reset_email, verification_email
 from backend.app.db import close_pool, connection, open_pool
@@ -96,7 +110,9 @@ from backend.app.schemas import (
     OfflineClaimRequest,
     OfflinePlaceBundle,
     PlaceCollection,
-    PlaceSearchResult,
+    CatalogueSearchResult,
+    CatalogueState,
+    MapPlacesResult,
     SearchPlace,
     PasswordResetConfirmation,
     TrailResult,
@@ -117,11 +133,11 @@ from backend.app.groups import (
     create_group_row,
     rename_group_row,
     place_detail_row,
-    search_place_rows,
 )
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
+DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES = 0.0001
 COVERAGE_NOTE = (
     "Official-source British Columbia collection: Parks Canada destinations, designated "
     "provincial parks, selected regional parks, and curated major islands. Regional coverage "
@@ -676,7 +692,266 @@ def list_places(
     }
 
 
-PLACE_CATEGORIES = frozenset({"national", "provincial", "regional", "island"})
+PLACE_CATEGORIES = frozenset(CATALOGUE_PLACE_CATEGORIES)
+
+
+def _catalogue_identity_parts(
+    identity: AccountIdentity | str | None,
+) -> tuple[str | None, str | None]:
+    if isinstance(identity, AccountIdentity):
+        return identity.account_id, None
+    if isinstance(identity, str):
+        return None, identity
+    return None, None
+
+
+def _selected_categories(
+    *,
+    categories: list[str] | None,
+    plural_categories: list[str] | None,
+    place_type: str | None = None,
+) -> list[str] | None:
+    requested = list(categories or []) + list(plural_categories or [])
+    if place_type:
+        if requested and any(category != place_type for category in requested):
+            raise HTTPException(
+                status_code=400,
+                detail="type and category must match when both are provided",
+            )
+        requested.append(place_type)
+    try:
+        return normalize_categories(requested)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _catalogue_filters(
+    *,
+    categories: list[str] | None,
+    authorities: list[str] | None,
+    visited: str | bool | None,
+) -> tuple[list[str] | None, list[str] | None, bool | None]:
+    normalized_categories = _selected_categories(
+        categories=categories,
+        plural_categories=None,
+    )
+    try:
+        normalized_authorities = normalize_authorities(authorities)
+        visit_filter = normalize_visit_filter(visited)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return normalized_categories, normalized_authorities, visit_filter
+
+
+@app.get("/api/catalogue/state", response_model=CatalogueState)
+def get_catalogue_state(
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    include_staging = settings.staging_field_places_enabled
+    total, category_totals = catalogue_counts(
+        conn, include_staging_field_places=include_staging
+    )
+    active_places = active_badge_places(
+        conn, include_staging_field_places=include_staging
+    )
+    if account_id:
+        visits = visits_for_account(
+            conn, account_id, include_staging_field_places=include_staging
+        )
+        completed = completed_trails_for_account(conn, account_id)
+    elif owner_hash:
+        visits = visits_for_guest(
+            conn, owner_hash, include_staging_field_places=include_staging
+        )
+        completed = [
+            row["trail_id"]
+            for row in conn.execute(
+                "SELECT trail_id FROM guest_trail_completions "
+                "WHERE owner_hash = %s ORDER BY trail_id",
+                (owner_hash,),
+            ).fetchall()
+        ]
+    else:
+        visits = []
+        completed = []
+    active_by_id = {place["id"]: place for place in active_places}
+    visited_set = set(visited_ids(visits))
+    visited_category_totals = {category: 0 for category in PLACE_CATEGORIES}
+    for place_id in visited_set:
+        place = active_by_id.get(place_id)
+        if place is not None:
+            visited_category_totals[place["category"]] += 1
+    return {
+        "total": total,
+        "category_totals": category_totals,
+        "visited_category_totals": visited_category_totals,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
+        "completed_trail_ids": completed,
+        "coverage_note": COVERAGE_NOTE,
+        "visit_claims": {
+            "supported": True,
+            "enforcement": settings.visit_claim_enforcement,
+            "offline_supported": True,
+        },
+        "badges": achievements(places=active_places, visits=visits),
+    }
+
+
+@app.get("/api/catalogue/visited", response_model=CatalogueSearchResult)
+def list_visited_places(
+    response: Response,
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
+    query: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10000),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    normalized_categories = _selected_categories(
+        categories=category, plural_categories=categories
+    )
+    try:
+        normalized_authorities = normalize_authorities(authority)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rows, total = visited_place_rows(
+        conn,
+        account_id=account_id,
+        owner_hash=owner_hash,
+        categories=normalized_categories,
+        authorities=normalized_authorities,
+        query=query,
+        limit=limit,
+        offset=offset,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
+    return {"places": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/map/places", response_model=MapPlacesResult)
+def get_map_places(
+    response: Response,
+    west: float = Query(ge=-180, le=180),
+    south: float = Query(ge=-90, le=90),
+    east: float = Query(ge=-180, le=180),
+    north: float = Query(ge=-90, le=90),
+    limit: int = Query(default=MAP_PLACE_LIMIT, ge=1, le=MAP_PLACE_LIMIT),
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
+    visited: str = Query(default="all"),
+    query: str | None = Query(default=None, max_length=200),
+    selected_id: str | None = Query(default=None, max_length=200),
+    selected_id_camel: str | None = Query(default=None, alias="selectedId", max_length=200),
+    group_id: str | None = Query(default=None, max_length=200),
+    group_id_camel: str | None = Query(default=None, alias="groupId", max_length=200),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    if south > north:
+        raise HTTPException(status_code=400, detail="south must not be greater than north")
+    if selected_id is not None and selected_id_camel is not None and selected_id != selected_id_camel:
+        raise HTTPException(status_code=400, detail="selected_id values must match")
+    if group_id is not None and group_id_camel is not None and group_id != group_id_camel:
+        raise HTTPException(status_code=400, detail="group_id values must match")
+    normalized_categories = _selected_categories(
+        categories=category, plural_categories=categories
+    )
+    normalized_categories, normalized_authorities, visit_filter = _catalogue_filters(
+        categories=normalized_categories,
+        authorities=authority,
+        visited=visited,
+    )
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    selected_group_id = group_id or group_id_camel
+    if selected_group_id is not None:
+        if account_id is None:
+            raise HTTPException(status_code=401, detail="Account required for group map")
+        group = conn.execute(
+            "SELECT 1 FROM account_groups WHERE id::text = %s AND account_id = %s",
+            (selected_group_id, account_id),
+        ).fetchone()
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found")
+    rows, total = map_place_rows(
+        conn,
+        west=west,
+        south=south,
+        east=east,
+        north=north,
+        categories=normalized_categories,
+        authorities=normalized_authorities,
+        query=query,
+        visited=visit_filter,
+        selected_id=selected_id or selected_id_camel,
+        group_id=selected_group_id,
+        account_id=account_id,
+        owner_hash=owner_hash,
+        limit=limit,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
+    return {"places": rows, "total": total, "limit": limit}
+
+
+@app.get("/api/map/boundaries")
+def get_map_boundaries(
+    response: Response,
+    place_id: list[str] | None = Query(default=None),
+    place_id_camel: list[str] | None = Query(default=None, alias="placeId"),
+    conn: Connection = Depends(connection),
+) -> dict:
+    requested_ids = list(place_id or []) + list(place_id_camel or [])
+    if len(requested_ids) > MAP_PLACE_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MAP_PLACE_LIMIT} place IDs can be requested",
+        )
+    if any(not value or len(value) > 200 for value in requested_ids):
+        raise HTTPException(status_code=400, detail="Invalid place ID")
+    unique_ids = list(dict.fromkeys(requested_ids))
+    response.headers["Cache-Control"] = "public, max-age=300"
+    if not unique_ids:
+        return {"type": "FeatureCollection", "features": []}
+    visible_ids = {
+        row["id"]
+        for row in conn.execute(
+            f"SELECT p.id FROM places p WHERE p.id = ANY(%s) AND {place_visibility_clause('p')}",
+            (unique_ids, *place_visibility_params(settings.staging_field_places_enabled)),
+        ).fetchall()
+    }
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    features = []
+    for place_id in unique_ids:
+        if place_id not in visible_ids:
+            continue
+        feature = registry.feature(place_id)
+        if feature is None:
+            continue
+        source_geometry = shape(feature["geometry"])
+        display_geometry = source_geometry.simplify(
+            DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
+            preserve_topology=True,
+        )
+        if display_geometry.is_empty or not display_geometry.is_valid:
+            display_geometry = source_geometry
+        features.append({**feature, "geometry": mapping(display_geometry)})
+    return {"type": "FeatureCollection", "features": features}
 
 
 def _record_id(value: str, label: str) -> str:
@@ -699,11 +974,14 @@ def _group_name(value: str, label: str = "Collection") -> str:
     return name
 
 
-@app.get("/api/places/search", response_model=PlaceSearchResult)
+@app.get("/api/places/search", response_model=CatalogueSearchResult)
 def search_places(
-    visited: bool | None = Query(default=None),
+    response: Response,
+    visited: str = Query(default="all"),
     place_type: str | None = Query(default=None, alias="type"),
-    category: str | None = Query(default=None),
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
     query: str | None = Query(default=None, max_length=200),
     latitude: float | None = Query(default=None, ge=-90, le=90),
     longitude: float | None = Query(default=None, ge=-180, le=180),
@@ -712,30 +990,43 @@ def search_places(
     offset: int = Query(default=0, ge=0, le=10000),
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
 ):
-    identity = require_bearer(conn, authorization)
-    if place_type and category and place_type != category:
-        raise HTTPException(status_code=400, detail="type and category must match when both are provided")
-    selected_category = place_type or category
-    if selected_category and selected_category not in PLACE_CATEGORIES:
-        raise HTTPException(status_code=400, detail="Invalid place type")
+    response.headers["Cache-Control"] = "no-store"
+    selected_categories = _selected_categories(
+        categories=category,
+        plural_categories=categories,
+        place_type=place_type,
+    )
+    selected_categories, selected_authorities, visit_filter = _catalogue_filters(
+        categories=selected_categories,
+        authorities=authority,
+        visited=visited,
+    )
     if (latitude is None) != (longitude is None):
         raise HTTPException(status_code=400, detail="latitude and longitude must be provided together")
     if radius_km is not None and latitude is None:
         raise HTTPException(status_code=400, detail="radius_km requires latitude and longitude")
-    rows, total = search_place_rows(
-        conn,
-        identity.account_id,
-        visited=visited,
-        category=selected_category,
-        query=query,
-        latitude=latitude,
-        longitude=longitude,
-        radius_km=radius_km,
-        limit=limit,
-        offset=offset,
-        include_staging_field_places=settings.staging_field_places_enabled,
-    )
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    try:
+        rows, total = catalogue_place_rows(
+            conn,
+            categories=selected_categories,
+            authorities=selected_authorities,
+            visited=visit_filter,
+            query=query,
+            account_id=account_id,
+            owner_hash=owner_hash,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km,
+            limit=limit,
+            offset=offset,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"places": rows, "total": total, "limit": limit, "offset": offset}
 
 

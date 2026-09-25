@@ -47,6 +47,7 @@ import { clearPhotoRetryOwner, currentNativeAppState, NATIVE_APP_STATE_EVENT } f
 import { clearUnresolvedClaim, clearUnresolvedClaims, hasUnresolvedClaim } from "./claim-recovery";
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
 import { createCollectionKey, type Place } from "./places";
+import type { Achievement } from "./achievements";
 import {
   createOfflineClaimsService,
   type OfflineClaimOwner,
@@ -58,14 +59,23 @@ type Identity =
   | { kind: "guest"; collectionKey: string }
   | { kind: "account"; token: string; account: Account | null };
 
+type CategoryTotals = Record<Place["category"], number>;
+type CatalogueBadge = Achievement & { requiredPlaces?: Array<{ id: string; name: string }> };
+
 type CataloguePayload = {
-  places: Place[];
+  total: number;
+  categoryTotals: CategoryTotals;
+  visitedCategoryTotals: CategoryTotals;
   visitedIds: string[];
   completedTrailIds?: string[];
   visits?: Visit[];
   coverageNote: string;
   visitClaims?: { supported: boolean; enforcement: "compatible" | "required"; offlineSupported?: boolean };
+  badges: CatalogueBadge[];
 };
+
+type CatalogueMetadataSnapshot = Pick<CataloguePayload, "total" | "categoryTotals" | "visitedCategoryTotals" | "coverageNote" | "badges">;
+type CatalogueContext = { ownerKey: string; headers: Record<string, string> };
 
 export type VisitClaimMode = "unknown" | "legacy" | "compatible" | "required";
 
@@ -102,6 +112,12 @@ type AccountCleanupOptions = {
 
 export type FieldJournal = {
   places: Place[];
+  total: number;
+  categoryTotals: CategoryTotals;
+  visitedCategoryTotals: CategoryTotals;
+  badges: CatalogueBadge[];
+  catalogueOwnerKey: string;
+  catalogueHeaders: Record<string, string>;
   visited: Set<string>;
   completedTrails: Set<string>;
   visitTimestamps: Record<string, string>;
@@ -125,6 +141,7 @@ export type FieldJournal = {
   visitClaimMode: VisitClaimMode;
   toggleVisit: (placeOrId: Pick<Place, "id"> | string) => Promise<void>;
   toggleTrail: (trailId: string) => Promise<void>;
+  retryCatalogue: () => Promise<boolean>;
   retrySync: () => Promise<void>;
   retryPendingClaims: () => Promise<void>;
   discardRejectedClaims: () => Promise<number>;
@@ -168,12 +185,92 @@ function timestampsFor(visits: Visit[] | undefined): Record<string, string> {
   return Object.fromEntries((visits ?? []).map((visit) => [visit.placeId, visit.visitedAt]));
 }
 
-/** The all-place disk index is for search and pins. Full content belongs to the recent-place cache. */
-export function catalogueIndex(places: Place[]): Place[] {
-  return places.map(({ id, name, category, latitude, longitude, region, sourceName, sourceId }) => ({
+/** Compact legacy rows only; current online catalogue data is viewport or search scoped. */
+function compactPlaceIndex({ id, name, category, latitude, longitude, region, sourceName, sourceId }: Place): Place {
+  return {
     id, name, category, latitude, longitude, region, sourceName, sourceId,
     description: "", sourceUrl: "",
-  }));
+  };
+}
+
+/** Compact and cap a legacy index before it is kept in journal state or storage. */
+export function catalogueIndex(places: Place[]): Place[] {
+  return places.slice(0, LEGACY_CATALOGUE_CACHE_LIMIT).map(compactPlaceIndex);
+}
+
+const LEGACY_CATALOGUE_CACHE_LIMIT = 100;
+const EMPTY_CATEGORY_TOTALS: CategoryTotals = { national: 0, provincial: 0, regional: 0, island: 0 };
+const CATALOGUE_STATE_STORAGE_PREFIX = "parkdex:catalogue-state:v1:";
+const PLACE_CATEGORIES = ["national", "provincial", "regional", "island"] as const;
+
+function normalizeCategoryTotals(value: unknown): CategoryTotals {
+  if (typeof value !== "object" || value === null) return { ...EMPTY_CATEGORY_TOTALS };
+  const candidate = value as Partial<CategoryTotals>;
+  return Object.fromEntries(PLACE_CATEGORIES.map((category) => [
+    category,
+    Number.isFinite(candidate[category]) ? candidate[category] : 0,
+  ])) as CategoryTotals;
+}
+
+function stableOwnerHash(value: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function catalogueContextFor(identity: Identity): CatalogueContext {
+  if (identity.kind === "guest") {
+    return {
+      ownerKey: `guest:${stableOwnerHash(identity.collectionKey)}`,
+      headers: { "X-Collection-Key": identity.collectionKey },
+    };
+  }
+  const ownerKey = identity.account?.id
+    ? `account:${identity.account.id}`
+    : `account:pending-${stableOwnerHash(identity.token)}`;
+  return { ownerKey, headers: { Authorization: `Bearer ${identity.token}` } };
+}
+
+function catalogueStateStorageKey(identity: Identity) {
+  return `${CATALOGUE_STATE_STORAGE_PREFIX}${catalogueContextFor(identity).ownerKey}`;
+}
+
+function parseCatalogueMetadataSnapshot(value: unknown): CatalogueMetadataSnapshot | null {
+  if (typeof value !== "object" || value === null) return null;
+  const snapshot = value as Partial<CatalogueMetadataSnapshot>;
+  const categoryTotals = snapshot.categoryTotals;
+  if (!Number.isFinite(snapshot.total)
+    || !categoryTotals
+    || !PLACE_CATEGORIES.every((category) => Number.isFinite(categoryTotals[category]))
+    || typeof snapshot.coverageNote !== "string"
+    || !Array.isArray(snapshot.badges)) return null;
+  return {
+    total: snapshot.total as number,
+    categoryTotals: normalizeCategoryTotals(categoryTotals),
+    visitedCategoryTotals: normalizeCategoryTotals(snapshot.visitedCategoryTotals),
+    coverageNote: snapshot.coverageNote,
+    badges: snapshot.badges,
+  };
+}
+
+function legacyPlaceSample(places: Place[], visited: ReadonlySet<string>, timestamps: Record<string, string>) {
+  const compact = places.map(compactPlaceIndex);
+  const visitedPlaces = compact.filter((place) => visited.has(place.id))
+    .sort((left, right) => (Date.parse(timestamps[right.id] ?? "") || 0) - (Date.parse(timestamps[left.id] ?? "") || 0)
+      || left.id.localeCompare(right.id));
+  const national = compact.filter((place) => place.category === "national" && !visited.has(place.id));
+  const islands = compact.filter((place) => place.category === "island" && !visited.has(place.id))
+    .sort((left, right) => stableOwnerHash(left.id).localeCompare(stableOwnerHash(right.id)));
+  const islandPriority = islands.slice(0, Math.ceil(islands.length / 3));
+  const prioritized = new Set([...visitedPlaces, ...national, ...islandPriority].map((place) => place.id));
+  const remaining = compact.filter((place) => !prioritized.has(place.id))
+    .sort((left, right) => stableOwnerHash(left.id).localeCompare(stableOwnerHash(right.id)));
+  return [...visitedPlaces, ...national, ...islandPriority, ...remaining]
+    .filter((place, index, all) => all.findIndex((candidate) => candidate.id === place.id) === index)
+    .slice(0, LEGACY_CATALOGUE_CACHE_LIMIT);
 }
 
 function metadataFor(visits: Visit[] | undefined, visitedIds?: Iterable<string>, timestamps: Record<string, string> = {}): Record<string, Visit> {
@@ -288,46 +385,8 @@ async function responseError(response: Response, fallback: string): Promise<ApiE
   return new ApiError(message, response.status, code);
 }
 
-const CATALOGUE_BOOT_RETRY_DELAYS_MS = [250, 750, 2_000, 4_000, 8_000, 16_000] as const;
-const CATALOGUE_POST_ERROR_RETRY_AT_MS = [2_000, 5_000, 10_000, 20_000] as const;
-
 function retryableCatalogueFailure(error: unknown) {
   return !(error instanceof ApiError && error.status >= 400 && error.status < 500 && ![408, 429].includes(error.status));
-}
-
-function waitForCatalogueRetry(delayMs: number) {
-  return new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      window.removeEventListener("online", finish);
-      resolve();
-    };
-    const timer = window.setTimeout(finish, delayMs);
-    window.addEventListener("online", finish, { once: true });
-  });
-}
-
-function waitForAbortableDelay(delayMs: number, signal: AbortSignal) {
-  return new Promise<boolean>((resolve) => {
-    if (signal.aborted) {
-      resolve(false);
-      return;
-    }
-    let settled = false;
-    const finish = (completed: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
-      resolve(completed);
-    };
-    const abort = () => finish(false);
-    const timer = window.setTimeout(() => finish(true), delayMs);
-    signal.addEventListener("abort", abort, { once: true });
-  });
 }
 
 function isLocationClaimRequired(error: unknown): error is ApiError {
@@ -336,6 +395,11 @@ function isLocationClaimRequired(error: unknown): error is ApiError {
 
 export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJournal {
   const [places, setPlaces] = useState<Place[]>([]);
+  const [total, setTotal] = useState(0);
+  const [categoryTotals, setCategoryTotals] = useState<CategoryTotals>(EMPTY_CATEGORY_TOTALS);
+  const [visitedCategoryTotals, setVisitedCategoryTotals] = useState<CategoryTotals>(EMPTY_CATEGORY_TOTALS);
+  const [badges, setBadges] = useState<CatalogueBadge[]>([]);
+  const [catalogueContext, setCatalogueContext] = useState<CatalogueContext>({ ownerKey: "", headers: {} });
   const [visited, setVisited] = useState<Set<string>>(new Set());
   const [completedTrails, setCompletedTrails] = useState<Set<string>>(new Set());
   const [visitTimestamps, setVisitTimestamps] = useState<Record<string, string>>({});
@@ -360,12 +424,14 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   const epochRef = useRef(new IdentityEpoch());
   const transitionRef = useRef(false);
   const identityRef = useRef<Identity>({ kind: "guest", collectionKey: "" });
+  const catalogueContextRef = useRef<CatalogueContext>({ ownerKey: "", headers: {} });
   const mountedRef = useRef(true);
   const placesRef = useRef(places);
   const catalogueReadyRef = useRef(false);
   const catalogueNeedsRecoveryRef = useRef(false);
+  const catalogueStateSequenceRef = useRef(0);
   const catalogueBackgroundRequestRef = useRef<{ epoch: number; promise: Promise<boolean> } | null>(null);
-  const cataloguePostErrorRecoveryRef = useRef<{ epoch: number; controller: AbortController; promise: Promise<void> } | null>(null);
+  const refreshCatalogueAfterProgressChangeRef = useRef<(identity: Identity) => void>(() => {});
   const visitedRef = useRef(visited);
   const trailsRef = useRef(completedTrails);
   const visitTimestampsRef = useRef(visitTimestamps);
@@ -394,6 +460,25 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     return { promise, resolve };
   });
 
+  const publishIdentity = useCallback((identity: Identity) => {
+    identityRef.current = identity;
+    const nextContext = catalogueContextFor(identity);
+    const currentContext = catalogueContextRef.current;
+    const currentHeaderKeys = Object.keys(currentContext.headers);
+    if (currentContext.ownerKey === nextContext.ownerKey
+      && currentHeaderKeys.length === Object.keys(nextContext.headers).length
+      && currentHeaderKeys.every((key) => currentContext.headers[key] === nextContext.headers[key])) return;
+    if (catalogueContextRef.current.ownerKey !== nextContext.ownerKey) {
+      setTotal(0);
+      setCategoryTotals(EMPTY_CATEGORY_TOTALS);
+      setVisitedCategoryTotals(EMPTY_CATEGORY_TOTALS);
+      setBadges([]);
+      setCoverageNote("");
+    }
+    catalogueContextRef.current = nextContext;
+    setCatalogueContext(nextContext);
+  }, []);
+
   const noteStorageFailure = useCallback((success: boolean) => {
     if (!success) setStorageUnavailable(true);
     return success;
@@ -403,6 +488,25 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     if (!storageRef.current) throw new Error("Storage is not ready.");
     return storageRef.current;
   }, []);
+
+  const hydrateCatalogueMetadata = useCallback(async (identity: Identity) => {
+    let snapshot: CatalogueMetadataSnapshot | null;
+    try {
+      snapshot = parseCatalogueMetadataSnapshot(await readStored<unknown>(
+        storage(),
+        catalogueStateStorageKey(identity),
+        null,
+      ));
+    } catch {
+      return;
+    }
+    if (!snapshot || !sameOwner(identityRef.current, identity)) return;
+    setTotal(snapshot.total);
+    setCategoryTotals(snapshot.categoryTotals);
+    setVisitedCategoryTotals(snapshot.visitedCategoryTotals);
+    setBadges(snapshot.badges);
+    setCoverageNote(snapshot.coverageNote);
+  }, [storage]);
 
   const updateProgress = useCallback((nextVisited: Set<string>, nextTrails: Set<string>, nextVisitTimestamps = visitTimestampsRef.current, nextVisitMetadata = visitMetadataRef.current) => {
     visitedRef.current = nextVisited;
@@ -424,7 +528,6 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      cataloguePostErrorRecoveryRef.current?.controller.abort();
     };
   }, []);
 
@@ -496,6 +599,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       visitMutationsRef.current.record(placeId, null);
       updateProgress(nextVisited, new Set(trailsRef.current), nextTimestamps, nextMetadata);
       if (identity.kind === "guest") await persistGuest(); else await persistAccount();
+      refreshCatalogueAfterProgressChangeRef.current(identity);
     } else if (identity.kind === "guest") {
       // Guest import drains the guest outbox while the account remains the
       // active identity, so persist its rollback from the stored guest state
@@ -559,7 +663,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const collectionKey = identityRef.current.kind === "guest"
       ? identityRef.current.collectionKey
       : await readStored<string>(target, JOURNAL_STORAGE.collectionKey, "");
-    identityRef.current = { kind: "guest", collectionKey };
+    publishIdentity({ kind: "guest", collectionKey });
+    await hydrateCatalogueMetadata(identityRef.current);
     setAuthenticated(false);
     setAccount(null);
     const guestVisited = guestVisitOutboxRef.current.applyTo(await readStored<string[]>(target, JOURNAL_STORAGE.guestVisited, []));
@@ -579,7 +684,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     setGuestProgressAvailable(await guestHasProgress());
     if (message) setSyncMessage(message);
     return cleanupSucceeded;
-  }, [guestHasProgress, noteStorageFailure, storage, updateProgress]);
+  }, [guestHasProgress, hydrateCatalogueMetadata, noteStorageFailure, publishIdentity, storage, updateProgress]);
 
   const accountDeletionIntent = useCallback(async (accountId: string): Promise<AccountDeletionIntent> => {
     const target = storage();
@@ -871,6 +976,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           updateProgress(rebased.visited, new Set(trailsRef.current), rebased.timestamps, rebased.metadata);
           await persistAccount();
           if (!isCurrent()) return;
+          refreshCatalogueAfterProgressChangeRef.current(identity);
         }
         const queueAfterDrain = await refreshOfflineClaimState(identity, capturedEpoch);
         if (provision && offlineClaimsAvailable) {
@@ -1040,46 +1146,63 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     return removed;
   }, [offlineClaimsService, refreshOfflineClaimState]);
 
-  const refreshCatalogue = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
+  const refreshCatalogue = useCallback(async (
+    isActive: () => boolean = () => mountedRef.current,
+    refreshProgress = true,
+  ) => {
     const identity = identityRef.current;
     if (!apiBaseUrl || (identity.kind === "guest" && !identity.collectionKey)) return false;
     const catalogueEpoch = epochRef.current.capture();
+    const requestSequence = ++catalogueStateSequenceRef.current;
     const visitBox = identity.kind === "guest" ? guestVisitOutboxRef.current : accountVisitOutboxRef.current;
     const trailBox = identity.kind === "guest" ? guestTrailOutboxRef.current : accountTrailOutboxRef.current;
     const visitCheckpoint = visitBox.checkpoint();
     const trailCheckpoint = trailBox.checkpoint();
     const visitMutationCheckpoint = visitMutationsRef.current.checkpoint();
-    const headers: Record<string, string> = identity.kind === "account"
-      ? { Authorization: `Bearer ${identity.token}` }
-      : { "X-Collection-Key": identity.collectionKey };
+    const headers = catalogueContextFor(identity).headers;
     try {
-      const response = await fetch(`${apiBaseUrl}/api/places?summary=true`, { cache: "no-store", headers });
+      const response = await fetch(`${apiBaseUrl}/api/catalogue/state`, { cache: "no-store", headers });
       if (!response.ok) throw await responseError(response, "Could not load the field guide.");
       const payload = await response.json() as CataloguePayload;
-      if (!isActive() || !epochRef.current.isCurrent(catalogueEpoch) || !sameOwner(identityRef.current, identity)) return false;
-      const snapshotVisited = visitBox.applyTo(payload.visitedIds, visitCheckpoint);
-      const nextTrails = trailBox.applyTo(payload.completedTrailIds ?? [], trailCheckpoint);
-      updatePlaces(payload.places);
-      setCoverageNote(payload.coverageNote);
+      if (!isActive() || !epochRef.current.isCurrent(catalogueEpoch)
+        || requestSequence !== catalogueStateSequenceRef.current
+        || !sameOwner(identityRef.current, identity)) return false;
+      const nextCategoryTotals = normalizeCategoryTotals(payload.categoryTotals);
+      const nextVisitedCategoryTotals = normalizeCategoryTotals(payload.visitedCategoryTotals);
+      const metadataSnapshot: CatalogueMetadataSnapshot = {
+        total: Number.isFinite(payload.total) ? payload.total : 0,
+        categoryTotals: nextCategoryTotals,
+        visitedCategoryTotals: nextVisitedCategoryTotals,
+        coverageNote: typeof payload.coverageNote === "string" ? payload.coverageNote : "",
+        badges: Array.isArray(payload.badges) ? payload.badges : [],
+      };
+      setTotal(metadataSnapshot.total);
+      setCategoryTotals(nextCategoryTotals);
+      setVisitedCategoryTotals(nextVisitedCategoryTotals);
+      setBadges(metadataSnapshot.badges);
+      setCoverageNote(metadataSnapshot.coverageNote);
       setVisitClaimMode(visitClaimModeFor(payload));
       setOfflineClaimsAvailable(payload.visitClaims?.offlineSupported === true);
       noteStorageFailure(await writeStored(storage(), "parkdex:claim-capability:v1", {
         apiBaseUrl, mode: visitClaimModeFor(payload), offlineSupported: payload.visitClaims?.offlineSupported === true,
       }));
-      const payloadTimestamps = timestampsFor(payload.visits);
-      const rebasedVisits = visitMutationsRef.current.rebase(
-        snapshotVisited,
-        payloadTimestamps,
-        metadataFor(payload.visits, snapshotVisited, payloadTimestamps),
-        visitMutationCheckpoint,
-      );
-      updateProgress(rebasedVisits.visited, nextTrails, rebasedVisits.timestamps, rebasedVisits.metadata);
-      noteStorageFailure(await writeStored(storage(), JOURNAL_STORAGE.places, catalogueIndex(payload.places)));
-      if (identity.kind === "guest") await persistGuest(); else await persistAccount();
+      noteStorageFailure(await writeStored(storage(), catalogueStateStorageKey(identity), metadataSnapshot));
+      if (refreshProgress) {
+        const snapshotVisited = visitBox.applyTo(payload.visitedIds, visitCheckpoint);
+        const nextTrails = trailBox.applyTo(payload.completedTrailIds ?? [], trailCheckpoint);
+        const payloadTimestamps = timestampsFor(payload.visits);
+        const rebasedVisits = visitMutationsRef.current.rebase(
+          snapshotVisited,
+          payloadTimestamps,
+          metadataFor(payload.visits, snapshotVisited, payloadTimestamps),
+          visitMutationCheckpoint,
+        );
+        updateProgress(rebasedVisits.visited, nextTrails, rebasedVisits.timestamps, rebasedVisits.metadata);
+        if (identity.kind === "guest") await persistGuest(); else await persistAccount();
+      }
       if (isActive() && epochRef.current.isCurrent(catalogueEpoch) && sameOwner(identityRef.current, identity)) {
         catalogueReadyRef.current = true;
         catalogueNeedsRecoveryRef.current = false;
-        cataloguePostErrorRecoveryRef.current?.controller.abort();
         setLoadError("");
       }
       return true;
@@ -1093,73 +1216,46 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       catalogueNeedsRecoveryRef.current = retryableCatalogueFailure(error);
       throw error;
     }
-  }, [apiBaseUrl, expireAccount, noteStorageFailure, persistAccount, persistGuest, storage, updatePlaces, updateProgress]);
+  }, [apiBaseUrl, expireAccount, noteStorageFailure, persistAccount, persistGuest, storage, updateProgress]);
 
-  const refreshCatalogueWithRetry = useCallback(async (isActive: () => boolean = () => mountedRef.current) => {
-    let lastError: unknown;
-    const retryEpoch = epochRef.current.capture();
-    const retryIdentity = identityRef.current;
-    const isCurrent = () => isActive()
-      && epochRef.current.isCurrent(retryEpoch)
-      && sameOwner(identityRef.current, retryIdentity);
-    for (let attempt = 0; attempt <= CATALOGUE_BOOT_RETRY_DELAYS_MS.length; attempt += 1) {
-      if (!isCurrent()) return false;
-      try {
-        return await refreshCatalogue(isCurrent);
-      } catch (error) {
-        if (!isCurrent()) return false;
-        lastError = error;
-        if (!retryableCatalogueFailure(error) || attempt === CATALOGUE_BOOT_RETRY_DELAYS_MS.length) throw error;
-        if (isCurrent() && (window.navigator.onLine === false || attempt >= 2)) {
-          setLoadError(placesRef.current.length
-            ? "Showing your saved field guide offline."
-            : "Could not load the field guide. Reconnecting…");
-        }
-        await waitForCatalogueRetry(CATALOGUE_BOOT_RETRY_DELAYS_MS[attempt]);
-      }
-    }
-    throw lastError;
-  }, [refreshCatalogue]);
-
-  const runBackgroundCatalogueRecovery = useCallback((withBootRetries: boolean, isActive: () => boolean = () => mountedRef.current) => {
+  const runBackgroundCatalogueRecovery = useCallback((isActive: () => boolean = () => mountedRef.current) => {
     const requestEpoch = epochRef.current.capture();
     const existing = catalogueBackgroundRequestRef.current;
     if (existing?.epoch === requestEpoch) return existing.promise;
-    const promise = (withBootRetries ? refreshCatalogueWithRetry(isActive) : refreshCatalogue(isActive)).finally(() => {
+    const promise = refreshCatalogue(isActive).finally(() => {
       if (catalogueBackgroundRequestRef.current?.promise === promise) catalogueBackgroundRequestRef.current = null;
     });
     catalogueBackgroundRequestRef.current = { epoch: requestEpoch, promise };
     return promise;
-  }, [refreshCatalogue, refreshCatalogueWithRetry]);
+  }, [refreshCatalogue]);
 
-  const startPostErrorCatalogueRecovery = useCallback(() => {
-    if (!apiBaseUrl || !mountedRef.current || !catalogueNeedsRecoveryRef.current) return;
-    const recoveryEpoch = epochRef.current.capture();
-    const existing = cataloguePostErrorRecoveryRef.current;
-    if (existing?.epoch === recoveryEpoch && !existing.controller.signal.aborted) return;
-    existing?.controller.abort();
-    const controller = new AbortController();
-    const startedAt = Date.now();
-    const promise = (async () => {
-      for (const retryAtMs of CATALOGUE_POST_ERROR_RETRY_AT_MS) {
-        const remainingDelay = Math.max(0, retryAtMs - (Date.now() - startedAt));
-        if (!await waitForAbortableDelay(remainingDelay, controller.signal)) return;
-        const isCurrent = () => mountedRef.current
-          && !controller.signal.aborted
-          && epochRef.current.isCurrent(recoveryEpoch);
-        if (!isCurrent() || !catalogueNeedsRecoveryRef.current) return;
-        try {
-          if (await runBackgroundCatalogueRecovery(false, isCurrent)) return;
-        } catch (error) {
-          if (!isCurrent() || !retryableCatalogueFailure(error)) return;
-          setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
-        }
+  const retryCatalogue = useCallback(async () => {
+    if (!apiBaseUrl || !mountedRef.current || transitionRef.current) return false;
+    try {
+      return await runBackgroundCatalogueRecovery();
+    } catch (error) {
+      if (mountedRef.current) {
+        setLoadError(placesRef.current.length
+          ? "Showing your saved field guide offline."
+          : error instanceof Error ? error.message : "Could not load the field guide.");
       }
-    })().finally(() => {
-      if (cataloguePostErrorRecoveryRef.current?.promise === promise) cataloguePostErrorRecoveryRef.current = null;
-    });
-    cataloguePostErrorRecoveryRef.current = { epoch: recoveryEpoch, controller, promise };
+      return false;
+    }
   }, [apiBaseUrl, runBackgroundCatalogueRecovery]);
+
+  const refreshCatalogueAfterProgressChange = useCallback((identity: Identity) => {
+    if (!apiBaseUrl || !browserIsOnline() || !mountedRef.current || !sameOwner(identityRef.current, identity)) return;
+    void refreshCatalogue(() => mountedRef.current, false).catch((error) => {
+      if (!mountedRef.current || !sameOwner(identityRef.current, identity)) return;
+      setLoadError(placesRef.current.length
+        ? "Showing your saved field guide offline."
+        : error instanceof Error ? error.message : "Could not load the field guide.");
+    });
+  }, [apiBaseUrl, refreshCatalogue]);
+
+  useEffect(() => {
+    refreshCatalogueAfterProgressChangeRef.current = refreshCatalogueAfterProgressChange;
+  }, [refreshCatalogueAfterProgressChange]);
 
   useEffect(() => {
     let active = true;
@@ -1199,9 +1295,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       const guestVisitTimestamps = await readStored<Record<string, string>>(target, JOURNAL_STORAGE.guestVisitTimestamps, {});
       const storedGuestMetadata = await readStored<Record<string, Visit>>(target, JOURNAL_STORAGE.guestVisitMetadata, {});
       const guestVisitMetadata = metadataFor(Object.values(storedGuestMetadata), guestVisited, guestVisitTimestamps);
-      const cachedPlaces = catalogueIndex(await readStored<Place[]>(target, JOURNAL_STORAGE.places, []));
-      // Replace legacy full-catalogue cache in place without changing its storage key.
-      if (cachedPlaces.length) noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.places, cachedPlaces));
+      const legacyPlacesValue = await readStored<Place[]>(target, JOURNAL_STORAGE.places, []);
+      const legacyPlaces = Array.isArray(legacyPlacesValue) ? legacyPlacesValue : [];
 
       let savedToken = await target.getItem(ACCOUNT_TOKEN_KEY) ?? "";
       const cachedAccount = await readStored<AccountSnapshot | null>(target, JOURNAL_STORAGE.accountSnapshot, null);
@@ -1268,7 +1363,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       let initialVisitTimestamps = guestVisitTimestamps;
       let initialVisitMetadata = guestVisitMetadata;
       if (savedToken) {
-        identityRef.current = { kind: "account", token: savedToken, account: cachedAccount?.account ?? null };
+        publishIdentity({ kind: "account", token: savedToken, account: cachedAccount?.account ?? null });
         if (cachedAccount) {
           await hydrateAccountOutboxes(cachedAccount.account.id);
           initialVisited = accountVisitOutboxRef.current.applyTo(cachedAccount.visitedIds);
@@ -1282,10 +1377,15 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           initialVisitMetadata = {};
         }
       } else {
-        identityRef.current = { kind: "guest", collectionKey };
+        publishIdentity({ kind: "guest", collectionKey });
       }
 
+      const cachedPlaces = legacyPlaceSample(legacyPlaces, initialVisited, initialVisitTimestamps);
+      // Preserve the legacy storage key for older app code, but migrate its
+      // unbounded catalogue value to a small, compact offline fallback.
+      noteStorageFailure(await writeStored(target, JOURNAL_STORAGE.places, cachedPlaces));
       if (cachedPlaces.length) updatePlaces(cachedPlaces);
+      await hydrateCatalogueMetadata(identityRef.current);
       setAuthenticated(Boolean(savedToken));
       setAccount(savedToken ? cachedAccount?.account ?? null : null);
       updateProgress(initialVisited, initialTrails, initialVisitTimestamps, initialVisitMetadata);
@@ -1304,7 +1404,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
           const session = await loadAccount(apiBaseUrl, savedToken);
           if (!active || !epochRef.current.isCurrent(accountEpoch)) return;
            await hydrateAccountOutboxes(session.account.id);
-           identityRef.current = { kind: "account", token: savedToken, account: session.account };
+           publishIdentity({ kind: "account", token: savedToken, account: session.account });
            setAccount(session.account);
            setGuestProgressAvailable(await guestHasProgress() && !await guestWasImportedBy(session.account.id));
            const sessionTimestamps = timestampsFor(session.visits);
@@ -1338,8 +1438,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       }
 
       try {
-        if (cachedPlaces.length || identityRef.current.kind === "account") await refreshCatalogue(() => active);
-        else await refreshCatalogueWithRetry(() => active);
+        await refreshCatalogue(() => active);
       } catch {
         if (!active) return;
         setLoadError(cachedPlaces.length ? "Showing your saved field guide offline." : "Could not load the field guide. Check your connection and try again.");
@@ -1360,7 +1459,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     });
 
     return () => { active = false; epoch.advance(); };
-  }, [apiBaseUrl, clearDeletedAccountLocalState, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrationReady, noteStorageFailure, persistAccount, refreshCatalogue, refreshCatalogueWithRetry, storage, switchToGuest, updatePlaces, updateProgress]);
+  }, [apiBaseUrl, clearDeletedAccountLocalState, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrateCatalogueMetadata, hydrationReady, noteStorageFailure, persistAccount, publishIdentity, refreshCatalogue, storage, switchToGuest, updatePlaces, updateProgress]);
 
   useEffect(() => {
     if (loading) return;
@@ -1386,20 +1485,22 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
   useEffect(() => {
     if (loading) return;
     const recover = () => {
+      if (!browserIsForeground()) return;
       if (catalogueReadyRef.current && !catalogueNeedsRecoveryRef.current) return;
-      void runBackgroundCatalogueRecovery(true).catch((error) => {
+      void runBackgroundCatalogueRecovery().catch((error) => {
         if (!mountedRef.current) return;
         setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
-        startPostErrorCatalogueRecovery();
       });
     };
     window.addEventListener("online", recover);
-    return () => window.removeEventListener("online", recover);
-  }, [loading, runBackgroundCatalogueRecovery, startPostErrorCatalogueRecovery]);
-
-  useEffect(() => {
-    if (!loading) startPostErrorCatalogueRecovery();
-  }, [loading, startPostErrorCatalogueRecovery]);
+    document.addEventListener("visibilitychange", recover);
+    window.addEventListener(NATIVE_APP_STATE_EVENT, recover);
+    return () => {
+      window.removeEventListener("online", recover);
+      document.removeEventListener("visibilitychange", recover);
+      window.removeEventListener(NATIVE_APP_STATE_EVENT, recover);
+    };
+  }, [loading, runBackgroundCatalogueRecovery]);
 
   const toggle = useCallback(async (kind: "visits" | "trails", id: string) => {
     if (transitionRef.current) return;
@@ -1447,6 +1548,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       await outbox.drain(id, (pendingId, pendingValue, revision) => kind === "visits"
         ? drainVisit(visitBox, pendingId, pendingValue, identity, capturedEpoch, revision)
         : putProgress(kind, pendingId, pendingValue, identity, capturedEpoch));
+      if (kind === "visits") refreshCatalogueAfterProgressChange(identity);
     } catch (error) {
       if (kind === "visits" && enabled && isLocationClaimRequired(error)) {
         setSyncMessage("This park now requires location confirmation. Use “Confirm this visit” while you’re there.");
@@ -1459,7 +1561,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       try { await persistOutbox(identity, visitBox.snapshot(), trailBox.snapshot()); }
       catch { setSyncMessage("Private device storage could not save this checkoff. Try again before leaving this page."); }
     }
-  }, [cancelPendingAccountVisitUndos, drainVisit, noteStorageFailure, persistAccount, persistGuest, persistOutbox, putProgress, storage, updateProgress]);
+  }, [cancelPendingAccountVisitUndos, drainVisit, noteStorageFailure, persistAccount, persistGuest, persistOutbox, putProgress, refreshCatalogueAfterProgressChange, storage, updateProgress]);
 
   const toggleVisit = useCallback((placeOrId: Pick<Place, "id"> | string) => {
     return toggle("visits", typeof placeOrId === "string" ? placeOrId : placeOrId.id);
@@ -1472,7 +1574,8 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     const identity: Identity = { kind: "account", token: session.token, account: session.account };
     visitMutationsRef.current.reset();
     await clearRestoredCameraPhoto(`account:${session.account.id}`);
-    identityRef.current = identity;
+    publishIdentity(identity);
+    await hydrateCatalogueMetadata(identity);
     noteStorageFailure(await writeRawStored(storage(), ACCOUNT_TOKEN_KEY, session.token));
     setAuthenticated(true);
     setAccount(session.account);
@@ -1494,14 +1597,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       }
     }
     if (!catalogueReadyRef.current || catalogueNeedsRecoveryRef.current) {
-      void runBackgroundCatalogueRecovery(true, () => mountedRef.current && epochRef.current.isCurrent(capturedEpoch)).catch((error) => {
+      void runBackgroundCatalogueRecovery(() => mountedRef.current && epochRef.current.isCurrent(capturedEpoch)).catch((error) => {
         if (mountedRef.current && epochRef.current.isCurrent(capturedEpoch)) {
           setLoadError(placesRef.current.length ? "Showing your saved field guide offline." : error instanceof Error ? error.message : "Could not load the field guide.");
-          startPostErrorCatalogueRecovery();
         }
       });
-    }
-  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, noteStorageFailure, persistAccount, runBackgroundCatalogueRecovery, startPostErrorCatalogueRecovery, storage, updateProgress]);
+    } else refreshCatalogueAfterProgressChange(identity);
+  }, [drainIdentity, guestHasProgress, guestWasImportedBy, hydrateAccountOutboxes, hydrateCatalogueMetadata, noteStorageFailure, persistAccount, publishIdentity, refreshCatalogueAfterProgressChange, runBackgroundCatalogueRecovery, storage, updateProgress]);
 
   const authenticate = useCallback(async (mode: "login" | "register", email: string, password: string) => {
     if (transitionRef.current) return;
@@ -1556,10 +1658,10 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     }
     const currentIdentity = identityRef.current;
     if (!epochRef.current.isCurrent(capturedEpoch) || currentIdentity.kind !== "account" || currentIdentity.account?.id !== capturedIdentity.account.id) return;
-    identityRef.current = { ...currentIdentity, account: refreshed.account };
+    publishIdentity({ ...currentIdentity, account: refreshed.account });
     setAccount(refreshed.account);
     await persistAccount();
-  }, [apiBaseUrl, expireAccount, persistAccount]);
+  }, [apiBaseUrl, expireAccount, persistAccount, publishIdentity]);
 
   const logout = useCallback(async () => {
     if (transitionRef.current || identityRef.current.kind !== "account") return;
@@ -1762,6 +1864,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       if (accountIdentity.account) noteStorageFailure(await writeStored(target, importedGuestKey(accountIdentity.account.id), revision));
       setGuestProgressAvailable(false);
       setSyncMessage(`Added ${result.importedVisitCount} guest ${result.importedVisitCount === 1 ? "place" : "places"}.`);
+      refreshCatalogueAfterProgressChange(accountIdentity);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         expireAccount(capturedEpoch);
@@ -1772,7 +1875,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [apiBaseUrl, drainIdentity, expireAccount, noteStorageFailure, persistAccount, storage, updateProgress]);
+  }, [apiBaseUrl, drainIdentity, expireAccount, noteStorageFailure, persistAccount, refreshCatalogueAfterProgressChange, storage, updateProgress]);
 
   const currentClaimIdentity = useCallback((): Extract<Identity, { kind: "account" }> => {
     if (!apiBaseUrl) throw new Error("Visit saving is unavailable while the field guide is offline.");
@@ -1875,12 +1978,13 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       visitMutationsRef.current.record(confirmation.placeId, claimedVisit);
       updateProgress(nextVisited, new Set(trailsRef.current), nextTimestamps, nextMetadata);
       await persistCurrentOwner(identity);
+      refreshCatalogueAfterProgressChange(identity);
       return confirmation;
     } catch (error) {
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, offlineClaimsService, persistCurrentOwner, refreshOfflineClaimState, syncOfflineClaims, updateProgress]);
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, offlineClaimsService, persistCurrentOwner, refreshCatalogueAfterProgressChange, refreshOfflineClaimState, syncOfflineClaims, updateProgress]);
 
   const reconcileClaim = useCallback(async (placeId: string): Promise<ClaimConfirmation | null> => {
     const identity = currentClaimIdentity();
@@ -1897,7 +2001,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         metadataFor(session.visits, sessionVisited, sessionTimestamps),
         mutationCheckpoint,
       );
-      identityRef.current = { ...identity, account: session.account };
+      publishIdentity({ ...identity, account: session.account });
       setAccount(session.account);
       updateProgress(
         rebased.visited,
@@ -1906,6 +2010,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         rebased.metadata,
       );
       await persistAccount();
+      refreshCatalogueAfterProgressChange(identity);
       const visit = rebased.metadata[placeId];
       if (!visit?.claim) return null;
       return {
@@ -1919,7 +2024,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       handleOwnerError(error, identity, capturedEpoch);
       throw error;
     }
-  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, persistAccount, updateProgress]);
+  }, [apiBaseUrl, assertCurrentClaimOwner, currentClaimIdentity, handleOwnerError, persistAccount, publishIdentity, refreshCatalogueAfterProgressChange, updateProgress]);
 
   const updatePhotoFlag = useCallback(async (identity: Identity, capturedEpoch: number, placeId: string, hasPhoto: boolean) => {
     assertCurrentClaimOwner(identity, capturedEpoch, "Your journal changed before this photo update finished. Refresh your journal before trying again.");
@@ -2016,6 +2121,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       setOfflineClaimRecoveryCount(0);
       setOfflineClaimRecoveryMessage("");
       setProgressRevision((revision) => revision + 1);
+      refreshCatalogueAfterProgressChange(identity);
       let cleanupError: unknown = null;
       try {
         await finishProgressResetCleanup(identity.account.id);
@@ -2048,6 +2154,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
         setOfflineClaimRecoveryCount(0);
         setOfflineClaimRecoveryMessage("");
         setProgressRevision((revision) => revision + 1);
+        refreshCatalogueAfterProgressChange(identity);
         if (!cleanupMarkerSaved) {
           try {
             cleanupMarkerSaved = await Promise.resolve(writeStored(storage(), JOURNAL_STORAGE.accountProgressResetCleanup, { accountId: identity.account.id }));
@@ -2071,7 +2178,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
       transitionRef.current = false;
       setTransitionBusy(false);
     }
-  }, [apiBaseUrl, expireAccount, finishProgressResetCleanup, noteStorageFailure, persistAccount, persistAccountOutboxes, storage, updateProgress]);
+  }, [apiBaseUrl, expireAccount, finishProgressResetCleanup, noteStorageFailure, persistAccount, persistAccountOutboxes, refreshCatalogueAfterProgressChange, storage, updateProgress]);
 
   useEffect(() => {
     if (syncMessage !== "Your progress has been reset.") return;
@@ -2081,6 +2188,12 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
 
   return {
     places,
+    total,
+    categoryTotals,
+    visitedCategoryTotals,
+    badges,
+    catalogueOwnerKey: catalogueContext.ownerKey,
+    catalogueHeaders: catalogueContext.headers,
     visited,
     completedTrails,
     visitTimestamps,
@@ -2103,6 +2216,7 @@ export function useFieldJournal({ apiBaseUrl }: { apiBaseUrl: string }): FieldJo
     visitClaimMode,
     toggleVisit,
     toggleTrail,
+    retryCatalogue,
     retrySync,
     retryPendingClaims,
     discardRejectedClaims,

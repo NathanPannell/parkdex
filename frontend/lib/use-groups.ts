@@ -3,7 +3,7 @@
 import { networkErrorMessage } from "./network-error";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readStored, removeStored, writeStored } from "./field-journal-state";
-import type { Place } from "./places";
+import type { Place, PlaceCatalogueSummary } from "./places";
 import { GroupOutbox } from "./group-outbox";
 import { addGroupPlace, createGroup, deleteGroup, GroupsApiError, listGroups, normalizeGroups, removeGroupPlace, updateGroup, type AuthenticatedRequest, type Group } from "./groups";
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
@@ -104,9 +104,16 @@ function compactGroup(group: Group) {
     name: group.name,
     ...(group.isWishlist ? { isWishlist: true } : {}),
     placeIds,
+    places: group.places.map(compactPlace),
     ...(group.createdAt ? { createdAt: group.createdAt } : {}),
     ...(group.updatedAt ? { updatedAt: group.updatedAt } : {}),
   };
+}
+
+function compactPlace(place: Place): PlaceCatalogueSummary {
+  const summary = { ...place };
+  delete summary.visitorDetails;
+  return summary;
 }
 
 function compactGroups(groups: Group[]) {
@@ -245,10 +252,30 @@ export function useGroups({ apiBaseUrl, authenticated, identityKey = "", places,
     }
   }, [storage]);
 
-  const hydrate = useCallback((items: Group[]) => items.map((group) => ({
-    ...group,
-    places: placeIdsFor(group).map((id) => places.find((place) => place.id === id)).filter((place): place is Place => Boolean(place)),
-  })), [places]);
+  const hydrate = useCallback((items: Group[]) => items.map((group) => {
+    const placeIds = placeIdsFor(group);
+    const groupPlaces = new Map(group.places.map((place) => [place.id, place]));
+    const included = new Set<string>();
+    const hydratedPlaces: Place[] = [];
+
+    // The groups API returns its own place objects. Keep them as the source of
+    // truth so sampling the global catalogue cannot erase collection members.
+    for (const placeId of placeIds) {
+      const place = groupPlaces.get(placeId) ?? places.find((candidate) => candidate.id === placeId);
+      if (!place || included.has(place.id)) continue;
+      hydratedPlaces.push(place);
+      included.add(place.id);
+    }
+    // Retain API-provided objects even when a server response has an incomplete
+    // placeIds list. The ID list remains useful for pending membership updates.
+    for (const place of group.places) {
+      if (included.has(place.id)) continue;
+      hydratedPlaces.push(place);
+      included.add(place.id);
+    }
+
+    return { ...group, placeIds, places: hydratedPlaces };
+  }), [places]);
 
   const sendMembership = useCallback(async (
     accountId: string,

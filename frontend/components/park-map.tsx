@@ -22,7 +22,7 @@ import {
 } from "@/lib/exploration-map-style";
 import { VANCOUVER_ISLAND_OVERVIEW_BOUNDS, cameraOffsetForPadding, cameraPaddingForOverlays, cameraPaddingWithContentMargin, hasUsableCameraViewport, type CameraPadding, type LayoutRect } from "@/lib/map-fit";
 import { placeMarkerLayerSpecifications, placeNameLayerSpecifications } from "@/lib/place-marker-style";
-import type { MapViewport, ParkMapMode, RecentPostcard } from "@/lib/map-presentation";
+import { normalizeMapViewport, type MapViewport, type ParkMapMode, type RecentPostcard } from "@/lib/map-presentation";
 import type { UseMapPresentationResult } from "@/lib/use-map-presentation";
 import type { Place } from "@/lib/places";
 import { distanceKm } from "@/lib/discovery";
@@ -50,11 +50,16 @@ export const POSTCARD_MARKER_FOOTPRINT = {
   anchorGap: 28,
 } as const;
 
+const EMPTY_CAMERA_PLACES: readonly Place[] = [];
+
 export { postcardMarkerCoordinates, postcardPhotoKey, loadPostcardPhotoUrl } from "@/lib/use-map-presentation";
 export type { RecentPostcard } from "@/lib/map-presentation";
 
 export type ParkMapProps = {
   places: Place[];
+  /** Camera targets can extend beyond the sampled marker and boundary set. */
+  cameraPlace?: Place | null;
+  groupCameraPlaces?: readonly Place[];
   visited: Set<string>;
   mode?: ParkMapMode;
   presentation: UseMapPresentationResult;
@@ -207,13 +212,13 @@ function cameraSnapshot(map: MapLibreMap): MapCameraSnapshot {
 
 export function mapViewportSnapshot(map: MapLibreMap): MapViewport {
   const bounds = map.getBounds();
-  return {
+  return normalizeMapViewport({
     west: bounds.getWest(),
     south: bounds.getSouth(),
     east: bounds.getEast(),
     north: bounds.getNorth(),
     zoom: map.getZoom(),
-  };
+  });
 }
 
 export function measuredCameraPadding(container: HTMLElement, includeSheet: boolean, base?: CameraPadding) {
@@ -302,6 +307,8 @@ function updateBoundaryFilters(map: MapLibreMap, presentation: BoundaryMapFilter
 
 export function ParkMap({
   places,
+  cameraPlace = null,
+  groupCameraPlaces = EMPTY_CAMERA_PLACES,
   visited,
   mode = "explored",
   presentation,
@@ -460,7 +467,7 @@ export function ParkMap({
           const current = dataRef.current;
           map.addSource(EXPLORATION_TERRITORY_SOURCE_ID, { type: "geojson", data: current.presentation.explorationData });
           explorationLayerSpecifications().forEach((layer) => map.addLayer(layer));
-          map.addSource("places", { type: "geojson", data: current.presentation.placeData });
+          map.addSource("places", { type: "geojson", promoteId: "id", data: current.presentation.placeData });
           placeMarkerLayerSpecifications().forEach((layer) => map.addLayer(layer));
           map.addSource("place-names", { type: "geojson", data: current.presentation.placeNameData });
           placeNameLayerSpecifications().forEach((layer) => map.addLayer(layer));
@@ -483,6 +490,27 @@ export function ParkMap({
             map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
             map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
           });
+
+          const labelledPlaceIds = new Set<string>();
+          const syncLabelVisibility = () => {
+            if (!map.getLayer("place-name-labels") || !map.getSource("places")) return;
+            const sampledIds = new Set(dataRef.current.presentation.placeData.features.map((feature) => feature.properties.id));
+            const renderedNameIds = new Set(map.queryRenderedFeatures({ layers: ["place-name-labels"] })
+              .map((feature) => feature.properties.id)
+              .filter((id): id is string => typeof id === "string" && sampledIds.has(id)));
+
+            labelledPlaceIds.forEach((id) => {
+              if (renderedNameIds.has(id)) return;
+              if (sampledIds.has(id)) map.setFeatureState({ source: "places", id }, { nameVisible: false });
+              labelledPlaceIds.delete(id);
+            });
+            renderedNameIds.forEach((id) => {
+              if (labelledPlaceIds.has(id)) return;
+              map.setFeatureState({ source: "places", id }, { nameVisible: true });
+              labelledPlaceIds.add(id);
+            });
+          };
+          map.on("render", syncLabelVisibility);
 
           setupBoundaries();
           moveToOverview(false);
@@ -605,8 +633,8 @@ export function ParkMap({
 
   useEffect(() => {
     if ((!selectedId && !selectedIds.size) || !mapRef.current) return;
-    const place = selectedId ? places.find((candidate) => candidate.id === selectedId) : undefined;
-    const groupPlaces = places.filter((candidate) => selectedIds.has(candidate.id));
+    const place = selectedId && cameraPlace?.id === selectedId ? cameraPlace : undefined;
+    const groupPlaces = groupCameraPlaces.filter((candidate) => selectedIds.has(candidate.id));
     if (!place && !groupPlaces.length) return;
     const map = mapRef.current;
     const container = containerRef.current;
@@ -647,7 +675,7 @@ export function ParkMap({
       resizeObserver.disconnect();
       window.removeEventListener("resize", fitSelected);
     };
-  }, [selectedId, places, boundaryIndex, selectedIds]);
+  }, [selectedId, cameraPlace, groupCameraPlaces, boundaryIndex, selectedIds]);
 
   const postcard = recentPostcard && postcardMarkerPosition ? (
     <div

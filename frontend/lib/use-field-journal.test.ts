@@ -18,6 +18,7 @@ vi.mock("./place-cache", () => ({ getRecentPlaceCache: () => recentPlaceCache })
 import { ACCOUNT_TOKEN_KEY, type Visit } from "./account";
 import { markUnresolvedClaim } from "./claim-recovery";
 import { JOURNAL_STORAGE, accountPendingKey, importedGuestKey } from "./field-journal-state";
+import type { Place } from "./places";
 import { catalogueIndex, useFieldJournal } from "./use-field-journal";
 
 const API = "https://api.example.test";
@@ -66,11 +67,14 @@ function json(data: unknown, status = 200) {
 
 function catalogue(visitedIds: string[] = [], completedTrailIds: string[] = []) {
   return {
-    places: [PLACE],
+    total: 1,
+    categoryTotals: { national: 0, provincial: 0, regional: 1, island: 0 },
+    visitedCategoryTotals: { national: 0, provincial: 0, regional: visitedIds.length, island: 0 },
     visitedIds,
     completedTrailIds,
     coverageNote: "Coverage",
     visitClaims: { supported: true, enforcement: "required" as const },
+    badges: [{ id: "first-visit", name: "First visit", species: "bear", description: "Visit a place", current: visitedIds.length, target: 1, earned: visitedIds.length > 0 }],
   };
 }
 
@@ -196,6 +200,66 @@ afterEach(() => {
 });
 
 describe("useFieldJournal identity and progress races", () => {
+  it("boots from compact catalogue state and exposes owner-scoped request context", async () => {
+    const state = {
+      ...catalogue([PLACE.id]),
+      total: 1_030,
+      categoryTotals: { national: 7, provincial: 693, regional: 293, island: 37 },
+      visitedCategoryTotals: { national: 1, provincial: 2, regional: 3, island: 4 },
+      badges: [{ id: "first-visit", name: "First visit", species: "bear", description: "Visit a place", current: 1, target: 1, earned: true }],
+    };
+    const fetchMock = vi.fn((url: string | URL | Request) => {
+      if (!String(url).endsWith("/api/catalogue/state")) throw new Error(`Unexpected request: ${url}`);
+      return json(state);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(fetchMock).toHaveBeenCalledWith(`${API}/api/catalogue/state`, expect.objectContaining({
+      cache: "no-store",
+      headers: { "X-Collection-Key": KEY },
+    }));
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(`${API}/api/places?summary=true`);
+    expect(result.current.places).toEqual([]);
+    expect(result.current.total).toBe(1_030);
+    expect(result.current.categoryTotals).toEqual({ national: 7, provincial: 693, regional: 293, island: 37 });
+    expect(result.current.visitedCategoryTotals).toEqual({ national: 1, provincial: 2, regional: 3, island: 4 });
+    expect(result.current.badges).toEqual(state.badges);
+    expect(result.current.catalogueOwnerKey).toMatch(/^guest:[0-9a-f]{8}$/);
+    expect(result.current.catalogueHeaders).toEqual({ "X-Collection-Key": KEY });
+    expect(JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.places) ?? "null")).toEqual([]);
+    const storedMetadata = window.localStorage.getItem(`parkdex:catalogue-state:v1:${result.current.catalogueOwnerKey}`);
+    expect(JSON.parse(storedMetadata ?? "{}")).toMatchObject({ total: 1_030, badges: state.badges });
+    expect(JSON.parse(storedMetadata ?? "{}")).not.toHaveProperty("places");
+  });
+
+  it("migrates a legacy full index to a compact 100-place sample with visited parks first", async () => {
+    const oldPlaces = Array.from({ length: 180 }, (_, index) => ({
+      ...PLACE,
+      id: `legacy-${index}`,
+      name: `Legacy ${index}`,
+      category: index < 10 ? "national" as const : index < 46 ? "island" as const : "regional" as const,
+      visitorDetails: { private: true },
+    }));
+    const visitedId = "legacy-179";
+    window.localStorage.setItem(JOURNAL_STORAGE.places, JSON.stringify(oldPlaces));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisited, JSON.stringify([visitedId]));
+    window.localStorage.setItem(JOURNAL_STORAGE.guestVisitTimestamps, JSON.stringify({ [visitedId]: "2026-09-01T12:00:00Z" }));
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("offline"))));
+
+    const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const migrated = JSON.parse(window.localStorage.getItem(JOURNAL_STORAGE.places) ?? "[]") as Place[];
+    expect(migrated).toHaveLength(100);
+    expect(migrated[0].id).toBe(visitedId);
+    expect(migrated.every((place) => !("visitorDetails" in place))).toBe(true);
+    expect(result.current.places).toEqual(migrated);
+    expect(migrated.filter((place) => place.category === "national")).toHaveLength(10);
+  });
+
   it("keeps a failed sign-in scoped to its caller rather than global sync feedback", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
       if (String(url).endsWith("/api/auth/login")) return Promise.reject(new TypeError("Failed to fetch"));
@@ -214,7 +278,7 @@ describe("useFieldJournal identity and progress races", () => {
   it("retries a fresh guest catalogue as soon as the native network reports online", async () => {
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
-      if (!String(url).endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
+      if (!String(url).endsWith("/api/catalogue/state")) throw new Error(`Unexpected request: ${url}`);
       catalogueAttempts += 1;
       return catalogueAttempts === 1 ? Promise.reject(new TypeError("network not ready")) : json(catalogue());
     }));
@@ -225,11 +289,11 @@ describe("useFieldJournal identity and progress races", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(catalogueAttempts).toBe(2);
-    expect(result.current.places).toEqual([PLACE]);
-    expect(result.current.loadError).toBe("");
+    expect(result.current.places).toEqual([]);
+    await waitFor(() => expect(result.current.loadError).toBe(""));
   });
 
-  it("shows reconnecting feedback after a known-offline failure while boot stays in loading", async () => {
+  it("finishes boot after one failed catalogue request while offline", async () => {
     vi.useFakeTimers();
     setNavigatorOnline(false);
     let catalogueAttempts = 0;
@@ -243,17 +307,18 @@ describe("useFieldJournal identity and progress races", () => {
       await act(async () => { await Promise.resolve(); });
     }
     expect(catalogueAttempts).toBe(1);
-    expect(result.current.loading).toBe(true);
-    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.loadError).toBe("Could not load the field guide. Check your connection and try again.");
   });
 
-  it("keeps bounded boot recovery active through a slow Android reconnect", async () => {
+  it("does not schedule catalogue retries and exposes an explicit retry action", async () => {
     vi.useFakeTimers();
     setNavigatorOnline(true);
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn(() => {
       catalogueAttempts += 1;
-      return catalogueAttempts < 6 ? Promise.reject(new TypeError("network still starting")) : json(catalogue());
+      return catalogueAttempts === 1 ? Promise.reject(new TypeError("network still starting")) : json(catalogue());
     }));
 
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
@@ -261,75 +326,37 @@ describe("useFieldJournal identity and progress races", () => {
       await act(async () => { await Promise.resolve(); });
     }
     expect(catalogueAttempts).toBe(1);
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(999); });
-    expect(catalogueAttempts).toBe(2);
-    expect(result.current.loadError).toBe("");
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(catalogueAttempts).toBe(3);
-    expect(result.current.loading).toBe(true);
-    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(13_999); });
-    expect(catalogueAttempts).toBe(5);
-    expect(result.current.loading).toBe(true);
-    expect(result.current.loadError).toBe("Could not load the field guide. Reconnecting…");
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-    expect(catalogueAttempts).toBe(6);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(catalogueAttempts).toBe(1);
     expect(result.current.loading).toBe(false);
-    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.retryCatalogue).toBeTypeOf("function");
+    await act(async () => { expect(await result.current.retryCatalogue()).toBe(true); });
+    expect(catalogueAttempts).toBe(2);
     expect(result.current.loadError).toBe("");
   });
 
-  it("continues finite timed recovery after every boot attempt fails without an online event", async () => {
-    vi.useFakeTimers();
+  it.each(["visibilitychange", "parkdex:native-app-state"] as const)("recovers a failed catalogue request on %s", async (eventName) => {
     let catalogueAttempts = 0;
-    vi.stubGlobal("fetch", vi.fn(() => {
+    vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
+      if (!String(url).endsWith("/api/catalogue/state")) throw new Error(`Unexpected request: ${url}`);
       catalogueAttempts += 1;
-      return catalogueAttempts < 8 ? Promise.reject(new TypeError("network still unavailable")) : json(catalogue());
+      return catalogueAttempts === 1 ? Promise.reject(new TypeError("offline")) : json(catalogue());
     }));
 
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
       await act(async () => { await Promise.resolve(); });
     }
-    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
-    expect(catalogueAttempts).toBe(7);
-    expect(result.current.loading).toBe(false);
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_999); });
-    expect(catalogueAttempts).toBe(7);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-
-    expect(catalogueAttempts).toBe(8);
-    expect(result.current.places).toEqual([PLACE]);
-    expect(result.current.loadError).toBe("");
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => {
+      if (eventName === "visibilitychange") document.dispatchEvent(new Event(eventName));
+      else window.dispatchEvent(new Event(eventName));
+    });
+    await waitFor(() => expect(catalogueAttempts).toBe(2));
+    await waitFor(() => expect(result.current.loadError).toBe(""));
   });
 
-  it("cancels post-error timed recovery on unmount", async () => {
-    vi.useFakeTimers();
-    let catalogueAttempts = 0;
-    vi.stubGlobal("fetch", vi.fn(() => {
-      catalogueAttempts += 1;
-      return Promise.reject(new TypeError("offline"));
-    }));
-
-    const mounted = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
-    for (let turn = 0; turn < 20 && catalogueAttempts === 0; turn += 1) {
-      await act(async () => { await Promise.resolve(); });
-    }
-    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
-    expect(catalogueAttempts).toBe(7);
-    expect(mounted.result.current.loading).toBe(false);
-
-    mounted.unmount();
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(catalogueAttempts).toBe(7);
-  });
-
-  it("discards a guest post-error schedule when account identity takes over", async () => {
-    vi.useFakeTimers();
+  it("does not retry a failed guest catalogue on a timer after account identity takes over", async () => {
     let guestCatalogueAttempts = 0;
     let accountCatalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
@@ -337,7 +364,7 @@ describe("useFieldJournal identity and progress races", () => {
       if (path.endsWith("/api/auth/login")) {
         return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
       }
-      if (!path.endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
+      if (!path.endsWith("/api/catalogue/state")) throw new Error(`Unexpected request: ${url}`);
       if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
         accountCatalogueAttempts += 1;
         return json(catalogue([PLACE.id]));
@@ -350,23 +377,22 @@ describe("useFieldJournal identity and progress races", () => {
     for (let turn = 0; turn < 20 && guestCatalogueAttempts === 0; turn += 1) {
       await act(async () => { await Promise.resolve(); });
     }
-    await act(async () => { await vi.advanceTimersByTimeAsync(31_000); });
-    expect(guestCatalogueAttempts).toBe(7);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(guestCatalogueAttempts).toBe(1);
     expect(result.current.loading).toBe(false);
 
     await act(() => result.current.authenticate("login", ACCOUNT.email, "password123"));
     for (let turn = 0; turn < 20 && accountCatalogueAttempts === 0; turn += 1) {
       await act(async () => { await Promise.resolve(); });
     }
-    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
 
-    expect(guestCatalogueAttempts).toBe(7);
+    expect(guestCatalogueAttempts).toBe(1);
     expect(accountCatalogueAttempts).toBe(1);
     expect(result.current.authenticated).toBe(true);
     expect(result.current.visited.has(PLACE.id)).toBe(true);
   });
 
-  it("cancels the failed guest retry and refreshes the catalogue for the account that signs in", async () => {
+  it("refreshes the catalogue for the account that signs in after the guest request fails", async () => {
     let guestCatalogueAttempts = 0;
     let accountCatalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
@@ -374,7 +400,7 @@ describe("useFieldJournal identity and progress races", () => {
       if (path.endsWith("/api/auth/login")) {
         return json({ token: "account-token", expiresAt: new Date(Date.now() + 60_000).toISOString(), account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [] });
       }
-      if (!path.endsWith("/api/places?summary=true")) throw new Error(`Unexpected request: ${url}`);
+      if (!path.endsWith("/api/catalogue/state")) throw new Error(`Unexpected request: ${url}`);
       if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
         accountCatalogueAttempts += 1;
         return json(catalogue([PLACE.id]));
@@ -392,7 +418,7 @@ describe("useFieldJournal identity and progress races", () => {
     await waitFor(() => expect(accountCatalogueAttempts).toBe(1));
     expect(guestCatalogueAttempts).toBe(1);
     expect(result.current.authenticated).toBe(true);
-    expect(result.current.places).toEqual([PLACE]);
+    expect(result.current.places).toEqual([]);
     expect(result.current.visited.has(PLACE.id)).toBe(true);
   });
 
@@ -411,7 +437,7 @@ describe("useFieldJournal identity and progress races", () => {
     expect(result.current.loadError).toBe("Showing your saved field guide offline.");
   });
 
-  it.each(["waiting to retry", "in flight"] as const)("does not continue a boot request %s after unmount", async (phase) => {
+  it.each(["after failure", "in flight"] as const)("does not retry a catalogue request %s after unmount", async (phase) => {
     const lateCatalogue = deferred<Response>();
     let catalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn(() => {
@@ -430,7 +456,6 @@ describe("useFieldJournal identity and progress races", () => {
     await new Promise((resolve) => window.setTimeout(resolve, 20));
 
     expect(catalogueAttempts).toBe(1);
-    expect(mounted.result.current.loadError).toBe("");
   });
 
   it("falls back to legacy account writes when the previous API has no claim capability", async () => {
@@ -553,7 +578,7 @@ describe("useFieldJournal identity and progress races", () => {
     let accountCatalogueAttempts = 0;
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
-      if (path.endsWith("/api/places?summary=true")) {
+      if (path.endsWith("/api/catalogue/state")) {
         if (new Headers(init?.headers).get("Authorization") === "Bearer account-token") {
           accountCatalogueAttempts += 1;
           return json(catalogue([PLACE.id]));
@@ -786,7 +811,7 @@ describe("useFieldJournal identity and progress races", () => {
         requestId = JSON.parse(String(init.body)).requestId;
         return json({ deleted: true, photoCleanupPending: false });
       }
-      if (path.endsWith("/api/places?summary=true")) return json({ ...catalogue([PLACE.id], ["account-trail"]), visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/catalogue/state")) return json({ ...catalogue([PLACE.id], ["account-trail"]), visits: [CLAIM_VISIT] });
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -825,7 +850,7 @@ describe("useFieldJournal identity and progress races", () => {
         if (deletionAttempts === 1) return Promise.reject(new TypeError("connection lost after the request was sent"));
         return json({ detail: "Session is no longer valid." }, 401);
       }
-      if (path.endsWith("/api/places?summary=true")) return json(catalogue([PLACE.id]));
+      if (path.endsWith("/api/catalogue/state")) return json(catalogue([PLACE.id]));
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -866,7 +891,7 @@ describe("useFieldJournal identity and progress races", () => {
         accountLoads += 1;
         return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [] });
       }
-      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
+      if (path.endsWith("/api/catalogue/state")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -892,7 +917,7 @@ describe("useFieldJournal identity and progress races", () => {
       void _init;
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
-      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
+      if (path.endsWith("/api/catalogue/state")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -917,7 +942,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: otherAccount, visitedIds: [], completedTrailIds: [], visits: [] });
-      if (path.endsWith("/api/places?summary=true")) return json(catalogue());
+      if (path.endsWith("/api/catalogue/state")) return json(catalogue());
       throw new Error(`Unexpected request: ${url}`);
     }));
 
@@ -940,7 +965,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places?summary=true")) return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
+      if (path.endsWith("/api/catalogue/state")) return json({ ...catalogue([PLACE.id]), visits: [CLAIM_VISIT] });
       if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "PUT") return photoResponse.promise;
       if (path.endsWith("/api/account") && init?.method === "DELETE") return json({ deleted: true, photoCleanupPending: false });
       throw new Error(`Unexpected request: ${url}`);
@@ -1042,7 +1067,7 @@ describe("useFieldJournal identity and progress races", () => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return accountSnapshot.promise;
       if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
-      if (path.endsWith("/api/places?summary=true")) return catalogueSnapshot.promise;
+      if (path.endsWith("/api/catalogue/state")) return catalogueSnapshot.promise;
       return json({});
     }));
 
@@ -1055,7 +1080,7 @@ describe("useFieldJournal identity and progress races", () => {
       accountSnapshot.resolve(await json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] }));
       await Promise.resolve();
     });
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places?summary=true`, expect.anything()));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/catalogue/state`, expect.anything()));
     await act(async () => {
       catalogueSnapshot.resolve(await json(catalogue()));
     });
@@ -1074,12 +1099,12 @@ describe("useFieldJournal identity and progress races", () => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
       if (path.endsWith("/api/claims")) return json(CLAIM_CONFIRMATION);
-      if (path.endsWith("/api/places?summary=true")) return catalogueSnapshot.promise;
+      if (path.endsWith("/api/catalogue/state")) return catalogueSnapshot.promise;
       return json({});
     }));
 
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/places?summary=true`, expect.anything()));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(`${API}/api/catalogue/state`, expect.anything()));
     expect(result.current.createClaim).toBeUndefined();
     await act(async () => { catalogueSnapshot.resolve(await json(catalogue())); });
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -1103,7 +1128,7 @@ describe("useFieldJournal identity and progress races", () => {
       const path = String(url);
       if (!apiReachable) return Promise.reject(new TypeError("offline"));
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [], completedTrailIds: [], visits: [] });
-      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue());
+      if (path.endsWith("/api/catalogue/state")) return json(offlineCatalogue());
       if (path.endsWith("/api/offline-claim-grants")) return json({
         grantToken: "offline-grant-v1",
         issuedAt: new Date(Date.now() - 1_000).toISOString(),
@@ -1187,7 +1212,7 @@ describe("useFieldJournal identity and progress races", () => {
     const fetchMock = vi.fn((url: string | URL | Request) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/catalogue/state")) return json(offlineCatalogue([PLACE.id]));
       if (path.endsWith("/api/offline-claim-grants")) return json({
         grantToken: "offline-grant-v1",
         issuedAt: new Date(Date.now() - 1_000).toISOString(),
@@ -1318,7 +1343,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/catalogue/state")) return json(offlineCatalogue([PLACE.id]));
       if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
         queueAtUndo = (JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items ?? []).map((item: { placeId: string }) => item.placeId);
         return json({ detail: { message: "Temporarily offline" } }, 503);
@@ -1372,7 +1397,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/catalogue/state")) return json(offlineCatalogue([PLACE.id]));
       if (path.endsWith(`/api/visits/${PLACE.id}`) && init?.method === "PUT") {
         queueAtUndo = (JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items ?? []).map((item: { placeId: string }) => item.placeId);
         return json({ visited: false, visitedAt: null });
@@ -1419,7 +1444,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [CLAIM_VISIT] });
-      if (path.endsWith("/api/places?summary=true")) return json(offlineCatalogue([PLACE.id]));
+      if (path.endsWith("/api/catalogue/state")) return json(offlineCatalogue([PLACE.id]));
       if (path.endsWith("/api/offline-claims")) {
         claimCalls.push(init ?? {});
         return receipt.promise;
@@ -1489,7 +1514,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [visitWithPhoto] });
-      if (path.endsWith("/api/places?summary=true")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
+      if (path.endsWith("/api/catalogue/state")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
       if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "DELETE") {
         sequence.push("remote-photo");
         const rows = JSON.parse(window.localStorage.getItem(queueKey) ?? "{}").items as Array<{ placeId: string; state: string; photoState: string }>;
@@ -1539,7 +1564,7 @@ describe("useFieldJournal identity and progress races", () => {
     vi.stubGlobal("fetch", vi.fn((url: string | URL | Request, init?: RequestInit) => {
       const path = String(url);
       if (path.endsWith("/api/auth/me")) return json({ account: ACCOUNT, visitedIds: [PLACE.id], completedTrailIds: [], visits: [visitWithPhoto] });
-      if (path.endsWith("/api/places?summary=true")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
+      if (path.endsWith("/api/catalogue/state")) return json({ ...offlineCatalogue([PLACE.id]), visits: [visitWithPhoto] });
       if (path.endsWith(`/api/visits/${PLACE.id}/photo`) && init?.method === "DELETE") {
         remoteDeletes += 1;
         return Promise.resolve(new Response(null, { status: 204 }));
@@ -1946,7 +1971,7 @@ describe("useFieldJournal identity and progress races", () => {
   });
 
   it("does not send claim or photo requests for a logged-out guest", async () => {
-    const fetchMock = vi.fn((url: string | URL | Request) => String(url).endsWith("/api/places?summary=true") ? json(catalogue()) : json(catalogue()));
+    const fetchMock = vi.fn((url: string | URL | Request) => String(url).endsWith("/api/catalogue/state") ? json(catalogue()) : json(catalogue()));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useFieldJournal({ apiBaseUrl: API }));
     await waitFor(() => expect(result.current.loading).toBe(false));
