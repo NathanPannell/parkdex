@@ -32,6 +32,10 @@
 .field-guide-shell .global-progress::after { display: none; }
 .field-guide-shell .maplibregl-ctrl-top-right { top: 198px; }
 .field-guide-shell .connection-status { top: auto; bottom: calc(88px + env(safe-area-inset-bottom)); right: 12px; left: 12px; z-index: 15; width: auto; }
+.field-guide-shell .offline-mode-note { flex-wrap: wrap; gap: 4px; background: var(--paper-bright); }
+.field-guide-shell .offline-mode-note button { min-height: 32px; margin-left: auto; }
+.field-guide-shell .collection-load-more { display: block; width: calc(100% - 12px); min-height: 44px; margin: 14px 6px 6px; border: 1px solid var(--forest); border-radius: 11px; background: var(--paper-bright); color: var(--forest); cursor: pointer; font-weight: 850; }
+.field-guide-shell .collection-load-more:hover { background: #e6eddf; }
 .field-guide-shell .map-stage:has(.connection-status) .place-sheet { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); max-height: calc(100dvh - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--connection-status-height,34px)); }
 .field-guide-shell .map-stage:has(.connection-status) .feature-panel { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); }
 .field-guide-shell .place-sheet { bottom: calc(88px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); z-index: 16; }

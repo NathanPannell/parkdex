@@ -62,6 +62,84 @@ class PlaceSearchResult(BaseModel):
     offset: int
 
 
+class CatalogueSearchPlace(SearchPlace):
+    priority_tier: int = Field(serialization_alias="priorityTier")
+    priority_key: str = Field(serialization_alias="priorityKey")
+    authority: str
+    list_region: str = Field(serialization_alias="listRegion")
+
+
+class CatalogueSearchResult(BaseModel):
+    places: list[CatalogueSearchPlace]
+    total: int
+    limit: int
+    offset: int
+
+
+class MapPlaceSummary(BaseModel):
+    id: str
+    name: str
+    category: PlaceCategory
+    latitude: float
+    longitude: float
+    region: str
+    source_url: str = Field(serialization_alias="sourceUrl")
+    source_name: str = Field(serialization_alias="sourceName")
+    source_id: str | None = Field(default=None, serialization_alias="sourceId")
+    authority: str
+    list_region: str = Field(serialization_alias="listRegion")
+    visited: bool
+    priority_tier: int = Field(serialization_alias="priorityTier")
+    priority_key: str = Field(serialization_alias="priorityKey")
+
+
+class MapPlacesResult(BaseModel):
+    places: list[MapPlaceSummary]
+    total: int
+    limit: int
+
+
+class Achievement(BaseModel):
+    id: str
+    name: str
+    species: str
+    description: str
+    required_place_ids: list[str] | None = Field(
+        default=None,
+        serialization_alias="requiredPlaceIds",
+        exclude_if=lambda value: value is None,
+    )
+    required_places: list[dict[str, str]] | None = Field(
+        default=None,
+        serialization_alias="requiredPlaces",
+        exclude_if=lambda value: value is None,
+    )
+    current: int
+    target: int
+    earned: bool
+    earned_at: datetime | None = Field(
+        default=None,
+        serialization_alias="earnedAt",
+        exclude_if=lambda value: value is None,
+    )
+
+
+class CatalogueState(BaseModel):
+    total: int
+    category_totals: dict[str, int] = Field(serialization_alias="categoryTotals")
+    visited_category_totals: dict[str, int] = Field(
+        serialization_alias="visitedCategoryTotals"
+    )
+    visited_ids: list[str] = Field(serialization_alias="visitedIds")
+    visits: list["Visit"]
+    completed_trail_ids: list[str] = Field(
+        default_factory=list, serialization_alias="completedTrailIds"
+    )
+    coverage_note: str = Field(serialization_alias="coverageNote")
+    visit_claims: "VisitClaimCapability" = Field(serialization_alias="visitClaims")
+    badges: list[Achievement]
+
+
 class GroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     placeIds: list[str] = Field(

@@ -13,6 +13,9 @@ export type Place = {
   sourceUrl: string;
   sourceName: string;
   sourceId?: string | null;
+  /** Server-derived list metadata; older detail responses may omit it. */
+  authority?: string;
+  listRegion?: string;
   visitorDetails?: PlaceVisitorDetails | null;
 };
 

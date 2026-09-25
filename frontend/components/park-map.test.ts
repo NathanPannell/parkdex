@@ -90,6 +90,15 @@ describe("map viewport reporting", () => {
 
     expect(mapViewportSnapshot(map)).toEqual({ west: -125, south: 48, east: -123, north: 50, zoom: 9.25 });
   });
+
+  it("normalizes unwrapped map bounds before reporting them to the gateway", () => {
+    const map = {
+      getBounds: () => ({ getWest: () => 530, getSouth: () => -95, getEast: () => 910, getNorth: () => 95 }),
+      getZoom: () => 2,
+    } as unknown as MapLibreMap;
+
+    expect(mapViewportSnapshot(map)).toEqual({ west: -180, south: -90, east: 180, north: 90, zoom: 2 });
+  });
 });
 
 describe("map place visibility and progress mode", () => {

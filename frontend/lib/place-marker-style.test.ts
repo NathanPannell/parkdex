@@ -16,9 +16,16 @@ describe("place marker map style", () => {
     expect(layers.some((layer) => layer.id.includes("cluster"))).toBe(false);
   });
 
-  it("keeps visible category markers smaller than their touch targets", () => {
+  it("keeps small category dots while preserving large touch targets", () => {
     expect(layers.find((layer) => layer.id === "place-hit-targets")).toMatchObject({
       paint: { "circle-radius": 30, "circle-color": "rgba(0,0,0,0)" },
+    });
+    expect(layers.find((layer) => layer.id === "place-points")).toMatchObject({
+      paint: {
+        "circle-radius": ["case", ["==", ["get", "groupSelected"], 1], 8, ["==", ["get", "visited"], 1], 6, 5],
+        "circle-opacity": ["case", ["boolean", ["feature-state", "nameVisible"], false], 0, 1],
+        "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "nameVisible"], false], 0, 1],
+      },
     });
     expect(layers.find((layer) => layer.id === "place-points")).toMatchObject({
       paint: { "circle-color": [
@@ -32,13 +39,18 @@ describe("place marker map style", () => {
     });
   });
 
-  it("lets MapLibre hide colliding park names and gives larger areas priority", () => {
+  it("lets MapLibre place names where they fit and prioritizes national parks and islands", () => {
     expect(layers.find((layer) => layer.id === "place-name-labels")).toMatchObject({
       layout: {
+        "text-anchor": "center",
+        "text-offset": [0, 0],
         "text-allow-overlap": false,
         "text-ignore-placement": false,
-        "symbol-sort-key": ["-", 0, ["get", "areaKm2"]],
+        "symbol-sort-key": ["get", "labelPriority"],
       },
+    });
+    expect(layers.find((layer) => layer.id === "place-checks")).toMatchObject({
+      paint: { "text-opacity": ["case", ["boolean", ["feature-state", "nameVisible"], false], 0, 1] },
     });
   });
 
