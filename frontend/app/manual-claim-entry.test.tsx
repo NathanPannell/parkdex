@@ -20,7 +20,16 @@ it("passes the staging-only manual claim flag through both app entry pages", () 
 
 it("keeps the control disabled in a production build", () => {
   vi.stubEnv("NEXT_PUBLIC_MANUAL_CLAIM_ENABLED", "0");
+  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://api.parkdex.app");
   render(<Home />);
   render(<ParkdexPage />);
   for (const [props] of vi.mocked(ParkdexApp).mock.calls) expect(props.manualClaimEnabled).toBe(false);
+});
+
+it("enables the control on an owned isolated preview API without a release flag", () => {
+  vi.stubEnv("NEXT_PUBLIC_MANUAL_CLAIM_ENABLED", "");
+  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://api-lp-pr-144-90da7853-81e1226d.up.railway.app");
+  render(<Home />);
+  render(<ParkdexPage />);
+  for (const [props] of vi.mocked(ParkdexApp).mock.calls) expect(props.manualClaimEnabled).toBe(true);
 });
