@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useReducer } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "@/lib/places";
+import { authorityForPlace, collectionFilter, listRegionForPlace } from "@/lib/collection";
+import { achievements } from "@/lib/achievements";
 import type { PlaceVisitorDetails as PlaceVisitorDetailsRecord } from "@/lib/visitor-details";
 import { LocationCapabilityError, publishNativeAppState, registerNativeCapabilities, type LocationSample } from "@/lib/native-capabilities";
 import { dispatchNativeBack } from "@/lib/native-back";
@@ -16,9 +19,15 @@ const rathtrevor: Place = { id: "provincial-rathtrevor-beach-park", name: "Ratht
 const national: Place = { id: "national-pacific-rim-national-park-reserve", name: "Pacific Rim National Park Reserve", category: "national", latitude: 49.05, longitude: -125.7, region: "West Coast", description: "A national park reserve.", sourceUrl: "https://example.test/pacific-rim", sourceName: "Parks Canada" };
 const artlish: Place = { ...place, id: "provincial-artlish-caves-park", name: "Artlish Caves Park" };
 const goldstream: Place = { ...place, id: "provincial-goldstream-park", name: "Goldstream Park" };
+const englishman: Place = { ...place, id: "regional-englishman-river-regional-park", name: "Englishman River Regional Park", category: "regional", latitude: 49.287303, longitude: -124.286889, region: "Central Island" };
 const cormorant: Place = { ...place, id: "island-cormorant-island", name: "Cormorant Island", category: "island", region: "Northern Islands", sourceName: "BC Geographical Names Office" };
 const woss: Place = { ...place, id: "provincial-woss-lake-park", name: "Woss Lake Park", region: "North Island" };
 const defaultPlaces = [place, rathtrevor, national];
+function countsByCategory(places: Place[]) {
+  const counts = { national: 0, provincial: 0, regional: 0, island: 0 };
+  for (const item of places) counts[item.category] += 1;
+  return counts;
+}
 function visitorDetailsRecord(overview: string, areaHectares: number | null = null): PlaceVisitorDetailsRecord {
   return {
     schemaVersion: "1.0.0",
@@ -43,11 +52,30 @@ function visitorDetailsRecord(overview: string, areaHectares: number | null = nu
 }
 const journal = {
   places: defaultPlaces.slice(), visited: new Set<string>(), visitTimestamps: {}, completedTrails: new Set<string>(), coverageNote: "Coverage",
+  catalogueTotalOverride: null as number | null,
+  get total() { return this.catalogueTotalOverride ?? this.places.length; },
+  get categoryTotals() { return countsByCategory(this.places); },
+  get visitedCategoryTotals() { return countsByCategory(this.places.filter((item) => this.visited.has(item.id))); },
+  get badges() {
+    const badgeVisited = this.visitClaimMode === "compatible" ? new Set<string>() : this.visited;
+    const knownPlaces = new Map(this.places.map((item) => [item.id, item.name]));
+    const requirementNames: Record<string, string> = {
+      "provincial-juan-de-fuca-park": "Juan de Fuca Park",
+      "provincial-carmanah-walbran-park": "Carmanah Walbran Park",
+      "provincial-macmillan-park": "MacMillan Park",
+    };
+    return achievements({ places: this.places, visited: badgeVisited, visitTimestamps: this.visitTimestamps }).map((badge) => ({
+      ...badge,
+      ...(badge.requiredPlaceIds ? { requiredPlaces: badge.requiredPlaceIds.map((id) => ({ id, name: knownPlaces.get(id) ?? requirementNames[id] ?? id })) } : {}),
+    }));
+  },
+  catalogueOwnerKey: "guest:fixture", catalogueHeaders: { "X-Collection-Key": "fixture" }, progressRevision: 0,
   account: null as { id: string; email: string; emailVerified?: boolean; hasPassword?: boolean } | null, authenticated: false, loading: false, loadError: "", syncMessage: "", storageUnavailable: false,
   guestProgressAvailable: false, transitionBusy: false, toggleVisit: vi.fn(), toggleTrail: vi.fn(), retrySync: vi.fn(),
   authenticate: vi.fn(), authenticateWithGoogle: vi.fn(), requestEmailVerification: vi.fn(), confirmEmailVerification: vi.fn(),
   logout: vi.fn(), importGuest: vi.fn(), resetProgress: vi.fn(async () => undefined), deleteAccount: vi.fn(async () => ({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false })),
   pendingClaims: 0, offlineClaimRecoveryCount: 0, offlineClaimRecoveryMessage: "", rejectedClaimCount: 0,
+  placeDataOffline: false, visitClaimMode: undefined as "unknown" | "legacy" | "compatible" | "required" | undefined,
   retryPendingClaims: vi.fn(async () => undefined), discardRejectedClaims: vi.fn(async () => 0),
 };
 const groupState = {
@@ -56,10 +84,94 @@ const groupState = {
   loading: false, error: "", busy: false, resetPreparationPending: false, resetCancellationAllowed: false, resetCleanupRequired: false,
   retry: vi.fn(async () => undefined), prepareForReset: vi.fn(async () => undefined), cancelResetPreparation: vi.fn(async () => undefined), refreshAfterReset: vi.fn(async () => undefined), selectGroup: vi.fn(), create: vi.fn(async () => null), rename: vi.fn(async () => undefined), remove: vi.fn(async () => undefined), addPlace: vi.fn(async () => undefined), removePlace: vi.fn(async () => undefined),
 };
+
+function useMockFieldJournal() {
+  const [, forceUpdate] = useReducer((revision: number) => revision + 1, 0);
+  const toggleVisit = (item: Place) => {
+    journal.toggleVisit(item);
+    const next = new Set(journal.visited);
+    if (next.has(item.id)) {
+      next.delete(item.id);
+    } else {
+      next.add(item.id);
+      journal.visitTimestamps = { ...journal.visitTimestamps, [item.id]: new Date().toISOString() };
+    }
+    journal.visited = next;
+    forceUpdate();
+  };
+  return { ...journal, toggleVisit };
+}
+
+type MockPlaceDataOptions = {
+  groupId?: string | null;
+  groupPlaceIds?: ReadonlySet<string>;
+  mapQuery: string;
+  mapCategories: ReadonlySet<Place["category"]>;
+  mapAuthorities: ReadonlySet<string>;
+  collectionQuery: string;
+  collectionCategories: ReadonlySet<Place["category"]>;
+  collectionAuthorities: ReadonlySet<string>;
+  visitFilter: "all" | "visited" | "unseen";
+  visitedIds: ReadonlySet<string>;
+  searchDraft: string;
+  searchExpanded: boolean;
+};
+
+function mockUsePlaceData(options: MockPlaceDataOptions) {
+  const group = options.groupId ? groupState.groups.find((candidate) => candidate.id === options.groupId) : undefined;
+  const mapSource = group
+    ? group.places.filter((item) => !options.groupPlaceIds || options.groupPlaceIds.has(item.id))
+    : journal.places;
+  const itemsFor = (items: Place[]) => items.map((item) => ({
+    ...item,
+    authority: authorityForPlace(item),
+    listRegion: listRegionForPlace(item),
+    visited: options.visitedIds.has(item.id),
+    priorityTier: item.category === "national" ? 0 as const : item.category === "island" ? 1 as const : 2 as const,
+    priorityKey: item.id,
+  }));
+  const resultFor = (items: Place[], limit: number) => {
+    const full = itemsFor(items);
+    return {
+      places: full.slice(0, limit),
+      total: full.length,
+      limit,
+      scope: journal.placeDataOffline ? "cached" as const : "full" as const,
+      partial: full.length > limit,
+    };
+  };
+  const filter = (
+    items: Place[],
+    query: string,
+    categories: ReadonlySet<Place["category"]>,
+    authorities: ReadonlySet<string>,
+    visitFilter: "all" | "visited" | "unseen",
+  ) => collectionFilter(items, query, categories, authorities, visitFilter, options.visitedIds);
+  const mapItems = filter(mapSource, options.mapQuery, options.mapCategories, options.mapAuthorities, options.visitFilter);
+  const searchItems = options.searchExpanded && options.searchDraft.trim()
+    ? filter(journal.places, options.searchDraft, options.mapCategories, options.mapAuthorities, options.visitFilter)
+    : [];
+  const collectionItems = filter(journal.places, options.collectionQuery, options.collectionCategories, options.collectionAuthorities, options.visitFilter);
+  const visitedItems = journal.places.filter((item) => options.visitedIds.has(item.id));
+  return {
+    map: resultFor(mapItems, 50),
+    mapSearch: resultFor(searchItems, 20),
+    collection: resultFor(collectionItems, 50),
+    visited: resultFor(visitedItems, 50),
+    offline: journal.placeDataOffline,
+    error: "",
+    gateway: null,
+    retry: vi.fn(),
+    loadMoreCollection: vi.fn(),
+    loadMoreVisited: vi.fn(),
+    searchPlaces: async (query: string) => itemsFor(filter(journal.places, query, new Set(), new Set(), "all")).slice(0, 30),
+  };
+}
 let restoreNative: () => void = () => undefined;
 
-vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
+vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => useMockFieldJournal() }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
+vi.mock("@/lib/use-place-data", () => ({ usePlaceData: (options: MockPlaceDataOptions) => mockUsePlaceData(options) }));
 vi.mock("@/lib/use-map-presentation", () => ({ useMapPresentation: () => ({}) }));
 vi.mock("@/lib/place-visuals", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/place-visuals")>();
@@ -72,9 +184,36 @@ vi.mock("@/lib/photo-processing", () => ({
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showZoomControls = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showZoomControls?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button>{showZoomControls && <><button>Zoom in</button><button>Zoom out</button></>}</div> }));
 beforeEach(() => { clearPlaceVisualIndexCache(); vi.mocked(loadPlaceVisualIndex).mockReset().mockResolvedValue(new Map()); HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
-afterEach(() => { while (getSnapshot().active) dismissNotification(getSnapshot().active?.id); vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.storageUnavailable = false; journal.pendingClaims = 0; journal.offlineClaimRecoveryCount = 0; journal.offlineClaimRecoveryMessage = ""; journal.rejectedClaimCount = 0; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
+afterEach(() => { while (getSnapshot().active) dismissNotification(getSnapshot().active?.id); vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.catalogueTotalOverride = null; journal.placeDataOffline = false; journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.storageUnavailable = false; journal.pendingClaims = 0; journal.offlineClaimRecoveryCount = 0; journal.offlineClaimRecoveryMessage = ""; journal.rejectedClaimCount = 0; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
 describe("Parkdex navigation", () => {
+  it("opens the staging manual claim on the map for the exact Englishman River park", async () => {
+    journal.places = [...defaultPlaces, englishman];
+    journal.account = { id: "user-1", email: "test@example.com" };
+    journal.authenticated = true;
+    const recommendation = { status: "recommended" as const, recommendationToken: "token", expiresAt: new Date(Date.now() + 60_000).toISOString(), candidate: { placeId: englishman.id, matchKind: "exact" as const, distanceMeters: 0 } };
+    const recommendClaim = vi.fn().mockResolvedValue(recommendation);
+    Object.assign(journal, {
+      recommendClaim,
+      createClaim: vi.fn(),
+      reconcileClaim: vi.fn(),
+      uploadVisitPhoto: vi.fn(),
+      loadVisitPhoto: vi.fn(),
+      removeVisitPhoto: vi.fn(),
+    });
+    const store = { save: vi.fn(), load: vi.fn().mockResolvedValue(null), remove: vi.fn(), clearOwner: vi.fn() };
+    restoreNative = registerNativeCapabilities({ getCurrentLocation: vi.fn(), getPhoto: vi.fn(), photoRetry: store });
+    window.history.replaceState({}, "", "/settings");
+    const rendered = render(<ParkdexApp apiBaseUrl="" />);
+    expect(screen.queryByRole("button", { name: "Try Englishman River claim" })).toBeNull();
+    rendered.rerender(<ParkdexApp apiBaseUrl="" manualClaimEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Try Englishman River claim" }));
+    await waitFor(() => expect(recommendClaim).toHaveBeenCalledWith({ location: expect.objectContaining({ latitude: englishman.latitude, longitude: englishman.longitude, accuracyMeters: 6 }) }));
+    expect(await screen.findByRole("button", { name: "Use generated photo" })).toBeTruthy();
+    expect(window.location.pathname).toContain("englishman-river-regional-park");
+    expect(screen.getByText(/simulated park location and a generated photo/i)).toBeTruthy();
+  });
+
   it("shows three primary destinations and gives My Dex settings its own route", async () => {
     journal.authenticated = true;
     render(<ParkdexApp apiBaseUrl="" />);
@@ -242,14 +381,14 @@ describe("Parkdex navigation", () => {
     expect(window.history.state.framework).toBe("preserved");
   });
 
-  it("restores public views and independent filters through real Back/Forward entries", async () => {
+  it("restores independent list and map filters through real Back/Forward entries", async () => {
     journal.authenticated = true;
     window.history.replaceState({}, "", "/places?query=beach&placesQuery=Forest");
     render(<ParkdexApp apiBaseUrl="" />);
     fireEvent.click(screen.getByRole("button", { name: /Forest Park/ }));
     expect(window.location.pathname).toBe("/parks/juan-de-fuca-park");
     expect(new URLSearchParams(window.location.search).get("from")).toBe("places");
-    expect(screen.getByTestId("park-map").dataset.placeIds).toContain(place.id);
+    expect(screen.getByTestId("park-map").dataset.placeIds).toBe(rathtrevor.id);
     fireEvent.click(screen.getByRole("button", { name: "My Dex" }));
     expect(window.location.pathname).toBe("/account");
     act(() => window.history.back());
@@ -270,7 +409,7 @@ describe("Parkdex navigation", () => {
     expect(window.history.length).toBe(length);
   });
 
-  it("recovers from an unknown place only after a successful catalogue load", async () => {
+  it("does not treat a place missing from the bounded catalogue sample as deleted", async () => {
     window.history.replaceState({}, "", "/?place=removed-place");
     journal.loading = true; journal.places = [];
     const { rerender } = render(<ParkdexApp apiBaseUrl="" />);
@@ -278,12 +417,10 @@ describe("Parkdex navigation", () => {
     journal.loading = false; journal.loadError = "Offline";
     rerender(<ParkdexApp apiBaseUrl="" />);
     expect(window.location.pathname).toBe("/parks/removed-place");
-    journal.loadError = ""; journal.places = defaultPlaces;
+    journal.loadError = ""; journal.places = defaultPlaces; journal.catalogueTotalOverride = 12;
     rerender(<ParkdexApp apiBaseUrl="" />);
-    expect(await screen.findByText(/This place is no longer in the catalogue/)).toBeTruthy();
-    expect(window.location.pathname).toBe("/map");
-    expect(new URLSearchParams(window.location.search).has("place")).toBe(false);
-    expect(screen.getByRole("button", { name: "Search places" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/parks/removed-place");
+    expect(screen.queryByText(/This place is no longer in the catalogue/)).toBeNull();
   });
 
   it("auth-gates a direct Groups tab and resumes after account initialization", () => {
@@ -535,12 +672,12 @@ describe("Parkdex navigation", () => {
     expect(groupState.addPlace).toHaveBeenCalledTimes(1);
   });
 
-  it("groups places from different authorities under their shared region", () => {
+  it("groups fetched places from different authorities under their shared region", () => {
     journal.authenticated = true;
     journal.places = ["Capital Regional District", "Cowichan Valley Regional District", "Regional District of Nanaimo", "Regional District of Mount Waddington"].map((sourceName, index) => ({ ...place, id: `regional-${index}`, category: "regional", sourceName }));
     window.history.replaceState({}, "", "/?view=collection");
     render(<ParkdexApp apiBaseUrl="" />);
-    expect(screen.getByText("Southern Vancouver Island").closest("summary")?.textContent).toContain("0/4");
+    expect(screen.getByText("Southern Vancouver Island").closest("summary")?.textContent).toContain("4 shown");
     for (const item of journal.places) expect(screen.queryByText(item.sourceName)).toBeNull();
   });
 
@@ -931,7 +1068,7 @@ describe("Parkdex navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "List" }));
     fireEvent.click(screen.getByRole("button", { name: "Provincial" }));
-    fireEvent.click(screen.getByRole("button", { name: /Rathtrevor Beach Park/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Rathtrevor Beach Park/ }));
     expect(screen.queryByRole("toolbar", { name: "Map utilities" })).toBeNull();
     fireEvent.click(screen.getByText("Map data and photo credits"));
     expect(screen.getByRole("link", { name: "Description source: BC Parks" }).getAttribute("href")).toBe("https://bcparks.ca/rathtrevor-beach-park/");
@@ -1778,7 +1915,7 @@ describe("Parkdex navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save collection name" }));
     await waitFor(() => expect(groupState.rename).toHaveBeenCalledWith("coast", "Shore days"));
     fireEvent.change(screen.getByPlaceholderText("Search places to add"), { target: { value: "Rathtrevor" } });
-    fireEvent.click(screen.getByRole("button", { name: /Rathtrevor Beach Park/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Rathtrevor Beach Park/ }));
     await waitFor(() => expect(groupState.addPlace).toHaveBeenCalledWith("coast", rathtrevor.id));
     expect(screen.queryByRole("button", { name: "Pick from map" })).toBeNull();
   });
@@ -1813,7 +1950,7 @@ describe("Parkdex navigation", () => {
     await waitFor(() => expect(groupState.removePlace).toHaveBeenCalledWith("coast", place.id));
 
     fireEvent.change(screen.getByPlaceholderText("Search places to add"), { target: { value: "Rathtrevor" } });
-    const addMember = screen.getByRole("button", { name: /Rathtrevor Beach Park/ });
+    const addMember = await screen.findByRole("button", { name: /Rathtrevor Beach Park/ });
     expect((addMember as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(addMember);
     await waitFor(() => expect(groupState.addPlace).toHaveBeenCalledWith("coast", rathtrevor.id));

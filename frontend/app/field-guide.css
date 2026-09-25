@@ -32,6 +32,10 @@
 .field-guide-shell .global-progress::after { display: none; }
 .field-guide-shell .maplibregl-ctrl-top-right { top: 198px; }
 .field-guide-shell .connection-status { top: auto; bottom: calc(88px + env(safe-area-inset-bottom)); right: 12px; left: 12px; z-index: 15; width: auto; }
+.field-guide-shell .offline-mode-note { flex-wrap: wrap; gap: 4px; background: var(--paper-bright); }
+.field-guide-shell .offline-mode-note button { min-height: 32px; margin-left: auto; }
+.field-guide-shell .collection-load-more { display: block; width: calc(100% - 12px); min-height: 44px; margin: 14px 6px 6px; border: 1px solid var(--forest); border-radius: 11px; background: var(--paper-bright); color: var(--forest); cursor: pointer; font-weight: 850; }
+.field-guide-shell .collection-load-more:hover { background: #e6eddf; }
 .field-guide-shell .map-stage:has(.connection-status) .place-sheet { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); max-height: calc(100dvh - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - var(--connection-status-height,34px)); }
 .field-guide-shell .map-stage:has(.connection-status) .feature-panel { bottom: calc(102px + env(safe-area-inset-bottom) + var(--connection-status-height,34px)); }
 .field-guide-shell .place-sheet { bottom: calc(88px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); z-index: 16; }
@@ -55,6 +59,12 @@
 .dex-summary dt { font-size: 11px; font-weight: 850; }
 .dex-summary dd { margin: 0; font: 750 30px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .dex-account-settings > p { overflow-wrap: anywhere; }
+.manual-claim-setting { margin-block: 24px; padding: 18px; border-radius: 14px; background: #e7eee1; color: var(--forest); }
+.manual-claim-setting h3 { margin: 0 0 6px; }
+.manual-claim-setting p { margin: 0; font-size: 13px; line-height: 1.45; }
+.manual-claim-setting .secondary-action { margin-top: 14px; background: var(--forest); color: var(--paper-bright); }
+.manual-claim-setting .secondary-action:disabled { opacity: .6; cursor: default; }
+.manual-claim-setting .auth-error { margin-top: 10px; }
 .dex-badge-guide { width: 100%; min-height: 48px; margin-block: 12px; display: flex; align-items: center; gap: 10px; border: 0; background: transparent; font-weight: 850; cursor: pointer; }
 .dex-badge-guide svg:last-child { margin-left: auto; }
 .field-guide-shell .group-quick-action { min-width: 92px; }

@@ -269,6 +269,46 @@ describe("useGroups account isolation", () => {
 });
 
 describe("useGroups offline groups", () => {
+  it("keeps API group members outside the sampled catalogue and restores them from the offline group cache", async () => {
+    const uncachedPlace: Place = {
+      ...place,
+      id: "park-not-in-catalogue-cache",
+      name: "Uncached coastal park",
+    };
+    const request = vi.fn(() => json([{
+      id: "coast",
+      name: "Coastal plans",
+      placeIds: [uncachedPlace.id],
+      places: [uncachedPlace],
+    }]));
+    const online = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [],
+      request,
+    }));
+
+    await waitFor(() => expect(online.result.current.groups[0]?.places).toEqual([uncachedPlace]));
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(accountGroupsCacheKey("account-a")) ?? "null")[0].places).toEqual([uncachedPlace]));
+    online.unmount();
+
+    setOnline(false);
+    const offlineRequest = vi.fn(() => json([]));
+    const offline = renderHook(() => useGroups({
+      apiBaseUrl: "https://api.example.test",
+      authenticated: true,
+      identityKey: "account-a",
+      places: [],
+      request: offlineRequest,
+    }));
+
+    await waitFor(() => expect(offline.result.current.groups[0]?.places).toEqual([uncachedPlace]));
+    expect(offline.result.current.groups[0].placeIds).toEqual([uncachedPlace.id]);
+    expect(offline.result.current.offline).toBe(true);
+    expect(offlineRequest).not.toHaveBeenCalled();
+  });
+
   it("silently retries failed collection fetches with exponential backoff until one succeeds", async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(accountGroupsCacheKey("account-a"), JSON.stringify([{ id: "coast", name: "Coastal plans", placeIds: [place.id] }]));

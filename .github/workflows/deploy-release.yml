@@ -154,6 +154,8 @@ jobs:
             --build-env "NEXT_PUBLIC_API_BASE_URL=$API_URL" \
             --build-env "NEXT_PUBLIC_APP_URL=$FRONTEND_URL" \
             --build-env "NEXT_PUBLIC_PARK_VISUALS_BASE_URL=$PARK_VISUALS_BASE_URL" \
+            --build-env "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=${{ inputs.target == 'staging' && '1' || '0' }}" \
+            --env "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --build-env "PARKDEX_CATALOGUE_SCOPE=${{ inputs.target == 'staging' && 'staging' || 'canonical' }}" \
             --build-env "PARKDEX_KEEP_SCOPED_ASSETS=${{ inputs.target == 'staging' && '1' || '0' }}" \
             --build-env "NEXT_PUBLIC_RELEASE_VERSION=$RELEASE_VERSION" \

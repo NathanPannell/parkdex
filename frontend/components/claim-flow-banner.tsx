@@ -25,7 +25,7 @@ const STAGE_LABELS: Record<ClaimWorkflowStage, string> = {
 };
 
 export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
-  const { place, recommendation, busy, arrivalPhotoUrl } = props;
+  const { place, recommendation, busy, arrivalPhotoUrl, manualClaim } = props;
   const flow = useArrivalClaimFlow(props);
   const {
     flowScreen, working, workStage, message, retry, noPhotoRetry, reviewPhoto,
@@ -70,7 +70,7 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
   const arrivalIsInside = recommendation.candidate.matchKind === "exact";
   const pendingSync = Boolean(successConfirmation?.pendingSync || (retry?.stage === "upload" && retry.confirmation.pendingSync));
   const heroPhotoUrl = arrivalPhotoUrl ?? placeImage?.detail.src ?? null;
-  const dialogTitle = flowScreen === "success" ? "You were here." : flowScreen === "review" ? "Keep this one?" : flowScreen === "upload" ? pendingSync ? "Saved on this device." : "A moment in the making." : retry || noPhotoRetry ? "Finish your postcard" : `Hello, ${place.name}.`;
+  const dialogTitle = flowScreen === "success" ? manualClaim ? "Test visit saved." : "You were here." : flowScreen === "review" ? "Keep this one?" : flowScreen === "upload" ? pendingSync ? "Saved on this device." : "A moment in the making." : retry || noPhotoRetry ? "Finish your postcard" : `Hello, ${place.name}.`;
   const closeButton = <button className="impression-icon-button impression-close" type="button" onClick={() => flow.closeToMap()} disabled={working} aria-label="Close sealed impression" data-impression-initial-focus><X size={19} /></button>;
   const pendingSyncCopy = "Saved on this device. Syncs when online.";
   const retryControl = !working && retry && <div className="impression-recovery" role="alert">
@@ -88,14 +88,14 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
       <header className="impression-header"><span className="impression-brand"><MapPin size={18} /> Parkdex</span>{closeButton}</header>
       <div className="impression-sheet">
         {hydrationStatus === "ready" && !retry && !noPhotoRetry && <ParkSeal place={place} className="impression-arrival-seal" />}
-        <span className="impression-eyebrow">{hydrationStatus === "loading" ? "Checking saved photos" : retry || noPhotoRetry ? "Your next postcard" : arrivalIsInside ? "Inside the park" : "Near the boundary"}</span>
+        <span className="impression-eyebrow">{manualClaim ? "Staging test claim" : hydrationStatus === "loading" ? "Checking saved photos" : retry || noPhotoRetry ? "Your next postcard" : arrivalIsInside ? "Inside the park" : "Near the boundary"}</span>
         <h1 id="impression-flow-title">{dialogTitle}</h1>
-        {!retry && !noPhotoRetry && <p>{message || (hydrationStatus === "loading" ? "Making sure an earlier photo is not overwritten." : arrivalIsInside ? "Your location is inside the published boundary." : `About ${Math.round(recommendation.candidate.distanceMeters)} m from the park boundary.`)}</p>}
+        {!retry && !noPhotoRetry && <p>{message || (hydrationStatus === "loading" ? "Making sure an earlier photo is not overwritten." : manualClaim ? "This uses a simulated park location and a generated photo. Saving creates a real visit and uploads the test photo to your account." : arrivalIsInside ? "Your location is inside the published boundary." : `About ${Math.round(recommendation.candidate.distanceMeters)} m from the park boundary.`)}</p>}
         {hydrationStatus === "loading" && <button className="impression-primary" type="button" disabled><RefreshCw className="impression-spin" size={18} />Checking saved photos…</button>}
         {hydrationStatus === "failed" && <button className="impression-primary" type="button" onClick={retryHydration}><RefreshCw size={18} />Retry saved photo check</button>}
         {hydrationStatus === "ready" && !retry && !noPhotoRetry && <>
-          <button className="impression-primary" type="button" onClick={() => void claimWithCamera()} disabled={working || busy}><Camera size={18} />{working ? workingLabel : "Log visit + photo"}</button>
-          <button className="impression-secondary" type="button" onClick={() => void claimWithoutPhoto()} disabled={working || busy}>Log without photo</button>
+          <button className="impression-primary" type="button" onClick={() => void claimWithCamera()} disabled={working || busy}><Camera size={18} />{working ? workingLabel : manualClaim ? "Use generated photo" : "Log visit + photo"}</button>
+          {!manualClaim && <button className="impression-secondary" type="button" onClick={() => void claimWithoutPhoto()} disabled={working || busy}>Log without photo</button>}
         </>}
         {retryControl}
         {noPhotoRetryControl}
@@ -104,9 +104,9 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
     </section>}
 
     {flowScreen === "review" && <section className="impression-review">
-      <header className="impression-header">{closeButton}<span className="impression-photo-tag">Your view</span></header>
+      <header className="impression-header">{closeButton}<span className="impression-photo-tag">{manualClaim ? "Generated test photo" : "Your view"}</span></header>
       <div className="impression-review-photo">{reviewUrl ? <img src={reviewUrl} alt={`Your selected visit photo preview for ${place.name}`} /> : <div className="impression-photo-missing"><ImageIcon size={34} /><span>Photo preview unavailable</span></div>}</div>
-      <div className="impression-review-copy"><div><h1 id="impression-flow-title">Keep this one?</h1><p>{place.name}</p></div><button className="impression-icon-button" type="button" onClick={() => void retakePhoto()} disabled={working || busy} aria-label="Retake photo"><Camera size={19} /></button></div>
+      <div className="impression-review-copy"><div><h1 id="impression-flow-title">Keep this one?</h1><p>{place.name}</p></div><button className="impression-icon-button" type="button" onClick={() => void retakePhoto()} disabled={working || busy} aria-label={manualClaim ? "Generate another test photo" : "Retake photo"}><Camera size={19} /></button></div>
       <div className="impression-actions"><div className="impression-privacy"><LockKeyhole size={14} /> Just for you</div><button className="impression-primary" type="button" onClick={() => void saveReviewedPhoto()} disabled={working || busy}>{working ? workingLabel : <><Check size={18} />Save my visit</>}</button>{message && <p className="impression-state" role="alert">{message}</p>}</div>
     </section>}
 
@@ -120,7 +120,7 @@ export function ClaimFlowBanner(props: ArrivalClaimFlowProps) {
 
     {flowScreen === "success" && <section className="impression-success">
       <header className="impression-header"><span className="impression-brand"><MapPin size={18} /> Parkdex</span>{closeButton}</header>
-      <div className="impression-success-heading"><h1 id="impression-flow-title">You were here.</h1><p>Now it’s one of your places.</p></div>
+      <div className="impression-success-heading"><h1 id="impression-flow-title">{manualClaim ? "Test visit saved." : "You were here."}</h1><p>{manualClaim ? "The claim and photo are saved to your account." : "Now it’s one of your places."}</p></div>
       <div className="impression-print-stage"><PostcardPrint place={place} photoUrl={successPhotoUrl ?? undefined} visitedAt={success?.visitedAt} sealed compact={false} /></div>
       <p className="impression-success-caption">{success?.claim.hasPhoto ? "Visit and photo saved." : "Visit saved. Add a photo another time."}</p>
       {retryControl}

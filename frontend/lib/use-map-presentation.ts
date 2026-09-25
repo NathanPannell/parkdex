@@ -17,13 +17,13 @@ import {
 
 export type { MapViewport } from "@/lib/map-presentation";
 
-const BOUNDARY_DISPLAY_DATA_URL = "/data/boundaries-display.v1.geojson";
 const EXPLORATION_TERRITORY_DATA_URL = "/data/exploration-territories.v1.geojson";
 const FOCUS_MASK_DATA_URL = "/data/bc-focus-mask.v1.geojson";
+export const MAX_MAP_BOUNDARY_PLACE_IDS = 50;
+const MAX_CACHED_BOUNDARY_IDS = 100;
 
 export type MapPresentationAssets = {
   boundaryIndex: BoundaryIndex;
-  boundaryAsset: BoundaryCollection;
   explorationData: GeoJSON.FeatureCollection;
   focusMaskData: GeoJSON.FeatureCollection;
 };
@@ -40,6 +40,7 @@ export type MapPostcardPhotoState = {
 
 export type UseMapPresentationOptions = {
   active?: boolean;
+  apiBaseUrl?: string;
   places: readonly Place[];
   visited: ReadonlySet<string>;
   mode: ParkMapMode;
@@ -68,7 +69,15 @@ type PostcardPhoto = {
 };
 
 const EMPTY_FEATURE_COLLECTION: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+const EMPTY_BOUNDARIES: BoundaryCollection = { type: "FeatureCollection", features: [] };
 let mapAssetRequest: Promise<MapPresentationAssets> | null = null;
+const boundaryFeatureCache = new Map<string, BoundaryFeature | null>();
+
+type SampledBoundaryState = {
+  key: string;
+  status: MapAssetsState["status"];
+  data: BoundaryCollection;
+};
 
 function parseFeatureCollection(value: unknown, label: string): GeoJSON.FeatureCollection {
   if (typeof value !== "object" || value === null || (value as { type?: unknown }).type !== "FeatureCollection" || !Array.isArray((value as { features?: unknown }).features)) {
@@ -83,21 +92,96 @@ async function fetchFeatureCollection(path: string, label: string): Promise<GeoJ
   return parseFeatureCollection(await response.json(), label);
 }
 
+function normalizedMapBoundaryIds(placeIds: readonly string[]): string[] {
+  return [...new Set(placeIds)].sort();
+}
+
+function boundaryCacheScope(apiBaseUrl: string | undefined): string {
+  return apiBaseUrl?.replace(/\/+$/, "") || (typeof window === "undefined" ? "same-origin" : window.location.origin);
+}
+
+function boundaryCacheKey(scope: string, placeId: string): string {
+  return JSON.stringify([scope, placeId]);
+}
+
+function rememberBoundaryFeature(scope: string, placeId: string, feature: BoundaryFeature | null) {
+  const key = boundaryCacheKey(scope, placeId);
+  boundaryFeatureCache.delete(key);
+  boundaryFeatureCache.set(key, feature);
+  while (boundaryFeatureCache.size > MAX_CACHED_BOUNDARY_IDS) {
+    const oldestKey = boundaryFeatureCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    boundaryFeatureCache.delete(oldestKey);
+  }
+}
+
+export function cachedSampledBoundaryAsset(apiBaseUrl: string | undefined, placeIds: readonly string[]): BoundaryCollection {
+  const scope = boundaryCacheScope(apiBaseUrl);
+  const features = normalizedMapBoundaryIds(placeIds).flatMap((placeId) => {
+    const key = boundaryCacheKey(scope, placeId);
+    if (!boundaryFeatureCache.has(key)) return [];
+    const feature = boundaryFeatureCache.get(key);
+    if (feature === undefined) return [];
+    boundaryFeatureCache.delete(key);
+    boundaryFeatureCache.set(key, feature);
+    return feature ? [feature] : [];
+  });
+  return { type: "FeatureCollection", features };
+}
+
+export function mapBoundaryRequestUrl(apiBaseUrl: string | undefined, placeIds: readonly string[]): string {
+  const ids = normalizedMapBoundaryIds(placeIds);
+  if (ids.length > MAX_MAP_BOUNDARY_PLACE_IDS) {
+    throw new RangeError(`At most ${MAX_MAP_BOUNDARY_PLACE_IDS} map boundaries can be requested`);
+  }
+  const base = apiBaseUrl?.replace(/\/+$/, "") ?? "";
+  const endpoint = `${base}/api/map/boundaries`;
+  const params = new URLSearchParams();
+  ids.forEach((id) => params.append("place_id", id));
+  const query = params.toString();
+  return query ? `${endpoint}?${query}` : endpoint;
+}
+
+export async function loadSampledBoundaryAsset(
+  apiBaseUrl: string | undefined,
+  placeIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<BoundaryCollection> {
+  const ids = normalizedMapBoundaryIds(placeIds);
+  if (ids.length > MAX_MAP_BOUNDARY_PLACE_IDS) {
+    throw new RangeError(`At most ${MAX_MAP_BOUNDARY_PLACE_IDS} map boundaries can be requested`);
+  }
+  if (ids.length === 0) return EMPTY_BOUNDARIES;
+  const scope = boundaryCacheScope(apiBaseUrl);
+  cachedSampledBoundaryAsset(apiBaseUrl, ids);
+  const missingIds = ids.filter((placeId) => !boundaryFeatureCache.has(boundaryCacheKey(scope, placeId)));
+  if (missingIds.length === 0) return cachedSampledBoundaryAsset(apiBaseUrl, ids);
+
+  const response = await fetch(mapBoundaryRequestUrl(apiBaseUrl, missingIds), { cache: "default", signal });
+  if (!response.ok) throw new Error(`Map boundaries returned ${response.status}`);
+  if (signal?.aborted) throw new Error("Map boundary request was cancelled");
+  const collection = parseBoundaryCollection(await response.json());
+  const requestedIds = new Set(missingIds);
+  const featuresById = new Map(collection.features
+    .filter((feature) => requestedIds.has(feature.properties.id))
+    .map((feature) => [feature.properties.id, feature]));
+  missingIds.forEach((placeId) => rememberBoundaryFeature(scope, placeId, featuresById.get(placeId) ?? null));
+  return cachedSampledBoundaryAsset(apiBaseUrl, ids);
+}
+
 /**
- * Load large map geometry into transient application memory. The requests use
- * no-store so Android does not put the display catalogue in its small content
- * cache. A successful request is shared for this page session.
+ * Load static map overlays into transient application memory. The requests use
+ * no-store so Android does not put the large exploration and focus overlays in
+ * its small content cache. A successful request is shared for this page session.
  */
 export function loadMapPresentationAssets(): Promise<MapPresentationAssets> {
   if (!mapAssetRequest) {
     mapAssetRequest = Promise.all([
       loadBoundaryIndex(),
-      fetchFeatureCollection(BOUNDARY_DISPLAY_DATA_URL, "Display boundaries").then((value) => parseBoundaryCollection(value)),
       fetchFeatureCollection(EXPLORATION_TERRITORY_DATA_URL, "Exploration territories"),
       fetchFeatureCollection(FOCUS_MASK_DATA_URL, "Map focus mask"),
-    ]).then(([boundaryIndex, boundaryAsset, explorationData, focusMaskData]) => ({
+    ]).then(([boundaryIndex, explorationData, focusMaskData]) => ({
       boundaryIndex,
-      boundaryAsset,
       explorationData,
       focusMaskData,
     })).catch((error) => {
@@ -111,6 +195,7 @@ export function loadMapPresentationAssets(): Promise<MapPresentationAssets> {
 /** Reset the in-memory request cache in tests after mocked asset responses. */
 export function resetMapPresentationAssetCache(): void {
   mapAssetRequest = null;
+  boundaryFeatureCache.clear();
 }
 
 export function postcardPhotoKey(ownerKey: string, postcard?: RecentPostcard): string {
@@ -154,6 +239,7 @@ export function loadPostcardPhotoUrl(
 
 export function useMapPresentation({
   active = true,
+  apiBaseUrl,
   places,
   visited,
   mode,
@@ -168,9 +254,14 @@ export function useMapPresentation({
   const [assets, setAssets] = useState<MapPresentationAssets | null>(null);
   const [assetStatus, setAssetStatus] = useState<MapAssetsState["status"]>("loading");
   const [assetRetrySequence, setAssetRetrySequence] = useState(0);
+  const [sampledBoundaryRetrySequence, setSampledBoundaryRetrySequence] = useState(0);
+  const [sampledBoundary, setSampledBoundary] = useState<SampledBoundaryState>({ key: "", status: "loading", data: EMPTY_BOUNDARIES });
   const [postcardPhoto, setPostcardPhoto] = useState<PostcardPhoto>({ key: "", state: "empty" });
   const loadPhotoRef = useRef(loadPhoto);
   useEffect(() => { loadPhotoRef.current = loadPhoto; }, [loadPhoto]);
+  const sampledPlaceIds = useMemo(() => normalizedMapBoundaryIds(places.map((place) => place.id)), [places]);
+  const sampledPlaceIdsKey = JSON.stringify(sampledPlaceIds);
+  const sampledBoundaryKey = JSON.stringify([apiBaseUrl ?? "", sampledPlaceIdsKey]);
 
   useEffect(() => {
     if (!active || assets) return;
@@ -205,6 +296,49 @@ export function useMapPresentation({
     };
   }, [active, assetStatus, assets]);
 
+  useEffect(() => {
+    if (!active) return;
+    const requestedIds = JSON.parse(sampledPlaceIdsKey) as string[];
+    if (requestedIds.length === 0) return;
+    const requestController = new AbortController();
+    let subscribed = true;
+
+    void loadSampledBoundaryAsset(apiBaseUrl, requestedIds, requestController.signal)
+      .then((data) => {
+        if (subscribed) setSampledBoundary({ key: sampledBoundaryKey, status: "ready", data });
+      })
+      .catch(() => {
+        if (subscribed) setSampledBoundary({
+          key: sampledBoundaryKey,
+          status: "failed",
+          data: cachedSampledBoundaryAsset(apiBaseUrl, requestedIds),
+        });
+      });
+
+    return () => {
+      subscribed = false;
+      requestController.abort();
+    };
+  }, [active, apiBaseUrl, sampledBoundaryKey, sampledBoundaryRetrySequence, sampledPlaceIdsKey]);
+
+  useEffect(() => {
+    const boundaryRequestIsCurrent = sampledBoundary.key === sampledBoundaryKey;
+    if (!active || !boundaryRequestIsCurrent || sampledBoundary.status !== "failed") return;
+    const retry = () => {
+      setSampledBoundary({ key: sampledBoundaryKey, status: "loading", data: EMPTY_BOUNDARIES });
+      setSampledBoundaryRetrySequence((sequence) => sequence + 1);
+    };
+    const retryOnForeground = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", retryOnForeground);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", retryOnForeground);
+    };
+  }, [active, sampledBoundary.key, sampledBoundary.status, sampledBoundaryKey]);
+
   const postcardPlaceId = recentPostcard?.place.id;
   const postcardHasPhoto = recentPostcard?.visit.claim?.hasPhoto === true;
   const currentPostcardPhotoKey = postcardPhotoKey(photoOwnerKey, recentPostcard);
@@ -225,6 +359,9 @@ export function useMapPresentation({
   const postcardPhotoState: MapPostcardPhotoState = matchingPostcardPhoto
     ? { url: matchingPostcardPhoto.url, state: matchingPostcardPhoto.state }
     : { state: postcardHasPhoto && loadPhoto && canCreatePhotoUrl ? "loading" : postcardHasPhoto ? "failed" : "empty" };
+  const currentSampledBoundary = sampledBoundary.key === sampledBoundaryKey
+    ? sampledBoundary.data
+    : cachedSampledBoundaryAsset(apiBaseUrl, sampledPlaceIds);
   const presentation = useMemo(() => mapPresentation({
     places,
     visited,
@@ -233,15 +370,16 @@ export function useMapPresentation({
     selectedIds,
     viewport,
     boundaryIndex: assets?.boundaryIndex ?? null,
-    boundaryAsset: assets?.boundaryAsset ?? null,
+    boundaryAsset: assets ? currentSampledBoundary : null,
     selectedBoundary,
-  }), [assets, mode, places, selectedBoundary, selectedId, selectedIds, visited, viewport]);
+  }), [assets, currentSampledBoundary, mode, places, selectedBoundary, selectedId, selectedIds, visited, viewport]);
   const ids = assets ? boundaryPlaceIds(assets.boundaryIndex) : new Set<string>();
+  const currentBoundaryStatus = sampledPlaceIds.length === 0
+    ? "ready"
+    : sampledBoundary.key === sampledBoundaryKey ? sampledBoundary.status : "loading";
   const boundaryLoadState: BoundaryLoadState = assetStatus === "ready"
-    ? { status: "ready", placeIds: ids }
-    : assetStatus === "failed"
-      ? { status: "failed", placeIds: new Set() }
-      : { status: "loading", placeIds: new Set() };
+    ? { status: currentBoundaryStatus, placeIds: currentBoundaryStatus === "ready" ? ids : new Set() }
+    : { status: assetStatus, placeIds: new Set() };
 
   return {
     ...presentation,

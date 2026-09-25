@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type UIEvent } from "react";
 import type { BoundaryLoadState } from "@/lib/boundaries";
 import type { ClaimConfirmation, ClaimRecommendation } from "@/lib/claims-client";
-import { achievements, newlyEarnedAchievementIds, type Achievement } from "@/lib/achievements";
-import { collectionFilter, groupByRegion, type VisitFilter } from "@/lib/collection";
+import { type Achievement } from "@/lib/achievements";
+import { groupByRegion, type VisitFilter } from "@/lib/collection";
 import { addNativeBackConsumer } from "@/lib/native-back";
 import type { Place, PlaceCategory } from "@/lib/places";
 import { resolveApiBaseUrl } from "@/lib/api-base-url";
@@ -17,8 +17,12 @@ import { readNavigation, type View } from "@/lib/navigation";
 import { notifyError, notifyInfo } from "@/lib/application-notifications";
 import { useMapPresentation, type MapViewport } from "@/lib/use-map-presentation";
 import { useRecentPlace } from "@/lib/use-recent-place";
+import { usePlaceData } from "@/lib/use-place-data";
+import { stablePlacePriorityKey, type PlaceDataItem } from "@/lib/place-data-gateway";
 
 const ONBOARDING_KEY = "parkdex:onboarding:v1";
+const EMPTY_CATEGORIES = new Set<PlaceCategory>();
+const EMPTY_AUTHORITIES = new Set<string>();
 type LocationIdentity = "guest" | `account:${string}`;
 
 function persistentSyncStatus(message: string) {
@@ -80,13 +84,38 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   const [boundaryLoadState, setBoundaryLoadState] = useState<BoundaryLoadState>({ status: "loading", placeIds: new Set() });
   const [mapViewport, setMapViewport] = useState<MapViewport | null>(null);
   const groupMapMode = view === "map" && Boolean(selectedGroup);
-  const mapFiltered = useMemo(() => collectionFilter(places, mapSearch, mapCategories, collectionAuthorities, collectionVisitFilter, visited), [places, mapSearch, mapCategories, collectionAuthorities, collectionVisitFilter, visited]);
-  const mapSearchMatches = useMemo(() => collectionFilter(places, mapSearchDraft, mapCategories, collectionAuthorities, collectionVisitFilter, visited), [places, mapSearchDraft, mapCategories, collectionAuthorities, collectionVisitFilter, visited]);
-  const collectionFiltered = useMemo(() => collectionFilter(places, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, visited), [places, collectionSearch, collectionCategories, collectionAuthorities, collectionVisitFilter, visited]);
+  const placeData = usePlaceData({
+    apiBaseUrl, ownerKey: journal.catalogueOwnerKey, headers: journal.catalogueHeaders,
+    viewport: mapViewport, selectedId, groupId: groupMapMode ? selectedGroup?.id : null,
+    groupPlaceIds: groupMapMode ? groupSelectedIds : undefined,
+    mapQuery: groupMapMode ? "" : mapSearch,
+    mapCategories: groupMapMode ? EMPTY_CATEGORIES : mapCategories,
+    mapAuthorities: groupMapMode ? EMPTY_AUTHORITIES : collectionAuthorities,
+    collectionQuery: collectionSearch, collectionCategories, collectionAuthorities,
+    visitFilter: collectionVisitFilter, visitedIds: visited,
+    searchDraft: mapSearchDraft, searchExpanded, view,
+  });
+  const mapFiltered = placeData.map.places;
+  const mapSearchMatches = placeData.mapSearch.places;
+  const collectionFiltered = placeData.collection.places;
   const groups = useMemo(() => groupByRegion(collectionFiltered), [collectionFiltered]);
-  const badgeList = useMemo(() => achievements({ places, visited, visitTimestamps }), [places, visited, visitTimestamps]);
+  const badgeList = journal.badges;
   const earnedBadges = badgeList.filter((badge) => badge.earned).length;
-  const catalogueSelected = places.find((place) => place.id === selectedId) ?? null;
+  const previousBadgesRef = useRef<{ ownerKey: string; earned: Set<string> } | null>(null);
+  useEffect(() => {
+    if (loading || !journal.catalogueOwnerKey || badgeList.length === 0) return;
+    const earned = new Set(badgeList.filter((badge) => badge.earned).map((badge) => badge.id));
+    const previous = previousBadgesRef.current;
+    if (previous?.ownerKey === journal.catalogueOwnerKey) {
+      const newlyEarned = badgeList.filter((badge) => badge.earned && !previous.earned.has(badge.id));
+      if (newlyEarned.length) setCelebrationBadges((current) => [...current, ...newlyEarned]);
+    }
+    previousBadgesRef.current = { ownerKey: journal.catalogueOwnerKey, earned };
+  }, [badgeList, journal.catalogueOwnerKey, loading]);
+  const catalogueSelected = mapFiltered.find((place) => place.id === selectedId)
+    ?? collectionFiltered.find((place) => place.id === selectedId)
+    ?? placeData.visited.places.find((place) => place.id === selectedId)
+    ?? places.find((place) => place.id === selectedId) ?? null;
   const selectedRecentPlace = useRecentPlace({ selectedId, apiBaseUrl });
   const selected = selectedRecentPlace.selectedId === selectedId && selectedRecentPlace.status === "ready" && selectedRecentPlace.place
     ? selectedRecentPlace.place
@@ -109,18 +138,20 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   );
   const visits = visitMetadata ?? {};
   const photoOwnerKey = account?.id ? `account:${account.id}` : "account:current";
-  const mapPlaces = useMemo(() => {
-    const candidates = selectedGroup ? collectionFilter(selectedGroup.places, "", new Set(), new Set(), collectionVisitFilter, visited) : view === "collection" ? collectionFiltered : mapFiltered;
-    const selectedMapPlace = selectedRecentPlace.place ?? catalogueSelected;
-    return selectedMapPlace && !candidates.some((place) => place.id === selectedMapPlace.id) ? [...candidates, selectedMapPlace] : candidates;
-  }, [selectedGroup, collectionVisitFilter, visited, view, collectionFiltered, mapFiltered, catalogueSelected, selectedRecentPlace.place]);
+  const mapPlaces = mapFiltered;
   const liveRecommendation = liveClaim.recommendation?.status === "recommended" ? liveClaim.recommendation : null;
   const displayedRecommendation = claimFlow?.recommendation ?? (liveRecommendation?.candidate.placeId === dismissedArrival ? null : liveRecommendation);
-  const liveClaimPlace = displayedRecommendation ? places.find((place) => place.id === displayedRecommendation.candidate.placeId) ?? null : null;
+  const liveClaimPlaceId = displayedRecommendation?.candidate.placeId ?? null;
   const arrivalRecentPlace = useRecentPlace({
-    selectedId: (view === "map" || claimFlow) && liveClaimPlace && liveClaimPlace.id !== selectedId ? liveClaimPlace.id : null,
+    selectedId: (view === "map" || claimFlow) && liveClaimPlaceId && liveClaimPlaceId !== selectedId ? liveClaimPlaceId : null,
     apiBaseUrl,
   });
+  const liveClaimPlace = liveClaimPlaceId
+    ? (selectedRecentPlace.selectedId === liveClaimPlaceId ? selectedRecentPlace.place : arrivalRecentPlace.place)
+      ?? mapFiltered.find((place) => place.id === liveClaimPlaceId)
+      ?? places.find((place) => place.id === liveClaimPlaceId)
+      ?? null
+    : null;
   const arrivalSelection = liveClaimPlace?.id === selectedRecentPlace.selectedId
     ? selectedRecentPlace
     : arrivalRecentPlace;
@@ -152,6 +183,10 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   useEffect(() => {
     reportErrorState("catalogue", loadError);
   }, [loadError, reportErrorState]);
+
+  useEffect(() => {
+    reportErrorState("place-data", placeData.error);
+  }, [placeData.error, reportErrorState]);
 
   useEffect(() => {
     reportErrorState("collections", groupsState.error);
@@ -231,11 +266,7 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   useEffect(() => {
     if (!authenticated || recoveryActive) rememberGroupNavigation(null, 0, groupNavigationAccountId);
   }, [authenticated, recoveryActive, groupNavigationAccountId]);
-  useEffect(() => {
-    if (loading || loadError || !selectedId || places.some((place) => place.id === selectedId)
-      || (selectedRecentPlace.selectedId === selectedId && selectedRecentPlace.status !== "error")) return;
-    queueMicrotask(() => { setNavigationNotice("This place is no longer in the catalogue. Find another place on the map."); updateNavigation({ selectedId: null, view: "map" }); });
-  }, [loading, loadError, places, selectedId, selectedRecentPlace.selectedId, selectedRecentPlace.status, updateNavigation]);
+  // Detail routes may refer to places outside the current viewport sample.
   function requestLocation() {
     setManualLocationScope(locationIdentity ?? "pending"); setLocationAttempt((current) => current + 1);
   }
@@ -267,14 +298,18 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
     if (!authenticated || recoveryActive || view !== "groups" || !selectedGroup || !groupNavigationAccountId) return;
     rememberGroupNavigation(selectedGroup.id, event.currentTarget.scrollTop, groupNavigationAccountId);
   }, [authenticated, groupNavigationAccountId, recoveryActive, selectedGroup, view]);
-  const choosePlace = useCallback((id: string) => {
+  const choosePlace = useCallback((id: string, compact = false) => {
+    const inView = mapFiltered.find((place) => place.id === id)
+      ?? collectionFiltered.find((place) => place.id === id)
+      ?? placeData.visited.places.find((place) => place.id === id);
+    if (inView) void placeData.gateway?.remember(inView, "interaction").catch(() => undefined);
     rememberDepartingGroup();
     const origin = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    updateNavigation({ selectedId: id, detailExpanded: view !== "map", view: view === "collection" ? "collection" : "map" }, "push");
+    updateNavigation({ selectedId: id, detailExpanded: !compact && view !== "map", view: view === "collection" ? "collection" : "map", settingsOpen: false }, "push");
     window.history.replaceState({ ...window.history.state, parkdexDetailOrigin: origin, parkdexDetailId: id }, "");
     rememberGroupNavigation(null, 0, groupNavigationAccountId);
     setNavigationNotice(""); setShowFilters(false); setSearchExpanded(false);
-  }, [view, rememberDepartingGroup, updateNavigation, groupNavigationAccountId]);
+  }, [view, rememberDepartingGroup, updateNavigation, groupNavigationAccountId, mapFiltered, collectionFiltered, placeData.visited.places, placeData.gateway]);
   function openGroupMember(id: string) { groupsState.selectGroup(null); choosePlace(id); }
   function navigate(next: View) {
     const resetting = view === next;
@@ -423,24 +458,18 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
   }
   function toggleSelected(place: Place) {
     if (transitionBusy || loading) return;
-    if (!visited.has(place.id)) {
-      const nextVisited = new Set(visited).add(place.id), nextTimestamps = { ...visitTimestamps, [place.id]: new Date().toISOString() };
-      const nextBadges = achievements({ places, visited: nextVisited, visitTimestamps: nextTimestamps });
-      const earnedIds = new Set(newlyEarnedAchievementIds(badgeList, nextBadges));
-      const newlyEarned = nextBadges.filter((badge) => earnedIds.has(badge.id));
-      setCelebrationBadges(newlyEarned);
-    }
+    const sampled = mapFiltered.find((item) => item.id === place.id)
+      ?? collectionFiltered.find((item) => item.id === place.id)
+      ?? placeData.visited.places.find((item) => item.id === place.id);
+    const cacheRecord: PlaceDataItem = sampled
+      ? { ...sampled, visited: !visited.has(place.id) }
+      : { ...place, visited: !visited.has(place.id), priorityTier: place.category === "national" ? 0 : 2,
+        priorityKey: stablePlacePriorityKey(place.id) };
+    void placeData.gateway?.remember(cacheRecord, "visited").catch(() => undefined);
     void toggleVisit(place);
   }
   function celebrateClaim(confirmation: ClaimConfirmation) {
-    if (confirmation.pendingSync) return;
-    if (visited.has(confirmation.placeId)) return;
-    const nextVisited = new Set(visited).add(confirmation.placeId);
-    const nextTimestamps = { ...visitTimestamps, [confirmation.placeId]: confirmation.visitedAt };
-    const nextBadges = achievements({ places, visited: nextVisited, visitTimestamps: nextTimestamps });
-    const earnedIds = new Set(newlyEarnedAchievementIds(badgeList, nextBadges));
-    const newlyEarned = nextBadges.filter((badge) => earnedIds.has(badge.id));
-    setCelebrationBadges(newlyEarned);
+    if (!confirmation.pendingSync) placeData.retry();
   }
 
   function rememberImpression(confirmation: ClaimConfirmation) {
@@ -457,12 +486,18 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
     clearLiveClaim();
   }
   const impressionPlace = recentImpression?.owner === photoOwnerKey && authenticated
-    ? places.find((place) => place.id === recentImpression.confirmation.placeId) : undefined;
+    ? selectedRecentPlace.place?.id === recentImpression.confirmation.placeId ? selectedRecentPlace.place
+      : arrivalRecentPlace.place?.id === recentImpression.confirmation.placeId ? arrivalRecentPlace.place
+        : mapFiltered.find((place) => place.id === recentImpression.confirmation.placeId)
+          ?? placeData.visited.places.find((place) => place.id === recentImpression.confirmation.placeId)
+          ?? places.find((place) => place.id === recentImpression.confirmation.placeId)
+    : undefined;
   const recentPostcard = impressionPlace && recentImpression ? {
     place: impressionPlace,
     visit: visits[impressionPlace.id] ?? { placeId: impressionPlace.id, visitedAt: recentImpression.confirmation.visitedAt, claim: recentImpression.confirmation.claim },
   } : undefined;
   const mapPresentation = useMapPresentation({
+    apiBaseUrl,
     active: view === "map",
     places: mapPlaces,
     visited,
@@ -512,8 +547,22 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
       boundaryLoadState,
       groupMapMode,
       mapFiltered,
+      mapTotal: placeData.map.total,
+      mapScope: placeData.map.scope,
       mapSearchMatches,
+      mapSearchTotal: placeData.mapSearch.total,
       collectionFiltered,
+      collectionTotal: placeData.collection.total,
+      collectionScope: placeData.collection.scope,
+      collectionHasMore: placeData.collection.places.length < placeData.collection.total,
+      visitedPlaces: placeData.visited.places,
+      visitedTotal: placeData.visited.total,
+      visitedScope: placeData.visited.scope,
+      visitedHasMore: placeData.visited.places.length < placeData.visited.total,
+      catalogueTotal: journal.total,
+      categoryTotals: journal.categoryTotals,
+      visitedCategoryTotals: journal.visitedCategoryTotals,
+      offlineMode: placeData.offline,
       groups,
       badgeList,
       earnedBadges,
@@ -585,6 +634,13 @@ export function useParkdexApplication({ apiBaseUrl: configuredApiBaseUrl, google
       setRecentImpression,
       setBoundaryLoadState,
       setMapViewport,
+      offlineRetry: () => {
+        placeData.retry();
+        void journal.retryCatalogue?.();
+      },
+      searchPlaces: placeData.searchPlaces,
+      onCollectionLoadMore: placeData.loadMoreCollection,
+      onVisitedLoadMore: placeData.loadMoreVisited,
       completeOnboarding,
       requestLocation,
       enablePreciseLocation,

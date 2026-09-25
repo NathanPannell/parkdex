@@ -15,7 +15,7 @@ import {
 import type { ClaimRecommendation } from "./claims-client";
 import { clearUnresolvedClaim, markUnresolvedClaim } from "./claim-recovery";
 import { isOfflineClaimRecommendationToken } from "./offline-claims";
-import { getNativeCapabilities, type LocationSample, type PhotoAsset } from "./native-capabilities";
+import { getNativeCapabilities, type LocationRequestOptions, type LocationSample, type PhotoAsset } from "./native-capabilities";
 import type { PhotoRetrySaveOptions } from "./photo-retry";
 
 type SubmitOptions = Omit<Parameters<typeof submitClaimWorkflow>[0], "ownerKey" | "placeId" | "store" | "onStage" | "persistUnresolved" | "clearUnresolved">;
@@ -43,6 +43,7 @@ export type ClaimFlowController = {
     operation: number,
     recommendClaim: (input: { location: LocationSample }) => Promise<ClaimRecommendation>,
     shouldContinue?: () => boolean,
+    getCurrentLocation?: (options: LocationRequestOptions) => Promise<LocationSample>,
   ): Promise<{ location: LocationSample; recommendation: ClaimRecommendation; startedAt: number } | null>;
   persistPhoto(operation: number, photo: PhotoAsset, options?: PhotoRetrySaveOptions): Promise<boolean>;
   removePhoto(operation: number): Promise<boolean>;
@@ -99,9 +100,10 @@ export function useClaimFlow(ownerKey: string | undefined, placeId: string): Cla
     operation: number,
     recommendClaim: (input: { location: LocationSample }) => Promise<ClaimRecommendation>,
     shouldContinue?: () => boolean,
+    getCurrentLocation?: (options: LocationRequestOptions) => Promise<LocationSample>,
   ) => {
     const result = await recommendClaimAtCurrentLocation({
-      getCurrentLocation: (options) => getNativeCapabilities().getCurrentLocation(options),
+      getCurrentLocation: getCurrentLocation ?? ((options) => getNativeCapabilities().getCurrentLocation(options)),
       recommendClaim,
       shouldContinue,
       onStage: (stage) => setStage(operation, stage),
