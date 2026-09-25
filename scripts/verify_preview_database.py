@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -16,6 +17,7 @@ from psycopg import sql
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS = ROOT / "database" / "migrations"
 CATALOGUE = ROOT / "data" / "places.json"
+REVIEWED_VISITOR_DETAILS = ROOT / "data" / "park-details.reviewed.json"
 
 
 def validate_target(value: str, database_name: str, expected_host: str) -> None:
@@ -69,6 +71,104 @@ def expected_place_ids() -> list[str]:
     return sorted(ids)
 
 
+def expected_visitor_detail_rows() -> list[tuple[str, str, date, str, datetime | None, dict]]:
+    reviewed_bytes = REVIEWED_VISITOR_DETAILS.read_bytes()
+    dataset = json.loads(reviewed_bytes)
+    places = dataset["places"]
+    details_by_id = {record["placeId"]: record["visitorDetails"] for record in places}
+    if len(details_by_id) != len(places):
+        raise RuntimeError("Checked-in visitor details contain duplicate place IDs")
+
+    canonical_ids = {
+        place["id"] for place in json.loads(CATALOGUE.read_text(encoding="utf-8"))
+    }
+    if set(details_by_id) != canonical_ids:
+        raise RuntimeError(
+            "Checked-in visitor detail IDs do not match the canonical place catalogue"
+        )
+
+    snapshot_date = date.fromisoformat(dataset["snapshotDate"])
+    dataset_sha256 = hashlib.sha256(reviewed_bytes).hexdigest()
+    expected_rows = []
+    for place_id in sorted(details_by_id):
+        details = details_by_id[place_id]
+        schema_version = details["schemaVersion"]
+        retrieved_at = details["source"]["retrievedAt"]
+        source_checked_at = None
+        if retrieved_at is not None:
+            source_checked_at = datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
+            if source_checked_at.tzinfo is None or source_checked_at.utcoffset() is None:
+                raise RuntimeError(
+                    f"Checked-in visitor details have a timezone-naive source timestamp for {place_id}"
+                )
+        expected_rows.append(
+            (place_id, schema_version, snapshot_date, dataset_sha256, source_checked_at, details)
+        )
+    return expected_rows
+
+
+def verify_visitor_details(conn: psycopg.Connection) -> set[str]:
+    expected_rows = expected_visitor_detail_rows()
+    actual_rows = conn.execute(
+        """
+        SELECT place_id, schema_version, snapshot_date, dataset_sha256,
+               source_checked_at, visitor_details
+        FROM place_visitor_details
+        ORDER BY place_id
+        """
+    ).fetchall()
+    expected_by_id = {row[0]: row for row in expected_rows}
+    actual_by_id = {row[0]: row for row in actual_rows}
+    if len(actual_by_id) != len(actual_rows):
+        raise RuntimeError("Preview visitor details contain duplicate place IDs")
+    expected_ids = set(expected_by_id)
+    actual_ids = set(actual_by_id)
+    missing = sorted(expected_ids - actual_ids)
+    extra = sorted(actual_ids - expected_ids)
+    if missing or extra:
+        raise RuntimeError(
+            "Preview visitor detail IDs do not match checked-in accepted JSON "
+            f"(missing={missing[:5]}, extra={extra[:5]})"
+        )
+
+    fields = ("place_id", "schema_version", "snapshot_date", "dataset_sha256", "source_checked_at", "visitor_details")
+    for place_id, expected in expected_by_id.items():
+        actual = actual_by_id[place_id]
+        differences = []
+        for index, field in enumerate(fields):
+            expected_value, actual_value = expected[index], actual[index]
+            if field == "dataset_sha256":
+                actual_value = actual_value.strip() if isinstance(actual_value, str) else actual_value
+            elif field == "source_checked_at" and actual_value is not None:
+                if not isinstance(actual_value, datetime) or actual_value.tzinfo is None or actual_value.utcoffset() is None:
+                    differences.append(field)
+                    continue
+            if actual_value != expected_value:
+                differences.append(field)
+        if differences:
+            raise RuntimeError(
+                f"Preview visitor details for {place_id} differ from accepted JSON: "
+                f"{', '.join(differences)}"
+            )
+    return {"place_visitor_details"}
+
+
+def verify_user_data_empty(
+    conn: psycopg.Connection,
+    tables: list[str],
+    verified_seed_tables: set[str],
+) -> None:
+    seeded_tables = {"places", "schema_migrations", *verified_seed_tables}
+    for table in tables:
+        if table in seeded_tables:
+            continue
+        count = conn.execute(
+            sql.SQL("SELECT COUNT(*) FROM {} ").format(sql.Identifier(table))
+        ).fetchone()[0]
+        if count:
+            raise RuntimeError(f"Preview user-data table {table} is not empty")
+
+
 def verify_migrated(conn: psycopg.Connection) -> None:
     expected = expected_migrations()
     actual = dict(conn.execute("SELECT version, checksum FROM schema_migrations ORDER BY version").fetchall())
@@ -80,14 +180,8 @@ def verify_migrated(conn: psycopg.Connection) -> None:
     if [row[0] for row in place_rows if row[1]] != expected_ids or [row[0] for row in place_rows] != expected_place_ids():
         raise RuntimeError("Preview catalogue does not match the exact source catalogue")
 
-    for table in table_names(conn):
-        if table in {"places", "schema_migrations"}:
-            continue
-        count = conn.execute(
-            sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(table))
-        ).fetchone()[0]
-        if count:
-            raise RuntimeError(f"Preview user-data table {table} is not empty")
+    verified_seed_tables = verify_visitor_details(conn)
+    verify_user_data_empty(conn, table_names(conn), verified_seed_tables)
 
 
 def main() -> None:
