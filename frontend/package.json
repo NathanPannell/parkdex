@@ -42,7 +42,8 @@
     "next": "16.3.4",
     "polygon-clipping": "^0.15.7",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.2",
@@ -54,6 +55,7 @@
     "@types/node": "22.18.1",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
+    "@types/three": "0.186.0",
     "eslint": "9.39.2",
     "eslint-config-next": "16.3.4",
     "fake-indexeddb": "^6.2.5",

@@ -8,6 +8,7 @@ import { LocationCapabilityError, publishNativeAppState, registerNativeCapabilit
 import { dispatchNativeBack } from "@/lib/native-back";
 import { dismissNotification, getSnapshot } from "@/lib/application-notifications";
 import { createBrowserPhotoRetryStore } from "@/lib/photo-retry";
+import { clearPlaceVisualIndexCache, loadPlaceVisualIndex, type PlaceVisualEntry } from "@/lib/place-visuals";
 import { ParkdexApp } from "./every-park-app";
 
 const place: Place = { id: "provincial-juan-de-fuca-park", name: "Forest Park", category: "provincial", latitude: 49, longitude: -124, region: "South Island", description: "A forest park.", sourceUrl: "https://example.test", sourceName: "BC Parks" };
@@ -60,12 +61,16 @@ let restoreNative: () => void = () => undefined;
 vi.mock("@/lib/use-field-journal", () => ({ useFieldJournal: () => journal }));
 vi.mock("@/lib/use-groups", () => ({ useGroups: () => groupState }));
 vi.mock("@/lib/use-map-presentation", () => ({ useMapPresentation: () => ({}) }));
+vi.mock("@/lib/place-visuals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/place-visuals")>();
+  return { ...actual, loadPlaceVisualIndex: vi.fn(async () => new Map<string, PlaceVisualEntry>()) };
+});
 vi.mock("@/lib/photo-processing", () => ({
   isPreparedVisitPhoto: (photo: { processingState?: string; file: File; mimeType: string }) => photo.processingState === "prepared" && photo.mimeType === "image/jpeg" && photo.file.size <= 900_000,
   normalizeVisitPhoto: vi.fn(async (photo) => photo),
 }));
 vi.mock("@/components/park-map", () => ({ ParkMap: ({ places, selectedIds = new Set(), showZoomControls = true, currentLocation, onSelect, onBoundaryLoadState, mode }: { places: Place[]; selectedIds?: ReadonlySet<string>; showZoomControls?: boolean; currentLocation?: LocationSample | null; onSelect: (id: string) => void; onBoundaryLoadState?: (state: { status: "failed"; placeIds: Set<string> }) => void; mode?: string }) => <div data-testid="park-map" data-place-ids={places.map((item) => item.id).join(",")} data-selected-ids={[...selectedIds].join(",")} data-current-location={currentLocation ? `${currentLocation.latitude},${currentLocation.longitude}` : ""} data-mode={mode}><button onClick={() => onSelect("provincial-juan-de-fuca-park")}>Test map marker</button><button onClick={() => onBoundaryLoadState?.({ status: "failed", placeIds: new Set() })}>Fail boundary load</button>{showZoomControls && <><button>Zoom in</button><button>Zoom out</button></>}</div> }));
-beforeEach(() => { HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
+beforeEach(() => { clearPlaceVisualIndexCache(); vi.mocked(loadPlaceVisualIndex).mockReset().mockResolvedValue(new Map()); HTMLElement.prototype.scrollTo = vi.fn(); window.localStorage.setItem("parkdex:onboarding:v1", "complete"); });
 
 afterEach(() => { while (getSnapshot().active) dismissNotification(getSnapshot().active?.id); vi.useRealTimers(); cleanup(); restoreNative(); restoreNative = () => undefined; publishNativeAppState(true); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); window.sessionStorage.clear(); window.localStorage.removeItem("parkdex:onboarding:v1"); journal.places = defaultPlaces.slice(); journal.visited = new Set<string>(); journal.visitTimestamps = {}; journal.authenticated = false; journal.account = null; journal.loading = false; journal.loadError = ""; journal.syncMessage = ""; journal.storageUnavailable = false; journal.pendingClaims = 0; journal.offlineClaimRecoveryCount = 0; journal.offlineClaimRecoveryMessage = ""; journal.rejectedClaimCount = 0; journal.toggleVisit.mockClear(); journal.resetProgress.mockClear(); journal.deleteAccount.mockReset().mockResolvedValue({ deleted: true as const, photoCleanupPending: false, localCleanupPending: false }); journal.logout.mockClear(); journal.authenticateWithGoogle.mockClear(); journal.confirmEmailVerification.mockClear(); for (const key of ["visitMetadata", "visitClaimMode", "recommendClaim", "createClaim", "reconcileClaim", "uploadVisitPhoto", "loadVisitPhoto", "removeVisitPhoto"]) delete (journal as Record<string, unknown>)[key]; groupState.groups = []; groupState.selectedGroupId = null; groupState.offline = false; groupState.syncStatus = "idle"; groupState.syncMessage = ""; groupState.pendingMemberships = 0; groupState.loading = false; groupState.error = ""; groupState.busy = false; Object.values(groupState).forEach((value) => { if (typeof value === "function" && "mockClear" in value) value.mockClear(); }); });
 
@@ -154,6 +159,42 @@ describe("Parkdex navigation", () => {
     expect(await screen.findByRole("dialog", { name: "Forest Park" })).toBeTruthy();
     act(() => window.history.back());
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Forest Park" })).toBeNull());
+  });
+
+  it("loads the visual index on place open and offers map views only for indexed places", async () => {
+    const visualEntry: PlaceVisualEntry = {
+      placeId: place.id,
+      satellite: `${place.id}/satellite.avif`,
+      relief: `${place.id}/relief.avif`,
+      model: `${place.id}/${place.id}-terrain.glb`,
+      attribution: ["Contains modified Copernicus Sentinel data 2025"],
+      acquired: ["2025-06-01"],
+      needsReview: false,
+      reviewFlags: [],
+    };
+    vi.mocked(loadPlaceVisualIndex).mockResolvedValueOnce(new Map([[place.id, visualEntry]]));
+    render(<ParkdexApp apiBaseUrl="" />);
+    expect(loadPlaceVisualIndex).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+
+    const launch = await screen.findByRole("button", { name: "Map views" });
+    expect(loadPlaceVisualIndex).toHaveBeenCalledTimes(1);
+    fireEvent.click(launch);
+    const dialog = await screen.findByRole("dialog", { name: "Map views Forest Park" });
+    expect(screen.getByRole("tab", { name: "Satellite" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Satellite view of Forest Park" })).toBeTruthy();
+    expect(dialog.textContent).toContain("Contains modified Copernicus Sentinel data 2025");
+    fireEvent.click(screen.getByRole("button", { name: "Close map views" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Map views Forest Park" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "Forest Park" })).toBeTruthy();
+  });
+
+  it("does not show the map views affordance when the selected place has no visual entry", async () => {
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Test map marker" }));
+    expect(await screen.findByRole("heading", { name: "Forest Park" })).toBeTruthy();
+    await waitFor(() => expect(loadPlaceVisualIndex).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Map views" })).toBeNull();
   });
 
   it("clears an expired Google callback without a verifier and leaves navigation usable", async () => {
