@@ -43,7 +43,7 @@ The index has `version: 1` and a `places` object keyed by canonical place ID. Ea
 
 Create or select a dedicated public visual-assets bucket outside this script. Do not use the private postcard bucket. The upload command checks that its configured bucket name differs from `R2_BUCKET` when that private-bucket variable is set. The publisher does not create buckets, change access policy, or configure a custom domain.
 
-For R2, enable public access through a dedicated custom domain or the account's approved public bucket endpoint. For S3, use a bucket policy that grants public `GetObject` only under the visual-asset prefix. Keep write credentials scoped to that bucket and prefix. The publisher does not create buckets, change access policy, or configure a custom domain.
+For R2, enable public access through a dedicated custom domain or the account's approved public bucket endpoint. For S3, use a bucket policy that grants public `GetObject` only under the visual-asset prefix. Keep write credentials scoped to that bucket and prefix.
 
 For an AWS S3 bucket, the public-read statement can be scoped to the asset prefix like this. Replace the bucket placeholder and adjust the prefix if `PARKDEX_VISUAL_ASSETS_S3_PREFIX` is different:
 
@@ -68,7 +68,40 @@ The application only needs the public index URL, such as:
 https://assets.example.com/parkdex/visual-assets/v1/<index-sha256>/index.json
 ```
 
-Configure bucket CORS for the staging and production web app origins. The GLB is loaded as a browser model, so cross-origin reads must be allowed. A suitable CORS rule is:
+Configure bucket CORS for the staging and production web app origins. The GLB is loaded as a browser model, so cross-origin reads must be allowed.
+
+### Cloudflare R2 with Wrangler
+
+Cloudflare Wrangler expects its own `rules` object and lowercase field names. This configuration follows the [Cloudflare R2 CORS documentation](https://developers.cloudflare.com/r2/buckets/cors/):
+
+```json
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://staging.web.parkdex.app",
+          "https://web.parkdex.app"
+        ],
+        "methods": ["GET", "HEAD"]
+      },
+      "exposeHeaders": ["ETag", "Content-Length", "Content-Type", "Cache-Control"],
+      "maxAgeSeconds": 86400
+    }
+  ]
+}
+```
+
+Save it as `cors.json`, then apply and verify it with Wrangler:
+
+```powershell
+npx wrangler r2 bucket cors set <PUBLIC_VISUAL_ASSETS_BUCKET> --file cors.json
+npx wrangler r2 bucket cors list <PUBLIC_VISUAL_ASSETS_BUCKET>
+```
+
+### AWS S3 CORS
+
+AWS S3 uses an array of CORS rules with capitalized field names. Use this format only for an AWS S3-compatible provider that expects the S3 CORS schema:
 
 ```json
 [
@@ -78,7 +111,6 @@ Configure bucket CORS for the staging and production web app origins. The GLB is
       "https://web.parkdex.app"
     ],
     "AllowedMethods": ["GET", "HEAD"],
-    "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag", "Content-Length", "Content-Type", "Cache-Control"],
     "MaxAgeSeconds": 86400
   }

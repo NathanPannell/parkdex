@@ -100,6 +100,16 @@ export default function PlaceVisuals3D({ src, label }: PlaceVisuals3DProps) {
             disposeModel(gltf.scene);
             return;
           }
+          gltf.scene.traverse((object) => {
+            if (!(object instanceof THREE.Mesh)) return;
+            for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+              if (material instanceof THREE.MeshStandardMaterial && material.map) {
+                // Generated GLBs use a 0.4 color factor; show the embedded image at full brightness.
+                material.color.set(0xffffff);
+                material.metalness = 0;
+              }
+            }
+          });
           const bounds = new THREE.Box3().setFromObject(gltf.scene);
           const size = bounds.getSize(new THREE.Vector3());
           const center = bounds.getCenter(new THREE.Vector3());
@@ -113,7 +123,8 @@ export default function PlaceVisuals3D({ src, label }: PlaceVisuals3DProps) {
           const fittedSize = 4.2;
           modelRoot.scale.setScalar(fittedSize / longestSide);
           scene.add(modelRoot);
-          camera.position.set(0, fittedSize * 0.62, fittedSize * 2.1);
+          const aspectScale = Math.max(1, 1.8 / camera.aspect);
+          camera.position.set(0, fittedSize * 0.75 * aspectScale, fittedSize * 1.25 * aspectScale);
           camera.lookAt(0, 0, 0);
           camera.updateProjectionMatrix();
           if (controls) {
