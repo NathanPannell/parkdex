@@ -41,6 +41,7 @@ CONTENT_TYPES = {
 IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 WRANGLER_VERSION = "4.139.0"
 WRANGLER_MISSING_MESSAGE = "The specified key does not exist."
+WRANGLER_INSPECTION_ATTEMPTS = 5
 
 
 class PublishError(Exception):
@@ -1327,16 +1328,20 @@ def _wrangler_remote_hash(
 ) -> str | None:
     with tempfile.TemporaryDirectory(prefix="parkdex-visual-read-") as temporary:
         destination = Path(temporary) / "object"
-        result = runner("r2", "object", "get", f"{bucket}/{key}", "--remote", "--file", str(destination))
-        if result.returncode != 0:
+        for attempt in range(WRANGLER_INSPECTION_ATTEMPTS):
+            destination.unlink(missing_ok=True)
+            result = runner("r2", "object", "get", f"{bucket}/{key}", "--remote", "--file", str(destination))
+            if result.returncode == 0:
+                if not destination.is_file():
+                    raise PublishError(f"Wrangler returned no bytes for remote object: {key}")
+                if destination.stat().st_size != expected_size:
+                    return "<conflict>"
+                return sha256_file(destination)
             if WRANGLER_MISSING_MESSAGE in result.stderr or WRANGLER_MISSING_MESSAGE in result.stdout:
                 return None
-            raise PublishError(f"Wrangler could not inspect remote object: {key}")
-        if not destination.is_file():
-            raise PublishError(f"Wrangler returned no bytes for remote object: {key}")
-        if destination.stat().st_size != expected_size:
-            return "<conflict>"
-        return sha256_file(destination)
+            if attempt + 1 < WRANGLER_INSPECTION_ATTEMPTS:
+                time.sleep(min(2 ** attempt, 8))
+        raise PublishError(f"Wrangler could not inspect remote object: {key}")
 
 
 def _ensure_wrangler_object(

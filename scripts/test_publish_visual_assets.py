@@ -266,6 +266,7 @@ class FakeWrangler:
         self.values = {}
         self.events = []
         self.fail_put_key = None
+        self.fail_get_key = None
         self._lock = threading.Lock()
 
     def __call__(self, *arguments):
@@ -278,6 +279,9 @@ class FakeWrangler:
         with self._lock:
             self.events.append((operation, key))
             if operation == "get":
+                if self.fail_get_key == key:
+                    self.fail_get_key = None
+                    return subprocess.CompletedProcess(arguments, 1, "", "transient remote error")
                 if key not in self.values:
                     return subprocess.CompletedProcess(arguments, 1, "", publisher.WRANGLER_MISSING_MESSAGE)
                 file_path.write_bytes(self.values[key][0])
@@ -485,6 +489,23 @@ def test_wrangler_upload_resumes_and_publishes_index_last(tmp_path, monkeypatch)
     )
     assert second["uploaded"] == 0
     assert second["skipped"] == 7
+    assert all(operation == "get" for operation, _ in runner.events)
+
+
+def test_wrangler_inspection_recovers_from_a_transient_remote_error(tmp_path, monkeypatch):
+    catalogue, generated, _ = make_fixture(tmp_path)
+    batch = gate_fixture_batch(publisher.validate_batch(generated, catalogue), catalogue, tmp_path, monkeypatch)
+    runner = FakeWrangler()
+    first = publisher.publish_to_wrangler(batch, bucket="public-assets", prefix="assets", runner=runner, workers=1)
+    retry_key = f"{first['prefix']}/{batch.places[0].assets[0].key}"
+    runner.events.clear()
+    runner.fail_get_key = retry_key
+    monkeypatch.setattr(publisher.time, "sleep", lambda _seconds: None)
+
+    resumed = publisher.publish_to_wrangler(batch, bucket="public-assets", prefix="assets", runner=runner, workers=1)
+
+    assert resumed["uploaded"] == 0
+    assert runner.events.count(("get", retry_key)) == 2
     assert all(operation == "get" for operation, _ in runner.events)
 
 
