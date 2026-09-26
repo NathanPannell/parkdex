@@ -8,6 +8,32 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const source = join(root, "..", "parkdex", "data");
 const places = JSON.parse(readFileSync(join(source, "places.json"), "utf8"));
 const boundaries = JSON.parse(readFileSync(join(source, "boundaries.geojson"), "utf8"));
+const island = JSON.parse(readFileSync(join(source, "vancouver-island-focus.geojson"), "utf8")).geometry.coordinates[0];
+
+// The 20 live badges: each park gets one distinct scene from public/badges/scenes.
+// Everything else on the island shows "badge coming soon" until it has art.
+const LIVE = {
+  "regional-gonzales-hill-regional-park": { scene: "coast-b", rarity: "common" },
+  "regional-albert-head-lagoon-regional-park": { scene: "coast-a", rarity: "common" },
+  "regional-francis-king-regional-park": { scene: "forest-a", rarity: "common" },
+  "regional-horth-hill-regional-park": { scene: "forest-b", rarity: "common" },
+  "regional-thetis-lake-regional-park": { scene: "lake-a", rarity: "common" },
+  "regional-elk-beaver-lake-regional-park": { scene: "lake-b", rarity: "common" },
+  "regional-mill-hill-regional-park": { scene: "mountain-b", rarity: "common" },
+  "regional-devonian-regional-park": { scene: "marsh-a", rarity: "common" },
+  "provincial-goldstream-park": { scene: "waterfall-a", rarity: "uncommon" },
+  "regional-witty-s-lagoon-regional-park": { scene: "waterfall-b", rarity: "uncommon" },
+  "regional-matheson-lake-regional-park": { scene: "marsh-b", rarity: "uncommon" },
+  "regional-sooke-river-regional-park": { scene: "river-a", rarity: "uncommon" },
+  "regional-sooke-potholes-regional-park": { scene: "river-b", rarity: "uncommon" },
+  "regional-mount-work-regional-park": { scene: "mountain-a", rarity: "rare" },
+  "regional-island-view-beach-regional-park": { scene: "legendary-b", rarity: "rare" },
+  "regional-east-sooke-regional-park": { scene: "heritage-a", rarity: "rare" },
+  "provincial-petroglyph-park": { scene: "heritage-b", rarity: "epic" },
+  "provincial-horne-lake-caves-park": { scene: "cave-a", rarity: "epic" },
+  "regional-little-huson-cave-regional-park": { scene: "cave-b", rarity: "epic" },
+  "national-pacific-rim-national-park-reserve": { scene: "legendary-a", rarity: "legendary" },
+};
 
 const VICTORIA = [48.4284, -123.3656];
 
@@ -24,6 +50,10 @@ const BIOME_RULES = [
 
 // Hand-written copy for the parks a Victoria tester is most likely to reach first.
 const BLURBS = {
+  "regional-devonian-regional-park": "A quiet lagoon, a salt marsh full of herons and a pebble beach at the end of a short forest walk.",
+  "regional-sooke-river-regional-park": "Riverside trails, deep swimming holes and big leaf maples along the Sooke River.",
+  "regional-little-huson-cave-regional-park": "Limestone arches and caves carved by the Atluck River. A North Island adventure.",
+  "regional-horth-hill-regional-park": "A mossy forest climb to a view over the Gulf Islands. Short, sweet, badge-worthy.",
   "regional-gonzales-hill-regional-park": "A pocket summit with a 360 view of the Olympics, Oak Bay and every ferry sliding past. Ten minutes up, zero excuses.",
   "regional-mill-hill-regional-park": "Garry oak meadows and a wildflower-lined climb to the Langford lookout. Spring here is ridiculous.",
   "regional-francis-king-regional-park": "Old-growth Douglas fir, cedar boardwalks and the kind of quiet that makes you whisper.",
@@ -117,6 +147,23 @@ const thin = (ring) => {
   return out;
 };
 
+function inRing([x, y], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// A park counts as "on Vancouver Island" when most of its boundary lies on the island itself,
+// which excludes the Gulf, Discovery and West Coast islands.
+const onIsland = (rings) => {
+  const verts = rings.flat();
+  return verts.filter((v) => inRing(v, island)).length / verts.length >= 0.5;
+};
+
 const outerRings = (geometry) =>
   geometry.type === "Polygon" ? [geometry.coordinates[0]] : geometry.coordinates.map((poly) => poly[0]);
 
@@ -134,6 +181,8 @@ for (const p of places) {
     .sort((a, b) => ringArea(b) - ringArea(a))
     .slice(0, 12)
     .map(thin);
+  if (!onIsland(outerRings(boundary.geometry))) continue;
+  const live = LIVE[p.id];
   const biome = biomeOf(p.name);
   parks.push({
     id: p.id,
@@ -145,7 +194,8 @@ for (const p of places) {
     lng: +p.longitude.toFixed(5),
     biome,
     shape: shapeOf(p),
-    rarity: rarityOf(p, distance),
+    rarity: live?.rarity ?? rarityOf(p, distance),
+    scene: live?.scene ?? null,
     seed: hash(p.id) % 1000,
     blurb: BLURBS[p.id] ?? BIOME_BLURBS[biome],
   });
@@ -156,7 +206,11 @@ for (const p of places) {
   });
 }
 
+const missing = Object.keys(LIVE).filter((id) => !parks.some((p) => p.id === id));
+if (missing.length) throw new Error(`live badge parks not found on the island: ${missing.join(", ")}`);
+const scenes = Object.values(LIVE).map((l) => l.scene);
+if (new Set(scenes).size !== scenes.length) throw new Error("each live badge needs its own scene");
 writeFileSync(join(root, "src", "data", "parks.json"), JSON.stringify(parks));
 writeFileSync(join(root, "public", "boundaries.geojson"), JSON.stringify({ type: "FeatureCollection", features }));
 const tally = parks.reduce((t, p) => ({ ...t, [p.biome]: (t[p.biome] ?? 0) + 1 }), {});
-console.log(`${parks.length} parks`, tally);
+console.log(`${parks.length} island parks, ${Object.keys(LIVE).length} live badges`, tally);

@@ -1,8 +1,10 @@
 import { AnimatePresence, MotionConfig } from "motion/react";
-import { useEffect } from "react";
+import { AnimatePresence as Presence, motion } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { setMuted } from "./lib/feedback";
+import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
 import { StoreProvider, useStore } from "./lib/store";
 import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
@@ -44,10 +46,42 @@ function Stage() {
 }
 
 function Screens() {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
+  const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
 
   useEffect(() => setMuted(state.muted), [state.muted]);
+
+  // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
+  const tracking = onboarded && (FIELD || isNative);
+  useEffect(() => {
+    if (!tracking) return;
+    let stop = () => {};
+    let live = true;
+    void watchLocation(
+      (fix) => dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy }),
+      (error) => dispatch({ type: "locationError", error }),
+    ).then((s) => (live ? (stop = s) : s()));
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [tracking, locationRetry]);
+
+  // Android back closes the top layer first, then leaves the app from the map.
+  const latest = useRef(state);
+  latest.current = state;
+  useEffect(
+    () =>
+      onBackButton(() => {
+        const s = latest.current;
+        if (s.selectedId) dispatch({ type: "select", id: null });
+        else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
+        else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
+        else minimizeApp();
+      }),
+    [],
+  );
 
   const showMap = onboarded && screen !== "splash" && screen !== "onboarding";
   const showNav = showMap && (screen === "map" || screen === "collection");
@@ -57,6 +91,17 @@ function Screens() {
       {showMap && <MapScreen />}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
+      <Presence>
+        {tracking && state.locationError === "denied" && screen === "map" && (
+          <motion.div key="loc" className="loc-off card" initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -40, opacity: 0 }}>
+            <strong>Location is off</strong>
+            <span>Parkdex needs your location to check you in at parks. Turn it on in Settings, then try again.</span>
+            <button className="btn btn--sm" onClick={() => setLocationRetry((n) => n + 1)}>
+              Try again
+            </button>
+          </motion.div>
+        )}
+      </Presence>
       <AnimatePresence>
         {screen === "camera" && <Camera key="camera" />}
         {screen === "claim" && <Claim key="claim" />}

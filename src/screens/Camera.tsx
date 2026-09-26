@@ -131,7 +131,7 @@ export function Camera() {
         <Bubble side="right" style={{ right: 50, top: -44, whiteSpace: "nowrap" }}>
           Say "cheese"!
         </Bubble>
-        <Kip pose="talk" size={84} flip />
+        <Kip pose="camera" size={96} flip />
       </motion.div>
 
       <div className="camera__bottom">

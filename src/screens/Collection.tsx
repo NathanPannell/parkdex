@@ -8,7 +8,7 @@ import { useToast } from "../components/Toast";
 import { burst } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
-import { CATEGORY_LABEL, PARK_BY_ID, PARKS, RARITY, TOTAL_BADGES, type Park, type Rarity } from "../lib/parks";
+import { CATEGORY_LABEL, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES, type Park, type Rarity } from "../lib/parks";
 import { useStore } from "../lib/store";
 
 const PRODUCTS = [
@@ -26,13 +26,12 @@ export function Collection() {
 
   const next = useMemo(
     () =>
-      PARKS.filter((p) => !state.claims[p.id])
-        .sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat]))
-        .slice(0, 12),
+      LIVE_PARKS.filter((p) => !state.claims[p.id])
+        .sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
     [state.claims, state.user],
   );
-  const slots = Math.max(9, Math.ceil((count + 3) / 3) * 3);
-  const ghosts = next.slice(0, slots - count);
+  // The case always shows every live badge: claimed ones shine, the rest wait as silhouettes.
+  const ghosts = next;
 
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
   const openPark = open ? PARK_BY_ID.get(open) : undefined;

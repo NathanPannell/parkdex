@@ -92,3 +92,25 @@ export function arcPath(a: LngLat, b: LngLat, steps = 48, bend = 0.18): LngLat[]
     return [u * u * a[0] + 2 * u * t * cx + t * t * b[0], u * u * a[1] + 2 * u * t * cy + t * t * b[1]] as LngLat;
   });
 }
+
+// Metres from a point to the nearest boundary edge, using a local flat projection
+// (accurate to well under a metre at park scale).
+export function distanceToBoundaryM(point: LngLat, boundary: Boundary) {
+  const kx = 111320 * Math.cos((point[1] * Math.PI) / 180);
+  const ky = 110540;
+  let best = Infinity;
+  for (const poly of boundary.coordinates) {
+    const ring = poly[0];
+    for (let i = 0; i < ring.length - 1; i++) {
+      const ax = (ring[i][0] - point[0]) * kx;
+      const ay = (ring[i][1] - point[1]) * ky;
+      const bx = (ring[i + 1][0] - point[0]) * kx;
+      const by = (ring[i + 1][1] - point[1]) * ky;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1)));
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+  }
+  return best;
+}

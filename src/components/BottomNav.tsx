@@ -1,14 +1,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { parkContaining, useBoundaries } from "../lib/boundaries";
 import { buzz, sfx } from "../lib/feedback";
+import { isLive } from "../lib/parks";
 import { useStore } from "../lib/store";
 import { Icon } from "./Icon";
 
 export function BottomNav() {
   const { state, dispatch } = useStore();
   const bounds = useBoundaries();
-  const here = parkContaining(state.user, bounds?.byId);
-  const canClaim = !!here && !state.claims[here.id];
+  const here = parkContaining(state.user, bounds?.byId, state.accuracy ?? 0);
+  const canClaim = !!here && isLive(here) && !state.claims[here.id];
   const tab = state.screen === "collection" ? "collection" : "map";
 
   const go = (screen: "map" | "collection") => {
@@ -27,12 +28,12 @@ export function BottomNav() {
       dispatch({ type: "go", screen: "camera" });
     } else {
       dispatch({ type: "go", screen: "map" });
-      toastless(here ? "claimed" : "outside");
+      toastless(!here ? "outside" : isLive(here) ? "claimed" : "soon");
     }
   };
 
   // Outside a park the FAB nudges instead of failing: it wiggles and shows why.
-  const toastless = (reason: "claimed" | "outside") => {
+  const toastless = (reason: "claimed" | "outside" | "soon") => {
     const el = document.querySelector(".fab__hint");
     el?.setAttribute("data-reason", reason);
     el?.classList.remove("is-on");

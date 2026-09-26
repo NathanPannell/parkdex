@@ -1,11 +1,12 @@
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { useToast } from "../components/Toast";
 import { buzz, sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
+import { FIELD } from "../lib/native";
 import { PARK_BY_ID } from "../lib/parks";
 import { DEMO_START, useStore } from "../lib/store";
 
@@ -13,7 +14,7 @@ const SLIDES = [
   {
     eyebrow: "Step 1 · Explore",
     title: ["Every park", "has a badge."],
-    body: "1,030 wild places across BC. Each one has a one-of-a-kind badge. Find one you want.",
+    body: "Parks all over Vancouver Island, each with its own one-of-a-kind badge. Find one you want.",
     tint: "#FFE2C2",
   },
   {
@@ -58,7 +59,7 @@ function BadgeFan() {
         </motion.div>
       ))}
       <motion.div className="ob-fan__kip" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.6, stiffness: 200, damping: 14 }}>
-        <Kip pose="wave" size={96} />
+        <Kip pose="wave" size={110} />
         <Bubble side="left" style={{ left: 64, top: -34, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
         </Bubble>
@@ -115,7 +116,7 @@ function GoThere() {
         </g>
       </svg>
       <motion.div className="ob-go__kip" animate={{ rotate: [0, -6, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-        <Kip pose="point" size={92} flip />
+        <Kip pose="point" size={104} />
       </motion.div>
     </div>
   );
@@ -172,6 +173,16 @@ export function Onboarding() {
   const [dir, setDir] = useState(1);
   const [asking, setAsking] = useState(false);
   const slide = SLIDES[index];
+  // The illustrations are drawn at 320px; shrink them to fit shorter phones.
+  const visualRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
+  useEffect(() => {
+    const el = visualRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setFit(Math.min(1, entry.contentRect.height / 340, entry.contentRect.width / 340)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const Visual = VISUALS[index];
 
   const goTo = (i: number) => {
@@ -189,7 +200,8 @@ export function Onboarding() {
 
   const finish = (useGps: boolean) => {
     sfx.chirp();
-    if (!useGps || !navigator.geolocation) {
+    // Field builds hand location to the app-wide watcher, which asks for permission itself.
+    if (FIELD || !useGps || !navigator.geolocation) {
       dispatch({ type: "onboarded" });
       return;
     }
@@ -224,7 +236,7 @@ export function Onboarding() {
         )}
       </div>
       <motion.div className="onboarding__drag" drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.25} onDragEnd={onDragEnd}>
-        <div className="onboarding__visual">
+        <div className="onboarding__visual" ref={visualRef}>
           <AnimatePresence mode="popLayout" custom={dir} initial={false}>
             <motion.div
               key={index}
@@ -240,7 +252,9 @@ export function Onboarding() {
               exit="exit"
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
-              <Visual />
+              <div style={{ transform: `scale(${fit})` }}>
+                <Visual />
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -308,13 +322,15 @@ export function Onboarding() {
                 <Kip pose="talk" size={110} />
               </div>
               <h2>Kip needs to know when you've arrived.</h2>
-              <p>Your location is only used to check you in inside a park boundary. It never leaves your phone in this mockup.</p>
+              <p>Your location is only used to check you in inside a park boundary. It never leaves your phone.</p>
               <button className="btn btn--block" onClick={() => finish(true)}>
                 <Icon name="locate" /> Allow location
               </button>
-              <button className="permission__alt" onClick={() => finish(false)}>
-                Use a demo spot in Victoria
-              </button>
+              {!FIELD && (
+                <button className="permission__alt" onClick={() => finish(false)}>
+                  Use a demo spot in Victoria
+                </button>
+              )}
             </motion.div>
           </motion.div>
         )}

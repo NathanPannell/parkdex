@@ -9,7 +9,8 @@ import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { arcPath, arrivalPoint, distanceKm, formatDistance, ringBounds, type LngLat } from "../../lib/geo";
-import { PARK_BY_ID, PARKS, RARITY, TOTAL_BADGES } from "../../lib/parks";
+import { isLive, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../../lib/parks";
+import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { MapView } from "./MapView";
 import { ParkSheet } from "./ParkSheet";
@@ -33,14 +34,14 @@ export function MapScreen() {
   const { user, claims, selectedId, tripId } = state;
   const selected = selectedId ? PARK_BY_ID.get(selectedId) : undefined;
   const trip = tripId ? PARK_BY_ID.get(tripId) : undefined;
-  const here = useMemo(() => parkContaining(user, bounds?.byId), [user, bounds]);
-  const arrivedId = here && !claims[here.id] ? here.id : null;
+  const here = useMemo(() => parkContaining(user, bounds?.byId, state.accuracy ?? 0), [user, bounds, state.accuracy]);
+  const arrivedId = here && isLive(here) && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
 
   const nearby = useMemo(
     () =>
-      PARKS.filter((p) => !claims[p.id])
+      LIVE_PARKS.filter((p) => !claims[p.id])
         .map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) }))
         .sort((a, b) => a.km - b.km)
         .slice(0, 8),
@@ -60,6 +61,14 @@ export function MapScreen() {
     }
     lastArrived.current = arrivedId;
   }, [arrivedId]);
+
+  // Jump to the visitor the first time a real GPS fix lands.
+  const hadFix = useRef(false);
+  useEffect(() => {
+    if (state.accuracy === null || hadFix.current) return;
+    hadFix.current = true;
+    mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+  }, [state.accuracy]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
@@ -175,7 +184,7 @@ export function MapScreen() {
           whileTap={{ scale: 0.95 }}
         >
           <span className="counter__kip">
-            <Kip size={40} />
+            <Kip pose="avatar" size={48} />
           </span>
           <span className="counter__text">
             <strong>
@@ -189,9 +198,11 @@ export function MapScreen() {
           <button className="tool card" onClick={() => dispatch({ type: "mute" })} aria-label="Toggle sound">
             <Icon name={state.muted ? "mute" : "sound"} size={20} />
           </button>
-          <button className="tool card" onClick={() => setDemoOpen((v) => !v)} aria-label="Demo controls">
-            <Icon name="wand" size={20} />
-          </button>
+          {!FIELD && (
+            <button className="tool card" onClick={() => setDemoOpen((v) => !v)} aria-label="Demo controls">
+              <Icon name="wand" size={20} />
+            </button>
+          )}
         </motion.div>
       </div>
 
@@ -326,6 +337,7 @@ export function MapScreen() {
       </AnimatePresence>
 
       {!bounds && <div className="map-loading">Loading parks…</div>}
+      {FIELD && state.accuracy === null && !state.locationError && <div className="finding card">Finding you…</div>}
     </div>
   );
 }

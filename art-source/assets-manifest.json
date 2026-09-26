@@ -1,0 +1,574 @@
+{
+  "version": 1,
+  "assetCount": 42,
+  "generator": "Built-in image_gen; SVG hand-authored; mechanical PNG size and registration normalization.",
+  "assets": [
+    {
+      "path": "public/kip/kip-reference.png",
+      "pixelSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Front, three-quarter and side turnaround views of Kip.",
+      "sha256": "1880d4980cb900270b8f0c35f19cf96bd55260ef82797900b1d0ac735d74b1bc",
+      "foregroundBoundsAlphaAbove32": [
+        63,
+        184,
+        1519,
+        818
+      ]
+    },
+    {
+      "path": "public/kip/kip-idle.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip standing relaxed with wings at the sides.",
+      "sha256": "1d6a4db8d91bcbcd4c119ff2e3c04fd1cfc0ee7e4673288b1dc71412d61f85cf",
+      "foregroundBoundsAlphaAbove32": [
+        192,
+        130,
+        889,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-wave.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip waving hello with an open bill.",
+      "sha256": "5bfb9238253e05cb8a92ead61e6cc40038f7b2ca8d96c569c0e22183f3285d17",
+      "foregroundBoundsAlphaAbove32": [
+        149,
+        128,
+        909,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-point.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip pointing forward and upward.",
+      "sha256": "2691fdcaf0996ccb610e60de6783a288f44e9e206f5d541f4aadc68d67943bdd",
+      "foregroundBoundsAlphaAbove32": [
+        185,
+        119,
+        941,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-talk.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip explaining with an open bill and gesturing wing.",
+      "sha256": "5df54d6a7a9760336287986fa6865eb289939f8ca5770e29c31674f34170a447",
+      "foregroundBoundsAlphaAbove32": [
+        196,
+        128,
+        897,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-cheer.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip jumping with raised wings, happy closed eyes and small sparkles.",
+      "sha256": "f1e1a0168007b48b904b477ab907bc52f2c8cb9bc1f23b03b2aed40e3e893f2e",
+      "foregroundBoundsAlphaAbove32": [
+        183,
+        141,
+        888,
+        886
+      ]
+    },
+    {
+      "path": "public/kip/kip-celebrate.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "User-selected Kip holding a large gold mountain medallion overhead.",
+      "sha256": "0e7c9da35da6bc11d2c7de3b74acbf4d54d18a521abc4b8e94578eba031f92ba",
+      "foregroundBoundsAlphaAbove32": [
+        272,
+        82,
+        808,
+        923
+      ],
+      "source": "User-supplied image, proportionally fitted to the 1024-square transparent canvas and shared baseline; artwork unchanged."
+    },
+    {
+      "path": "public/kip/kip-camera.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip holding a retro camera at eye level with the orange bill visible.",
+      "sha256": "187184bc0fc2f10771c2280f7985b68d141f07afaf7475685a1c6ce486c4eb4a",
+      "foregroundBoundsAlphaAbove32": [
+        192,
+        127,
+        889,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-map.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip reading an unfolded wordless trail map.",
+      "sha256": "31ee2c7a2ac4bb88875f0cc6185d43c4ae23391692994e0d34d358e30d281698",
+      "foregroundBoundsAlphaAbove32": [
+        221,
+        150,
+        830,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-walk.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip walking mid-stride with a small green backpack.",
+      "sha256": "a7a23f4f9fdad5fd835a43db77d8c4d0429b205d8414a83c9d3a3c0f6140feb3",
+      "foregroundBoundsAlphaAbove32": [
+        220,
+        132,
+        890,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-think.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip tilting the head with one wing at the chin.",
+      "sha256": "15deddf0070929309d1b5da5ec6d9897e3c9f040446cc5df79eb53752c026954",
+      "foregroundBoundsAlphaAbove32": [
+        203,
+        124,
+        866,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-sleep.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip sitting fluffed up with a peaceful closed eye.",
+      "sha256": "322ef4bb98db41437937c92e9137d2debb21336193093cb86854d00db2e80258",
+      "foregroundBoundsAlphaAbove32": [
+        168,
+        237,
+        923,
+        922
+      ]
+    },
+    {
+      "path": "public/kip/kip-peek.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip head and wing peeking through the left edge.",
+      "sha256": "3e5b174aea7d1d3b8000f4662db8c633763cd1c6331c56b48a806c97ade82b76",
+      "foregroundBoundsAlphaAbove32": [
+        0,
+        125,
+        683,
+        874
+      ]
+    },
+    {
+      "path": "public/kip/kip-avatar.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": true,
+      "description": "Kip head and shoulders for a circular avatar.",
+      "sha256": "2bf3a154e41e5ab8e06a29634a5bfc8eb706f24b04ef45455cea2f83795bdbbc",
+      "foregroundBoundsAlphaAbove32": [
+        161,
+        133,
+        945,
+        925
+      ]
+    },
+    {
+      "path": "public/kip/app-icon.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Kip head on an opaque orange rounded-square tile with paper corners.",
+      "sha256": "ec031feab8584687c2193fafd975a1988c9161cb608eb1f1c23fb519e283836f"
+    },
+    {
+      "path": "public/badges/scenes/coast-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Daylight rocky Pacific coast with sea stacks, surf and driftwood.",
+      "sha256": "ead5d8a9a54ac241789296278c8ac1176e1df0396a041ebf0dd176d7b3293276"
+    },
+    {
+      "path": "public/badges/scenes/coast-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Rocky coast with a small red-and-white lighthouse.",
+      "sha256": "2f96f69a639eca4749ebf892ba183b6d8eb0a9c182a4a6044a6fef1fa7cf2570"
+    },
+    {
+      "path": "public/badges/scenes/forest-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Sunlit Douglas fir and cedar forest with moss and light beams.",
+      "sha256": "4936c871ce728f872b3dd469c494777af73e8192147443ca5bb2e25b80b9cf2e"
+    },
+    {
+      "path": "public/badges/scenes/forest-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Misty forest with a small red mushroom and ferns.",
+      "sha256": "0764b83204e7cbc923f1b3c202fc95875e95b02b11ecfdd4d2c8f1604740aed0"
+    },
+    {
+      "path": "public/badges/scenes/mountain-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Twin snowy peaks over an alpine meadow and pine trees.",
+      "sha256": "1ac6e6269bd108f7ef666f7c14990e97f0a7c5a51d7a98ddf52d4a80128d47d0"
+    },
+    {
+      "path": "public/badges/scenes/mountain-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Purple dawn over twin snowy peaks and an alpine meadow.",
+      "sha256": "6c64283eceaa1011e9f162f0c6727b96349b976d569a591b88f755ed3d7ec77b"
+    },
+    {
+      "path": "public/badges/scenes/lake-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Calm blue lake reflecting hills with an orange canoe.",
+      "sha256": "3ef639eefa70381eb55a5d0701f0aafe8b9c170568fa02c24a39ad736f4341c8"
+    },
+    {
+      "path": "public/badges/scenes/lake-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Golden-hour lake with reflected hills and an orange canoe.",
+      "sha256": "4888c46bdecdbbb8003bb384db8de7859bf2d584d36f844663bda4e175fb975b"
+    },
+    {
+      "path": "public/badges/scenes/waterfall-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Broad twilight waterfall between purple cliffs and a splash pool.",
+      "sha256": "d26a33544425da260add630f76b813dd512513cd275af8f389f28c93d0f8edde"
+    },
+    {
+      "path": "public/badges/scenes/waterfall-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Tall daylight waterfall between cliffs with spray and a pool.",
+      "sha256": "97c6b11a5edd931d5a797d0556916919aded7aeebb7b9fb0a87db03b68d4485a"
+    },
+    {
+      "path": "public/badges/scenes/river-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Daylight winding turquoise river, green banks, stones and pines.",
+      "sha256": "685b4dc91e52fa4a9dca35424f7f2c218103cccab19af87cfb8ea94d82f2272b"
+    },
+    {
+      "path": "public/badges/scenes/river-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Sunset river winding between green banks and pine-covered hills.",
+      "sha256": "450fd9e9fe44fafbb93ea135591e055a6d87fd508b94e9a245bd0c9e635bdc8e"
+    },
+    {
+      "path": "public/badges/scenes/cave-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Starry purple sky over a cave with cyan and lavender crystals.",
+      "sha256": "5cd6dc0fd25a2c505d2ff117c36a92f8497fc0a9eb25e3fd6d24a6a2eb21ac69"
+    },
+    {
+      "path": "public/badges/scenes/cave-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Blue twilight cave with amber crystals and a turquoise stream.",
+      "sha256": "c4ad40bb38ccb94510a5f3a3610ff1972ac1716911f92b3b4e4fdc505178b9bc"
+    },
+    {
+      "path": "public/badges/scenes/marsh-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Pink dawn wetland with reeds, cattails and a standing heron silhouette.",
+      "sha256": "1ef3904247ef7f0a4a2bc4dca3263c0e3e41fc69268f7b1af679226aee8d0a50"
+    },
+    {
+      "path": "public/badges/scenes/marsh-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Lavender sunset wetland with cattails and a flying heron silhouette.",
+      "sha256": "cd7693c0b0c4d7c0e75bf55a595762d21332f853229336dc65b127fe8149632d"
+    },
+    {
+      "path": "public/badges/scenes/heritage-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Sandstone with invented spiral and animal-line carvings among arbutus trees.",
+      "sha256": "c01a2ba6bbada430d9f3450c873d2271ad299dd1a7b465a14cd9519e762e5ba0"
+    },
+    {
+      "path": "public/badges/scenes/heritage-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Golden-hour sandstone with invented carvings and a leaning arbutus.",
+      "sha256": "b07f1e6458ae2a38ed35a790d7d63e4fced99e2e35c3d1d4cc1b59e12e8c4ec3"
+    },
+    {
+      "path": "public/badges/scenes/legendary-a.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Grand surf beach with rainforest, sea stacks, big sky and sun rays.",
+      "sha256": "ed740aeeffdfd9f146fd1b3fedb1b568b0a6b4a0441778957dcc4c832efb9d10"
+    },
+    {
+      "path": "public/badges/scenes/legendary-b.png",
+      "pixelSize": {
+        "width": 1024,
+        "height": 1024
+      },
+      "hasTransparency": false,
+      "description": "Sunset surf beach with rainforest headlands and a radiant orange sun.",
+      "sha256": "7e24259ef9c4c2f3d68a8a96a8092df50154a2036e0816cdf3bf164aa7fb8b8f"
+    },
+    {
+      "path": "public/products/display-case.png",
+      "pixelSize": {
+        "width": 1200,
+        "height": 900
+      },
+      "hasTransparency": true,
+      "description": "Walnut glass-front shadow box with pine felt and twelve enamel pins.",
+      "sha256": "3b9c1e4083dda2781a470337628e644d41fc3541fa8cd48bd3dffa4cc7b34326"
+    },
+    {
+      "path": "public/products/field-book.png",
+      "pixelSize": {
+        "width": 1200,
+        "height": 900
+      },
+      "hasTransparency": true,
+      "description": "Closed pine cloth hardcover with an open scenic photo and badge spread.",
+      "sha256": "d43d628245f8411b9e862e8c4200d2a7e255762935b59af123f0b735aec5391e"
+    },
+    {
+      "path": "public/products/pin-closeup.png",
+      "pixelSize": {
+        "width": 1200,
+        "height": 900
+      },
+      "hasTransparency": true,
+      "description": "Angled hexagonal mountain enamel pin with a gold rim and clutch behind it.",
+      "sha256": "ff61e20610ba92d0343b54495818e11387ea463774b9909047d27b869304c4e5"
+    },
+    {
+      "path": "public/assets-contact-sheet.png",
+      "pixelSize": {
+        "width": 1960,
+        "height": 1760
+      },
+      "hasTransparency": false,
+      "description": "Labeled overview of all 38 PNG artwork assets and the SVG rig.",
+      "sha256": "8ab3bf2266a52190ea32f0687b1dc1a4f8f8ef64c7936d8ed49cca840f1f4a57"
+    },
+    {
+      "path": "public/kip/kip-rig.svg",
+      "pixelSize": {
+        "width": 150,
+        "height": 150
+      },
+      "hasTransparency": true,
+      "description": "Hand-authored articulated idle Kip with independent closed shapes."
+    },
+    {
+      "path": "public/kip/kip-rig.json",
+      "pixelSize": null,
+      "hasTransparency": null,
+      "description": "Animation pivots in SVG viewBox units."
+    },
+    {
+      "path": "public/assets-manifest.json",
+      "pixelSize": null,
+      "hasTransparency": null,
+      "description": "Asset inventory, export metadata, prompt recipe and validation results."
+    }
+  ],
+  "regenerated": [
+    "public/kip/kip-celebrate.png",
+    "public/kip/kip-camera.png",
+    "public/kip/app-icon.png",
+    "public/badges/scenes/marsh-a.png",
+    "public/badges/scenes/marsh-b.png",
+    "public/products/pin-closeup.png"
+  ],
+  "unproduced": [],
+  "validation": {
+    "exactNamesAndDimensions": "pass",
+    "transparentCorners": "pass",
+    "opaqueScenesAndIcon": "pass",
+    "rigXmlIdsHierarchyAndPivots": "pass",
+    "standingFootBaselineSpreadPx": 5,
+    "mainPoseHeightSpreadPercent": 1.646,
+    "foregroundMeasurement": "Alpha >32 ignores faint generation fringe; foot measurement uses opaque pink pixels below y600.",
+    "poseMeasurements": {
+      "kip-idle": {
+        "footBaselineY": 913,
+        "bboxHeight": 792
+      },
+      "kip-wave": {
+        "footBaselineY": 913,
+        "bboxHeight": 794
+      },
+      "kip-point": {
+        "footBaselineY": 911,
+        "bboxHeight": 803
+      },
+      "kip-talk": {
+        "footBaselineY": 912,
+        "bboxHeight": 794
+      },
+      "kip-celebrate": {
+        "footBaselineY": 915,
+        "bboxHeight": 841
+      },
+      "kip-camera": {
+        "footBaselineY": 913,
+        "bboxHeight": 795
+      },
+      "kip-map": {
+        "footBaselineY": 913,
+        "bboxHeight": 772
+      },
+      "kip-walk": {
+        "footBaselineY": 912,
+        "bboxHeight": 790
+      },
+      "kip-think": {
+        "footBaselineY": 914,
+        "bboxHeight": 798
+      },
+      "kip-sleep": {
+        "footBaselineY": 910,
+        "bboxHeight": 685
+      }
+    }
+  },
+  "notes": [
+    "The app icon is opaque; generated orange approximates #FF5A1F with slight pixel variation rather than an exact flat hex fill.",
+    "The celebration pose includes overhead wings and a medallion, so its silhouette differs from standing idle; the required five-pose bounding-height check passes.",
+    "SVG pixelSize is the nominal 150 by 150 viewBox; the SVG is resolution-independent. JSON has no intrinsic pixel size or transparency."
+  ],
+  "promptRecipe": {
+    "kipBase": "Cute mascot character Kip, a Black Oystercatcher shorebird. Chubby round glossy black body, big round head, oversized yellow eye with a thick red-orange eye ring and a white sparkle, pink blush, long straight vivid orange-red bill with a yellow-orange tip and thin dark outline, thin pale pink legs with small feet, short rounded black wings used like arms. Flat vector sticker style, thick consistent dark outline, minimal cel shading, bright and playful. Transparent background, full body centred with margin, facing right.",
+    "kipConsistency": "Same character as the reference. Every later Kip generation used kip-reference.png and most used kip-idle.png as registration reference. Preserve bill, eye, legs and proportions. Pose instructions match each asset description; no words, logos or ground shadows.",
+    "scenes": "Flat sticker two-tone landscape, thin #14231C outlines, Parkdex palette, opaque edge-to-edge square, key subject central 80 percent, bottom 30 percent simple, subtle diagonal stitch texture. No badge rim, frame, ribbon, stars, lettering or watermark. coast-a or river-a used as visual reference. Individual hero and time-of-day instructions match each asset description.",
+    "products": "Transparent three-quarter product illustration with #14231C outline, Parkdex palette, slight depth, at most two-tone shading, generous margin and no text. Individual subjects match each asset description."
+  }
+}

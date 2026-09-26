@@ -1,125 +1,100 @@
-import type { StyleSpecification } from "maplibre-gl";
+import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
-// A hand-tuned "storybook" style over OpenFreeMap's keyless vector tiles:
-// warm paper land, candy water with an offset shadow, soft greens and quiet roads.
-const cls = (...classes: string[]) => ["match", ["get", "class"], classes, true, false] as unknown as boolean;
-const road = (...classes: string[]) =>
-  ["all", ["match", ["get", "brunnel"], ["tunnel"], false, true], ["match", ["get", "class"], classes, true, false]] as unknown as boolean;
-const zw = (stops: [number, number][]) => ["interpolate", ["exponential", 1.6], ["zoom"], ...stops.flat()] as unknown as number;
+// Must match the extract bounds in scripts/fetch-map.mjs.
+export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
 
-export const mapStyle: StyleSpecification = {
-  version: 8,
-  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
-  sources: {
-    omt: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
-  },
-  layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#F7ECD8" } },
-    { id: "wood", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("wood", "forest"), paint: { "fill-color": "#D3EBBE", "fill-opacity": 0.9 } },
-    { id: "grass", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("grass", "farmland", "wetland"), paint: { "fill-color": "#E3F0C8", "fill-opacity": 0.8 } },
-    { id: "sand", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("sand"), paint: { "fill-color": "#FBE3B0" } },
-    { id: "ice", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("ice"), paint: { "fill-color": "#FFFFFF" } },
-    { id: "residential", type: "fill", source: "omt", "source-layer": "landuse", filter: cls("residential", "suburb", "neighbourhood"), paint: { "fill-color": "#F3E3C8", "fill-opacity": 0.7 } },
-    { id: "osm-park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-color": "#C9E7B2", "fill-opacity": 0.55 } },
-    { id: "water-shadow", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] } },
-    { id: "water", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": "#A8E1EC" } },
-    {
-      id: "waterway",
-      type: "line",
-      source: "omt",
-      "source-layer": "waterway",
-      paint: { "line-color": "#A8E1EC", "line-width": zw([[8, 0.6], [14, 3], [18, 8]]) },
-    },
-    { id: "building", type: "fill", source: "omt", "source-layer": "building", minzoom: 14, paint: { "fill-color": "#EAD6B6", "fill-outline-color": "#DCC39C" } },
-    {
-      id: "path",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 13,
-      filter: road("path", "track"),
-      paint: { "line-color": "#B98E5A", "line-width": zw([[13, 0.8], [18, 2.2]]), "line-dasharray": [2, 1.6], "line-opacity": 0.75 },
-    },
-    {
-      id: "minor-casing",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 12,
-      filter: road("minor", "service"),
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#E9D4B0", "line-width": zw([[12, 1.5], [18, 16]]) },
-    },
-    {
-      id: "minor",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 12,
-      filter: road("minor", "service"),
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#FFFDF7", "line-width": zw([[12, 0.8], [18, 12]]) },
-    },
-    {
-      id: "major-casing",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 7,
-      filter: road("secondary", "tertiary", "primary", "trunk"),
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#E3C697", "line-width": zw([[7, 1], [18, 26]]) },
-    },
-    {
-      id: "major",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 7,
-      filter: road("secondary", "tertiary", "primary", "trunk"),
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#FFFFFF", "line-width": zw([[7, 0.6], [18, 20]]) },
-    },
-    {
-      id: "motorway",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      minzoom: 5,
-      filter: road("motorway"),
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#FFD68A", "line-width": zw([[5, 0.8], [18, 24]]) },
-    },
-    {
-      id: "ferry",
-      type: "line",
-      source: "omt",
-      "source-layer": "transportation",
-      filter: cls("ferry"),
-      paint: { "line-color": "#6FB8C9", "line-width": 1.2, "line-dasharray": [3, 3] },
-    },
-    {
-      id: "water-label",
-      type: "symbol",
-      source: "omt",
-      "source-layer": "water_name",
-      layout: { "text-field": ["get", "name:latin"], "text-font": ["Noto Sans Italic"], "text-size": 12, "text-letter-spacing": 0.08 },
-      paint: { "text-color": "#3D8EA0", "text-halo-color": "#A8E1EC", "text-halo-width": 1.5 },
-    },
-    {
-      id: "place-label",
-      type: "symbol",
-      source: "omt",
-      "source-layer": "place",
-      filter: cls("city", "town", "village", "suburb"),
-      layout: {
-        "text-field": ["get", "name:latin"],
-        "text-font": ["Noto Sans Bold"],
-        "text-size": ["match", ["get", "class"], "city", 15, "town", 13, 11],
-        "text-transform": "uppercase",
-        "text-letter-spacing": 0.12,
-      },
-      paint: { "text-color": "#7A6A55", "text-halo-color": "#F7ECD8", "text-halo-width": 2 },
-    },
-  ],
+// Storybook palette over the bundled Protomaps tiles: warm paper land,
+// candy water, soft greens and quiet roads.
+const FLAVOR: Flavor = {
+  ...namedFlavor("light"),
+  background: "#A8E1EC",
+  earth: "#F7ECD8",
+  park_a: "#D5ECC0",
+  park_b: "#C9E7B2",
+  wood_a: "#D3EBBE",
+  wood_b: "#C6E4AE",
+  scrub_a: "#E3F0C8",
+  scrub_b: "#DCEDBE",
+  glacier: "#FFFFFF",
+  sand: "#FBE3B0",
+  beach: "#FBE3B0",
+  water: "#A8E1EC",
+  buildings: "#EAD6B6",
+  pedestrian: "#F3E3C8",
+  hospital: "#F6E0D0",
+  school: "#F6E6C8",
+  industrial: "#EFE2CC",
+  aerodrome: "#EFE4D2",
+  zoo: "#D5ECC0",
+  military: "#EFE4D2",
+  minor_casing: "#E9D4B0",
+  minor_service_casing: "#E9D4B0",
+  link_casing: "#E3C697",
+  major_casing_early: "#E3C697",
+  major_casing_late: "#E3C697",
+  highway_casing_early: "#E0B878",
+  highway_casing_late: "#E0B878",
+  minor_a: "#FFFDF7",
+  minor_b: "#FFFDF7",
+  minor_service: "#FFFDF7",
+  other: "#FFFDF7",
+  link: "#FFFFFF",
+  major: "#FFFFFF",
+  highway: "#FFD68A",
+  boundaries: "#C9B89A",
+  roads_label_minor: "#8C7B63",
+  roads_label_minor_halo: "#FFFDF7",
+  roads_label_major: "#7A6A55",
+  roads_label_major_halo: "#FFFFFF",
+  ocean_label: "#3D8EA0",
+  city_label: "#6B5B47",
+  city_label_halo: "#F7ECD8",
+  subplace_label: "#8C7B63",
+  subplace_label_halo: "#F7ECD8",
+  state_label: "#A89880",
+  state_label_halo: "#F7ECD8",
+  country_label: "#A89880",
+  address_label: "#A89880",
+  address_label_halo: "#F7ECD8",
+  regular: "Noto Sans Regular",
+  bold: "Noto Sans Medium",
+  italic: "Noto Sans Italic",
+  pois: undefined,
 };
+
+export function mapStyle(origin: string): StyleSpecification {
+  // No sprite ships offline, so drop icon-only layers and icons on labels.
+  const base = (layers("protomaps", FLAVOR, { lang: "en" }) as LayerSpecification[])
+    .filter((l) => l.id !== "roads_oneway" && l.id !== "roads_shields")
+    .map((l) => {
+      if (l.type !== "symbol" || !l.layout?.["icon-image"]) return l;
+      const { ["icon-image"]: _icon, ...layout } = l.layout;
+      return { ...l, layout };
+    });
+  const waterIndex = base.findIndex((l) => l.id === "water");
+  // An offset copy of the water under itself gives coastlines a soft sticker edge.
+  const shadow: LayerSpecification = {
+    id: "water-shadow",
+    type: "fill",
+    source: "protomaps",
+    "source-layer": "water",
+    paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] },
+  };
+  const style = waterIndex >= 0 ? [...base.slice(0, waterIndex), shadow, ...base.slice(waterIndex)] : base;
+  return {
+    version: 8,
+    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
+    sources: {
+      protomaps: {
+        type: "vector",
+        tiles: [`${origin}/map/tiles/{z}/{x}/{y}.pbf`],
+        minzoom: 0,
+        maxzoom: 14,
+        bounds: ISLAND_BOUNDS,
+        attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+      },
+    },
+    layers: style,
+  };
+}

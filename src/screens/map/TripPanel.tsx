@@ -5,6 +5,7 @@ import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
 import { formatDistance, formatMinutes, travelEstimate } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
+import { FIELD } from "../../lib/native";
 import { directionsUrl } from "./ParkSheet";
 
 type TripProps = {
@@ -63,9 +64,11 @@ export function TripPanel({ park, remainingKm, totalKm, simulating, onSimulate, 
         <a className="btn btn--paper btn--sm" href={directionsUrl(park)} target="_blank" rel="noreferrer">
           <Icon name="car" size={18} /> Open in Maps
         </a>
-        <button className="btn btn--sun btn--sm trip__sim" onClick={onSimulate} disabled={simulating}>
-          <Icon name="play" size={14} /> {simulating ? "Travelling…" : "Demo: simulate trip"}
-        </button>
+        {!FIELD && (
+          <button className="btn btn--sun btn--sm trip__sim" onClick={onSimulate} disabled={simulating}>
+            <Icon name="play" size={14} /> {simulating ? "Travelling…" : "Demo: simulate trip"}
+          </button>
+        )}
       </div>
     </motion.div>
   );

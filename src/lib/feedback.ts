@@ -1,3 +1,5 @@
+import { haptic } from "./native";
+
 // Tiny Web Audio synth and vibration helpers. Everything is generated, so the
 // mockup ships no audio files and stays silent until the first user gesture.
 let ctx: AudioContext | null = null;
@@ -58,9 +60,5 @@ export const sfx = {
 };
 
 export function buzz(pattern: number | number[]) {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    // Vibration is optional; desktop browsers ignore it.
-  }
+  haptic(pattern);
 }

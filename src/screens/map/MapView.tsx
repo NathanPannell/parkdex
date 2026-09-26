@@ -1,4 +1,6 @@
-import { AttributionControl, Map as MLMap, Marker, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
+import { AttributionControl, Map as MLMap, Marker, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
+
+setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
 import { motion } from "motion/react";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -6,8 +8,8 @@ import { Badge } from "../../components/Badge";
 import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
-import { mapStyle } from "../../lib/mapStyle";
-import { PARKS, type Park } from "../../lib/parks";
+import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
+import { isLive, PARKS, type Park } from "../../lib/parks";
 
 type Tier = "far" | "mid" | "near";
 const tierOf = (z: number): Tier => (z < 8.6 ? "far" : z < 10.4 ? "mid" : "near");
@@ -51,7 +53,12 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
   useEffect(() => {
     const map = new MLMap({
       container: container.current!,
-      style: mapStyle,
+      style: mapStyle(location.origin),
+      minZoom: 6.5,
+      maxBounds: [
+        [ISLAND_BOUNDS[0] - 1.5, ISLAND_BOUNDS[1] - 0.8],
+        [ISLAND_BOUNDS[2] + 1.5, ISLAND_BOUNDS[3] + 0.8],
+      ],
       center: user,
       zoom: 10.7,
       attributionControl: false,
@@ -103,7 +110,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     if (!map || !loaded || !fc || map.getSource("parks")) return;
     map.addSource("parks", { type: "geojson", data: fc });
     map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    const before = "water-label";
+    const before = "water_waterway_label";
     map.addLayer(
       {
         id: "park-fill",
@@ -222,17 +229,18 @@ const ParkMarker = memo(function ParkMarker({
   focused: boolean;
   onSelect: (id: string) => void;
 }) {
-  const size = tier === "near" ? 50 : 38;
+  const live = isLive(park);
+  const size = !live ? (tier === "near" ? 30 : 22) : tier === "near" ? 50 : 38;
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const host = ref.current?.parentElement;
-    if (host) host.style.zIndex = focused ? "20" : claimed ? "2" : "1";
+    if (host) host.style.zIndex = focused ? "20" : claimed ? "3" : live ? "2" : "1";
   }, [focused, claimed]);
 
   return (
     <motion.button
       ref={ref}
-      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""}`}
+      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""} ${live ? "" : "pm--soon"}`}
       aria-label={park.name}
       initial={{ scale: 0, y: 24 }}
       animate={{ scale: focused ? 1.4 : 1, y: focused ? -6 : 0 }}

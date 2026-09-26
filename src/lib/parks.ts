@@ -17,12 +17,18 @@ export type Park = {
   rarity: Rarity;
   seed: number;
   blurb: string;
+  // Badge art for live badges; null means "badge coming soon".
+  scene: string | null;
 };
 
 export const PARKS = raw as Park[];
 export const PARK_BY_ID = new Map(PARKS.map((p) => [p.id, p]));
-// The staging catalogue covers all of BC; the mockup ships the Island subset.
-export const TOTAL_BADGES = 1030;
+export const LIVE_PARKS = PARKS.filter((p) => p.scene);
+// Only parks with finished art count toward the collection.
+export const TOTAL_BADGES = LIVE_PARKS.length;
+
+export const isLive = (p: Park) => p.scene !== null;
+export const sceneUrl = (scene: string) => `/art/badges/scenes/${scene}.webp`;
 
 export type Palette = {
   skyTop: string;

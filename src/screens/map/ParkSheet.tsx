@@ -3,7 +3,7 @@ import { Badge } from "../../components/Badge";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
 import { distanceKm, formatDistance, formatMinutes, travelEstimate, type LngLat } from "../../lib/geo";
-import { BIOME_LABEL, CATEGORY_LABEL, PALETTES, RARITY, type Park } from "../../lib/parks";
+import { BIOME_LABEL, CATEGORY_LABEL, isLive, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { Claim } from "../../lib/store";
 
 type Props = {
@@ -31,7 +31,8 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
   const km = distanceKm(user, [park.lng, park.lat]);
   const { driveMin } = travelEstimate(km);
   const finalWalk = 3 + (park.seed % 11);
-  const pal = PALETTES[park.biome];
+  const live = isLive(park);
+  const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
@@ -70,15 +71,19 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           </Tilt>
         </motion.div>
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {claim ? "In your case" : "You'll earn this"}
+          {claim ? "In your case" : live ? "You'll earn this" : "Badge coming soon"}
         </motion.div>
       </div>
 
       <motion.div className="park-sheet__body scroll" variants={stagger} initial="hidden" animate="show">
         <motion.div className="park-sheet__pills" variants={item}>
-          <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
-            {"★".repeat(rarity.stars)} {rarity.label}
-          </span>
+          {live ? (
+            <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
+              {"★".repeat(rarity.stars)} {rarity.label}
+            </span>
+          ) : (
+            <span className="pill">Badge coming soon</span>
+          )}
           <span className="pill">{BIOME_LABEL[park.biome]}</span>
         </motion.div>
         <motion.h2 variants={item} className="park-sheet__name">
@@ -124,6 +129,15 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           <button className="btn btn--block btn--ink" onClick={onViewCase}>
             <Icon name="case" /> View in your case
           </button>
+        ) : !live ? (
+          <>
+            <button className="btn btn--block btn--paper" disabled>
+              Badge art coming soon
+            </button>
+            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps">
+              <Icon name="car" />
+            </a>
+          </>
         ) : inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
             <Icon name="camera" /> Check in &amp; claim

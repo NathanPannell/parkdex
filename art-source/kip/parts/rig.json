@@ -1,0 +1,314 @@
+{
+  "canvas": 1024,
+  "order": [
+    "tail",
+    "legs",
+    "wing-back",
+    "body",
+    "head",
+    "eye-open",
+    "eye-closed",
+    "bill-lower",
+    "bill-upper",
+    "wing-front"
+  ],
+  "pivots": {
+    "body": [
+      483,
+      914
+    ],
+    "head": [
+      479,
+      496
+    ],
+    "wing-front": [
+      422,
+      529
+    ],
+    "wing-back": [
+      650,
+      551
+    ],
+    "bill-lower": [
+      641,
+      393
+    ],
+    "bill-upper": [
+      641,
+      393
+    ],
+    "tail": [
+      274,
+      638
+    ],
+    "legs": [
+      472,
+      754
+    ]
+  },
+  "childOf": {
+    "eye-open": "head",
+    "eye-closed": "head",
+    "bill-lower": "head",
+    "bill-upper": "head"
+  },
+  "defaultHidden": [
+    "eye-closed"
+  ],
+  "angleConvention": "Positive clockwise in canvas coordinates; transform children with head.",
+  "source": "../kip-idle.png",
+  "sourceSha256": "1d6a4db8d91bcbcd4c119ff2e3c04fd1cfc0ee7e4673288b1dc71412d61f85cf",
+  "inpainted": [
+    "tail",
+    "legs",
+    "wing-back",
+    "body",
+    "head"
+  ],
+  "constructed": [
+    "eye-closed"
+  ],
+  "jointExtensionsPx": 30,
+  "validation": {
+    "assets": {
+      "tail": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "legs": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "wing-back": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "body": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "head": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "eye-open": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "eye-closed": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "bill-lower": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "bill-upper": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      },
+      "wing-front": {
+        "exists": true,
+        "size": [
+          1024,
+          1024
+        ],
+        "hasAlphaChannel": true,
+        "hasTransparentPixels": true,
+        "hasOpaquePixels": true
+      }
+    },
+    "rigOrderMatches": true,
+    "canvasMatches": true,
+    "sourceSize": [
+      1024,
+      1024
+    ],
+    "idle": {
+      "sourceOpaquePixels": 266895,
+      "within12RgbFraction": 0.9964667753236292,
+      "within12RgbPercent": 99.64667753236292,
+      "sourceOpaqueAlphaMismatchOver12": 0,
+      "silhouetteMissingPixels": 0,
+      "silhouetteExtraPixels": 0
+    },
+    "poses": {
+      "headPlus12": {
+        "jointDisks": {
+          "head": {
+            "radiusPx": 18,
+            "pixels": 1009,
+            "opaqueFraction": 1.0,
+            "transparentPixels": 0
+          }
+        },
+        "newEnclosedJointHoles": {
+          "head": {
+            "countAtLeast8Px": 0,
+            "largestAreaPx": 0
+          }
+        },
+        "largeConnectedComponents": 1,
+        "largestConnectedComponentPixels": 270963,
+        "torsoCoreOpaqueFraction": 1.0
+      },
+      "headMinus12": {
+        "jointDisks": {
+          "head": {
+            "radiusPx": 18,
+            "pixels": 1009,
+            "opaqueFraction": 1.0,
+            "transparentPixels": 0
+          }
+        },
+        "newEnclosedJointHoles": {
+          "head": {
+            "countAtLeast8Px": 0,
+            "largestAreaPx": 0
+          }
+        },
+        "largeConnectedComponents": 1,
+        "largestConnectedComponentPixels": 270904,
+        "torsoCoreOpaqueFraction": 1.0
+      },
+      "wingFrontMinus110": {
+        "jointDisks": {
+          "wing-front": {
+            "radiusPx": 18,
+            "pixels": 1009,
+            "opaqueFraction": 1.0,
+            "transparentPixels": 0
+          }
+        },
+        "newEnclosedJointHoles": {
+          "wing-front": {
+            "countAtLeast8Px": 0,
+            "largestAreaPx": 0
+          }
+        },
+        "largeConnectedComponents": 1,
+        "largestConnectedComponentPixels": 270211,
+        "torsoCoreOpaqueFraction": 1.0
+      },
+      "wingBackMinus110": {
+        "jointDisks": {
+          "wing-back": {
+            "radiusPx": 18,
+            "pixels": 1009,
+            "opaqueFraction": 1.0,
+            "transparentPixels": 0
+          }
+        },
+        "newEnclosedJointHoles": {
+          "wing-back": {
+            "countAtLeast8Px": 0,
+            "largestAreaPx": 0
+          }
+        },
+        "largeConnectedComponents": 1,
+        "largestConnectedComponentPixels": 284593,
+        "torsoCoreOpaqueFraction": 1.0
+      },
+      "billLowerPlus18": {
+        "jointDisks": {
+          "bill-lower": {
+            "radiusPx": 18,
+            "pixels": 1009,
+            "opaqueFraction": 1.0,
+            "transparentPixels": 0
+          }
+        },
+        "newEnclosedJointHoles": {
+          "bill-lower": {
+            "countAtLeast8Px": 0,
+            "largestAreaPx": 0
+          }
+        },
+        "largeConnectedComponents": 1,
+        "largestConnectedComponentPixels": 271517,
+        "torsoCoreOpaqueFraction": 1.0
+      }
+    },
+    "pass": true
+  },
+  "jointExtended": [
+    "tail",
+    "legs",
+    "wing-back",
+    "body",
+    "head",
+    "bill-lower",
+    "bill-upper",
+    "wing-front"
+  ],
+  "inpaintingNotes": {
+    "head": "Sampled charcoal shading and harmonic fill beneath the eye and bill; hidden neck overlap reconstructed.",
+    "body": "Torso shading reconstructed beneath the source wing and head; smooth fill preserves the visible source outside occlusion.",
+    "wing-back": "Visible far-wing pixels retained; hidden wing completed from a smaller, darker transformed copy of the source near wing.",
+    "tail": "Charcoal attachment fill extends under the torso.",
+    "legs": "Pink hip caps extend under the torso without a joint-edge outline.",
+    "wing-front": "Original wing and source-identical rounded shoulder overlap.",
+    "bill-lower": "Source lower bill with source overlap into the upper half and face hinge.",
+    "bill-upper": "Source upper bill with face-hinge overlap and an ink outline along the newly exposed inner edge.",
+    "eye-closed": "New red-orange happy closed-eye curve; hidden by default."
+  },
+  "notes": [
+    "Every part is a full 1024x1024 registered canvas; do not trim transparent bounds at runtime.",
+    "The neutral composite meets the requested 99 percent within 12 RGB units threshold. The small RGB difference is the new ink outline at the bill split.",
+    "Requested endpoint rotations were tested. Open-mouth negative space and silhouette displacement caused by moving parts are intentional, not joint gaps."
+  ]
+}

@@ -232,7 +232,7 @@ export function Claim() {
             <Bubble side="right" style={{ right: 70, top: -40, whiteSpace: "nowrap" }}>
               {number === 1 ? "Your first badge! KLEEP!" : CHEERS[number % CHEERS.length]}
             </Bubble>
-            <Kip pose="cheer" size={96} flip />
+            <Kip pose="celebrate" size={112} flip />
           </motion.div>
         )}
       </AnimatePresence>

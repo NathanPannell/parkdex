@@ -193,6 +193,11 @@ p {
   box-shadow: 0 0 0 var(--edge);
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .btn--block {
   width: 100%;
 }

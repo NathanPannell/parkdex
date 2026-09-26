@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import type { LngLat } from "./geo";
+import { clearPhotos, loadPhotos, savePhoto } from "./photos";
 
 export type Claim = { at: string; photo: string };
 
@@ -9,6 +10,9 @@ type State = {
   onboarded: boolean;
   claims: Record<string, Claim>;
   user: LngLat;
+  // Metres of GPS uncertainty; null until the first real fix arrives.
+  accuracy: number | null;
+  locationError: string | null;
   muted: boolean;
   waitlist: string[];
   screen: Screen;
@@ -23,7 +27,9 @@ type Action =
   | { type: "onboarded" }
   | { type: "select"; id: string | null }
   | { type: "trip"; id: string | null }
-  | { type: "move"; user: LngLat }
+  | { type: "move"; user: LngLat; accuracy?: number }
+  | { type: "locationError"; error: string | null }
+  | { type: "photos"; photos: Record<string, string> }
   | { type: "photo"; photo: string | null }
   | { type: "claim"; id: string; photo: string }
   | { type: "focus"; id: string | null }
@@ -39,6 +45,8 @@ const initial: State = {
   onboarded: false,
   claims: {},
   user: DEMO_START,
+  accuracy: null,
+  locationError: null,
   muted: false,
   waitlist: [],
   screen: "splash",
@@ -69,7 +77,14 @@ function reducer(state: State, action: Action): State {
     case "trip":
       return { ...state, tripId: action.id };
     case "move":
-      return { ...state, user: action.user };
+      return { ...state, user: action.user, accuracy: action.accuracy ?? state.accuracy, locationError: null };
+    case "locationError":
+      return { ...state, locationError: action.error };
+    case "photos": {
+      const claims = { ...state.claims };
+      for (const [id, photo] of Object.entries(action.photos)) if (claims[id]) claims[id] = { ...claims[id], photo };
+      return { ...state, claims };
+    }
     case "photo":
       return { ...state, pendingPhoto: action.photo };
     case "claim":
@@ -95,15 +110,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, load);
 
   useEffect(() => {
-    const { onboarded, claims, muted, waitlist } = state;
+    loadPhotos()
+      .then((photos) => dispatch({ type: "photos", photos }))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const { onboarded, muted, waitlist } = state;
+    // Photos are stored separately in IndexedDB; only claim metadata goes to localStorage.
+    const claims = Object.fromEntries(Object.entries(state.claims).map(([id, c]) => [id, { at: c.at, photo: "" }]));
     try {
       localStorage.setItem(KEY, JSON.stringify({ onboarded, claims, muted, waitlist }));
     } catch {
-      // Photos can exceed the storage quota; keep the session state in memory.
+      // Storage can be unavailable in private modes; the session still works in memory.
     }
   }, [state.onboarded, state.claims, state.muted, state.waitlist]);
 
-  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
+  const wrapped = (action: Action) => {
+    if (action.type === "claim" && action.photo) void savePhoto(action.id, action.photo).catch(() => {});
+    if (action.type === "reset") void clearPhotos().catch(() => {});
+    dispatch(action);
+  };
+
+  return <Ctx.Provider value={{ state, dispatch: wrapped }}>{children}</Ctx.Provider>;
 }
 
 export function useStore() {

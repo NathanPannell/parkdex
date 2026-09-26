@@ -34,7 +34,7 @@ export function Splash() {
         animate={{ y: 0, rotate: 0 }}
         transition={{ type: "spring", stiffness: 260, damping: 13, delay: 0.25 }}
       >
-        <Kip pose="wave" size={170} />
+        <Kip pose="wave" size={190} />
       </motion.div>
       <h1 className="splash__word" aria-label="parkdex">
         {WORD.map((ch, i) => (

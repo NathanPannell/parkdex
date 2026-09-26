@@ -1,17 +1,32 @@
 import { toBlob } from "html-to-image";
 import { LayoutGroup, motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useToast } from "../components/Toast";
 import { sfx } from "../lib/feedback";
-import { PALETTES, PARK_BY_ID, RARITY, TOTAL_BADGES, type Park } from "../lib/parks";
+import { isNative, shareImage } from "../lib/native";
+import { PALETTES, PARK_BY_ID, RARITY, sceneUrl, TOTAL_BADGES, type Park } from "../lib/parks";
 import { useStore, type Claim } from "../lib/store";
 
 type Look = "polaroid" | "badge";
 
-export function StoryCard({ park, claim, number, look, cardRef }: { park: Park; claim: Claim; number: number; look: Look; cardRef?: React.Ref<HTMLDivElement> }) {
+export function StoryCard({
+  park,
+  claim,
+  number,
+  look,
+  cardRef,
+  sceneHref,
+}: {
+  park: Park;
+  claim: Claim;
+  number: number;
+  look: Look;
+  cardRef?: React.Ref<HTMLDivElement>;
+  sceneHref?: string;
+}) {
   const pal = PALETTES[park.biome];
   const date = new Date(claim.at).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
   return (
@@ -25,7 +40,7 @@ export function StoryCard({ park, claim, number, look, cardRef }: { park: Park; 
         <span className="story__photo-caption">{date}</span>
       </motion.div>
       <motion.div layout className="story__badge" transition={{ type: "spring", stiffness: 300, damping: 24 }}>
-        <Badge park={park} size={look === "badge" ? 210 : 132} state="earned" />
+        <Badge park={park} size={look === "badge" ? 210 : 132} state="earned" sceneHref={sceneHref} />
       </motion.div>
       <motion.div layout className="story__text" transition={{ type: "spring", stiffness: 300, damping: 28 }}>
         <span>I collected</span>
@@ -35,7 +50,7 @@ export function StoryCard({ park, claim, number, look, cardRef }: { park: Park; 
         </em>
       </motion.div>
       <div className="story__kip">
-        <Kip size={54} pose="idle" />
+        <Kip size={64} pose="wave" />
       </div>
     </div>
   );
@@ -50,6 +65,20 @@ export function Share() {
   const [look, setLook] = useState<Look>("polaroid");
   const card = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
+  // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
+  const [sceneHref, setSceneHref] = useState<string>();
+  useEffect(() => {
+    if (!park.scene) return;
+    fetch(sceneUrl(park.scene))
+      .then((r) => r.blob())
+      .then((b) => new Promise<string>((res) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result));
+        fr.readAsDataURL(b);
+      }))
+      .then(setSceneHref)
+      .catch(() => {});
+  }, [park.scene]);
 
   const image = async () => {
     const blob = await toBlob(card.current!, { pixelRatio: 3, cacheBust: true });
@@ -62,14 +91,14 @@ export function Share() {
     sfx.tap();
     try {
       const file = await image();
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `I collected ${park.short}`, text: `Badge #${number} on Parkdex` });
-      } else {
+      const result = await shareImage(file, file.name, `I collected ${park.short} on Parkdex`);
+      if (result === "unsupported") {
         download(file);
         toast("Saved! Post it to your story.", "moss");
       }
     } catch (e) {
-      if ((e as Error).name !== "AbortError") toast("Couldn't share that one. Try saving.", "kip");
+      const msg = String((e as Error).message ?? e);
+      if ((e as Error).name !== "AbortError" && !/cancel/i.test(msg)) toast("Couldn't share that one. Try again.", "kip");
     } finally {
       setBusy(false);
     }
@@ -83,16 +112,6 @@ export function Share() {
       toast("Saved to your downloads", "moss");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(`https://parkdex.app/b/${park.id}`);
-      sfx.pop();
-      toast("Link copied", "moss");
-    } catch {
-      toast("Clipboard blocked in this browser", "kip");
     }
   };
 
@@ -116,7 +135,7 @@ export function Share() {
 
       <LayoutGroup>
         <motion.div className="share__preview" initial={{ scale: 0.8, rotate: 6, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.15 }}>
-          <StoryCard park={park} claim={claim} number={number} look={look} cardRef={card} />
+          <StoryCard park={park} claim={claim} number={number} look={look} cardRef={card} sceneHref={sceneHref} />
         </motion.div>
       </LayoutGroup>
 
@@ -133,14 +152,13 @@ export function Share() {
         <button className="btn btn--block" onClick={share} disabled={busy}>
           <Icon name="share" /> {busy ? "Getting it ready…" : "Share to story"}
         </button>
-        <div className="share__row">
-          <button className="btn btn--paper btn--sm" onClick={save} disabled={busy}>
-            <Icon name="download" size={18} /> Save
-          </button>
-          <button className="btn btn--paper btn--sm" onClick={copy}>
-            <Icon name="link" size={18} /> Copy link
-          </button>
-        </div>
+        {!isNative && (
+          <div className="share__row">
+            <button className="btn btn--paper btn--sm" onClick={save} disabled={busy}>
+              <Icon name="download" size={18} /> Save image
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );
