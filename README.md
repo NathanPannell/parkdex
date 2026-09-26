@@ -27,7 +27,10 @@ npm run map
 
 `npm run map` extracts the island from a Protomaps daily build and writes about 59k tile
 files and the glyph fonts into `public/map/` (not committed). `npm run data` rebuilds
-`src/data/parks.json` and `public/boundaries.geojson` from `../parkdex/data`. `npm run art`
+`src/data/parks.json` and `public/boundaries.geojson` from `../parkdex/data`. `npm run drive`
+precomputes driving routes (OSRM) from eight origin hubs around Victoria, Duncan and Nanaimo
+to every park into `src/data/drive.json`; the app scales the nearest hub's route to the
+visitor's position to estimate drive time offline. `npm run art`
 resizes the generated source art in `art-source/` into the WebP files the app ships.
 
 ## Run in a browser

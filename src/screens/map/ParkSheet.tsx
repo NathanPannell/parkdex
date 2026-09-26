@@ -2,8 +2,9 @@ import { motion, type PanInfo } from "motion/react";
 import { Badge } from "../../components/Badge";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
-import { distanceKm, formatDistance, formatMinutes, travelEstimate, type LngLat } from "../../lib/geo";
-import { BIOME_LABEL, CATEGORY_LABEL, isLive, PALETTES, RARITY, type Park } from "../../lib/parks";
+import { estimateTrip, finalWalk } from "../../lib/drive";
+import { formatDistance, type LngLat } from "../../lib/geo";
+import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { Claim } from "../../lib/store";
 
 type Props = {
@@ -23,14 +24,15 @@ const item = {
   show: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 420, damping: 30 } },
 };
 
+const minutes = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60}m` : ""}`.trim());
+
 export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
 export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase }: Props) {
-  const km = distanceKm(user, [park.lng, park.lat]);
-  const { driveMin } = travelEstimate(km);
-  const finalWalk = 3 + (park.seed % 11);
+  const trip = estimateTrip(user, park);
+  const walk = finalWalk(park);
   const live = isLive(park);
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
@@ -84,7 +86,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           ) : (
             <span className="pill">Badge coming soon</span>
           )}
-          <span className="pill">{BIOME_LABEL[park.biome]}</span>
+          <span className="pill">{landscapeLabel(park)}</span>
         </motion.div>
         <motion.h2 variants={item} className="park-sheet__name">
           {park.name}
@@ -96,18 +98,18 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
         <motion.div variants={item} className="stats">
           <div className="stat">
             <Icon name="pin" size={18} />
-            <strong>{inside ? "Here!" : formatDistance(km)}</strong>
-            <span>away</span>
+            <strong>{inside ? "Here!" : trip.mode === "boat" ? "Island" : formatDistance(trip.km)}</strong>
+            <span>{inside ? "you made it" : trip.mode === "walk" ? "on foot" : "by road"}</span>
           </div>
           <div className="stat">
-            <Icon name="car" size={18} />
-            <strong>{inside ? "0 min" : formatMinutes(driveMin)}</strong>
-            <span>to get there</span>
+            <Icon name={trip.mode === "walk" ? "walk" : "car"} size={18} />
+            <strong>{inside ? "0 min" : trip.mode === "boat" ? "Boat" : minutes(trip.minutes)}</strong>
+            <span>{trip.mode === "walk" ? "walk there" : trip.mode === "boat" ? "or ferry access" : "drive there"}</span>
           </div>
           <div className="stat">
             <Icon name="walk" size={18} />
-            <strong>{finalWalk} min</strong>
-            <span>final walk in</span>
+            <strong>{walk.label}</strong>
+            <span>{walk.minutes ? "road to boundary" : "park by the road"}</span>
           </div>
         </motion.div>
 

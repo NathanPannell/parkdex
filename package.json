@@ -15,7 +15,8 @@
     "android:sync": "npm run build:field && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "predev": "node scripts/copy-maplibre-worker.mjs",
-    "prebuild": "node scripts/copy-maplibre-worker.mjs"
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "drive": "node scripts/drive-times.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

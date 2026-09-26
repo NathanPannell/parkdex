@@ -14,21 +14,6 @@ export function formatDistance(km: number) {
   return `${Math.round(km)} km`;
 }
 
-// Rough travel estimates for the mockup; a real build would ask a routing service.
-export function travelEstimate(km: number) {
-  const road = km * 1.35;
-  const driveMin = Math.max(4, Math.round((road / 55) * 60 + 3));
-  const walkMin = Math.round((km * 1000) / 80);
-  return { driveMin, walkMin };
-}
-
-export function formatMinutes(min: number) {
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m ? `${h} h ${m} min` : `${h} h`;
-}
-
 function inRing(point: LngLat, ring: LngLat[]) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

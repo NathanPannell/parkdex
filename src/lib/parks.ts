@@ -75,6 +75,13 @@ export const BIOME_LABEL: Record<Biome, string> = {
   heritage: "Heritage",
 };
 
+// The landscape label follows the badge art when a park has it.
+export function landscapeLabel(p: Park) {
+  const kind = p.scene?.split("-")[0];
+  if (kind === "legendary") return "Legendary vista";
+  return BIOME_LABEL[(kind as Biome) ?? p.biome] ?? BIOME_LABEL[p.biome];
+}
+
 export const CATEGORY_LABEL = { national: "National Park", provincial: "Provincial Park", regional: "Regional Park" };
 
 // Small deterministic PRNG so every park's badge art is stable across renders.

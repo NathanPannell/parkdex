@@ -8,7 +8,8 @@ import { RollingNumber } from "../../components/Motion";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
-import { arcPath, arrivalPoint, distanceKm, formatDistance, ringBounds, type LngLat } from "../../lib/geo";
+import { estimateTrip, formatTrip } from "../../lib/drive";
+import { arcPath, arrivalPoint, distanceKm, ringBounds, type LngLat } from "../../lib/geo";
 import { isLive, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../../lib/parks";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
@@ -43,8 +44,8 @@ export function MapScreen() {
   const nearby = useMemo(
     () =>
       LIVE_PARKS.filter((p) => !claims[p.id])
-        .map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) }))
-        .sort((a, b) => a.km - b.km)
+        .map((p) => ({ p, trip: estimateTrip(user, p) }))
+        .sort((a, b) => a.trip.minutes - b.trip.minutes)
         .slice(0, 8),
     [user, claims],
   );
@@ -96,7 +97,7 @@ export function MapScreen() {
     if (!selected || !bounds) return;
     const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
     const path = arcPath(user, target);
-    tripStart.current = { from: user, total: distanceKm(user, target) };
+    tripStart.current = { from: user, total: estimateTrip(user, selected).km };
     setRoute(path);
     sfx.whoosh();
     buzz(15);
@@ -162,7 +163,7 @@ export function MapScreen() {
     mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }
 
-  const remaining = trip && bounds ? distanceKm(user, arrivalPoint(bounds.byId.get(trip.id)!, tripStart.current?.from ?? user)) : 0;
+  const remaining = trip ? estimateTrip(user, trip) : null;
 
   return (
     <div className="screen map-screen">
@@ -267,7 +268,7 @@ export function MapScreen() {
               <span className="eyebrow">Badges near you</span>
             </div>
             <div className="nearby__rail scroll">
-              {nearby.map(({ p, km }, i) => (
+              {nearby.map(({ p, trip: est }, i) => (
                 <motion.button
                   key={p.id}
                   className="nearby__card card"
@@ -283,7 +284,7 @@ export function MapScreen() {
                   <span className="nearby__name">{p.short}</span>
                   <span className="nearby__meta">
                     <i style={{ background: RARITY[p.rarity].ink }} />
-                    {formatDistance(km)}
+                    {formatTrip(est)}
                   </span>
                 </motion.button>
               ))}
@@ -297,8 +298,8 @@ export function MapScreen() {
           <TripPanel
             key="trip"
             park={trip}
-            remainingKm={here?.id === trip.id ? 0 : remaining}
-            totalKm={tripStart.current?.total ?? remaining}
+            remaining={here?.id === trip.id ? { mode: "walk", km: 0, minutes: 0 } : remaining!}
+            totalKm={tripStart.current?.total ?? remaining!.km}
             simulating={simulating}
             onSimulate={simulate}
             onEnd={endTrip}

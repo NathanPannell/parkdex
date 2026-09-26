@@ -3,14 +3,15 @@ import { Badge } from "../../components/Badge";
 import { Icon } from "../../components/Icon";
 import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
-import { formatDistance, formatMinutes, travelEstimate } from "../../lib/geo";
+import { formatTrip, type Trip } from "../../lib/drive";
+import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import { FIELD } from "../../lib/native";
 import { directionsUrl } from "./ParkSheet";
 
 type TripProps = {
   park: Park;
-  remainingKm: number;
+  remaining: Trip;
   totalKm: number;
   simulating: boolean;
   onSimulate: () => void;
@@ -18,9 +19,9 @@ type TripProps = {
   onOpen: () => void;
 };
 
-export function TripPanel({ park, remainingKm, totalKm, simulating, onSimulate, onEnd, onOpen }: TripProps) {
+export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen }: TripProps) {
+  const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
-  const { driveMin } = travelEstimate(remainingKm);
   return (
     <motion.div
       className="trip card"
@@ -48,7 +49,7 @@ export function TripPanel({ park, remainingKm, totalKm, simulating, onSimulate, 
           <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
             {formatDistance(remainingKm)}
           </motion.span>
-          <small>to the boundary · about {formatMinutes(driveMin)}</small>
+          <small>by road · about {formatTrip(remaining)}</small>
         </div>
         <div className="trip__bar">
           <motion.div className="trip__fill" animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
