@@ -2,8 +2,9 @@ node_modules
 dist
 shots
 .tools
-public/map/tiles
+public/map/island
 public/map/fonts
 public/maplibre
 .claude/
 android/.kotlin/
+release/

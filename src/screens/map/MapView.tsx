@@ -1,6 +1,7 @@
 import { AttributionControl, Map as MLMap, Marker, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 
 setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
+registerOfflineTiles(location.origin);
 import { motion } from "motion/react";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +10,7 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
+import { registerOfflineTiles } from "../../lib/offlineTiles";
 import { isLive, PARKS, type Park } from "../../lib/parks";
 
 type Tier = "far" | "mid" | "near";

@@ -1,14 +1,13 @@
 // Builds the offline Vancouver Island basemap into public/map:
-//   tiles/{z}/{x}/{y}.pbf  uncompressed vector tiles (Android compresses them in the APK)
-//   fonts/{stack}/{range}.pbf  the glyph ranges the style needs
-// Capacitor's local server ignores HTTP Range offsets, so a single .pmtiles
-// archive can't be read on-device; plain tile files work with ordinary fetches.
+//   island/NNN.bin + manifest.json  the Protomaps archive split into 2 MB chunks
+//   fonts/{stack}/{range}.pbf        the glyph ranges the style needs
+// Capacitor's local server ignores HTTP Range offsets, so the app can't read a single
+// .pmtiles file directly; src/lib/offlineTiles.ts reassembles ranges from the chunks.
 // Usage: node scripts/fetch-map.mjs  (needs .tools/go-pmtiles.exe, see README)
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readSync, writeFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PMTiles } from "pmtiles";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const out = join(root, "public", "map");
@@ -28,48 +27,20 @@ if (!existsSync(archive)) {
   );
 }
 
-class FileSource {
-  constructor(path) {
-    this.fd = openSync(path, "r");
-    this.path = path;
-  }
-  getKey() {
-    return this.path;
-  }
-  async getBytes(offset, length) {
-    const buf = Buffer.alloc(length);
-    readSync(this.fd, buf, 0, length, offset);
-    return { data: buf.buffer.slice(buf.byteOffset, buf.byteOffset + length) };
-  }
-}
-
-const lon2x = (lon, z) => Math.floor(((lon + 180) / 360) * 2 ** z);
-const lat2y = (lat, z) => {
-  const r = (lat * Math.PI) / 180;
-  return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z);
-};
-
+// Split the archive into plain chunk files. The app reads byte ranges by loading
+// whole chunks, which Capacitor serves correctly, and a few dozen files keep
+// Android builds fast (59k loose tiles took over an hour to package).
+const CHUNK_BYTES = 2 * 1024 * 1024;
+const data = readFileSync(archive);
 rmSync(join(out, "tiles"), { recursive: true, force: true });
-const pm = new PMTiles(new FileSource(archive));
-let count = 0;
-let bytes = 0;
-for (let z = 0; z <= MAX_ZOOM; z++) {
-  const [x0, x1] = [lon2x(BBOX[0], z), lon2x(BBOX[2], z)];
-  const [y0, y1] = [lat2y(BBOX[3], z), lat2y(BBOX[1], z)];
-  for (let x = x0; x <= x1; x++) {
-    for (let y = y0; y <= y1; y++) {
-      const tile = await pm.getZxy(z, x, y);
-      if (!tile?.data?.byteLength) continue;
-      const file = join(out, "tiles", String(z), String(x), `${y}.pbf`);
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, Buffer.from(tile.data));
-      count++;
-      bytes += tile.data.byteLength;
-    }
-  }
-  console.log(`z${z}: ${count} tiles so far`);
+rmSync(join(out, "island"), { recursive: true, force: true });
+mkdirSync(join(out, "island"), { recursive: true });
+const count = Math.ceil(data.length / CHUNK_BYTES);
+for (let i = 0; i < count; i++) {
+  writeFileSync(join(out, "island", `${String(i).padStart(3, "0")}.bin`), data.subarray(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES));
 }
-console.log(`wrote ${count} tiles, ${(bytes / 1e6).toFixed(1)} MB uncompressed`);
+writeFileSync(join(out, "island", "manifest.json"), JSON.stringify({ size: data.length, chunkBytes: CHUNK_BYTES, count }));
+console.log(`wrote ${count} chunks, ${(data.length / 1e6).toFixed(1)} MB`);
 
 for (const font of FONTS) {
   for (const range of RANGES) {

@@ -6,7 +6,7 @@ the badge, and share it. No accounts and no network sync: everything stays on th
 
 - 122 parks on Vancouver Island itself. 20 have live badges (0/20 to start); the rest
   show "badge coming soon".
-- Offline basemap: bundled Protomaps vector tiles for the island (zoom 0 to 14) plus fonts.
+- Offline basemap: a bundled Protomaps archive for the island (zoom 0 to 14) plus fonts.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 
 ## Setup
@@ -25,8 +25,11 @@ GOBIN="$(pwd)/.tools" go install github.com/protomaps/go-pmtiles@latest
 npm run map
 ```
 
-`npm run map` extracts the island from a Protomaps daily build and writes about 59k tile
-files and the glyph fonts into `public/map/` (not committed). `npm run data` rebuilds
+`npm run map` extracts the island from a Protomaps daily build (96 MB, zoom 0 to 14),
+splits it into 46 chunk files under `public/map/island/`, and fetches the glyph fonts
+(not committed). Capacitor's local server ignores byte-range offsets, so
+`src/lib/offlineTiles.ts` reads the archive by loading whole chunks; this keeps the APK
+build to a few dozen files instead of tens of thousands of tiles. `npm run data` rebuilds
 `src/data/parks.json` and `public/boundaries.geojson` from `../parkdex/data`. `npm run drive`
 precomputes driving routes (OSRM) from eight origin hubs around Victoria, Duncan and Nanaimo
 to every park into `src/data/drive.json`; the app scales the nearest hub's route to the
@@ -51,6 +54,7 @@ npm run android:apk
 This builds the field bundle (`VITE_FIELD=1`: real GPS only, no demo tools), syncs it into
 the Capacitor project and assembles `android/app/build/outputs/apk/debug/app-debug.apk`.
 The debug build installs as `app.parkdex.debug` ("Parkdex Field"). Release builds use `app.parkdex`.
+A clean build takes about 2.5 minutes; incremental rebuilds about 35 seconds.
 
 Set `sdk.dir` in `android/local.properties` to your Android SDK path before the first build.
 

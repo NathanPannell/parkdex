@@ -1,5 +1,6 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { OFFLINE_TILES } from "./offlineTiles";
 
 // Must match the extract bounds in scripts/fetch-map.mjs.
 export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
@@ -88,7 +89,7 @@ export function mapStyle(origin: string): StyleSpecification {
     sources: {
       protomaps: {
         type: "vector",
-        tiles: [`${origin}/map/tiles/{z}/{x}/{y}.pbf`],
+        tiles: [OFFLINE_TILES],
         minzoom: 0,
         maxzoom: 14,
         bounds: ISLAND_BOUNDS,

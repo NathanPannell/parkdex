@@ -17,8 +17,8 @@ android {
         }
     }
     androidResources {
-        // Vector tiles barely shrink under zip and compressing 59k of them dominates build time.
-        noCompress += ["pbf"]
+        // Map chunks hold already-gzipped vector tiles; recompressing them only costs build time.
+        noCompress += ["pbf", "bin"]
     }
     buildTypes {
         debug {

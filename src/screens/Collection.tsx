@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Badge } from "../components/Badge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
@@ -25,9 +26,7 @@ export function Collection() {
   const count = claimed.length;
 
   const next = useMemo(
-    () =>
-      LIVE_PARKS.filter((p) => !state.claims[p.id])
-        .sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
+    () => LIVE_PARKS.filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
     [state.claims, state.user],
   );
   // The case always shows every live badge: claimed ones shine, the rest wait as silhouettes.
@@ -68,7 +67,12 @@ export function Collection() {
       </header>
 
       <div className="col-progress">
-        <motion.div className="col-progress__fill" initial={{ width: 0 }} animate={{ width: `${Math.max(1.5, (count / TOTAL_BADGES) * 100)}%` }} transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }} />
+        <motion.div
+          className="col-progress__fill"
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(1.5, (count / TOTAL_BADGES) * 100)}%` }}
+          transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }}
+        />
       </div>
       <div className="col-rarity">
         {(Object.keys(RARITY) as Rarity[]).map((r) => (
@@ -133,8 +137,21 @@ export function Collection() {
           {PRODUCTS.map((prod, i) => {
             const joined = state.waitlist.includes(prod.id);
             return (
-              <motion.div key={prod.id} className="product card" initial={{ y: 40, opacity: 0 }} whileInView={{ y: 0, opacity: 1 }} viewport={{ once: true }} transition={{ type: "spring", delay: i * 0.08 }}>
-                <div className={`product__art product__art--${prod.id}`}>{prod.id === "case" ? <MiniCase parks={claimed.length ? claimed : next} /> : <MiniBook park={claimed[0] ?? next[0]} photo={claimed[0] ? state.claims[claimed[0].id].photo : undefined} />}</div>
+              <motion.div
+                key={prod.id}
+                className="product card"
+                initial={{ y: 40, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ type: "spring", delay: i * 0.08 }}
+              >
+                <div className={`product__art product__art--${prod.id}`}>
+                  {prod.id === "case" ? (
+                    <MiniCase parks={claimed.length ? claimed : next} />
+                  ) : (
+                    <MiniBook park={claimed[0] ?? next[0]} photo={claimed[0] ? state.claims[claimed[0].id].photo : undefined} />
+                  )}
+                </div>
                 <div className="product__body">
                   <div className="product__row">
                     <strong>{prod.name}</strong>
@@ -159,18 +176,22 @@ export function Collection() {
 
       <div className="col-foot" />
 
-      <AnimatePresence>
-        {openPark && (
-          <BadgeDetail
-            park={openPark}
-            onClose={() => setOpen(null)}
-            onShare={() => {
-              dispatch({ type: "trip", id: openPark.id });
-              dispatch({ type: "go", screen: "share" });
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Portalled to the device so the detail covers the bottom nav too. */}
+      {createPortal(
+        <AnimatePresence>
+          {openPark && (
+            <BadgeDetail
+              park={openPark}
+              onClose={() => setOpen(null)}
+              onShare={() => {
+                dispatch({ type: "trip", id: openPark.id });
+                dispatch({ type: "go", screen: "share" });
+              }}
+            />
+          )}
+        </AnimatePresence>,
+        document.querySelector(".device") ?? document.body,
+      )}
     </motion.div>
   );
 }
@@ -183,7 +204,14 @@ function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => vo
 
   return (
     <motion.div className="detail" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="detail__inner" onClick={(e) => e.stopPropagation()} initial={{ scale: 0.6, y: 80 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.7, y: 80, opacity: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22 }}>
+      <motion.div
+        className="detail__inner"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ scale: 0.6, y: 80 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.7, y: 80, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      >
         <button
           className="flip"
           onClick={() => {

@@ -2337,8 +2337,8 @@
   padding: 20px;
 }
 
-.collection .detail {
-  position: fixed;
+.detail {
+  z-index: 60;
 }
 
 .detail__inner {
@@ -2362,7 +2362,7 @@
 .flip__card {
   position: relative;
   width: 260px;
-  height: 300px;
+  height: 330px;
   transform-style: preserve-3d;
 }
 
