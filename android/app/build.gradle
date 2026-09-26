@@ -16,6 +16,10 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    androidResources {
+        // Vector tiles barely shrink under zip and compressing 59k of them dominates build time.
+        noCompress += ["pbf"]
+    }
     buildTypes {
         debug {
             // Sideloaded field builds install beside the Play build and are clearly labelled.

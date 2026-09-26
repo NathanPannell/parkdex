@@ -19,7 +19,8 @@ const toFix = (p: Position | GeolocationPosition): Fix => ({
 
 // Continuous high-accuracy tracking so arrival fires as the visitor walks in.
 export async function watchLocation(onFix: (fix: Fix) => void, onError: (message: string) => void) {
-  const options = { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 };
+  // Android uses "interval" for update cadence; without it updates arrive only every 20s.
+  const options = { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000, interval: 2000, minimumUpdateInterval: 1000 };
   if (isNative) {
     try {
       const status = await Geolocation.requestPermissions({ permissions: ["location"] });

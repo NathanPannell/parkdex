@@ -1,9 +1,11 @@
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { buzz, sfx } from "../lib/feedback";
 import { PALETTES, PARK_BY_ID, type Park } from "../lib/parks";
+import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
 
 // When no camera is available (desktop without webcam, denied permission),
@@ -51,13 +53,39 @@ export function Camera() {
         setLive("on");
       })
       .catch(() => setLive("off")) ?? setLive("off");
+    // Some devices grant a stream that never delivers frames; treat that as no preview.
+    const watchdog = setTimeout(() => {
+      if (!cancelled && !video.current?.videoWidth) setLive("off");
+    }, 6000);
     return () => {
+      clearTimeout(watchdog);
       cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
     };
   }, [facing]);
 
+  // Field builds never use the stand-in scene: without a live preview they hand off
+  // to the phone's own camera app so every claim has a real photo.
+  const nativeShot = async () => {
+    try {
+      const shot = await NativeCamera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.DataUrl,
+        quality: 82,
+        width: 1080,
+        correctOrientation: true,
+      });
+      if (shot.dataUrl) setPhoto(shot.dataUrl);
+    } catch {
+      // The visitor backed out of the camera app.
+    }
+  };
+
   const shoot = () => {
+    if (FIELD && live !== "on") {
+      void nativeShot();
+      return;
+    }
     sfx.shutter();
     buzz(20);
     setFlash((f) => f + 1);
@@ -100,7 +128,7 @@ export function Camera() {
     >
       <div className="camera__feed">
         <video ref={video} playsInline muted className={facing === "user" ? "mirror" : ""} style={{ opacity: live === "on" ? 1 : 0 }} />
-        {live === "off" && <div className="camera__fallback" dangerouslySetInnerHTML={{ __html: sceneSvg(park) }} />}
+        {live === "off" && !FIELD && <div className="camera__fallback" dangerouslySetInnerHTML={{ __html: sceneSvg(park) }} />}
         <div className="camera__grid" />
       </div>
 
@@ -124,7 +152,7 @@ export function Camera() {
 
       {live === "off" && !photo && (
         <motion.div className="camera__note" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-          No camera found, so this is a stand-in scene
+          {FIELD ? "Tap the shutter to open your camera" : "No camera found, so this is a stand-in scene"}
         </motion.div>
       )}
 

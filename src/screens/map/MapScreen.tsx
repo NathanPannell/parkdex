@@ -10,6 +10,7 @@ import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { arcPath, arrivalPoint, distanceKm, formatDistance, ringBounds, type LngLat } from "../../lib/geo";
 import { isLive, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../../lib/parks";
+import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { MapView } from "./MapView";
@@ -67,6 +68,9 @@ export function MapScreen() {
   useEffect(() => {
     if (state.accuracy === null || hadFix.current) return;
     hadFix.current = true;
+    // Visitors off the island keep the island in view instead of an empty ocean.
+    const [w, s, e, n] = ISLAND_BOUNDS;
+    if (user[0] < w || user[0] > e || user[1] < s || user[1] > n) return;
     mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }, [state.accuracy]);
 

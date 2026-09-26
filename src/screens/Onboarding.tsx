@@ -31,7 +31,7 @@ const SLIDES = [
   },
 ];
 
-const fan = ["regional-thetis-lake-regional-park", "national-pacific-rim-national-park-reserve", "provincial-elk-falls-park"].map(
+const fan = ["regional-thetis-lake-regional-park", "national-pacific-rim-national-park-reserve", "provincial-goldstream-park"].map(
   (id) => PARK_BY_ID.get(id)!,
 );
 
