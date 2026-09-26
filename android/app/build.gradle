@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+// Release signing and versioning come from the environment or from a private properties
+// file named by PARKDEX_RELEASE_PROPERTIES_FILE. Nothing secret lives in the repository.
+def releaseProps = new Properties()
+def releasePropsPath = System.getenv('PARKDEX_RELEASE_PROPERTIES_FILE')
+if (releasePropsPath) {
+    def propsFile = file(releasePropsPath)
+    if (!propsFile.exists()) throw new GradleException("PARKDEX_RELEASE_PROPERTIES_FILE does not exist: ${releasePropsPath}")
+    propsFile.withInputStream { releaseProps.load(it) }
+}
+def releaseValue = { String key -> System.getenv(key) ?: releaseProps.getProperty(key) }
+def releaseKeystore = releaseValue('PARKDEX_RELEASE_KEYSTORE_FILE')
+def releaseVersionCode = releaseValue('PARKDEX_ANDROID_VERSION_CODE')
+def releaseVersionName = releaseValue('PARKDEX_ANDROID_VERSION_NAME')
+
 android {
     namespace = "app.parkdex"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,13 +21,23 @@ android {
         applicationId "app.parkdex"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode ? Integer.parseInt(releaseVersionCode) : 1
+        versionName releaseVersionName ?: "0.0.0-dev"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword releaseValue('PARKDEX_RELEASE_KEYSTORE_PASSWORD')
+                keyAlias releaseValue('PARKDEX_RELEASE_KEY_ALIAS')
+                keyPassword releaseValue('PARKDEX_RELEASE_KEY_PASSWORD')
+            }
         }
     }
     androidResources {
@@ -28,6 +52,7 @@ android {
             resValue "string", "title_activity_main", "Parkdex Field"
         }
         release {
+            signingConfig releaseKeystore ? signingConfigs.release : null
             resValue "string", "app_name", "Parkdex"
             resValue "string", "title_activity_main", "Parkdex"
             minifyEnabled false
@@ -63,4 +88,14 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Refuse to produce an unsigned or unversioned release bundle for Play.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        def missing = ['PARKDEX_RELEASE_KEYSTORE_FILE', 'PARKDEX_RELEASE_KEYSTORE_PASSWORD', 'PARKDEX_RELEASE_KEY_ALIAS',
+                       'PARKDEX_RELEASE_KEY_PASSWORD', 'PARKDEX_ANDROID_VERSION_CODE', 'PARKDEX_ANDROID_VERSION_NAME'].findAll { !releaseValue(it) }
+        if (missing) throw new GradleException("Release build needs: ${missing.join(', ')}")
+        if (!file(releaseKeystore).exists()) throw new GradleException("Keystore not found: ${releaseKeystore}")
+    }
 }
