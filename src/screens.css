@@ -327,8 +327,6 @@
 /* ================= Map ================= */
 
 .map-screen {
-  /* Keeps marker z-indexes inside the map so pins never float over other screens. */
-  isolation: isolate;
   background: #f7ecd8;
 }
 
@@ -336,6 +334,12 @@
 .mapview__canvas {
   position: absolute;
   inset: 0;
+}
+
+.mapview {
+  /* Keeps marker z-indexes inside the map so pins never float over sheets or other screens. */
+  isolation: isolate;
+  z-index: 0;
 }
 
 .mapview .maplibregl-ctrl-attrib {
@@ -1969,7 +1973,7 @@
   border-radius: 99px;
 }
 
-.seg__opt span {
+.seg__opt span:not(.seg__pill) {
   position: relative;
 }
 

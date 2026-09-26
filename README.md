@@ -1,0 +1,68 @@
+# Parkdex field app
+
+A standalone, fully offline Android app for the core Parkdex loop on Vancouver Island:
+pick a park on the map, go there, check in inside the park boundary, take a photo, claim
+the badge, and share it. No accounts and no network sync: everything stays on the phone.
+
+- 122 parks on Vancouver Island itself. 20 have live badges (0/20 to start); the rest
+  show "badge coming soon".
+- Offline basemap: bundled Protomaps vector tiles for the island (zoom 0 to 14) plus fonts.
+- Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
+
+## Setup
+
+Requirements: Node 22+, Python 3 with Pillow, Go (for the pmtiles CLI), JDK 21, Android SDK 36.
+
+```bash
+npm install
+```
+
+```bash
+GOBIN="$(pwd)/.tools" go install github.com/protomaps/go-pmtiles@latest
+```
+
+```bash
+npm run map
+```
+
+`npm run map` extracts the island from a Protomaps daily build and writes about 59k tile
+files and the glyph fonts into `public/map/` (not committed). `npm run data` rebuilds
+`src/data/parks.json` and `public/boundaries.geojson` from `../parkdex/data`. `npm run art`
+resizes the generated source art in `art-source/` into the WebP files the app ships.
+
+## Run in a browser
+
+```bash
+npm run dev
+```
+
+Opens at http://localhost:5190. The browser build keeps demo tools: the wand on the map
+teleports you into the nearest park, and a trip can be simulated. `/#gallery` shows every badge.
+
+## Android
+
+```bash
+npm run android:apk
+```
+
+This builds the field bundle (`VITE_FIELD=1`: real GPS only, no demo tools), syncs it into
+the Capacitor project and assembles `android/app/build/outputs/apk/debug/app-debug.apk`.
+The debug build installs as `app.parkdex.debug` ("Parkdex Field"). Release builds use `app.parkdex`.
+
+Set `sdk.dir` in `android/local.properties` to your Android SDK path before the first build.
+
+## How check-in works
+
+The app watches GPS with high accuracy. A visitor counts as inside a park when they are within
+its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims and waitlist
+taps live in localStorage; photos live in IndexedDB.
+
+## End-to-end check
+
+With `npm run dev` running:
+
+```bash
+node scripts/journey.mjs
+```
+
+It walks the whole loop in headless Chrome and saves a screenshot per step to `shots/`.

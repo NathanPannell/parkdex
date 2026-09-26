@@ -3,6 +3,7 @@ import { AnimatePresence as Presence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
+import { clearConfetti } from "./lib/confetti";
 import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
 import { StoreProvider, useStore } from "./lib/store";
@@ -51,6 +52,9 @@ function Screens() {
   const { screen, onboarded } = state;
 
   useEffect(() => setMuted(state.muted), [state.muted]);
+  useEffect(() => {
+    if (screen !== "claim") clearConfetti();
+  }, [screen]);
 
   // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
   const tracking = onboarded && (FIELD || isNative);

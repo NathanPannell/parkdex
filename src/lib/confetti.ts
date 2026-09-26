@@ -26,6 +26,11 @@ function instance() {
   return fire;
 }
 
+// Clears any confetti still falling, e.g. when leaving the celebration screen.
+export function clearConfetti() {
+  fire?.reset();
+}
+
 export function burst(origin = { x: 0.5, y: 0.45 }, power = 1) {
   const f = instance();
   const base = { origin, colors: COLORS, shapes: shapes ?? undefined, scalar: 1.1, ticks: 260, gravity: 0.9 };

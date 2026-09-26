@@ -59,7 +59,8 @@ export function StoryCard({
 export function Share() {
   const { state, dispatch } = useStore();
   const toast = useToast();
-  const park = PARK_BY_ID.get(state.tripId ?? "")!;
+  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
+  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
   const claim = state.claims[park.id];
   const number = Object.keys(state.claims).indexOf(park.id) + 1;
   const [look, setLook] = useState<Look>("polaroid");

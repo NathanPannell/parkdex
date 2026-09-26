@@ -28,7 +28,8 @@ ${Array.from({ length: 7 }, (_, i) => {
 
 export function Camera() {
   const { state, dispatch } = useStore();
-  const park = PARK_BY_ID.get(state.tripId ?? "")!;
+  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
+  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
   const video = useRef<HTMLVideoElement>(null);
   const [live, setLive] = useState<"pending" | "on" | "off">("pending");
   const [photo, setPhoto] = useState<string | null>(null);

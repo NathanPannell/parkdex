@@ -14,7 +14,8 @@ const CHEERS = ["KLEEP! Beauty!", "Into the case!", "Look at that shine!", "Anot
 
 export function Claim() {
   const { state, dispatch } = useStore();
-  const park = PARK_BY_ID.get(state.tripId ?? "")!;
+  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
+  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
   const photo = state.pendingPhoto ?? "";
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
