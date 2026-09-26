@@ -1,7 +1,7 @@
 # Kip art brief
 
 Save every image to `parkdex-badge-mockup/public/kip/` using the exact file names below.
-The app looks for these files and falls back to the built-in SVG Kip if one is missing.
+Once they are wired in, any missing file falls back to the built-in SVG Kip.
 
 ## Output rules (all images)
 
