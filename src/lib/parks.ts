@@ -1,0 +1,81 @@
+import raw from "../data/parks.json";
+
+export type Biome = "coast" | "forest" | "mountain" | "lake" | "waterfall" | "river" | "cave" | "marsh" | "heritage";
+export type Shape = "circle" | "hex" | "shield" | "arch" | "seal";
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+export type Park = {
+  id: string;
+  name: string;
+  short: string;
+  category: "national" | "provincial" | "regional";
+  region: string;
+  lat: number;
+  lng: number;
+  biome: Biome;
+  shape: Shape;
+  rarity: Rarity;
+  seed: number;
+  blurb: string;
+};
+
+export const PARKS = raw as Park[];
+export const PARK_BY_ID = new Map(PARKS.map((p) => [p.id, p]));
+// The staging catalogue covers all of BC; the mockup ships the Island subset.
+export const TOTAL_BADGES = 1030;
+
+export type Palette = {
+  skyTop: string;
+  skyBottom: string;
+  sun: string;
+  far: string;
+  mid: string;
+  near: string;
+  water: string;
+  accent: string;
+  ribbon: string;
+  ribbonText: string;
+};
+
+export const PALETTES: Record<Biome, Palette> = {
+  coast: { skyTop: "#FFB38A", skyBottom: "#FFE3B3", sun: "#FFF4D6", far: "#7FB8D8", mid: "#3E97B8", near: "#F4CF8E", water: "#27A9C4", accent: "#FF5A1F", ribbon: "#0E6E86", ribbonText: "#FFF8EC" },
+  forest: { skyTop: "#A6E6C3", skyBottom: "#E7F8D8", sun: "#FFD45C", far: "#6CC08F", mid: "#2F9E6B", near: "#1C5B43", water: "#6FD1C4", accent: "#FFC93C", ribbon: "#1C5B43", ribbonText: "#FFF8EC" },
+  mountain: { skyTop: "#9CCBFF", skyBottom: "#E6F2FF", sun: "#FFE6A8", far: "#9EA9F0", mid: "#6474DB", near: "#39479F", water: "#7FD3F7", accent: "#FF7AA2", ribbon: "#39479F", ribbonText: "#FFF8EC" },
+  lake: { skyTop: "#FFD08A", skyBottom: "#FFF1C9", sun: "#FF8A3D", far: "#8ACB8E", mid: "#4DAF6B", near: "#2C7F57", water: "#39B5E0", accent: "#FF5A1F", ribbon: "#1F7FA8", ribbonText: "#FFF8EC" },
+  waterfall: { skyTop: "#B9F0E0", skyBottom: "#ECFFF7", sun: "#FFF2B3", far: "#9B8CE6", mid: "#7461D1", near: "#4B3C9E", water: "#DDF8FF", accent: "#5CE1FF", ribbon: "#4B3C9E", ribbonText: "#FFF8EC" },
+  river: { skyTop: "#FFE39A", skyBottom: "#FFF7DC", sun: "#FFB547", far: "#A6D98A", mid: "#6BBF5E", near: "#3F8F48", water: "#35B1D6", accent: "#FF6B3D", ribbon: "#2E7F9E", ribbonText: "#FFF8EC" },
+  cave: { skyTop: "#2B2350", skyBottom: "#4F3F92", sun: "#FFE27A", far: "#6D5BD0", mid: "#8B7BE6", near: "#2A1F57", water: "#5CE1FF", accent: "#FFD84D", ribbon: "#2A1F57", ribbonText: "#FFE27A" },
+  marsh: { skyTop: "#FFC8D8", skyBottom: "#FFF0F4", sun: "#FFF3C4", far: "#A8D8A0", mid: "#72B865", near: "#3E8A4A", water: "#8FD8CB", accent: "#FF7A59", ribbon: "#3E8A4A", ribbonText: "#FFF8EC" },
+  heritage: { skyTop: "#FFC89A", skyBottom: "#FFEBD1", sun: "#FFF1D6", far: "#E0A37A", mid: "#C9774C", near: "#8C4A2F", water: "#7ACBD6", accent: "#FFF1D6", ribbon: "#8C4A2F", ribbonText: "#FFF1D6" },
+};
+
+export const RARITY: Record<Rarity, { label: string; color: string; ink: string; stars: number }> = {
+  common: { label: "Common", color: "#DDEFE3", ink: "#1C5B43", stars: 1 },
+  uncommon: { label: "Uncommon", color: "#CDEFFF", ink: "#0E6E86", stars: 2 },
+  rare: { label: "Rare", color: "#DCD5FF", ink: "#4B3C9E", stars: 3 },
+  epic: { label: "Epic", color: "#FFD3E6", ink: "#A3245C", stars: 4 },
+  legendary: { label: "Legendary", color: "#FFE9A8", ink: "#8A5A00", stars: 5 },
+};
+
+export const BIOME_LABEL: Record<Biome, string> = {
+  coast: "Coastline",
+  forest: "Forest",
+  mountain: "Summit",
+  lake: "Lake",
+  waterfall: "Waterfall",
+  river: "River",
+  cave: "Cave",
+  marsh: "Wetland",
+  heritage: "Heritage",
+};
+
+export const CATEGORY_LABEL = { national: "National Park", provincial: "Provincial Park", regional: "Regional Park" };
+
+// Small deterministic PRNG so every park's badge art is stable across renders.
+export function rng(seed: number) {
+  let s = seed * 9301 + 49297;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}

@@ -1,0 +1,125 @@
+import type { StyleSpecification } from "maplibre-gl";
+
+// A hand-tuned "storybook" style over OpenFreeMap's keyless vector tiles:
+// warm paper land, candy water with an offset shadow, soft greens and quiet roads.
+const cls = (...classes: string[]) => ["match", ["get", "class"], classes, true, false] as unknown as boolean;
+const road = (...classes: string[]) =>
+  ["all", ["match", ["get", "brunnel"], ["tunnel"], false, true], ["match", ["get", "class"], classes, true, false]] as unknown as boolean;
+const zw = (stops: [number, number][]) => ["interpolate", ["exponential", 1.6], ["zoom"], ...stops.flat()] as unknown as number;
+
+export const mapStyle: StyleSpecification = {
+  version: 8,
+  glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+  sources: {
+    omt: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
+  },
+  layers: [
+    { id: "bg", type: "background", paint: { "background-color": "#F7ECD8" } },
+    { id: "wood", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("wood", "forest"), paint: { "fill-color": "#D3EBBE", "fill-opacity": 0.9 } },
+    { id: "grass", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("grass", "farmland", "wetland"), paint: { "fill-color": "#E3F0C8", "fill-opacity": 0.8 } },
+    { id: "sand", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("sand"), paint: { "fill-color": "#FBE3B0" } },
+    { id: "ice", type: "fill", source: "omt", "source-layer": "landcover", filter: cls("ice"), paint: { "fill-color": "#FFFFFF" } },
+    { id: "residential", type: "fill", source: "omt", "source-layer": "landuse", filter: cls("residential", "suburb", "neighbourhood"), paint: { "fill-color": "#F3E3C8", "fill-opacity": 0.7 } },
+    { id: "osm-park", type: "fill", source: "omt", "source-layer": "park", paint: { "fill-color": "#C9E7B2", "fill-opacity": 0.55 } },
+    { id: "water-shadow", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] } },
+    { id: "water", type: "fill", source: "omt", "source-layer": "water", paint: { "fill-color": "#A8E1EC" } },
+    {
+      id: "waterway",
+      type: "line",
+      source: "omt",
+      "source-layer": "waterway",
+      paint: { "line-color": "#A8E1EC", "line-width": zw([[8, 0.6], [14, 3], [18, 8]]) },
+    },
+    { id: "building", type: "fill", source: "omt", "source-layer": "building", minzoom: 14, paint: { "fill-color": "#EAD6B6", "fill-outline-color": "#DCC39C" } },
+    {
+      id: "path",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 13,
+      filter: road("path", "track"),
+      paint: { "line-color": "#B98E5A", "line-width": zw([[13, 0.8], [18, 2.2]]), "line-dasharray": [2, 1.6], "line-opacity": 0.75 },
+    },
+    {
+      id: "minor-casing",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 12,
+      filter: road("minor", "service"),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#E9D4B0", "line-width": zw([[12, 1.5], [18, 16]]) },
+    },
+    {
+      id: "minor",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 12,
+      filter: road("minor", "service"),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FFFDF7", "line-width": zw([[12, 0.8], [18, 12]]) },
+    },
+    {
+      id: "major-casing",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 7,
+      filter: road("secondary", "tertiary", "primary", "trunk"),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#E3C697", "line-width": zw([[7, 1], [18, 26]]) },
+    },
+    {
+      id: "major",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 7,
+      filter: road("secondary", "tertiary", "primary", "trunk"),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FFFFFF", "line-width": zw([[7, 0.6], [18, 20]]) },
+    },
+    {
+      id: "motorway",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      minzoom: 5,
+      filter: road("motorway"),
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FFD68A", "line-width": zw([[5, 0.8], [18, 24]]) },
+    },
+    {
+      id: "ferry",
+      type: "line",
+      source: "omt",
+      "source-layer": "transportation",
+      filter: cls("ferry"),
+      paint: { "line-color": "#6FB8C9", "line-width": 1.2, "line-dasharray": [3, 3] },
+    },
+    {
+      id: "water-label",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "water_name",
+      layout: { "text-field": ["get", "name:latin"], "text-font": ["Noto Sans Italic"], "text-size": 12, "text-letter-spacing": 0.08 },
+      paint: { "text-color": "#3D8EA0", "text-halo-color": "#A8E1EC", "text-halo-width": 1.5 },
+    },
+    {
+      id: "place-label",
+      type: "symbol",
+      source: "omt",
+      "source-layer": "place",
+      filter: cls("city", "town", "village", "suburb"),
+      layout: {
+        "text-field": ["get", "name:latin"],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["match", ["get", "class"], "city", 15, "town", 13, 11],
+        "text-transform": "uppercase",
+        "text-letter-spacing": 0.12,
+      },
+      paint: { "text-color": "#7A6A55", "text-halo-color": "#F7ECD8", "text-halo-width": 2 },
+    },
+  ],
+};
