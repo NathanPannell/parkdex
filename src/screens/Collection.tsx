@@ -174,6 +174,17 @@ export function Collection() {
         </div>
       </section>
 
+      <section className="fb-cta card">
+        <Kip pose="think" size={64} />
+        <div>
+          <strong>Found a bug or have an idea?</strong>
+          <span>Tell the Parkdex team without leaving the app.</span>
+        </div>
+        <button className="btn btn--sm btn--paper" onClick={() => dispatch({ type: "feedback", open: true })}>
+          <Icon name="chat" size={18} /> Send feedback
+        </button>
+      </section>
+
       <div className="col-foot" />
 
       {/* Portalled to the device so the detail covers the bottom nav too. */}

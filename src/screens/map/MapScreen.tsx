@@ -12,6 +12,7 @@ import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, ringBounds, type LngLat } from "../../lib/geo";
 import { isLive, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../../lib/parks";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
+import { feedbackFailureOn, setFeedbackFailure } from "../../lib/feedbackReport";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { MapView } from "./MapView";
@@ -31,6 +32,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [failFeedback, setFailFeedback] = useState(feedbackFailureOn);
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
   const { user, claims, selectedId, tripId } = state;
@@ -200,6 +202,9 @@ export function MapScreen() {
           </span>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
+          <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback">
+            <Icon name="chat" size={20} />
+          </button>
           <button className="tool card" onClick={() => dispatch({ type: "mute" })} aria-label="Toggle sound">
             <Icon name={state.muted ? "mute" : "sound"} size={20} />
           </button>
@@ -240,6 +245,14 @@ export function MapScreen() {
               }}
             >
               <Icon name="refresh" size={18} /> Reset and replay onboarding
+            </button>
+            <button
+              onClick={() => {
+                setFeedbackFailure(!failFeedback);
+                setFailFeedback(!failFeedback);
+              }}
+            >
+              <Icon name="chat" size={18} /> {failFeedback ? "Let feedback send again" : "Make feedback sending fail"}
             </button>
           </motion.div>
         )}
@@ -332,6 +345,7 @@ export function MapScreen() {
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}
+              onFeedback={() => dispatch({ type: "feedback", open: true, parkId: selected.id })}
               onViewCase={() => {
                 dispatch({ type: "select", id: null });
                 dispatch({ type: "go", screen: "collection" });

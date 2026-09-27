@@ -10,6 +10,7 @@ import { StoreProvider, useStore } from "./lib/store";
 import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
+import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
@@ -79,7 +80,8 @@ function Screens() {
     () =>
       onBackButton(() => {
         const s = latest.current;
-        if (s.selectedId) dispatch({ type: "select", id: null });
+        if (s.feedback) dispatch({ type: "feedback", open: false });
+        else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
@@ -111,6 +113,7 @@ function Screens() {
         {screen === "claim" && <Claim key="claim" />}
         {screen === "share" && <Share key="share" />}
       </AnimatePresence>
+      <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
     </>
