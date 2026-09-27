@@ -415,6 +415,10 @@ def wait_neon_operations(config: dict, state: dict, journal: Path, response: dic
     if not isinstance(operations, list):
         raise DeliveryError(f"Neon did not return operation identities after {phase} creation.")
     pending: dict[str, dict] = {}
+    # Schema-only creation can start the configured parent compute to read its schema.
+    allowed_branches = {None, branch_id}
+    if phase == "branch":
+        allowed_branches.add(config["neonParentBranchId"])
     for item in operations:
         if not isinstance(item, dict):
             raise DeliveryError(f"Neon returned an invalid operation after {phase} creation.")
@@ -423,7 +427,7 @@ def wait_neon_operations(config: dict, state: dict, journal: Path, response: dic
             raise DeliveryError(f"Neon returned an invalid operation ID after {phase} creation.")
         if item.get("project_id") not in (None, config["neonProjectId"]):
             raise DeliveryError(f"Neon returned an operation for a different project after {phase} creation.")
-        if item.get("branch_id") not in (None, branch_id):
+        if item.get("branch_id") not in allowed_branches:
             raise DeliveryError(f"Neon returned an operation for a different branch after {phase} creation.")
         if operation_id in pending:
             raise DeliveryError(f"Neon repeated an operation ID after {phase} creation.")
@@ -436,7 +440,7 @@ def wait_neon_operations(config: dict, state: dict, journal: Path, response: dic
             "phase": phase,
             "action": item.get("action"),
             "status": item.get("status", "submitted"),
-            "branchId": branch_id,
+            "branchId": item.get("branch_id"),
         })
     save_json(journal, state)
 
@@ -462,7 +466,7 @@ def wait_neon_operations(config: dict, state: dict, journal: Path, response: dic
                 not isinstance(operation, dict)
                 or operation.get("id") != operation_id
                 or operation.get("project_id") not in (None, config["neonProjectId"])
-                or operation.get("branch_id") not in (None, branch_id)
+                or operation.get("branch_id") not in allowed_branches
             ):
                 raise DeliveryError(f"Neon operation identity changed while waiting after {phase} creation.")
             status = operation.get("status")
