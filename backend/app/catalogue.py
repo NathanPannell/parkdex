@@ -6,13 +6,13 @@ from collections.abc import Iterable
 
 from psycopg import Connection
 
+from backend.app.place_categories import PLACE_CATEGORIES
 from backend.app.staging_field_places import (
     place_visibility_clause,
     place_visibility_params,
 )
 
 
-PLACE_CATEGORIES = ("national", "provincial", "regional", "island")
 MAP_PLACE_LIMIT = 50
 ISLAND_PRIORITY_COUNT = 12
 

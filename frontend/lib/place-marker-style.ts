@@ -5,6 +5,8 @@ export const PLACE_CATEGORY_COLORS = Object.freeze({
   regional: "#D97706",
   provincial: "#D84A3A",
   national: "#7C4DFF",
+  municipal: "#1E6B59",
+  community: "#9B3D68",
 });
 
 export const MAP_INK = "#173D32";
@@ -16,6 +18,8 @@ const categoryColor: ExpressionSpecification = [
   "regional", PLACE_CATEGORY_COLORS.regional,
   "provincial", PLACE_CATEGORY_COLORS.provincial,
   "national", PLACE_CATEGORY_COLORS.national,
+  "municipal", PLACE_CATEGORY_COLORS.municipal,
+  "community", PLACE_CATEGORY_COLORS.community,
   "#F6F0DC",
 ];
 

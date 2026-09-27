@@ -37,11 +37,12 @@ PIN_LONGITUDE = -123.542431
 def staging_fixture_place(
     place_id: str = "regional-staging-fixture",
     name: str = "Staging Fixture Park",
+    category: str = "regional",
 ) -> dict[str, object]:
     return {
         "id": place_id,
         "name": name,
-        "category": "regional",
+        "category": category,
         "latitude": 48.475557,
         "longitude": -123.542431,
         "region": "South Island",
@@ -50,6 +51,21 @@ def staging_fixture_place(
         "sourceName": "Test fixture",
         "sourceId": "fixture-1",
     }
+
+
+@pytest.mark.parametrize("category", ["municipal", "community"])
+def test_staging_field_place_loader_accepts_local_categories(
+    tmp_path: Path, category: str
+) -> None:
+    source = tmp_path / "staging-places.json"
+    source.write_text(
+        json.dumps([staging_fixture_place(category=category)]), encoding="utf-8"
+    )
+
+    places = load_staging_field_places(source)
+
+    assert len(places) == 1
+    assert places[0]["category"] == category
 
 
 def test_staging_field_overlay_is_empty_and_canonical_bellhouse_remains() -> None:

@@ -10,6 +10,8 @@ const expectedCategoryColor = [
   "regional", PLACE_CATEGORY_COLORS.regional,
   "provincial", PLACE_CATEGORY_COLORS.provincial,
   "national", PLACE_CATEGORY_COLORS.national,
+  "municipal", PLACE_CATEGORY_COLORS.municipal,
+  "community", PLACE_CATEGORY_COLORS.community,
   "#8B7F6B",
 ];
 

@@ -20,11 +20,13 @@ const national: Place = { id: "national-pacific-rim-national-park-reserve", name
 const artlish: Place = { ...place, id: "provincial-artlish-caves-park", name: "Artlish Caves Park" };
 const goldstream: Place = { ...place, id: "provincial-goldstream-park", name: "Goldstream Park" };
 const englishman: Place = { ...place, id: "regional-englishman-river-regional-park", name: "Englishman River Regional Park", category: "regional", latitude: 49.287303, longitude: -124.286889, region: "Central Island" };
+const municipal: Place = { ...place, id: "municipal-harbour-park", name: "Harbour Park", category: "municipal", region: "Victoria", sourceName: "City of Victoria" };
+const community: Place = { ...place, id: "community-village-green", name: "Village Green", category: "community", region: "Coast", sourceName: "Example Community" };
 const cormorant: Place = { ...place, id: "island-cormorant-island", name: "Cormorant Island", category: "island", region: "Northern Islands", sourceName: "BC Geographical Names Office" };
 const woss: Place = { ...place, id: "provincial-woss-lake-park", name: "Woss Lake Park", region: "North Island" };
 const defaultPlaces = [place, rathtrevor, national];
 function countsByCategory(places: Place[]) {
-  const counts = { national: 0, provincial: 0, regional: 0, island: 0 };
+  const counts = { national: 0, provincial: 0, regional: 0, municipal: 0, community: 0, island: 0 };
   for (const item of places) counts[item.category] += 1;
   return counts;
 }
@@ -1085,6 +1087,31 @@ describe("Parkdex navigation", () => {
     expect(screen.getByRole("button", { name: "National" }).classList.contains("selected")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(screen.getByRole("button", { name: "Filter places" }).classList.contains("active")).toBe(false);
+  });
+
+  it("filters municipal and community places across map and collection controls", () => {
+    journal.places = [municipal, community];
+    render(<ParkdexApp apiBaseUrl="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Search places" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter places" }));
+
+    const mapFilters = within(document.querySelector<HTMLElement>(".filter-tray.category-chips")!);
+    expect(["National", "Provincial", "Regional", "Municipal", "Community", "Major islands"]
+      .map((label) => mapFilters.getByRole("button", { name: label }).getAttribute("aria-pressed")))
+      .toEqual(["false", "false", "false", "false", "false", "false"]);
+    fireEvent.click(mapFilters.getByRole("button", { name: "Municipal" }));
+    expect(screen.getByTestId("park-map").getAttribute("data-place-ids")).toBe(municipal.id);
+
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    const collectionFilters = within(screen.getByRole("group", { name: "Place categories" }));
+    expect(collectionFilters.getByRole("button", { name: "Municipal" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(collectionFilters.getByRole("button", { name: "Community" }));
+
+    expect(document.querySelector(".collection-result-count")?.textContent).toBe("2 places found");
+    expect(screen.getByRole("button", { name: /Harbour Park/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Village Green/ })).toBeTruthy();
+    expect(document.querySelector(".collection-progress")?.textContent).toContain("Municipal0/1");
+    expect(document.querySelector(".collection-progress")?.textContent).toContain("Community0/1");
   });
 
   it("exposes pressed state for map and Places filters", () => {

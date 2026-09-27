@@ -12,13 +12,28 @@ from psycopg.rows import dict_row
 from pydantic import ValidationError
 
 from backend.app.schemas import SearchPlace
-from backend.app.visitor_details import PlaceVisitorDetails, ReviewedDataset
+from backend.app.visitor_details import DatasetIdentity, PlaceVisitorDetails, ReviewedDataset
 
 
 ROOT = Path(__file__).resolve().parents[2]
 REVIEWED_PATH = ROOT / "data" / "park-details.reviewed.json"
 MIGRATION_PATH = ROOT / "database" / "migrations" / "0027_import_place_visitor_details.sql"
 PLACE_ID = "provincial-goldstream-park"
+
+
+@pytest.mark.parametrize("category", ["municipal", "community"])
+def test_visitor_dataset_identity_accepts_local_park_categories(category: str) -> None:
+    identity = DatasetIdentity.model_validate(
+        {
+            "name": "Local park fixture",
+            "category": category,
+            "region": "Test Region",
+            "latitude": 49.0,
+            "longitude": -124.0,
+            "coordinateRole": "catalogue_reference_point_not_verified_entrance",
+        }
+    )
+    assert identity.category == category
 
 
 def test_reviewed_import_matches_canonical_ids_and_omits_ingestion_internals() -> None:

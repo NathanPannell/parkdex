@@ -1,6 +1,11 @@
 import type { PlaceVisitorDetails } from "./visitor-details";
 
-export type PlaceCategory = "national" | "provincial" | "regional" | "island";
+export const PLACE_CATEGORIES = ["national", "provincial", "regional", "municipal", "community", "island"] as const;
+export type PlaceCategory = typeof PLACE_CATEGORIES[number];
+
+export function isPlaceCategory(value: unknown): value is PlaceCategory {
+  return typeof value === "string" && PLACE_CATEGORIES.includes(value as PlaceCategory);
+}
 
 export type Place = {
   id: string;
@@ -32,6 +37,8 @@ export const categoryLabels: Record<PlaceCategory, string> = {
   national: "National",
   provincial: "Provincial",
   regional: "Regional",
+  municipal: "Municipal",
+  community: "Community",
   island: "Major islands",
 };
 

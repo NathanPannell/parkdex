@@ -59,6 +59,30 @@ def test_viewport_boundary_query_uses_polygon_intersection_not_anchor(tmp_path):
     ) == ("edge-park",)
 
 
+@pytest.mark.parametrize(
+    ("category", "latitude", "longitude"),
+    [("municipal", 49.0, -124.0), ("community", 49.2, -124.2)],
+)
+def test_local_category_boundaries_are_claim_recommendable(
+    tmp_path, category, latitude, longitude
+):
+    ring = [
+        [longitude - 0.01, latitude - 0.01],
+        [longitude + 0.01, latitude - 0.01],
+        [longitude + 0.01, latitude + 0.01],
+        [longitude - 0.01, latitude + 0.01],
+        [longitude - 0.01, latitude - 0.01],
+    ]
+    place_id = f"{category}-boundary-fixture"
+    registry = registry_for(tmp_path, [feature(place_id, category, [ring])])
+
+    candidate = registry.recommend(sample(latitude, longitude))
+
+    assert candidate is not None
+    assert candidate.place_id == place_id
+    assert candidate.match_kind == "exact"
+
+
 def test_viewport_boundary_query_supports_world_and_antimeridian_bounds(tmp_path):
     west_edge = feature(
         "west-edge",

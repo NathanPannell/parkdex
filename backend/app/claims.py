@@ -24,6 +24,8 @@ from shapely.ops import transform, unary_union
 from shapely.strtree import STRtree
 from shapely.validation import make_valid
 
+from backend.app.place_categories import ALLOWED_CATEGORIES
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BOUNDARY_PATH = PROJECT_ROOT / "data" / "boundaries.geojson"
@@ -95,12 +97,7 @@ class BoundaryRegistry:
                     raise RuntimeError(
                         "Boundary data has a missing or duplicate place id"
                     )
-                if category not in {
-                    "national",
-                    "provincial",
-                    "regional",
-                    "island",
-                }:
+                if category not in ALLOWED_CATEGORIES:
                     raise RuntimeError(
                         f"Boundary {place_id} has an invalid category"
                     )

@@ -147,6 +147,8 @@ function placeLabelPriority(place: Place, areaKm2: number): number {
     island: 1,
     provincial: 2,
     regional: 3,
+    municipal: 3,
+    community: 3,
   };
   return categoryRank[place.category] * 1_000_000 - Math.min(areaKm2, 999_999);
 }

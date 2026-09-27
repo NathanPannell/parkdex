@@ -73,14 +73,18 @@ function geometryContains(location: readonly [number, number], geometry: GeoJSON
 }
 
 describe("weighted exploration territory", () => {
-  it("uses the explicit national, island, provincial, regional influence order", () => {
-    expect(EXPLORATION_CATEGORY_WEIGHTS).toEqual({ national: 4, island: 3, provincial: 2, regional: 1 });
+  it("gives municipal and community places the same territory weight as regional places", () => {
+    expect(EXPLORATION_CATEGORY_WEIGHTS).toEqual({
+      national: 4, island: 3, provincial: 2, regional: 1, municipal: 1, community: 1,
+    });
     const location = point("query", -124);
-    const sameLocation = (["national", "island", "provincial", "regional"] as const)
+    const sameLocation = (["national", "island", "provincial", "regional", "municipal", "community"] as const)
       .map((category) => point(category, -123.9, 49, category));
     expect(sameLocation.map((place) => weightedDistanceScore(location, place)))
       .toEqual([...sameLocation.map((place) => weightedDistanceScore(location, place))].sort((a, b) => a - b));
     expect(nearestWeightedExplorationPoint(location, sameLocation)?.id).toBe("national");
+    expect(weightedDistanceScore(location, sameLocation[3])).toBe(weightedDistanceScore(location, sameLocation[4]));
+    expect(weightedDistanceScore(location, sameLocation[3])).toBe(weightedDistanceScore(location, sameLocation[5]));
   });
 
   it("lets weight expand an accomplishment without defeating a substantially nearer gap", () => {

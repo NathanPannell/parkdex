@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BoundaryFeature } from "./boundaries";
 import type { KeyValueStore } from "./platform-storage";
 import type { PhotoRetryStore } from "./photo-retry";
+import type { PlaceCategory } from "./places";
 import { createOfflineClaimsService, type OfflineClaimOwner, type RecentPlaceCacheForClaims } from "./offline-claims";
 
 const API = "https://api.example.test";
@@ -16,7 +17,7 @@ class MemoryStore implements KeyValueStore {
   async removeItem(key: string) { this.values.delete(key); }
 }
 
-const place = (id: string, category: "national" | "provincial" | "regional" | "island" = "regional") => ({
+const place = (id: string, category: PlaceCategory = "regional") => ({
   id,
   name: id,
   category,
@@ -40,7 +41,7 @@ const square = (west: number, south: number, east: number, north: number) => [
   [west, south], [east, south], [east, north], [west, north], [west, south],
 ];
 
-function bundle(id: string, boundary: BoundaryFeature, category: "national" | "provincial" | "regional" | "island" = "regional", version: string | number | null = "v1") {
+function bundle(id: string, boundary: BoundaryFeature, category: PlaceCategory = "regional", version: string | number | null = "v1") {
   return { place: place(id, category), boundary, boundaryVersion: version };
 }
 

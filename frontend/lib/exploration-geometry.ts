@@ -1,4 +1,6 @@
-export type ExplorationCategory = "national" | "island" | "provincial" | "regional";
+import type { PlaceCategory } from "./places";
+
+export type ExplorationCategory = PlaceCategory;
 
 export type ExplorationPoint = {
   id: string;
@@ -12,6 +14,8 @@ export const EXPLORATION_CATEGORY_WEIGHTS: Readonly<Record<ExplorationCategory, 
   island: 3,
   provincial: 2,
   regional: 1,
+  municipal: 1,
+  community: 1,
 });
 
 const EARTH_RADIUS_KM = 6371.0088;

@@ -1,5 +1,5 @@
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
-import { matchesPlaceSearch, type PlaceCategory, type PlaceCatalogueSummary } from "./places";
+import { isPlaceCategory, matchesPlaceSearch, type PlaceCategory, type PlaceCatalogueSummary } from "./places";
 
 export const PLACE_DATA_CACHE_LIMIT = 100;
 export const PLACE_MAP_RESULT_LIMIT = 50;
@@ -8,8 +8,6 @@ export const OFFLINE_PLACE_DATA_MESSAGE = "You are in offline mode. Showing save
 const CACHE_VERSION = 1;
 const CACHE_KEY_PREFIX = "parkdex:place-data-cache:v1:";
 const LEGACY_PLACE_CACHE_KEY = "every-park:places:v1";
-const CATEGORIES: readonly PlaceCategory[] = ["national", "provincial", "regional", "island"];
-
 export type PlaceVisitFilter = "all" | "visited" | "unseen";
 export type PlaceCacheReason = "viewport" | "interaction" | "visited";
 
@@ -136,7 +134,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isCategory(value: unknown): value is PlaceCategory {
-  return CATEGORIES.includes(value as PlaceCategory);
+  return isPlaceCategory(value);
 }
 
 function boundedLimit(value: number | undefined, maximum: number, fallback: number): number {
