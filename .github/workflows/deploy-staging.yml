@@ -1,0 +1,72 @@
+name: Deploy Parkdex Kip staging
+
+on:
+  push:
+    branches:
+      - staging
+
+concurrency:
+  group: kip-staging-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify the exact staging commit
+        shell: bash
+        run: |
+          test "$GITHUB_REF" = "refs/heads/staging"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git status --porcelain)" = ""
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Install, check, and build
+        shell: bash
+        run: |
+          python scripts/kip-delivery.py write-release --environment staging --sha "$GITHUB_SHA"
+          npm ci
+          npm run typecheck
+          npm test --if-present
+          npm run build
+
+      - name: Apply the additive feedback migration
+        env:
+          KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
+        run: python scripts/kip-delivery.py migrate-staging --sha "$GITHUB_SHA" --apply
+
+      - name: Install the pinned deployment CLI
+        run: npm install --global vercel@50.1.3
+
+      - name: Queue the exact staging deployment
+        env:
+          KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
+          VERCEL_STAGING_PROJECT_ID: ${{ vars.VERCEL_STAGING_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_STAGING }}
+        run: python scripts/kip-delivery.py deploy-staging --sha "$GITHUB_SHA" --apply
