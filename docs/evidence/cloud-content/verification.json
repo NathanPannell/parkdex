@@ -1,0 +1,829 @@
+{
+  "verified_at": "2026-09-27T23:18:34.386566+00:00",
+  "source_commit": "0838a3a47e792ce3c65b5b2d3dd52ba65352f327",
+  "content_version": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744",
+  "manifest_sha256": "d84ecf3f969cc00c351f85401625024b8f526a2d82ba7344f9980d9f01ae1c32",
+  "source_inventory_independently_matched": true,
+  "source_files": 114,
+  "source_bytes": 99527167,
+  "snapshot_reproduced_from_pinned_commit": true,
+  "database": {
+    "project": "small-cloud-35890217",
+    "branch": "br-shy-hat-akg1paip",
+    "name": "parkdex_kip",
+    "tables": [
+      "boundaries",
+      "parks",
+      "r2_objects",
+      "version_manifests"
+    ],
+    "counts": {
+      "boundaries": 122,
+      "parks": 122,
+      "r2_objects": 115,
+      "version_manifests": 1,
+      "live_badges": 20
+    },
+    "full_source_row_equality": true,
+    "import_replay_preserves_baseline": true
+  },
+  "r2": {
+    "bucket": "parkdex-kip-content",
+    "public_development_url_enabled": false,
+    "all_objects_uploaded_and_download_hash_verified": true
+  },
+  "cdn": {
+    "origin": "https://kip-assets.parkdex.app",
+    "pages_project_id": "2c125c50-821f-46a8-90c6-bf55df12f93e",
+    "deployment_id": "9b853fca-2754-4d75-948e-021493e017a7",
+    "deployment_url": "https://9b853fca.parkdex-kip-content.pages.dev",
+    "deployment_commit": "9fe5d963ba5b25cf3439373205118b94c4462ca3",
+    "git_integration": null,
+    "worker_source_sha256": "904a2538e2a72668a64f34c09a4354c8f528906101b713d8a15f132b842ea7ed"
+  },
+  "unit_tests": {
+    "python": 8,
+    "worker": 9,
+    "passed": true
+  },
+  "browser": {
+    "browser": "Chrome/153.0.8010.53",
+    "parks": 122,
+    "boundaries": 122,
+    "liveBadges": 20,
+    "mapChunks": 46,
+    "driveHubs": 8,
+    "badgeDecoded": [
+      512,
+      512
+    ],
+    "crossOriginCanvasExport": true,
+    "mapRangeStatus": 206,
+    "mapHeader": "PMTiles",
+    "glyphFetch": true,
+    "origin": "http://127.0.0.1:62521",
+    "cdnOrigin": "https://kip-assets.parkdex.app",
+    "pageErrors": [],
+    "version": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744"
+  },
+  "http": {
+    "cdn_origin": "https://kip-assets.parkdex.app",
+    "version": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744",
+    "checks": [
+      {
+        "check": "edge-cache",
+        "status": 200,
+        "content_cache": "HIT"
+      },
+      {
+        "check": "conditional-get",
+        "status": 304,
+        "content_cache": "HIT"
+      },
+      {
+        "check": "conditional-head",
+        "status": 304,
+        "content_cache": "BYPASS"
+      },
+      {
+        "check": "last-modified",
+        "status": 304,
+        "content_cache": "HIT"
+      },
+      {
+        "check": "strong-match",
+        "status": 200,
+        "content_cache": "HIT"
+      },
+      {
+        "check": "wrong-match",
+        "status": 412,
+        "content_cache": "HIT"
+      },
+      {
+        "check": "byte-range",
+        "status": 206,
+        "content_cache": "BYPASS"
+      },
+      {
+        "check": "stale-if-range",
+        "status": 200,
+        "content_cache": "BYPASS"
+      },
+      {
+        "check": "invalid-range",
+        "status": 416,
+        "content_cache": "BYPASS"
+      },
+      {
+        "check": "cors-preflight",
+        "status": 204,
+        "content_cache": null
+      },
+      {
+        "check": "write-rejected",
+        "status": 405,
+        "content_cache": null
+      }
+    ]
+  },
+  "public_byte_verification": {
+    "command": "verify-cdn",
+    "version": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744",
+    "object_count": 115,
+    "total_bytes": 99583413,
+    "objects": [
+      {
+        "path": "art/badges/scenes/cave-a.webp",
+        "status": 200,
+        "sha256": "7fc6538aecaaa19723e58003125ec09be97d1f3b3a4bb3bdc6873a33a794850f",
+        "byte_size": 66716
+      },
+      {
+        "path": "art/badges/scenes/cave-b.webp",
+        "status": 200,
+        "sha256": "bbf0dd829990dbd0afe450ace1763cf15ccb1cff72dcf087a4470a5445873c6b",
+        "byte_size": 73266
+      },
+      {
+        "path": "art/badges/scenes/coast-a.webp",
+        "status": 200,
+        "sha256": "0d6317e5a179e6d9ad7d4d69ebfa7f950c17e60e9b25d9a77ef315d2a134e5ba",
+        "byte_size": 58786
+      },
+      {
+        "path": "art/badges/scenes/coast-b.webp",
+        "status": 200,
+        "sha256": "8621b7062555f3786960f625a079874dcd4206070faaba86a38af507a0022ff1",
+        "byte_size": 46176
+      },
+      {
+        "path": "art/badges/scenes/forest-a.webp",
+        "status": 200,
+        "sha256": "6da90afa5ca4116981c2826806fe001a7d28696c113ae239d6ca7645ef1fe51f",
+        "byte_size": 68124
+      },
+      {
+        "path": "art/badges/scenes/forest-b.webp",
+        "status": 200,
+        "sha256": "badb9cb733727fa4bde2cdb5526d6d98b124fc45300daef236a5c7ecba031bde",
+        "byte_size": 62712
+      },
+      {
+        "path": "art/badges/scenes/heritage-a.webp",
+        "status": 200,
+        "sha256": "a86bad3ec2a41692c684ac28c03d735ec2bba2ff63fdf6ccf3c20811f089425e",
+        "byte_size": 85216
+      },
+      {
+        "path": "art/badges/scenes/heritage-b.webp",
+        "status": 200,
+        "sha256": "632f6c2a32ee597b9278cba9c754f3b162baedf359748bf92bc33366664dbb21",
+        "byte_size": 83328
+      },
+      {
+        "path": "art/badges/scenes/lake-a.webp",
+        "status": 200,
+        "sha256": "e96b8c795fd94df4d9d9322e2517dc8b68f84235fb701e4bab072710430faa7b",
+        "byte_size": 34954
+      },
+      {
+        "path": "art/badges/scenes/lake-b.webp",
+        "status": 200,
+        "sha256": "206817fd8081622ccd636d3cef540b074c97c1c3604528d956e97ca961c362bc",
+        "byte_size": 38838
+      },
+      {
+        "path": "art/badges/scenes/legendary-a.webp",
+        "status": 200,
+        "sha256": "43b26b91269c3d462aabf8e8f3c3591ab408e1852816b7bc298261110232c75c",
+        "byte_size": 52590
+      },
+      {
+        "path": "art/badges/scenes/legendary-b.webp",
+        "status": 200,
+        "sha256": "fdd703f77cb731e2931a6c66a8779c8c4ffb2a0efd862b767464616b553a0c3b",
+        "byte_size": 59046
+      },
+      {
+        "path": "art/badges/scenes/marsh-a.webp",
+        "status": 200,
+        "sha256": "89fb80e9cd56b014db869d8661852e6a694ce71bd6038ddc985467d495f77bff",
+        "byte_size": 51516
+      },
+      {
+        "path": "art/badges/scenes/marsh-b.webp",
+        "status": 200,
+        "sha256": "d8e882aa71b0ff3b7b7294fb1e28a719bf93e0f1e015e0c35ad37af1ac9b70a9",
+        "byte_size": 47908
+      },
+      {
+        "path": "art/badges/scenes/mountain-a.webp",
+        "status": 200,
+        "sha256": "c48a229dff73e295e122012f54a2eeadb2ae27545bb081fc3dfd2db51f4e4e52",
+        "byte_size": 42624
+      },
+      {
+        "path": "art/badges/scenes/mountain-b.webp",
+        "status": 200,
+        "sha256": "b39a5a41323245681eaeac84e3275df8f4b66cb31ed42bd70f08f032353226a9",
+        "byte_size": 39660
+      },
+      {
+        "path": "art/badges/scenes/river-a.webp",
+        "status": 200,
+        "sha256": "980f198dc2bd8584eaf6bac671b42f765626b02a8c98fdaa113046698090a9ee",
+        "byte_size": 62814
+      },
+      {
+        "path": "art/badges/scenes/river-b.webp",
+        "status": 200,
+        "sha256": "96b0815ad7d0bd4aa569cfcba6412c1872b7831bab21e032956973e7fc57054a",
+        "byte_size": 60100
+      },
+      {
+        "path": "art/badges/scenes/waterfall-a.webp",
+        "status": 200,
+        "sha256": "dd1e21a45d4a3fe5d97262b32d8590020985318f66273cabc86db387dcbef8a5",
+        "byte_size": 49420
+      },
+      {
+        "path": "art/badges/scenes/waterfall-b.webp",
+        "status": 200,
+        "sha256": "1abfb5e7a605866b54b12a9acd6e1197ea8746fe5960bac0e9a5c1805afcf6a8",
+        "byte_size": 50032
+      },
+      {
+        "path": "art/kip/kip-avatar.webp",
+        "status": 200,
+        "sha256": "844ee1753a65a30aa1ae71dda1a17861072d7d546830bc289c80cfba132a4e4b",
+        "byte_size": 17270
+      },
+      {
+        "path": "art/kip/kip-camera.webp",
+        "status": 200,
+        "sha256": "5e75c8c76d92383b965cb74b3fbd1ff1240b3d1b781f1da41f91e3f8b4c757fe",
+        "byte_size": 18926
+      },
+      {
+        "path": "art/kip/kip-celebrate.webp",
+        "status": 200,
+        "sha256": "7cf3a2987ac36f3af9b234b4c42d86600f9cb91482c45adb26415238c0fae765",
+        "byte_size": 20794
+      },
+      {
+        "path": "art/kip/kip-cheer.webp",
+        "status": 200,
+        "sha256": "d22dd7f7e903d2144f183fcbae397f782f63a765bdd042fd03320176b6fe62ff",
+        "byte_size": 22122
+      },
+      {
+        "path": "art/kip/kip-idle.webp",
+        "status": 200,
+        "sha256": "76d4118a0e42af77d485b6ff1afc8c4b3c3c058611d00254f5c2b66dbdb90d3b",
+        "byte_size": 18458
+      },
+      {
+        "path": "art/kip/kip-map.webp",
+        "status": 200,
+        "sha256": "8d50b6f3cfaeb0eb4c42156ab5cc78f64ab9dd78d777d14c3902529be71449e1",
+        "byte_size": 25178
+      },
+      {
+        "path": "art/kip/kip-peek.webp",
+        "status": 200,
+        "sha256": "4fa44401ade2c4d0a8af2f993d7071c538833b149ba008be93b613457a0af7a7",
+        "byte_size": 13942
+      },
+      {
+        "path": "art/kip/kip-point.webp",
+        "status": 200,
+        "sha256": "4986f9e05e99d48a6724593d5632d826eee1dc38c2907011a2204b02f2cba9c8",
+        "byte_size": 20454
+      },
+      {
+        "path": "art/kip/kip-sleep.webp",
+        "status": 200,
+        "sha256": "3bbce528728fef73a50925d584f5378a42eab0da9bc9f95b91bbada0c86fb9e3",
+        "byte_size": 14728
+      },
+      {
+        "path": "art/kip/kip-talk.webp",
+        "status": 200,
+        "sha256": "336ed7f30d4b044753b4a5eabc85ce0a31703ccdd0ed25379bb03ab31dca5f03",
+        "byte_size": 20286
+      },
+      {
+        "path": "art/kip/kip-think.webp",
+        "status": 200,
+        "sha256": "4250441a800a1fdf6dfe6c66b4b6b8178f430801bc8e220a3dfcf0f8813c6664",
+        "byte_size": 18012
+      },
+      {
+        "path": "art/kip/kip-walk.webp",
+        "status": 200,
+        "sha256": "4d7014b3aff648b8bb35856bd23b98a1976fb02e2f331ac451dab1e2537fda24",
+        "byte_size": 20066
+      },
+      {
+        "path": "art/kip/kip-wave.webp",
+        "status": 200,
+        "sha256": "8c72d04d860eab3c00e546b408d39dba23ceb4c6857fe519860ac9e730d2ce0e",
+        "byte_size": 20744
+      },
+      {
+        "path": "art/kip/parts/bill-lower.webp",
+        "status": 200,
+        "sha256": "0bdd68966085e1b3bd43f5502a9bea2632ac6dcf8c736487743545698b84546c",
+        "byte_size": 3626
+      },
+      {
+        "path": "art/kip/parts/bill-upper.webp",
+        "status": 200,
+        "sha256": "b16466542b886118e3e3b3d94caf9ec120f657c1a012bf05eeb85db45eca5069",
+        "byte_size": 3554
+      },
+      {
+        "path": "art/kip/parts/body.webp",
+        "status": 200,
+        "sha256": "6eb9fffdd249e5097500dade506b5a2c4693b660fafaa4742fbd25e8af057923",
+        "byte_size": 5240
+      },
+      {
+        "path": "art/kip/parts/eye-closed.webp",
+        "status": 200,
+        "sha256": "f1e74760088ab0dd3f1080c5d2a1dce7f6c352f31a7243ec199a23e7f9183760",
+        "byte_size": 2098
+      },
+      {
+        "path": "art/kip/parts/eye-open.webp",
+        "status": 200,
+        "sha256": "54cc0d3f4cfa8bff3974e69e83871fb7a8d5074bcb24f3fde968f05ec71396f8",
+        "byte_size": 3988
+      },
+      {
+        "path": "art/kip/parts/head.webp",
+        "status": 200,
+        "sha256": "2dd1ebed1abbbf755c1915af38e38ec13282c5efa7c28d284260b33e0f214f1e",
+        "byte_size": 6370
+      },
+      {
+        "path": "art/kip/parts/legs.webp",
+        "status": 200,
+        "sha256": "e62a83c9b7351b276ea224279525d1096fd8fc4320b1602376822f1973051c4f",
+        "byte_size": 6614
+      },
+      {
+        "path": "art/kip/parts/tail.webp",
+        "status": 200,
+        "sha256": "19f9ec970c511ec23d20c9f1f7a24c55876950848222eae56e46d323f96836dd",
+        "byte_size": 1910
+      },
+      {
+        "path": "art/kip/parts/wing-back.webp",
+        "status": 200,
+        "sha256": "850f5e85f003da5c3d4ec6a2d78790ab416376c5577f0f2b2146f9771674c5bf",
+        "byte_size": 2838
+      },
+      {
+        "path": "art/kip/parts/wing-front.webp",
+        "status": 200,
+        "sha256": "b69ed96bb155dbec2cf9283a38a9e656134a6df799dda6fc57c0261bc89f2eb0",
+        "byte_size": 3984
+      },
+      {
+        "path": "art/products/display-case.webp",
+        "status": 200,
+        "sha256": "86aab727d677ccfd3ef0555bd4b4fa9a2edb0106e43be9502dea302b1eae1d0c",
+        "byte_size": 78498
+      },
+      {
+        "path": "art/products/field-book.webp",
+        "status": 200,
+        "sha256": "4d99ebc6eac0c32460927ed860580dad295f2c2fb4b271c1e8f4a791cb1c61a5",
+        "byte_size": 86078
+      },
+      {
+        "path": "art/products/pin-closeup.webp",
+        "status": 200,
+        "sha256": "2d8a9198d7472fdd87d344ffa58a8ae7d14796dff14b396f697457b01f620944",
+        "byte_size": 52768
+      },
+      {
+        "path": "boundaries.geojson",
+        "status": 200,
+        "sha256": "4ba538bfb0862e49367d788ae2228fd89a3db66d51c987771713c73cb4f6e9a7",
+        "byte_size": 292941
+      },
+      {
+        "path": "data/drive.json",
+        "status": 200,
+        "sha256": "d21e40023efc848f460b44c9bad0bc2edd1a79e6646e841c1c7e1d26a2baf099",
+        "byte_size": 18170
+      },
+      {
+        "path": "data/parks.json",
+        "status": 200,
+        "sha256": "64575506a2f06e3fe77ffa390860ec5b81d9b9472880527bfe33ec0c2e42c196",
+        "byte_size": 40896
+      },
+      {
+        "path": "manifest.json",
+        "status": 200,
+        "sha256": "d84ecf3f969cc00c351f85401625024b8f526a2d82ba7344f9980d9f01ae1c32",
+        "byte_size": 56246
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/0-255.pbf",
+        "status": 200,
+        "sha256": "43edfca91c285ba1226f09d5e74d68e1473a088c517f02a5212ff6ccb10037dc",
+        "byte_size": 79344
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/256-511.pbf",
+        "status": 200,
+        "sha256": "a6f9f6574c86a4a28aba630ca1017857ceadd2370ed32a1293c35f819ab9bd60",
+        "byte_size": 132976
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/512-767.pbf",
+        "status": 200,
+        "sha256": "5849298255f12639422a8b8ef32927b1ac49d59f725afaa6cbaf51550a5752fe",
+        "byte_size": 96460
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/768-1023.pbf",
+        "status": 200,
+        "sha256": "52bfd64775b91f7847da983b7bbc277135e006423cec22a44499e03e182e614e",
+        "byte_size": 71308
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/7680-7935.pbf",
+        "status": 200,
+        "sha256": "781d61c4e6c2634d704579906c71b064c4b62d7da7f06141a2babc0870c05ebb",
+        "byte_size": 141117
+      },
+      {
+        "path": "map/fonts/Noto Sans Italic/8192-8447.pbf",
+        "status": 200,
+        "sha256": "5dc4e6680116fef01be024e272859d130262613c7e634409a590e5d50ad124ae",
+        "byte_size": 52891
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/0-255.pbf",
+        "status": 200,
+        "sha256": "ba2f0118dd024e3041b158e5f9eb49bc0a658019f53f458e9f5c0b8efcd79b91",
+        "byte_size": 77628
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/256-511.pbf",
+        "status": 200,
+        "sha256": "d5e801a1a5b1d409d3298c3a1e1ca76328e2314a751078833a618620e8e66e4d",
+        "byte_size": 129635
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/512-767.pbf",
+        "status": 200,
+        "sha256": "985e56060887a8e774fdf62ec4619f26bd44d264fcb837d315023f87d768f8e2",
+        "byte_size": 96169
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/768-1023.pbf",
+        "status": 200,
+        "sha256": "4b92939b4d3779b2d0b6be5b69c105e8c88352c047170e474011e82511ac03e9",
+        "byte_size": 71160
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/7680-7935.pbf",
+        "status": 200,
+        "sha256": "21c35a285f8abc65e05bd55e80f8782d10a179831a83b31d983aa00a783a258b",
+        "byte_size": 138316
+      },
+      {
+        "path": "map/fonts/Noto Sans Medium/8192-8447.pbf",
+        "status": 200,
+        "sha256": "cc38e4956207f0edba1aaf749b61e8f6f1678ef1ad443d32ee285b21d0eb67aa",
+        "byte_size": 65101
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/0-255.pbf",
+        "status": 200,
+        "sha256": "62c6d49b15fa836eb6aa45e259c7ca6762f44b011b09e47776efbe4a6db1b397",
+        "byte_size": 76044
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/256-511.pbf",
+        "status": 200,
+        "sha256": "2eca7561f9f566bcacfda5dd04fb5880baec1328ec0f5484678289a13994de8a",
+        "byte_size": 127726
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/512-767.pbf",
+        "status": 200,
+        "sha256": "6abc80badad0e823e228ab739515be257c8b33bc68bb077dd873030e9b2d143a",
+        "byte_size": 94728
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/768-1023.pbf",
+        "status": 200,
+        "sha256": "537ccbee79180f4f8b3f6d2bdd27df979260ce1a0358c40d7aa7db505d9b03aa",
+        "byte_size": 77034
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/7680-7935.pbf",
+        "status": 200,
+        "sha256": "b9100ec886dff647198802c41d1ca6df9e6f82325179d8d71e3d377b5fe8682e",
+        "byte_size": 135449
+      },
+      {
+        "path": "map/fonts/Noto Sans Regular/8192-8447.pbf",
+        "status": 200,
+        "sha256": "8ea977a587352fe31b4159ffdbc9a40be79056f2472017c742ea1e4a931864b9",
+        "byte_size": 64220
+      },
+      {
+        "path": "map/island/000.bin",
+        "status": 200,
+        "sha256": "8274d6cf5beedc8e279ec1cce33e1a2acbab2454245f9fe69d090618c59737e9",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/001.bin",
+        "status": 200,
+        "sha256": "60751bb9f783598fac2884abba137dd38f7b7e24f1dbacd99b03dec1752ace8a",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/002.bin",
+        "status": 200,
+        "sha256": "8a8227dc505fc7105638d2162c753cf852039f098ab78c7b86a2a092ee5e393a",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/003.bin",
+        "status": 200,
+        "sha256": "c26c503b410abd4fe40ac6804230bfef73c97a4e1fae0a9c48548655b4479775",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/004.bin",
+        "status": 200,
+        "sha256": "2c3ff27354679d032a53877e5fa51a5e6d91c8492f5fef2e2f7a93aafc629ea0",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/005.bin",
+        "status": 200,
+        "sha256": "f05b512f2c93bbbf880e2e2e643a3981413f04f26c15e988bd488cdb2ce4324c",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/006.bin",
+        "status": 200,
+        "sha256": "6fabb3b6b71ddd9e6f8f5e8efb44d3e41bf5895db186f4ce6f6ebea8b1d8c92b",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/007.bin",
+        "status": 200,
+        "sha256": "d9ee8f2eb3a6dca6502de9b379c2129ba106fbcb61b85ea23665500b3a943042",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/008.bin",
+        "status": 200,
+        "sha256": "fa36b33b3cdeff79eea7394393697c23ac2cd3aed75dbea168bf11687ac23256",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/009.bin",
+        "status": 200,
+        "sha256": "70f3aa1b156495c802849c804cebc702162e8e2ef79fd58eed042f1f4ba6076f",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/010.bin",
+        "status": 200,
+        "sha256": "38eb7e0b536f6e431dcb50e85aa1ce172dd4b553a4faaae287b3132e45cad742",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/011.bin",
+        "status": 200,
+        "sha256": "f81bf8043c753242bc5d43f0f8824ac0e1b9e13a7889ab0d245dcc66cd315c21",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/012.bin",
+        "status": 200,
+        "sha256": "2c56560e72a8884db4aae7658b5e2f54220bc85237e7a97d68a9577acd64851b",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/013.bin",
+        "status": 200,
+        "sha256": "921a982b8aab5d2428ab5ec4e99d8a9b4926b1c0fa0bebd2e59c78b90546d4be",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/014.bin",
+        "status": 200,
+        "sha256": "64e7b5fc1c19143cd56272df63a77a11fd5b84c2cda8fe762cea555ca1a3982b",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/015.bin",
+        "status": 200,
+        "sha256": "f57792af17ebadb9b0ed65e74384788150b0f2d9fa623f7adb677222976e3d0a",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/016.bin",
+        "status": 200,
+        "sha256": "88253f981f7942726ae67c47fbfc26bcca220e87572e7718ead88cee8ab7155e",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/017.bin",
+        "status": 200,
+        "sha256": "32bddbb44185e2680280cbd0bd069ac1c1dd2146c0f141cc0319f09aede977f1",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/018.bin",
+        "status": 200,
+        "sha256": "7a6d1ee3f30fbc8a140eb7f5f28c7bf45dfdc390a0f64d0a42408af66a92da8d",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/019.bin",
+        "status": 200,
+        "sha256": "9b9537f006b9082e35a2d8d028fa8c3391d13c0eef302297e127812a625d4e5d",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/020.bin",
+        "status": 200,
+        "sha256": "7dfc79bcf189c0cb6e7ff00e1bb184440196e66defa012d8042018a6762dc26f",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/021.bin",
+        "status": 200,
+        "sha256": "1e0876ade0f1d71430071263375784a16b4e830842a5309fb0112a33665fdb8a",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/022.bin",
+        "status": 200,
+        "sha256": "84ef0edb14354be6136b687ec46529f719b41b45eff1d1f59315baa081d63bec",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/023.bin",
+        "status": 200,
+        "sha256": "0cc3505d073ddb2af364d2c1ee6db6d4c574b1b8880d9c6c0f1e32e079e52a81",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/024.bin",
+        "status": 200,
+        "sha256": "43cc91c7a706d65df1a2359cb8afb65d716400dfb0ab6c7c675e79dcebc4f50e",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/025.bin",
+        "status": 200,
+        "sha256": "9cc7ce001d522c3101791ef0ca76a35f77da4332c0762b3a6a308c0249c3cbd3",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/026.bin",
+        "status": 200,
+        "sha256": "5a17b8bbd9cc6077c7ef9b8631a90918cc8454af7c065b28587a2425cb789033",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/027.bin",
+        "status": 200,
+        "sha256": "282f91211779cb18dea19d65ffeb505c50c090f4231566a49328f1bf28667275",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/028.bin",
+        "status": 200,
+        "sha256": "bfda2232f40af7150ad37d1a0df15fce79dbfdee4a9ec0c6f104c983d9575271",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/029.bin",
+        "status": 200,
+        "sha256": "84dc984fce240ddf959c37e4e040ee3fdd09acaf7194ba4d40d19f166d1ff5f0",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/030.bin",
+        "status": 200,
+        "sha256": "24f3bcefaa46e9bbe6b5728efc26510f8fbb559df99a5a2573012191adb85aa5",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/031.bin",
+        "status": 200,
+        "sha256": "039243f8a9cb67ec977b4d94e265c6780444858b12feb2711388974a36b661c1",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/032.bin",
+        "status": 200,
+        "sha256": "03fc89d6fdd4a5aa142333c3873656138fd0d2536ec4c1e6c4dd177bf982e801",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/033.bin",
+        "status": 200,
+        "sha256": "4c867740f3846a0173894af404f7ca8b601e0b8d2f5fc30c6a9979ee2dbb52f5",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/034.bin",
+        "status": 200,
+        "sha256": "de9e2d1efee1fcb4061bcad8edefc08a6a0e87eca953121c3db7430a5b5d4bdd",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/035.bin",
+        "status": 200,
+        "sha256": "1ce222394e9870ee60464f4110fdf46aa85d11fd9a12cb1868ca26a5e056c252",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/036.bin",
+        "status": 200,
+        "sha256": "5d3cd7fb0be02e171820cf9968ad129ea46d47dc10cd74760329eeb713daab75",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/037.bin",
+        "status": 200,
+        "sha256": "30a002024f0d416c212c0bb96bbe380ab8c46c33113a205acadfbabb2a2644d1",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/038.bin",
+        "status": 200,
+        "sha256": "2e99fe3ec0d8669a59c1edfa8c6c82bcaa8179fc38499fd42c3cc21cbb76b17a",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/039.bin",
+        "status": 200,
+        "sha256": "378e6a339b849465697d5bf5cd9ce2cfa88e54f9426bcaceec20a3fd063eab43",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/040.bin",
+        "status": 200,
+        "sha256": "410a047b708a142c117fb1949dd478499a916b8550ecf4d551586f71c7395dea",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/041.bin",
+        "status": 200,
+        "sha256": "68f7d639159be48a1251793098f50ceaa0cb53e5b37ab6663dd106ac1b9c8732",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/042.bin",
+        "status": 200,
+        "sha256": "50754d6777bb6ff8a22d2a22ef393ea9b23daf0a92aaa06ad0f5ed76cddc4a5d",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/043.bin",
+        "status": 200,
+        "sha256": "161e77afb6d32cf9466679c173b52582ca9de680cff051c69345f62c615d5b57",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/044.bin",
+        "status": 200,
+        "sha256": "2dc85928eb6c79fdfb48340f00d5edd31f7d353bdfa65f028be8edb6382f7e84",
+        "byte_size": 2097152
+      },
+      {
+        "path": "map/island/045.bin",
+        "status": 200,
+        "sha256": "bdfa8d4c761132c9607e04576de1d1c6de7dadb1c8660a379225a4f8871759be",
+        "byte_size": 1433593
+      },
+      {
+        "path": "map/island/manifest.json",
+        "status": 200,
+        "sha256": "c9f632fc0c7790bf39825e915d1b948ce890542b005f17b0b991066a0dce047e",
+        "byte_size": 49
+      }
+    ]
+  },
+  "app_source_unchanged": true
+}
