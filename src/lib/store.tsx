@@ -17,7 +17,6 @@ type State = {
   accuracy: number | null;
   locationError: string | null;
   muted: boolean;
-  waitlist: string[];
   screen: Screen;
   selectedId: string | null;
   tripId: string | null;
@@ -38,7 +37,6 @@ type Action =
   | { type: "claim"; id: string; photo: string }
   | { type: "focus"; id: string | null }
   | { type: "mute" }
-  | { type: "waitlist"; product: string }
   | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "reset" };
 
@@ -53,7 +51,6 @@ const initial: State = {
   accuracy: null,
   locationError: null,
   muted: false,
-  waitlist: [],
   screen: "splash",
   selectedId: null,
   tripId: null,
@@ -66,7 +63,7 @@ function load(): State {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (!saved) return initial;
-    return { ...initial, onboarded: saved.onboarded, claims: saved.claims ?? {}, muted: !!saved.muted, waitlist: saved.waitlist ?? [] };
+    return { ...initial, onboarded: saved.onboarded, claims: saved.claims ?? {}, muted: !!saved.muted };
   } catch {
     return initial;
   }
@@ -103,8 +100,6 @@ function reducer(state: State, action: Action): State {
       return { ...state, focusId: action.id };
     case "mute":
       return { ...state, muted: !state.muted };
-    case "waitlist":
-      return state.waitlist.includes(action.product) ? state : { ...state, waitlist: [...state.waitlist, action.product] };
     case "feedback":
       if (!action.open) return { ...state, feedback: null };
       return { ...state, feedback: { screen: state.screen, parkId: action.parkId ?? state.selectedId ?? state.tripId } };
@@ -125,15 +120,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const { onboarded, muted, waitlist } = state;
+    const { onboarded, muted } = state;
     // Photos are stored separately in IndexedDB; only claim metadata goes to localStorage.
     const claims = Object.fromEntries(Object.entries(state.claims).map(([id, c]) => [id, { at: c.at, photo: "" }]));
     try {
-      localStorage.setItem(KEY, JSON.stringify({ onboarded, claims, muted, waitlist }));
+      localStorage.setItem(KEY, JSON.stringify({ onboarded, claims, muted }));
     } catch {
       // Storage can be unavailable in private modes; the session still works in memory.
     }
-  }, [state.onboarded, state.claims, state.muted, state.waitlist]);
+  }, [state.onboarded, state.claims, state.muted]);
 
   const wrapped = (action: Action) => {
     if (action.type === "claim" && action.photo) void savePhoto(action.id, action.photo).catch(() => {});

@@ -13,3 +13,7 @@ release/
 .env.local
 .env.*.local
 .dev.vars
+.codex/cdn-dist/
+.codex/cloud-snapshot/
+.wrangler/
+__pycache__/

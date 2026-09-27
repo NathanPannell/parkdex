@@ -1,0 +1,2 @@
+# The published manifest must retain its exact uploaded bytes on every platform.
+database/content-manifest.json -text
