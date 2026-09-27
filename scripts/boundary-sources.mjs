@@ -1,5 +1,12 @@
 import { BC_MAJOR_ISLANDS } from './bc-major-islands.mjs';
 import { officialRegionalSources } from './bc-regional-catalogue.mjs';
+import {
+  crdLocalParkSourceCounts,
+  crdLocalParksSourceContract,
+  readCrdLocalParksManifestSync,
+} from './crd-local-parks.mjs';
+
+const crdLocalParksManifest = readCrdLocalParksManifestSync({ optional: true }) ?? { entries: [] };
 
 export const boundarySources = Object.freeze({
   bcParks: Object.freeze({
@@ -117,9 +124,14 @@ export const expectedSourceCounts = Object.freeze({
   [officialRegionalSources.rdco.name]: 30,
   [officialRegionalSources.rdffg.name]: 11,
   [boundarySources.rdn.name]: 14,
+  ...crdLocalParkSourceCounts(crdLocalParksManifest),
 });
 
 export function expectedBoundarySource(place) {
+  if (!place) return null;
+  if (place?.category === 'municipal' || place?.category === 'community') {
+    return crdLocalParksSourceContract(place, crdLocalParksManifest);
+  }
   if (place.category === 'national') return { source: boundarySources.national, sourceId: nationalSourceIds.get(place.id) };
   if (place.category === 'provincial') return { source: boundarySources.bcParks, sourceId: place.sourceId == null ? null : String(place.sourceId) };
   if (place.category === 'island' || osmObjects.has(place.id)) {

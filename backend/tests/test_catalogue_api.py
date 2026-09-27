@@ -161,8 +161,37 @@ def test_local_park_categories_filter_and_serialize_through_catalogue_api() -> N
 
     run_id = uuid4().hex
     places = [
-        (f"{category}-catalogue-{run_id}", f"{category.title()} Catalogue {run_id}", category)
-        for category in ("municipal", "community")
+        (
+            f"{category}-catalogue-{run_id}-{index}",
+            f"{category.title()} Catalogue {run_id} {index}",
+            category,
+            source_name,
+            authority,
+        )
+        for index, (category, source_name, authority) in enumerate(
+            (
+                (
+                    "municipal",
+                    "District of Saanich (CRD Park GIS)",
+                    "District of Saanich",
+                ),
+                (
+                    "community",
+                    "T'Sou-ke Nation (CRD Park GIS)",
+                    "T'Sou-ke Nation",
+                ),
+                (
+                    "municipal",
+                    "District of Saanich (CRD Park GIS) export",
+                    "District of Saanich (CRD Park GIS) export",
+                ),
+                (
+                    "regional",
+                    "District of Saanich (CRD Park GIS)",
+                    "District of Saanich (CRD Park GIS)",
+                ),
+            )
+        )
     ]
     with psycopg.connect(database_url) as conn:
         conn.cursor().executemany(
@@ -170,17 +199,21 @@ def test_local_park_categories_filter_and_serialize_through_catalogue_api() -> N
                 id, name, category, latitude, longitude, region, description,
                 source_url, source_name
             ) VALUES (%s, %s, %s, 49.0, -124.0, 'Test Region', '',
-                      'https://example.test/local-park', 'Test fixture')""",
-            places,
+                      'https://example.test/local-park', %s)""",
+            [place[:4] for place in places],
         )
         conn.commit()
 
     try:
         with TestClient(app) as client:
-            for place_id, name, category in places:
+            for place_id, name, category, source_name, authority in places:
                 response = client.get(
                     "/api/places/search",
-                    params={"query": run_id, "category": category},
+                    params={
+                        "query": run_id,
+                        "category": category,
+                        "authority": authority,
+                    },
                 )
                 assert response.status_code == 200, response.text
                 payload = response.json()
@@ -188,16 +221,35 @@ def test_local_park_categories_filter_and_serialize_through_catalogue_api() -> N
                 assert payload["places"][0]["id"] == place_id
                 assert payload["places"][0]["name"] == name
                 assert payload["places"][0]["category"] == category
+                assert payload["places"][0]["authority"] == authority
+
+                if category in {"municipal", "community"} and source_name.endswith(
+                    " (CRD Park GIS)"
+                ):
+                    source_label_filter = client.get(
+                        "/api/places/search",
+                        params={
+                            "query": run_id,
+                            "category": category,
+                            "authority": source_name,
+                        },
+                    )
+                    assert source_label_filter.status_code == 200, source_label_filter.text
+                    assert source_label_filter.json()["total"] == 0
 
             state = client.get("/api/catalogue/state")
             assert state.status_code == 200, state.text
-            for _, _, category in places:
+            assert "selected named parks from CRD Park GIS" in state.json()[
+                "coverageNote"
+            ]
+            assert "not a complete inventory" in state.json()["coverageNote"]
+            for _, _, category, _, _ in places:
                 assert state.json()["categoryTotals"][category] >= 1
     finally:
         with psycopg.connect(database_url) as conn:
             conn.execute(
                 "DELETE FROM places WHERE id = ANY(%s)",
-                ([place_id for place_id, _, _ in places],),
+                ([place_id for place_id, _, _, _, _ in places],),
             )
             conn.commit()
 

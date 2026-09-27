@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -15,6 +16,11 @@ import psycopg
 from psycopg import sql
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from backend.app.place_categories import visitor_detail_coverage_issues
+
 MIGRATIONS = ROOT / "database" / "migrations"
 CATALOGUE = ROOT / "data" / "places.json"
 REVIEWED_VISITOR_DETAILS = ROOT / "data" / "park-details.reviewed.json"
@@ -79,12 +85,18 @@ def expected_visitor_detail_rows() -> list[tuple[str, str, date, str, datetime |
     if len(details_by_id) != len(places):
         raise RuntimeError("Checked-in visitor details contain duplicate place IDs")
 
-    canonical_ids = {
-        place["id"] for place in json.loads(CATALOGUE.read_text(encoding="utf-8"))
-    }
-    if set(details_by_id) != canonical_ids:
+    catalogue = json.loads(CATALOGUE.read_text(encoding="utf-8"))
+    canonical_categories = {place["id"]: place["category"] for place in catalogue}
+    if len(canonical_categories) != len(catalogue):
+        raise RuntimeError("Canonical place catalogue contains duplicate place IDs")
+    issues = visitor_detail_coverage_issues(canonical_categories, details_by_id)
+    if any(issues.values()):
         raise RuntimeError(
-            "Checked-in visitor detail IDs do not match the canonical place catalogue"
+            "Checked-in visitor details must cover every required canonical place "
+            "and contain only canonical IDs "
+            f"(missing required={issues['missing_required'][:5]}, "
+            f"unknown reviewed={issues['unknown_reviewed'][:5]}, "
+            f"unsupported categories={issues['unsupported_categories'][:5]})"
         )
 
     snapshot_date = date.fromisoformat(dataset["snapshotDate"])

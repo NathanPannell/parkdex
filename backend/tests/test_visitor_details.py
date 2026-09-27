@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from backend.app.schemas import SearchPlace
 from backend.app.visitor_details import DatasetIdentity, PlaceVisitorDetails, ReviewedDataset
+from scripts import build_park_details_migration
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,8 +42,15 @@ def test_reviewed_import_matches_canonical_ids_and_omits_ingestion_internals() -
     reviewed = ReviewedDataset.model_validate(json.loads(reviewed_text))
     canonical = json.loads((ROOT / "data" / "places.json").read_text(encoding="utf-8"))
     ids = [place.place_id for place in reviewed.places]
-    assert len(ids) == len(set(ids)) == len(canonical) == 1030
-    assert set(ids) == {place["id"] for place in canonical}
+    canonical_by_id = {place["id"]: place for place in canonical}
+    reviewed_ids = set(ids)
+    assert len(ids) == len(set(ids)) == 1030
+    assert reviewed_ids <= set(canonical_by_id)
+    assert {
+        place_id
+        for place_id, place in canonical_by_id.items()
+        if place["category"] not in {"municipal", "community"}
+    } <= reviewed_ids
     assert ids == sorted(ids)
     assert "archiveIds" not in reviewed_text
     assert "extractionMethod" not in reviewed_text
@@ -57,6 +65,81 @@ def test_reviewed_import_matches_canonical_ids_and_omits_ingestion_internals() -
     assert banks_island.visitor_details.background.wildlife is None
     assert banks_island.visitor_details.scope.matched_name == "Banks Island"
     assert banks_island.visitor_details.source.retrieved_at
+
+
+def _coverage_dataset(place_ids: list[str]) -> ReviewedDataset:
+    reviewed = ReviewedDataset.model_validate(json.loads(REVIEWED_PATH.read_text(encoding="utf-8")))
+    details = next(
+        place.visitor_details.model_dump(by_alias=True, mode="json")
+        for place in reviewed.places
+    )
+    return ReviewedDataset.model_validate(
+        {
+            "schemaVersion": "1.0.0",
+            "snapshotDate": reviewed.snapshot_date.isoformat(),
+            "places": [
+                {"placeId": place_id, "visitorDetails": details}
+                for place_id in sorted(place_ids)
+            ],
+        }
+    )
+
+
+def _write_coverage_catalogue(path: Path) -> dict[str, str]:
+    categories = {
+        "test-national": "national",
+        "test-provincial": "provincial",
+        "test-regional": "regional",
+        "test-island": "island",
+        "test-municipal": "municipal",
+        "test-community": "community",
+    }
+    path.write_text(
+        json.dumps(
+            [
+                {"id": place_id, "category": category}
+                for place_id, category in categories.items()
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return categories
+
+
+def test_reviewed_coverage_allows_unreviewed_municipal_and_community_places(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    categories = _write_coverage_catalogue(tmp_path / "places.json")
+    monkeypatch.setattr(build_park_details_migration, "CANONICAL_PLACES", tmp_path / "places.json")
+    original_ids = [
+        place_id
+        for place_id, category in categories.items()
+        if category in {"national", "provincial", "regional", "island"}
+    ]
+
+    build_park_details_migration.validate_canonical_ids(_coverage_dataset(original_ids))
+
+
+def test_reviewed_coverage_rejects_missing_original_category_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    categories = _write_coverage_catalogue(tmp_path / "places.json")
+    monkeypatch.setattr(build_park_details_migration, "CANONICAL_PLACES", tmp_path / "places.json")
+    reviewed_ids = [place_id for place_id in categories if place_id != "test-regional"]
+
+    with pytest.raises(ValueError, match="missing required=.*test-regional"):
+        build_park_details_migration.validate_canonical_ids(_coverage_dataset(reviewed_ids))
+
+
+def test_reviewed_coverage_rejects_unknown_reviewed_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    categories = _write_coverage_catalogue(tmp_path / "places.json")
+    monkeypatch.setattr(build_park_details_migration, "CANONICAL_PLACES", tmp_path / "places.json")
+    reviewed_ids = [*categories, "not-in-the-canonical-catalogue"]
+
+    with pytest.raises(ValueError, match="unknown reviewed=.*not-in-the-canonical-catalogue"):
+        build_park_details_migration.validate_canonical_ids(_coverage_dataset(reviewed_ids))
 
 
 def test_place_visitor_details_field_serializes_public_alias_and_is_omitted_when_absent() -> None:

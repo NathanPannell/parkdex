@@ -47,6 +47,9 @@ export function authorityForPlace(place: Place): string {
   if (place.category === "national") return "Parks Canada";
   if (place.category === "provincial") return "BC Parks";
   if (place.category === "island") return "Major islands";
+  if (place.category === "municipal" || place.category === "community") {
+    return place.sourceName.replace(/ \(CRD Park GIS\)$/, "");
+  }
   if (place.sourceName.includes("Capital Regional District")) return "Capital Regional District (CRD)";
   if (place.sourceName.includes("Nanaimo")) return "Regional District of Nanaimo (RDN)";
   if (place.sourceName.includes("Cowichan Valley")) return "Cowichan Valley Regional District (CVRD)";

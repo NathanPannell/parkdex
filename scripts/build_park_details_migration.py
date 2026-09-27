@@ -21,6 +21,7 @@ from backend.app.visitor_details import (
     PlaceVisitorDetails,
     ReviewedDataset,
 )
+from backend.app.place_categories import visitor_detail_coverage_issues
 
 
 DEFAULT_SOURCE = (
@@ -46,26 +47,30 @@ def reviewed_schema_text() -> str:
     return json_text(ReviewedDataset.model_json_schema(by_alias=True), pretty=True)
 
 
-def canonical_place_ids() -> set[str]:
+def canonical_place_categories() -> dict[str, str]:
     places = json.loads(CANONICAL_PLACES.read_text(encoding="utf-8"))
     ids = [place["id"] for place in places]
     if len(ids) != len(set(ids)):
         raise ValueError("data/places.json contains duplicate place IDs")
-    return set(ids)
+    return {place["id"]: place["category"] for place in places}
+
+
+def canonical_place_ids() -> set[str]:
+    return set(canonical_place_categories())
 
 
 def validate_canonical_ids(dataset: ReviewedDataset) -> None:
     ids = [place.place_id for place in dataset.places]
     if len(ids) != len(set(ids)):
         raise ValueError("Reviewed details contain duplicate place IDs")
-    expected = canonical_place_ids()
-    actual = set(ids)
-    missing = sorted(expected - actual)
-    extra = sorted(actual - expected)
-    if missing or extra:
+    issues = visitor_detail_coverage_issues(canonical_place_categories(), ids)
+    if any(issues.values()):
         raise ValueError(
-            "Reviewed detail IDs must exactly match data/places.json "
-            f"(missing={missing[:5]}, extra={extra[:5]})"
+            "Reviewed details must cover every required canonical place and contain "
+            "only canonical IDs "
+            f"(missing required={issues['missing_required'][:5]}, "
+            f"unknown reviewed={issues['unknown_reviewed'][:5]}, "
+            f"unsupported categories={issues['unsupported_categories'][:5]})"
         )
 
 

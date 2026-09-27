@@ -3,13 +3,26 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hasBalancedNameDelimiters, provincialNameCorrections } from './place-name-corrections.mjs';
 import { officialRegionalSources } from './bc-regional-catalogue.mjs';
+import {
+  CRD_LOCAL_PARKS_SOURCE_URL,
+  CRD_REGIONAL_SOURCE_NAME,
+  loadCrdLocalParksImport,
+  PLACE_CATEGORIES,
+  crdLocalParkSourceCounts,
+} from './crd-local-parks.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const places = JSON.parse(fs.readFileSync(path.join(root, 'data', 'places.json'), 'utf8'));
 const audit = JSON.parse(fs.readFileSync(path.join(root, 'data', 'coverage-audit.json'), 'utf8'));
 const visitorPages = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'visitor-information.catalogue.json'), 'utf8'));
 const publishedDescriptionSources = JSON.parse(fs.readFileSync(path.join(root, 'frontend', 'lib', 'place-description-sources.catalogue.json'), 'utf8'));
-const descriptionFiles = ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json', 'bc-expansion-descriptions.catalogue.json'];
+const crdLocalParksImport = await loadCrdLocalParksImport({ root });
+const descriptionFiles = [
+  'place-descriptions.catalogue.json',
+  'nonprovincial-descriptions.catalogue.json',
+  'bc-expansion-descriptions.catalogue.json',
+  path.join('source-imports', 'crd-local-parks', 'descriptions.catalogue.json'),
+];
 const descriptionEntries = new Map();
 for (const filename of descriptionFiles) {
   const catalogue = JSON.parse(fs.readFileSync(path.join(root, 'data', filename), 'utf8'));
@@ -30,7 +43,7 @@ for (const filename of descriptionFiles) {
   }
 }
 const requiredFields = ['id', 'name', 'category', 'latitude', 'longitude', 'region', 'description', 'sourceUrl', 'sourceName'];
-const categories = new Set(['national', 'provincial', 'regional', 'island']);
+const categories = new Set(PLACE_CATEGORIES);
 const ids = new Set();
 
 for (const place of places) {
@@ -47,6 +60,36 @@ for (const place of places) {
   const description = descriptionEntries.get(place.id);
   if (!description) throw new Error(`${place.id}: missing visitor-facing description source`);
   if (place.description !== description.description) throw new Error(`${place.id}: built description does not match its source catalogue`);
+}
+
+const importedPlacesById = new Map(crdLocalParksImport.places.map((place) => [place.id, place]));
+const canonicalLocalParks = places.filter((place) => place.category === 'municipal' || place.category === 'community');
+if (canonicalLocalParks.length !== importedPlacesById.size) {
+  throw new Error('municipal and community place count differs from the reviewed CRD import');
+}
+for (const place of canonicalLocalParks) {
+  if (JSON.stringify(place) !== JSON.stringify(importedPlacesById.get(place.id))) {
+    throw new Error(`${place.id}: canonical record differs from the reviewed CRD import`);
+  }
+}
+for (const imported of crdLocalParksImport.places) {
+  if (!ids.has(imported.id)) throw new Error(`${imported.id}: reviewed CRD import is missing from the canonical catalogue`);
+}
+const preservedCrdIdentity = crdLocalParksImport.manifest.existingCanonicalIdentity;
+if (preservedCrdIdentity) {
+  const existing = places.find((place) => place.id === preservedCrdIdentity.placeId);
+  if (!existing || existing.category !== 'regional' || existing.sourceUrl !== CRD_LOCAL_PARKS_SOURCE_URL
+      || existing.sourceName !== CRD_REGIONAL_SOURCE_NAME
+      || (existing.sourceId != null && String(existing.sourceId) !== String(preservedCrdIdentity.sourceObjectId))) {
+    throw new Error(`${preservedCrdIdentity.placeId}: existing CRD canonical place identity was changed`);
+  }
+  const boundary = JSON.parse(fs.readFileSync(path.join(root, 'data', 'boundaries.geojson'), 'utf8')).features
+    .find((feature) => feature.properties.id === preservedCrdIdentity.placeId);
+  if (!boundary || boundary.properties.category !== 'regional' || boundary.properties.sourceUrl !== CRD_LOCAL_PARKS_SOURCE_URL
+      || boundary.properties.sourceName !== CRD_REGIONAL_SOURCE_NAME
+      || String(boundary.properties.sourceId) !== String(preservedCrdIdentity.sourceObjectId)) {
+    throw new Error(`${preservedCrdIdentity.placeId}: existing CRD canonical boundary identity was changed`);
+  }
 }
 
 if (descriptionEntries.size !== places.length) throw new Error('description source catalogues do not match the canonical place count');
@@ -204,6 +247,7 @@ const polygonSources = new Set([
   'Cowichan Valley Regional District — Parks GIS layer',
   'Regional District of Nanaimo — Regional Parks spatial data',
   ...Object.values(officialRegionalSources).map((source) => source.name),
+  ...Object.keys(crdLocalParkSourceCounts(crdLocalParksImport.manifest)),
 ]);
 const polygonPinCount = places.filter((place) => polygonSources.has(place.sourceName)
   || place.sourceName.endsWith(' via BC Local and Regional Greenspaces')).length;

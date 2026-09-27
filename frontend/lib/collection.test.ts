@@ -54,4 +54,70 @@ describe("collection hierarchy", () => {
     expect(authorityForPlace(columbia)).toBe("Regional District of Central Kootenay");
     expect(collectionFilter([fraser, columbia], "", new Set(), new Set([authorityForPlace(fraser)]), "all", new Set())).toEqual([fraser]);
   });
+
+  it("groups municipal and community parks by their jurisdiction owner", () => {
+    const saanich: Place = {
+      ...crd,
+      id: "saanich",
+      name: "Elk Lake Park",
+      category: "municipal",
+      region: "Capital Region",
+      sourceName: "District of Saanich (CRD Park GIS)",
+    };
+    const victoria: Place = {
+      ...crd,
+      id: "victoria",
+      name: "Beacon Hill Park",
+      category: "municipal",
+      region: "Capital Region",
+      sourceName: "City of Victoria (CRD Park GIS)",
+    };
+    const tsouke: Place = {
+      ...crd,
+      id: "tsouke",
+      name: "T'Sou-ke Community Park",
+      category: "community",
+      region: "Capital Region",
+      sourceName: "T'Sou-ke Nation (CRD Park GIS)",
+    };
+
+    expect(authorityForPlace(saanich)).toBe("District of Saanich");
+    expect(authorityForPlace(victoria)).toBe("City of Victoria");
+    expect(authorityForPlace(tsouke)).toBe("T'Sou-ke Nation");
+    expect(
+      collectionFilter(
+        [saanich, victoria, tsouke],
+        "",
+        new Set(),
+        new Set(["District of Saanich"]),
+        "all",
+        new Set(),
+      ),
+    ).toEqual([saanich]);
+    expect(groupByRegion([tsouke, victoria, saanich])).toEqual([
+      { region: "Southern Vancouver Island", places: [victoria, saanich, tsouke] },
+    ]);
+  });
+
+  it("strips only the exact CRD GIS suffix for new categories", () => {
+    const suffixedWithExtraText: Place = {
+      ...crd,
+      id: "saanich-extra",
+      category: "municipal",
+      sourceName: "District of Saanich (CRD Park GIS) export",
+    };
+    const existingRegional: Place = {
+      ...crd,
+      id: "regional-legacy",
+      category: "regional",
+      sourceName: "District of Saanich (CRD Park GIS)",
+    };
+
+    expect(authorityForPlace(suffixedWithExtraText)).toBe(
+      "District of Saanich (CRD Park GIS) export",
+    );
+    expect(authorityForPlace(existingRegional)).toBe(
+      "District of Saanich (CRD Park GIS)",
+    );
+  });
 });

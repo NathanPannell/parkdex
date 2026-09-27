@@ -6,15 +6,21 @@ import { provincialNameCorrections } from './place-name-corrections.mjs';
 import { classifyBcRegion } from './bc-regions.mjs';
 import { BC_MAJOR_ISLANDS } from './bc-major-islands.mjs';
 import { fetchOfficialRegionalParks } from './bc-regional-catalogue.mjs';
+import { loadCrdLocalParksImport, PLACE_CATEGORIES } from './crd-local-parks.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const dataDir = path.join(root, 'data');
 const existingPlaces = JSON.parse(await fs.readFile(path.join(dataDir, 'places.json'), 'utf8'));
+const crdLocalParksImport = await loadCrdLocalParksImport({ root });
 const polygonInteriorFallbacks = [];
 const placeDescriptionEntries = new Map();
 
-for (const filename of ['place-descriptions.catalogue.json', 'nonprovincial-descriptions.catalogue.json']) {
+for (const filename of [
+  'place-descriptions.catalogue.json',
+  'nonprovincial-descriptions.catalogue.json',
+  path.join('source-imports', 'crd-local-parks', 'descriptions.catalogue.json'),
+]) {
   let raw;
   try {
     raw = await fs.readFile(path.join(dataDir, filename), 'utf8');
@@ -566,7 +572,7 @@ function validate(places) {
     }
     if (ids.has(place.id)) throw new Error(`Duplicate id: ${place.id}`);
     ids.add(place.id);
-    if (!['national', 'provincial', 'regional', 'island'].includes(place.category)) throw new Error(`${place.id}: invalid category`);
+    if (!PLACE_CATEGORIES.includes(place.category)) throw new Error(`${place.id}: invalid category`);
     if (place.latitude < 47 || place.latitude > 61 || place.longitude < -141 || place.longitude > -113) throw new Error(`${place.id}: coordinate outside British Columbia scope`);
   }
   for (const required of [
@@ -607,12 +613,12 @@ const [provincial, crd, cvrd, rdn, officialRegional, islands] = await Promise.al
   buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOfficialRegional(), buildIslands(),
 ]);
 const places = [...buildNational(), ...buildVerifiedRegionalPoints(), ...provincial.places,
-  ...crd, ...cvrd, ...rdn, ...officialRegional.places, ...islands]
+  ...crd, ...cvrd, ...rdn, ...officialRegional.places, ...islands, ...crdLocalParksImport.places]
   .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'en-CA'));
 const generatedDescriptionEntries = {};
 for (const place of places) {
   let entry = placeDescriptionEntries.get(place.id);
-  if (!entry && ['provincial', 'national', 'island', 'regional'].includes(place.category)) {
+  if (!entry && PLACE_CATEGORIES.includes(place.category)) {
     entry = {
       status: 'source-derived',
       description: place.description,
@@ -646,15 +652,21 @@ const descriptionSources = Object.fromEntries([...placeDescriptionEntries].sort(
 }]));
 await fs.writeFile(path.join(root, 'frontend', 'lib', 'place-description-sources.catalogue.json'), `${JSON.stringify(descriptionSources, null, 2)}\n`);
 await fs.writeFile(path.join(dataDir, 'coverage-audit.json'), `${JSON.stringify({
-  generatedAt: new Date().toISOString(), counts: Object.fromEntries(['national', 'provincial', 'regional', 'island'].map((category) => [category, places.filter((p) => p.category === category).length])),
+  generatedAt: new Date().toISOString(), counts: Object.fromEntries(PLACE_CATEGORIES.map((category) => [category, places.filter((p) => p.category === category).length])),
   bcParksBroadBboxFeatures: provincial.sourceFeatures,
-  polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length + officialRegional.places.length,
+  polygonPinsVerified: provincial.places.length + crd.length + cvrd.length + rdn.length + officialRegional.places.length + crdLocalParksImport.boundaries.features.length,
   officialRegionalSourceCounts: officialRegional.counts,
   excludedOfficialGreenspaces: officialRegional.excludedGreenspaces,
   polygonInteriorFallbacks,
   excludedCvrdRegionalParks: [...cvrdEligibilityExclusions].map(([name, evidence]) => ({ name, ...evidence })),
   scopeRetirements: [],
   excludedProvincialParksOutsideMask: provincial.excluded.sort((a, b) => a.name.localeCompare(b.name)),
+  crdLocalParksImport: {
+    sourceUrl: crdLocalParksImport.audit.sourceLayer ?? crdLocalParksImport.manifest.sourceLayer,
+    includedCount: crdLocalParksImport.places.length,
+    snapshotSha256: crdLocalParksImport.audit.sourceSnapshot?.sha256 ?? crdLocalParksImport.manifest.sourceSnapshot.sha256,
+    dispositionCounts: crdLocalParksImport.manifest.dispositionCounts,
+  },
   extents: { south: Math.min(...places.map((p) => p.latitude)), north: Math.max(...places.map((p) => p.latitude)), west: Math.min(...places.map((p) => p.longitude)), east: Math.max(...places.map((p) => p.longitude)) },
 }, null, 2)}\n`);
 console.log(`Wrote ${places.length} places: ${[...new Set(places.map((p) => p.category))].map((category) => `${places.filter((p) => p.category === category).length} ${category}`).join(', ')}`);

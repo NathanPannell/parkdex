@@ -7,10 +7,12 @@ import booleanValid from '@turf/boolean-valid';
 
 import { boundarySources as sources, osmObjects } from './boundary-sources.mjs';
 import { fetchOfficialRegionalParks, officialRegionalSources } from './bc-regional-catalogue.mjs';
+import { canonicalizeCrdLocalParkBoundaryFeature, loadCrdLocalParksImport } from './crd-local-parks.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = path.join(root, 'data');
 const places = JSON.parse(await fs.readFile(path.join(dataDir, 'places.json'), 'utf8'));
+const crdLocalParksImport = await loadCrdLocalParksImport({ root });
 const placeById = new Map(places.map((place) => [place.id, place]));
 const preservationChecks = [];
 const topologyWarnings = [];
@@ -284,6 +286,11 @@ function coordinateStats(geometry) {
 const groups = await Promise.all([
   buildNational(), buildProvincial(), buildCrd(), buildCvrd(), buildRdn(), buildOfficialRegional(), buildOsm(),
 ]);
+groups.push(crdLocalParksImport.boundaries.features.map(canonicalizeCrdLocalParkBoundaryFeature));
+for (const feature of crdLocalParksImport.boundaries.features) {
+  const stats = coordinateStats(feature.geometry);
+  preservationChecks.push({ id: feature.properties.id ?? feature.properties.placeId, sourceParts: stats.parts, sourceHoles: stats.holes });
+}
 const features = groups.flat().sort((a, b) => a.properties.id.localeCompare(b.properties.id));
 const emittedIds = new Set(features.map((feature) => feature.properties.id));
 const missingIds = places.filter((place) => !emittedIds.has(place.id)).map((place) => place.id);
