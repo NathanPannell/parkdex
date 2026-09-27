@@ -30,6 +30,7 @@ NEON_API = "https://console.neon.tech/api/v2"
 VERCEL_API = "https://api.vercel.com"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ID_RE = re.compile(r"^[0-9]+$")
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 SECRET_VALUES: list[str] = []
 
 
@@ -366,7 +367,7 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
 
 
 def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
-             query: dict | None = None, not_found_ok: bool = False):
+             query: dict | None = None, not_found_ok: bool = False, timeout: float = 30):
     url = base + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -383,7 +384,7 @@ def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dic
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = response.read()
     except urllib.error.HTTPError as exc:
         if not_found_ok and exc.code == 404:
@@ -399,12 +400,89 @@ def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dic
         raise DeliveryError(f"{urllib.parse.urlsplit(url).netloc} API returned invalid JSON.") from exc
 
 
-def neon_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None, query: dict | None = None):
+def neon_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None,
+                 query: dict | None = None, timeout: float = 30):
     key = os.environ.get("NEON_API_KEY", "")
     if not key:
         raise DeliveryError("NEON_API_KEY is required for preview apply or teardown.")
     register_secret(key)
-    return api_json(NEON_API, path, token=key, method=method, body=body, query=query)
+    return api_json(NEON_API, path, token=key, method=method, body=body, query=query, timeout=timeout)
+
+
+def wait_neon_operations(config: dict, state: dict, journal: Path, response: dict,
+                         branch_id: str, phase: str) -> None:
+    operations = response.get("operations") if isinstance(response, dict) else None
+    if not isinstance(operations, list):
+        raise DeliveryError(f"Neon did not return operation identities after {phase} creation.")
+    pending: dict[str, dict] = {}
+    for item in operations:
+        if not isinstance(item, dict):
+            raise DeliveryError(f"Neon returned an invalid operation after {phase} creation.")
+        operation_id = item.get("id")
+        if not isinstance(operation_id, str) or not UUID_RE.fullmatch(operation_id):
+            raise DeliveryError(f"Neon returned an invalid operation ID after {phase} creation.")
+        if item.get("project_id") not in (None, config["neonProjectId"]):
+            raise DeliveryError(f"Neon returned an operation for a different project after {phase} creation.")
+        if item.get("branch_id") not in (None, branch_id):
+            raise DeliveryError(f"Neon returned an operation for a different branch after {phase} creation.")
+        if operation_id in pending:
+            raise DeliveryError(f"Neon repeated an operation ID after {phase} creation.")
+        pending[operation_id] = item
+
+    history = state.setdefault("neonOperations", [])
+    for operation_id, item in pending.items():
+        history.append({
+            "id": operation_id,
+            "phase": phase,
+            "action": item.get("action"),
+            "status": item.get("status", "submitted"),
+            "branchId": branch_id,
+        })
+    save_json(journal, state)
+
+    deadline = time.monotonic() + 120
+    while pending:
+        for operation_id in list(pending):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise DeliveryError(f"Neon {phase} operations did not finish within 120 seconds; keep the preview journal for recovery.")
+            try:
+                payload = neon_request(
+                    config,
+                    f"/projects/{config['neonProjectId']}/operations/{operation_id}",
+                    timeout=min(10, remaining),
+                )
+            except DeliveryError as exc:
+                message = str(exc)
+                if any(f"HTTP {status}" in message for status in (404, 423, 503)):
+                    continue
+                raise
+            operation = payload.get("operation") if isinstance(payload, dict) else None
+            if (
+                not isinstance(operation, dict)
+                or operation.get("id") != operation_id
+                or operation.get("project_id") not in (None, config["neonProjectId"])
+                or operation.get("branch_id") not in (None, branch_id)
+            ):
+                raise DeliveryError(f"Neon operation identity changed while waiting after {phase} creation.")
+            status = operation.get("status")
+            record = next(entry for entry in history if entry["id"] == operation_id and entry["phase"] == phase)
+            record["status"] = status
+            record["updatedAt"] = datetime.now(timezone.utc).isoformat()
+            if status == "finished":
+                pending.pop(operation_id)
+            elif status in ("failed", "error", "cancelled", "cancelling", "skipped"):
+                save_json(journal, state)
+                raise DeliveryError(f"Neon operation failed after {phase} creation with status {status}.")
+            elif status not in ("scheduling", "running"):
+                save_json(journal, state)
+                raise DeliveryError(f"Neon returned an unsupported operation status after {phase} creation.")
+        save_json(journal, state)
+        if pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise DeliveryError(f"Neon {phase} operations did not finish within 120 seconds; keep the preview journal for recovery.")
+            time.sleep(min(2, remaining))
 
 
 def vercel_token(config: dict) -> str:
@@ -510,6 +588,7 @@ def create_preview_database(config: dict, state: dict, branch_id: str, journal: 
         state["resources"]["neonRoleId"] = role["id"]
     state["status"] = "neon-preview-role-created"
     save_json(journal, state)
+    wait_neon_operations(config, state, journal, role_result, branch_id, "role")
 
     databases_path = f"/projects/{project_id}/branches/{branch_id}/databases"
     listing = neon_request(config, databases_path)
@@ -535,6 +614,7 @@ def create_preview_database(config: dict, state: dict, branch_id: str, journal: 
     state["resources"]["neonDatabaseId"] = database["id"]
     state["status"] = "neon-preview-database-created"
     save_json(journal, state)
+    wait_neon_operations(config, state, journal, created, branch_id, "database")
 
     connection = neon_request(config, f"/projects/{project_id}/connection_uri", query={
         "branch_id": branch_id,
@@ -1003,6 +1083,9 @@ def preview_apply(pr: int) -> None:
             if not isinstance(branch, dict) or not branch.get("id") or branch.get("name") != state["branchName"]:
                 raise DeliveryError("Neon did not return the exact owned branch identity.")
             state["resources"]["neonBranchId"] = branch["id"]
+            state["status"] = "waiting-neon-branch-operations"
+            save_json(path, state)
+            wait_neon_operations(config, state, path, created, branch["id"], "branch")
             verify_neon_ownership(config, state, branch)
             state["status"] = "neon-created"
             save_json(path, state)
@@ -1457,7 +1540,6 @@ def assign_staging(args) -> None:
         assert_vercel_cli_version(config)
         run_vercel(config, [
             "alias", "set", deployment_url(deployment), config["stagingAlias"],
-            "--yes",
         ], auth_dir, cwd=ROOT)
     finally:
         shutil.rmtree(auth_dir, ignore_errors=True)
