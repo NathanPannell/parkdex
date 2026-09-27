@@ -1457,7 +1457,6 @@ def assign_staging(args) -> None:
         assert_vercel_cli_version(config)
         run_vercel(config, [
             "alias", "set", deployment_url(deployment), config["stagingAlias"],
-            "--yes",
         ], auth_dir, cwd=ROOT)
     finally:
         shutil.rmtree(auth_dir, ignore_errors=True)
