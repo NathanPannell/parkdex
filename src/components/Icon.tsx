@@ -25,6 +25,10 @@ const PATHS = {
   book: "M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Zm0 16a2 2 0 0 1 2-2h13v2",
   wand: "M4 20 16 8m-2-2 4 4M18 3v3m-1.5-1.5h3M20 9v2m-1-1h2M12 3v2m-1-1h2",
   refresh: "M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15m0 5v-5h5",
+  chat: "M4 5h16v11H9l-5 4V5Zm4 5h.01M12 10h.01M16 10h.01",
+  bug: "M8 10a4 4 0 0 1 8 0v4a4 4 0 0 1-8 0v-4Zm4 0v8M3 13h5m8 0h5M5 8l3 2m11-2-3 2M5 19l3-2m11 2-3-2M9.5 6.5 8 4m6.5 2.5L16 4",
+  bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z",
+  image: "M4 5h16v14H4V5Zm0 11 5-5 4 4 3-3 4 4M15.5 9.5h.01",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -6,6 +6,9 @@ export type Claim = { at: string; photo: string };
 
 export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share";
 
+// Where the feedback sheet was opened from, captured so reports carry app context.
+export type FeedbackOrigin = { screen: Screen; parkId: string | null };
+
 type State = {
   onboarded: boolean;
   claims: Record<string, Claim>;
@@ -20,6 +23,7 @@ type State = {
   tripId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;
+  feedback: FeedbackOrigin | null;
 };
 
 type Action =
@@ -35,6 +39,7 @@ type Action =
   | { type: "focus"; id: string | null }
   | { type: "mute" }
   | { type: "waitlist"; product: string }
+  | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "reset" };
 
 // Downtown Victoria: the mockup's starting point for testers without GPS.
@@ -54,6 +59,7 @@ const initial: State = {
   tripId: null,
   pendingPhoto: null,
   focusId: null,
+  feedback: null,
 };
 
 function load(): State {
@@ -99,6 +105,9 @@ function reducer(state: State, action: Action): State {
       return { ...state, muted: !state.muted };
     case "waitlist":
       return state.waitlist.includes(action.product) ? state : { ...state, waitlist: [...state.waitlist, action.product] };
+    case "feedback":
+      if (!action.open) return { ...state, feedback: null };
+      return { ...state, feedback: { screen: state.screen, parkId: action.parkId ?? state.selectedId ?? state.tripId } };
     case "reset":
       return { ...initial, screen: "splash" };
   }

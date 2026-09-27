@@ -16,6 +16,7 @@ type Props = {
   onGo: () => void;
   onCheckIn: () => void;
   onViewCase: () => void;
+  onFeedback: () => void;
 };
 
 const stagger = { show: { transition: { staggerChildren: 0.05, delayChildren: 0.12 } } };
@@ -30,7 +31,7 @@ export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase }: Props) {
+export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase, onFeedback }: Props) {
   const trip = estimateTrip(user, park);
   const walk = finalWalk(park);
   const live = isLive(park);
@@ -124,6 +125,10 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           <span className="park-sheet__how-dash" />
           <span className="park-sheet__how-step">3</span> Snap + claim
         </motion.div>
+
+        <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
+          <Icon name="chat" size={16} /> Something wrong with this park? Tell us
+        </motion.button>
       </motion.div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
