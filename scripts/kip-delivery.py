@@ -867,9 +867,12 @@ def write_vercel_files(candidate_root: Path, config: dict, token: str, runtime_e
 
 def run_vercel(config: dict, args: list[str], auth_dir: Path, *, cwd: Path = ROOT, env_extra: dict[str, str] | None = None) -> str:
     cli = vercel_args()
+    project_id = os.environ.get(config["vercelProjectIdEnvironment"]) or os.environ.get(config["vercelPreviewProjectIdEnvironment"], "")
+    if os.environ.get("VERCEL_PROJECT_ID") and os.environ["VERCEL_PROJECT_ID"] != project_id:
+        raise DeliveryError("Ambient VERCEL_PROJECT_ID does not match the configured Kip project.")
     env = safe_env(extra={
         config["vercelTeamIdEnvironment"]: os.environ.get(config["vercelTeamIdEnvironment"], ""),
-        "VERCEL_PROJECT_ID": os.environ.get("VERCEL_PROJECT_ID") or os.environ.get(config["vercelProjectIdEnvironment"]) or os.environ.get(config["vercelPreviewProjectIdEnvironment"], ""),
+        "VERCEL_PROJECT_ID": project_id,
         **(env_extra or {}),
     })
     command = [*cli, *args, "--scope", os.environ.get(config["vercelTeamIdEnvironment"], ""),
