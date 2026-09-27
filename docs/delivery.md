@@ -18,6 +18,8 @@ The runtime JSON is read only by the delivery helper. It is written to a short-l
 
 The first tooling-only PR is the bootstrap. Merge and verify its static staging release before running this workflow for feature PRs. The helper can build a static candidate that has no API or feedback migration so that bootstrap does not depend on the later API implementation.
 
+Vercel can classify a new project's first deployment as Production even when Preview was requested. Keep the bootstrap static and verify the returned target before assigning any staging alias. If this occurs, create a second static deployment of the same SHA, verify that its target is Preview, and remove the exact unintended initial deployment. Never send feedback runtime credentials to an unverified first deployment.
+
 ## Isolated draft PR preview
 
 Run the scripts from a clean trusted checkout exactly at the current origin/staging SHA. Authenticate GitHub CLI for read-only PR metadata. Set process environment values NEON_API_KEY, NEON_PROJECT_ID, VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PREVIEW_PROJECT_ID; the preview project ID must equal the staging Vercel project ID. Install Vercel CLI 50.1.3 and PostgreSQL client psql.
