@@ -6,7 +6,7 @@ import type { BoundaryFeature } from "./boundaries";
 import { formatPlaceArea } from "./place-detail-facts";
 import { getPlaceDescriptionSource, type PlaceDescriptionSource } from "./place-description-sources";
 import { getPlaceImages, type PlaceImageRecord } from "./place-images";
-import { toPlaceCatalogueSummary, type Place, type PlaceCatalogueSummary } from "./places";
+import { isPlaceCategory, toPlaceCatalogueSummary, type Place, type PlaceCatalogueSummary } from "./places";
 import { getVisitorInformation, type VisitorInformation } from "./visitor-information";
 import { parsePlaceVisitorDetails } from "./visitor-details";
 
@@ -114,7 +114,7 @@ function parsePlace(value: unknown, expectedId: string): Place {
   if (!isRecord(value)
     || value.id !== expectedId
     || typeof value.name !== "string"
-    || !["national", "provincial", "regional", "island"].includes(String(value.category))
+    || !isPlaceCategory(value.category)
     || !Number.isFinite(value.latitude)
     || !Number.isFinite(value.longitude)
     || typeof value.region !== "string"

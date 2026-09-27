@@ -68,6 +68,22 @@ describe("issue batch responsive CSS", () => {
     expect(regional).toContain("color: #fff;");
   });
 
+  it("gives municipal and community filters distinct readable colors and wrap on small screens", () => {
+    const municipal = css.match(/--category-municipal:\s*(#[0-9a-f]{6})/i)?.[1];
+    const community = css.match(/--category-community:\s*(#[0-9a-f]{6})/i)?.[1];
+
+    expect(ruleBody(".category-municipal")).toContain("--category-color: var(--category-municipal);");
+    expect(ruleBody(".category-community")).toContain("--category-color: var(--category-community);");
+    expect(municipal).toBeTruthy();
+    expect(community).toBeTruthy();
+    expect(municipal).not.toBe(ruleBody(":root").match(/--category-regional:\s*(#[0-9a-f]{6})/i)?.[1]);
+    expect(community).not.toBe(ruleBody(":root").match(/--category-provincial:\s*(#[0-9a-f]{6})/i)?.[1]);
+    expect(contrastRatio("#ffffff", municipal!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio("#ffffff", community!)).toBeGreaterThanOrEqual(4.5);
+    expect(css).toContain(".feature-collection .category-chips { flex-wrap: wrap; overflow: visible; row-gap: 5px; }");
+    expect(css).toContain(".feature-collection .category-chips > button { flex: 1 1 calc(50% - 3px); min-width: 0; justify-content: flex-start; }");
+  });
+
   it("renders global progress as a colorful chunky number without gauge styling", () => {
     expect(ruleBody(".global-progress strong")).toContain("font: 800 25px/1 var(--font-display);");
     expect(ruleBody(".global-progress strong span:last-child")).toContain("color: var(--water);");

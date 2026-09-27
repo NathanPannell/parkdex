@@ -4,9 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from backend.app.place_categories import PlaceCategory
 from backend.app.visitor_details import PlaceVisitorDetails
-
-PlaceCategory = Literal["national", "provincial", "regional", "island"]
 
 
 def normalize_address(value: EmailStr) -> str:

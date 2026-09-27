@@ -224,8 +224,8 @@ describe("useFieldJournal identity and progress races", () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(`${API}/api/places?summary=true`);
     expect(result.current.places).toEqual([]);
     expect(result.current.total).toBe(1_030);
-    expect(result.current.categoryTotals).toEqual({ national: 7, provincial: 693, regional: 293, island: 37 });
-    expect(result.current.visitedCategoryTotals).toEqual({ national: 1, provincial: 2, regional: 3, island: 4 });
+    expect(result.current.categoryTotals).toEqual({ national: 7, provincial: 693, regional: 293, municipal: 0, community: 0, island: 37 });
+    expect(result.current.visitedCategoryTotals).toEqual({ national: 1, provincial: 2, regional: 3, municipal: 0, community: 0, island: 4 });
     expect(result.current.badges).toEqual(state.badges);
     expect(result.current.catalogueOwnerKey).toMatch(/^guest:[0-9a-f]{8}$/);
     expect(result.current.catalogueHeaders).toEqual({ "X-Collection-Key": KEY });

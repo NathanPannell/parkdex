@@ -155,6 +155,21 @@ describe("recent place cache", () => {
     expect("visitorDetails" in (await store.listMetadata())[0].place).toBe(false);
   });
 
+  it("round-trips municipal and community categories in offline detail and geometry records", async () => {
+    const store = createIndexedDbRecentPlaceStore(new IDBFactory());
+    for (const [index, category] of (["municipal", "community"] as const).entries()) {
+      const saved = record(`${category}-place`, index + 1);
+      saved.bundle.place.category = category;
+      if (saved.bundle.boundary) saved.bundle.boundary.properties.category = category;
+      await store.saveAndPrune(saved);
+    }
+
+    expect((await store.list()).map(({ bundle }) => [bundle.place.id, bundle.place.category]).sort())
+      .toEqual([["community-place", "community"], ["municipal-place", "municipal"]]);
+    expect((await store.listMetadata()).map(({ place }) => [place.id, place.category]).sort())
+      .toEqual([["community-place", "community"], ["municipal-place", "municipal"]]);
+  });
+
   it("evicts alternate gallery photo bytes with the least-recently viewed place", async () => {
     const store = createIndexedDbRecentPlaceStore(new IDBFactory());
     const images = getPlaceImages("provincial-bear-creek-park");

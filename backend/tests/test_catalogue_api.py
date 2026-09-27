@@ -139,6 +139,10 @@ def test_catalogue_filter_normalization_accepts_multi_category_and_visit_aliases
         "regional",
         "provincial",
     ]
+    assert normalize_categories(["municipal", "community"]) == [
+        "municipal",
+        "community",
+    ]
     assert normalize_categories([]) is None
     assert normalize_visit_filter("all") is None
     assert normalize_visit_filter("visited") is True
@@ -148,6 +152,54 @@ def test_catalogue_filter_normalization_accepts_multi_category_and_visit_aliases
         normalize_categories(["campground"])
     with pytest.raises(ValueError):
         normalize_visit_filter("recent")
+
+
+def test_local_park_categories_filter_and_serialize_through_catalogue_api() -> None:
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        pytest.skip("DATABASE_URL is required for catalogue API integration coverage")
+
+    run_id = uuid4().hex
+    places = [
+        (f"{category}-catalogue-{run_id}", f"{category.title()} Catalogue {run_id}", category)
+        for category in ("municipal", "community")
+    ]
+    with psycopg.connect(database_url) as conn:
+        conn.cursor().executemany(
+            """INSERT INTO places (
+                id, name, category, latitude, longitude, region, description,
+                source_url, source_name
+            ) VALUES (%s, %s, %s, 49.0, -124.0, 'Test Region', '',
+                      'https://example.test/local-park', 'Test fixture')""",
+            places,
+        )
+        conn.commit()
+
+    try:
+        with TestClient(app) as client:
+            for place_id, name, category in places:
+                response = client.get(
+                    "/api/places/search",
+                    params={"query": run_id, "category": category},
+                )
+                assert response.status_code == 200, response.text
+                payload = response.json()
+                assert payload["total"] == 1
+                assert payload["places"][0]["id"] == place_id
+                assert payload["places"][0]["name"] == name
+                assert payload["places"][0]["category"] == category
+
+            state = client.get("/api/catalogue/state")
+            assert state.status_code == 200, state.text
+            for _, _, category in places:
+                assert state.json()["categoryTotals"][category] >= 1
+    finally:
+        with psycopg.connect(database_url) as conn:
+            conn.execute(
+                "DELETE FROM places WHERE id = ANY(%s)",
+                ([place_id for place_id, _, _ in places],),
+            )
+            conn.commit()
 
 
 def test_badge_progress_uses_visible_places_and_visit_chronology() -> None:

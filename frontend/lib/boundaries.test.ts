@@ -101,4 +101,18 @@ describe("overlapping boundary selection", () => {
 
     expect(pickBoundaryPlace(features, [], { lng: -125, lat: 49 })).toBe("park-unsampled");
   });
+
+  it("recognizes unsampled municipal and community boundary categories", () => {
+    const polygon = (west: number, south: number, east: number, north: number) => ({
+      type: "Polygon" as const,
+      coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
+    });
+    const features = [
+      { properties: { id: "municipal-unsampled", category: "municipal" }, geometry: polygon(-125.02, 48.98, -124.98, 49.02) },
+      { properties: { id: "community-unsampled", category: "community" }, geometry: polygon(-125.1, 48.9, -124.9, 49.1) },
+    ];
+
+    expect(pickBoundaryPlace([features[0]], [], { lng: -125, lat: 49 })).toBe("municipal-unsampled");
+    expect(pickBoundaryPlace([features[1]], [], { lng: -125, lat: 49 })).toBe("community-unsampled");
+  });
 });

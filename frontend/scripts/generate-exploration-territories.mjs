@@ -37,7 +37,7 @@ function validateStagingPlaces(value) {
     if (!scoped.stagingIds.has(place.id)) throw new Error(`Staging catalogue place ${place.id} has no staging boundary`);
     if (seen.has(place.id)) throw new Error(`Staging catalogue place ${place.id} is duplicated`);
     seen.add(place.id);
-    if (!["national", "provincial", "regional", "island"].includes(place.category)) throw new Error(`Staging catalogue place ${place.id} has an unsupported category`);
+    if (!["national", "provincial", "regional", "municipal", "community", "island"].includes(place.category)) throw new Error(`Staging catalogue place ${place.id} has an unsupported category`);
     if (![place.latitude, place.longitude].every(Number.isFinite)) throw new Error(`Staging catalogue place ${place.id} has no finite representative point`);
     for (const field of ["name", "region", "description", "sourceUrl", "sourceName"]) {
       if (typeof place[field] !== "string" || !place[field].trim()) throw new Error(`Staging catalogue place ${place.id} is missing ${field}`);

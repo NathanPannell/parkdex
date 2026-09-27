@@ -6,6 +6,8 @@ from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
+from backend.app.place_categories import PlaceCategory
+
 
 VisitorText = Annotated[str, Field(min_length=1)]
 VisitorTimestamp = Annotated[
@@ -211,7 +213,7 @@ class PlaceVisitorDetails(VisitorModel):
 
 class DatasetIdentity(VisitorModel):
     name: VisitorText
-    category: Literal["provincial", "national", "regional", "island"]
+    category: PlaceCategory
     region: VisitorText | None
     latitude: Latitude
     longitude: Longitude

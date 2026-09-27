@@ -1,4 +1,4 @@
-import type { Place, PlaceCategory } from "./places";
+import { isPlaceCategory, type Place, type PlaceCategory } from "./places";
 import type { FilterSpecification } from "maplibre-gl";
 
 export const BOUNDARY_DATA_URL = "/data/boundaries.v1.geojson";
@@ -166,9 +166,7 @@ export function pickBoundaryPlace(
       if (!isRecord(feature.properties) || typeof feature.properties.id !== "string") return [];
       const place = byId.get(feature.properties.id);
       const rawCategory = feature.properties.category;
-      const category = place?.category ?? (rawCategory === "national" || rawCategory === "provincial" || rawCategory === "regional" || rawCategory === "island"
-        ? rawCategory
-        : null);
+      const category = place?.category ?? (isPlaceCategory(rawCategory) ? rawCategory : null);
       let longitude = place?.longitude;
       let latitude = place?.latitude;
       const geometry = feature.geometry;

@@ -46,7 +46,7 @@ import { clearRestoredCameraPhoto } from "./capacitor-native-capabilities";
 import { clearPhotoRetryOwner, currentNativeAppState, NATIVE_APP_STATE_EVENT } from "./native-capabilities";
 import { clearUnresolvedClaim, clearUnresolvedClaims, hasUnresolvedClaim } from "./claim-recovery";
 import { getPlatformStorage, type KeyValueStore } from "./platform-storage";
-import { createCollectionKey, type Place } from "./places";
+import { createCollectionKey, PLACE_CATEGORIES, type Place } from "./places";
 import type { Achievement } from "./achievements";
 import {
   createOfflineClaimsService,
@@ -199,9 +199,9 @@ export function catalogueIndex(places: Place[]): Place[] {
 }
 
 const LEGACY_CATALOGUE_CACHE_LIMIT = 100;
-const EMPTY_CATEGORY_TOTALS: CategoryTotals = { national: 0, provincial: 0, regional: 0, island: 0 };
+const EMPTY_CATEGORY_TOTALS = Object.fromEntries(PLACE_CATEGORIES.map((category) => [category, 0])) as CategoryTotals;
 const CATALOGUE_STATE_STORAGE_PREFIX = "parkdex:catalogue-state:v1:";
-const PLACE_CATEGORIES = ["national", "provincial", "regional", "island"] as const;
+const REQUIRED_LEGACY_CATEGORY_TOTALS = ["national", "provincial", "regional", "island"] as const;
 
 function normalizeCategoryTotals(value: unknown): CategoryTotals {
   if (typeof value !== "object" || value === null) return { ...EMPTY_CATEGORY_TOTALS };
@@ -244,7 +244,9 @@ function parseCatalogueMetadataSnapshot(value: unknown): CatalogueMetadataSnapsh
   const categoryTotals = snapshot.categoryTotals;
   if (!Number.isFinite(snapshot.total)
     || !categoryTotals
-    || !PLACE_CATEGORIES.every((category) => Number.isFinite(categoryTotals[category]))
+    // Older staging snapshots have only the original four categories. Missing
+    // municipal/community counts normalize to zero until the matching API ships.
+    || !REQUIRED_LEGACY_CATEGORY_TOTALS.every((category) => Number.isFinite((categoryTotals as Partial<CategoryTotals>)[category]))
     || typeof snapshot.coverageNote !== "string"
     || !Array.isArray(snapshot.badges)) return null;
   return {

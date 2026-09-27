@@ -13,6 +13,8 @@
   --category-regional: #d97706;
   --category-provincial: #d84a3a;
   --category-national: #7c4dff;
+  --category-municipal: #1e6b59;
+  --category-community: #9b3d68;
   --cluster: #f4c84a;
   --muted: #587167;
   --soft-shadow: 0 10px 28px rgba(23, 61, 50, .18);
@@ -530,6 +532,8 @@ button { color: inherit; }
 .category-regional { --category-color: var(--category-regional); }
 .category-provincial { --category-color: var(--category-provincial); }
 .category-national { --category-color: var(--category-national); }
+.category-municipal { --category-color: var(--category-municipal); }
+.category-community { --category-color: var(--category-community); }
 .place-category.category-regional { color: var(--forest); }
 .place-category[class*="category-"] { background: var(--category-color); }
 .place-collection-link { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; margin: 5px 0 0 19px; padding: 0; border: 0; background: transparent; color: var(--water); cursor: pointer; font-size: 11px; font-weight: 900; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }

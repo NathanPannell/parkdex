@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createCollectionKey, filterPlaces, type Place } from "./places";
+import { categoryLabels, createCollectionKey, filterPlaces, isPlaceCategory, type Place } from "./places";
 
 const places: Place[] = [
   {
@@ -25,12 +25,43 @@ const places: Place[] = [
     sourceUrl: "https://example.com",
     sourceName: "Source",
   },
+  {
+    id: "municipal",
+    name: "Harbour Park",
+    category: "municipal",
+    latitude: 49,
+    longitude: -124,
+    region: "Victoria",
+    description: "A municipal waterfront park",
+    sourceUrl: "https://example.com",
+    sourceName: "City of Victoria",
+  },
+  {
+    id: "community",
+    name: "Village Green",
+    category: "community",
+    latitude: 49,
+    longitude: -124,
+    region: "Coast",
+    description: "A community recreation site",
+    sourceUrl: "https://example.com",
+    sourceName: "Example community",
+  },
 ];
 
 describe("filterPlaces", () => {
   it("combines search and category filters", () => {
     expect(filterPlaces(places, "old growth", new Set(["provincial"]))).toEqual([places[0]]);
     expect(filterPlaces(places, "old growth", new Set(["island"]))).toEqual([]);
+  });
+
+  it("filters municipal and community places and exposes their category labels", () => {
+    expect(filterPlaces(places, "", new Set(["municipal", "community"]))).toEqual(places.slice(2));
+    expect(categoryLabels.municipal).toBe("Municipal");
+    expect(categoryLabels.community).toBe("Community");
+    expect(isPlaceCategory("municipal")).toBe(true);
+    expect(isPlaceCategory("community")).toBe(true);
+    expect(isPlaceCategory("local")).toBe(false);
   });
 });
 

@@ -89,6 +89,21 @@ describe("application map presentation", () => {
     expect(labels.features.find((feature) => feature.properties.id === "island-bowen-island")?.properties.category).toBe("island");
   });
 
+  it("gives municipal and community names the regional label priority", () => {
+    const labels = placeNameData([
+      place("regional-sample", -124, 49, "regional"),
+      place("municipal-sample", -124.1, 49, "municipal"),
+      place("community-sample", -124.2, 49, "community"),
+    ], closeViewport);
+    const priorityById = Object.fromEntries(labels.features.map(({ properties }) => [properties.id, properties.labelPriority]));
+
+    expect(priorityById).toEqual({
+      "regional-sample": 3_000_000,
+      "municipal-sample": 3_000_000,
+      "community-sample": 3_000_000,
+    });
+  });
+
   it("does not offer a name when its pin anchor is outside the viewport", () => {
     const park = place("national-glacier-national-park", -126);
 

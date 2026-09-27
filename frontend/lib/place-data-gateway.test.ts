@@ -92,13 +92,17 @@ describe("place data gateway", () => {
     const store = new MemoryStore();
     const fetcher = vi.fn(async (...args: Parameters<typeof fetch>) => {
       void args;
-      return jsonResponse({ places: [place("n1", { category: "national" })], total: 8, limit: 50 });
+      return jsonResponse({ places: [
+        place("n1", { category: "national" }),
+        place("m1", { category: "municipal" }),
+        place("c1", { category: "community" }),
+      ], total: 8, limit: 50 });
     });
     const gateway = createPlaceGateway({ apiBaseUrl: "https://api.example.test", identityKey: "guest:k", store, fetcher, legacyStorageKey: null });
 
     const result = await gateway.fetchMap({
       viewport: { west: -128, south: 48, east: -122, north: 54 },
-      categories: ["national", "island"],
+      categories: ["national", "island", "municipal", "community"],
       authorities: ["BC Parks", "Parks Canada"],
       query: "coast",
       groupId: "collection-123",
@@ -109,13 +113,14 @@ describe("place data gateway", () => {
 
     const requested = new URL(String(fetcher.mock.calls[0][0]));
     expect(requested.pathname).toBe("/api/map/places");
-    expect(requested.searchParams.getAll("category")).toEqual(["island", "national"]);
+    expect(requested.searchParams.getAll("category")).toEqual(["community", "island", "municipal", "national"]);
     expect(requested.searchParams.getAll("authority")).toEqual(["BC Parks", "Parks Canada"]);
     expect(requested.searchParams.get("query")).toBe("coast");
     expect(requested.searchParams.get("group_id")).toBe("collection-123");
     expect(requested.searchParams.get("visited")).toBe("unseen");
     expect(requested.searchParams.get("selected_id")).toBe("n1");
     expect(result).toMatchObject({ total: 8, scope: "full", partial: true, limit: 50 });
+    expect(result.places.map(({ category }) => category)).toEqual(["national", "municipal", "community"]);
   });
 
   it("uses only cached rows offline, filters antimeridian bounds, and keeps the selected place", async () => {
@@ -172,6 +177,28 @@ describe("place data gateway", () => {
     expect(search).toMatchObject({ total: 1, scope: "cached", partial: true, offset: 0 });
     expect(visited.places.map(({ id }) => id)).toEqual(["regional"]);
     expect(search.places[0]?.listRegion).toBe("Vancouver Island");
+  });
+
+  it("keeps municipal and community rows searchable by category while offline", async () => {
+    const store = new MemoryStore();
+    const cache = createPlaceDataCache({ identityKey: "guest:local-categories", store, legacyStorageKey: null });
+    await cache.remember([
+      place("town-park", { category: "municipal" }),
+      place("village-green", { category: "community" }),
+      place("regional-park"),
+    ]);
+    const gateway = createPlaceGateway({
+      apiBaseUrl: "https://api.example.test",
+      identityKey: "guest:local-categories",
+      store,
+      fetcher: vi.fn(async () => { throw new TypeError("offline"); }),
+      legacyStorageKey: null,
+    });
+
+    const result = await gateway.fetchSearch({ categories: ["municipal", "community"] });
+
+    expect(result).toMatchObject({ total: 2, scope: "cached" });
+    expect(result.places.map(({ id }) => id).sort()).toEqual(["town-park", "village-green"]);
   });
 
   it("keeps offline status until a successful retry request", async () => {
