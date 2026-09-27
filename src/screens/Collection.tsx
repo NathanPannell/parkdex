@@ -5,21 +5,13 @@ import { Badge } from "../components/Badge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Tilt } from "../components/Motion";
-import { useToast } from "../components/Toast";
-import { burst } from "../lib/confetti";
-import { buzz, sfx } from "../lib/feedback";
+import { sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { CATEGORY_LABEL, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES, type Park, type Rarity } from "../lib/parks";
 import { useStore } from "../lib/store";
 
-const PRODUCTS = [
-  { id: "case", name: "The Display Case", line: "Walnut shadow box with an enamel pin for every badge you've claimed.", price: "from $59" },
-  { id: "book", name: "The Field Book", line: "A hardcover photo book: one page per park, your photo and badge together.", price: "from $39" },
-];
-
 export function Collection() {
   const { state, dispatch } = useStore();
-  const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   const claimedIds = Object.keys(state.claims);
   const claimed = claimedIds.map((id) => PARK_BY_ID.get(id)!).filter(Boolean);
@@ -34,16 +26,6 @@ export function Collection() {
 
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
   const openPark = open ? PARK_BY_ID.get(open) : undefined;
-
-  const want = (id: string, e: React.MouseEvent) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const host = document.querySelector(".device")!.getBoundingClientRect();
-    burst({ x: (r.left + r.width / 2 - host.left) / host.width, y: (r.top - host.top) / host.height }, 0.5);
-    sfx.chirp();
-    buzz([20, 40, 20]);
-    dispatch({ type: "waitlist", product: id });
-    toast("You're on the early list. Kip will ping you!", "moss");
-  };
 
   return (
     <motion.div
@@ -128,51 +110,6 @@ export function Collection() {
           ))}
         </div>
       </div>
-
-      <section className="real">
-        <span className="eyebrow">Coming soon</span>
-        <h2>Make your case real.</h2>
-        <p>Every badge you claim can become a real enamel pin and every photo a printed page.</p>
-        <div className="real__cards">
-          {PRODUCTS.map((prod, i) => {
-            const joined = state.waitlist.includes(prod.id);
-            return (
-              <motion.div
-                key={prod.id}
-                className="product card"
-                initial={{ y: 40, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ type: "spring", delay: i * 0.08 }}
-              >
-                <div className={`product__art product__art--${prod.id}`}>
-                  {prod.id === "case" ? (
-                    <MiniCase parks={claimed.length ? claimed : next} />
-                  ) : (
-                    <MiniBook park={claimed[0] ?? next[0]} photo={claimed[0] ? state.claims[claimed[0].id].photo : undefined} />
-                  )}
-                </div>
-                <div className="product__body">
-                  <div className="product__row">
-                    <strong>{prod.name}</strong>
-                    <span className="product__price">{prod.price}</span>
-                  </div>
-                  <p>{prod.line}</p>
-                  <button className={`btn btn--sm btn--block ${joined ? "btn--paper" : "btn--ink"}`} onClick={(e) => !joined && want(prod.id, e)}>
-                    {joined ? (
-                      <>
-                        <Icon name="check" size={18} /> You're on the list
-                      </>
-                    ) : (
-                      "I want this"
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
 
       <section className="fb-cta card">
         <Kip pose="think" size={64} />
@@ -267,34 +204,5 @@ function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => vo
         </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-function MiniCase({ parks }: { parks: Park[] }) {
-  return (
-    <div className="mini-case">
-      {Array.from({ length: 6 }, (_, i) => (
-        <span key={i} className="mini-case__cell">
-          {parks[i] && <Badge park={parks[i]} size={34} showName={false} state="earned" />}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function MiniBook({ park, photo }: { park?: Park; photo?: string }) {
-  return (
-    <div className="mini-book">
-      <div className="mini-book__page mini-book__page--back" />
-      <div className="mini-book__page">
-        <span className="mini-book__photo">{photo ? <img src={photo} alt="" /> : null}</span>
-        {park && (
-          <span className="mini-book__badge">
-            <Badge park={park} size={40} showName={false} state="earned" />
-          </span>
-        )}
-        <span className="mini-book__title">Field Book</span>
-      </div>
-    </div>
   );
 }

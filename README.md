@@ -61,8 +61,8 @@ Set `sdk.dir` in `android/local.properties` to your Android SDK path before the 
 ## How check-in works
 
 The app watches GPS with high accuracy. A visitor counts as inside a park when they are within
-its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims and waitlist
-taps live in localStorage; photos live in IndexedDB.
+its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims live in
+localStorage; photos live in IndexedDB.
 
 ## End-to-end check
 
