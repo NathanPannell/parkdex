@@ -18,7 +18,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Incumbent system applied here
 
-The app's shared visual source is `src/styles.css`: dark green ink (`--ink: #14231c`), cream paper (`--paper: #fff8ec`), warm paper (`--paper-2: #fbecd4`), Kip orange (`--kip: #ff5a1f`), Bricolage Grotesque Variable display type, and Figtree Variable body type. Its rounded surface sizes are 28px and 20px, and its common raised control uses a 4px ink shadow. The feedback sheet keeps the established bottom-sheet layout, dark outlined fields, rounded controls, and tactile buttons in `src/screens.css`.
+The app's shared visual source is `src/styles.css`: dark green ink (`--ink: #14231c`), cream paper (`--paper: #fff8ec`), warm paper (`--paper-2: #fbecd4`), Kip orange (`--kip: #ff5a1f`), Bricolage Grotesque Variable display type, and Figtree Variable body type. Its shared radius tokens are 28px and 20px, and its ink-offset shadow token is 4px. Feedback kind buttons use 16px corners and a 3px ink-offset shadow. The feedback sheet keeps the established bottom-sheet layout, dark outlined fields, and rounded controls in `src/screens.css`.
 
 Kip continuity comes from the existing mascot component and artwork. The form uses the avatar pose at 52px and the cheer pose at 150px after save. The private review uses the think pose at 62px on its sign-in screen and the avatar pose at 43px in its header. Both email templates use the supplied `public/email/kip-wave.png` illustration in a 176px hero area.
 
@@ -26,7 +26,7 @@ The review inbox carries the app's ink, paper, orange, pine, and typography into
 
 ## Source-level color variations
 
-The current extension contains local color values alongside the shared tokens. The review stylesheet uses `#526258` for soft ink and `#b73309` for action orange; the email templates use `#526359` for soft ink, plus coral (`#ffb4a5`) and a warm rule (`#ead6b6`). The shared app values are `--ink-soft: #5b6b62` and `--kip-dark: #d9400c`. In the existing form, invalid input borders use the shared berry token (`#ff5c8a`), while error text uses literal `#c2185b`. These are recorded as local variations, not promoted to new app-wide tokens.
+The current extension contains local color values alongside the shared tokens. The review stylesheet uses `#526258` for soft ink and `#b73309` for action orange; the email templates use `#526359` for soft ink, plus pale paper (`#fffdf8`), coral (`#ffb4a5`), and a warm rule (`#ead6b6`). The shared app values are `--ink-soft: #5b6b62` and `--kip-dark: #d9400c`. In the existing form, invalid input borders use the shared berry token (`#ff5c8a`), while error text uses literal `#c2185b`. These are recorded as local variations, not promoted to new app-wide tokens.
 
 ## Review status
 
