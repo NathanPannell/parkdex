@@ -1,0 +1,2 @@
+Source art: art-source/kip/kip-wave.png, the original transparent Kip wave illustration at 1024 x 1024 pixels.
+Email derivative: 512 x 512 RGBA PNG, converted with FFmpeg 8.0.1 using scale=512:512:flags=lanczos and PNG compression level 9.

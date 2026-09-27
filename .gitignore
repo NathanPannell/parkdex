@@ -8,3 +8,8 @@ public/maplibre
 .claude/
 android/.kotlin/
 release/
+.codex/
+.vercel/
+.env.local
+.env.*.local
+.dev.vars

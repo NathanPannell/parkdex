@@ -11,6 +11,7 @@ import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
+import { FeedbackReview } from "./screens/FeedbackReview";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
@@ -18,6 +19,7 @@ import { Share } from "./screens/Share";
 import { Splash } from "./screens/Splash";
 
 export function App() {
+  if (location.pathname === "/feedback/review") return <FeedbackReview />;
   if (location.hash === "#gallery") return <Gallery />;
   return (
     <MotionConfig reducedMotion="user">
