@@ -1,0 +1,12 @@
+{
+  "name": "parkdex-kip-content",
+  "pages_build_output_dir": "../.codex/cdn-dist",
+  "account_id": "6f0eb57971124f41fadc7897ace74dac",
+  "compatibility_date": "2026-09-27",
+  "r2_buckets": [
+    {
+      "binding": "CONTENT",
+      "bucket_name": "parkdex-kip-content"
+    }
+  ]
+}

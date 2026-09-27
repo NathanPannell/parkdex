@@ -8,3 +8,7 @@ public/maplibre
 .claude/
 android/.kotlin/
 release/
+.codex/cdn-dist/
+.codex/cloud-snapshot/
+.wrangler/
+__pycache__/
