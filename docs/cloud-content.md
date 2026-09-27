@@ -32,10 +32,13 @@ There are 114 original files totaling 99,527,167 bytes. R2 contains those files 
 | Neon project | `parkdex-kip` / `small-cloud-35890217` |
 | Region | `aws-us-west-2` |
 | PostgreSQL | 18 |
-| Branch | `staging` / `br-shy-hat-akg1paip` |
+| Root / default branch | `main` / `br-shy-hat-akg1paip` |
+| Staging branch | `staging` / `br-orange-lake-akrxmy23`, child of `main` |
 | Database | `parkdex_kip` |
 | Owner role | `parkdex_kip_owner` |
 | Compute | 0.25 CU, suspend after 300 idle seconds |
+
+The original populated branch was renamed from `staging` to `main`, then a new `staging` branch was created from it. Both branches contain identical schemas and baseline data. Each has its own compute and connection endpoint, with the settings above. Both reference the same immutable R2 content. Full row equality and the branch relationship are recorded in `docs/evidence/cloud-content/neon-branches.json`.
 
 The migration creates exactly four application tables:
 
@@ -75,7 +78,7 @@ python scripts/cloud_content.py snapshot --source-commit 0838a3a47e792ce3c65b5b2
 
 The generated `manifest.json` must match `database/content-manifest.json` byte-for-byte. The snapshot tool rejects uncommitted or changed source inputs, missing chunks, malformed map manifests, unresolved badge scenes, and inconsistent park/boundary IDs.
 
-Load the dedicated database URL into `DATABASE_URL` using private local credential storage. The current operator copy is in `$USERPROFILE/.codex/secrets/parkdex-kip.env`, restricted to that user. Do not pass the URL in a command line, commit it, or put it in an Android build.
+Load the intended branch's database URL into `DATABASE_URL` using private local credential storage. The current operator staging connection is in `$USERPROFILE/.codex/secrets/parkdex-kip.env`; the separate main connection is in `$USERPROFILE/.codex/secrets/parkdex-kip-main.env`. Both files are restricted to that user and include the branch name and ID. Do not pass a URL in a command line, commit it, or put it in an Android build.
 
 ```powershell
 python scripts/cloud_content.py import --snapshot .codex/cloud-snapshot
