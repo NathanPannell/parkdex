@@ -85,12 +85,13 @@ export function loadDraftSession(): FeedbackDraftSession {
   }
 }
 
-export function saveDraft(draft: FeedbackDraft, generation: string) {
+export function saveDraft(draft: FeedbackDraft, generation: string): boolean {
   try {
     localStorage.setItem(DRAFT_GENERATION_KEY, generation);
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, generation }));
+    return true;
   } catch {
-    // Private modes may block storage; the draft still lives in the open sheet.
+    return false;
   }
 }
 

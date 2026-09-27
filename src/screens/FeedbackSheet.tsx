@@ -102,6 +102,7 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const [shotProcessing, setShotProcessing] = useState(false);
   const [shotError, setShotError] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
+  const [draftSaveError, setDraftSaveError] = useState("");
   const [attemptResetPending, setAttemptResetPending] = useState(false);
   const [status, setStatus] = useState<Status>("editing");
   const [sendError, setSendError] = useState("");
@@ -137,7 +138,9 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   }, []);
 
   useEffect(() => {
-    if (status !== "sent") saveDraft(draft, draftGeneration);
+    if (status === "sent") return;
+    if (saveDraft(draft, draftGeneration)) setDraftSaveError("");
+    else setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
   }, [draft, draftGeneration, status]);
 
   useEffect(() => {
@@ -189,7 +192,7 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const emailOk = emailFormatOk && (!draft.contact || email.length > 0);
   const emailError = !emailFormatOk ? "Check that email address." : draft.contact && !email ? "Add an email address to allow follow-up." : "";
   const isEditingLocked = status === "sending" || shotLoading;
-  const canSend = draft.message.trim().length > 0 && emailOk && !shotLoading && !shotProcessing && !attemptResetPending && !storageError && nativeInfoStatus === "ready" && status !== "sending";
+  const canSend = draft.message.trim().length > 0 && emailOk && !shotLoading && !shotProcessing && !attemptResetPending && !storageError && !draftSaveError && nativeInfoStatus === "ready" && status !== "sending";
   const isSending = status === "sending";
 
   const close = () => {
@@ -278,6 +281,11 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
 
   const send = async () => {
     if (sendingRef.current || !canSend) return;
+    if (!saveDraft(draft, draftGeneration)) {
+      setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
+      return;
+    }
+    setDraftSaveError("");
     sendingRef.current = true;
     const submittedDraft = { ...draft, message: draft.message.trim(), email };
     const selectedShot = shot;
@@ -515,6 +523,7 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <p>Your location, photos and logs are never included. Screenshots are only sent if you attach one.</p>
                 </details>
                 {storageError && <span className="fb-error-text" role="alert">{storageError}</span>}
+                {draftSaveError && <span className="fb-error-text" role="alert">{draftSaveError}</span>}
               </div>
 
               <div className="fb-foot">
