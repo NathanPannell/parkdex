@@ -7,4 +7,3 @@ import { WebContentStore } from "./store.web";
 export function createContentStore(): ContentStore {
   return Capacitor.isNativePlatform() ? new NativeContentStore() : new WebContentStore();
 }
-

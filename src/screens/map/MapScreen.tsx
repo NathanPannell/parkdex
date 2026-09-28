@@ -13,7 +13,6 @@ import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { badgeTotal, isLive, RARITY } from "../../lib/parks";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
-import { feedbackFailureOn, setFeedbackFailure } from "../../lib/feedbackReport";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
@@ -35,7 +34,6 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
-  const [failFeedback, setFailFeedback] = useState(feedbackFailureOn);
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
   const { user, claims, selectedId, tripId } = state;
@@ -257,14 +255,6 @@ export function MapScreen() {
               }}
             >
               <Icon name="refresh" size={18} /> Reset and replay onboarding
-            </button>
-            <button
-              onClick={() => {
-                setFeedbackFailure(!failFeedback);
-                setFailFeedback(!failFeedback);
-              }}
-            >
-              <Icon name="chat" size={18} /> {failFeedback ? "Let feedback send again" : "Make feedback sending fail"}
             </button>
           </motion.div>
         )}

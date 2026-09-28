@@ -1,87 +1,344 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { App } from "@capacitor/app";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { buzz, sfx } from "../lib/feedback";
+import { isNative } from "../lib/native";
+import {
+  clearFeedbackScreenshot,
+  createFeedbackDraftGeneration,
+  feedbackScreenshotDataUrl,
+  feedbackScreenshotErrorMessage,
+  feedbackScreenshotUrl,
+  FeedbackScreenshotError,
+  loadFeedbackScreenshot,
+  loadFeedbackSubmissionAttempt,
+  prepareFeedbackScreenshot,
+  resetFeedbackSubmissionAttempt,
+  saveFeedbackScreenshot,
+  type SavedFeedbackScreenshot,
+} from "../lib/feedbackDraft";
 import {
   clearDraft,
   EMPTY_DRAFT,
   FEEDBACK_KINDS,
   feedbackContext,
-  loadDraft,
+  loadDraftSession,
   saveDraft,
   submitFeedback,
+  type FeedbackContext,
   type FeedbackDraft,
+  type FeedbackAppVersion,
+  type FeedbackKind,
+  type FeedbackNotificationState,
 } from "../lib/feedbackReport";
 import { useStore, type FeedbackOrigin } from "../lib/store";
 import { useContent } from "../lib/content/provider";
 
 type Status = "editing" | "sending" | "failed" | "sent";
+type Shot = SavedFeedbackScreenshot & { url: string };
+type SavedReport = {
+  id: string;
+  kind: FeedbackKind;
+  email: string;
+  contact: boolean;
+  operator?: FeedbackNotificationState;
+  receipt?: FeedbackNotificationState;
+};
 
-const MAX_SHOT_MB = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function notificationCopy(state: FeedbackNotificationState | undefined, target: "operator" | "receipt", email: string) {
+  if (target === "operator") {
+    switch (state) {
+      case "sent":
+        return " The Parkdex team was notified.";
+      case "pending":
+        return " The team notification is pending.";
+      case "sending":
+      case "ambiguous":
+        return " The team notification is pending. The Parkdex team can check it.";
+      case "failed":
+        return " The team notification wasn't confirmed. The Parkdex team can check it.";
+      case "disabled":
+        return " Team notifications are unavailable right now.";
+      default:
+        return "";
+    }
+  }
+
+  if (!email) return "";
+  switch (state) {
+    case "sent":
+      return ` An email receipt was sent to ${email}.`;
+    case "pending":
+      return ` The receipt email for ${email} is pending.`;
+    case "sending":
+    case "ambiguous":
+      return ` The receipt email for ${email} is pending. The Parkdex team can check it.`;
+    case "failed":
+      return ` The receipt email for ${email} wasn't confirmed. The Parkdex team can check it.`;
+    case "disabled":
+      return " Email receipts aren't available right now.";
+    default:
+      return " The receipt status wasn't confirmed.";
+  }
+}
 
 // Origin arrives as a prop so the sheet keeps it while animating out after the store clears it.
 export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const { dispatch } = useStore();
   const content = useContent();
   const park = origin.parkId ? content?.parkById.get(origin.parkId) : undefined;
-  const context = useMemo(() => feedbackContext(origin, park), [origin, park]);
-  const [draft, setDraft] = useState<FeedbackDraft>(loadDraft);
-  const [shot, setShot] = useState<{ url: string; name: string } | null>(null);
+  const [initialDraftSession] = useState(() => loadDraftSession());
+  const [draftGeneration, setDraftGeneration] = useState(initialDraftSession.generation);
+  const [nativeAppVersion, setNativeAppVersion] = useState<FeedbackAppVersion | null>(null);
+  const [nativeInfoStatus, setNativeInfoStatus] = useState<"loading" | "ready">(isNative ? "loading" : "ready");
+  const context = useMemo(
+    () => feedbackContext(origin, park, nativeAppVersion ?? (isNative ? { version: "loading", build: "loading" } : undefined)),
+    [origin, park, nativeAppVersion],
+  );
+  const [draft, setDraft] = useState<FeedbackDraft>(initialDraftSession.draft);
+  const [shot, setShot] = useState<Shot | null>(null);
+  const [shotLoading, setShotLoading] = useState(true);
+  const [shotProcessing, setShotProcessing] = useState(false);
   const [shotError, setShotError] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState("");
+  const [draftSaveError, setDraftSaveError] = useState("");
+  const [attemptResetPending, setAttemptResetPending] = useState(false);
   const [status, setStatus] = useState<Status>("editing");
-  const [reportId, setReportId] = useState("");
+  const [sendError, setSendError] = useState("");
+  const [savedReport, setSavedReport] = useState<SavedReport | null>(null);
   const [emailTouched, setEmailTouched] = useState(false);
+  const [retryContext, setRetryContext] = useState<FeedbackContext | null>(null);
+  const sendingRef = useRef(false);
+  const retryAttemptExistsRef = useRef(false);
+  const resetQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const resetCountRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (status !== "sent") saveDraft(draft);
-  }, [draft, status]);
-
-  const kind = FEEDBACK_KINDS.find((k) => k.id === draft.kind)!;
-  const emailOk = !draft.contact || EMAIL.test(draft.email.trim());
-  const canSend = draft.message.trim().length > 0 && emailOk && status !== "sending";
-
-  const close = () => dispatch({ type: "feedback", open: false });
-  const edit = (patch: Partial<FeedbackDraft>) => setDraft((d) => ({ ...d, ...patch }));
-
-  const pickShot = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    if (file.size > MAX_SHOT_MB * 1024 * 1024) {
-      setShotError(`That image is over ${MAX_SHOT_MB} MB. Try a smaller screenshot.`);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setShot({ url: String(reader.result), name: file.name });
-      setShotError(null);
+    if (!isNative) return;
+    let current = true;
+    void App.getInfo()
+      .then((info) => {
+        if (!current) return;
+        setNativeAppVersion({
+          version: info.version?.trim() || "unavailable",
+          build: info.build?.trim() || "unavailable",
+        });
+      })
+      .catch(() => {
+        if (current) setNativeAppVersion({ version: "unavailable", build: "unavailable" });
+      })
+      .finally(() => {
+        if (current) setNativeInfoStatus("ready");
+      });
+    return () => {
+      current = false;
     };
-    reader.readAsDataURL(file);
+  }, []);
+
+  useEffect(() => {
+    if (status === "sent") return;
+    if (saveDraft(draft, draftGeneration)) setDraftSaveError("");
+    else setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
+  }, [draft, draftGeneration, status]);
+
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      try {
+        const saved = await loadFeedbackScreenshot(initialDraftSession.generation);
+        if (!current) return;
+        if (saved) setShot({ ...saved, url: feedbackScreenshotUrl(saved.blob) });
+        const screenshot = saved ? await feedbackScreenshotDataUrl(saved.blob) : null;
+        const candidate = {
+          ...initialDraftSession.draft,
+          message: initialDraftSession.draft.message.trim(),
+          email: initialDraftSession.draft.email.trim(),
+          screenshot,
+          context,
+        };
+        const attempt = await loadFeedbackSubmissionAttempt(candidate, initialDraftSession.generation);
+        if (!current) return;
+        if (attempt) {
+          retryAttemptExistsRef.current = true;
+          setRetryContext(attempt.report.context);
+        }
+      } catch {
+        if (current) setStorageError("Couldn't check the saved report on this phone. Check device storage before sending again.");
+      }
+    })()
+      .catch(() => {
+        if (current) setStorageError("Couldn't check the saved report on this phone. Check device storage before sending again.");
+      })
+      .finally(() => {
+        if (current) setShotLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  const shotUrl = shot?.url;
+  useEffect(() => {
+    if (!shotUrl) return;
+    return () => URL.revokeObjectURL(shotUrl);
+  }, [shotUrl]);
+
+  const kind = FEEDBACK_KINDS.find((item) => item.id === draft.kind)!;
+  const displayContext = retryContext ?? context;
+  const email = draft.email.trim();
+  const emailFormatOk = !email || EMAIL.test(email);
+  const emailOk = emailFormatOk && (!draft.contact || email.length > 0);
+  const emailError = !emailFormatOk ? "Check that email address." : draft.contact && !email ? "Add an email address to allow follow-up." : "";
+  const isEditingLocked = status === "sending" || shotLoading;
+  const canSend = draft.message.trim().length > 0 && emailOk && !shotLoading && !shotProcessing && !attemptResetPending && !storageError && !draftSaveError && nativeInfoStatus === "ready" && status !== "sending";
+  const isSending = status === "sending";
+
+  const close = () => {
+    if (sendingRef.current) return;
+    dispatch({ type: "feedback", open: false });
+  };
+
+  const invalidateRetryAttempt = () => {
+    if (!retryAttemptExistsRef.current) return;
+    retryAttemptExistsRef.current = false;
+    setRetryContext(null);
+    setAttemptResetPending(true);
+    const resetNumber = ++resetCountRef.current;
+    resetQueueRef.current = resetQueueRef.current
+      .catch(() => {})
+      .then(() => resetFeedbackSubmissionAttempt(draftGeneration))
+      .then(() => {
+        if (resetNumber === resetCountRef.current) setStorageError("");
+      })
+      .catch(() => {
+        if (resetNumber === resetCountRef.current) setStorageError("Couldn't update the saved report on this phone. Check device storage before sending again.");
+      })
+      .finally(() => {
+        if (resetNumber === resetCountRef.current) setAttemptResetPending(false);
+      });
+  };
+
+  const edit = (patch: Partial<FeedbackDraft>) => {
+    if (sendingRef.current || isSending || shotLoading) return;
+    const changed = Object.entries(patch).some(([key, value]) => draft[key as keyof FeedbackDraft] !== value);
+    if (!changed) return;
+    invalidateRetryAttempt();
+    if (status === "failed") {
+      setStatus("editing");
+      setSendError("");
+    }
+    setDraft((current) => ({ ...current, ...patch }));
+  };
+
+  const pickShot = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || sendingRef.current || shotLoading) return;
+
+    if (status === "failed") {
+      setStatus("editing");
+      setSendError("");
+    }
+    setShotError(null);
+    setShotProcessing(true);
+    try {
+      // File type and size are checked before the image is decoded or read.
+      const blob = await prepareFeedbackScreenshot(file);
+      await saveFeedbackScreenshot({ blob, name: file.name || "Screenshot", generation: draftGeneration });
+      retryAttemptExistsRef.current = false;
+      setRetryContext(null);
+      setStorageError("");
+      setShot({ blob, name: file.name || "Screenshot", generation: draftGeneration, url: feedbackScreenshotUrl(blob) });
+    } catch (error) {
+      setShotError(feedbackScreenshotErrorMessage(error));
+    } finally {
+      setShotProcessing(false);
+    }
+  };
+
+  const removeShot = async () => {
+    if (!shot || sendingRef.current || shotProcessing || shotLoading) return;
+    setShotProcessing(true);
+    try {
+      await clearFeedbackScreenshot(draftGeneration);
+      setShot(null);
+      setShotError(null);
+      retryAttemptExistsRef.current = false;
+      setRetryContext(null);
+      setStorageError("");
+      if (status === "failed") {
+        setStatus("editing");
+        setSendError("");
+      }
+    } catch {
+      setShotError("Couldn't remove the saved screenshot from this phone. Try again.");
+    } finally {
+      setShotProcessing(false);
+    }
   };
 
   const send = async () => {
-    if (!canSend) return;
+    if (sendingRef.current || !canSend) return;
+    if (!saveDraft(draft, draftGeneration)) {
+      setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
+      return;
+    }
+    setDraftSaveError("");
+    sendingRef.current = true;
+    const submittedDraft = { ...draft, message: draft.message.trim(), email };
+    const selectedShot = shot;
+    const submittedContext = { ...(retryContext ?? context) };
     setStatus("sending");
+    setSendError("");
     sfx.tap();
+
     try {
-      const { id } = await submitFeedback({ ...draft, screenshot: shot?.url ?? null, context });
-      clearDraft();
-      setReportId(id);
+      const screenshot = selectedShot ? await feedbackScreenshotDataUrl(selectedShot.blob) : null;
+      const result = await submitFeedback({ ...submittedDraft, screenshot, context: submittedContext }, draftGeneration);
+
+      // Advance the draft generation first, so a failed device cleanup cannot restore a sent screenshot.
+      const nextGeneration = createFeedbackDraftGeneration();
+      clearDraft(nextGeneration);
+      setDraftGeneration(nextGeneration);
+      retryAttemptExistsRef.current = false;
+      setRetryContext(null);
+      void clearFeedbackScreenshot(draftGeneration).catch(() => {});
+      setShot(null);
+      setSavedReport({
+        id: result.id,
+        kind: submittedDraft.kind,
+        email: submittedDraft.email,
+        contact: submittedDraft.contact,
+        operator: result.notification?.operator,
+        receipt: result.notification?.receipt,
+      });
       setStatus("sent");
       sfx.chirp();
       buzz([20, 40, 20]);
-    } catch {
+    } catch (error) {
       setStatus("failed");
+      if (error instanceof FeedbackScreenshotError) setSendError(feedbackScreenshotErrorMessage(error));
+      else setSendError(error instanceof Error ? error.message : "Couldn't send that report. Your draft is saved on this phone. Try again.");
       buzz(40);
+    } finally {
+      sendingRef.current = false;
     }
   };
 
   const startOver = () => {
+    retryAttemptExistsRef.current = false;
+    setRetryContext(null);
     setDraft(EMPTY_DRAFT);
     setShot(null);
+    setSavedReport(null);
+    setEmailTouched(false);
+    setShotError(null);
+    setSendError("");
     setStatus("editing");
   };
 
@@ -99,19 +356,21 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         <div className="sheet__handle" />
-        <button className="park-sheet__close" onClick={close} aria-label="Close feedback">
+        <button className="park-sheet__close" onClick={close} aria-label="Close feedback" disabled={isSending}>
           <Icon name="close" size={18} stroke={3} />
         </button>
 
         <AnimatePresence mode="wait" initial={false}>
-          {status === "sent" ? (
+          {status === "sent" && savedReport ? (
             <motion.div key="sent" className="fb-done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
               <Kip pose="cheer" size={150} />
-              <span className="eyebrow">Report {reportId}</span>
-              <h2>Thanks! Kip passed it on.</h2>
+              <span className="eyebrow">Report {savedReport.id}</span>
+              <h2>Feedback saved</h2>
               <p>
-                Your {kind.label.toLowerCase()} report is saved.{" "}
-                {draft.contact ? `We may email ${draft.email.trim()} if we have questions.` : "The team reviews every report."}
+                Your {FEEDBACK_KINDS.find((item) => item.id === savedReport.kind)?.label.toLowerCase()} report is saved.
+                {notificationCopy(savedReport.operator, "operator", savedReport.email)}
+                {notificationCopy(savedReport.receipt, "receipt", savedReport.email)}
+                {savedReport.contact && ` You allowed follow-up by email at ${savedReport.email}. No marketing.`}
               </p>
               <div className="fb-done__actions">
                 <button className="btn btn--block btn--ink" onClick={close}>
@@ -136,19 +395,21 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
 
               <div className="fb-body scroll">
                 <div className="fb-kinds" role="radiogroup" aria-label="Feedback type">
-                  {FEEDBACK_KINDS.map((k) => (
+                  {FEEDBACK_KINDS.map((item) => (
                     <button
-                      key={k.id}
+                      key={item.id}
+                      type="button"
                       role="radio"
-                      aria-checked={draft.kind === k.id}
-                      className={`fb-kind ${draft.kind === k.id ? "is-on" : ""}`}
+                      aria-checked={draft.kind === item.id}
+                      className={`fb-kind ${draft.kind === item.id ? "is-on" : ""}`}
+                      disabled={isEditingLocked}
                       onClick={() => {
                         sfx.tap();
-                        edit({ kind: k.id });
+                        edit({ kind: item.id });
                       }}
                     >
-                      <Icon name={k.icon} size={20} />
-                      {k.label}
+                      <Icon name={item.icon} size={20} />
+                      {item.label}
                     </button>
                   ))}
                 </div>
@@ -161,10 +422,11 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                     className="fb-input fb-textarea"
                     aria-label={kind.prompt}
                     value={draft.message}
-                    onChange={(e) => edit({ message: e.target.value })}
+                    onChange={(event) => edit({ message: event.target.value })}
                     placeholder={draft.kind === "bug" ? "I tapped Claim at Beacon Hill and the camera stayed black…" : "Type here…"}
                     rows={5}
                     maxLength={4000}
+                    disabled={isEditingLocked}
                   />
                 </label>
 
@@ -172,34 +434,60 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <span className="fb-label">
                     Screenshot <em>Optional</em>
                   </span>
-                  <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickShot} />
+                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={pickShot} disabled={isEditingLocked || shotProcessing} />
                   {shot ? (
                     <div className="fb-shot card">
                       <img src={shot.url} alt="Attached screenshot" />
                       <span className="fb-shot__name">{shot.name}</span>
-                      <button className="fb-shot__remove" onClick={() => setShot(null)} aria-label="Remove screenshot">
+                      <button type="button" className="fb-shot__remove" onClick={() => void removeShot()} aria-label="Remove screenshot" disabled={isEditingLocked || shotProcessing}>
                         <Icon name="close" size={16} stroke={3} />
                       </button>
                     </div>
                   ) : (
-                    <button className="fb-attach" onClick={() => fileRef.current?.click()}>
-                      <Icon name="image" size={20} /> Attach a screenshot
+                    <button type="button" className="fb-attach" onClick={() => fileRef.current?.click()} disabled={isEditingLocked || shotProcessing}>
+                      <Icon name="image" size={20} /> {shotProcessing ? "Preparing screenshot…" : shotLoading ? "Loading saved screenshot…" : "Attach a screenshot"}
                     </button>
                   )}
-                  {shotError && <span className="fb-error-text">{shotError}</span>}
+                  {shotError && <span className="fb-error-text" role="alert">{shotError}</span>}
                 </div>
+
+                <label className="fb-field">
+                  <span className="fb-label">
+                    Email for a receipt <em>Optional</em>
+                  </span>
+                  <input
+                    className="fb-input"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={draft.email}
+                    onChange={(event) => edit({ email: event.target.value })}
+                    onBlur={() => setEmailTouched(true)}
+                    aria-label="Email for feedback receipt"
+                    aria-invalid={Boolean(emailError && emailTouched)}
+                    disabled={isEditingLocked}
+                  />
+                  {emailError && emailTouched ? <span className="fb-error-text">{emailError}</span> : <span className="fb-error-text" style={{ color: "var(--ink-soft)" }}>Used for a receipt. The switch below separately allows follow-up. No marketing.</span>}
+                </label>
 
                 <div className="fb-field">
                   <button
+                    type="button"
                     role="switch"
                     aria-checked={draft.contact}
-                    aria-label="You can contact me about this"
+                    aria-label="Allow follow-up by email"
                     className={`fb-switch ${draft.contact ? "is-on" : ""}`}
-                    onClick={() => edit({ contact: !draft.contact })}
+                    disabled={isEditingLocked}
+                    onClick={() => {
+                      const contact = !draft.contact;
+                      if (contact) setEmailTouched(true);
+                      edit({ contact });
+                    }}
                   >
                     <span className="fb-switch__text">
-                      <strong>You can contact me about this</strong>
-                      <span>Only to follow up or say it's fixed.</span>
+                      <strong>Allow follow-up about this report</strong>
+                      <span>Parkdex may email about this report only. No marketing.</span>
                     </span>
                     <span className="fb-switch__track">
                       <motion.span className="fb-switch__knob" layout transition={{ type: "spring", stiffness: 600, damping: 32 }} />
@@ -208,19 +496,9 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <AnimatePresence initial={false}>
                     {draft.contact && (
                       <motion.div className="fb-email" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-                        <input
-                          className="fb-input"
-                          type="email"
-                          inputMode="email"
-                          autoComplete="email"
-                          placeholder="you@example.com"
-                          value={draft.email}
-                          onChange={(e) => edit({ email: e.target.value })}
-                          onBlur={() => setEmailTouched(true)}
-                          aria-label="Email for follow-up"
-                          aria-invalid={!emailOk && emailTouched}
-                        />
-                        {!emailOk && emailTouched && <span className="fb-error-text">Check that email address.</span>}
+                        <span className="fb-error-text" style={{ color: "var(--ink-soft)" }}>
+                          Follow-up uses the receipt email above. An email address is required for this permission.
+                        </span>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -234,19 +512,21 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <dl>
                     <dt>App</dt>
                     <dd>
-                      Parkdex {context.version} · {context.platform}
+                      {nativeInfoStatus === "loading" && !retryContext ? "Loading installed app details…" : `Parkdex ${displayContext.version} · build ${displayContext.build} · ${displayContext.platform}`}
                     </dd>
                     <dt>Screen</dt>
-                    <dd>{context.screen}</dd>
-                    {context.parkName && (
+                    <dd>{displayContext.screen}</dd>
+                    {displayContext.parkName && (
                       <>
                         <dt>Park</dt>
-                        <dd>{context.parkName}</dd>
+                        <dd>{displayContext.parkName}</dd>
                       </>
                     )}
                   </dl>
                   <p>Your location, photos and logs are never included. Screenshots are only sent if you attach one.</p>
                 </details>
+                {storageError && <span className="fb-error-text" role="alert">{storageError}</span>}
+                {draftSaveError && <span className="fb-error-text" role="alert">{draftSaveError}</span>}
               </div>
 
               <div className="fb-foot">
@@ -260,7 +540,7 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                       exit={{ y: 16, opacity: 0 }}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     >
-                      <strong>Couldn't send that.</strong> Your draft is saved on this phone. Check your connection and try again.
+                      <strong>Couldn't send that.</strong> {sendError || "Your draft is saved on this phone. Check your connection and try again."}
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -66,6 +66,12 @@ function errorText(error: unknown): string {
   return "Park content could not be loaded.";
 }
 
+function assertUnredirected(response: Response, requestedUrl: string, label: string): void {
+  if (response.url && response.url !== requestedUrl) {
+    throw new ContentValidationError(`${label} redirected away from its immutable URL`);
+  }
+}
+
 function parseEnvironment(value: unknown, expected: ContentEnvironment) {
   return parseContentChannel(value, expected);
 }
@@ -437,6 +443,9 @@ class ContentRuntimeController implements ContentRuntime {
     }
 
     const existing = await this.options.store.getRelease(channel.releaseId);
+    if (activeId === channel.releaseId && active!.channel.manifestSha256 !== channel.manifestSha256) {
+      throw new ContentValidationError("an active immutable release changed its manifest hash");
+    }
     const manifest = await this.loadManifest(channel, existing);
     if (activeId === channel.releaseId) {
       const updated = { ...active!, channel, manifest };
@@ -497,6 +506,7 @@ class ContentRuntimeController implements ContentRuntime {
     }
     const response = await this.fetcher(channel.manifestUrl, { cache: "force-cache" });
     if (!response.ok) throw new Error(`Content manifest returned HTTP ${response.status}`);
+    assertUnredirected(response, channel.manifestUrl, "Content manifest");
     const bytes = await response.arrayBuffer();
     if ((await sha256Hex(bytes)) !== channel.manifestSha256) throw new ContentValidationError("content manifest failed SHA-256 verification");
     return parseContentManifest(parseJsonBytes(bytes), channel);
@@ -560,6 +570,7 @@ class ContentRuntimeController implements ContentRuntime {
       if (signal.aborted) throw signal.reason ?? new DOMException("Download cancelled", "AbortError");
       const response = await this.fetcher(file.url, { signal, cache: "force-cache" });
       if (!response.ok) throw new Error(`Content file ${file.path} returned HTTP ${response.status}`);
+      assertUnredirected(response, file.url, `Content file ${file.path}`);
       const bytes = await response.arrayBuffer();
       await assertFileBytes(file, bytes);
       await this.options.store.putFile(file.sha256, bytes);
@@ -700,12 +711,6 @@ class ContentRuntimeController implements ContentRuntime {
 
   private publishSnapshot(snapshot: ContentSnapshot, phase: ContentPhase, error: string | null): void {
     this.setStatus({ snapshot, phase, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
-  }
-
-  private startupAnchor(): MapPoint {
-    return this.currentLocation && isPointInsideContentBounds(this.currentLocation)
-      ? this.currentLocation
-      : VICTORIA;
   }
 
   private scheduleNearbyPrefetch(force: boolean): void {
@@ -876,11 +881,6 @@ class ContentRuntimeController implements ContentRuntime {
       for (const key of this.verifiedHashes) if (key.startsWith(`${file.hash}:`)) this.verifiedHashes.delete(key);
       for (const [key] of this.fileUrlPromises) if (key.startsWith(`${file.hash}:`)) this.fileUrlPromises.delete(key);
     }
-  }
-
-  private async resumeFailedWork(): Promise<void> {
-    if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
-    await this.resumeStoredCandidate();
   }
 
   private incrementInFlight(hash: string) {

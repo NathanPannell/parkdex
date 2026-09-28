@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import pkg from "./package.json" with { type: "json" };
 import { readdir, readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const PUBLIC_ROOT = resolve("public");
 const PUBLIC_DIRS = ["art/kip", "art/products"];
@@ -70,13 +72,29 @@ function allowlistedPublicAssets(): Plugin {
   };
 }
 
+function sourceRevision() {
+  const environmentRevision = process.env.RELEASE_SHA || process.env.VERCEL_GIT_COMMIT_SHA;
+  if (environmentRevision) return environmentRevision;
+  try {
+    const release = JSON.parse(readFileSync(new URL("./public/release.json", import.meta.url), "utf8")) as { sha?: unknown };
+    if (typeof release.sha === "string" && /^[a-f0-9]{40}$/i.test(release.sha)) return release.sha;
+  } catch {
+    // The release manifest is only present in delivery builds.
+  }
+  try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  catch { return 'local'; }
+}
+
 export default defineConfig({
   // Source artwork, catalogs, scenes, glyphs, boundaries, and map chunks stay in
   // public/ for the content publisher, but are never copied into app builds.
   publicDir: false,
   plugins: [react(), allowlistedPublicAssets()],
   // Feedback reports carry the app version so testers never have to look it up.
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_BUILD__: JSON.stringify(sourceRevision()),
+  },
   // 59k offline tile files: watching them makes dev startup crawl.
   server: { host: true, watch: { ignored: ["**/public/map/**"] } },
   // MapLibre loads ./maplibre-gl-worker.mjs next to itself; pre-bundling would move it away.

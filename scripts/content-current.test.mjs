@@ -186,4 +186,3 @@ test("unsupported methods never fetch the CDN", async () => {
   assert.equal(response.headers.get("allow"), "GET, HEAD, OPTIONS");
   assert.equal(fetchArgs, undefined);
 });
-
