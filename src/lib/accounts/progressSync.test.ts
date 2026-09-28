@@ -80,18 +80,23 @@ beforeEach(async () => {
 });
 
 describe("account progress sync", () => {
-  it("does not call the account API on cellular or outside the foreground", async () => {
+  it("allows connected web cellular backups but skips offline or background work", async () => {
     const sync = await import("./progressSync");
     const fetcher = vi.fn(async () => jsonResponse({ claims: [], nextCursor: null }));
-    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: false });
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: false, wifi: false });
 
+    const offlineResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true);
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: false });
     const cellularResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true);
-    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: true });
+    const nativeCellularResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true, { connected: true, allowed: false });
     const backgroundResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => false);
 
-    expect(cellularResult).toBeNull();
+    expect(offlineResult).toBeNull();
+    expect(cellularResult).not.toBeNull();
+    expect(nativeCellularResult).toBeNull();
+    // A web browser treats an online cellular/unknown link as an allowed account backup.
     expect(backgroundResult).toBeNull();
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("coalesces concurrent initial backup triggers into one run", async () => {
@@ -134,8 +139,9 @@ describe("account progress sync", () => {
     expect(calls).toBe(2);
   });
 
-  it("schedules one coalesced retry for cellular-to-Wi-Fi recovery and ignores the initial Wi-Fi snapshot", async () => {
+  it("schedules one coalesced retry when backup becomes allowed and ignores the initial snapshot", async () => {
     const sync = await import("./progressSync");
+    const connectivityPolicy = await import("./accountBackupConnectivity");
     const inFlight = new Map<string, Promise<number>>();
     const rerunRequested = new Set<string>();
     let finishFirst!: (value: number) => void;
@@ -145,16 +151,18 @@ describe("account progress sync", () => {
       return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
     });
     const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
-    expect(sync.shouldScheduleWifiBackup(null, { connected: true, wifi: true })).toBe(false);
+    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false }, false)).toEqual({ connected: true, allowed: true });
+    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false }, true)).toEqual({ connected: true, allowed: false });
+    expect(sync.shouldScheduleAccountBackup(null, { connected: true, allowed: true })).toBe(false);
 
-    let previous = { connected: true, wifi: false };
-    const firstWifi = { connected: true, wifi: true };
-    expect(sync.shouldScheduleWifiBackup(previous, firstWifi)).toBe(true);
-    previous = firstWifi;
+    let previous = { connected: true, allowed: false };
+    const firstAllowed = { connected: true, allowed: true };
+    expect(sync.shouldScheduleAccountBackup(previous, firstAllowed)).toBe(true);
+    previous = firstAllowed;
     const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
-    expect(sync.shouldScheduleWifiBackup(previous, { connected: true, wifi: true })).toBe(false);
-    previous = { connected: true, wifi: false };
-    expect(sync.shouldScheduleWifiBackup(previous, firstWifi)).toBe(true);
+    expect(sync.shouldScheduleAccountBackup(previous, { connected: true, allowed: true })).toBe(false);
+    previous = { connected: true, allowed: false };
+    expect(sync.shouldScheduleAccountBackup(previous, firstAllowed)).toBe(true);
     expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
 
     await Promise.resolve();
@@ -326,7 +334,7 @@ describe("account progress sync", () => {
     expect((await personal.getPersonalPhoto(owner, REMOTE_ID))?.backupState).toBe("backed-up");
   });
 
-  it("leaves ready private photos pending when Wi-Fi is unavailable", async () => {
+  it("restores private photos over a connected web cellular connection", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
     const owner = { kind: "account" as const, accountId: ACCOUNT_A };
@@ -338,21 +346,58 @@ describe("account progress sync", () => {
       contentType: "image/png",
     };
     const urls: string[] = [];
-    photoTransport.isContentWifiAvailable.mockResolvedValue(false);
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: false });
     const fetcher = async (input: RequestInfo | URL) => {
       const url = requestUrl(input);
       urls.push(url);
       if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata)], nextCursor: "photo-revision" });
       if (url === "/api/claims?cursor=photo-revision") return jsonResponse({ claims: [], nextCursor: null });
+      if (url.endsWith("/photo")) return new Response(await savedPhoto.arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
+      throw new Error(`Unexpected request: ${url}`);
+    };
+
+    const result = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true);
+
+    expect(urls).toEqual(["/api/claims", "/api/claims?cursor=photo-revision", `/api/claims/${REMOTE_ID}/photo`]);
+    expect(result?.photosRestored).toBe(1);
+    expect(await personal.getPersonalPhoto(owner, REMOTE_ID)).toMatchObject({ backupState: "backed-up" });
+  });
+
+  it("stops remaining private photo restores when the account backup transport goes offline", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const savedPhoto = png(7);
+    const metadata = {
+      status: "ready",
+      sha256: await personal.hashPhoto(savedPhoto),
+      sizeBytes: savedPhoto.size,
+      contentType: "image/png",
+    };
+    const secondRemoteId = "44444444-4444-4444-8444-444444444444";
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: false });
+    const photoRequests: string[] = [];
+    const fetcher = async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url === "/api/claims") {
+        return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata), remoteClaim(secondRemoteId, park("maple-cove", "Maple Cove Park"), metadata)], nextCursor: "photos-after-first-page" });
+      }
+      if (url === "/api/claims?cursor=photos-after-first-page") return jsonResponse({ claims: [], nextCursor: null });
+      if (url.endsWith("/photo")) {
+        photoRequests.push(url);
+        photoTransport.getContentConnectivity.mockResolvedValue({ connected: false, wifi: false });
+        const error = new Error("The account backup connection is unavailable.");
+        error.name = "AccountBackupUnavailableError";
+        throw error;
+      }
       throw new Error(`Unexpected request: ${url}`);
     };
 
     const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
 
-    expect(urls).toEqual(["/api/claims", "/api/claims?cursor=photo-revision"]);
-    expect(result.photosRestored).toBe(0);
-    expect(result.photosPending).toBe(1);
-    expect(photoTransport.isContentWifiAvailable).toHaveBeenCalledTimes(1);
+    expect(photoRequests).toHaveLength(1);
+    expect(result.photosPending).toBe(2);
+    expect(result.issues).toContainEqual(expect.objectContaining({ operation: "photo-restore", code: "network_or_storage_error" }));
   });
 
   it("scopes claim upload, claim pages, photo upload, and private photo download to the captured account", async () => {

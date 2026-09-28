@@ -5,6 +5,7 @@ import {
   nativeAccountBackupRequest,
   subscribeContentConnectivity,
 } from "../content/transport";
+import { isAccountBackupAvailable, mapAccountBackupConnectivity } from "./accountBackupConnectivity";
 
 const MAX_ACCOUNT_BACKUP_BYTES = 2_621_440;
 const MAX_CLAIM_JSON_BYTES = 16 * 1024;
@@ -23,7 +24,7 @@ export function isAccountBackupPath(url: URL): boolean {
   return url.pathname.startsWith("/api/claims");
 }
 
-/** Validate the small set of account endpoints permitted to use the Wi-Fi backup transport. */
+/** Validate the small set of account endpoints permitted to use the account backup transport. */
 export function assertAccountBackupRequest(url: URL, method: string, approvedApiOrigin: string): RouteKind {
   let apiOrigin: string;
   try {
@@ -65,7 +66,7 @@ export function assertAccountBackupRequest(url: URL, method: string, approvedApi
   throw new Error("The account backup route is not approved.");
 }
 
-/** Route account claims and private photos over an affirmatively identified Wi-Fi connection. */
+/** Route account claims and private photos through the platform's account backup policy. */
 export async function accountBackupFetch(
   input: RequestInfo | URL,
   init: RequestInit,
@@ -168,14 +169,14 @@ async function browserAccountBackupFetch(
   }
   if (callerSignal?.aborted) throw callerSignal.reason ?? abortError();
   const initial = await getContentConnectivity();
-  if (!initial.connected || !initial.wifi) throw wifiUnavailableError();
+  if (!(await isAccountBackupAvailable(initial))) throw accountBackupUnavailableError();
 
   const controller = new AbortController();
   const abortForCaller = () => {
     if (!controller.signal.aborted) controller.abort(callerSignal?.reason ?? abortError());
   };
-  const abortForWifiLoss = () => {
-    if (!controller.signal.aborted) controller.abort(wifiUnavailableError());
+  const abortForUnavailable = () => {
+    if (!controller.signal.aborted) controller.abort(accountBackupUnavailableError());
   };
   const abortForBackground = () => {
     if (typeof document !== "undefined" && document.visibilityState === "hidden" && !controller.signal.aborted) {
@@ -185,7 +186,7 @@ async function browserAccountBackupFetch(
     }
   };
   const onConnectivity = (connectivity: { connected: boolean; wifi: boolean }) => {
-    if (!connectivity.connected || !connectivity.wifi) abortForWifiLoss();
+    if (!mapAccountBackupConnectivity(connectivity).allowed) abortForUnavailable();
   };
 
   let unsubscribe: (() => void) | undefined;
@@ -198,8 +199,8 @@ async function browserAccountBackupFetch(
     unsubscribe = subscribeContentConnectivity(onConnectivity);
     const confirmed = await getContentConnectivity();
     onConnectivity(confirmed);
-    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
-    if (!confirmed.connected || !confirmed.wifi) throw wifiUnavailableError();
+    if (controller.signal.aborted) throw controller.signal.reason ?? accountBackupUnavailableError();
+    if (!(await isAccountBackupAvailable(confirmed))) throw accountBackupUnavailableError();
     timeout = setTimeout(() => {
       if (!controller.signal.aborted) {
         const error = new Error("The account backup request timed out.");
@@ -222,13 +223,13 @@ async function browserAccountBackupFetch(
       throw new Error("Account backup redirects are not permitted.");
     }
     const bytes = await readBoundedResponseBody(response, (error) => controller.abort(error));
-    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    if (controller.signal.aborted) throw controller.signal.reason ?? accountBackupUnavailableError();
     const responseBody = [204, 205, 304].includes(response.status) ? null : bytes;
     const buffered = new Response(responseBody, { status: response.status, statusText: response.statusText, headers: response.headers });
     Object.defineProperty(buffered, "url", { value: response.url || url.href });
     return buffered;
   } catch (error) {
-    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    if (controller.signal.aborted) throw controller.signal.reason ?? accountBackupUnavailableError();
     throw error;
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
@@ -387,9 +388,9 @@ function createRequestId(): string {
   return `account-backup-${Date.now()}-${nextRequestId}`;
 }
 
-function wifiUnavailableError(): Error {
-  const error = new Error("Connect to Wi-Fi to back up saved claims and photos.");
-  error.name = "WifiUnavailableError";
+function accountBackupUnavailableError(): Error {
+  const error = new Error("Connect to the internet to back up saved claims and photos.");
+  error.name = "AccountBackupUnavailableError";
   return error;
 }
 

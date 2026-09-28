@@ -56,7 +56,7 @@ function scopedHeaders(extra: Record<string, string> = {}) {
   });
 }
 
-  beforeEach(() => {
+beforeEach(() => {
   mocks.native = false;
   mocks.connectivity = { connected: true, wifi: true };
   mocks.connectivityHandler = null;
@@ -76,26 +76,39 @@ function scopedHeaders(extra: Record<string, string> = {}) {
   vi.stubGlobal("document", undefined);
 });
 
-describe("Wi-Fi account backup transport", () => {
-  it("fails closed when browser network type is unknown and sends no request", async () => {
+describe("account backup transport", () => {
+  it("allows browser backup on a connected network with unknown or cellular network type", async () => {
     mocks.connectivity = { connected: true, wifi: false };
     const fetchMock = vi.mocked(globalThis.fetch);
 
     await expect(accountBackupFetch(`${API_ORIGIN}/api/claims`, {
       method: "GET",
       headers: scopedHeaders(),
-    }, API_ORIGIN)).rejects.toMatchObject({ name: "WifiUnavailableError" });
+    }, API_ORIGIN)).resolves.toMatchObject({ status: 200 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects browser backup while offline before sending a request", async () => {
+    mocks.connectivity = { connected: false, wifi: false };
+    const fetchMock = vi.mocked(globalThis.fetch);
+
+    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims`, {
+      method: "GET",
+      headers: scopedHeaders(),
+    }, API_ORIGIN)).rejects.toMatchObject({ name: "AccountBackupUnavailableError" });
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.subscribe).not.toHaveBeenCalled();
   });
 
-  it("uses same-origin cookie credentials for browser backup and aborts when Wi-Fi is lost", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-      },
-    }), { headers: { "content-type": "application/json" } }));
+  it("uses same-origin cookie credentials for browser backup and aborts when offline", async () => {
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+      requestSignal = init?.signal ?? undefined;
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    }));
     vi.stubGlobal("fetch", fetchMock);
     const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
       method: "GET",
@@ -105,10 +118,33 @@ describe("Wi-Fi account backup transport", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, requestInit] = fetchMock.mock.calls[0] ?? [];
     expect(requestInit).toMatchObject({ credentials: "include", redirect: "error", method: "GET" });
+    mocks.connectivityHandler?.({ connected: false, wifi: false });
+
+    await expect(pending).rejects.toMatchObject({ name: "AccountBackupUnavailableError" });
+    expect(requestSignal?.aborted).toBe(true);
+    expect(mocks.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps an in-flight browser backup when Wi-Fi changes to cellular while online", async () => {
+    let resolveFetch: ((response: Response) => void) | undefined;
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
+      resolveFetch = resolve;
+      requestSignal = init?.signal ?? undefined;
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
+      method: "GET",
+      headers: scopedHeaders(),
+    }, API_ORIGIN);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
     mocks.connectivityHandler?.({ connected: true, wifi: false });
 
-    await expect(pending).rejects.toMatchObject({ name: "WifiUnavailableError" });
-    expect(mocks.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(requestSignal?.aborted).toBe(false);
+    resolveFetch?.(new Response("ok"));
+    await expect(pending).resolves.toMatchObject({ status: 200 });
   });
 
   it("forwards caller cancellation to an in-flight browser request", async () => {
@@ -129,6 +165,29 @@ describe("Wi-Fi account backup transport", () => {
     controller.abort(new DOMException("Account changed", "AbortError"));
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("aborts browser backup when the request times out", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      }));
+      vi.stubGlobal("fetch", fetchMock);
+      const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
+        method: "GET",
+        headers: scopedHeaders(),
+      }, API_ORIGIN);
+      const timedOut = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+      for (let attempt = 0; attempt < 12 && fetchMock.mock.calls.length === 0; attempt += 1) await Promise.resolve();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(20_001);
+
+      await timedOut;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("aborts browser backup when the page leaves the foreground", async () => {

@@ -9,7 +9,7 @@ import {
   reserveGuestClaimsForAccount,
   setLastSuccessfulBackupAt,
 } from "./personalStore";
-import { coalesceProgressSync, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleWifiBackup, type ProgressSyncResult } from "./progressSync";
+import { coalesceProgressSync, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
 import {
   AuthHttpError,
   clearLocalNativeSession,
@@ -39,7 +39,7 @@ import {
   type GooglePurpose,
 } from "./authClient";
 import { listenForNativeAuthLinks, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
-import { getContentConnectivity, subscribeContentConnectivity } from "../content/transport";
+import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 
 const LAST_ACCOUNT_KEY = "kip-account-last-id";
 
@@ -452,9 +452,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const run = async (): Promise<ProgressSyncResult | null> => {
       let controller: AbortController | null = null;
       try {
-        const connectivity = await getContentConnectivity().catch(() => ({ connected: false, wifi: false }));
+        const connectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
         if (!isCurrentSession() || !foreground.current) return null;
-        if (!connectivity.connected || !connectivity.wifi) return setUnavailableStatus(connectivity.connected);
+        if (!connectivity.connected || !connectivity.allowed) return setUnavailableStatus(connectivity.connected);
 
         controller = new AbortController();
         syncAbortControllers.current.set(flightKey, controller);
@@ -465,11 +465,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           accountId,
           fetchAuthenticated: (input, init) => fetchAuthenticated(input, { ...init, signal: controller?.signal }, accountId),
           isCurrent: isCurrentSession,
-        }, () => foreground.current);
+        }, () => foreground.current, connectivity);
         if (!result) {
           if (isCurrentSession() && foreground.current) {
-            const latest = await getContentConnectivity().catch(() => ({ connected: false, wifi: false }));
-            if (!latest.connected || !latest.wifi) await setUnavailableStatus(latest.connected);
+            const latest = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+            if (!latest.connected || !latest.allowed) await setUnavailableStatus(latest.connected);
           }
           return null;
         }
@@ -482,19 +482,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (!isCurrentSession()) return result;
 
-        const afterSyncConnectivity = await getContentConnectivity().catch(() => ({ connected: false, wifi: false }));
+        const afterSyncConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
         const offline = !afterSyncConnectivity.connected;
         const hasPending = result.claimsPending + result.photosPending > 0;
-        const waitingForWifi = afterSyncConnectivity.connected && !afterSyncConnectivity.wifi && (hasPending || result.issues.length > 0);
-        const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForWifi ? "pending" : "success";
+        const waitingForConnection = afterSyncConnectivity.connected && !afterSyncConnectivity.allowed && (hasPending || result.issues.length > 0);
+        const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForConnection ? "pending" : "success";
         const message = offline
           ? "You're offline. Your saved collection stays on this device until you reconnect."
-          : waitingForWifi
+          : waitingForConnection
             ? "Backup waits for Wi-Fi. Your saved collection stays on this device until Wi-Fi is available."
             : result.issues.length
               ? result.issues.some((issue) => issue.operation === "photo-upload")
                 ? "Some saved photos remain on this device because they could not be backed up."
-                : "Some saved progress is waiting for backup. It will sync when Wi-Fi is available."
+                : "Some saved progress is waiting for backup. It will sync when a usable connection is available."
               : hasPending
                 ? "Some saved progress is waiting for backup."
                 : "Your collection is backed up.";
@@ -557,7 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let live = true;
-    let lastConnectivity: { connected: boolean; wifi: boolean } | null = null;
+    let lastConnectivity: AccountBackupConnectivity | null = null;
     const setForeground = (isForeground: boolean) => {
       foreground.current = isForeground;
       if (!isForeground) {
@@ -568,7 +568,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setForeground(document.visibilityState !== "hidden");
     const resumeWork = async (retryAfterFlight = false) => {
       if (!foreground.current || document.visibilityState === "hidden") return;
-      const connectivity = await getContentConnectivity().catch(() => ({ connected: false, wifi: false }));
+      const connectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
       if (!live || !foreground.current || !connectivity.connected) return;
       const now = Date.now();
       if (resumeInFlight.current) return resumeInFlight.current;
@@ -589,12 +589,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (becameVisible) void resumeWork(true);
     };
     document.addEventListener("visibilitychange", onVisibility);
-    const stopConnectivity = subscribeContentConnectivity((connectivity) => {
+    const stopConnectivity = subscribeAccountBackupConnectivity((connectivity) => {
       const previous = lastConnectivity;
       lastConnectivity = connectivity;
-      if (!connectivity.connected || !connectivity.wifi) abortProgressRequests(syncAbortControllers.current);
+      if (!connectivity.connected || !connectivity.allowed) abortProgressRequests(syncAbortControllers.current);
       if (!previous) return;
-      if (shouldScheduleWifiBackup(previous, connectivity) && stateRef.current.phase === "authenticated") void syncRef.current({ retryAfterFlight: true });
+      if (shouldScheduleAccountBackup(previous, connectivity) && stateRef.current.phase === "authenticated") void syncRef.current({ retryAfterFlight: true });
       if (!previous.connected && connectivity.connected) void resumeWork(false);
     });
     let appListener: { remove: () => Promise<void> } | undefined;

@@ -22,7 +22,7 @@ import {
   type RemoteClaim,
   type RemotePhoto,
 } from "./personalStore";
-import { getContentConnectivity, isContentWifiAvailable, type ContentConnectivity } from "../content/transport";
+import { getAccountBackupConnectivity, isAccountBackupAvailable, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 
 export type AuthenticatedFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -283,11 +283,11 @@ async function pullClaims(session: ProgressSession, owner: ProgressOwner, result
 
 async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
   const pending = await listPhotosNeedingDownload(owner);
-  if (pending.length === 0 || !(await isContentWifiAvailable())) return;
+  if (pending.length === 0 || !(await isAccountBackupAvailable())) return;
   for (const item of pending) {
     try {
       assertCurrent(session);
-      if (!(await isContentWifiAvailable())) return;
+      if (!(await isAccountBackupAvailable())) return;
       const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claim.claimId)}/photo`, { method: "GET" });
       assertCurrent(session);
       await ensureOk(response, "photo-restore");
@@ -302,7 +302,7 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
     } catch (error) {
       result.issues.push(issueFor(error, "photo-restore", item.claim.claimId));
       if (error instanceof ProgressSessionChangedError) return;
-      if (error instanceof Error && (error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
+      if (error instanceof Error && (error.name === "AccountBackupUnavailableError" || error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
     }
   }
 }
@@ -360,15 +360,15 @@ export async function syncProgress(session: ProgressSession): Promise<ProgressSy
   return result;
 }
 
-/** Run a backup only when the app is foregrounded and the transport confirms Wi-Fi. */
+/** Run a backup only when the app is foregrounded and platform policy allows its connection. */
 export async function runProgressSyncWhenReady(
   session: ProgressSession,
   isForeground: () => boolean,
-  knownConnectivity?: ContentConnectivity,
+  knownConnectivity?: AccountBackupConnectivity,
 ): Promise<ProgressSyncResult | null> {
   if (!isForeground()) return null;
-  const connectivity = knownConnectivity ?? await getContentConnectivity().catch(() => ({ connected: false, wifi: false }));
-  if (!connectivity.connected || !connectivity.wifi || !isForeground()) return null;
+  const connectivity = knownConnectivity ?? await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+  if (!connectivity.connected || !connectivity.allowed || !isForeground()) return null;
   return syncProgress(session);
 }
 
@@ -402,12 +402,12 @@ export function canPersistSuccessfulOutboundBackup(result: ProgressSyncResult): 
   return !result.issues.some((issue) => issue.operation === "session" || issue.operation === "claim-upload" || issue.operation === "photo-upload" || /conflict|changed/i.test(issue.code));
 }
 
-/** Schedule backup only for a real transition into confirmed Wi-Fi, not the initial subscription snapshot. */
-export function shouldScheduleWifiBackup(
-  previous: ContentConnectivity | null,
-  current: ContentConnectivity,
+/** Schedule backup only when a real connectivity transition makes the account backup available. */
+export function shouldScheduleAccountBackup(
+  previous: AccountBackupConnectivity | null,
+  current: AccountBackupConnectivity,
 ): boolean {
-  return previous !== null && current.connected && current.wifi && (!previous.connected || !previous.wifi);
+  return previous !== null && current.connected && current.allowed && (!previous.connected || !previous.allowed);
 }
 
 export async function persistSuccessfulOutboundBackupTimestamp(
