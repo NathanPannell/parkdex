@@ -4,6 +4,11 @@
 BEGIN;
 SET CONSTRAINTS ALL DEFERRED;
 
+-- psql's HOST is the client-selected endpoint. The server address can be a Docker
+-- bridge address in CI even when this client connected through loopback.
+SELECT set_config('parkdex_qa.client_host', :'HOST', true);
+SELECT set_config('parkdex_qa.database_name', :'DBNAME', true);
+
 DO $$
 DECLARE
     v_id text := 'sync-qa-' || txid_current()::text;
@@ -22,8 +27,9 @@ DECLARE
     v_final_blurb text;
     v_pruned_floor bigint;
 BEGIN
-    IF current_database() !~ '^kip_qa_content_sync(_[a-f0-9]{32})?$'
-       OR inet_server_addr() NOT IN ('127.0.0.1'::inet, '::1'::inet) THEN
+    IF current_database() !~ '^kip_qa_content_sync_[a-f0-9]{32}$'
+       OR current_database() IS DISTINCT FROM current_setting('parkdex_qa.database_name', true)
+       OR COALESCE(current_setting('parkdex_qa.client_host', true), '') NOT IN ('127.0.0.1', 'localhost', '::1') THEN
         RAISE EXCEPTION 'content sync SQL QA requires the owned loopback database';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.parks LIMIT 1)

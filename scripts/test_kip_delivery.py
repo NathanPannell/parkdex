@@ -162,6 +162,7 @@ class AccountReleaseGates(unittest.TestCase):
         self.touch(self.config["contentSync"]["qaSqlPath"])
         qa_path = self.root / self.config["contentSync"]["qaSqlPath"]
         steps = []
+        qa_targets = []
         commands = []
         def qa_run(args, **_kwargs):
             commands.append(args)
@@ -174,13 +175,19 @@ class AccountReleaseGates(unittest.TestCase):
              patch.object(delivery, "candidate_psql_args", return_value=["psql"]), \
              patch.object(delivery, "run", side_effect=qa_run), \
              patch.object(delivery, "migration_paths", return_value=[self.root / "feedback.sql", self.root / "content.sql"]), \
-             patch.object(delivery, "run_candidate_sql_file", side_effect=lambda path, _env, **kwargs: steps.append((path.name, kwargs.get("transactional", True)))), \
+             patch.object(delivery, "run_candidate_sql_file", side_effect=lambda path, env, **kwargs: (
+                 steps.append((path.name, kwargs.get("transactional", True))),
+                 qa_targets.append(dict(env)) if path == qa_path else None,
+             )), \
              patch.object(delivery, "bootstrap_content", side_effect=lambda _config, _root, url, environment: steps.append(("bootstrap", environment, url))):
             delivery.run_content_sync_sql_qa(self.config, self.root)
         self.assertEqual(steps[:2], [("feedback.sql", True), ("content.sql", True)])
         self.assertEqual(steps[2][:2], ("bootstrap", "preview"))
         self.assertRegex(steps[2][2], r"/kip_qa_content_sync_[0-9a-f]{32}$")
         self.assertEqual(steps[3], (qa_path.name, False))
+        self.assertEqual(len(qa_targets), 1)
+        self.assertEqual(qa_targets[0]["PGHOST"], "127.0.0.1")
+        self.assertRegex(qa_targets[0]["PGDATABASE"], r"^kip_qa_content_sync_[0-9a-f]{32}$")
         create_sql = next(args[-1] for args in commands if args[-1].startswith("CREATE DATABASE"))
         drop_sql = next(args[-1] for args in commands if args[-1].startswith("DROP DATABASE"))
         self.assertEqual(create_sql.replace("CREATE", "DROP"), drop_sql)
@@ -191,6 +198,19 @@ class AccountReleaseGates(unittest.TestCase):
             delivery.run_candidate_sql_file(self.root / "qa-content-sync.sql", env, cwd=self.root, transactional=False)
         args = run.call_args.args[0]
         self.assertEqual(args, ["psql", "-f", str(self.root / "qa-content-sync.sql")])
+
+    def test_content_sql_qa_runner_passes_loopback_endpoint_and_owned_database_to_psql(self):
+        database_name = "kip_qa_content_sync_" + "a" * 32
+        env = {
+            "PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": database_name,
+            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+        }
+        with patch.object(delivery, "psql_executable", return_value="psql"), patch.object(delivery, "run") as run:
+            delivery.run_candidate_sql_file(self.root / "qa-content-sync.sql", env, cwd=self.root, transactional=False)
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index("-h") + 1], "127.0.0.1")
+        self.assertEqual(args[args.index("-d") + 1], database_name)
+        self.assertEqual(args[-2:], ["-f", str(self.root / "qa-content-sync.sql")])
 
     def test_content_sql_qa_refuses_a_preexisting_owned_name_without_dropping_it(self):
         self.content_files()
