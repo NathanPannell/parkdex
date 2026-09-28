@@ -829,6 +829,96 @@ describe("account progress sync", () => {
     expect(browser.urlCount).toBe(1);
   });
 
+  it("accepts reordered legacy snapshot keys on first sync and still rejects changed claim fields", async () => {
+    const browser = installPhotoConversionBrowser();
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const { sceneSvg } = await import("./photoBackupRendition");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const originalBlob = new Blob([sceneSvg(park())], { type: "image/svg+xml" });
+    const guestClaim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: originalBlob });
+    const reorderedSnapshot = Object.fromEntries(
+      Object.entries(park()).sort(([left], [right]) => left.localeCompare(right)),
+    ) as Park;
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("parkdex-personal-v1");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction("claims", "readwrite");
+        const store = transaction.objectStore("claims");
+        const request = store.get(["guest", guestClaim.claimId]);
+        request.onsuccess = () => {
+          const stored = request.result;
+          if (!stored) { reject(new Error("Legacy guest claim missing.")); return; }
+          stored.parkSnapshot = reorderedSnapshot;
+          store.put(stored);
+        };
+        request.onerror = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    } finally { db.close(); }
+    await personal.reserveGuestClaimsForAccount(ACCOUNT_A);
+
+    const uploadedClaimIds: string[] = [];
+    const uploadedPhotoIds: string[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) {
+        const claimId = url.split("/").at(-2)!;
+        uploadedPhotoIds.push(claimId);
+        const body = init.body as Blob;
+        const digest = await personal.hashPhoto(body);
+        return jsonResponse({ claimId, photo: { status: "ready", sha256: digest, sizeBytes: body.size, contentType: body.type } }, 201);
+      }
+      if (init?.method === "PUT") {
+        const claimId = url.split("/").at(-1)!;
+        uploadedClaimIds.push(claimId);
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    const savedClaim = (await personal.listPersonalClaims(owner))[0];
+    const savedPhoto = await personal.getPersonalPhoto(owner, guestClaim.claimId);
+
+    expect(uploadedClaimIds).toEqual([guestClaim.claimId]);
+    expect(uploadedPhotoIds).toEqual([guestClaim.claimId]);
+    expect(result.claimsUploaded).toBe(1);
+    expect(result.photosUploaded).toBe(1);
+    expect(result.issues).toEqual([]);
+    expect(savedClaim).toMatchObject({ claimId: guestClaim.claimId, syncState: "acknowledged" });
+    expect(savedPhoto).toMatchObject({ claimId: guestClaim.claimId, backupState: "backed-up", contentType: "image/svg+xml" });
+    expect(await savedPhoto?.blob.text()).toBe(await originalBlob.text());
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    expect(browser.urlCount).toBe(1);
+
+    const conflictingClaim = await personal.createPersonalClaim(owner, { park: park("different-park", "Different Park"), photo: png(3) });
+    const conflictPhotoIds: string[] = [];
+    const changedResponseFetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) conflictPhotoIds.push(url);
+      if (init?.method === "PUT") {
+        const claimId = url.split("/").at(-1)!;
+        const payload = JSON.parse(String(init.body));
+        payload.parkSnapshot.name = "Changed by the server";
+        return jsonResponse({ claim: { claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+    const conflictResult = await sync.syncProgress(makeSession(ACCOUNT_A, changedResponseFetcher));
+
+    expect(conflictPhotoIds).toEqual([]);
+    expect(conflictResult.issues).toContainEqual(expect.objectContaining({ claimId: conflictingClaim.claimId, code: "conflict" }));
+    expect((await personal.listPersonalClaims(owner)).find((claim) => claim.claimId === conflictingClaim.claimId)?.syncState).toBe("pending");
+  });
+
   it("keeps a different ready server photo immutable and does not upload over it", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");

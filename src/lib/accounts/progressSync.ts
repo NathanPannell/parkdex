@@ -137,8 +137,7 @@ async function responseJson(response: Response, fallback: string): Promise<Recor
 
 function sameWirePayload(a: Pick<RemoteClaim, "parkId" | "claimedAt" | "parkSnapshot" | "contentReleaseId">, b: PersonalClaim) {
   if (!b.parkSnapshot) return false;
-  return JSON.stringify({ parkId: a.parkId, claimedAt: a.claimedAt, parkSnapshot: a.parkSnapshot, contentReleaseId: a.contentReleaseId }) ===
-    JSON.stringify({ parkId: b.parkId, claimedAt: b.claimedAt, parkSnapshot: b.parkSnapshot, contentReleaseId: b.contentReleaseId });
+  return JSON.stringify(claimPayload(a)) === JSON.stringify(claimPayload(b));
 }
 
 async function ensureOk(response: Response, operation: SyncIssue["operation"]) {
