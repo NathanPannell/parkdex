@@ -22,6 +22,22 @@ try {
   assert.equal(batch[1][0].second, 2);
   log('Neon transaction batch adapter', 'PASS');
   await applyMigration(fileURLToPath(new URL('../database/migrations/accounts_001_init.sql', import.meta.url)));
+  // This runner is restricted by qa-postgres-adapter to a dedicated loopback QA
+  // database. Clear prior runs before asserting exact retention backlog counts.
+  // CASCADE also clears progress claims when that optional migration was applied.
+  await pool.query(`TRUNCATE TABLE
+    kip_account.accounts,
+    kip_account.google_identities,
+    kip_account.sessions,
+    kip_account.action_tokens,
+    kip_account.google_challenges,
+    kip_account.rate_limits,
+    kip_account.security_events,
+    kip_account.account_deletion_receipts
+    CASCADE`);
+  if ((await pool.query("SELECT to_regclass('kip_account.account_deletion_photo_objects') AS relation")).rows[0].relation) {
+    await pool.query('TRUNCATE TABLE kip_account.account_deletion_photo_objects');
+  }
   const accountId = randomUUID();
   const email = `qa-${suffix}@example.test`;
   const initialSession = session();
