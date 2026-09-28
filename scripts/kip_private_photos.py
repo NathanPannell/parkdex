@@ -261,7 +261,7 @@ def _service_url(worker_name: str, subdomain: str) -> str:
 
 
 def _health(url: str) -> dict:
-    request = urllib.request.Request(url + "/health", headers={"Accept": "application/json"})
+    request = urllib.request.Request(url + "/health", headers={"Accept": "application/json", "User-Agent": "Parkdex-Kip-Delivery/1.0"})
     opener = urllib.request.build_opener(_NoRedirect())
     try:
         with opener.open(request, timeout=20) as response:
