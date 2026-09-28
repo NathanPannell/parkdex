@@ -5,13 +5,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from scripts import authoring_queue as queue
+if __package__:
+    from . import authoring_queue as queue
+else:
+    import authoring_queue as queue
 
 WORKSPACE = queue.WORKSPACE_ROOT
 BEACON_DIR = WORKSPACE / ".codex" / "outputs" / "parkdex-100-rollout" / "beacon-hill"
@@ -128,13 +134,16 @@ LOCAL_DATABASE_URL = os.environ.get("AUTHORING_QUEUE_TEST_DATABASE_URL")
 
 @unittest.skipUnless(LOCAL_DATABASE_URL, "set AUTHORING_QUEUE_TEST_DATABASE_URL for isolated local PostgreSQL QA")
 class AuthoringQueuePostgresTests(unittest.TestCase):
-    """Uses one rollback-only transaction against an explicit loopback QA database."""
+    """Uses an explicit loopback QA database and restores queue state after integration checks."""
 
     @classmethod
     def setUpClass(cls) -> None:
         parsed = urlsplit(LOCAL_DATABASE_URL or "")
         if parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise RuntimeError("AUTHORING_QUEUE_TEST_DATABASE_URL must point to loopback")
+        database_name = parsed.path.lstrip("/")
+        if not re.fullmatch(r"kip_qa_content_sync_[0-9a-f]{32}", database_name):
+            raise RuntimeError("AUTHORING_QUEUE_TEST_DATABASE_URL must name a unique content-sync QA database")
         try:
             import psycopg
         except ImportError:
@@ -286,6 +295,191 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
             finally:
                 queue.WORK_ROOT = original_root
                 self.conn.rollback()
+
+    def test_expired_lease_renewal_cannot_overlap_a_new_claim(self) -> None:
+        """A renewal crossing expiry must serialize with the next single-flight claim."""
+        import psycopg
+
+        with self.conn.cursor() as cursor:
+            cursor.execute("SELECT id FROM public.parks ORDER BY id LIMIT 2")
+            parks = cursor.fetchall()
+            cursor.execute("SELECT singleton FROM public.park_enrichment_rollout WHERE singleton = true")
+            marker = cursor.fetchone()
+        if len(parks) < 2:
+            self.fail("local QA database must contain at least two parks")
+        if marker is None:
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
+                clock = cursor.fetchone()
+                if clock is None:
+                    self.fail("local QA database must contain the content clock")
+                cursor.execute(
+                    """INSERT INTO public.park_enrichment_rollout
+                           (singleton, source_bundle_sha256, ranked_list_sha256, expected_count,
+                            target_environment, target_id, database_host, applied_content_revision)
+                       VALUES (true, %s, %s, 100, 'staging', NULL, %s, %s)""",
+                    ("a" * 64, "b" * 64, urlsplit(LOCAL_DATABASE_URL or "").hostname, clock[0]),
+                )
+            self.conn.commit()
+
+        snapshot_created = False
+        snapshot_name = f"authoring_queue_snapshot_{uuid4().hex}"
+        trigger_name = f"authoring_queue_slow_renew_{uuid4().hex}"
+        function_name = f"authoring_queue_slow_renew_{uuid4().hex}"
+        renewal_app = f"parkdex-queue-renew-{uuid4().hex}"
+        claim_app = f"{renewal_app}-claim"
+        advisory_key = uuid4().int & ((1 << 63) - 1)
+        token = str(uuid4())
+        advisory_locked = False
+        try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    f'CREATE TEMP TABLE "{snapshot_name}" ON COMMIT PRESERVE ROWS AS '
+                    "SELECT * FROM public.park_enrichment_jobs"
+                )
+            self.conn.commit()
+            snapshot_created = True
+
+            with self.conn.cursor() as cursor:
+                cursor.execute("DELETE FROM public.park_enrichment_jobs")
+                cursor.execute(
+                    """INSERT INTO public.park_enrichment_jobs
+                           (rank, park_id, state, lease_token, lease_expires_at, attempt_count)
+                       VALUES (1, %s, 'leased', %s::uuid, clock_timestamp() + interval '5 seconds', 1),
+                              (2, %s, 'queued', NULL, NULL, 0)""",
+                    (parks[0][0], token, parks[1][0]),
+                )
+                cursor.execute(
+                    f"""
+                    CREATE FUNCTION public."{function_name}"() RETURNS trigger
+                    LANGUAGE plpgsql AS $$
+                    BEGIN
+                        IF OLD.rank = 1 AND NEW.lease_expires_at > OLD.lease_expires_at THEN
+                            PERFORM pg_advisory_xact_lock({advisory_key});
+                        END IF;
+                        RETURN NEW;
+                    END
+                    $$
+                    """
+                )
+                cursor.execute(
+                    f"""
+                    CREATE TRIGGER "{trigger_name}"
+                    BEFORE UPDATE ON public.park_enrichment_jobs
+                    FOR EACH ROW EXECUTE FUNCTION public."{function_name}"()
+                    """
+                )
+            self.conn.commit()
+
+            def renew() -> dict:
+                with psycopg.connect(
+                    LOCAL_DATABASE_URL,
+                    application_name=renewal_app,
+                    options="-c lock_timeout=10000 -c statement_timeout=20000",
+                ) as conn:
+                    return queue.renew_lease(conn, 1, token)
+
+            def claim() -> dict:
+                with psycopg.connect(
+                    LOCAL_DATABASE_URL,
+                    application_name=claim_app,
+                    options="-c lock_timeout=10000 -c statement_timeout=20000",
+                ) as conn:
+                    return queue.claim_one(conn)
+
+            with self.conn.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_lock(%s)", (advisory_key,))
+            self.conn.commit()
+            advisory_locked = True
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                renew_future = pool.submit(renew)
+                try:
+                    deadline = time.monotonic() + 15
+                    while time.monotonic() < deadline:
+                        with self.conn.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                                "WHERE application_name = %s AND state = 'active' "
+                                "AND wait_event_type = 'Lock' AND wait_event = 'advisory')",
+                                (renewal_app,),
+                            )
+                            renewal_waiting = cursor.fetchone()[0]
+                            cursor.execute(
+                                "SELECT lease_expires_at <= clock_timestamp() "
+                                "FROM public.park_enrichment_jobs WHERE rank = 1"
+                            )
+                            expired = cursor.fetchone()[0]
+                        self.conn.commit()
+                        if renewal_waiting and expired:
+                            break
+                        if renew_future.done():
+                            self.fail("renewal finished before the test reached its expiry window")
+                        time.sleep(0.01)
+                    else:
+                        self.fail("renewal did not remain blocked in its database trigger across lease expiry")
+
+                    claim_future = pool.submit(claim)
+                    claim_deadline = time.monotonic() + 10
+                    while time.monotonic() < claim_deadline:
+                        with self.conn.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                                "WHERE application_name = %s AND state = 'active' AND wait_event_type = 'Lock')",
+                                (claim_app,),
+                            )
+                            claim_waiting = cursor.fetchone()[0]
+                        self.conn.commit()
+                        if claim_waiting:
+                            break
+                        if claim_future.done():
+                            self.fail("claim finished before waiting for the renewal transaction")
+                        time.sleep(0.01)
+                    else:
+                        self.fail("claim did not wait behind the renewal transaction")
+                finally:
+                    with self.conn.cursor() as cursor:
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (advisory_key,))
+                        unlocked = cursor.fetchone()[0]
+                    self.conn.commit()
+                    advisory_locked = False
+                    self.assertTrue(unlocked)
+
+                claim_result = claim_future.result(timeout=10)
+                renew_result = renew_future.result(timeout=10)
+
+            self.assertEqual(renew_result["outcome"], "renewed")
+            self.assertEqual(claim_result["outcome"], "busy")
+            self.assertEqual(claim_result["job"]["rank"], 1)
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """SELECT count(*) FROM public.park_enrichment_jobs
+                         WHERE state IN ('leased', 'ready', 'publishing')
+                           AND lease_token IS NOT NULL AND lease_expires_at > clock_timestamp()"""
+                )
+                self.assertEqual(cursor.fetchone()[0], 1)
+                cursor.execute(
+                    "SELECT state, lease_token IS NOT NULL FROM public.park_enrichment_jobs WHERE rank = 2"
+                )
+                self.assertEqual(cursor.fetchone(), ("queued", False))
+            self.conn.commit()
+        finally:
+            if advisory_locked:
+                self.conn.rollback()
+                with self.conn.cursor() as cursor:
+                    cursor.execute("SELECT pg_advisory_unlock(%s)", (advisory_key,))
+                self.conn.commit()
+            if snapshot_created:
+                self.conn.rollback()
+                with self.conn.cursor() as cursor:
+                    cursor.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}" ON public.park_enrichment_jobs')
+                    cursor.execute(f'DROP FUNCTION IF EXISTS public."{function_name}"()')
+                    cursor.execute("DELETE FROM public.park_enrichment_jobs")
+                    cursor.execute(
+                        f'INSERT INTO public.park_enrichment_jobs SELECT * FROM "{snapshot_name}"'
+                    )
+                    cursor.execute(f'DROP TABLE "{snapshot_name}"')
+                self.conn.commit()
 
 
 if __name__ == "__main__":

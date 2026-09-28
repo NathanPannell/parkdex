@@ -474,6 +474,8 @@ def _select_job(cursor: Any, rank: int, *, lock: bool = False) -> dict[str, Any]
 
 
 def _lock_rollout(cursor: Any) -> None:
+    # Global claim/lease lock. Acquire it before any job-row lock so an expired
+    # renewal or publication cannot be skipped while claim_one leases another rank.
     cursor.execute("SELECT singleton FROM public.park_enrichment_rollout WHERE singleton = true FOR UPDATE")
     if cursor.fetchone() is None:
         raise QueueError("park enrichment rollout receipt is missing")
@@ -845,6 +847,7 @@ def freeze_research(conn: Any, rank: int, token: str, research: dict[str, Any]) 
     serialized = _json_text(research)
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             job = _select_job(cursor, rank, lock=True)
             if job is None:
                 raise QueueError(f"rank {rank} was not found")
@@ -970,6 +973,7 @@ def _verify_render_history(job: dict[str, Any]) -> list[dict[str, Any]]:
 def checkpoint_render(conn: Any, rank: int, token: str, manifest_path: Path) -> dict[str, Any]:
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             job = _select_job(cursor, rank, lock=True)
             if job is None:
                 raise QueueError(f"rank {rank} was not found")
@@ -1077,6 +1081,7 @@ def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Pat
     )
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             job = _select_job(cursor, rank, lock=True)
             if job is None or job["park_id"] != park_id:
                 raise QueueError("rank 1 is not seeded for Beacon Hill")
@@ -1126,6 +1131,7 @@ def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Pat
 def select_art(conn: Any, rank: int, token: str, art: dict[str, Any]) -> dict[str, Any]:
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             job = _select_job(cursor, rank, lock=True)
             if job is None:
                 raise QueueError(f"rank {rank} was not found")
@@ -1172,6 +1178,7 @@ def select_art(conn: Any, rank: int, token: str, art: dict[str, Any]) -> dict[st
 def renew_lease(conn: Any, rank: int, token: str) -> dict[str, Any]:
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             cursor.execute(
                 """
                 UPDATE public.park_enrichment_jobs
@@ -1201,6 +1208,7 @@ def fail_job(conn: Any, rank: int, token: str, reason: str, *, permanent: bool) 
         raise QueueError("--reason must be at most 500 characters")
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             cursor.execute(
                 """
                 UPDATE public.park_enrichment_jobs
@@ -1306,6 +1314,7 @@ def publish_job(conn: Any, rank: int, token: str, args: argparse.Namespace, data
                 target: str, target_id: str | None, expected_host: str) -> dict[str, Any]:
     with conn.transaction():
         with conn.cursor() as cursor:
+            _lock_rollout(cursor)
             job = _select_job(cursor, rank, lock=True)
             if job is None:
                 raise QueueError(f"rank {rank} was not found")
@@ -1341,6 +1350,7 @@ def publish_job(conn: Any, rank: int, token: str, args: argparse.Namespace, data
         verify_target(reconcile_conn, target, target_id, expected_host, database_url)
         with reconcile_conn.transaction():
             with reconcile_conn.cursor() as cursor:
+                _lock_rollout(cursor)
                 current = _select_job(cursor, rank, lock=True)
                 if current is None:
                     raise QueueError("job disappeared during publication")
