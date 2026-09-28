@@ -1,6 +1,6 @@
 import type { Map as MLMap } from "maplibre-gl";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
 import { ContentSyncStatus } from "../../components/ContentSyncStatus";
 import { Icon } from "../../components/Icon";
@@ -13,6 +13,8 @@ import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { badgeTotal, isLive, RARITY } from "../../lib/parks";
+import { getParkRarityEligibility, getRarityProgress, type ParkRarityEligibility } from "../../lib/progression";
+import { rarityLockMessage } from "../../lib/rarityUi";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
@@ -43,20 +45,25 @@ export function MapScreen() {
   const parks = content?.parks ?? [];
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
+  const rarityProgress = useMemo(() => getRarityProgress(claims, content?.parkById), [claims, content?.parkById]);
+  const eligibilityFor = useCallback((park: (typeof parks)[number]): ParkRarityEligibility => {
+    if (!state.progressReady) return { eligible: false, reason: "unavailable", requirements: {}, current: {}, remaining: {} };
+    return getParkRarityEligibility(park, rarityProgress, !!claims[park.id]);
+  }, [claims, rarityProgress, state.progressReady]);
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
   const here = useMemo(() => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? state.accuracy ?? 0 : 0), [user, parks, bounds, state.accuracy, hasUsableGpsFix]);
-  const arrivedId = here && isLive(here) && !claims[here.id] ? here.id : null;
+  const arrivedId = here && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
-  const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
+  const totalBadges = content ? badgeTotal(content.parks, Object.keys(claims)) : 0;
 
   const nearby = useMemo(
     () =>
-      (content?.liveParks ?? []).filter((p) => !claims[p.id])
-        .map((p) => ({ p, trip: estimateTrip(user, p, content?.drive) }))
-        .sort((a, b) => a.trip.minutes - b.trip.minutes)
+      parks.filter((p) => !claims[p.id])
+        .map((p) => ({ p, trip: estimateTrip(user, p, content?.drive), eligibility: eligibilityFor(p) }))
+        .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.trip.minutes - b.trip.minutes)
         .slice(0, 8),
-    [content?.liveParks, content?.drive, user, claims],
+    [parks, content?.drive, user, claims, eligibilityFor],
   );
 
   // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
@@ -165,6 +172,8 @@ export function MapScreen() {
   }
 
   function checkIn(id: string) {
+    const park = content?.parkById.get(id);
+    if (!park || !state.progressReady || claims[id] || !eligibilityFor(park).eligible) return;
     dispatch({ type: "trip", id });
     dispatch({ type: "select", id: null });
     dispatch({ type: "go", screen: "camera" });
@@ -189,6 +198,8 @@ export function MapScreen() {
         user={user}
         fc={bounds?.fc}
         claims={claims}
+        rarityProgress={rarityProgress}
+        progressReady={state.progressReady}
         selectedId={selectedId}
         tripId={tripId}
         arrivedId={arrivedId}
@@ -289,11 +300,12 @@ export function MapScreen() {
               <span className="eyebrow">Badges near you</span>
             </div>
             <div className="nearby__rail scroll">
-              {nearby.map(({ p, trip: est }, i) => (
+              {nearby.map(({ p, trip: est, eligibility }, i) => (
                 <motion.button
                   key={p.id}
-                  className="nearby__card card"
+                  className={`nearby__card card ${eligibility.eligible ? "" : "nearby__card--locked"}`}
                   onClick={() => select(p.id, "nearby")}
+                  aria-label={`${p.name}, ${RARITY[p.rarity].label}. ${eligibility.eligible ? formatTrip(est) : rarityLockMessage(eligibility)}${isLive(p) ? "" : ". Badge art coming soon"}`}
                   initial={{ y: 60, opacity: 0, rotate: 4 }}
                   animate={{ y: 0, opacity: 1, rotate: 0 }}
                   transition={{ type: "spring", stiffness: 380, damping: 22, delay: 0.1 + i * 0.05 }}
@@ -305,7 +317,7 @@ export function MapScreen() {
                   <span className="nearby__name">{p.short}</span>
                   <span className="nearby__meta">
                     <i style={{ background: RARITY[p.rarity].ink }} />
-                    {formatTrip(est)}
+                    {eligibility.eligible ? formatTrip(est) : eligibility.reason === "unavailable" ? "Checking" : "Locked"}
                   </span>
                 </motion.button>
               ))}
@@ -336,7 +348,10 @@ export function MapScreen() {
           <ArrivalCard
             key={here.id}
             park={here}
+            eligibility={eligibilityFor(here)}
+            artComingSoon={!isLive(here)}
             onCheckIn={() => checkIn(here.id)}
+            onShowRequirements={() => select(here.id, "map")}
             onDismiss={() => setDismissedArrival(here.id)}
           />
         )}
@@ -353,6 +368,9 @@ export function MapScreen() {
               user={user}
               claim={claims[selected.id]}
               inside={here?.id === selected.id}
+              eligibility={eligibilityFor(selected)}
+              progressReady={state.progressReady}
+              progressOwnerKey={state.progressOwnerKey}
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}

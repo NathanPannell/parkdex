@@ -13,7 +13,7 @@ The active 100-park assignment is recorded in `database/catalogue/victoria-rarit
 
 A visit is a completed local park claim. Repeat visits to one park count once. Known park IDs count at their current catalogue rarity. If an earned park is removed from the active catalogue, its saved snapshot rarity remains a fallback. An unknown legacy park with no snapshot has no inferred rarity. An already earned park remains accessible even if its current tier is locked.
 
-Artwork availability is separate from eligibility. An unlocked skeleton park can be visited and claimed before its badge illustration is published. Its placeholder visit counts toward progression. When artwork arrives, the collection can display it without rewriting the original claim snapshot, photo or content release provenance. Claims with existing artwork retain their recorded artwork version.
+Artwork availability is separate from eligibility. An unlocked skeleton park can be visited and claimed before its badge illustration is published. Its placeholder visit counts toward progression. Known parks display their current catalogue rarity and adopt current artwork once the new asset is saved locally. Until then, their previous artwork or placeholder remains visible. Removed parks use their saved snapshot. These display updates never rewrite the original claim snapshot, photo or content release provenance.
 
 ## Offline and account behavior
 

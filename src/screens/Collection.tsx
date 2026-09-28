@@ -9,6 +9,7 @@ import { RollingNumber, Tilt } from "../components/Motion";
 import { sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { badgeTotal, CATEGORY_LABEL, RARITY, type Park, type Rarity } from "../lib/parks";
+import { getRarityProgress, RARITY_TIERS, type ProgressionRarity, type RarityCounts, type RarityProgress, type RarityTierProgress } from "../lib/progression";
 import { useStore, type Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 
@@ -19,19 +20,32 @@ export function Collection() {
   const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
   const claimedIds = Object.keys(state.claims);
-  const claimed = claimedIds.map((id) => state.claims[id]?.parkSnapshot ?? content?.parkById.get(id) ?? undefined).filter((park): park is Park => !!park);
+  const claimed = claimedIds.map((id) => content?.parkById.get(id) ?? state.claims[id]?.parkSnapshot ?? undefined).filter((park): park is Park => !!park);
   const count = claimedIds.length;
-  const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
+  const totalBadges = content ? badgeTotal(content.parks, claimedIds) : undefined;
+  const rarityProgress = useMemo(
+    () => getRarityProgress(
+      state.claims,
+      state.progressReady && state.progressOwnerKey && content ? content.parkById : undefined,
+    ),
+    [state.claims, state.progressReady, state.progressOwnerKey, content],
+  );
 
   const next = useMemo(
-    () => (content?.liveParks ?? []).filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
-    [content?.liveParks, state.claims, state.user],
+    () => (content?.parks ?? []).filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
+    [content?.parks, state.claims, state.user],
   );
-  // The case always shows every live badge: claimed ones shine, the rest wait as silhouettes.
+  // The case shows the current catalogue, including parks without published art.
   const ghosts = next;
 
+  // Known park IDs follow the current catalogue. Removed parks retain their saved label.
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const openPark = state.progressReady && open ? state.claims[open]?.parkSnapshot ?? content?.parkById.get(open) ?? undefined : undefined;
+  const rarityChips: Rarity[] = [];
+  for (const rarity of RARITY_TIERS) {
+    if (rarity === "legendary" && (tally.epic ?? 0) > 0) rarityChips.push("epic");
+    rarityChips.push(rarity);
+  }
+  const openPark = state.progressReady && open ? content?.parkById.get(open) ?? state.claims[open]?.parkSnapshot ?? undefined : undefined;
   const openClaim = open ? state.claims[open] : undefined;
 
   return (
@@ -68,13 +82,30 @@ export function Collection() {
           transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }}
         />
       </div>
-      <div className="col-rarity">
-        {(Object.keys(RARITY) as Rarity[]).map((r) => (
+      <div className="col-rarity-label eyebrow">Earned parks by current rarity</div>
+      <div className="col-rarity" aria-label="Earned parks by current rarity; removed parks use saved rarity">
+        {rarityChips.map((r) => (
           <span key={r} className={`col-rarity__chip ${tally[r] ? "" : "is-empty"}`} style={{ background: RARITY[r].color, color: RARITY[r].ink }}>
             <b>{tally[r] ?? 0}</b> {RARITY[r].label}
           </span>
         ))}
       </div>
+
+      <section className="collection-rarity-progress" aria-label="Current rarity progression">
+        <div className="collection-rarity-progress__head">
+          <strong>Rarity progression</strong>
+          <span>{rarityProgress.available ? `${RARITY[rarityProgress.highestUnlocked].label} tier open` : "Checking progress"}</span>
+        </div>
+        {rarityProgress.available ? (
+          <div className="collection-rarity-progress__requirements">
+            {RARITY_TIERS.map((rarity) => (
+              <RarityProgressRow key={rarity} rarity={rarity} progress={rarityProgress} />
+            ))}
+          </div>
+        ) : (
+          <p>Saved visits and the current park list are loading.</p>
+        )}
+      </section>
 
       <div className="case">
         <div className="case__glass" />
@@ -176,6 +207,32 @@ export function Collection() {
         document.querySelector(".device") ?? document.body,
       )}
     </motion.div>
+  );
+}
+
+function requirementProgress(tier: RarityTierProgress) {
+  return Object.entries(tier.requirements).flatMap(([rarity, required]) => {
+    if (required === undefined) return [];
+    const key = rarity as keyof RarityCounts;
+    const label = RARITY[key].label;
+    return [`${label} ${tier.current[key] ?? 0}/${required}`];
+  }).join(" · ");
+}
+
+function RarityProgressRow({ rarity, progress }: { rarity: ProgressionRarity; progress: RarityProgress }) {
+  const tier = progress.tiers[rarity];
+  const open = rarity === "common" || tier.unlocked;
+  const detail = rarity === "common"
+    ? `${progress.counts.common} Common parks in Dex`
+    : requirementProgress(tier);
+  const status = rarity === "common" ? "Open" : open ? "Unlocked" : "Locked";
+
+  return (
+    <div className="collection-rarity-progress__row" data-state={open ? "unlocked" : "locked"} aria-label={`${RARITY[rarity].label}: ${detail}. ${status}`}>
+      <span style={{ background: RARITY[rarity].color, color: RARITY[rarity].ink }}>{RARITY[rarity].label}</span>
+      <span>{detail}</span>
+      <strong>{status}</strong>
+    </div>
   );
 }
 

@@ -10,6 +10,9 @@ import { FIELD } from "../lib/native";
 import type { Park } from "../lib/parks";
 import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
+import { RARITY } from "../lib/parks";
+import { RARITY_REQUIREMENTS, RARITY_TIERS } from "../lib/progression";
+import { formatRarityRequirements } from "../lib/rarityUi";
 
 const SLIDES = [
   {
@@ -30,7 +33,42 @@ const SLIDES = [
     body: "Take a photo, claim the badge and build a collection worth putting on a shelf.",
     tint: "#DCEBFF",
   },
+  {
+    eyebrow: "Step 4 · Unlock",
+    title: ["Unlock", "rarer parks."],
+    body: "Claim badges to open the next rarity tier. Your park sheet always shows what you need next.",
+    tint: "#E8E2FF",
+  },
 ];
+
+function RarityRoadmap() {
+  return (
+    <div className="ob-roadmap" aria-label="Badge rarity unlock requirements">
+      <div className="ob-roadmap__heading">Claimed badges unlock rarer parks</div>
+      <div className="ob-roadmap__rows">
+        {RARITY_TIERS.map((rarity, index) => {
+          const requirements = RARITY_REQUIREMENTS[rarity];
+          const need = formatRarityRequirements(requirements);
+          return (
+            <motion.div
+              key={rarity}
+              className="ob-roadmap__row"
+              initial={{ x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: index * 0.08, type: "spring", stiffness: 320, damping: 24 }}
+            >
+              <span className="ob-roadmap__tier" style={{ background: RARITY[rarity].color, color: RARITY[rarity].ink }}>
+                {RARITY[rarity].label}
+              </span>
+              <span className="ob-roadmap__need">{need || "Open now"}</span>
+            </motion.div>
+          );
+        })}
+      </div>
+      <div className="ob-roadmap__foot">Each badge counts once</div>
+    </div>
+  );
+}
 
 function BadgeFan({ parks }: { parks: readonly Park[] }) {
   const fan = parks.slice(0, 3);
@@ -226,8 +264,8 @@ export function Onboarding() {
     >
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
-        {index < 2 && (
-          <button className="onboarding__skip" onClick={() => goTo(2)}>
+        {index < SLIDES.length - 1 && (
+          <button className="onboarding__skip" onClick={() => goTo(SLIDES.length - 1)}>
             Skip
           </button>
         )}
@@ -250,7 +288,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere /> : <SnapClaimKeep parks={parks} />}
+                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere /> : index === 2 ? <SnapClaimKeep parks={parks} /> : <RarityRoadmap />}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -291,13 +329,13 @@ export function Onboarding() {
         <motion.button
           className="btn"
           layout
-          onClick={() => (index < 2 ? goTo(index + 1) : setAsking(true))}
+          onClick={() => (index < SLIDES.length - 1 ? goTo(index + 1) : setAsking(true))}
           whileTap={{ scale: 0.96 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={index < 2 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
-              {index < 2 ? "Next" : "Let's go!"}
+            <motion.span key={index < SLIDES.length - 1 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
+              {index < SLIDES.length - 1 ? "Next" : "Let's go!"}
             </motion.span>
           </AnimatePresence>
           <Icon name="next" />

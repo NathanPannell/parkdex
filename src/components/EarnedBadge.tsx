@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Badge, type BadgeState } from "./Badge";
 import { scenePath, type Park } from "../lib/parks";
+import { resolveEarnedParkDisplay } from "../lib/earnedParkDisplay";
 import type { Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 import { canDownloadContent, isWaitingForContentWifi, type Connectivity } from "../lib/content/contracts";
@@ -55,15 +56,21 @@ function useEarnedScene(park: Park, claim: Claim) {
   const connectivity = useSyncExternalStore(subscribeToContentNetwork, getContentNetworkSnapshot, getContentNetworkSnapshot);
   const contentDownloadAvailable = canDownloadContent(connectivity);
   const waitingForWifi = isWaitingForContentWifi(connectivity);
-  const activePark = content?.liveParks.find((candidate) => candidate.id === earnedPark.id);
+  const activePark = content?.parkById.get(earnedPark.id);
+  const currentSceneHref = activePark?.scene ? content?.assetUrls.get(scenePath(activePark.scene)) : undefined;
+  const display = resolveEarnedParkDisplay(park, claim, activePark, !!currentSceneHref);
+  const displayPark = display.park;
   const activeSceneVersion = runtime.getSceneAssetVersion(earnedPark.id, earnedPark.scene);
-  const matchesActiveArt = !!earnedPark.scene && !!claim.contentReleaseId &&
+  const matchesArchivedReleaseArt = !!earnedPark.scene && !!claim.contentReleaseId &&
     activePark?.scene === earnedPark.scene && activeSceneVersion === claim.contentReleaseId;
   const sceneKey = `${claim.claimId}:${claim.contentReleaseId ?? ""}:${earnedPark.scene ?? ""}`;
   const [archivedScene, setArchivedScene] = useState<{ key: string; url: string } | null>(null);
-  const activeSceneHref = matchesActiveArt && earnedPark.scene
-    ? content?.assetUrls.get(scenePath(earnedPark.scene))
-    : undefined;
+  const activeSceneHref = display.usesCurrentArt && activePark?.scene
+    ? currentSceneHref
+    : matchesArchivedReleaseArt && earnedPark.scene
+      ? content?.assetUrls.get(scenePath(earnedPark.scene))
+      : undefined;
+  const matchesActiveArt = display.usesCurrentArt ? !!activeSceneHref : matchesArchivedReleaseArt;
   const sceneHref = activeSceneHref ?? (archivedScene?.key === sceneKey ? archivedScene.url : undefined);
 
   useEffect(() => {
@@ -86,7 +93,7 @@ function useEarnedScene(park: Park, claim: Claim) {
     return () => { live = false; };
   }, [activeSceneHref, archivedScene, claim.contentReleaseId, earnedPark.id, earnedPark.scene, runtime, sceneKey, status.phase, contentDownloadAvailable]);
 
-  return { sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt };
+  return { displayPark, sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt, adoptedCurrentArt: display.usesCurrentArt };
 }
 
 export function useEarnedSceneAsset(park: Park, claim: Claim) {
@@ -98,12 +105,12 @@ export function useEarnedSceneHref(park: Park, claim: Claim) {
 }
 
 export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
+  const { displayPark, sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
   const earnedPark = claim.parkSnapshot ?? park;
-  const { sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt } = useEarnedSceneAsset(earnedPark, claim);
-  const needsExactScene = earnedPark.scene !== null && (!matchesActiveArt || !sceneHref);
+  const needsExactScene = displayPark.scene !== null && (!matchesActiveArt || !sceneHref);
   if (needsExactScene && !sceneHref) {
     const size = badgeProps.size ?? 120;
-    const message = !claim.contentReleaseId
+    const message = !claim.contentReleaseId && !adoptedCurrentArt
       ? "Art unavailable"
       : waitingForWifi
         ? "Connect to Wi-Fi to restore art"
@@ -112,5 +119,5 @@ export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
           : "Restoring badge art";
     return <div className="earned-badge__restoring" style={{ width: size, height: size }} role="img" aria-label={`${earnedPark.short} badge. ${message}.`}><span>{message}</span></div>;
   }
-  return <Badge park={earnedPark} sceneHref={sceneHref} {...badgeProps} />;
+  return <Badge park={displayPark} sceneHref={sceneHref} {...badgeProps} />;
 }

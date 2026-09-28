@@ -5,12 +5,16 @@ import { motion } from "motion/react";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Badge } from "../../components/Badge";
+import { EarnedBadge } from "../../components/EarnedBadge";
 import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
+import { getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
+import { rarityAccessibleStatus } from "../../lib/rarityUi";
+import type { Claim } from "../../lib/store";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
@@ -20,7 +24,9 @@ type Props = {
   mapRef: RefObject<MLMap | null>;
   user: LngLat;
   fc: BoundaryCollection | undefined;
-  claims: Record<string, unknown>;
+  claims: Readonly<Record<string, Claim>>;
+  rarityProgress: RarityProgress;
+  progressReady: boolean;
   selectedId: string | null;
   tripId: string | null;
   arrivedId: string | null;
@@ -42,7 +48,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedId, route, onSelect }: Props) {
+export function MapView({ mapRef, user, fc, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -295,7 +301,10 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
             park={park}
             tier={tier}
             rank={rank}
-            claimed={!!claims[park.id]}
+            claim={claims[park.id]}
+            eligibility={progressReady
+              ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id])
+              : { eligible: false, reason: "unavailable", requirements: {}, current: {}, remaining: {} }}
             focused={park.id === (tripId ?? selectedId)}
             onSelect={onSelect}
           />,
@@ -312,18 +321,22 @@ const ParkMarker = memo(function ParkMarker({
   park,
   tier,
   rank,
-  claimed,
+  claim,
+  eligibility,
   focused,
   onSelect,
 }: {
   park: Park;
   tier: Tier;
   rank: number;
-  claimed: boolean;
+  claim?: Claim;
+  eligibility: ParkRarityEligibility;
   focused: boolean;
   onSelect: (id: string) => void;
 }) {
   const live = isLive(park);
+  const claimed = !!claim;
+  const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const size = !live ? (tier === "near" ? 30 : 22) : tier === "near" ? 50 : 38;
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -334,8 +347,8 @@ const ParkMarker = memo(function ParkMarker({
   return (
     <motion.button
       ref={ref}
-      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""} ${live ? "" : "pm--soon"}`}
-      aria-label={park.name}
+      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""} ${live ? "" : "pm--soon"} ${locked ? "pm--locked" : ""}`}
+      aria-label={`${park.name}. ${rarityAccessibleStatus(park, eligibility, !live)}`}
       initial={{ scale: 0, y: 24 }}
       animate={{ scale: focused ? 1.4 : 1, y: focused ? -6 : 0 }}
       whileHover={{ scale: focused ? 1.45 : 1.12 }}
@@ -348,13 +361,16 @@ const ParkMarker = memo(function ParkMarker({
       ) : (
         <>
           <span className="pm__badge">
-            <Badge park={park} size={size} showName={false} state={claimed ? "earned" : "preview"} />
+            {claim
+              ? <EarnedBadge park={park} claim={claim} size={size} showName={false} state="earned" />
+              : <Badge park={park} size={size} showName={false} state="preview" />}
           </span>
           {claimed && (
             <span className="pm__check">
               <Icon name="check" size={12} stroke={3.4} />
             </span>
           )}
+          {locked && <span className="pm__lock" aria-hidden="true"><Icon name="lock" size={10} stroke={2.8} /></span>}
           <span className="pm__stem" />
         </>
       )}
