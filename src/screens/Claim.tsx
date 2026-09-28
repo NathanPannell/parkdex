@@ -32,7 +32,7 @@ function ClaimReady({ park }: { park: Park }) {
   const { state, dispatch } = useStore();
   const auth = useAuth();
   const content = useContent();
-  const photo = state.pendingPhoto ?? "";
+  const [photo] = useState(() => state.pendingPhoto ?? "");
   const [contentReleaseId] = useState(() => content?.releaseId ?? null);
   const [owner] = useState(() => auth.ownerAccountId ? { kind: "account" as const, accountId: auth.ownerAccountId } : { kind: "guest" as const });
   const ownerKey = progressOwnerKey(owner)!;
@@ -184,7 +184,7 @@ function ClaimReady({ park }: { park: Park }) {
         transition={{ type: "spring", stiffness: 200, damping: 16, delay: 0.2 }}
       >
         <span className="tape" />
-        <img src={photo} alt="Your check-in" />
+        {photo && <img src={photo} alt="Your check-in" />}
       </motion.div>
 
       <div className="claim__stage">
