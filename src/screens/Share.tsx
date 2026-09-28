@@ -2,14 +2,14 @@ import { toBlob } from "html-to-image";
 import { LayoutGroup, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
-import { useEarnedSceneHref } from "../components/EarnedBadge";
+import { useEarnedSceneAsset } from "../components/EarnedBadge";
 import { ContentGate } from "../components/ContentGate";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useToast } from "../components/Toast";
 import { sfx } from "../lib/feedback";
 import { isNative, shareImage } from "../lib/native";
-import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, type Park } from "../lib/parks";
 import { useStore, type Claim } from "../lib/store";
 import { useContent } from "../lib/content/provider";
 
@@ -78,7 +78,7 @@ export function Share() {
     return claim ? { ownerKey: state.progressOwnerKey, parkId, claim } : null;
   });
   if (!state.progressReady || !pinned || state.progressOwnerKey !== pinned.ownerKey) return <ContentGate />;
-  const park = content?.parkById.get(pinned.parkId) ?? pinned.claim.parkSnapshot;
+  const park = pinned.claim.parkSnapshot ?? content?.parkById.get(pinned.parkId);
   if (!park) return <ContentGate />;
   const number = Math.max(1, Object.keys(state.claims).indexOf(pinned.parkId) + 1);
   return <ShareReady park={park} claim={pinned.claim} number={number} />;
@@ -94,11 +94,8 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
   const [busy, setBusy] = useState(false);
   // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
   const [sceneHref, setSceneHref] = useState<string>();
-  const archivedScene = useEarnedSceneHref(park, claim);
-  const isLive = !!content?.liveParks.some((candidate) => candidate.id === park.id);
-  const sceneAsset = park.scene
-    ? (isLive ? content?.assetUrls.get(scenePath(park.scene)) : archivedScene)
-    : undefined;
+  const { sceneHref: earnedSceneHref, wifiAvailable } = useEarnedSceneAsset(park, claim);
+  const sceneAsset = park.scene ? earnedSceneHref : undefined;
   const [sceneState, setSceneState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   useEffect(() => {
     let live = true;
@@ -129,10 +126,10 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
     return () => { live = false; };
   }, [park.id, park.scene, sceneAsset]);
 
-  const sceneMessage = !claim.contentReleaseId && !isLive
+  const sceneMessage = !claim.contentReleaseId
     ? "Archived badge art is not available for this claim."
-    : typeof navigator !== "undefined" && !navigator.onLine
-      ? "Connect to restore the original badge art."
+    : !wifiAvailable
+      ? "Connect to Wi-Fi to restore the original badge art."
       : sceneState === "error"
         ? "Badge art could not be loaded. Try again shortly."
         : "Restoring the original badge art…";

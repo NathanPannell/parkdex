@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { contentFetch, getContentApiOrigin, getContentConnectivity, subscribeContentConnectivity } from "../content/transport";
 import {
   nativeAuthFetch,
   persistNativeSession,
@@ -80,6 +81,134 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
   return "GET";
 }
 
+const PRIVATE_PHOTO_PATH = /^\/api\/claims\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/photo$/i;
+const MAX_PRIVATE_PHOTO_BYTES = 2_621_440;
+
+function privatePhotoRequestUrl(input: RequestInfo | URL, method: string): URL | null {
+  if (method.toUpperCase() !== "GET") return null;
+  const accountBase = apiUrl("/");
+  const rawUrl = typeof Request !== "undefined" && input instanceof Request ? input.url : String(input);
+  const url = new URL(rawUrl, accountBase);
+  if (!PRIVATE_PHOTO_PATH.test(url.pathname)) return null;
+
+  const accountOrigin = new URL(accountBase).origin;
+  if (url.origin !== accountOrigin || url.protocol !== "https:" || url.username || url.password || url.hash || (url.port && url.port !== "443")) {
+    throw new Error("Private photo downloads must use the configured HTTPS account API.");
+  }
+  return url;
+}
+
+function assertPhotoOriginsCompatible(url: URL): void {
+  const accountOrigin = new URL(apiUrl("/")).origin;
+  const approvedContentOrigin = getContentApiOrigin();
+  if (!approvedContentOrigin || url.origin !== accountOrigin || accountOrigin !== approvedContentOrigin) {
+    throw new Error("Private photo downloads require matching account and content API origins.");
+  }
+}
+
+function wifiUnavailableError(): Error {
+  const error = new Error("Connect to Wi-Fi to download saved photos.");
+  error.name = "WifiUnavailableError";
+  return error;
+}
+
+async function fetchPrivatePhotoOnWifi(input: RequestInfo | URL, init: RequestInit): Promise<Response> {
+  const callerSignal = init.signal ?? null;
+  if (callerSignal?.aborted) throw callerSignal.reason ?? new DOMException("The photo request was aborted.", "AbortError");
+  const initialConnectivity = await getContentConnectivity();
+  if (!initialConnectivity.connected || !initialConnectivity.wifi) throw wifiUnavailableError();
+
+  const controller = new AbortController();
+  const abortForWifi = () => {
+    if (!controller.signal.aborted) controller.abort(wifiUnavailableError());
+  };
+  const abortForCaller = () => {
+    if (!controller.signal.aborted) controller.abort(callerSignal?.reason);
+  };
+  const onConnectivity = (connectivity: { connected: boolean; wifi: boolean }) => {
+    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+  };
+  let stopConnectivity: (() => void) | undefined;
+
+  callerSignal?.addEventListener("abort", abortForCaller, { once: true });
+  try {
+    stopConnectivity = subscribeContentConnectivity(onConnectivity);
+    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    const connectivity = await getContentConnectivity();
+    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    const response = await fetch(input, {
+      ...init,
+      signal: controller.signal,
+      credentials: "include",
+      cache: "no-store",
+      redirect: "error",
+    });
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PRIVATE_PHOTO_BYTES) {
+      const error = new RangeError("The private photo exceeds its byte limit.");
+      controller.abort(error);
+      if (response.body) void response.body.cancel(error).catch(() => {});
+      throw error;
+    }
+    const bytes = await readBoundedResponseBody(response, MAX_PRIVATE_PHOTO_BYTES, (error) => controller.abort(error));
+    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    const body = [204, 205, 304].includes(response.status) ? null : bytes;
+    const bufferedResponse = new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+    Object.defineProperty(bufferedResponse, "url", { value: response.url });
+    return bufferedResponse;
+  } catch (error) {
+    if (controller.signal.aborted) throw controller.signal.reason ?? wifiUnavailableError();
+    throw error;
+  } finally {
+    callerSignal?.removeEventListener("abort", abortForCaller);
+    stopConnectivity?.();
+  }
+}
+
+async function readBoundedResponseBody(
+  response: Response,
+  maxBytes: number,
+  abort: (reason: unknown) => void,
+): Promise<ArrayBuffer> {
+  if (!response.body) return new ArrayBuffer(0);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (byteLength + value.byteLength > maxBytes) {
+        const error = new RangeError("The private photo exceeds its byte limit.");
+        abort(error);
+        void reader.cancel(error).catch(() => {});
+        throw error;
+      }
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } catch (error) {
+    void reader.cancel(error).catch(() => {});
+    throw error;
+  } finally {
+    try { reader.releaseLock(); } catch { /* A failed stream may keep its reader locked. */ }
+  }
+
+  const buffer = new ArrayBuffer(byteLength);
+  const output = new Uint8Array(buffer);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return buffer;
+}
+
 async function parseBody(response: Response): Promise<Record<string, unknown>> {
   try {
     const body: unknown = await response.json();
@@ -95,6 +224,16 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
   const headers = new Headers(typeof Request !== "undefined" && pathOrInput instanceof Request ? pathOrInput.headers : undefined);
   new Headers(init.headers).forEach((value, name) => headers.set(name, value));
   if (expectedAccountId) headers.set("X-Kip-Account-ID", expectedAccountId);
+
+  const photoUrl = privatePhotoRequestUrl(url, method);
+  if (photoUrl) {
+    if (!authenticated) throw new Error("Private photo downloads require an authenticated account session.");
+    assertPhotoOriginsCompatible(photoUrl);
+    const signal = init.signal ?? (typeof Request !== "undefined" && url instanceof Request ? url.signal : undefined);
+    // The native content fetcher enforces its exact staging, production, or compile-time preview host allowlist.
+    if (isNative) return nativeAuthFetch(url, { ...init, headers, signal }, contentFetch);
+    return fetchPrivatePhotoOnWifi(photoUrl, { ...init, method: "GET", headers, signal });
+  }
 
   if (isNative) {
     if (authenticated) return nativeAuthFetch(url, { ...init, headers });

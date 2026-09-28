@@ -1,12 +1,13 @@
 export type Biome = "coast" | "forest" | "mountain" | "lake" | "waterfall" | "river" | "cave" | "marsh" | "heritage";
 export type Shape = "circle" | "hex" | "shield" | "arch" | "seal";
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type ParkCategory = "national" | "provincial" | "regional" | "municipal" | "community";
 
 export type Park = {
   id: string;
   name: string;
   short: string;
-  category: "national" | "provincial" | "regional";
+  category: ParkCategory;
   region: string;
   lat: number;
   lng: number;
@@ -82,7 +83,13 @@ export function landscapeLabel(park: Park) {
   return BIOME_LABEL[(kind as Biome) ?? park.biome] ?? BIOME_LABEL[park.biome];
 }
 
-export const CATEGORY_LABEL = { national: "National Park", provincial: "Provincial Park", regional: "Regional Park" };
+export const CATEGORY_LABEL: Record<ParkCategory, string> = {
+  national: "National Park",
+  provincial: "Provincial Park",
+  regional: "Regional Park",
+  municipal: "Municipal Park",
+  community: "Community Park",
+};
 
 // Small deterministic PRNG so every park's badge art is stable across renders.
 export function rng(seed: number) {

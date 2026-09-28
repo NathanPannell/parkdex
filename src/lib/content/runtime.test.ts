@@ -1,20 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Connectivity,
+  ArchivedScene,
+  ContentChangeBatch,
   ContentChannel,
+  ContentEnvironment,
   ContentFile,
+  ContentMapInventory,
+  ContentMapPointer,
   ContentManifest,
   ContentRuntime,
   ContentRuntimeOptions,
   ContentSnapshot,
   ContentStore,
-  ArchivedScene,
+  ContentSyncCursor,
+  ContentSyncState,
   RetainedPark,
   StoredRelease,
 } from "./contracts";
-import { CONTENT_CDN_ORIGIN } from "./contracts";
-import { sha256Hex } from "./manifest";
+import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
 import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
+import { CONTENT_CDN_ORIGIN } from "./contracts";
 import { resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
@@ -59,7 +65,7 @@ const PARK_FIELDS = {
   rarity: "common",
   seed: 17,
   blurb: "A coastal park.",
-};
+} as const;
 
 function toBytes(value: unknown): ArrayBuffer {
   const bytes = new TextEncoder().encode(typeof value === "string" ? value : JSON.stringify(value));
@@ -165,13 +171,17 @@ async function makeArchivedRelease(parkId: string, scene: string) {
   return { channel, rawManifest: rawManifest as ContentManifest, content, park: draft.park };
 }
 
+
 class MemoryContentStore implements ContentStore {
   activeId: string | null = null;
   releases = new Map<string, StoredRelease>();
   files = new Map<string, ArrayBuffer>();
-  retained = new Map<string, RetainedPark>();
-  archivedScenes = new Map<string, ArchivedScene>();
   deletedFiles: string[] = [];
+  retained = new Map<string, RetainedPark>();
+  archived = new Map<string, ArchivedScene>();
+  sync = new Map<ContentEnvironment, ContentSyncState>();
+  inventories = new Map<string, ContentMapInventory>();
+  cachedMapPointers = new Map<ContentEnvironment, ContentMapPointer>();
   beforeActivation?: (id: string, expected: string | null) => void;
   initialized = false;
   closed = false;
@@ -186,6 +196,10 @@ class MemoryContentStore implements ContentStore {
     if (this.activeId !== expectedActiveId) throw new Error("Content release activation compare-and-swap failed");
     if (!this.releases.has(id)) throw new Error("Content release is missing");
     this.activeId = id;
+  }
+  async clearActiveRelease(expectedActiveId: string) {
+    if (this.activeId !== expectedActiveId) throw new Error("Active content changed before its legacy pointer could be cleared");
+    this.activeId = null;
   }
   async deleteRelease(id: string) {
     if (this.activeId === id) throw new Error("Cannot delete active content release");
@@ -211,17 +225,45 @@ class MemoryContentStore implements ContentStore {
       if (release.id === this.activeId && release.manifest.files.some((file) => file.sha256 === hash)) throw new Error("File is referenced by active release");
     }
     for (const entry of this.retained.values()) if (entry.sceneFile?.sha256 === hash) throw new Error("File is referenced by retained park");
+    for (const scene of this.archived.values()) if (scene.file.sha256 === hash) throw new Error("File is referenced by archived scene");
     this.deletedFiles.push(hash);
     this.files.delete(hash);
   }
   async getRetainedParks() { return [...this.retained.values()].map((value) => structuredClone(value)); }
   async retainParks(parks: RetainedPark[]) { for (const entry of parks) this.retained.set(entry.park.id, structuredClone(entry)); }
-  async getArchivedScene(releaseId: string, scene: string) {
-    const entry = this.archivedScenes.get(`${releaseId}:${scene}`);
-    return entry ? structuredClone(entry) : undefined;
+  async getArchivedScene(releaseId: string, scene: string) { const value = this.archived.get(`${releaseId}:${scene}`); return value ? structuredClone(value) : undefined; }
+  async retainArchivedScene(scene: ArchivedScene) { this.archived.set(`${scene.releaseId}:${scene.scene}`, structuredClone(scene)); }
+  async listArchivedScenes() { return [...this.archived.values()].map((value) => structuredClone(value)); }
+  async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
+    const state = this.sync.get(environment);
+    return state ? { revision: state.revision, sourceId: state.sourceId ?? "" } : null;
   }
-  async retainArchivedScene(entry: ArchivedScene) { this.archivedScenes.set(`${entry.releaseId}:${entry.scene}`, structuredClone(entry)); }
-  async listArchivedScenes() { return [...this.archivedScenes.values()].map((entry) => structuredClone(entry)); }
+  async getSyncState(environment: ContentEnvironment) { const value = this.sync.get(environment); return value ? structuredClone(value) : null; }
+  async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false) {
+    const current = this.sync.get(environment);
+    if ((current?.revision ?? null) !== expectedRevision || (current?.sourceId ?? null) !== expectedSourceId) throw new Error("Content sync cursor changed before the snapshot could be committed");
+    if (!resetCursor && current && state.revision < current.revision) throw new Error("Content snapshot cannot move the sync cursor backwards");
+    this.sync.set(environment, structuredClone({ ...state, sourceId }));
+    if (state.map) this.cachedMapPointers.set(environment, structuredClone(state.map));
+  }
+  async applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string) {
+    const current = this.sync.get(environment);
+    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId) throw new Error("Content sync cursor changed before the batch could be committed");
+    this.sync.set(environment, structuredClone(applyContentChangeBatch(current, batch)));
+    if (batch.changes.some((change) => change.entity === "map" && change.op === "upsert" && change.value)) {
+      const change = batch.changes.find((entry) => entry.entity === "map" && entry.op === "upsert" && entry.value);
+      if (change?.entity === "map" && change.value) this.cachedMapPointers.set(environment, structuredClone(change.value));
+    }
+  }
+  async advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string) {
+    const current = this.sync.get(environment);
+    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId) throw new Error("Content sync cursor changed before the revision could advance");
+    this.sync.set(environment, { ...current, revision });
+  }
+  async getMapInventory(version: string) { const value = this.inventories.get(version); return value ? structuredClone(value) : null; }
+  async putMapInventory(inventory: ContentMapInventory) { this.inventories.set(inventory.version, structuredClone(inventory)); }
+  async pruneMapInventories(keepVersions: readonly string[]) { const keep = new Set(keepVersions); for (const version of this.inventories.keys()) if (!keep.has(version)) this.inventories.delete(version); }
+  async getCachedMapPointer(environment: ContentEnvironment) { const value = this.cachedMapPointers.get(environment); return value ? structuredClone(value) : null; }
   async close() { this.closed = true; }
 }
 
@@ -253,6 +295,80 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
   };
 }
 
+type TestSyncPark = Omit<Awaited<ReturnType<typeof makeRelease>>["park"], "scene"> & { scene: string | null };
+
+function contentSyncSnapshot(revision: number, park: TestSyncPark, assets: ContentFile[]) {
+  return {
+    schema: "parkdex.content-sync/v1",
+    revision,
+    parks: [park],
+    boundaries: {
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: { id: park.id, biome: park.biome },
+        geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
+      }],
+    },
+    drive: {
+      hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }],
+      parks: { [park.id]: { drive: [null], walkM: 0 } },
+    },
+    assets,
+    map: null,
+  };
+}
+
+async function makeSceneAsset(version: string, scene: string, content: string) {
+  const path = `art/badges/scenes/${scene}.webp`;
+  const bytes = toBytes(content);
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const file: ContentFile = {
+    path,
+    key: `releases/${version}/${path}`,
+    url: `https://kip-assets.parkdex.app/releases/${version}/${encodedPath}`,
+    sha256: await sha256Hex(bytes),
+    byte_size: bytes.byteLength,
+    content_type: "image/webp",
+  };
+  return { file, bytes };
+}
+
+function contentSyncServer(
+  snapshot: ReturnType<typeof contentSyncSnapshot>,
+  deltas = new Map<number, unknown>(),
+  sceneLookups = new Map<string, ContentFile>(),
+  files = new Map<string, ArrayBuffer>(),
+) {
+  const calls: string[] = [];
+  const fetcher: typeof fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    calls.push(url.href);
+    if (url.pathname === "/api/content/snapshot") return Response.json(snapshot);
+    if (url.pathname === "/api/content/changes") {
+      const after = Number(url.searchParams.get("after"));
+      const explicit = deltas.get(after);
+      return Response.json(explicit ?? {
+        schema: "parkdex.content-sync/v1",
+        fromRevision: after,
+        throughRevision: after,
+        headRevision: after,
+        hasMore: false,
+        batches: [],
+      });
+    }
+    if (url.pathname === "/api/content/scene") {
+      const releaseId = url.searchParams.get("releaseId") ?? "";
+      const scene = url.searchParams.get("scene") ?? "";
+      const file = sceneLookups.get(`${releaseId}:${scene}`);
+      return file ? Response.json({ schema: "parkdex.scene-asset/v1", file }) : new Response("missing", { status: 404 });
+    }
+    const bytes = files.get(url.href);
+    return bytes ? new Response(bytes.slice(0), { status: 200 }) : new Response("missing", { status: 404 });
+  });
+  return { calls, fetcher };
+}
+
 function createRuntime(store: MemoryContentStore, fetcher: typeof fetch, connectivity: Connectivity, claimedParkIds: string[] = []) {
   const runtime = createContentRuntime({
     store,
@@ -263,6 +379,24 @@ function createRuntime(store: MemoryContentStore, fetcher: typeof fetch, connect
     connectivity,
   } satisfies ContentRuntimeOptions);
   return runtime;
+}
+
+function createSyncRuntime(
+  store: MemoryContentStore,
+  fetcher: typeof fetch,
+  connectivity: Connectivity,
+  claimedParkIds: string[] = [],
+  apiUrl: string | null = "https://parkdex.example.test/api/content/current",
+  environment: ContentEnvironment = "staging",
+) {
+  return createContentRuntime({
+    store,
+    fetch: fetcher,
+    apiUrl,
+    environment,
+    claimedParkIds: () => claimedParkIds,
+    connectivity,
+  } satisfies ContentRuntimeOptions);
 }
 
 const runtimes: ContentRuntime[] = [];
@@ -420,8 +554,8 @@ describe("content runtime", () => {
 
     runtime.setConnectivity({ connected: true, wifi: true });
     await update;
+    await vi.waitFor(async () => expect(await store.getActiveId()).toBe(b.channel.releaseId));
     const snapshot = runtime.getStatus().snapshot!;
-    expect(await store.getActiveId()).toBe(b.channel.releaseId);
     expect(snapshot.releaseId).toBe(b.channel.releaseId);
     expect(snapshot.parks.map((park) => park.id)).toEqual(["provincial-b-park"]);
     expect(snapshot.retiredParks.map((park) => park.id)).toEqual(["provincial-a-park"]);
@@ -461,6 +595,53 @@ describe("content runtime", () => {
     for (const hash of stagedHashes) expect(await store.listFiles()).toContainEqual(expect.objectContaining({ hash }));
   });
 
+  it("does not publish a candidate after an activation compare-and-swap conflict", async () => {
+    const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
+    const b = await makeRelease("b".repeat(64), 2, "provincial-b-park", "scene-b");
+    const c = await makeRelease("c".repeat(64), 3, "provincial-c-park", "scene-c");
+    const server = contentServer(a);
+    server.add(b);
+    const store = new MemoryContentStore();
+    const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    await store.putRelease({ id: c.channel.releaseId, channel: c.channel, manifest: c.rawManifest, readiness: "complete", healthy: true });
+
+    store.beforeActivation = (id) => {
+      if (id !== b.channel.releaseId) return;
+      store.beforeActivation = undefined;
+      store.activeId = "c".repeat(64);
+    };
+    server.setCurrent(b.channel);
+    await runtime.retry();
+
+    expect(await store.getActiveId()).toBe("c".repeat(64));
+    expect(runtime.getStatus().snapshot?.releaseId).toBe(a.channel.releaseId);
+    expect(runtime.getStatus().phase).toBe("error");
+    expect(runtime.getStatus().error).toMatch(/compare-and-swap/);
+  });
+
+  it("does not reopen a Wi-Fi-only chunk queue on a background network event", async () => {
+    const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
+    const server = contentServer(a);
+    const store = new MemoryContentStore();
+    const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: false }));
+    await runtime.start();
+    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
+
+    runtime.setForeground(false);
+    runtime.setConnectivity({ connected: true, wifi: true });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const secondChunkUrl = a.rawManifest.files.find((file) => file.path === "map/island/001.bin")!.url;
+    expect((server.fetcher as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))).not.toContain(secondChunkUrl);
+
+    runtime.setForeground(true);
+    await vi.waitFor(() => expect((server.fetcher as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))).toContain(secondChunkUrl));
+    const secondChunk = a.rawManifest.files.find((file) => file.path === "map/island/001.bin")!;
+    await vi.waitFor(async () => expect(await store.hasFile(secondChunk.sha256, 4)).toBe(true));
+  });
+});
+
+describe("legacy archived art compatibility", () => {
   it("restores exact archived badge art, publishes its URL, and keeps the pinned hash through offline GC", async () => {
     const current = await makeRelease("b".repeat(64), 2, "current-park", "current-scene");
     const archived = await makeArchivedRelease("retired-park", "retired-scene");
@@ -554,48 +735,188 @@ describe("content runtime", () => {
     expect(signal?.aborted).toBe(true);
   });
 
-  it("does not publish a candidate after an activation compare-and-swap conflict", async () => {
-    const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
-    const b = await makeRelease("b".repeat(64), 2, "provincial-b-park", "scene-b");
-    const c = await makeRelease("c".repeat(64), 3, "provincial-c-park", "scene-c");
-    const server = contentServer(a);
-    server.add(b);
+
+});
+
+describe("incremental content sync", () => {
+  it("keeps skeleton parks in the catalogue, skips map traffic for a null pointer, and reuses an unchanged cursor", async () => {
+    const release = await makeRelease("a".repeat(64), 1, "municipal-skeleton-park", "scene-a");
+    const skeleton = { ...release.park, scene: null };
+    const snapshot = contentSyncSnapshot(7, skeleton, []);
+    const server = contentSyncServer(snapshot);
     const store = new MemoryContentStore();
-    const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+
     await runtime.start();
-    await store.putRelease({ id: c.channel.releaseId, channel: c.channel, manifest: c.rawManifest, readiness: "complete", healthy: true });
 
-    store.beforeActivation = (id) => {
-      if (id !== b.channel.releaseId) return;
-      store.beforeActivation = undefined;
-      store.activeId = "c".repeat(64);
-    };
-    server.setCurrent(b.channel);
-    await runtime.retry();
-
-    expect(await store.getActiveId()).toBe("c".repeat(64));
-    expect(runtime.getStatus().snapshot?.releaseId).toBe(a.channel.releaseId);
-    expect(runtime.getStatus().phase).toBe("error");
-    expect(runtime.getStatus().error).toMatch(/compare-and-swap/);
+    const active = runtime.getStatus().snapshot!;
+    expect(active.parks.map((park) => park.id)).toEqual([skeleton.id]);
+    expect(active.parks[0]?.scene).toBeNull();
+    expect(active.liveParks).toEqual([]);
+    expect((await store.getSyncState("staging"))?.revision).toBe(7);
+    expect((await store.getSyncState("staging"))?.sourceId).toBe("staging|https://parkdex.example.test/api/content");
+    expect(server.calls.filter((url) => new URL(url).pathname.endsWith("/snapshot"))).toHaveLength(1);
+    expect(server.calls.filter((url) => new URL(url).pathname.endsWith("/changes"))).toHaveLength(1);
+    expect(server.calls.some((url) => new URL(url).pathname.includes("/map/"))).toBe(false);
   });
 
-  it("does not reopen a Wi-Fi-only chunk queue on a background network event", async () => {
-    const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
-    const server = contentServer(a);
+  it("hides a source-mismatched cached catalogue offline and snapshots instead of sending its old cursor", async () => {
+    const previousRelease = await makeRelease("b".repeat(64), 1, "municipal-old-park", "scene-old");
+    const previous = parseContentSnapshot(contentSyncSnapshot(11, { ...previousRelease.park, scene: null }, []));
     const store = new MemoryContentStore();
-    const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: false }));
+    store.sync.set("staging", { ...previous, sourceId: "staging|https://old.example.test/api/content" });
+    const currentRelease = await makeRelease("c".repeat(64), 2, "municipal-current-park", "scene-current");
+    const server = contentSyncServer(contentSyncSnapshot(2, { ...currentRelease.park, scene: null }, []));
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: false, wifi: false }));
+
     await runtime.start();
-    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
+    expect(runtime.getStatus().snapshot).toBeNull();
+    expect(server.calls).toEqual([]);
 
-    runtime.setForeground(false);
     runtime.setConnectivity({ connected: true, wifi: true });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    const secondChunkUrl = a.rawManifest.files.find((file) => file.path === "map/island/001.bin")!.url;
-    expect((server.fetcher as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))).not.toContain(secondChunkUrl);
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-current-park"));
+    expect(server.calls.some((url) => new URL(url).pathname.endsWith("/snapshot"))).toBe(true);
+    expect(server.calls.some((url) => new URL(url).pathname.endsWith("/changes") && new URL(url).searchParams.get("after") === "11")).toBe(false);
+    expect((await store.getSyncCursor("staging"))?.sourceId).toBe("staging|https://parkdex.example.test/api/content");
+  });
 
-    runtime.setForeground(true);
-    await vi.waitFor(() => expect((server.fetcher as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]))).toContain(secondChunkUrl));
-    const secondChunk = a.rawManifest.files.find((file) => file.path === "map/island/001.bin")!;
-    await vi.waitFor(async () => expect(await store.hasFile(secondChunk.sha256, 4)).toBe(true));
+  it("shows a configuration error without requests when the main API origin is missing", async () => {
+    const store = new MemoryContentStore();
+    const fetcher = vi.fn(async () => new Response("unexpected", { status: 500 })) as typeof fetch;
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }, [], null, "main"));
+
+    await runtime.start();
+
+    expect(runtime.getStatus().syncStage).toBe("error");
+    expect(runtime.getStatus().error).toMatch(/API is not configured/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("archives every claimed scene version before same-slug art changes", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "municipal-earned-park", "scene-a");
+    const oldAsset = await makeSceneAsset("d".repeat(64), "scene-a", "old claimed badge art");
+    const middleAsset = await makeSceneAsset("e".repeat(64), "scene-a", "middle claimed badge art");
+    const currentAsset = await makeSceneAsset("f".repeat(64), "scene-a", "current badge art");
+    const park = release.park;
+    const snapshot = contentSyncSnapshot(1, park, [oldAsset.file]);
+    const second: ContentChangeBatch = {
+      revision: 2,
+      changes: [
+        { entity: "park", op: "upsert", id: park.id, value: park },
+        { entity: "asset", op: "upsert", id: middleAsset.file.path, value: middleAsset.file },
+      ],
+    };
+    const third: ContentChangeBatch = {
+      revision: 3,
+      changes: [
+        { entity: "park", op: "upsert", id: park.id, value: park },
+        { entity: "asset", op: "upsert", id: currentAsset.file.path, value: currentAsset.file },
+      ],
+    };
+    const deltas = new Map<number, unknown>([
+      [1, { schema: "parkdex.content-sync/v1", fromRevision: 1, throughRevision: 2, headRevision: 3, hasMore: true, batches: [second] }],
+      [2, { schema: "parkdex.content-sync/v1", fromRevision: 2, throughRevision: 3, headRevision: 3, hasMore: false, batches: [third] }],
+    ]);
+    const files = new Map<string, ArrayBuffer>([
+      [oldAsset.file.url, oldAsset.bytes],
+      [middleAsset.file.url, middleAsset.bytes],
+      [currentAsset.file.url, currentAsset.bytes],
+    ]);
+    const server = contentSyncServer(snapshot, deltas, new Map(), files);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }, [park.id]));
+
+    await runtime.start();
+
+    expect((await store.getSyncCursor("staging"))?.revision).toBe(3);
+    expect(await store.getArchivedScene("d".repeat(64), "scene-a")).toEqual({ releaseId: "d".repeat(64), scene: "scene-a", file: oldAsset.file });
+    expect(await store.getArchivedScene("e".repeat(64), "scene-a")).toEqual({ releaseId: "e".repeat(64), scene: "scene-a", file: middleAsset.file });
+    expect(await store.hasFile(oldAsset.file.sha256, oldAsset.file.byte_size)).toBe(true);
+    expect(await store.hasFile(middleAsset.file.sha256, middleAsset.file.byte_size)).toBe(true);
+    expect(runtime.getSceneAssetVersion(park.id, "scene-a")).toBe("f".repeat(64));
+  });
+
+  it("restores an archived descriptor and bytes through the Wi-Fi content API", async () => {
+    const currentRelease = await makeRelease("1".repeat(64), 1, "municipal-current-park", "scene-current");
+    const currentSceneFile = currentRelease.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-current.webp")!;
+    const snapshot = contentSyncSnapshot(1, currentRelease.park, [currentSceneFile]);
+    const archivedAsset = await makeSceneAsset("2".repeat(64), "scene-archived", "restored badge bytes");
+    const server = contentSyncServer(
+      snapshot,
+      new Map(),
+      new Map([[`2`.repeat(64) + ":scene-archived", archivedAsset.file]]),
+      new Map([
+        [currentSceneFile.url, currentRelease.content.get(currentSceneFile.url)!],
+        [archivedAsset.file.url, archivedAsset.bytes],
+      ]),
+    );
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    expect(runtime.getStatus().error).toBeNull();
+    expect(runtime.getStatus().snapshot).not.toBeNull();
+
+    const url = await runtime.ensureArchivedScene("2".repeat(64), "scene-archived");
+
+    expect(url).toBe(`content-store://${archivedAsset.file.sha256}`);
+    expect(await store.getArchivedScene("2".repeat(64), "scene-archived")).toEqual({ releaseId: "2".repeat(64), scene: "scene-archived", file: archivedAsset.file });
+    expect(await store.hasFile(archivedAsset.file.sha256, archivedAsset.file.byte_size)).toBe(true);
+    expect(runtime.getStatus().snapshot?.retainedSceneUrls.get(`${"2".repeat(64)}:scene-archived`)).toBe(url);
+    expect(server.calls.some((entry) => new URL(entry).pathname.endsWith("/scene") && new URL(entry).searchParams.get("releaseId") === "2".repeat(64))).toBe(true);
+
+    runtime.setConnectivity({ connected: false, wifi: false });
+    await expect(runtime.ensureArchivedScene("2".repeat(64), "scene-archived")).resolves.toBe(url);
+    expect(runtime.getStatus().snapshot?.retainedSceneUrls.get(`${"2".repeat(64)}:scene-archived`)).toBe(url);
+  });
+
+  it("defers an uncached archive restore while backgrounded before checking Wi-Fi", async () => {
+    const store = new MemoryContentStore();
+    const fetcher = vi.fn(async () => new Response("unexpected", { status: 500 })) as typeof fetch;
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: false, wifi: false }));
+    await runtime.start();
+    runtime.setForeground(false);
+
+    await expect(runtime.ensureArchivedScene("3".repeat(64), "scene-background"))
+      .rejects.toBeInstanceOf(ArchivedSceneRestoreDeferredError);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("normalizes an in-flight archive restore aborted by runtime stop", async () => {
+    const currentRelease = await makeRelease("4".repeat(64), 1, "municipal-current-park", "scene-current");
+    const snapshot = contentSyncSnapshot(1, currentRelease.park, [currentRelease.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-current.webp")!]);
+    const archivedAsset = await makeSceneAsset("5".repeat(64), "scene-stopping", "stopped badge bytes");
+    const server = contentSyncServer(
+      snapshot,
+      new Map(),
+      new Map([[`${"5".repeat(64)}:scene-stopping`, archivedAsset.file]]),
+      new Map([[archivedAsset.file.url, archivedAsset.bytes]]),
+    );
+    let resolveStarted!: () => void;
+    const started = new Promise<void>((resolve) => { resolveStarted = resolve; });
+    let requestSignal: AbortSignal | undefined;
+    const fetcher: typeof fetch = (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/content/scene") {
+        requestSignal = init?.signal ?? undefined;
+        resolveStarted();
+        return new Promise<Response>((_resolve, reject) => {
+          if (requestSignal?.aborted) {
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+          }
+          requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      }
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    const pending = runtime.ensureArchivedScene("5".repeat(64), "scene-stopping");
+    await started;
+
+    const stopped = runtime.stop();
+    await expect(pending).rejects.toThrow("Content runtime is stopped");
+    expect(requestSignal?.aborted).toBe(true);
+    await stopped;
   });
 });

@@ -98,8 +98,9 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
     def test_tooling_checkout_ignores_existing_publisher_test_without_feature_markers(self):
-        self.assertTrue((delivery.ROOT / "scripts" / "test_publish_content.py").is_file())
-        self.assertFalse(delivery.content_sync_present(self.config, delivery.ROOT))
+        self.touch("scripts/test_publish_content.py")
+        self.assertTrue((self.root / "scripts" / "test_publish_content.py").is_file())
+        self.assertFalse(delivery.content_sync_present(self.config, self.root))
 
     def test_content_sync_requires_sql_qa_python_tests_and_pinned_dependencies(self):
         self.content_files()

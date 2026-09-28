@@ -19,7 +19,7 @@ export function Collection() {
   const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
   const claimedIds = Object.keys(state.claims);
-  const claimed = claimedIds.map((id) => content?.parkById.get(id) ?? state.claims[id]?.parkSnapshot ?? undefined).filter((park): park is Park => !!park);
+  const claimed = claimedIds.map((id) => state.claims[id]?.parkSnapshot ?? content?.parkById.get(id) ?? undefined).filter((park): park is Park => !!park);
   const count = claimedIds.length;
   const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
 
@@ -31,7 +31,7 @@ export function Collection() {
   const ghosts = next;
 
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const openPark = state.progressReady && open ? content?.parkById.get(open) ?? state.claims[open]?.parkSnapshot ?? undefined : undefined;
+  const openPark = state.progressReady && open ? state.claims[open]?.parkSnapshot ?? content?.parkById.get(open) ?? undefined : undefined;
   const openClaim = open ? state.claims[open] : undefined;
 
   return (

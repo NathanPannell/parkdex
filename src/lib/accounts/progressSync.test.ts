@@ -2,6 +2,12 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Park } from "../parks";
 
+const photoTransport = vi.hoisted(() => ({ isContentWifiAvailable: vi.fn(async () => true) }));
+vi.mock("../content/transport", () => ({
+  contentFetch: vi.fn(),
+  isContentWifiAvailable: photoTransport.isContentWifiAvailable,
+}));
+
 class MemoryStorage {
   private values = new Map<string, string>();
   get length() { return this.values.size; }
@@ -62,6 +68,7 @@ function makeSession(accountId: string, fetchAuthenticated: (input: RequestInfo 
 
 beforeEach(async () => {
   vi.resetModules();
+  photoTransport.isContentWifiAvailable.mockResolvedValue(true);
   for (const name of DB_NAMES) await deleteDatabase(name);
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: new MemoryStorage() });
 });
@@ -156,6 +163,35 @@ describe("account progress sync", () => {
     expect(urls).toContain("/api/claims?cursor=claim-revision");
     expect(restored.photosRestored).toBe(1);
     expect((await personal.getPersonalPhoto(owner, REMOTE_ID))?.backupState).toBe("backed-up");
+  });
+
+  it("leaves ready private photos pending when Wi-Fi is unavailable", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const savedPhoto = png(4);
+    const metadata = {
+      status: "ready",
+      sha256: await personal.hashPhoto(savedPhoto),
+      sizeBytes: savedPhoto.size,
+      contentType: "image/png",
+    };
+    const urls: string[] = [];
+    photoTransport.isContentWifiAvailable.mockResolvedValue(false);
+    const fetcher = async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      urls.push(url);
+      if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata)], nextCursor: "photo-revision" });
+      if (url === "/api/claims?cursor=photo-revision") return jsonResponse({ claims: [], nextCursor: null });
+      throw new Error(`Unexpected request: ${url}`);
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+
+    expect(urls).toEqual(["/api/claims", "/api/claims?cursor=photo-revision"]);
+    expect(result.photosRestored).toBe(0);
+    expect(result.photosPending).toBe(1);
+    expect(photoTransport.isContentWifiAvailable).toHaveBeenCalledTimes(1);
   });
 
   it("scopes claim upload, claim pages, photo upload, and private photo download to the captured account", async () => {
