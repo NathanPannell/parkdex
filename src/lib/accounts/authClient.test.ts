@@ -8,12 +8,17 @@ const nativeMocks = vi.hoisted(() => ({
   persist: vi.fn(),
 }));
 
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => nativeMocks.native } }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => nativeMocks.native, getPlatform: () => "android" },
+  registerPlugin: () => ({ accountRequest: vi.fn(), abort: vi.fn() }),
+}));
 vi.mock("../content/transport", () => ({
   contentFetch: vi.fn(),
   getContentApiOrigin: () => "https://parkdex-kip-staging.vercel.app",
   getContentConnectivity: vi.fn(async () => ({ connected: true, wifi: true })),
   subscribeContentConnectivity: vi.fn(() => () => {}),
+  nativeAccountBackupRequest: vi.fn(),
+  abortNativeAccountBackupRequest: vi.fn(),
 }));
 vi.mock("./nativeIdentity", () => ({
   nativeAuthFetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

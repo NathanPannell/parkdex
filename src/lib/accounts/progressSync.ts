@@ -2,7 +2,7 @@ import {
   claimPayload,
   commitDownloadedPhoto,
   commitRemotePage,
-  copyGuestClaimsToAccount,
+  finalizeReservedGuestClaims,
   getPersonalPhoto,
   hashPhoto,
   getPullCursor,
@@ -10,19 +10,19 @@ import {
   listPhotosNeedingDownload,
   listPersonalClaims,
   listPersonalOutbox,
+  listPersonalPhotos,
   markClaimUploaded,
   markPhotoConflict,
   markPhotoUnsupported,
   markPhotoUploaded,
   ownerKey,
-  removeAttachedGuestClaims,
   validateRemoteClaim,
   type PersonalClaim,
   type ProgressOwner,
   type RemoteClaim,
   type RemotePhoto,
 } from "./personalStore";
-import { isContentWifiAvailable } from "../content/transport";
+import { getAccountBackupConnectivity, isAccountBackupAvailable, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 
 export type AuthenticatedFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -35,7 +35,7 @@ export type ProgressSession = {
 };
 
 export type SyncIssue = {
-  operation: "claim-upload" | "photo-upload" | "claim-restore" | "photo-restore" | "session";
+  operation: "claim-upload" | "photo-upload" | "claim-restore" | "photo-restore" | "guest-finalize" | "session";
   claimId?: string;
   code: string;
   message: string;
@@ -50,11 +50,6 @@ export type ProgressSyncResult = {
   claimsPending: number;
   photosPending: number;
   issues: SyncIssue[];
-};
-
-export type GuestAttachResult = ProgressSyncResult & {
-  guestClaimsCopied: number;
-  guestClaimsRemoved: number;
 };
 
 export class ProgressSessionChangedError extends Error {
@@ -288,11 +283,11 @@ async function pullClaims(session: ProgressSession, owner: ProgressOwner, result
 
 async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
   const pending = await listPhotosNeedingDownload(owner);
-  if (pending.length === 0 || !(await isContentWifiAvailable())) return;
+  if (pending.length === 0 || !(await isAccountBackupAvailable())) return;
   for (const item of pending) {
     try {
       assertCurrent(session);
-      if (!(await isContentWifiAvailable())) return;
+      if (!(await isAccountBackupAvailable())) return;
       const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claim.claimId)}/photo`, { method: "GET" });
       assertCurrent(session);
       await ensureOk(response, "photo-restore");
@@ -307,7 +302,7 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
     } catch (error) {
       result.issues.push(issueFor(error, "photo-restore", item.claim.claimId));
       if (error instanceof ProgressSessionChangedError) return;
-      if (error instanceof Error && (error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
+      if (error instanceof Error && (error.name === "AccountBackupUnavailableError" || error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
     }
   }
 }
@@ -315,11 +310,22 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
 async function countPending(owner: ProgressOwner, result: ProgressSyncResult) {
   const claims = await listPersonalClaims(owner);
   const outbox = await listPersonalOutbox(owner);
+  const photos = await listPersonalPhotos(owner);
   const photoIds = new Set(outbox.filter((item) => item.kind === "photo").map((item) => item.claimId));
   for (const claim of claims) {
     if (claim.remotePhoto.status === "pending") photoIds.add(claim.claimId);
   }
   for (const item of await listPhotosNeedingDownload(owner)) photoIds.add(item.claim.claimId);
+  for (const photo of photos) {
+    const issue = photo.backupState === "unsupported"
+      ? { code: "unsupported_photo", message: "This saved photo cannot be backed up in its current format." }
+      : photo.backupState === "conflict"
+        ? { code: "photo_conflict", message: "A different photo is already backed up for this claim." }
+        : null;
+    if (issue && !result.issues.some((existing) => existing.claimId === photo.claimId && existing.code === issue.code)) {
+      result.issues.push({ operation: "photo-upload", claimId: photo.claimId, ...issue });
+    }
+  }
   result.claimsPending = outbox.filter((item) => item.kind === "claim").length + claims.filter((claim) => claim.syncState === "pending" && !outbox.some((item) => item.kind === "claim" && item.claimId === claim.claimId)).length;
   result.photosPending = photoIds.size;
 }
@@ -341,23 +347,87 @@ export async function syncProgress(session: ProgressSession): Promise<ProgressSy
   } catch (error) {
     result.issues.push(sessionIssue(error));
   }
+  try {
+    await finalizeReservedGuestClaims(capturedSession.accountId);
+  } catch (error) {
+    result.issues.push({
+      operation: "guest-finalize",
+      code: "guest_finalize_failed",
+      message: error instanceof Error ? error.message : "Reserved guest progress could not be finalized.",
+    });
+  }
   await countPending(owner, result);
   return result;
 }
 
-/** Call only from an explicit user-approved guest-collection attachment flow. */
-export async function attachGuestProgress(session: ProgressSession): Promise<GuestAttachResult> {
-  const capturedSession = captureProgressSession(session);
-  const owner = accountOwner(capturedSession);
-  assertCurrent(capturedSession);
-  const guestClaimsCopied = await copyGuestClaimsToAccount(capturedSession.accountId);
-  const sync = await syncProgress(capturedSession);
-  let guestClaimsRemoved = 0;
-  if (sync.issues.length === 0 && sync.claimsPending === 0 && sync.photosPending === 0) {
-    assertCurrent(capturedSession);
-    guestClaimsRemoved = await removeAttachedGuestClaims(capturedSession.accountId);
+/** Run a backup only when the app is foregrounded and platform policy allows its connection. */
+export async function runProgressSyncWhenReady(
+  session: ProgressSession,
+  isForeground: () => boolean,
+  knownConnectivity?: AccountBackupConnectivity,
+): Promise<ProgressSyncResult | null> {
+  if (!isForeground()) return null;
+  const connectivity = knownConnectivity ?? await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+  if (!connectivity.connected || !connectivity.allowed || !isForeground()) return null;
+  return syncProgress(session);
+}
+
+/** Coalesce concurrent triggers and optionally queue one follow-up for a meaningful new trigger. */
+export function coalesceProgressSync<T>(
+  inFlight: Map<string, Promise<T>>,
+  rerunRequested: Set<string>,
+  key: string,
+  run: () => Promise<T>,
+  retryAfterFlight: boolean,
+  rerun: () => void,
+): Promise<T> {
+  const active = inFlight.get(key);
+  if (active) {
+    if (retryAfterFlight) rerunRequested.add(key);
+    return active;
   }
-  return { ...sync, guestClaimsCopied, guestClaimsRemoved, ownerKey: ownerKey(owner) };
+
+  let task: Promise<T>;
+  task = Promise.resolve().then(run).finally(() => {
+    if (inFlight.get(key) === task) inFlight.delete(key);
+    if (rerunRequested.delete(key)) queueMicrotask(rerun);
+  });
+  inFlight.set(key, task);
+  return task;
+}
+
+/** Record only acknowledged outgoing work after all backup work is clear. */
+export function canPersistSuccessfulOutboundBackup(result: ProgressSyncResult): boolean {
+  if (result.claimsUploaded + result.photosUploaded === 0 || result.claimsPending > 0 || result.photosPending > 0) return false;
+  return !result.issues.some((issue) => issue.operation === "session" || issue.operation === "claim-upload" || issue.operation === "photo-upload" || /conflict|changed/i.test(issue.code));
+}
+
+/** Schedule backup only when a real connectivity transition makes the account backup available. */
+export function shouldScheduleAccountBackup(
+  previous: AccountBackupConnectivity | null,
+  current: AccountBackupConnectivity,
+): boolean {
+  return previous !== null && current.connected && current.allowed && (!previous.connected || !previous.allowed);
+}
+
+export async function persistSuccessfulOutboundBackupTimestamp(
+  accountId: string,
+  result: ProgressSyncResult,
+  currentTimestamp: number | null,
+  storage: {
+    get: (accountId: string) => Promise<number | null>;
+    set: (accountId: string, timestamp: number) => Promise<void>;
+  },
+  timestamp = Date.now(),
+): Promise<number | null> {
+  if (!canPersistSuccessfulOutboundBackup(result)) return currentTimestamp;
+  try {
+    await storage.set(accountId, timestamp);
+    const durableTimestamp = await storage.get(accountId);
+    return Math.max(currentTimestamp ?? 0, durableTimestamp ?? timestamp);
+  } catch {
+    return currentTimestamp;
+  }
 }
 
 export function claimEventContext(claim: Pick<PersonalClaim, "claimId" | "parkId">, firstClaim: boolean) {

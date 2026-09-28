@@ -49,7 +49,7 @@ export function Splash() {
         ))}
       </h1>
       <motion.p className="splash__tag" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.35 }}>
-        Go outside. Collect the wild.
+        Go outside. Find new badges.
       </motion.p>
     </motion.div>
   );

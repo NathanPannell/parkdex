@@ -18,6 +18,18 @@ type NativeContentResponse = {
   url: string;
 };
 
+export type NativeAccountBackupRequestOptions = {
+  requestId: string;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  bodyBase64: string;
+  approvedApiOrigin: string;
+  maxRequestBytes: number;
+  maxResponseBytes: number;
+  timeoutMs: number;
+};
+
 type NativeContentTransport = {
   getWifiStatus(): Promise<NativeWifiStatus>;
   request(options: {
@@ -30,11 +42,21 @@ type NativeContentTransport = {
     maxResponseBytes: number;
     timeoutMs: number;
   }): Promise<NativeContentResponse>;
+  accountRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse>;
   abort(options: { requestId: string }): Promise<void>;
 };
 
 const NativeTransport = registerPlugin<NativeContentTransport>("WifiContentTransport");
 let nextRequestId = 0;
+
+/** Account backup shares the Wi-Fi plugin registration but keeps its own strict native request method. */
+export function nativeAccountBackupRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse> {
+  return NativeTransport.accountRequest(options);
+}
+
+export function abortNativeAccountBackupRequest(requestId: string): Promise<void> {
+  return NativeTransport.abort({ requestId });
+}
 
 function browserNetworkInformation(): BrowserNetworkInformation | undefined {
   if (typeof navigator === "undefined") return undefined;

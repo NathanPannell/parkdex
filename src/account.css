@@ -128,56 +128,43 @@
   border-top: 1px solid rgba(20, 35, 28, 0.12);
 }
 
-.account-section-title {
+.account-profile__backup {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 35, 28, 0.12);
+}
+
+.account-profile__backup-time {
+  color: var(--ink) !important;
+  font-size: 13px !important;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-profile__backup-status {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 12px !important;
+  line-height: 1.4 !important;
 }
 
-.account-section-title h2 {
-  margin-top: 4px;
-}
-
-.account-backup__dot {
-  width: 14px;
-  height: 14px;
+.account-profile__backup-status svg {
+  width: 15px;
+  height: 15px;
   flex: none;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background: #e4d6bf;
+  margin-top: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.account-backup__dot.is-success {
-  background: var(--moss);
-}
-
-.account-backup__dot.is-syncing {
-  background: var(--sun);
-  animation: account-pulse 1.1s ease-in-out infinite alternate;
-}
-
-.account-backup__dot.is-pending,
-.account-backup__dot.is-error {
-  background: var(--kip);
-}
-
-.account-backup__dot.is-offline {
-  background: #9fd8ff;
-}
-
-.account-pending {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.account-pending span {
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: var(--paper-2);
-  font-size: 12px;
-  font-weight: 800;
+.account-profile__backup-status.is-error {
+  color: #9b3a23;
 }
 
 .account-help,
@@ -192,17 +179,6 @@
   border-top: 1px solid rgba(20, 35, 28, 0.12);
 }
 
-.account-merge__confirm {
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--paper-2);
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.account-merge__confirm > div,
 .account-delete-panel__actions {
   display: flex;
   flex-wrap: wrap;
@@ -336,10 +312,6 @@
   margin-top: 4px;
 }
 
-.account-guest-note {
-  margin-bottom: 14px;
-}
-
 .col-head__tools {
   display: flex;
   align-items: center;
@@ -437,12 +409,4 @@
   font-size: 13px;
   line-height: 1.35;
   text-align: center;
-}
-
-@keyframes account-pulse {
-  to { transform: scale(1.2); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .account-backup__dot.is-syncing { animation: none; }
 }

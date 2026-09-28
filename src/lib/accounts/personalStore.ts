@@ -10,6 +10,8 @@ const LEGACY_KEY = "parkdex-mockup-v1";
 const LEGACY_DATABASE = "parkdex";
 const LEGACY_PHOTOS = "photos";
 const LEGACY_MIGRATION_KEY = "legacy:parkdex-mockup-v1";
+const GUEST_RESERVATION_PREFIX = "guest-reservation:";
+const LAST_BACKUP_PREFIX = "last-successful-backup:";
 export const MAX_BACKUP_PHOTO_BYTES = 2_621_440;
 
 export type ProgressOwner = { kind: "guest" } | { kind: "account"; accountId: string };
@@ -73,6 +75,23 @@ export class PersonalStoreUnavailableError extends Error {
     super(message);
     this.name = "PersonalStoreUnavailableError";
   }
+}
+
+function accountIdFromOwnerKey(key: string): string {
+  return key.slice("account:".length);
+}
+
+function guestReservationKey(claimId: string): string {
+  return `${GUEST_RESERVATION_PREFIX}${claimId}`;
+}
+
+function lastBackupKey(accountKey: string): string {
+  return `${LAST_BACKUP_PREFIX}${accountKey}`;
+}
+
+function reservedGuestClaimIds(values: Meta[]): Set<string> {
+  return new Set(values.flatMap((item) => typeof item.key === "string" && item.key.startsWith(GUEST_RESERVATION_PREFIX)
+    ? [item.key.slice(GUEST_RESERVATION_PREFIX.length)] : []));
 }
 
 export function ownerKey(owner: ProgressOwner): string {
@@ -510,9 +529,23 @@ export async function createPersonalClaim(owner: ProgressOwner, input: CreatePer
 export async function listPersonalClaims(owner: ProgressOwner): Promise<PersonalClaim[]> {
   await initializePersonalStore();
   const key = ownerKey(owner);
-  return withDatabase((db) => transaction(db, CLAIMS, "readonly", (tx, complete, fail) => {
+  const stores = owner.kind === "guest" ? [CLAIMS, META] : CLAIMS;
+  return withDatabase((db) => transaction(db, stores, "readonly", (tx, complete, fail) => {
     const request = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(key));
-    request.onsuccess = () => complete((request.result as PersonalClaim[]).sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.claimId.localeCompare(b.claimId)));
+    request.onsuccess = () => {
+      const claims = request.result as PersonalClaim[];
+      if (owner.kind !== "guest") {
+        complete(claims.sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.claimId.localeCompare(b.claimId)));
+        return;
+      }
+      const metaRequest = tx.objectStore(META).getAll();
+      metaRequest.onsuccess = () => {
+        const reserved = reservedGuestClaimIds(metaRequest.result as Meta[]);
+        complete(claims.filter((claim) => !reserved.has(claim.claimId))
+          .sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.claimId.localeCompare(b.claimId)));
+      };
+      metaRequest.onerror = () => fail(metaRequest.error);
+    };
     request.onerror = () => fail(request.error);
   }));
 }
@@ -520,10 +553,49 @@ export async function listPersonalClaims(owner: ProgressOwner): Promise<Personal
 export async function listPersonalPhotos(owner: ProgressOwner): Promise<PersonalPhoto[]> {
   await initializePersonalStore();
   const key = ownerKey(owner);
-  return withDatabase((db) => transaction(db, PHOTOS, "readonly", (tx, complete, fail) => {
+  const stores = owner.kind === "guest" ? [PHOTOS, META] : PHOTOS;
+  return withDatabase((db) => transaction(db, stores, "readonly", (tx, complete, fail) => {
     const request = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(key));
-    request.onsuccess = () => complete(request.result as PersonalPhoto[]);
+    request.onsuccess = () => {
+      const photos = request.result as PersonalPhoto[];
+      if (owner.kind !== "guest") { complete(photos); return; }
+      const metaRequest = tx.objectStore(META).getAll();
+      metaRequest.onsuccess = () => {
+        const reserved = reservedGuestClaimIds(metaRequest.result as Meta[]);
+        complete(photos.filter((photo) => !reserved.has(photo.claimId)));
+      };
+      metaRequest.onerror = () => fail(metaRequest.error);
+    };
     request.onerror = () => fail(request.error);
+  }));
+}
+
+async function readGuestProgressRows(): Promise<{ claims: PersonalClaim[]; photos: PersonalPhoto[] }> {
+  await initializePersonalStore();
+  return withDatabase((db) => transaction(db, [CLAIMS, PHOTOS, META], "readonly", (tx, complete, fail) => {
+    const claimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only("guest"));
+    const photosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only("guest"));
+    const metaRequest = tx.objectStore(META).getAll();
+    let ready = 0;
+    let claims: PersonalClaim[] = [];
+    let photos: PersonalPhoto[] = [];
+    let meta: Meta[] = [];
+    const finish = () => {
+      ready += 1;
+      if (ready !== 3) return;
+      const reserved = reservedGuestClaimIds(meta);
+      complete({
+        claims: claims.filter((claim) => !reserved.has(claim.claimId))
+          .sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.claimId.localeCompare(b.claimId)),
+        photos: photos.filter((photo) => !reserved.has(photo.claimId)),
+      });
+    };
+    claimsRequest.onsuccess = () => { claims = claimsRequest.result as PersonalClaim[]; finish(); };
+    photosRequest.onsuccess = () => { photos = photosRequest.result as PersonalPhoto[]; finish(); };
+    metaRequest.onsuccess = () => { meta = metaRequest.result as Meta[]; finish(); };
+    claimsRequest.onerror = () => fail(claimsRequest.error);
+    photosRequest.onerror = () => fail(photosRequest.error);
+    metaRequest.onerror = () => fail(metaRequest.error);
   }));
 }
 
@@ -538,7 +610,13 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 /** Project each park to its most recent locally available claim photo for the current collection UI. */
 export async function loadPersonalPhotos(owner: ProgressOwner): Promise<Record<string, string>> {
-  const [claims, photos] = await Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)]);
+  const { claims, photos } = owner.kind === "guest"
+    ? await readGuestProgressRows()
+    : { claims: await listPersonalClaims(owner), photos: await listPersonalPhotos(owner) };
+  return projectPersonalPhotos(claims, photos);
+}
+
+async function projectPersonalPhotos(claims: PersonalClaim[], photos: PersonalPhoto[]): Promise<Record<string, string>> {
   const photosByClaim = new Map(photos.map((photo) => [photo.claimId, photo]));
   const out: Record<string, string> = {};
   const visited = new Set<string>();
@@ -555,9 +633,16 @@ export async function loadPersonalPhotos(owner: ProgressOwner): Promise<Record<s
 export async function getPersonalPhoto(owner: ProgressOwner, claimId: string): Promise<PersonalPhoto | null> {
   await initializePersonalStore();
   const key = ownerKey(owner);
-  return withDatabase((db) => transaction<PersonalPhoto | null>(db, PHOTOS, "readonly", (tx, complete, fail) => {
+  const stores = owner.kind === "guest" ? [PHOTOS, META] : PHOTOS;
+  return withDatabase((db) => transaction<PersonalPhoto | null>(db, stores, "readonly", (tx, complete, fail) => {
     const request = tx.objectStore(PHOTOS).get([key, claimId]);
-    request.onsuccess = () => complete((request.result as PersonalPhoto | undefined) ?? null);
+    request.onsuccess = () => {
+      const photo = (request.result as PersonalPhoto | undefined) ?? null;
+      if (!photo || owner.kind !== "guest") { complete(photo); return; }
+      const reservationRequest = tx.objectStore(META).get(guestReservationKey(claimId)) as IDBRequest<Meta | undefined>;
+      reservationRequest.onsuccess = () => complete(reservationRequest.result ? null : photo);
+      reservationRequest.onerror = () => fail(reservationRequest.error);
+    };
     request.onerror = () => fail(request.error);
   }));
 }
@@ -866,145 +951,300 @@ export async function commitDownloadedPhoto(owner: ProgressOwner, claimId: strin
 }
 
 export async function loadPersonalProgress(owner: ProgressOwner): Promise<{ claims: PersonalClaim[]; photos: Record<string, string> }> {
+  if (owner.kind === "guest") {
+    const { claims, photos } = await readGuestProgressRows();
+    return { claims, photos: await projectPersonalPhotos(claims, photos) };
+  }
   const [claims, photos] = await Promise.all([listPersonalClaims(owner), loadPersonalPhotos(owner)]);
   return { claims, photos };
 }
 
-export async function copyGuestClaimsToAccount(accountId: string): Promise<number> {
+function matchingPhotoCopy(source: PersonalPhoto, target: PersonalPhoto | undefined): target is PersonalPhoto {
+  return Boolean(target && source.sha256 === target.sha256 && source.sizeBytes === target.sizeBytes &&
+    source.contentType === target.contentType && source.blob.size === target.blob.size);
+}
+
+function conflictsWithClaimCopy(existing: PersonalClaim, source: PersonalClaim): boolean {
+  return existing.parkId !== source.parkId || existing.claimedAt !== source.claimedAt ||
+    (Boolean(existing.parkSnapshot && source.parkSnapshot) && !samePayload(existing, {
+      parkId: source.parkId,
+      claimedAt: source.claimedAt,
+      parkSnapshot: source.parkSnapshot!,
+      contentReleaseId: source.contentReleaseId,
+    })) ||
+    (!existing.parkSnapshot && !source.parkSnapshot && existing.contentReleaseId !== source.contentReleaseId) ||
+    (!existing.parkSnapshot && Boolean(source.parkSnapshot) && existing.syncState === "acknowledged");
+}
+
+/** Atomically reserves unowned guest claims for this account and queues durable account copies. */
+export async function reserveGuestClaimsForAccount(accountId: string): Promise<number> {
   await initializePersonalStore();
   const guest: ProgressOwner = { kind: "guest" };
   const account: ProgressOwner = { kind: "account", accountId };
   const guestKey = ownerKey(guest);
   const accountKey = ownerKey(account);
-  return withDatabase((db) => transaction<number>(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
+  const normalizedAccountId = accountIdFromOwnerKey(accountKey);
+  return withDatabase((db) => transaction<number>(db, [CLAIMS, PHOTOS, OUTBOX, META], "readwrite", (tx, complete, fail) => {
     const claimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(guestKey));
     const photosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(guestKey));
+    const allClaimsRequest = tx.objectStore(CLAIMS).getAll();
     const targetClaimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(accountKey));
     const targetPhotosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(accountKey));
+    const allPhotosRequest = tx.objectStore(PHOTOS).getAll();
+    const metaRequest = tx.objectStore(META).getAll();
     let ready = 0;
     let guestClaims: PersonalClaim[] = [];
     let guestPhotos: PersonalPhoto[] = [];
+    let allClaims: PersonalClaim[] = [];
     let accountClaims: PersonalClaim[] = [];
     let accountPhotos: PersonalPhoto[] = [];
+    let allPhotos: PersonalPhoto[] = [];
+    let metaRows: Meta[] = [];
     const finish = () => {
       ready += 1;
-      if (ready !== 4) return;
+      if (ready !== 7) return;
       try {
         const targetClaims = tx.objectStore(CLAIMS);
         const targetPhotos = tx.objectStore(PHOTOS);
         const targetOutbox = tx.objectStore(OUTBOX);
+        const meta = tx.objectStore(META);
         const claimById = new Map(accountClaims.map((row) => [row.claimId, row]));
         const photoById = new Map(accountPhotos.map((row) => [row.claimId, row]));
+        const guestClaimById = new Map(guestClaims.map((row) => [row.claimId, row]));
+        const accountOwnersById = new Map<string, Map<string, PersonalClaim>>();
+        for (const row of allClaims) {
+          if (!row.ownerKey.startsWith("account:")) continue;
+          const owners = accountOwnersById.get(row.claimId) ?? new Map<string, PersonalClaim>();
+          owners.set(row.ownerKey, row);
+          accountOwnersById.set(row.claimId, owners);
+        }
+        const accountPhotosByOwnerAndId = new Map(allPhotos.filter((photo) => photo.ownerKey.startsWith("account:"))
+          .map((photo) => [`${photo.ownerKey}:${photo.claimId}`, photo] as const));
+        const guestPhotoById = new Map(guestPhotos.map((photo) => [photo.claimId, photo]));
+        const reservationById = new Map(metaRows.flatMap((row) => typeof row.key === "string" && row.key.startsWith(GUEST_RESERVATION_PREFIX)
+          ? [[row.key.slice(GUEST_RESERVATION_PREFIX.length), row.value] as const] : []));
+        for (const sourcePhoto of guestPhotos) {
+          if (!guestClaimById.has(sourcePhoto.claimId)) throw new PersonalClaimConflictError("A guest photo has no matching guest claim.");
+        }
+        const claimsForAccount: PersonalClaim[] = [];
         for (const source of guestClaims) {
+          const owners = accountOwnersById.get(source.claimId) ?? new Map<string, PersonalClaim>();
+          if (owners.size > 1) throw new PersonalClaimConflictError("A guest claim has multiple existing account owners.");
+          const priorOwnerKey = owners.keys().next().value as string | undefined;
+          const priorOwner = priorOwnerKey ? owners.get(priorOwnerKey)! : undefined;
+          if (priorOwner && conflictsWithClaimCopy(priorOwner, source)) {
+            throw new PersonalClaimConflictError("A guest claim conflicts with its existing account copy.");
+          }
+          const priorOwnerId = priorOwnerKey ? accountIdFromOwnerKey(priorOwnerKey) : null;
+          const sourcePhoto = guestPhotoById.get(source.claimId);
+          const priorPhoto = priorOwnerKey ? accountPhotosByOwnerAndId.get(`${priorOwnerKey}:${source.claimId}`) : undefined;
+          if (sourcePhoto && priorPhoto && !matchingPhotoCopy(sourcePhoto, priorPhoto)) {
+            throw new PersonalClaimConflictError("A guest photo conflicts with its existing account copy.");
+          }
+          if (sourcePhoto && priorOwner?.remotePhoto.status === "ready" && priorOwner.remotePhoto.sha256 !== sourcePhoto.sha256) {
+            throw new PersonalClaimConflictError("A guest photo conflicts with the existing account backup.");
+          }
+          if (reservationById.has(source.claimId)) {
+            const reservationOwner = reservationById.get(source.claimId);
+            if (typeof reservationOwner !== "string") throw new PersonalClaimConflictError("A guest claim has an invalid reservation owner.");
+            if (priorOwnerId && reservationOwner.toLowerCase() !== priorOwnerId) {
+              throw new PersonalClaimConflictError("A guest claim reservation conflicts with its existing account owner.");
+            }
+            if (reservationOwner.toLowerCase() !== normalizedAccountId) continue;
+          } else if (priorOwnerId && priorOwnerId !== normalizedAccountId) {
+            // An earlier attach without a reservation still establishes the unique account owner.
+            meta.put({ key: guestReservationKey(source.claimId), value: priorOwnerId } satisfies Meta);
+            continue;
+          }
+          claimsForAccount.push(source);
+        }
+        for (const source of claimsForAccount) {
           const existing = claimById.get(source.claimId);
-          if (existing && (existing.parkId !== source.parkId || existing.claimedAt !== source.claimedAt ||
-              (existing.parkSnapshot && source.parkSnapshot && !samePayload(existing, { parkId: source.parkId, claimedAt: source.claimedAt, parkSnapshot: source.parkSnapshot, contentReleaseId: source.contentReleaseId })))) {
+          const immutableConflict = existing && conflictsWithClaimCopy(existing, source);
+          if (immutableConflict) {
             throw new PersonalClaimConflictError("A guest claim conflicts with progress already on this account.");
           }
           if (!existing) {
             const copied: PersonalClaim = { ...source, ownerKey: accountKey, syncState: "pending" };
             claimById.set(copied.claimId, copied);
-            targetClaims.add(copied);
-            targetOutbox.put({ ownerKey: accountKey, claimId: source.claimId, kind: "claim" } satisfies ClaimOutbox);
+            targetClaims.put(copied);
           } else if (!existing.parkSnapshot && source.parkSnapshot) {
             if (existing.syncState === "acknowledged") throw new PersonalClaimConflictError("An acknowledged account claim is missing its frozen snapshot.");
             existing.parkSnapshot = source.parkSnapshot;
             existing.contentReleaseId = source.contentReleaseId;
             existing.syncState = "pending";
             targetClaims.put(existing);
+          }
+          const accountClaim = claimById.get(source.claimId)!;
+          if (accountClaim.syncState !== "acknowledged") {
             targetOutbox.put({ ownerKey: accountKey, claimId: source.claimId, kind: "claim" } satisfies ClaimOutbox);
           }
         }
-        for (const sourcePhoto of guestPhotos) {
+        const accountClaimIds = new Set(claimsForAccount.map((claim) => claim.claimId));
+        for (const sourcePhoto of guestPhotos.filter((photo) => accountClaimIds.has(photo.claimId))) {
           const existing = photoById.get(sourcePhoto.claimId);
           const claim = claimById.get(sourcePhoto.claimId);
           if (!claim) throw new PersonalClaimConflictError("A guest photo has no matching account claim.");
-          if (existing && existing.sha256 !== sourcePhoto.sha256) {
+          if (existing && !matchingPhotoCopy(sourcePhoto, existing)) {
             throw new PersonalClaimConflictError("A guest photo conflicts with progress already on this account.");
+          }
+          if (claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 !== sourcePhoto.sha256) {
+            throw new PersonalClaimConflictError("The account already has a different backed-up photo for this claim.");
           }
           if (!existing) {
             const sameAsServer = claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 === sourcePhoto.sha256;
-            if (claim.remotePhoto.status === "ready" && !sameAsServer) {
-              throw new PersonalClaimConflictError("The account already has a different backed-up photo for this claim.");
-            }
             const copied: PersonalPhoto = {
               ...sourcePhoto,
               ownerKey: accountKey,
-              backupState: sourcePhoto.unsupportedReason ? "unsupported" : sameAsServer ? "backed-up" : "pending",
+              backupState: sourcePhoto.unsupportedReason || sourcePhoto.backupState === "unsupported" ? "unsupported" : sameAsServer ? "backed-up" : "pending",
             };
             photoById.set(copied.claimId, copied);
-            targetPhotos.add(copied);
-            if (!copied.unsupportedReason && !sameAsServer) targetOutbox.put({ ownerKey: accountKey, claimId: copied.claimId, kind: "photo" } satisfies PhotoOutbox);
-          };
+            targetPhotos.put(copied);
+            if (!copied.unsupportedReason && copied.backupState !== "unsupported" && !sameAsServer) {
+              targetOutbox.put({ ownerKey: accountKey, claimId: copied.claimId, kind: "photo" } satisfies PhotoOutbox);
+            }
+          } else if (claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 === existing.sha256 && existing.backupState !== "backed-up") {
+            existing.backupState = "backed-up";
+            existing.unsupportedReason = null;
+            targetPhotos.put(existing);
+            targetOutbox.delete([accountKey, existing.claimId, "photo"]);
+          } else if (existing.backupState === "pending" && existing.unsupportedReason === null) {
+            targetOutbox.put({ ownerKey: accountKey, claimId: existing.claimId, kind: "photo" } satisfies PhotoOutbox);
+          }
         }
-        complete(guestClaims.length);
+        for (const claim of claimsForAccount) {
+          if (reservationById.get(claim.claimId) !== normalizedAccountId) {
+            meta.put({ key: guestReservationKey(claim.claimId), value: normalizedAccountId } satisfies Meta);
+          }
+        }
+        complete(claimsForAccount.length);
       } catch (error) { fail(error); }
     };
     claimsRequest.onsuccess = () => { guestClaims = claimsRequest.result as PersonalClaim[]; finish(); };
     photosRequest.onsuccess = () => { guestPhotos = photosRequest.result as PersonalPhoto[]; finish(); };
+    allClaimsRequest.onsuccess = () => { allClaims = allClaimsRequest.result as PersonalClaim[]; finish(); };
     targetClaimsRequest.onsuccess = () => { accountClaims = targetClaimsRequest.result as PersonalClaim[]; finish(); };
     targetPhotosRequest.onsuccess = () => { accountPhotos = targetPhotosRequest.result as PersonalPhoto[]; finish(); };
+    allPhotosRequest.onsuccess = () => { allPhotos = allPhotosRequest.result as PersonalPhoto[]; finish(); };
+    metaRequest.onsuccess = () => { metaRows = metaRequest.result as Meta[]; finish(); };
     claimsRequest.onerror = () => fail(claimsRequest.error);
     photosRequest.onerror = () => fail(photosRequest.error);
+    allClaimsRequest.onerror = () => fail(allClaimsRequest.error);
     targetClaimsRequest.onerror = () => fail(targetClaimsRequest.error);
     targetPhotosRequest.onerror = () => fail(targetPhotosRequest.error);
+    allPhotosRequest.onerror = () => fail(allPhotosRequest.error);
+    metaRequest.onerror = () => fail(metaRequest.error);
   }));
 }
 
-export async function removeAttachedGuestClaims(accountId: string): Promise<number> {
+/** Compatibility name retained for callers from the previous attach flow. */
+export async function copyGuestClaimsToAccount(accountId: string): Promise<number> {
+  return reserveGuestClaimsForAccount(accountId);
+}
+
+/** Remove only guest rows whose account copy has been acknowledged and is durably complete. */
+export async function finalizeReservedGuestClaims(accountId: string): Promise<number> {
   await initializePersonalStore();
   const guest: ProgressOwner = { kind: "guest" };
   const account: ProgressOwner = { kind: "account", accountId };
   const guestKey = ownerKey(guest);
   const accountKey = ownerKey(account);
-  return withDatabase((db) => transaction<number>(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
+  const normalizedAccountId = accountIdFromOwnerKey(accountKey);
+  return withDatabase((db) => transaction<number>(db, [CLAIMS, PHOTOS, OUTBOX, META], "readwrite", (tx, complete, fail) => {
     const guestClaimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(guestKey));
     const accountClaimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(accountKey));
+    const guestPhotosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(guestKey));
+    const accountPhotosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(accountKey));
+    const metaRequest = tx.objectStore(META).getAll();
     let ready = 0;
     let guestClaims: PersonalClaim[] = [];
     let accountClaims: PersonalClaim[] = [];
+    let guestPhotos: PersonalPhoto[] = [];
+    let accountPhotos: PersonalPhoto[] = [];
+    let metaRows: Meta[] = [];
     const finish = () => {
       ready += 1;
-      if (ready !== 2) return;
+      if (ready !== 5) return;
+      const reservations = metaRows.filter((row) => typeof row.key === "string" && row.key.startsWith(GUEST_RESERVATION_PREFIX) &&
+        typeof row.value === "string" && row.value.toLowerCase() === normalizedAccountId);
+      const guestById = new Map(guestClaims.map((claim) => [claim.claimId, claim]));
       const accountById = new Map(accountClaims.map((claim) => [claim.claimId, claim]));
-      const pendingRemove = guestClaims.filter((claim) => {
-        const accountClaim = accountById.get(claim.claimId);
-        return accountClaim?.syncState === "acknowledged";
-      });
-      if (pendingRemove.length !== guestClaims.length) { fail(new Error("Guest progress is still waiting for server acknowledgement.")); return; }
-      let remaining = pendingRemove.length;
-      if (remaining === 0) { complete(0); return; }
-      for (const claim of pendingRemove) {
-        const photoRequest = tx.objectStore(PHOTOS).get([guestKey, claim.claimId]);
-        photoRequest.onsuccess = () => {
-          const guestPhoto = photoRequest.result as PersonalPhoto | undefined;
-          const accountPhotoRequest = tx.objectStore(PHOTOS).get([accountKey, claim.claimId]);
-          accountPhotoRequest.onsuccess = () => {
-            const accountPhoto = accountPhotoRequest.result as PersonalPhoto | undefined;
-            if (guestPhoto) {
-              if (accountPhoto?.sha256 !== guestPhoto.sha256) {
-                fail(new Error("A guest photo is not durably attached to the account."));
-                return;
-              }
-              if (!guestPhoto.unsupportedReason && accountPhoto.backupState !== "backed-up") {
-                fail(new Error("A guest photo is still waiting for server acknowledgement."));
-                return;
-              }
-            }
-            tx.objectStore(CLAIMS).delete([guestKey, claim.claimId]);
-            tx.objectStore(PHOTOS).delete([guestKey, claim.claimId]);
-            remaining -= 1;
-            if (remaining === 0) complete(pendingRemove.length);
-          };
-          accountPhotoRequest.onerror = () => fail(accountPhotoRequest.error);
-        };
-        photoRequest.onerror = () => fail(photoRequest.error);
+      const guestPhotoById = new Map(guestPhotos.map((photo) => [photo.claimId, photo]));
+      const accountPhotoById = new Map(accountPhotos.map((photo) => [photo.claimId, photo]));
+      const claims = tx.objectStore(CLAIMS);
+      const photos = tx.objectStore(PHOTOS);
+      const outbox = tx.objectStore(OUTBOX);
+      const meta = tx.objectStore(META);
+      let removed = 0;
+      for (const reservation of reservations) {
+        const claimId = reservation.key.slice(GUEST_RESERVATION_PREFIX.length);
+        const sourceClaim = guestById.get(claimId);
+        const accountClaim = accountById.get(claimId);
+        if (!sourceClaim || accountClaim?.syncState !== "acknowledged") continue;
+        const sourcePhoto = guestPhotoById.get(claimId);
+        if (sourcePhoto) {
+          const accountPhoto = accountPhotoById.get(claimId);
+          if (!matchingPhotoCopy(sourcePhoto, accountPhoto)) continue;
+          const unsupported = sourcePhoto.unsupportedReason != null || sourcePhoto.backupState === "unsupported";
+          if (!unsupported && accountPhoto.backupState !== "backed-up") continue;
+        }
+        claims.delete([guestKey, claimId]);
+        photos.delete([guestKey, claimId]);
+        outbox.delete([guestKey, claimId, "claim"]);
+        outbox.delete([guestKey, claimId, "photo"]);
+        meta.delete(reservation.key);
+        removed += 1;
       }
+      complete(removed);
     };
     guestClaimsRequest.onsuccess = () => { guestClaims = guestClaimsRequest.result as PersonalClaim[]; finish(); };
     accountClaimsRequest.onsuccess = () => { accountClaims = accountClaimsRequest.result as PersonalClaim[]; finish(); };
+    guestPhotosRequest.onsuccess = () => { guestPhotos = guestPhotosRequest.result as PersonalPhoto[]; finish(); };
+    accountPhotosRequest.onsuccess = () => { accountPhotos = accountPhotosRequest.result as PersonalPhoto[]; finish(); };
+    metaRequest.onsuccess = () => { metaRows = metaRequest.result as Meta[]; finish(); };
     guestClaimsRequest.onerror = () => fail(guestClaimsRequest.error);
     accountClaimsRequest.onerror = () => fail(accountClaimsRequest.error);
+    guestPhotosRequest.onerror = () => fail(guestPhotosRequest.error);
+    accountPhotosRequest.onerror = () => fail(accountPhotosRequest.error);
+    metaRequest.onerror = () => fail(metaRequest.error);
+  }));
+}
+
+/** Compatibility name retained for callers from the previous attach flow. */
+export async function removeAttachedGuestClaims(accountId: string): Promise<number> {
+  return finalizeReservedGuestClaims(accountId);
+}
+
+/** Read the durable timestamp of the last completed backup for one account. */
+export async function getLastSuccessfulBackupAt(accountId: string): Promise<number | null> {
+  await initializePersonalStore();
+  const key = ownerKey({ kind: "account", accountId });
+  return withDatabase((db) => transaction<number | null>(db, META, "readonly", (tx, complete, fail) => {
+    const request = tx.objectStore(META).get(lastBackupKey(key)) as IDBRequest<Meta | undefined>;
+    request.onsuccess = () => {
+      const value = request.result?.value;
+      complete(typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+/** Persist an explicit successful-backup timestamp. Reads and attempts never advance it. */
+export async function setLastSuccessfulBackupAt(accountId: string, timestamp: number): Promise<void> {
+  await initializePersonalStore();
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw new Error("Invalid successful backup timestamp.");
+  const key = ownerKey({ kind: "account", accountId });
+  await withDatabase((db) => transaction(db, META, "readwrite", (tx, complete, fail) => {
+    const meta = tx.objectStore(META);
+    const backupKey = lastBackupKey(key);
+    const request = meta.get(backupKey) as IDBRequest<Meta | undefined>;
+    request.onsuccess = () => {
+      const existing = request.result?.value;
+      const existingTimestamp = typeof existing === "number" && Number.isSafeInteger(existing) && existing >= 0 ? existing : -1;
+      meta.put({ key: backupKey, value: Math.max(existingTimestamp, timestamp) } satisfies Meta);
+      complete(undefined);
+    };
+    request.onerror = () => fail(request.error);
   }));
 }
 
@@ -1012,9 +1252,13 @@ export async function clearAccountProgressAfterServerDeletion(accountId: string)
   await initializePersonalStore();
   const account: ProgressOwner = { kind: "account", accountId };
   const key = ownerKey(account);
+  const normalizedAccountId = accountIdFromOwnerKey(key);
   await withDatabase((db) => transaction(db, [CLAIMS, PHOTOS, OUTBOX, META], "readwrite", (tx, complete, fail) => {
     let pending = 4;
-    const stores = [CLAIMS, PHOTOS, OUTBOX].map((name) => tx.objectStore(name));
+    const claims = tx.objectStore(CLAIMS);
+    const photos = tx.objectStore(PHOTOS);
+    const outbox = tx.objectStore(OUTBOX);
+    const stores = [claims, photos, outbox];
     for (const store of stores) {
       const request = store.index("byOwner").openCursor(IDBKeyRange.only(key));
       request.onsuccess = () => {
@@ -1029,7 +1273,17 @@ export async function clearAccountProgressAfterServerDeletion(accountId: string)
     metaCursor.onsuccess = () => {
       const cursor = metaCursor.result;
       if (!cursor) { pending -= 1; if (pending === 0) finish(); return; }
-      if (String(cursor.key).endsWith(`:${key}`)) cursor.delete();
+      const item = cursor.value as Meta;
+      const accountReservation = typeof cursor.key === "string" && String(cursor.key).startsWith(GUEST_RESERVATION_PREFIX) &&
+        typeof item.value === "string" && item.value.toLowerCase() === normalizedAccountId;
+      if (accountReservation) {
+        const claimId = String(cursor.key).slice(GUEST_RESERVATION_PREFIX.length);
+        claims.delete(["guest", claimId]);
+        photos.delete(["guest", claimId]);
+        outbox.delete(["guest", claimId, "claim"]);
+        outbox.delete(["guest", claimId, "photo"]);
+      }
+      if (String(cursor.key).endsWith(`:${key}`) || accountReservation) cursor.delete();
       cursor.continue();
     };
     metaCursor.onerror = () => fail(metaCursor.error);

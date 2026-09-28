@@ -8,7 +8,7 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const route = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
   const appUrl = process.env.PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-  if (!appUrl) return res.status(503).json({ error: 'Kip is temporarily unavailable.' });
+  if (!appUrl) return res.status(503).json({ error: 'Parkdex is temporarily unavailable.' });
   const url = new URL(`/api/${route || 'health'}`, appUrl);
   for (const [key, value] of Object.entries(req.query)) {
     if (key === 'path' || value === undefined) continue;
@@ -52,6 +52,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (cookies.length) res.setHeader('set-cookie', cookies);
     res.send(Buffer.from(await response.arrayBuffer()));
   } catch {
-    res.status(503).json({ error: 'Kip is temporarily unavailable. Please try again.' });
+    res.status(503).json({ error: 'Parkdex is temporarily unavailable. Please try again.' });
   }
 }
