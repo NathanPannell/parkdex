@@ -96,6 +96,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/feedback_001_init.sql",
             "database/001_cloud_content.sql",
             "database/migrations/content_001_sync.sql",
+            "database/migrations/content_002_authoring.sql",
         ])
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
@@ -137,6 +138,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/progress_001_init.sql",
             "database/migrations/interactions_001_init.sql",
             "database/migrations/content_001_sync.sql",
+            "database/migrations/content_002_authoring.sql",
         ])
 
     def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):

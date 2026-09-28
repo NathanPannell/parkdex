@@ -24,7 +24,8 @@
       "database/001_cloud_content.sql"
     ],
     "migrationPaths": [
-      "database/migrations/content_001_sync.sql"
+      "database/migrations/content_001_sync.sql",
+      "database/migrations/content_002_authoring.sql"
     ],
     "apiPaths": [
       "api/content/snapshot.ts",
@@ -37,7 +38,9 @@
       "scripts/test_bootstrap_content.py",
       "scripts/test_map_only_manifest.py",
       "scripts/test_publish_content.py",
-      "scripts/test_publish_park_update.py"
+      "scripts/test_publish_park_update.py",
+      "scripts/test_reset_victoria_100.py",
+      "scripts/test_authoring_queue.py"
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
