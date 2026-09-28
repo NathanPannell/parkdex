@@ -46,7 +46,7 @@ vi.mock("@capacitor/filesystem", () => ({
   },
 }));
 
-import type { StoredRelease } from "./contracts";
+import type { ArchivedScene, StoredRelease } from "./contracts";
 import { NativeContentStore } from "./store.native";
 
 const HASH = "b".repeat(64);
@@ -94,6 +94,7 @@ const sceneFile = {
 describe("NativeContentStore deletion guard", () => {
   let activeRelease = release([sceneFile]);
   let retainedRows: { park_json: string; scene_file_json: string }[] = [];
+  let archivedRows: { release_id: string; scene: string; file_json: string }[] = [];
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -102,11 +103,26 @@ describe("NativeContentStore deletion guard", () => {
     nativeMocks.files.clear();
     activeRelease = release([sceneFile]);
     retainedRows = [];
+    archivedRows = [];
     nativeMocks.createConnection.mockResolvedValue(nativeMocks.db);
     nativeMocks.db.open.mockResolvedValue(undefined);
     nativeMocks.db.execute.mockResolvedValue({});
-    nativeMocks.db.run.mockResolvedValue({ changes: { changes: 1 } });
-    nativeMocks.db.query.mockImplementation(async (statement: string) => {
+    nativeMocks.db.run.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.includes("INSERT OR REPLACE INTO content_archived_scenes")) {
+        const [release_id, scene, file_json] = values as [string, string, string];
+        archivedRows = archivedRows.filter((row) => row.release_id !== release_id || row.scene !== scene);
+        archivedRows.push({ release_id, scene, file_json });
+      }
+      return { changes: { changes: 1 } };
+    });
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.includes("FROM content_archived_scenes")) {
+        if (statement.includes("WHERE release_id = ? AND scene = ?")) {
+          const [releaseId, scene] = values as [string, string];
+          return { values: archivedRows.filter((row) => row.release_id === releaseId && row.scene === scene) };
+        }
+        return { values: [...archivedRows].sort((left, right) => left.release_id.localeCompare(right.release_id) || left.scene.localeCompare(right.scene)) };
+      }
       if (statement.includes("SELECT release_id")) return { values: [{ release_id: "release" }] };
       if (statement.includes("SELECT release_json")) return { values: [{ release_json: JSON.stringify(activeRelease) }] };
       if (statement.includes("SELECT park_json")) return { values: retainedRows };
@@ -145,6 +161,33 @@ describe("NativeContentStore deletion guard", () => {
     await expect(store.deleteFile(HASH)).rejects.toThrow(/active or retained content/);
     expect(nativeMocks.deleteFile).not.toHaveBeenCalled();
     expect(nativeMocks.db.run).not.toHaveBeenCalled();
+    await store.close();
+  });
+
+  it("pins archived scenes separately by release and blocks their blobs from collection", async () => {
+    activeRelease = release([]);
+    const makeArchived = (releaseId: string, digest: string): ArchivedScene => ({
+      releaseId,
+      scene: "coast-a",
+      file: {
+        path: "art/badges/scenes/coast-a.webp",
+        key: `releases/${releaseId}/art/badges/scenes/coast-a.webp`,
+        url: `https://kip-assets.parkdex.app/releases/${releaseId}/art/badges/scenes/coast-a.webp`,
+        sha256: digest,
+        byte_size: 10,
+        content_type: "image/webp",
+      },
+    });
+    const first = makeArchived("a".repeat(64), "c".repeat(64));
+    const second = makeArchived("b".repeat(64), "d".repeat(64));
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    await store.retainArchivedScene(first);
+    await store.retainArchivedScene(second);
+    await expect(store.deleteFile(first.file.sha256)).rejects.toThrow(/active or retained content/);
+    expect(await store.getArchivedScene(first.releaseId, first.scene)).toEqual(first);
+    expect(await store.listArchivedScenes()).toEqual([first, second]);
     await store.close();
   });
 

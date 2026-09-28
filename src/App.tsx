@@ -1,18 +1,22 @@
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { AnimatePresence as Presence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
-import { ContentProvider } from "./lib/content/provider";
+import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
+import "./account.css";
+import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
-import { StoreProvider, useStore } from "./lib/store";
+import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
+import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
 import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { FeedbackReview } from "./screens/FeedbackReview";
+import { Account } from "./screens/Account";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
@@ -23,36 +27,91 @@ export function App() {
   if (location.pathname === "/feedback/review") return <FeedbackReview />;
   return (
     <MotionConfig reducedMotion="user">
-      <StoreProvider>
-        <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
-      </StoreProvider>
+      <AuthProvider>
+        <StoreProvider>
+          <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+        </StoreProvider>
+      </AuthProvider>
     </MotionConfig>
   );
 }
 
 function Stage() {
   return (
-    <div className="stage">
-      <aside className="stage-note">
-        <h1>Parkdex</h1>
-        <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary, snap a photo, claim the badge, share it.</p>
-        <p>
-          Use the <kbd>wand</kbd> on the map for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
-        </p>
-      </aside>
-      <div className="device">
-        <ToastProvider>
-          <Screens />
-        </ToastProvider>
+    <>
+      <ClaimSnapshotRestorer />
+      <div className="stage">
+        <aside className="stage-note">
+          <h1>Parkdex</h1>
+          <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary, snap a photo, claim the badge, share it.</p>
+          <p>
+            Use the <kbd>wand</kbd> on the map for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
+          </p>
+        </aside>
+        <div className="device">
+          <ToastProvider>
+            <Screens />
+          </ToastProvider>
+        </div>
       </div>
-    </div>
+    </>
   );
+}
+
+function ClaimSnapshotRestorer() {
+  const { state, dispatch } = useStore();
+  const auth = useAuth();
+  const content = useContentStatus().snapshot;
+  const owner = useMemo<ProgressOwner | null>(() => {
+    if (auth.phase === "guest") return { kind: "guest" };
+    if ((auth.phase === "authenticated" || auth.phase === "offline-account") && auth.ownerAccountId) return { kind: "account", accountId: auth.ownerAccountId };
+    return null;
+  }, [auth.phase, auth.ownerAccountId]);
+  const ownerKey = progressOwnerKey(owner);
+  const attemptKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!owner || !ownerKey || !content || !state.progressReady || state.progressOwnerKey !== ownerKey) return;
+    const currentAttempt = `${ownerKey}:${content.releaseId}:${auth.progressRevision}`;
+    if (attemptKey.current === currentAttempt) return;
+    attemptKey.current = currentAttempt;
+    let live = true;
+    void (async () => {
+      try {
+        const claims = await listPersonalClaims(owner);
+        let changed = false;
+        for (const claim of claims) {
+          if (claim.parkSnapshot) continue;
+          const currentPark = content.liveParks.find((candidate) => candidate.id === claim.parkId);
+          const park = currentPark ?? content.retiredParks.find((candidate) => candidate.id === claim.parkId);
+          if (!park) continue;
+          await setLegacyClaimSnapshot(owner, claim.claimId, park, claim.contentReleaseId ?? (currentPark ? content.releaseId : null));
+          changed = true;
+        }
+        if (!live || !changed) return;
+        const restored = await loadPersonalProgress(owner);
+        if (!live || state.progressOwnerKey !== ownerKey) return;
+        dispatch({ type: "progressLoaded", ownerKey, claims: projectClaims(restored.claims, restored.photos) });
+        if (owner.kind === "account" && auth.phase === "authenticated" && auth.ownerAccountId?.toLowerCase() === owner.accountId.toLowerCase()) void auth.syncBackup();
+      } catch {
+        if (live) attemptKey.current = null;
+      }
+    })();
+    return () => { live = false; };
+  }, [auth.ownerAccountId, auth.phase, auth.progressRevision, auth.syncBackup, content, dispatch, owner, ownerKey, state.progressOwnerKey, state.progressReady]);
+
+  return null;
 }
 
 function Screens() {
   const { state, dispatch } = useStore();
+  const auth = useAuth();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
+
+  useEffect(() => {
+    if (auth.pendingAction) dispatch({ type: "go", screen: "account" });
+  }, [auth.pendingAction, dispatch]);
 
   useEffect(() => setMuted(state.muted), [state.muted]);
   useEffect(() => {
@@ -85,19 +144,21 @@ function Screens() {
         if (s.feedback) dispatch({ type: "feedback", open: false });
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
+        else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "collection" : "onboarding" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
       }),
     [],
   );
 
-  const showMap = onboarded && screen !== "splash" && screen !== "onboarding";
+  const showMap = onboarded && screen !== "splash" && screen !== "onboarding" && screen !== "account";
   const showNav = showMap && (screen === "map" || screen === "collection");
 
   return (
     <>
       {showMap && <MapScreen />}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
+      <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "collection" : "onboarding" })} />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
       <Presence>
         {tracking && state.locationError === "denied" && screen === "map" && (

@@ -2,6 +2,9 @@ import { renderOperatorEmail, renderReceiptEmail } from "./emails.js";
 import { createSessionToken, getClientAddress, isSameOriginWrite, keyedHash, readSessionCookie, requestOriginAllowed, sessionCookie, clearSessionCookie, verifyOperatorPassword, verifySessionToken } from "./security.js";
 import { createNeonFeedbackStore } from "./store.js";
 import type { FeedbackCursor, FeedbackStore, MailIntent, ResendPayload } from "./store.js";
+import { handleInteractionRequest, handleRetentionRequest, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
+import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
+import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import {
   HttpError,
   readJsonBody,
@@ -13,7 +16,7 @@ import {
   type ValidatedFeedback,
 } from "./validation.js";
 
-export interface WorkerEnvironment {
+export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv {
   DATABASE_URL?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
@@ -33,6 +36,9 @@ export interface WorkerExecutionContext {
 }
 
 export interface WorkerDependencies {
+  auth?: AuthDependencies;
+  progress?: ProgressDependencies;
+  interactions?: InteractionDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
@@ -383,10 +389,43 @@ function parseAttachmentBase64(base64: string): Uint8Array {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
-async function routeApi(request: Request, env: WorkerEnvironment, dependencies: WorkerDependencies): Promise<Response> {
+async function routeApi(request: Request, env: WorkerEnvironment, dependencies: WorkerDependencies, context: WorkerExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/api/health" && request.method === "GET") return json({ ok: true, releaseSha: env.RELEASE_SHA ?? null });
+  const interactionResponse = await handleInteractionRequest(request, env, dependencies.interactions);
+  if (interactionResponse) return interactionResponse;
+  const retentionResponse = await handleRetentionRequest(request, env, dependencies.interactions);
+  if (retentionResponse) {
+    if (!retentionResponse.ok) return retentionResponse;
+    const interactionResult = await retentionResponse.json() as { deleted: number; remainingExpired: number };
+    const authResult = await purgeAuthRetention(env, dependencies.auth);
+    return json({ ...interactionResult, authDeleted: authResult.deleted, remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired });
+  }
+  const authDependencies: AuthDependencies = {
+    ...dependencies.auth,
+    waitUntil: dependencies.auth?.waitUntil ?? context.waitUntil,
+    deleteAccountData: dependencies.auth?.deleteAccountData ?? ((input) => deleteAccountData(input, env, {
+      createStore: dependencies.progress?.createStore,
+      fetch: dependencies.progress?.fetch,
+    })),
+  };
+  const authResponse = await handleAuthRequest(request, env, authDependencies);
+  if (authResponse) return authResponse;
+  if (path === "/api/claims" || path.startsWith("/api/claims/")) {
+    const auth = request.method === "GET"
+      ? await requireAccount(request, env, authDependencies)
+      : await requireAccountMutation(request, env, authDependencies);
+    const progressResponse = await handleProgressRequest(request, env, auth, dependencies.progress);
+    if (progressResponse) return progressResponse;
+  }
+  const deletionResume = /^\/api\/operator\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
+  if (deletionResume && request.method === "POST") {
+    sameOriginRequired(request);
+    await requireOperator(request, env);
+    const result = await resumeAccountDeletion(deletionResume[1], env, authDependencies);
+    return json(result, result.complete ? 200 : 202);
+  }
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
   if (path === "/api/operator/login" && request.method === "POST") return login(request, env, dependencies);
   if (path === "/api/operator/logout" && request.method === "POST") return clearLogin(request);
@@ -500,7 +539,7 @@ function decodeListCursor(value: string, expectedStatus: string): FeedbackCursor
 async function route(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-    return routeApi(request, env, dependencies);
+    return routeApi(request, env, dependencies, context);
   }
   if (env.ASSETS) {
     try { return await env.ASSETS.fetch(request); } catch { return new Response("Not found", { status: 404 }); }
@@ -514,8 +553,8 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
   const headers = new Headers(response.headers);
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-credentials", "true");
-  headers.set("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
-  headers.set("access-control-allow-headers", "Content-Type");
+  headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  headers.set("access-control-allow-headers", "Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256");
   headers.set("access-control-max-age", "600");
   headers.append("vary", "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });

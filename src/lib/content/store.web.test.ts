@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { RetainedPark, StoredRelease } from "./contracts";
+import type { ArchivedScene, RetainedPark, StoredRelease } from "./contracts";
 import { WebContentStore } from "./store.web";
 
 const DATABASE = "parkdex-content-v1";
@@ -171,5 +171,42 @@ describe("WebContentStore", () => {
     expect(retained.map(({ park: item }) => item.id)).toEqual(["earned", "new"]);
     expect(retained[0].park.name).toBe("Renamed Earned Park");
     expect(retained[0].sceneFile).toEqual(earnedScene);
+  });
+
+  it("pins archived scene blobs by release and scene across recreation", async () => {
+    const firstBytes = arrayBuffer("vintage one art");
+    const secondBytes = arrayBuffer("vintage two art");
+    const firstHash = await hash(firstBytes);
+    const secondHash = await hash(secondBytes);
+    const makeArchived = (releaseId: string, sha256: string, byte_size: number): ArchivedScene => ({
+      releaseId,
+      scene: "coast-a",
+      file: {
+        path: "art/badges/scenes/coast-a.webp",
+        key: `releases/${releaseId}/art/badges/scenes/coast-a.webp`,
+        url: `https://kip-assets.parkdex.app/releases/${releaseId}/art/badges/scenes/coast-a.webp`,
+        sha256,
+        byte_size,
+        content_type: "image/webp",
+      },
+    });
+    const first = makeArchived("a".repeat(64), firstHash, firstBytes.byteLength);
+    const second = makeArchived("b".repeat(64), secondHash, secondBytes.byteLength);
+
+    await store.putFile(firstHash, firstBytes);
+    await store.retainArchivedScene(first);
+    await store.putFile(secondHash, secondBytes);
+    await store.retainArchivedScene(second);
+    await expect(store.deleteFile(firstHash)).rejects.toThrow(/active or retained content/);
+    await expect(store.deleteFile(secondHash)).rejects.toThrow(/active or retained content/);
+
+    await store.close();
+    store = new WebContentStore();
+    await store.initialize();
+    expect(await store.getArchivedScene(first.releaseId, first.scene)).toEqual(first);
+    expect(await store.getArchivedScene(second.releaseId, second.scene)).toEqual(second);
+    expect(await store.listArchivedScenes()).toEqual([first, second]);
+    expect(await store.readFile(firstHash)).toEqual(firstBytes);
+    expect(await store.readFile(secondHash)).toEqual(secondBytes);
   });
 });

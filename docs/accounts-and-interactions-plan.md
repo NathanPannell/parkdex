@@ -1,52 +1,41 @@
-# Accounts and interaction proposal
+# Accounts, progress backup, and interactions
 
-This is a proposal, not implemented functionality. The approved implementation in this branch is server content loading with local SQLite/private files on Android. Account UI will be designed separately. Interaction logging must wait for approval of the event list below.
+This document records the approved product scope and the implementation in this branch. Functional account screens using Kip's current styling are approved; a later visual redesign is optional. The detailed API and data contract is in [accounts-implementation-contract.md](accounts-implementation-contract.md).
 
-## Protect earned progress first
+The branch implements independent Kip accounts, account-scoped claim and photo backup, restore, and exactly three anonymous interaction events. Provider configuration and deployed acceptance are separate release steps. Source code and local checks do not establish that Google, Cloudflare, or a deployed preview is ready.
 
-An app update or content release must preserve earned badges without requiring an account. Keep claim IDs, stable park IDs, original claim times, and photos separate from downloaded content. Preserve a park's display information and artwork when a later catalogue retires it. Do not re-evaluate an old claim against a new boundary. Content cleanup must never clear personal claim or photo storage.
+## Accounts and personal progress
 
-Accounts add recovery after reinstall, a lost phone, or a device change. Authentication alone is insufficient: the app also needs authenticated claim backup, photo backup, restore, and an idempotent merge of existing local progress. Raw interaction logs are never the source of truth for earned claims.
+Kip accounts use Kip's own identity and progress records. Existing Parkdex credentials and sessions are not imported, and the old Parkdex service is not a runtime dependency. Email and password registration and sign-in are implemented, along with verification and password reset flows. Google sign-in and linking have web and Android code paths that become available only when their OAuth configuration is supplied. Web sessions use secure cookies and CSRF checks. Android sessions use the native Keystore bridge.
 
-## Start with three explicit events
+The functional Account screen covers account creation and sign-in, conditional Google sign-in, password reset and email verification, Google linking for signed-in users, backup status, explicit guest collection attachment, sign-out, and account deletion with reauthentication and a typed confirmation. A deletion response carries a receipt and can remain pending until personal data cleanup is confirmed. Email and Google availability are driven by server configuration, so a disabled provider remains unavailable in the screen.
 
-| Event | Trigger | Event context |
+Guest progress remains on the device unless the user explicitly attaches it to an account. Claims are assigned stable UUIDs and uploaded idempotently. A successful local save is durable before the app reports the claim or emits an interaction event. The app keeps local claims and supported photos until the server acknowledges backup, and restores account data into that account's local partition. Switching accounts does not expose or move the other account's cached progress. The claim/photo APIs require `X-Kip-Account-ID` to match the authenticated session, which rejects requests left over from a stale account tab.
+
+Claims and photos are separate from downloaded catalogue content. Each claim retains its stable park ID, original claim time, and frozen park snapshot. A retired park therefore remains visible in the earned collection. When its original scene art is needed, the app retrieves it from the claim's immutable content release, verifies it against that release's manifest and file hash, and caches it under the release and scene identity. If the device is offline, the claim stays visible while the matching art waits to restore. Multiple historical claim records for one park remain in progress history while the badge display continues to show one earned badge for that park.
+
+Personal photos use the private photo API and a Cloudflare/R2 service boundary. This does not make provider setup complete: actual Cloudflare resources, secret wiring, and deployed private-photo acceptance still require the owned preview workflow. Photos are not stored in the public content CDN.
+
+## Approved interaction events
+
+The only approved event types are `park_viewed`, `directions_opened`, and `park_claimed`. Calls are attached to those explicit product actions. There is no global click listener, and the product has no interaction logging opt-out. `park_viewed` means a park detail view was opened, not that the user visited the park. `directions_opened` means an external directions link was requested, not that navigation or arrival was completed. `park_claimed` is emitted only after the local claim transaction succeeds. Interaction events are never used to create or recover earned progress.
+
+Every event has this common context: an event UUID, a random installation UUID, a session UUID, client occurrence time, schema version, app version and build, content release ID, app environment, and stable park ID. The server adds the receipt time. The schema is strict and typed:
+
+| Event | Trigger | Event-specific context |
 | --- | --- | --- |
-| `park_viewed` | Open a park detail view; do not emit again on a React render | Park ID and entry point such as map, nearby list, or collection |
-| `directions_opened` | Request an external directions link | Park ID, provider, selected travel mode, and entry point. This proves a request to open directions, not arrival or navigation completion. |
-| `park_claimed` | A claim is successfully saved | Park ID, unique claim ID, first claim or repeat visit if the app supports repeat visits |
+| `park_viewed` | Open a park detail view | `entryPoint`: `map`, `nearby`, or `collection` |
+| `directions_opened` | Request an external maps link | `entryPoint` as above; `provider`: `google_maps` or `apple_maps`; `travelMode`: `driving`, `walking`, `bicycling`, or `transit` |
+| `park_claimed` | Save a claim locally | Claim UUID and `claimStatus`: `first` or `repeat` |
 
-Common context: unique event ID, randomly generated install ID, session ID, client occurrence time, server receipt time, event schema version, app version/build, content release ID, and app environment. The event ID allows retries without double counting. No names, email addresses, exact coordinates, photos, tokens, or free text. Any future association with an account ID needs an explicit identity policy; do not silently put personal account fields into analytics.
+The event allowlist contains no account ID, email, name, IP address, coordinates, photo, token, URL, referrer, or free text. The event table has no account foreign key. The API accepts bounded batches and uses the event UUID for idempotency. Replaying the same ID and payload is a duplicate; reusing it with changed content is a conflict. Request addresses are not written to events. Separate rate limiting uses a keyed hash with expiry.
 
-Keep raw interactions for 90 days. There is no logging opt-out in the requested product behavior. Use a small set of explicit calls, not a global click listener. Never block navigation or a successful claim on telemetry delivery. Claim sync and interaction delivery are separate concerns. `trip_started` and `share_completed` can be considered later if a concrete product question needs them.
+The client stores events in a bounded IndexedDB outbox with a 500-event cap and a 90-day age limit. It retries with the same event UUID, sends at most 50 events per batch, and bounds each flush to five batches. Delivery is attempted while the app is foregrounded or when connectivity returns. There is no always-on polling or automatic retry service. Event delivery does not block navigation or claim completion.
 
-## Keep Kip accounts separate
+Raw server events are retained for 90 days from server receipt time. A bounded daily purge deletes older rows and reports any remaining expired backlog; the purge endpoint is protected by `KIP_RETENTION_SECRET`. A missed purge can be resumed explicitly. The retention schedule exists to meet the approved 90-day rule, not to run a general retry worker.
 
-The old FastAPI service already supports email/password, Argon2id password hashes, verification emails, password reset, rate-limited login, opaque sessions, and Google identities. It has email login, not username login. Prefer a display name plus email/password initially; true username login needs a separate unique identifier and recovery rules.
+## Release and verification boundaries
 
-The operator chose independent Kip accounts. Port the tested legacy authentication behavior into Kip's Vercel backend and keep users, credentials, provider identities, sessions, and progress in Kip's Neon database. Do not depend on the old Parkdex service at runtime or silently copy password/session rows. Kip's backend must authenticate each request; the client cannot choose its own trusted account ID.
+The account and interaction source includes targeted tests and disposable PostgreSQL QA scripts. Deployed API and browser acceptance must run against the exact owned Vercel Preview deployment and commit SHA. Android in-place update, link handling, secure session, and restore journeys also require device verification. None of those deployed checks should be inferred from local tests.
 
-Existing Parkdex credentials will not automatically work in Kip. Any later import of old visits or account linking needs an explicit migration flow with ownership verification. That import is separate from preserving and backing up the existing local Kip testers' collections.
-
-All 122 current Kip park IDs exist in the inspected legacy 198-ID route catalogue. Import visits by exact IDs, never by similar names. The other legacy IDs need an explicit policy before importing. Kip's local claims and IndexedDB photos do not use the legacy guest-import format and require a new import endpoint.
-
-## Technical work needed for accounts
-
-1. **Identity model:** immutable internal account ID, separate Google provider/subject identity, email credential, optional display name, verification state, and account deletion. Do not key progress or Google linking by email. Correct the legacy check that rejects an already linked Google subject when its email changes.
-2. **Native Google sign-in:** use Android Credential Manager through a Capacitor bridge and a server endpoint that verifies Google ID tokens. Configure Android OAuth clients for each package/signing certificate, including the Play app signing certificate and field/debug builds, plus the web client ID used as the server audience. Validate signature, issuer, audience, expiry, verified email and a one-time nonce. Do not open Google authorization inside the app's WebView.
-3. **Session handling:** store mobile credentials in Android Keystore-backed secure storage; support revocation and a deliberate renewal policy. The old service currently has 30-day sessions and no refresh endpoint.
-4. **Email and links:** reuse the verified email sender/templates and password-reset protections. Add verified Android App Links and Capacitor link handling where verification/reset should return to Kip. Configure separate staging and production redirect targets.
-5. **Durable progress:** authenticated idempotent claim upload/download, immutable claim history, conflict-safe union when linking an existing local collection, and an acknowledged sync cursor. Keep local progress until the server confirms persistence. A catalogue update cannot invalidate a previously earned claim.
-6. **Photos:** keep the current phone copy and upload backups to private storage if photo recovery is part of the account promise. Use authenticated access or short-lived URLs, never the public content CDN. Retry independently of claim metadata.
-7. **Deletion and recovery:** delete personal Kip rows/photos and revoke sessions when a Kip account is deleted. Keep analytics retention separate from claim retention.
-8. **Migration for testers:** upgrade in place using the same Android package/signing identity, preserve current local keys, import with stable claim UUIDs, and verify reinstall/second-device restore before promising backup.
-
-Claude's UI handoff should cover sign-in, create account, Google sign-in, email verification, reset, linking an existing guest collection, backup pending/offline/error/success, and account deletion. The backend can be specified and tested before those screens are designed.
-
-## References
-
-- Legacy implementation: `parkdex/backend/AUTH.md`, `backend/app/auth.py`, `backend/app/main.py`, and migration `0008_secure_account_authentication.sql` in the sibling legacy repository.
-- [Android Credential Manager and Google sign-in](https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation)
-- [Google OAuth policy on embedded user agents](https://developers.google.com/identity/protocols/oauth2/policies)
-- [Google OpenID Connect identity rules](https://developers.google.com/identity/openid-connect/openid-connect)
-- [Android App Links](https://developer.android.com/training/app-links/about)
+Google OAuth client configuration, Android package and signing-certificate registration, Play App Signing identity, outbound email delivery, Cloudflare/R2 resource configuration, and preview secret wiring remain external setup. The current app-link and signer details, including the missing Play App Signing fingerprint, are documented in [android-app-links.md](android-app-links.md). Do not report Google or private-photo provider flows as ready until the exact environment is configured and verified.

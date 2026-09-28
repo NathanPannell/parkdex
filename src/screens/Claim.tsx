@@ -8,8 +8,12 @@ import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { badgeTotal, PALETTES, RARITY, type Park } from "../lib/parks";
-import { useStore } from "../lib/store";
+import { progressOwnerKey, useStore } from "../lib/store";
 import { useContent } from "../lib/content/provider";
+import { useAuth } from "../lib/accounts/AuthProvider";
+import { createPersonalClaim } from "../lib/accounts/personalStore";
+import { claimEventContext } from "../lib/accounts/progressSync";
+import { recordParkClaimed } from "../lib/interactions";
 
 const HOLD_MS = 1500;
 const CHEERS = ["KLEEP! Beauty!", "Into the case!", "Look at that shine!", "Another one!"];
@@ -19,19 +23,40 @@ export function Claim() {
   const content = useContent();
   const [parkId] = useState(() => state.tripId ?? "");
   const park = content?.parkById.get(parkId);
+  if (!state.progressReady) return <div className="screen claim-progress-wait"><div className="card"><Kip pose="think" size={72} /><strong>Opening your saved case…</strong><span>Your photo is still here. Kip will save this badge as soon as the case is ready.</span></div></div>;
   if (!park) return <ContentGate />;
   return <ClaimReady park={park} />;
 }
 
 function ClaimReady({ park }: { park: Park }) {
   const { state, dispatch } = useStore();
+  const auth = useAuth();
   const content = useContent();
-  const photo = state.pendingPhoto ?? "";
+  const [photo] = useState(() => state.pendingPhoto ?? "");
+  const [contentReleaseId] = useState(() => content?.releaseId ?? null);
+  const [owner] = useState(() => auth.ownerAccountId ? { kind: "account" as const, accountId: auth.ownerAccountId } : { kind: "guest" as const });
+  const ownerKey = progressOwnerKey(owner)!;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const authRef = useRef(auth);
+  authRef.current = auth;
+  const claimOwnerIsCurrent = () => {
+    const currentAuth = authRef.current;
+    const currentOwnerKey = currentAuth.phase === "guest"
+      ? "guest"
+      : currentAuth.ownerAccountId
+        ? `account:${currentAuth.ownerAccountId.toLowerCase()}`
+        : null;
+    return currentOwnerKey === ownerKey && stateRef.current.progressOwnerKey === ownerKey && stateRef.current.progressReady;
+  };
+  const [firstClaim] = useState(() => !state.claims[park.id]);
   const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
   const [holding, setHolding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   // Frozen at mount: the claim itself bumps the live count mid-ceremony.
   const [before] = useState(() => Object.keys(state.claims).length);
   const [count, setCount] = useState(before);
@@ -44,6 +69,7 @@ function ClaimReady({ park }: { park: Park }) {
   const shakeX = useMotionValue(0);
   const shakeR = useMotionValue(0);
   const anim = useRef<ReturnType<typeof animate> | null>(null);
+  const savingRef = useRef(false);
   const lastTick = useRef(0);
 
   useAnimationFrame((t) => {
@@ -54,7 +80,7 @@ function ClaimReady({ park }: { park: Park }) {
   });
 
   const start = (e: React.PointerEvent) => {
-    if (phase !== "charge") return;
+    if (phase !== "charge" || savingRef.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     setHolding(true);
     anim.current?.stop();
@@ -69,20 +95,51 @@ function ClaimReady({ park }: { park: Park }) {
           buzz(6 + step * 2);
         }
       },
-      onComplete: complete,
+      onComplete: () => { void saveClaim(); },
     });
   };
 
   const release = () => {
-    if (phase !== "charge" || progress.get() >= 1) return;
+    if (phase !== "charge" || savingRef.current || progress.get() >= 1) return;
     setHolding(false);
     lastTick.current = 0;
     anim.current?.stop();
     anim.current = animate(progress, 0, { type: "spring", stiffness: 300, damping: 24 });
   };
 
-  function complete() {
+  async function saveClaim() {
+    if (phase !== "charge" || savingRef.current) return;
+    savingRef.current = true;
     setHolding(false);
+    setSaving(true);
+    setSaveError(false);
+    const claimedAt = new Date().toISOString();
+    try {
+      // The personal store resolves only after claim metadata, photo bytes and the
+      // account sync outbox have committed in one durable transaction.
+      const saved = await createPersonalClaim(owner, { park, claimedAt, contentReleaseId, photo: photo || null });
+      const event = claimEventContext(saved, firstClaim);
+      void recordParkClaimed({ parkId: event.parkId, claimId: event.claimId, claimStatus: event.firstClaim ? "first" : "repeat", contentReleaseId: contentReleaseId ?? "" }).catch(() => {});
+      if (!claimOwnerIsCurrent()) {
+        setSaveError(true);
+        progress.set(0);
+        lastTick.current = 0;
+        return;
+      }
+      dispatch({ type: "claim", ownerKey, id: park.id, claimId: saved.claimId, at: saved.claimedAt, photo, parkSnapshot: park, contentReleaseId });
+      if (authRef.current.phase === "authenticated" && authRef.current.ownerAccountId?.toLowerCase() === ownerKey.slice("account:".length)) void authRef.current.syncBackup();
+      celebrate();
+    } catch {
+      setSaveError(true);
+      progress.set(0);
+      lastTick.current = 0;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  function celebrate() {
     setPhase("done");
     sfx.claim();
     buzz([40, 40, 80, 40, 160]);
@@ -92,8 +149,6 @@ function ClaimReady({ park }: { park: Park }) {
     setTimeout(cannons, 350);
     setTimeout(() => setCount(number), 700);
     setTimeout(() => sfx.chirp(), 900);
-    dispatch({ type: "claim", id: park.id, photo });
-    dispatch({ type: "trip", id: park.id });
   }
 
   return (
@@ -129,7 +184,7 @@ function ClaimReady({ park }: { park: Park }) {
         transition={{ type: "spring", stiffness: 200, damping: 16, delay: 0.2 }}
       >
         <span className="tape" />
-        <img src={photo} alt="Your check-in" />
+        {photo && <img src={photo} alt="Your check-in" />}
       </motion.div>
 
       <div className="claim__stage">
@@ -193,6 +248,7 @@ function ClaimReady({ park }: { park: Park }) {
                 animate={{ scale: holding ? 0.92 : 1 }}
                 transition={{ type: "spring", stiffness: 500, damping: 20 }}
                 aria-label="Hold to claim"
+                disabled={saving || !state.progressReady}
               >
                 <svg viewBox="0 0 100 100" className="hold__ring">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,248,236,.18)" strokeWidth="7" />
@@ -203,8 +259,9 @@ function ClaimReady({ park }: { park: Park }) {
                 </span>
               </motion.button>
               <motion.p className="hold__label" animate={{ opacity: holding ? 0.5 : 1 }}>
-                {holding ? "Keep holding…" : "Press and hold to claim"}
+                {saving ? "Saving your badge…" : holding ? "Keep holding…" : "Press and hold to claim"}
               </motion.p>
+              {saveError && <p className="claim-save-error" role="alert">That badge couldn’t be saved yet. Your photo is still here. Release and try again.</p>}
             </motion.div>
           ) : (
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}>

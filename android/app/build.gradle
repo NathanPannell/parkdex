@@ -13,6 +13,17 @@ def releaseValue = { String key -> System.getenv(key) ?: releaseProps.getPropert
 def releaseKeystore = releaseValue('PARKDEX_RELEASE_KEYSTORE_FILE')
 def releaseVersionCode = releaseValue('PARKDEX_ANDROID_VERSION_CODE')
 def releaseVersionName = releaseValue('PARKDEX_ANDROID_VERSION_NAME')
+def rawAuthLinkHost = project.findProperty('PARKDEX_AUTH_LINK_HOST') ?: System.getenv('PARKDEX_AUTH_LINK_HOST')
+def requestedAuthLinkHost = rawAuthLinkHost ? rawAuthLinkHost.toString().trim().toLowerCase() : null
+def resolveAuthLinkHost = { String fallback ->
+    if (!requestedAuthLinkHost) return fallback
+    def kipPreview = requestedAuthLinkHost ==~ /^parkdex-kip-[a-z0-9]+(-[a-z0-9]+)*\.vercel\.app$/
+    def ownerPreview = requestedAuthLinkHost ==~ /^parkdex-[a-z0-9]+-nathanpannells-projects\.vercel\.app$/
+    if (!kipPreview && !ownerPreview) {
+        throw new GradleException('PARKDEX_AUTH_LINK_HOST must be the Kip staging host, a Kip Vercel preview host, or an owner-scoped Parkdex Vercel preview host')
+    }
+    return requestedAuthLinkHost
+}
 
 android {
     namespace = "app.parkdex"
@@ -48,11 +59,13 @@ android {
         debug {
             // Sideloaded field builds install beside the Play build and are clearly labelled.
             applicationIdSuffix ".debug"
+            manifestPlaceholders = [authLinkHost: resolveAuthLinkHost('parkdex-kip-staging.vercel.app')]
             resValue "string", "app_name", "Parkdex Field"
             resValue "string", "title_activity_main", "Parkdex Field"
         }
         release {
             signingConfig releaseKeystore ? signingConfigs.release : null
+            manifestPlaceholders = [authLinkHost: resolveAuthLinkHost('parkdex-kip-staging.vercel.app')]
             resValue "string", "app_name", "Parkdex"
             resValue "string", "title_activity_main", "Parkdex"
             minifyEnabled false
@@ -72,6 +85,9 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

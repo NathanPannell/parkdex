@@ -8,7 +8,7 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const route = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
   const appUrl = process.env.PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
-  if (!appUrl) return res.status(503).json({ error: 'Feedback is temporarily unavailable.' });
+  if (!appUrl) return res.status(503).json({ error: 'Kip is temporarily unavailable.' });
   const url = new URL(`/api/${route || 'health'}`, appUrl);
   for (const [key, value] of Object.entries(req.query)) {
     if (key === 'path' || value === undefined) continue;
@@ -33,19 +33,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for await (const chunk of req) {
           const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           bytes += buffer.length;
-          if (bytes > 3 * 1024 * 1024) return res.status(413).json({ error: 'That screenshot is too large. Try a smaller image.' });
+          if (bytes > 3 * 1024 * 1024) return res.status(413).json({ error: 'That upload is too large. Try a smaller image.' });
           chunks.push(buffer);
         }
         body = Buffer.concat(chunks);
       }
-      if (body.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'That screenshot is too large. Try a smaller image.' });
+      if (body.length > 3 * 1024 * 1024) return res.status(413).json({ error: 'That upload is too large. Try a smaller image.' });
     }
-    const request = new Request(url, { method: req.method, headers, body: body ? new Uint8Array(body).buffer : undefined });
+    const request = new Request(url, { method: req.method, headers, body: body?.length ? new Uint8Array(body).buffer : undefined });
     const response = await worker.fetch(request, { ...process.env, PUBLIC_APP_URL: appUrl } as never, { waitUntil } as never);
     res.status(response.status);
-    response.headers.forEach((value, key) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => {
+      if (key.toLowerCase() !== 'set-cookie') res.setHeader(key, value);
+    });
+    // Session and CSRF cookies must remain separate headers. A comma-joined cookie
+    // header can lose one cookie in browsers, especially when Expires is present.
+    const cookies = response.headers.getSetCookie();
+    if (cookies.length) res.setHeader('set-cookie', cookies);
     res.send(Buffer.from(await response.arrayBuffer()));
   } catch {
-    res.status(503).json({ error: 'Feedback is temporarily unavailable. Your draft is still saved.' });
+    res.status(503).json({ error: 'Kip is temporarily unavailable. Please try again.' });
   }
 }
