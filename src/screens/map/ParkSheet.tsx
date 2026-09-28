@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
 import { estimateTrip, finalWalk } from "../../lib/drive";
 import { formatDistance, type LngLat } from "../../lib/geo";
+import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { ParkRarityEligibility } from "../../lib/progression";
 import { RarityGuide } from "../../components/RarityGuide";
@@ -52,6 +53,9 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
   const openDirections = () => {
     if (content) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
+  const badge = claim
+    ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
+    : <Badge park={park} size={176} animated state="preview" />;
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) onClose();
@@ -84,11 +88,8 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
           animate={{ scale: 1, rotate: 0, y: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
         >
-          <Tilt>
-            {claim
-              ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
-              : <Badge park={park} size={176} animated state="preview" />}
-          </Tilt>
+          {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
+          {isNative ? badge : <Tilt>{badge}</Tilt>}
         </motion.div>
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
           {claim ? "In your Dex" : eligibility.reason === "unavailable" ? "Checking rarity" : locked ? `${rarity.label} · Locked` : live ? "You can claim this" : "Claimable · art coming soon"}
