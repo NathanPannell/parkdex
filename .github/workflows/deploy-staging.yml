@@ -18,6 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: kip_qa
+          POSTGRES_PASSWORD: kip_owned_ci_only
+          POSTGRES_DB: kip_qa_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kip_qa -d kip_qa_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,20 +67,33 @@ jobs:
           npm ci
           npm run typecheck
           npm test --if-present
+          python -m unittest discover -s scripts -p "test_kip*.py"
           npm run build
 
-      - name: Apply the additive feedback migration
+      - name: Verify account queries against owned PostgreSQL
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: kip_qa
+          PGPASSWORD: kip_owned_ci_only
+          PGDATABASE: kip_qa_ci
+        shell: bash
+        run: |
+          if test -f scripts/qa-account-sql.mjs; then npm run test:sql; fi
+
+      - name: Apply ordered additive migrations
         env:
           KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
         run: python scripts/kip-delivery.py migrate-staging --sha "$GITHUB_SHA" --apply
 
-      - name: Install the pinned deployment CLI
-        run: npm install --global vercel@50.1.3
+      - name: Install pinned deployment CLIs
+        run: npm install --global vercel@50.1.3 wrangler@4.132.0
 
-      - name: Queue the exact staging deployment
+      - name: Queue exact staging services concurrently
         env:
           KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
           VERCEL_STAGING_PROJECT_ID: ${{ vars.VERCEL_STAGING_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_STAGING }}
-        run: python scripts/kip-delivery.py deploy-staging --sha "$GITHUB_SHA" --apply
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_KIP_STAGING_TOKEN }}
+        run: python scripts/kip-delivery.py deploy-staging-services --sha "$GITHUB_SHA" --apply

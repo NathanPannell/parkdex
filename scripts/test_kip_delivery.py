@@ -1,0 +1,179 @@
+"""Release gates that prevent incomplete or cross-environment account deployments."""
+import importlib.util
+import argparse
+import contextlib
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+SPEC = importlib.util.spec_from_file_location("kip_delivery", Path(__file__).with_name("kip-delivery.py"))
+delivery = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = delivery
+SPEC.loader.exec_module(delivery)
+
+
+class AccountReleaseGates(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.config = delivery.load_config()
+        self.touch(self.config["apiEntrypoint"])
+        self.touch(self.config["migrationPath"])
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def touch(self, name):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    def account_files(self):
+        for name in self.config["optionalMigrationPaths"]:
+            self.touch(name)
+        self.touch(self.config["privatePhotos"]["sourcePath"])
+
+    def runtime(self):
+        return {
+            "SESSION_SECRET": "o" * 48, "AUTH_SESSION_SECRET": "a" * 48,
+            "KIP_PHOTO_SERVICE_TOKEN": "p" * 48, "KIP_RETENTION_SECRET": "r" * 48,
+            "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-staging.owned.workers.dev",
+            "GOOGLE_WEB_CLIENT_ID": "123456-kip.apps.googleusercontent.com",
+            "EMAIL_FROM": "Kip <kip@example.test>",
+        }
+
+    def test_bootstrap_runs_existing_migration_only(self):
+        self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], ["feedback_001_init.sql"])
+
+    def test_account_code_without_any_migration_fails_closed(self):
+        self.touch("worker/accounts/auth.ts")
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.migration_paths(self.config, self.root)
+
+    def test_partial_account_schema_and_missing_photo_service_fail(self):
+        self.touch(self.config["optionalMigrationPaths"][0])
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.migration_paths(self.config, self.root)
+        for name in self.config["optionalMigrationPaths"]:
+            self.touch(name)
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.migration_paths(self.config, self.root)
+
+    def test_complete_migrations_keep_foreign_key_order(self):
+        self.account_files()
+        self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+        ])
+
+    def test_staging_rejects_preview_photo_origin_and_missing_google(self):
+        self.account_files()
+        bundle = self.runtime()
+        delivery.require_account_runtime(self.config, bundle, self.root)
+        for origin in ("https://kip-pr-12.owned.workers.dev", "https://parkdex-kip-photos-staging.owned.workers.dev:444", "https://parkdex-kip-photos-staging.evil.test"):
+            with self.subTest(origin=origin), self.assertRaises(delivery.DeliveryError):
+                delivery.require_account_runtime(self.config, {**bundle, "KIP_PHOTO_SERVICE_URL": origin}, self.root)
+        bundle.pop("GOOGLE_WEB_CLIENT_ID")
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.require_account_runtime(self.config, bundle, self.root)
+
+    def test_purpose_secrets_must_be_distinct(self):
+        self.account_files()
+        bundle = self.runtime()
+        bundle["AUTH_SESSION_SECRET"] = bundle["SESSION_SECRET"]
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.require_account_runtime(self.config, bundle, self.root)
+
+    def test_preview_uses_fresh_secrets_without_email_or_google_credentials(self):
+        path = self.root / "credentials.json"
+        document = {"sessionSecret": "s", "operatorPasswordHash": "h", "authSessionSecret": "a", "photoServiceToken": "p", "retentionSecret": "r"}
+        path.write_text(json.dumps(document), encoding="utf-8")
+        state = {"headSha": "a" * 40, "accountsPresent": True, "resources": {"photoServiceUrl": "https://owned-preview.workers.dev"}}
+        env = delivery.runtime_env_for_preview(self.config, state, "postgres://fresh", path)
+        self.assertEqual(env["EMAIL_MODE"], "disabled")
+        self.assertEqual(env["KIP_PHOTO_SERVICE_TOKEN"], "p")
+        self.assertFalse(set(env) & {"GOOGLE_WEB_CLIENT_ID", "RESEND_API_KEY", "CLOUDFLARE_API_TOKEN", "NEON_API_KEY"})
+
+    def test_all_generated_credentials_are_redacted(self):
+        path = self.root / "generated.json"
+        with patch.object(delivery, "credential_path", return_value=path):
+            delivery.make_operator_credentials(12, "owned-release")
+        document = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(len(set(document.values())), len(document))
+        for secret in document.values():
+            self.assertNotIn(secret, delivery.redact("failure " + secret))
+
+    def test_migration_is_atomic_and_stops_on_sql_error(self):
+        with patch.object(delivery, "run") as run:
+            delivery.run_migration("postgresql://role:secret@ep-owned-test.us-west-2.aws.neon.tech/db", self.root / "migration.sql")
+        args = run.call_args.args[0]
+        self.assertIn("-1", args)
+        self.assertIn("ON_ERROR_STOP=1", args)
+        self.assertNotIn("secret", " ".join(args))
+
+    def test_candidate_sql_credentials_are_local_only_and_provider_secrets_are_removed(self):
+        values = {"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only", "NEON_API_KEY": "persistent-secret"}
+        with patch.dict(os.environ, values, clear=True):
+            env = delivery.candidate_sql_env()
+            self.assertNotIn("NEON_API_KEY", env)
+            self.assertEqual(env["PGDATABASE"], "kip_qa_candidate")
+            self.assertNotIn("qa-only", delivery.redact("failure qa-only"))
+        for overrides in ({"PGHOST": "ep-staging.neon.tech"}, {"PGDATABASE": "parkdex_kip"}, {"PGPORT": "65536"}):
+            with patch.dict(os.environ, {**values, **overrides}, clear=True), self.assertRaises(delivery.DeliveryError):
+                delivery.candidate_sql_env()
+
+    def test_staging_bootstrap_source_requires_current_browser_verified_preview(self):
+        head, base, candidate = "a" * 40, "b" * 40, "c" * 40
+        path = self.root / "preview.json"
+        state = {
+            "schema": "parkdex-kip.preview/v1", "repository": delivery.REPOSITORY,
+            "pullRequest": 12, "releaseId": "a1111111-1111-4111-8111-111111111111",
+            "status": "ready-for-browser-verification", "accountsPresent": True,
+            "headSha": head, "baseSha": base, "candidateSha": candidate,
+            "browserVerifiedHeadSha": head, "browserVerifiedCandidateSha": candidate,
+            "browserVerifiedDeploymentId": "dpl_owned", "browserVerifiedAt": "2026-09-28T00:00:00Z",
+            "resources": {"vercelDeploymentId": "dpl_owned"}, "url": "https://owned.vercel.app",
+        }
+        pr = {"number": 12, "state": "OPEN", "isDraft": True, "isCrossRepository": False,
+              "baseRefName": "staging", "headRefName": "feat/accounts", "headRefOid": head}
+        with patch.object(delivery, "journal_path", return_value=path), patch.object(delivery, "gh_pr", return_value=pr), patch.object(delivery, "fetch_pr_head", return_value=head), patch.object(delivery, "photo_provider") as provider, patch.object(delivery, "git") as git, patch.object(delivery, "vercel_request", return_value={"readyState": "READY", "url": "owned.vercel.app"}), patch.object(delivery, "verify_deployment"), patch.object(delivery, "verify_release_url"):
+            for change in ({"browserVerifiedHeadSha": None}, {"browserVerifiedCandidateSha": "d" * 40},
+                           {"browserVerifiedDeploymentId": "dpl_other"}, {"headSha": "d" * 40},
+                           {"baseSha": "e" * 40}, {"status": "failed-needs-teardown"}):
+                path.write_text(json.dumps({**state, **change}), encoding="utf-8")
+                with self.subTest(change=change), self.assertRaises(delivery.DeliveryError):
+                    delivery.verified_photo_source(self.config, 12, base)
+            provider.assert_not_called()
+            path.write_text(json.dumps(state), encoding="utf-8")
+            git.side_effect = [f"{candidate} {base} {head}", "f" * 40, "f" * 40]
+            self.assertEqual(delivery.verified_photo_source(self.config, 12, base), state)
+            provider.return_value.verify_preview.assert_called_once()
+
+    def test_browser_attestation_binds_current_preview_and_deployment(self):
+        path = self.root / "preview.json"
+        state = {
+            "headSha": "a" * 40, "candidateSha": "c" * 40,
+            "resources": {"vercelDeploymentId": "dpl_owned"},
+        }
+        args = argparse.Namespace(pr=12, deployment_id="dpl_owned")
+        with patch.object(delivery, "load_config", return_value=self.config), \
+             patch.object(delivery, "assert_clean_staging_harness", return_value=("b" * 40, None)), \
+             patch.object(delivery, "lifecycle_lock", return_value=contextlib.nullcontext()), \
+             patch.object(delivery, "journal_path", return_value=path), \
+             patch.object(delivery, "verified_photo_source", return_value=state):
+            delivery.attest_preview_browser(args)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["browserVerifiedHeadSha"], state["headSha"])
+            self.assertEqual(saved["browserVerifiedCandidateSha"], state["candidateSha"])
+            self.assertEqual(saved["browserVerifiedDeploymentId"], args.deployment_id)
+            self.assertTrue(saved["browserVerifiedAt"])
+            with self.assertRaises(delivery.DeliveryError):
+                delivery.attest_preview_browser(argparse.Namespace(pr=12, deployment_id="dpl_wrong"))
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
+
+
+if __name__ == "__main__":
+    unittest.main()

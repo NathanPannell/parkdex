@@ -15,10 +15,12 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -32,6 +34,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ID_RE = re.compile(r"^[0-9]+$")
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 SECRET_VALUES: list[str] = []
+JOURNAL_LOCK = threading.RLock()
 
 
 class DeliveryError(RuntimeError):
@@ -172,6 +175,11 @@ def credential_path(pr: int, release_id: str) -> Path:
 
 
 def save_json(path: Path, data: dict) -> None:
+    with JOURNAL_LOCK:
+        _save_json(path, data)
+
+
+def _save_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(path.parent, 0o700)
@@ -180,8 +188,7 @@ def save_json(path: Path, data: dict) -> None:
     temp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-        json.dump(data, stream, indent=2)
-        stream.write("\n")
+        stream.write(json.dumps(data, indent=2) + "\n")
     os.replace(temp, path)
     try:
         os.chmod(path, 0o600)
@@ -364,6 +371,30 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
         run([*npm, *args], cwd=candidate_root, env=env, label=f"candidate npm {name}")
         state["validation"].append({"check": name, "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
         save_json(path, state)
+    run([sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_kip*.py"], cwd=candidate_root, env=env, label="candidate delivery tests")
+    state["validation"].append({"check": "delivery-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+    save_json(path, state)
+    if state.get("accountsPresent"):
+        run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
+        state["validation"].append({"check": "postgresql-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+        photo_provider().validate_candidate(sys.modules[__name__], load_config(), candidate_root)
+        state["validation"].append({"check": "private-photo-worker-bundle", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+
+
+def candidate_sql_env() -> dict[str, str]:
+    values = {key: os.environ.get(key, "") for key in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD")}
+    if (
+        values["PGHOST"] not in ("127.0.0.1", "localhost", "::1")
+        or not re.fullmatch(r"kip_qa_[a-z0-9_]+|kip_accounts_qa", values["PGDATABASE"])
+        or not values["PGUSER"]
+        or not values["PGPASSWORD"]
+        or (values["PGPORT"] and (not values["PGPORT"].isdigit() or not 1 <= int(values["PGPORT"]) <= 65535))
+    ):
+        raise DeliveryError("Account candidate SQL tests require PG* credentials for a disposable loopback kip_qa_ database.")
+    register_secret(values["PGPASSWORD"])
+    return safe_env(extra={key: value for key, value in values.items() if value})
 
 
 def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
@@ -809,8 +840,8 @@ def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> li
 def run_migration(database_url: str, migration: Path) -> None:
     uri, username, password = parse_database_url(database_url)
     env = safe_env(extra={"PGPASSWORD": password, "PGSSLMODE": "require"})
-    run([*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-f", str(migration)],
-        cwd=ROOT, env=env, label="feedback migration")
+    run([*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-1", "-f", str(migration)],
+        cwd=ROOT, env=env, label=f"database migration {migration.name}")
 
 
 def preview_psql_query(database_url: str, sql: str) -> str:
@@ -829,20 +860,22 @@ def verify_preview_database_empty(database_url: str, *, migration_applied: bool)
     if not migration_applied:
         tables = preview_psql_query(
             database_url,
-            "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'kip_feedback'",
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'",
         )
         if tables != "0":
-            raise DeliveryError("The fresh preview database already contains feedback tables; refusing to use it.")
+            raise DeliveryError("The fresh preview database already contains application tables; refusing to use it.")
         return
-    counts = preview_psql_query(database_url, """
-        SELECT
-          (SELECT count(*) FROM kip_feedback.reports)::text || ':' ||
-          (SELECT count(*) FROM kip_feedback.attachments)::text || ':' ||
-          (SELECT count(*) FROM kip_feedback.email_deliveries)::text || ':' ||
-          (SELECT count(*) FROM kip_feedback.rate_limits)::text
+    preview_psql_query(database_url, """
+        DO $$ DECLARE item record; populated boolean;
+        BEGIN
+          FOR item IN SELECT table_schema, table_name FROM information_schema.tables
+            WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'
+          LOOP
+            EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I LIMIT 1)', item.table_schema, item.table_name) INTO populated;
+            IF populated THEN RAISE EXCEPTION 'Fresh preview database contains data'; END IF;
+          END LOOP;
+        END $$;
     """)
-    if counts != "0:0:0:0":
-        raise DeliveryError("The preview feedback database is not empty after migration; refusing to deploy it.")
 
 
 def read_runtime_bundle(config: dict, *, optional: bool = False) -> dict | None:
@@ -860,7 +893,7 @@ def read_runtime_bundle(config: dict, *, optional: bool = False) -> dict | None:
     if not isinstance(bundle, dict):
         raise DeliveryError(f"{env_name} must contain a JSON object.")
     expected = set(config["runtimeSecretBundleKeys"])
-    allowed = expected | {"MIGRATION_DATABASE_URL"}
+    allowed = expected | set(config.get("runtimeOptionalKeys", [])) | {"MIGRATION_DATABASE_URL"}
     if set(bundle) - allowed or expected - set(bundle):
         raise DeliveryError(f"{env_name} must contain the documented runtime keys.")
     for key, value in bundle.items():
@@ -887,18 +920,68 @@ def migration_presence(candidate_root: Path) -> tuple[bool, bool]:
     return has_api, has_migration
 
 
+def migration_paths(config: dict, candidate_root: Path) -> list[Path]:
+    """Trusted ordered inventory. Never execute arbitrary candidate SQL filenames."""
+    has_api, _ = migration_presence(candidate_root)
+    if not has_api:
+        return []
+    paths = [candidate_root / config["migrationPath"]]
+    optional = [candidate_root / name for name in config.get("optionalMigrationPaths", [])]
+    present = [path for path in optional if path.is_file()]
+    feature_markers = (candidate_root / "worker/accounts", candidate_root / config["privatePhotos"]["sourcePath"])
+    if any(path.exists() for path in feature_markers) and not present:
+        raise DeliveryError("Account feature code requires its ordered migrations.")
+    if present and len(present) != len(optional):
+        raise DeliveryError("Account, progress, and interaction migrations must ship together.")
+    if present and not (candidate_root / config["privatePhotos"]["sourcePath"]).is_file():
+        raise DeliveryError("Account migrations require the private photo Worker service.")
+    paths.extend(present)
+    return paths
+
+
+def accounts_present(config: dict, candidate_root: Path) -> bool:
+    paths = migration_paths(config, candidate_root)
+    return len(paths) > 1
+
+
+def require_account_runtime(config: dict, bundle: dict, candidate_root: Path) -> None:
+    if not accounts_present(config, candidate_root):
+        return
+    for key in ("AUTH_SESSION_SECRET", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"):
+        if len(bundle.get(key, "")) < 32:
+            raise DeliveryError(f"{key} must be configured with at least 32 random characters.")
+    if len({bundle["SESSION_SECRET"], bundle["AUTH_SESSION_SECRET"], bundle["KIP_PHOTO_SERVICE_TOKEN"], bundle["KIP_RETENTION_SECRET"]}) != 4:
+        raise DeliveryError("Operator, account, photo, and retention secrets must be distinct.")
+    url = urllib.parse.urlsplit(bundle.get("KIP_PHOTO_SERVICE_URL", ""))
+    expected_host = config["privatePhotos"]["stagingWorkerName"] + "."
+    if url.scheme != "https" or not url.hostname or not url.hostname.startswith(expected_host) or not url.hostname.endswith(".workers.dev") or url.path not in ("", "/") or url.query or url.fragment or url.username or url.port:
+        raise DeliveryError("KIP_PHOTO_SERVICE_URL must be the dedicated HTTPS Worker origin.")
+    if not re.fullmatch(r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com", bundle.get("GOOGLE_WEB_CLIENT_ID", "")):
+        raise DeliveryError("Staging accounts require a configured Google Web OAuth client.")
+    if not bundle.get("AUTH_EMAIL_FROM") and not bundle.get("EMAIL_FROM"):
+        raise DeliveryError("Staging accounts require an authentication email sender.")
+
+
 def runtime_env_for_preview(config: dict, state: dict, database_url: str | None,
                             credential_path_value: Path | None) -> dict:
     if database_url is None or credential_path_value is None:
         return {}
     password_doc = json.loads(credential_path_value.read_text(encoding="utf-8"))
-    return {
+    result = {
         "DATABASE_URL": database_url,
         "SESSION_SECRET": password_doc["sessionSecret"],
         "OPERATOR_PASSWORD_HASH": password_doc["operatorPasswordHash"],
         "EMAIL_MODE": config["previewEmailMode"],
         "RELEASE_SHA": state["headSha"],
     }
+    if state.get("accountsPresent"):
+        result.update({
+            "AUTH_SESSION_SECRET": password_doc["authSessionSecret"],
+            "KIP_RETENTION_SECRET": password_doc["retentionSecret"],
+            "KIP_PHOTO_SERVICE_TOKEN": password_doc["photoServiceToken"],
+            "KIP_PHOTO_SERVICE_URL": state["resources"]["photoServiceUrl"],
+        })
+    return result
 
 
 def make_operator_credentials(pr: int, release_id: str) -> Path:
@@ -907,15 +990,42 @@ def make_operator_credentials(pr: int, release_id: str) -> Path:
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 210_000, dklen=32)
     session_secret = secrets.token_urlsafe(48)
     target = credential_path(pr, release_id)
-    save_json(target, {
+    document = {
         "operatorPassword": password,
         "operatorPasswordHash": f"{salt.hex()}:{digest.hex()}",
         "sessionSecret": session_secret,
-    })
-    register_secret(password)
-    register_secret(session_secret)
-    register_secret(f"{salt.hex()}:{digest.hex()}")
+        "authSessionSecret": secrets.token_urlsafe(48),
+        "photoServiceToken": secrets.token_urlsafe(48),
+        "retentionSecret": secrets.token_urlsafe(48),
+    }
+    for value in document.values():
+        register_secret(value)
+    save_json(target, document)
     return target
+
+
+def photo_provider():
+    import kip_private_photos
+    return kip_private_photos
+
+
+def merge_photo_journal(state: dict, path: Path) -> None:
+    sidecar = state.get("photoJournal")
+    if not sidecar:
+        return
+    expected = path.with_name(f"{path.stem}-{state['releaseId']}-photos.json")
+    if Path(sidecar).resolve() != expected.resolve():
+        raise DeliveryError("Photo sidecar path does not match the preview journal identity.")
+    if not expected.exists():
+        return
+    photo_state = json.loads(expected.read_text(encoding="utf-8"))
+    for key in ("repository", "pullRequest", "releaseId", "headSha", "candidateSha"):
+        if photo_state.get(key) != state.get(key):
+            raise DeliveryError("Photo sidecar provenance does not match its preview journal.")
+    state["resources"].update(photo_state.get("resources", {}))
+    state["intent"].update(photo_state.get("intent", {}))
+    state["photoStatus"] = photo_state.get("status")
+    save_json(path, state)
 
 
 def write_vercel_files(candidate_root: Path, config: dict, token: str, runtime_env: dict):
@@ -1037,11 +1147,15 @@ def preview_apply(pr: int) -> None:
     auth_dir = None
     local_config_path = None
     credential_file = None
+    photo_executor = None
+    photo_future = None
     try:
         candidate_sha, candidate_root = make_candidate(head_sha, base_sha)
         state["candidateSha"] = candidate_sha
         has_api, has_migration = migration_presence(candidate_root)
         state["apiPresent"] = has_api
+        migrations = migration_paths(config, candidate_root)
+        state["accountsPresent"] = accounts_present(config, candidate_root)
         set_release_file(candidate_root, head_sha, "preview")
         candidate_checks(candidate_root, state, path)
         pr_latest = gh_pr(pr)
@@ -1052,6 +1166,19 @@ def preview_apply(pr: int) -> None:
 
         database_url = None
         if has_migration:
+            credential_file = make_operator_credentials(pr, release_id)
+            state["credentialFile"] = str(credential_file)
+            save_json(path, state)
+            if state["accountsPresent"]:
+                photo_path = path.with_name(f"{path.stem}-{state['releaseId']}-photos.json")
+                photo_state = json.loads(json.dumps(state))
+                photo_state["resources"] = {}
+                photo_state["intent"] = {}
+                state["photoJournal"] = str(photo_path)
+                save_json(path, state)
+                save_json(photo_path, photo_state)
+                photo_executor = ThreadPoolExecutor(max_workers=1)
+                photo_future = photo_executor.submit(photo_provider().create_preview, sys.modules[__name__], config, photo_state, photo_path, candidate_root, credential_file)
             branches = neon_branches(config)
             parent_id = config["neonParentBranchId"]
             parent = [branch for branch in branches if branch.get("id") == parent_id]
@@ -1095,12 +1222,16 @@ def preview_apply(pr: int) -> None:
             save_json(path, state)
             database_url = create_preview_database(config, state, branch["id"], path)
             verify_preview_database_empty(database_url, migration_applied=False)
-            run_migration(database_url, candidate_root / config["migrationPath"])
+            for migration in migrations:
+                run_migration(database_url, migration)
             verify_preview_database_empty(database_url, migration_applied=True)
-            credential_file = make_operator_credentials(pr, release_id)
-            state["credentialFile"] = str(credential_file)
             state["status"] = "neon-migrated"
             save_json(path, state)
+
+        if photo_future:
+            photo_future.result()
+            merge_photo_journal(state, path)
+            photo_provider().verify_preview(sys.modules[__name__], config, state)
 
         token = vercel_token(config)
         runtime_env = runtime_env_for_preview(config, state, database_url, credential_file)
@@ -1135,6 +1266,8 @@ def preview_apply(pr: int) -> None:
         save_json(path, state)
         ready = wait_for_preview(config, state, path)
         verify_release_url(config, state["url"], head_sha, "preview", api_present=has_api)
+        if state["accountsPresent"]:
+            photo_provider().verify_preview(sys.modules[__name__], config, state)
         state["status"] = "ready-for-browser-verification"
         state["readyAt"] = datetime.now(timezone.utc).isoformat()
         save_json(path, state)
@@ -1149,6 +1282,12 @@ def preview_apply(pr: int) -> None:
         print("preview-email-mode=disabled")
         print(f"teardown-command=pwsh -File scripts/teardown-preview-pr.ps1 -PullRequest {pr} -Apply")
     except Exception as exc:
+        if photo_future:
+            try:
+                photo_future.result()
+            except Exception as photo_error:
+                state["photoFailure"] = redact(str(photo_error))
+            merge_photo_journal(state, path)
         if state.get("intent") or state.get("resources"):
             state["status"] = "failed-needs-teardown"
             state["failure"] = redact(str(exc))
@@ -1161,6 +1300,8 @@ def preview_apply(pr: int) -> None:
             save_json(path, state)
         raise
     finally:
+        if photo_executor:
+            photo_executor.shutdown(wait=True)
         if auth_dir and auth_dir.exists():
             shutil.rmtree(auth_dir, ignore_errors=True)
         if candidate_root:
@@ -1267,6 +1408,8 @@ def verify_teardown_condition(config: dict, state: dict, pr_info: dict) -> None:
             raise DeliveryError("Set STAGING_VERIFIED=1 after the merged SHA and affected staging journey pass.")
         merged_sha = staging_sha_for_pr(pr_info)
         verify_release_url(config, config["stagingUrl"], merged_sha, "staging", api_present=bool(state.get("apiPresent")))
+        if state.get("accountsPresent"):
+            photo_provider().verify_staging(sys.modules[__name__], config, merged_sha)
         state["stagingVerifiedSha"] = merged_sha
         return
     if pr_info.get("state") == "CLOSED" and os.environ.get("PREVIEW_ABANDONED") == "1":
@@ -1282,30 +1425,29 @@ def verify_teardown_condition(config: dict, state: dict, pr_info: dict) -> None:
 
 
 def resource_absent_observation(config: dict, state: dict) -> dict:
+    neon_absent = True
+    vercel_absent = True
     neon_id = state.get("resources", {}).get("neonBranchId")
     neon_name = state.get("branchName")
     if state.get("intent", {}).get("neon"):
         branches = neon_branches(config)
         matching = [item for item in branches if item.get("name") == neon_name or item.get("id") == neon_id]
         if matching:
-            return {"neonAbsent": False, "vercelAbsent": None, "at": datetime.now(timezone.utc).isoformat()}
-    else:
-        branches = []
+            neon_absent = False
     vercel_id = state.get("resources", {}).get("vercelDeploymentId")
     if state.get("intent", {}).get("vercel"):
         matches = deployment_for_state(config, state)
         if matches:
-            return {"neonAbsent": True if not state.get("intent", {}).get("neon") else True,
-                    "vercelAbsent": False, "at": datetime.now(timezone.utc).isoformat()}
+            vercel_absent = False
         if vercel_id:
             exact = vercel_request(config, f"/v13/deployments/{vercel_id}", not_found_ok=True)
             if exact is not None:
                 verify_deployment(config, state, exact)
-                return {"neonAbsent": True if not state.get("intent", {}).get("neon") else True,
-                        "vercelAbsent": False, "at": datetime.now(timezone.utc).isoformat()}
+                vercel_absent = False
     return {
-        "neonAbsent": True,
-        "vercelAbsent": True,
+        "neonAbsent": neon_absent,
+        "vercelAbsent": vercel_absent,
+        "photosAbsent": photo_provider().absence(sys.modules[__name__], config, state) if state.get("accountsPresent") else True,
         "at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -1328,6 +1470,7 @@ def teardown_apply(pr: int) -> None:
         return
     pr_info = gh_pr(pr)
     verify_teardown_condition(config, state, pr_info)
+    merge_photo_journal(state, path)
     recover_intended_resources(config, state, path)
     errors = []
     try:
@@ -1338,6 +1481,11 @@ def teardown_apply(pr: int) -> None:
         delete_neon_branch(config, state)
     except Exception as exc:
         errors.append(f"Neon: {redact(str(exc))}")
+    if state.get("accountsPresent"):
+        try:
+            photo_provider().delete_preview(sys.modules[__name__], config, state, path)
+        except Exception as exc:
+            errors.append(f"Cloudflare private photos: {redact(str(exc))}")
     if errors:
         state["status"] = "cleanup-failed"
         state["cleanupErrors"] = errors
@@ -1353,7 +1501,7 @@ def teardown_apply(pr: int) -> None:
         observations.append(observation)
         state["absenceObservations"] = observations
         save_json(path, state)
-        if observation.get("neonAbsent") is not True or observation.get("vercelAbsent") is not True:
+        if any(observation.get(key) is not True for key in ("neonAbsent", "vercelAbsent", "photosAbsent")):
             state["status"] = "cleanup-pending"
             save_json(path, state)
             raise DeliveryError("A journaled preview resource is still visible; keep the journal and retry teardown.")
@@ -1410,11 +1558,10 @@ def migration_staging(args) -> None:
     verify_runtime_bundle(bundle, config)
     database_url = bundle.get("MIGRATION_DATABASE_URL") or bundle["DATABASE_URL"]
     parse_database_url(database_url, config["neonDatabaseName"])
-    migration = ROOT / config["migrationPath"]
-    if not migration.is_file():
-        raise DeliveryError("The configured additive feedback migration is missing.")
-    run_migration(database_url, migration)
-    print(f"migration-applied={config['migrationPath']}")
+    require_account_runtime(config, bundle, ROOT)
+    for migration in migration_paths(config, ROOT):
+        run_migration(database_url, migration)
+        print(f"migration-applied={migration.relative_to(ROOT).as_posix()}")
 
 
 def ensure_previous_staging_resolved(config: dict, project_id: str) -> None:
@@ -1438,8 +1585,11 @@ def staging_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_pres
     if bundle is None:
         raise DeliveryError("The staging runtime secret bundle is required for the API deployment.")
     verify_runtime_bundle(bundle, config)
+    require_account_runtime(config, bundle, ROOT)
     return {
         **{key: bundle[key] for key in config["runtimeSecretBundleKeys"]},
+        **{key: bundle[key] for key in config.get("runtimeOptionalKeys", []) if key in bundle},
+        "AUTH_EMAIL_FROM": bundle.get("AUTH_EMAIL_FROM", bundle["EMAIL_FROM"]),
         "EMAIL_MODE": config["stagingEmailMode"],
         "PUBLIC_APP_URL": config["stagingUrl"],
         "ALLOWED_ORIGINS": ",".join([
@@ -1518,6 +1668,147 @@ def dispatch_staging(args) -> None:
             shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
+def dispatch_staging_services(args) -> None:
+    """Queue independent services together; convergence is checked outside Actions."""
+    config = load_config()
+    verify_git_sha(args.sha, staging_only=True, clean=False)
+    if not accounts_present(config, ROOT):
+        dispatch_staging(args)
+        return
+    if os.environ.get("GITHUB_RUN_ATTEMPT", "1") != "1":
+        raise DeliveryError("Staging release dispatch is first-attempt only.")
+    if not args.apply:
+        print("plan=queue the private photo Worker and Vercel concurrently after ordered migrations")
+        return
+    bundle = read_runtime_bundle(config)
+    verify_runtime_bundle(bundle, config)
+    require_account_runtime(config, bundle, ROOT)
+    failures = []
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            ("Vercel", executor.submit(dispatch_staging, args)),
+            ("Cloudflare", executor.submit(photo_provider().dispatch_staging, sys.modules[__name__], config, ROOT, args.sha, bundle)),
+        ]
+        for name, future in futures:
+            try:
+                result = future.result()
+                if result:
+                    print(f"{name.lower()}-dispatch={json.dumps(result)}")
+            except Exception as exc:
+                failures.append(f"{name}: {redact(str(exc))}")
+    if failures:
+        raise DeliveryError("Staging dispatch needs manual recovery: " + "; ".join(failures))
+
+
+def provision_staging_photos(args) -> None:
+    config = load_config()
+    base_sha, _ = assert_clean_staging_harness(config)
+    path = state_root() / "persistent" / "private-photos-staging.json"
+    preview_pr = getattr(args, "from_preview_pr", None)
+    if preview_pr is None:
+        photo_provider().provision_staging(sys.modules[__name__], config, path, apply=args.apply)
+        return
+    if not 1 <= preview_pr <= 999999:
+        raise DeliveryError("Preview PR number is invalid.")
+    with lifecycle_lock(preview_pr):
+        state = verified_photo_source(config, preview_pr, base_sha)
+        # Only the standalone Worker from the verified merge tree is copied. No
+        # candidate scripts, runtime credentials, or local working files run here.
+        source_path = config["privatePhotos"]["sourcePath"]
+        if not re.fullmatch(r"cloudflare/[A-Za-z0-9_-]+\.mjs", source_path):
+            raise DeliveryError("The trusted private-photo source path is invalid.")
+        object_name = f"{state['candidateSha']}:{source_path}"
+        try:
+            blob = subprocess.run(["git", "-C", str(ROOT), "show", object_name], env=safe_env(), capture_output=True, check=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise DeliveryError("Could not read the exact verified Worker blob.") from exc
+        object_hash = hashlib.sha1(b"blob " + str(len(blob)).encode("ascii") + b"\0" + blob).hexdigest()
+        if object_hash != git("rev-parse", object_name):
+            raise DeliveryError("The extracted Worker bytes do not match the verified Git blob.")
+        with tempfile.TemporaryDirectory(prefix="parkdex-kip-photo-provision-") as directory:
+            root = Path(directory)
+            worker = root / source_path
+            worker.parent.mkdir(parents=True)
+            worker.write_bytes(blob)
+            photo_provider().provision_staging(
+                sys.modules[__name__], config, path, apply=args.apply,
+                candidate_root=root, release_sha=state["headSha"],
+            )
+        persistent = json.loads(path.read_text(encoding="utf-8"))
+        persistent["sourcePreview"] = {
+            key: state[key] for key in ("pullRequest", "releaseId", "headSha", "baseSha", "candidateSha")
+        }
+        save_json(path, persistent)
+
+
+def attest_preview_browser(args) -> None:
+    if not 1 <= args.pr <= 999999 or not re.fullmatch(r"dpl_[A-Za-z0-9]+", args.deployment_id):
+        raise DeliveryError("Browser attestation requires a valid PR and full Vercel deployment ID.")
+    config = load_config()
+    base_sha, _ = assert_clean_staging_harness(config)
+    with lifecycle_lock(args.pr):
+        state = verified_photo_source(config, args.pr, base_sha, require_attestation=False)
+        deployment_id = state["resources"]["vercelDeploymentId"]
+        if deployment_id != args.deployment_id:
+            raise DeliveryError("Browser attestation deployment ID does not match the owned preview.")
+        state.update({
+            "browserVerifiedHeadSha": state["headSha"],
+            "browserVerifiedCandidateSha": state["candidateSha"],
+            "browserVerifiedDeploymentId": deployment_id,
+            "browserVerifiedAt": datetime.now(timezone.utc).isoformat(),
+        })
+        save_json(journal_path(args.pr), state)
+    print(f"browser-attested-preview=PR #{args.pr} deployment {deployment_id}")
+
+
+def verified_photo_source(config: dict, pr: int, base_sha: str, *, require_attestation: bool = True) -> dict:
+    try:
+        state = json.loads(journal_path(pr).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DeliveryError("The source preview journal is unavailable.") from exc
+    head_sha, head_ref = validate_pr(gh_pr(pr), pr)
+    if (
+        state.get("schema") != "parkdex-kip.preview/v1"
+        or state.get("repository") != REPOSITORY
+        or state.get("pullRequest") != pr
+        or not UUID_RE.fullmatch(state.get("releaseId", ""))
+        or state.get("status") != "ready-for-browser-verification"
+        or state.get("accountsPresent") is not True
+        or state.get("headSha") != head_sha
+        or state.get("baseSha") != base_sha
+        or not SHA_RE.fullmatch(state.get("candidateSha", ""))
+    ):
+        raise DeliveryError("Staging photo provisioning requires the current owned account preview.")
+    if require_attestation and (
+        state.get("browserVerifiedHeadSha") != head_sha
+        or state.get("browserVerifiedCandidateSha") != state["candidateSha"]
+        or state.get("browserVerifiedDeploymentId") != state.get("resources", {}).get("vercelDeploymentId")
+        or not state.get("browserVerifiedAt")
+    ):
+        raise DeliveryError("Staging photo provisioning requires browser attestation for the current preview deployment.")
+    if fetch_pr_head(head_ref, pr) != head_sha:
+        raise DeliveryError("The source preview PR changed while fetching.")
+    parents = git("rev-list", "--parents", "-n", "1", state["candidateSha"]).split()
+    if parents != [state["candidateSha"], base_sha, head_sha]:
+        raise DeliveryError("The source preview merge candidate has unexpected parents.")
+    tree = git("merge-tree", "--write-tree", base_sha, head_sha).splitlines()[0]
+    if tree != git("rev-parse", f"{state['candidateSha']}^{{tree}}"):
+        raise DeliveryError("The source preview is not the exact current merge candidate.")
+    photo_provider().verify_preview(sys.modules[__name__], config, state)
+    deployment_id = state.get("resources", {}).get("vercelDeploymentId", "")
+    if not re.fullmatch(r"dpl_[A-Za-z0-9]+", deployment_id):
+        raise DeliveryError("The source preview deployment ID is invalid.")
+    deployment = vercel_request(config, f"/v13/deployments/{deployment_id}")
+    verify_deployment(config, state, deployment)
+    if (deployment.get("readyState") or deployment.get("state")) != "READY":
+        raise DeliveryError("The source preview deployment is not ready.")
+    url = state.get("url")
+    if url != deployment_url(deployment):
+        raise DeliveryError("The source preview deployment URL is missing.")
+    verify_release_url(config, url, head_sha, "preview", api_present=True)
+    return state
+
+
 def assign_staging(args) -> None:
     config = load_config()
     if not re.fullmatch(r"dpl_[A-Za-z0-9]+", args.deployment_id):
@@ -1556,6 +1847,8 @@ def verify_staging(args) -> None:
     config = load_config()
     has_api, _ = staging_api_state(config)
     verify_release_url(config, config["stagingUrl"], args.sha, "staging", api_present=has_api)
+    if accounts_present(config, ROOT):
+        photo_provider().verify_staging(sys.modules[__name__], config, args.sha)
     print(f"staging-url={config['stagingUrl']}")
     print(f"release-sha={args.sha}")
     print("staging-verification=passed")
@@ -1593,12 +1886,21 @@ def build_parser() -> argparse.ArgumentParser:
     item = sub.add_parser("deploy-staging")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("deploy-staging-services")
+    item.add_argument("--sha", required=True)
+    item.add_argument("--apply", action="store_true")
     item = sub.add_parser("assign-staging")
     item.add_argument("--deployment-id", required=True)
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
     item = sub.add_parser("verify-staging")
     item.add_argument("--sha", required=True)
+    item = sub.add_parser("provision-staging-photos")
+    item.add_argument("--from-preview-pr", type=int)
+    item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("attest-preview-browser")
+    item.add_argument("--pr", required=True, type=int)
+    item.add_argument("--deployment-id", required=True)
     return parser
 
 
@@ -1620,10 +1922,16 @@ def main() -> int:
             migration_staging(args)
         elif args.command == "deploy-staging":
             dispatch_staging(args)
+        elif args.command == "deploy-staging-services":
+            dispatch_staging_services(args)
         elif args.command == "assign-staging":
             assign_staging(args)
         elif args.command == "verify-staging":
             verify_staging(args)
+        elif args.command == "provision-staging-photos":
+            provision_staging_photos(args)
+        elif args.command == "attest-preview-browser":
+            attest_preview_browser(args)
     except (DeliveryError, OSError, ValueError) as exc:
         print(redact(str(exc)), file=sys.stderr)
         return 1
