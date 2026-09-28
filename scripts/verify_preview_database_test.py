@@ -68,6 +68,84 @@ def test_checked_in_visitor_metadata_is_accepted_as_the_exact_seed() -> None:
     assert verified == {"place_visitor_details"}
 
 
+def _write_visitor_coverage_fixture(tmp_path, monkeypatch, reviewed_ids):
+    from scripts import verify_preview_database
+
+    categories = {
+        "test-national": "national",
+        "test-provincial": "provincial",
+        "test-regional": "regional",
+        "test-island": "island",
+        "test-municipal": "municipal",
+        "test-community": "community",
+    }
+    catalogue = tmp_path / "places.json"
+    reviewed = tmp_path / "reviewed.json"
+    catalogue.write_text(
+        json.dumps(
+            [
+                {"id": place_id, "category": category}
+                for place_id, category in categories.items()
+            ]
+        ),
+        encoding="utf-8",
+    )
+    details = {
+        "schemaVersion": "1.0.0",
+        "source": {"retrievedAt": "2026-09-24T12:00:00+00:00"},
+    }
+    reviewed.write_text(
+        json.dumps(
+            {
+                "snapshotDate": "2026-09-24",
+                "places": [
+                    {"placeId": place_id, "visitorDetails": details}
+                    for place_id in reviewed_ids
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verify_preview_database, "CATALOGUE", catalogue)
+    monkeypatch.setattr(verify_preview_database, "REVIEWED_VISITOR_DETAILS", reviewed)
+    return verify_preview_database.expected_visitor_detail_rows()
+
+
+def test_preview_expected_rows_allow_missing_municipal_and_community_details(
+    tmp_path, monkeypatch
+) -> None:
+    reviewed_ids = [
+        "test-national",
+        "test-provincial",
+        "test-regional",
+        "test-island",
+    ]
+
+    rows = _write_visitor_coverage_fixture(tmp_path, monkeypatch, reviewed_ids)
+
+    assert [row[0] for row in rows] == sorted(reviewed_ids)
+
+
+def test_preview_expected_rows_reject_missing_original_category_details(tmp_path, monkeypatch) -> None:
+    reviewed_ids = ["test-national", "test-provincial", "test-island"]
+
+    with pytest.raises(RuntimeError, match="missing required=.*test-regional"):
+        _write_visitor_coverage_fixture(tmp_path, monkeypatch, reviewed_ids)
+
+
+def test_preview_expected_rows_reject_unknown_reviewed_ids(tmp_path, monkeypatch) -> None:
+    reviewed_ids = [
+        "test-national",
+        "test-provincial",
+        "test-regional",
+        "test-island",
+        "not-in-the-canonical-catalogue",
+    ]
+
+    with pytest.raises(RuntimeError, match="unknown reviewed=.*not-in-the-canonical-catalogue"):
+        _write_visitor_coverage_fixture(tmp_path, monkeypatch, reviewed_ids)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [

@@ -144,7 +144,8 @@ DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES = 0.0001
 COVERAGE_NOTE = (
     "Official-source British Columbia collection: Parks Canada destinations, designated "
     "provincial parks, selected regional parks, and curated major islands. Regional coverage "
-    "varies by authority and is not a complete inventory of municipal or First Nations parks. "
+    "varies by authority. Municipal and community coverage includes selected named parks from "
+    "CRD Park GIS, not a complete inventory. First Nations park coverage is also limited. "
     "Pins are representative centres, not entrances or trailheads."
 )
 CLAIM_RECOMMENDATION_ACCOUNT_LIMIT = 60

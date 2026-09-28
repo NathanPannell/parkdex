@@ -71,6 +71,8 @@ def authority_sql(alias: str = "p") -> str:
         WHEN {alias}.category = 'national' THEN 'Parks Canada'
         WHEN {alias}.category = 'provincial' THEN 'BC Parks'
         WHEN {alias}.category = 'island' THEN 'Major islands'
+        WHEN {alias}.category IN ('municipal', 'community')
+            THEN regexp_replace({alias}.source_name, ' [(]CRD Park GIS[)]$', '')
         WHEN strpos({alias}.source_name, 'Capital Regional District') > 0 THEN 'Capital Regional District (CRD)'
         WHEN strpos({alias}.source_name, 'Nanaimo') > 0 THEN 'Regional District of Nanaimo (RDN)'
         WHEN strpos({alias}.source_name, 'Cowichan Valley') > 0 THEN 'Cowichan Valley Regional District (CVRD)'

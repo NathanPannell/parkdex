@@ -1,0 +1,3384 @@
+{
+  "retrievedAtUtc": "2026-09-27T22:49:52+00:00",
+  "sources": {
+    "saanich": {
+      "layer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "featureCount": 282,
+      "fields": "OBJECTID,PARK,PARKTYPE,PARKADMINISTRATOR,LOCATION"
+    },
+    "victoria": {
+      "layer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "featureCount": 175,
+      "fields": "OBJECTID,Park_Name,Alias_Name,ParkClassCode"
+    }
+  },
+  "namedDuplicateGroupChecks": [
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 4,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 4,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "Juan de Fuca Terrace"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 542.86,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.28,
+      "officialCoveredByCrdPercent": 83.16,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 14713.67,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9319.45,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6320.15,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6276.1,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5725.59,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9615.18,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8519.41,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 451.44,
+          "crdCoveragePercent": 83.16,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 12641.76,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1651.98,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8324.2,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9011.59,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 12387.89,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 12031.25,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9198.85,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9478.46,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6913.09,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3428.83,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 13426.62,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 11236.57,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 11004.95,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 11710.57,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9575.09,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9092.43,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 6,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 6,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "850 Mckenzie Ave"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 3837.83,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 2.29,
+      "officialCoveredByCrdPercent": 95.76,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9526.36,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3849.24,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 838.49,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 790.36,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2243.26,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2837.61,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4641.54,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6910.68,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7098.95,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5847.61,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2292.83,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4552.84,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6536.48,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5232.97,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5754.92,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5761.93,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 3675.12,
+          "crdCoveragePercent": 95.76,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4725.66,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7015.19,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4658.43,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4636.43,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4777.65,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5849.92,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2475.19,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 93,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 93,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "North of 2623 Richmond Rd"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 161.93,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.0,
+      "officialCoveredByCrdPercent": 0.0,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 14396.33,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8631.9,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4075.06,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4122.85,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2755.1,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7815.59,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8740.7,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4172.81,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 12019.58,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4545.54,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7190.95,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8936.85,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 11515.15,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 10132.6,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9743.22,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9889.39,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4928.39,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5140.13,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 12027.74,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9663.66,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9657.79,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9546.55,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9995.67,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6172.53,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 128,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 128,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "South of 5098 Lochside Dr"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 231.52,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.13,
+      "officialCoveredByCrdPercent": 87.91,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5315.9,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2476.1,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6515.22,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6419.76,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7836.44,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4922.38,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1085.34,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9476.0,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3748.77,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7771.76,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3703.25,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1197.66,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3879.66,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5817.06,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 335.63,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 203.52,
+          "crdCoveragePercent": 87.91,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5760.8,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5998.18,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5648.83,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4657.44,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3973.51,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6353.22,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 87.68,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7437.17,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 190,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 190,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "Travino Walkway"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 474.27,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.0,
+      "officialCoveredByCrdPercent": 0.0,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6376.35,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 748.13,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3995.8,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3926.65,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5414.25,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1612.63,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2358.2,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9016.49,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3975.4,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7532.03,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 717.14,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1858.11,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3502.29,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3341.58,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3343.05,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3185.21,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3072.49,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5898.43,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4388.93,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2334.67,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1979.95,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3461.41,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3252.39,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4143.3,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 201,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 201,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "South of 3913 Saanich Rd"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 154.97,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.08,
+      "officialCoveredByCrdPercent": 86.03,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 10383.56,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4668.18,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 88.81,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 133.32,
+          "crdCoveragePercent": 86.03,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 1476.56,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3702.51,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5281.75,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6273.76,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7965.12,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5342.08,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3143.3,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5262.98,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7415.46,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6076.29,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6379.47,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6421.1,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 792.84,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4432.99,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7896.77,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5536.57,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5522.87,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5586.72,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6514.06,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2879.53,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Park",
+      "crdObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "crdFeatureCount": 24,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 641,
+      "officialNames": [
+        "PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 641,
+        "PARK": "PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": "731 Burnside Rd W"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 3724.99,
+      "crdUnionAreaSqM": 160533.66,
+      "crdUnionCoveredByOfficialPercent": 0.0,
+      "officialCoveredByCrdPercent": 0.0,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 24,
+          "crdAreaSqM": 3238.29,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 9738.77,
+          "matches": false
+        },
+        {
+          "crdObjectId": 81,
+          "crdAreaSqM": 6732.4,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4698.02,
+          "matches": false
+        },
+        {
+          "crdObjectId": 129,
+          "crdAreaSqM": 1810.28,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2392.5,
+          "matches": false
+        },
+        {
+          "crdObjectId": 131,
+          "crdAreaSqM": 154.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2551.22,
+          "matches": false
+        },
+        {
+          "crdObjectId": 136,
+          "crdAreaSqM": 839.55,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3284.11,
+          "matches": false
+        },
+        {
+          "crdObjectId": 219,
+          "crdAreaSqM": 14721.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2539.61,
+          "matches": false
+        },
+        {
+          "crdObjectId": 297,
+          "crdAreaSqM": 3644.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6071.71,
+          "matches": false
+        },
+        {
+          "crdObjectId": 467,
+          "crdAreaSqM": 542.86,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 8808.58,
+          "matches": false
+        },
+        {
+          "crdObjectId": 477,
+          "crdAreaSqM": 6936.15,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7304.92,
+          "matches": false
+        },
+        {
+          "crdObjectId": 492,
+          "crdAreaSqM": 1266.09,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7911.16,
+          "matches": false
+        },
+        {
+          "crdObjectId": 541,
+          "crdAreaSqM": 3554.11,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3243.79,
+          "matches": false
+        },
+        {
+          "crdObjectId": 544,
+          "crdAreaSqM": 11684.66,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 5751.85,
+          "matches": false
+        },
+        {
+          "crdObjectId": 546,
+          "crdAreaSqM": 19538.62,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6582.6,
+          "matches": false
+        },
+        {
+          "crdObjectId": 548,
+          "crdAreaSqM": 63440.43,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4323.18,
+          "matches": false
+        },
+        {
+          "crdObjectId": 553,
+          "crdAreaSqM": 626.96,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7162.93,
+          "matches": false
+        },
+        {
+          "crdObjectId": 554,
+          "crdAreaSqM": 231.5,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7069.83,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1032,
+          "crdAreaSqM": 3837.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 2092.53,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1050,
+          "crdAreaSqM": 1298.61,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6896.42,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1056,
+          "crdAreaSqM": 1923.59,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 6487.71,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1059,
+          "crdAreaSqM": 4594.38,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4227.03,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1060,
+          "crdAreaSqM": 5512.83,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 4490.64,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1294,
+          "crdAreaSqM": 1678.26,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 3584.05,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1447,
+          "crdAreaSqM": 352.53,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 7145.96,
+          "matches": false
+        },
+        {
+          "crdObjectId": 1921,
+          "crdAreaSqM": 2373.14,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 300.82,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "South Valley Park",
+      "crdObjectIds": [
+        25,
+        221,
+        528,
+        529,
+        540,
+        1031
+      ],
+      "crdFeatureCount": 6,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 97,
+      "officialNames": [
+        "SOUTH VALLEY PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 97,
+        "PARK": "SOUTH VALLEY PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 4,
+      "officialAreaSqM": 31888.1,
+      "crdUnionAreaSqM": 30946.62,
+      "crdUnionCoveredByOfficialPercent": 95.48,
+      "officialCoveredByCrdPercent": 92.66,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 25,
+          "crdAreaSqM": 1387.84,
+          "intersectionAreaSqM": 1387.84,
+          "crdCoveragePercent": 100.0,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 221,
+          "crdAreaSqM": 6787.53,
+          "intersectionAreaSqM": 6598.63,
+          "crdCoveragePercent": 97.22,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 528,
+          "crdAreaSqM": 3915.5,
+          "intersectionAreaSqM": 3508.67,
+          "crdCoveragePercent": 89.61,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 529,
+          "crdAreaSqM": 5898.34,
+          "intersectionAreaSqM": 5766.51,
+          "crdCoveragePercent": 97.76,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 540,
+          "crdAreaSqM": 8939.15,
+          "intersectionAreaSqM": 8545.95,
+          "crdCoveragePercent": 95.6,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1031,
+          "crdAreaSqM": 4018.28,
+          "intersectionAreaSqM": 3740.53,
+          "crdCoveragePercent": 93.09,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Quick's Bottom Park",
+      "crdObjectIds": [
+        27,
+        298
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 279,
+      "officialNames": [
+        "QUICK'S BOTTOM PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 279,
+        "PARK": "QUICK'S BOTTOM PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 194956.0,
+      "crdUnionAreaSqM": 194988.99,
+      "crdUnionCoveredByOfficialPercent": 99.45,
+      "officialCoveredByCrdPercent": 99.46,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 27,
+          "crdAreaSqM": 763.52,
+          "intersectionAreaSqM": 734.86,
+          "crdCoveragePercent": 96.25,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 298,
+          "crdAreaSqM": 194225.47,
+          "intersectionAreaSqM": 193174.42,
+          "crdCoveragePercent": 99.46,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Colquitz Park",
+      "crdObjectIds": [
+        28,
+        29,
+        105,
+        140,
+        167,
+        170,
+        213,
+        215,
+        216,
+        231,
+        542,
+        1035,
+        1036,
+        1290,
+        1292,
+        1439,
+        1919,
+        1924
+      ],
+      "crdFeatureCount": 18,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 114,
+      "officialNames": [
+        "COLQUITZ PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 114,
+        "PARK": "COLQUITZ PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 26,
+      "officialAreaSqM": 330636.29,
+      "crdUnionAreaSqM": 354462.17,
+      "crdUnionCoveredByOfficialPercent": 87.76,
+      "officialCoveredByCrdPercent": 94.08,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 28,
+          "crdAreaSqM": 6479.24,
+          "intersectionAreaSqM": 6363.78,
+          "crdCoveragePercent": 98.22,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 29,
+          "crdAreaSqM": 3287.95,
+          "intersectionAreaSqM": 3214.4,
+          "crdCoveragePercent": 97.76,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 105,
+          "crdAreaSqM": 26029.37,
+          "intersectionAreaSqM": 25376.65,
+          "crdCoveragePercent": 97.49,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 140,
+          "crdAreaSqM": 420.27,
+          "intersectionAreaSqM": 399.72,
+          "crdCoveragePercent": 95.11,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 167,
+          "crdAreaSqM": 9679.01,
+          "intersectionAreaSqM": 9526.53,
+          "crdCoveragePercent": 98.42,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 170,
+          "crdAreaSqM": 125113.71,
+          "intersectionAreaSqM": 94495.51,
+          "crdCoveragePercent": 75.53,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 213,
+          "crdAreaSqM": 5237.91,
+          "intersectionAreaSqM": 5052.84,
+          "crdCoveragePercent": 96.47,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 215,
+          "crdAreaSqM": 3227.04,
+          "intersectionAreaSqM": 3106.36,
+          "crdCoveragePercent": 96.26,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 216,
+          "crdAreaSqM": 130.42,
+          "intersectionAreaSqM": 103.04,
+          "crdCoveragePercent": 79.01,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 231,
+          "crdAreaSqM": 5120.37,
+          "intersectionAreaSqM": 5044.78,
+          "crdCoveragePercent": 98.52,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 542,
+          "crdAreaSqM": 53863.81,
+          "intersectionAreaSqM": 49446.45,
+          "crdCoveragePercent": 91.8,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1035,
+          "crdAreaSqM": 61606.44,
+          "intersectionAreaSqM": 55899.0,
+          "crdCoveragePercent": 90.74,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1036,
+          "crdAreaSqM": 13433.97,
+          "intersectionAreaSqM": 13084.08,
+          "crdCoveragePercent": 97.4,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1290,
+          "crdAreaSqM": 27277.06,
+          "intersectionAreaSqM": 26637.35,
+          "crdCoveragePercent": 97.65,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1292,
+          "crdAreaSqM": 8440.45,
+          "intersectionAreaSqM": 8363.68,
+          "crdCoveragePercent": 99.09,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1439,
+          "crdAreaSqM": 1891.25,
+          "intersectionAreaSqM": 1814.77,
+          "crdCoveragePercent": 95.96,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1919,
+          "crdAreaSqM": 2385.69,
+          "intersectionAreaSqM": 2336.78,
+          "crdCoveragePercent": 97.95,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1924,
+          "crdAreaSqM": 838.22,
+          "intersectionAreaSqM": 810.53,
+          "crdCoveragePercent": 96.7,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Blenkinsop Lake Park",
+      "crdObjectIds": [
+        31,
+        82
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 27,
+      "officialNames": [
+        "BLENKINSOP LAKE PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 27,
+        "PARK": "BLENKINSOP LAKE PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 3,
+      "officialAreaSqM": 139990.4,
+      "crdUnionAreaSqM": 45337.74,
+      "crdUnionCoveredByOfficialPercent": 98.94,
+      "officialCoveredByCrdPercent": 32.04,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 31,
+          "crdAreaSqM": 14307.55,
+          "intersectionAreaSqM": 14171.01,
+          "crdCoveragePercent": 99.05,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 82,
+          "crdAreaSqM": 31030.19,
+          "intersectionAreaSqM": 30684.15,
+          "crdCoveragePercent": 98.88,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Doumac Park",
+      "crdObjectIds": [
+        64,
+        301
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 315,
+      "officialNames": [
+        "DOUMAC PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 315,
+        "PARK": "DOUMAC PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 48558.35,
+      "crdUnionAreaSqM": 45300.47,
+      "crdUnionCoveredByOfficialPercent": 85.63,
+      "officialCoveredByCrdPercent": 79.89,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 64,
+          "crdAreaSqM": 433.06,
+          "intersectionAreaSqM": 428.66,
+          "crdCoveragePercent": 98.98,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 301,
+          "crdAreaSqM": 44867.41,
+          "intersectionAreaSqM": 38363.57,
+          "crdCoveragePercent": 85.5,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Pondwood Park",
+      "crdObjectIds": [
+        78,
+        357
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 246,
+      "officialNames": [
+        "PONDWOOD PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 246,
+        "PARK": "PONDWOOD PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 3784.08,
+      "crdUnionAreaSqM": 3783.05,
+      "crdUnionCoveredByOfficialPercent": 87.93,
+      "officialCoveredByCrdPercent": 87.9,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 78,
+          "crdAreaSqM": 2316.25,
+          "intersectionAreaSqM": 2042.69,
+          "crdCoveragePercent": 88.19,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 357,
+          "crdAreaSqM": 1466.79,
+          "intersectionAreaSqM": 1283.69,
+          "crdCoveragePercent": 87.52,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Industrial Buffer Park",
+      "crdObjectIds": [
+        83,
+        511
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 142,
+      "officialNames": [
+        "INDUSTRIAL BUFFER PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 142,
+        "PARK": "INDUSTRIAL BUFFER PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 3,
+      "officialAreaSqM": 33124.22,
+      "crdUnionAreaSqM": 33526.31,
+      "crdUnionCoveredByOfficialPercent": 95.62,
+      "officialCoveredByCrdPercent": 96.78,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 83,
+          "crdAreaSqM": 13977.39,
+          "intersectionAreaSqM": 13415.32,
+          "crdCoveragePercent": 95.98,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 511,
+          "crdAreaSqM": 19548.91,
+          "intersectionAreaSqM": 18643.41,
+          "crdCoveragePercent": 95.37,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Swan Creek Park",
+      "crdObjectIds": [
+        130,
+        133,
+        158,
+        165,
+        166,
+        168,
+        230,
+        278,
+        285,
+        411,
+        412,
+        530,
+        531,
+        532,
+        533,
+        534
+      ],
+      "crdFeatureCount": 16,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 220,
+      "officialNames": [
+        "SWAN CREEK PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 220,
+        "PARK": "SWAN CREEK PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 12,
+      "officialAreaSqM": 130212.58,
+      "crdUnionAreaSqM": 133390.08,
+      "crdUnionCoveredByOfficialPercent": 94.9,
+      "officialCoveredByCrdPercent": 97.22,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 130,
+          "crdAreaSqM": 1183.61,
+          "intersectionAreaSqM": 1136.67,
+          "crdCoveragePercent": 96.03,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 133,
+          "crdAreaSqM": 9000.6,
+          "intersectionAreaSqM": 8232.66,
+          "crdCoveragePercent": 91.47,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 158,
+          "crdAreaSqM": 15857.79,
+          "intersectionAreaSqM": 15621.23,
+          "crdCoveragePercent": 98.51,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 165,
+          "crdAreaSqM": 3199.65,
+          "intersectionAreaSqM": 3095.73,
+          "crdCoveragePercent": 96.75,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 166,
+          "crdAreaSqM": 4833.18,
+          "intersectionAreaSqM": 4624.59,
+          "crdCoveragePercent": 95.68,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 168,
+          "crdAreaSqM": 29673.57,
+          "intersectionAreaSqM": 26903.29,
+          "crdCoveragePercent": 90.66,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 230,
+          "crdAreaSqM": 18547.29,
+          "intersectionAreaSqM": 18120.12,
+          "crdCoveragePercent": 97.7,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 278,
+          "crdAreaSqM": 687.78,
+          "intersectionAreaSqM": 657.62,
+          "crdCoveragePercent": 95.61,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 285,
+          "crdAreaSqM": 1330.97,
+          "intersectionAreaSqM": 1247.37,
+          "crdCoveragePercent": 93.72,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 411,
+          "crdAreaSqM": 16448.36,
+          "intersectionAreaSqM": 14571.91,
+          "crdCoveragePercent": 88.59,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 412,
+          "crdAreaSqM": 2019.77,
+          "intersectionAreaSqM": 1961.24,
+          "crdCoveragePercent": 97.1,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 530,
+          "crdAreaSqM": 240.43,
+          "intersectionAreaSqM": 227.05,
+          "crdCoveragePercent": 94.43,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 531,
+          "crdAreaSqM": 1302.44,
+          "intersectionAreaSqM": 1292.01,
+          "crdCoveragePercent": 99.2,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 532,
+          "crdAreaSqM": 25230.13,
+          "intersectionAreaSqM": 25115.0,
+          "crdCoveragePercent": 99.54,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 533,
+          "crdAreaSqM": 3518.05,
+          "intersectionAreaSqM": 3499.25,
+          "crdCoveragePercent": 99.47,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 534,
+          "crdAreaSqM": 316.43,
+          "intersectionAreaSqM": 284.77,
+          "crdCoveragePercent": 89.99,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Gorge Park",
+      "crdObjectIds": [
+        144,
+        145,
+        146
+      ],
+      "crdFeatureCount": 3,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 163,
+      "officialNames": [
+        "GORGE PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 163,
+        "PARK": "GORGE PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 42669.51,
+      "crdUnionAreaSqM": 45752.3,
+      "crdUnionCoveredByOfficialPercent": 92.36,
+      "officialCoveredByCrdPercent": 99.04,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 144,
+          "crdAreaSqM": 271.5,
+          "intersectionAreaSqM": 173.15,
+          "crdCoveragePercent": 63.78,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 145,
+          "crdAreaSqM": 48.0,
+          "intersectionAreaSqM": 17.34,
+          "crdCoveragePercent": 36.13,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 146,
+          "crdAreaSqM": 45432.81,
+          "intersectionAreaSqM": 42067.99,
+          "crdCoveragePercent": 92.59,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Balmacarra Park",
+      "crdObjectIds": [
+        152,
+        153
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 298,
+      "officialNames": [
+        "BALMACARRA PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 298,
+        "PARK": "BALMACARRA PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 669.96,
+      "crdUnionAreaSqM": 669.6,
+      "crdUnionCoveredByOfficialPercent": 95.02,
+      "officialCoveredByCrdPercent": 94.97,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 152,
+          "crdAreaSqM": 335.05,
+          "intersectionAreaSqM": 317.89,
+          "crdCoveragePercent": 94.88,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 153,
+          "crdAreaSqM": 334.55,
+          "intersectionAreaSqM": 318.36,
+          "crdCoveragePercent": 95.16,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Tyndall Park",
+      "crdObjectIds": [
+        218,
+        222
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 209,
+      "officialNames": [
+        "TYNDALL PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 209,
+        "PARK": "TYNDALL PARK",
+        "PARKTYPE": "Community",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 44692.08,
+      "crdUnionAreaSqM": 44692.07,
+      "crdUnionCoveredByOfficialPercent": 98.81,
+      "officialCoveredByCrdPercent": 98.81,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 218,
+          "crdAreaSqM": 1148.75,
+          "intersectionAreaSqM": 1113.9,
+          "crdCoveragePercent": 96.97,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 222,
+          "crdAreaSqM": 43543.32,
+          "intersectionAreaSqM": 43047.36,
+          "crdCoveragePercent": 98.86,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Grant Park",
+      "crdObjectIds": [
+        224,
+        225,
+        226,
+        248,
+        249
+      ],
+      "crdFeatureCount": 5,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 282,
+      "officialNames": [
+        "GRANT PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 282,
+        "PARK": "GRANT PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 5,
+      "officialAreaSqM": 41123.0,
+      "crdUnionAreaSqM": 41140.66,
+      "crdUnionCoveredByOfficialPercent": 97.25,
+      "officialCoveredByCrdPercent": 97.3,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 224,
+          "crdAreaSqM": 19790.56,
+          "intersectionAreaSqM": 19193.6,
+          "crdCoveragePercent": 96.98,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 225,
+          "crdAreaSqM": 6524.31,
+          "intersectionAreaSqM": 6381.64,
+          "crdCoveragePercent": 97.81,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 226,
+          "crdAreaSqM": 5246.92,
+          "intersectionAreaSqM": 5128.84,
+          "crdCoveragePercent": 97.75,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 248,
+          "crdAreaSqM": 6327.16,
+          "intersectionAreaSqM": 6161.47,
+          "crdCoveragePercent": 97.38,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 249,
+          "crdAreaSqM": 3251.71,
+          "intersectionAreaSqM": 3145.57,
+          "crdCoveragePercent": 96.74,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Gorge Waterway Park",
+      "crdObjectIds": [
+        232,
+        409
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 45,
+      "officialNames": [
+        "GORGE WATERWAY PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 45,
+        "PARK": "GORGE WATERWAY PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 36916.77,
+      "crdUnionAreaSqM": 37554.28,
+      "crdUnionCoveredByOfficialPercent": 96.72,
+      "officialCoveredByCrdPercent": 98.39,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 232,
+          "crdAreaSqM": 18270.49,
+          "intersectionAreaSqM": 17824.24,
+          "crdCoveragePercent": 97.56,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 409,
+          "crdAreaSqM": 19283.79,
+          "intersectionAreaSqM": 18496.82,
+          "crdCoveragePercent": 95.92,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "PKOLS (Mount Douglas Park)",
+      "crdObjectIds": [
+        244,
+        347,
+        549
+      ],
+      "crdFeatureCount": 3,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 214,
+      "officialNames": [
+        "PKOLS (MOUNT DOUGLAS PARK)"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 214,
+        "PARK": "PKOLS (MOUNT DOUGLAS PARK)",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 3,
+      "officialAreaSqM": 1840244.86,
+      "crdUnionAreaSqM": 1832846.84,
+      "crdUnionCoveredByOfficialPercent": 99.28,
+      "officialCoveredByCrdPercent": 98.88,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 244,
+          "crdAreaSqM": 183058.57,
+          "intersectionAreaSqM": 174455.32,
+          "crdCoveragePercent": 95.3,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 347,
+          "crdAreaSqM": 129349.14,
+          "intersectionAreaSqM": 128638.7,
+          "crdCoveragePercent": 99.45,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 549,
+          "crdAreaSqM": 1520439.13,
+          "intersectionAreaSqM": 1516609.01,
+          "crdCoveragePercent": 99.75,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Doris Page Park",
+      "crdObjectIds": [
+        340,
+        475
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 84,
+      "officialNames": [
+        "DORIS PAGE PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 84,
+        "PARK": "DORIS PAGE PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 12690.79,
+      "crdUnionAreaSqM": 12691.2,
+      "crdUnionCoveredByOfficialPercent": 98.08,
+      "officialCoveredByCrdPercent": 98.08,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 340,
+          "crdAreaSqM": 8873.55,
+          "intersectionAreaSqM": 8728.69,
+          "crdCoveragePercent": 98.37,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 475,
+          "crdAreaSqM": 3817.65,
+          "intersectionAreaSqM": 3718.43,
+          "crdCoveragePercent": 97.4,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Mattick's Wood Park",
+      "crdObjectIds": [
+        422,
+        505
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 56,
+      "officialNames": [
+        "MATTICK'S WOOD PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 56,
+        "PARK": "MATTICK'S WOOD PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 1778.38,
+      "crdUnionAreaSqM": 1780.93,
+      "crdUnionCoveredByOfficialPercent": 94.17,
+      "officialCoveredByCrdPercent": 94.31,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 422,
+          "crdAreaSqM": 1058.18,
+          "intersectionAreaSqM": 1000.29,
+          "crdCoveragePercent": 94.53,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 505,
+          "crdAreaSqM": 722.75,
+          "intersectionAreaSqM": 676.87,
+          "crdCoveragePercent": 93.65,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "South Prospect Lake Park",
+      "crdObjectIds": [
+        547,
+        1057
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 283,
+      "officialNames": [
+        "SOUTH PROSPECT LAKE PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 283,
+        "PARK": "SOUTH PROSPECT LAKE PARK",
+        "PARKTYPE": "Neighbourhood",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 4,
+      "officialAreaSqM": 91482.87,
+      "crdUnionAreaSqM": 96156.0,
+      "crdUnionCoveredByOfficialPercent": 94.37,
+      "officialCoveredByCrdPercent": 99.19,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 547,
+          "crdAreaSqM": 56303.16,
+          "intersectionAreaSqM": 55859.71,
+          "crdCoveragePercent": 99.21,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1057,
+          "crdAreaSqM": 39852.84,
+          "intersectionAreaSqM": 34878.01,
+          "crdCoveragePercent": 87.52,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Saghalie Park",
+      "crdObjectIds": [
+        803,
+        804
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 299,
+      "officialNames": [
+        "Saghalie Park",
+        "Saghalie Park"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 299,
+        "Park_Name": "Saghalie Park",
+        "Alias_Name": "Saghalie Park",
+        "ParkClassCode": "NP"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 287.59,
+      "crdUnionAreaSqM": 3700.61,
+      "crdUnionCoveredByOfficialPercent": 7.75,
+      "officialCoveredByCrdPercent": 99.73,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 803,
+          "crdAreaSqM": 287.6,
+          "intersectionAreaSqM": 286.81,
+          "crdCoveragePercent": 99.73,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 804,
+          "crdAreaSqM": 3413.0,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 32.85,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Blackwood Green",
+      "crdObjectIds": [
+        853,
+        857
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 258,
+      "officialNames": [
+        "Blackwood Green",
+        "Blackwood Green"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 258,
+        "Park_Name": "Blackwood Green",
+        "Alias_Name": "Blackwood Green",
+        "ParkClassCode": "NP"
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 3390.77,
+      "crdUnionAreaSqM": 2638.13,
+      "crdUnionCoveredByOfficialPercent": 99.95,
+      "officialCoveredByCrdPercent": 77.76,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 853,
+          "crdAreaSqM": 2084.78,
+          "intersectionAreaSqM": 2083.35,
+          "crdCoveragePercent": 99.93,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 857,
+          "crdAreaSqM": 553.35,
+          "intersectionAreaSqM": 553.35,
+          "crdCoveragePercent": 100.0,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Harris Green",
+      "crdObjectIds": [
+        858,
+        859,
+        860
+      ],
+      "crdFeatureCount": 3,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 278,
+      "officialNames": [
+        "Harris Green",
+        "Harris Green"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 278,
+        "Park_Name": "Harris Green",
+        "Alias_Name": "Harris Green",
+        "ParkClassCode": "GRN"
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 6696.39,
+      "crdUnionAreaSqM": 11561.79,
+      "crdUnionCoveredByOfficialPercent": 51.62,
+      "officialCoveredByCrdPercent": 89.12,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 858,
+          "crdAreaSqM": 6439.08,
+          "intersectionAreaSqM": 5967.68,
+          "crdCoveragePercent": 92.68,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 859,
+          "crdAreaSqM": 3541.76,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 17.27,
+          "matches": false
+        },
+        {
+          "crdObjectId": 860,
+          "crdAreaSqM": 1580.94,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 224.98,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Summit Park",
+      "crdObjectIds": [
+        872,
+        874
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 301,
+      "officialNames": [
+        "Summit Park",
+        "Summit Park"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 301,
+        "Park_Name": "Summit Park",
+        "Alias_Name": "Summit Park",
+        "ParkClassCode": "NP"
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 2,
+      "officialAreaSqM": 58122.73,
+      "crdUnionAreaSqM": 57090.93,
+      "crdUnionCoveredByOfficialPercent": 99.98,
+      "officialCoveredByCrdPercent": 98.21,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 872,
+          "crdAreaSqM": 46765.64,
+          "intersectionAreaSqM": 46758.96,
+          "crdCoveragePercent": 99.99,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 874,
+          "crdAreaSqM": 10325.29,
+          "intersectionAreaSqM": 10322.77,
+          "crdCoveragePercent": 99.98,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Viaduct Park",
+      "crdObjectIds": [
+        886,
+        888
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 173,
+      "officialNames": [
+        "Viaduct Park",
+        "Viaduct Park"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 173,
+        "Park_Name": "Viaduct Park",
+        "Alias_Name": "Viaduct Park",
+        "ParkClassCode": "CP"
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 2127.84,
+      "crdUnionAreaSqM": 12120.96,
+      "crdUnionCoveredByOfficialPercent": 17.53,
+      "officialCoveredByCrdPercent": 99.85,
+      "allCrdPiecesIntersectOfficialBoundary": false,
+      "perFeature": [
+        {
+          "crdObjectId": 886,
+          "crdAreaSqM": 2218.37,
+          "intersectionAreaSqM": 2124.56,
+          "crdCoveragePercent": 95.77,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 888,
+          "crdAreaSqM": 9902.6,
+          "intersectionAreaSqM": 0.0,
+          "crdCoveragePercent": 0.0,
+          "gapM": 0.02,
+          "matches": false
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "City of Victoria",
+      "crdName": "Cecelia Ravine Park",
+      "crdObjectIds": [
+        938,
+        941,
+        942
+      ],
+      "crdFeatureCount": 3,
+      "officialSource": "victoria",
+      "officialLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50",
+      "officialObjectId": 343,
+      "officialNames": [
+        "Cecelia Ravine Park",
+        "Cecelia Ravine Park"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 343,
+        "Park_Name": "Cecelia Ravine Park",
+        "Alias_Name": "Cecelia Ravine Park",
+        "ParkClassCode": "NP"
+      },
+      "officialGeometryType": "MultiPolygon",
+      "officialPolygonParts": 3,
+      "officialAreaSqM": 23037.12,
+      "crdUnionAreaSqM": 20828.0,
+      "crdUnionCoveredByOfficialPercent": 99.96,
+      "officialCoveredByCrdPercent": 90.37,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 938,
+          "crdAreaSqM": 18813.89,
+          "intersectionAreaSqM": 18807.47,
+          "crdCoveragePercent": 99.97,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 941,
+          "crdAreaSqM": 850.25,
+          "intersectionAreaSqM": 849.15,
+          "crdCoveragePercent": 99.87,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 942,
+          "crdAreaSqM": 1163.86,
+          "intersectionAreaSqM": 1163.14,
+          "crdCoveragePercent": 99.94,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    },
+    {
+      "crdType": "Municipal Park",
+      "crdJurisdiction": "District of Saanich",
+      "crdName": "Cuthbert Holmes Park",
+      "crdObjectIds": [
+        1920,
+        1922
+      ],
+      "crdFeatureCount": 2,
+      "officialSource": "saanich",
+      "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+      "officialObjectId": 275,
+      "officialNames": [
+        "CUTHBERT HOLMES PARK"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 275,
+        "PARK": "CUTHBERT HOLMES PARK",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "officialGeometryType": "Polygon",
+      "officialPolygonParts": 1,
+      "officialAreaSqM": 191604.71,
+      "crdUnionAreaSqM": 195383.61,
+      "crdUnionCoveredByOfficialPercent": 97.59,
+      "officialCoveredByCrdPercent": 99.52,
+      "allCrdPiecesIntersectOfficialBoundary": true,
+      "perFeature": [
+        {
+          "crdObjectId": 1920,
+          "crdAreaSqM": 191581.21,
+          "intersectionAreaSqM": 190627.28,
+          "crdCoveragePercent": 99.5,
+          "gapM": 0.0,
+          "matches": true
+        },
+        {
+          "crdObjectId": 1922,
+          "crdAreaSqM": 3802.4,
+          "intersectionAreaSqM": 57.14,
+          "crdCoveragePercent": 1.5,
+          "gapM": 0.0,
+          "matches": true
+        }
+      ]
+    }
+  ],
+  "requiredPkolsCheck": [
+    {
+      "officialObjectId": 214,
+      "officialNames": [
+        "PKOLS (MOUNT DOUGLAS PARK)"
+      ],
+      "officialAttributes": {
+        "OBJECTID": 214,
+        "PARK": "PKOLS (MOUNT DOUGLAS PARK)",
+        "PARKTYPE": "Municipal",
+        "PARKADMINISTRATOR": "District of Saanich",
+        "LOCATION": null
+      },
+      "geometryType": "MultiPolygon",
+      "parts": 3,
+      "perFeature": [
+        {
+          "crdObjectId": 244,
+          "crdName": "PKOLS (Mount Douglas Park)",
+          "crdAreaSqM": 183058.57,
+          "intersectionAreaSqM": 174455.32,
+          "crdCoveragePercent": 95.3,
+          "gapM": 0.0
+        },
+        {
+          "crdObjectId": 347,
+          "crdName": "PKOLS (Mount Douglas Park)",
+          "crdAreaSqM": 129349.14,
+          "intersectionAreaSqM": 128638.7,
+          "crdCoveragePercent": 99.45,
+          "gapM": 0.0
+        },
+        {
+          "crdObjectId": 549,
+          "crdName": "PKOLS (Mount Douglas Park)",
+          "crdAreaSqM": 1520439.13,
+          "intersectionAreaSqM": 1516609.01,
+          "crdCoveragePercent": 99.75,
+          "gapM": 0.0
+        }
+      ],
+      "allPiecesOverlap": true
+    }
+  ],
+  "crosscheckSnapshot": "official-boundary-crosschecks.geojson",
+  "crosscheckFeatureCount": 33,
+  "variantChecks": [
+    {
+      "sourceObjectIds": [
+        364,
+        500
+      ],
+      "sourceNames": [
+        "Knockan Hill",
+        "Knockan Hill Park"
+      ],
+      "decision": "include",
+      "displayName": "Knockan Hill Park",
+      "reason": "Official Saanich named boundary confirms both differently named CRD polygons are one park.",
+      "evidence": {
+        "kind": "official-name-and-overlap",
+        "officialSource": "saanich",
+        "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+        "officialObjectId": 303,
+        "officialNames": [
+          "KNOCKAN HILL PARK"
+        ],
+        "perFeature": [
+          {
+            "sourceObjectId": 364,
+            "sourceAreaSqM": 857.79,
+            "intersectionAreaSqM": 808.61,
+            "sourceCoveragePercent": 94.27,
+            "gapM": 0.0
+          },
+          {
+            "sourceObjectId": 500,
+            "sourceAreaSqM": 92871.48,
+            "intersectionAreaSqM": 92419.9,
+            "sourceCoveragePercent": 99.51,
+            "gapM": 0.0
+          }
+        ]
+      }
+    },
+    {
+      "sourceObjectIds": [
+        408,
+        424
+      ],
+      "sourceNames": [
+        "Sayward Hill Park",
+        "Sayward Hill"
+      ],
+      "decision": "include",
+      "displayName": "Sayward Hill Park",
+      "reason": "Official Saanich named boundary confirms both differently named CRD polygons are one park.",
+      "evidence": {
+        "kind": "official-name-and-overlap",
+        "officialSource": "saanich",
+        "officialLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+        "officialObjectId": 241,
+        "officialNames": [
+          "SAYWARD HILL PARK"
+        ],
+        "perFeature": [
+          {
+            "sourceObjectId": 408,
+            "sourceAreaSqM": 35716.07,
+            "intersectionAreaSqM": 35211.15,
+            "sourceCoveragePercent": 98.59,
+            "gapM": 0.0
+          },
+          {
+            "sourceObjectId": 424,
+            "sourceAreaSqM": 1977.55,
+            "intersectionAreaSqM": 1855.65,
+            "sourceCoveragePercent": 93.84,
+            "gapM": 0.0
+          }
+        ]
+      }
+    }
+  ]
+}

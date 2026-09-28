@@ -1,0 +1,3866 @@
+{
+  "schemaVersion": 1,
+  "sourceLayer": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+  "sourceSnapshot": {
+    "file": "crd-municipal-community-source.geojson",
+    "sha256": "2f3a89357b995cdf33b5027e2edff304cc2d364a9f9fd3e218adaff922212232",
+    "featureCount": 1273,
+    "retrievedAtUtc": "2026-09-27T22:43:13+00:00"
+  },
+  "manifestFile": "import-manifest.json",
+  "officialBoundaryReview": {
+    "file": "official-boundary-crosschecks.json",
+    "snapshot": "official-boundary-crosschecks.geojson",
+    "snapshotSha256": "eb13dffd4dedc07f4b0385ae68ce29cde079f2e650e12b312339f76b29e30137",
+    "reviewedGroups": 19,
+    "minimumPerFeatureSourceCoveragePercent": 70,
+    "saanichLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
+    "victoriaLayer": "https://maps.victoria.ca/server/rest/services/OpenData/OpenData_Parks/MapServer/50"
+  },
+  "counts": {
+    "sourceFeatures": 1273,
+    "manifestEntries": 872,
+    "includedPlaces": 626,
+    "includedSourceFeatures": 699,
+    "heldEntries": 144,
+    "heldSourceFeatures": 258,
+    "excludedEntries": 102,
+    "excludedSourceFeatures": 316,
+    "generatedBoundaries": 626,
+    "generatedDescriptions": 626
+  },
+  "existingCanonicalIdentity": {
+    "sourceObjectId": 1958,
+    "placeId": "regional-sooke-river-regional-park",
+    "action": "exclude-from-new-import-preserve-existing-record-and-boundary",
+    "crdSourceCoveragePercent": 97.59,
+    "existingBoundaryCoveragePercent": 98.09
+  },
+  "boundaryConstruction": {
+    "operation": "polygon-clipping union of original CRD GeoJSON coordinates for each approved multi-OBJECTID manifest entry; singleton geometry is copied unchanged",
+    "noBufferOrHull": true,
+    "sourcePartsAndHolesPreserved": true,
+    "groupCount": 33,
+    "groups": [
+      {
+        "id": "municipal-district-of-saanich-25",
+        "sourceObjectIds": [
+          25,
+          221,
+          528,
+          529,
+          540,
+          1031
+        ],
+        "sourceNames": [
+          "South Valley Park",
+          "South Valley Park",
+          "South Valley Park",
+          "South Valley Park",
+          "South Valley Park",
+          "South Valley Park"
+        ],
+        "sourceFeatureCount": 6,
+        "sourcePolygonParts": 8,
+        "outputPolygonParts": 6,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 30876.83,
+        "unionAreaSqM": 30876.8,
+        "overlappingAreaRemovedSqM": 0.03,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-27",
+        "sourceObjectIds": [
+          27,
+          298
+        ],
+        "sourceNames": [
+          "Quick's Bottom Park",
+          "Quick's Bottom Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 194548.2,
+        "unionAreaSqM": 194548.2,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-28",
+        "sourceObjectIds": [
+          28,
+          29,
+          105,
+          140,
+          167,
+          170,
+          213,
+          215,
+          216,
+          231,
+          542,
+          1035,
+          1036,
+          1290,
+          1292,
+          1439,
+          1919,
+          1924
+        ],
+        "sourceNames": [
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park",
+          "Colquitz Park"
+        ],
+        "sourceFeatureCount": 18,
+        "sourcePolygonParts": 18,
+        "outputPolygonParts": 18,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 353661.73,
+        "unionAreaSqM": 353661.73,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-31",
+        "sourceObjectIds": [
+          31,
+          82
+        ],
+        "sourceNames": [
+          "Blenkinsop Lake Park",
+          "Blenkinsop Lake Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 45235.49,
+        "unionAreaSqM": 45235.49,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-64",
+        "sourceObjectIds": [
+          64,
+          301
+        ],
+        "sourceNames": [
+          "Doumac Park",
+          "Doumac Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 45197.83,
+        "unionAreaSqM": 45197.83,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-78",
+        "sourceObjectIds": [
+          78,
+          357
+        ],
+        "sourceNames": [
+          "Pondwood Park",
+          "Pondwood Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 3774.5,
+        "unionAreaSqM": 3774.5,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-83",
+        "sourceObjectIds": [
+          83,
+          511
+        ],
+        "sourceNames": [
+          "Industrial Buffer Park",
+          "Industrial Buffer Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 33450.51,
+        "unionAreaSqM": 33450.51,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-130",
+        "sourceObjectIds": [
+          130,
+          133,
+          158,
+          165,
+          166,
+          168,
+          230,
+          278,
+          285,
+          411,
+          412,
+          530,
+          531,
+          532,
+          533,
+          534
+        ],
+        "sourceNames": [
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park",
+          "Swan Creek Park"
+        ],
+        "sourceFeatureCount": 16,
+        "sourcePolygonParts": 16,
+        "outputPolygonParts": 10,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 133089.53,
+        "unionAreaSqM": 133089.53,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-152",
+        "sourceObjectIds": [
+          152,
+          153
+        ],
+        "sourceNames": [
+          "Balmacarra Park",
+          "Balmacarra Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 668.09,
+        "unionAreaSqM": 668.09,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-sooke-192",
+        "sourceObjectIds": [
+          192,
+          952
+        ],
+        "sourceNames": [
+          "Brooks Road Park",
+          "Brooks Road Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 2046.07,
+        "unionAreaSqM": 1023.04,
+        "overlappingAreaRemovedSqM": 1023.03,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-218",
+        "sourceObjectIds": [
+          218,
+          222
+        ],
+        "sourceNames": [
+          "Tyndall Park",
+          "Tyndall Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 44591.44,
+        "unionAreaSqM": 44591.44,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-224",
+        "sourceObjectIds": [
+          224,
+          225,
+          226,
+          248,
+          249
+        ],
+        "sourceNames": [
+          "Grant Park",
+          "Grant Park",
+          "Grant Park",
+          "Grant Park",
+          "Grant Park"
+        ],
+        "sourceFeatureCount": 5,
+        "sourcePolygonParts": 5,
+        "outputPolygonParts": 5,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 41047.61,
+        "unionAreaSqM": 41047.61,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-232",
+        "sourceObjectIds": [
+          232,
+          409
+        ],
+        "sourceNames": [
+          "Gorge Waterway Park",
+          "Gorge Waterway Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 37469.66,
+        "unionAreaSqM": 37469.66,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-244",
+        "sourceObjectIds": [
+          244,
+          347,
+          549
+        ],
+        "sourceNames": [
+          "PKOLS (Mount Douglas Park)",
+          "PKOLS (Mount Douglas Park)",
+          "PKOLS (Mount Douglas Park)"
+        ],
+        "sourceFeatureCount": 3,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 3,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 1828713.22,
+        "unionAreaSqM": 1828713.22,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-340",
+        "sourceObjectIds": [
+          340,
+          475
+        ],
+        "sourceNames": [
+          "Doris Page Park",
+          "Doris Page Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 12662.48,
+        "unionAreaSqM": 12662.48,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-364",
+        "sourceObjectIds": [
+          364,
+          500
+        ],
+        "sourceNames": [
+          "Knockan Hill",
+          "Knockan Hill Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 93516.87,
+        "unionAreaSqM": 93516.87,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-408",
+        "sourceObjectIds": [
+          408,
+          424
+        ],
+        "sourceNames": [
+          "Sayward Hill Park",
+          "Sayward Hill"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 37608.09,
+        "unionAreaSqM": 37608.09,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-422",
+        "sourceObjectIds": [
+          422,
+          505
+        ],
+        "sourceNames": [
+          "Mattick's Wood Park",
+          "Mattick's Wood Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 1776.89,
+        "unionAreaSqM": 1776.89,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-sooke-429",
+        "sourceObjectIds": [
+          429,
+          481
+        ],
+        "sourceNames": [
+          "Ludlow Road Park",
+          "Ludlow Road Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 94747.15,
+        "unionAreaSqM": 94747.15,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-547",
+        "sourceObjectIds": [
+          547,
+          1057
+        ],
+        "sourceNames": [
+          "South Prospect Lake Park",
+          "South Prospect Lake Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 95937.72,
+        "unionAreaSqM": 95937.72,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-langford-589",
+        "sourceObjectIds": [
+          589,
+          592
+        ],
+        "sourceNames": [
+          "Players Drive Park",
+          "Players Drive Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 24890.49,
+        "unionAreaSqM": 24890.49,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-langford-609",
+        "sourceObjectIds": [
+          609,
+          1737
+        ],
+        "sourceNames": [
+          "Goldstream Meadows Park",
+          "Goldstream Meadows Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 107468.28,
+        "unionAreaSqM": 107468.28,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-langford-612",
+        "sourceObjectIds": [
+          612,
+          1797
+        ],
+        "sourceNames": [
+          "Harlequin Park",
+          "Harlequin Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 12986.13,
+        "unionAreaSqM": 12017.71,
+        "overlappingAreaRemovedSqM": 968.41,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-victoria-853",
+        "sourceObjectIds": [
+          853,
+          857
+        ],
+        "sourceNames": [
+          "Blackwood Green",
+          "Blackwood Green"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 2632.21,
+        "unionAreaSqM": 2632.21,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-victoria-872",
+        "sourceObjectIds": [
+          872,
+          874
+        ],
+        "sourceNames": [
+          "Summit Park",
+          "Summit Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 1,
+        "outputHoleCount": 1,
+        "sourceAreaSumSqM": 56962.73,
+        "unionAreaSqM": 56962.73,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-victoria-886",
+        "sourceObjectIds": [
+          886,
+          888
+        ],
+        "sourceNames": [
+          "Viaduct Park",
+          "Viaduct Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 12093.46,
+        "unionAreaSqM": 12093.46,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-city-of-victoria-938",
+        "sourceObjectIds": [
+          938,
+          941,
+          942
+        ],
+        "sourceNames": [
+          "Cecelia Ravine Park",
+          "Cecelia Ravine Park",
+          "Cecelia Ravine Park"
+        ],
+        "sourceFeatureCount": 3,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 3,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 20781.2,
+        "unionAreaSqM": 20781.2,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-town-of-sidney-1108",
+        "sourceObjectIds": [
+          1108,
+          1497
+        ],
+        "sourceNames": [
+          "Mermaid Park",
+          "Mermaid Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 3101.05,
+        "unionAreaSqM": 2851.27,
+        "overlappingAreaRemovedSqM": 249.78,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "community-salt-spring-island-electoral-area-1197",
+        "sourceObjectIds": [
+          1197,
+          1198
+        ],
+        "sourceNames": [
+          "Peter Arnell Park",
+          "Peter Arnell Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 140543.58,
+        "unionAreaSqM": 126092.48,
+        "overlappingAreaRemovedSqM": 14451.1,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-town-of-view-royal-1373",
+        "sourceObjectIds": [
+          1373,
+          1502
+        ],
+        "sourceNames": [
+          "Burchill Park",
+          "Burchill Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 3071.37,
+        "unionAreaSqM": 3071.37,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-town-of-view-royal-1384",
+        "sourceObjectIds": [
+          1384,
+          1403,
+          1404
+        ],
+        "sourceNames": [
+          "Robin Hill Park",
+          "Robin Hill Park",
+          "Robin Hill Park"
+        ],
+        "sourceFeatureCount": 3,
+        "sourcePolygonParts": 3,
+        "outputPolygonParts": 2,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 24970.23,
+        "unionAreaSqM": 24970.23,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-metchosin-1595",
+        "sourceObjectIds": [
+          1595,
+          1596
+        ],
+        "sourceNames": [
+          "Branson Trail Park",
+          "Branson Trail Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 0,
+        "sourceAreaSumSqM": 3283.8,
+        "unionAreaSqM": 3283.8,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      },
+      {
+        "id": "municipal-district-of-saanich-1920",
+        "sourceObjectIds": [
+          1920,
+          1922
+        ],
+        "sourceNames": [
+          "Cuthbert Holmes Park",
+          "Cuthbert Holmes Park"
+        ],
+        "sourceFeatureCount": 2,
+        "sourcePolygonParts": 2,
+        "outputPolygonParts": 1,
+        "sourceHoleCount": 0,
+        "outputHoleCount": 1,
+        "sourceAreaSumSqM": 194943.13,
+        "unionAreaSqM": 194943.12,
+        "overlappingAreaRemovedSqM": 0,
+        "unionWithinSourceArea": true,
+        "unionRecipe": "polygon-clipping.union of original source geometries"
+      }
+    ]
+  },
+  "representativePointChecks": {
+    "method": "interior representative point of the largest polygon part, rounded to six decimal places and checked against rings and holes",
+    "checkedPlaces": 626,
+    "allInsideOutputBoundary": true
+  },
+  "outputFiles": {
+    "places": "places.json",
+    "boundaries": "boundaries.geojson",
+    "descriptions": "descriptions.catalogue.json"
+  },
+  "dispositions": [
+    {
+      "id": null,
+      "name": "Cordova Spit Park",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        20,
+        21,
+        22,
+        23,
+        74
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        24,
+        81,
+        129,
+        131,
+        136,
+        219,
+        297,
+        467,
+        477,
+        492,
+        541,
+        544,
+        546,
+        548,
+        553,
+        554,
+        1032,
+        1050,
+        1056,
+        1059,
+        1060,
+        1294,
+        1447,
+        1921
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of North Saanich",
+      "sourceObjectIds": [
+        35,
+        38,
+        42,
+        72,
+        89,
+        91,
+        92,
+        93,
+        304,
+        425,
+        426,
+        484,
+        485,
+        486,
+        489,
+        1077,
+        1120,
+        1443,
+        1771
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Island Parks",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area",
+      "sourceObjectIds": [
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        239,
+        240,
+        241,
+        242,
+        243,
+        389,
+        390
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Avalon Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        61
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Songhees Point Park",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        62,
+        817
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Green Park",
+      "category": "municipal",
+      "jurisdiction": "District of North Saanich",
+      "sourceObjectIds": [
+        68,
+        84,
+        295
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        70,
+        71,
+        211,
+        376,
+        647,
+        651,
+        654,
+        1445,
+        1714,
+        1715,
+        1716,
+        1717,
+        1718,
+        1719,
+        1720,
+        1721,
+        1722,
+        1723,
+        1724,
+        1725,
+        1726,
+        1727,
+        1728,
+        1729,
+        1730,
+        1731,
+        1732,
+        1733,
+        1735,
+        1736,
+        1738,
+        1739,
+        1740,
+        1741,
+        1743,
+        1744,
+        1745,
+        1747,
+        1748,
+        1749,
+        1750,
+        1751,
+        1753,
+        1754,
+        1779,
+        1851,
+        1875,
+        1876,
+        1877,
+        1878,
+        1879,
+        1880,
+        1881,
+        1882,
+        1965
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Turtle Island",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area",
+      "sourceObjectIds": [
+        73
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Commonwealth Place",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        80
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Portage Park",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        86,
+        736,
+        1906
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Craigflower Farm Historic Site",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        87,
+        1391
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Eugene Bailin Memorial Trail / Eugene Bailin Memorial Trail Park",
+      "category": "municipal",
+      "jurisdiction": "District of North Saanich",
+      "sourceObjectIds": [
+        90,
+        1084
+      ],
+      "disposition": "hold",
+      "reason": "Eugene Bailin Memorial Trail and Eugene Bailin Memorial Trail Park are near but disconnected, and no reviewed North Saanich named boundary confirms they are one destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area",
+      "sourceObjectIds": [
+        103,
+        351,
+        520,
+        1187,
+        1415,
+        1416,
+        1423
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Cormorant Crescent Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        110
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Teal Place Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        111
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Long Harbour Islands Park",
+      "category": "community",
+      "jurisdiction": "Islands Trust",
+      "sourceObjectIds": [
+        113,
+        468,
+        469,
+        472
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Lively Peak Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (North Pender Island)",
+      "sourceObjectIds": [
+        114,
+        365
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Parkcrest Park",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        118,
+        119,
+        1393
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Gorge Park",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        144,
+        145,
+        146
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Rithet's Bog Conservation Area",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        154
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Swan Lake Park",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        157,
+        227,
+        410
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Glen Cove Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        160,
+        656
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Christmas Hill Nature Sanctuary",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        171,
+        254,
+        550
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        177,
+        1226,
+        1267
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Conconi Reef Community Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Mayne Island)",
+      "sourceObjectIds": [
+        204,
+        1274
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Otter Point Access Park",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        259
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Duck Bay Island Parks",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        260,
+        261
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Churchill Road Linear Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        263,
+        264
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Saanichton Bay Park",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        265,
+        490,
+        1071
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Pioneer Square",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        282
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Coffin Island",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        283,
+        284
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        291,
+        428,
+        1066
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Mouat Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        296,
+        1421,
+        1428
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        312,
+        762,
+        772,
+        784,
+        1473,
+        1478,
+        1479
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Islands Trust",
+      "sourceObjectIds": [
+        352,
+        493
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Long Harbour Road Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        354
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Centennial Park",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        371,
+        1067,
+        1068
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Cooperidge Park",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        378,
+        380,
+        381
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Thomas Drive Park",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        437,
+        1388,
+        1389,
+        1390
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (North Pender Island)",
+      "sourceObjectIds": [
+        440,
+        1279,
+        1280
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Rogers Court",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        465
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Open Space",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        555
+      ],
+      "disposition": "exclude",
+      "reason": "Generic Open Space source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        563,
+        567,
+        568,
+        570,
+        572,
+        1592,
+        1593,
+        1594,
+        1829,
+        1830,
+        1831,
+        1832,
+        1833,
+        1837,
+        1844,
+        1967,
+        1968
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Hannington Stormwater Pond Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        578
+      ],
+      "disposition": "exclude",
+      "reason": "Standalone facility or infrastructure parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Nicklaus Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        582,
+        583
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Spirit Ridge Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        585,
+        586
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Quails Run Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        587,
+        593
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Graphite-Echo Valley",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        601
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Sparrow Crt-Millstream Rd",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        603
+      ],
+      "disposition": "exclude",
+      "reason": "Unverified road-side parcel name, Sparrow Crt-Millstream Rd."
+    },
+    {
+      "id": null,
+      "name": "Alton Lane Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        605,
+        606
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Setchfield - Camli Pl",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        607
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Ed Nixon Trail",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        610,
+        611
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Cressida Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        613,
+        614
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Elegante-Andre",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        615
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Santana-Willway Elementary",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        616,
+        617
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Rolabee-Willway Elementary",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        618
+      ],
+      "disposition": "hold",
+      "reason": "Rolabee-Willway Elementary is a school-site label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Glen Lake Trail",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        626
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Glen Lake Fishing Pier",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        630
+      ],
+      "disposition": "exclude",
+      "reason": "Standalone facility or infrastructure parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Fisher's Field",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        633
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Firehall Creek Bio Swale",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        634
+      ],
+      "disposition": "exclude",
+      "reason": "Firehall Creek Bio Swale is a bioswale, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Isabell-Galloping Goose Trail",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        635
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Ronald-Sooke",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        636
+      ],
+      "disposition": "hold",
+      "reason": "Ronald-Sooke is an intersection/road parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Glen Willow-Jacklin",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        638
+      ],
+      "disposition": "hold",
+      "reason": "Glen Willow-Jacklin is an intersection/road parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Sybronden Lane",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        639
+      ],
+      "disposition": "exclude",
+      "reason": "Unverified lane-side parcel name, Sybronden Lane."
+    },
+    {
+      "id": null,
+      "name": "Valley View Pond 1",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        643
+      ],
+      "disposition": "hold",
+      "reason": "Valley View Pond 1 is a stormwater-pond parcel without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Valley View Ponds 2 - 5",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        644
+      ],
+      "disposition": "hold",
+      "reason": "Valley View Ponds 2 - 5 are stormwater-pond parcels without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Valley View Pond 6",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        645
+      ],
+      "disposition": "hold",
+      "reason": "Valley View Pond 6 is a stormwater-pond parcel without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Moss Ridge/Strm pond 7",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        646
+      ],
+      "disposition": "hold",
+      "reason": "Moss Ridge/Strm pond 7 is a stormwater-pond parcel without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Wilfred",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        653
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Isabell Avenue-Ernhill Drive",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        655
+      ],
+      "disposition": "exclude",
+      "reason": "Unverified road-side parcel name, Isabell Avenue-Ernhill Drive."
+    },
+    {
+      "id": null,
+      "name": "Ayton-Galloping Goose",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        657
+      ],
+      "disposition": "hold",
+      "reason": "Ayton-Galloping Goose is a road/intersection parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Karr-Goldstream",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        660
+      ],
+      "disposition": "hold",
+      "reason": "Karr-Goldstream is a road/intersection parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Ashley Pl-Millstream Rd",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        670
+      ],
+      "disposition": "hold",
+      "reason": "Ashley Pl-Millstream Rd is a road/intersection parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Millstream Creek Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        671,
+        672,
+        673,
+        674,
+        675
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Carmanagh-Phelps Rd",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        681
+      ],
+      "disposition": "hold",
+      "reason": "Carmanagh-Phelps Rd is a road/intersection parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Haley Rae Pl -Thetis Lake Regional Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        683
+      ],
+      "disposition": "exclude",
+      "reason": "Haley Rae Pl -Thetis Lake Regional Park is an access parcel to an existing regional park."
+    },
+    {
+      "id": null,
+      "name": "Rainville Leckfield Trail",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        687
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Selwyn Falls Park North / Selwyn Falls Park South",
+      "category": "municipal",
+      "jurisdiction": "District of Langford",
+      "sourceObjectIds": [
+        689,
+        1459
+      ],
+      "disposition": "hold",
+      "reason": "The legacy District of Langford north and south Selwyn Falls Park records may be one destination or separate destinations; the names and jurisdiction alone do not resolve identity."
+    },
+    {
+      "id": null,
+      "name": "Leggett Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        693,
+        694
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "VMP East Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        699,
+        700,
+        1461
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park (Trail Access)",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        701,
+        713
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Colwood Creek Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        702,
+        1300,
+        1907,
+        1908
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Madronna Bank",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        706,
+        707
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Pondside Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        708,
+        1465
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Pelican Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        710,
+        712
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Seashell Prk",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        711
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Millstream Galloping Goose",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        724
+      ],
+      "disposition": "hold",
+      "reason": "Millstream Galloping Goose is a road/trail-corridor parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Chilco Park",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        729,
+        730,
+        731
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of Highlands",
+      "sourceObjectIds": [
+        740,
+        741,
+        742,
+        743,
+        744,
+        748,
+        750,
+        751,
+        752,
+        753,
+        755,
+        1605,
+        1775,
+        1776
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Riding Ring",
+      "category": "municipal",
+      "jurisdiction": "District of Highlands",
+      "sourceObjectIds": [
+        747
+      ],
+      "disposition": "exclude",
+      "reason": "Riding Ring is a standalone recreation facility, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Caleb Pike Homestead",
+      "category": "municipal",
+      "jurisdiction": "District of Highlands",
+      "sourceObjectIds": [
+        749
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Cal Revelle Nature Sanctuary",
+      "category": "municipal",
+      "jurisdiction": "District of Highlands",
+      "sourceObjectIds": [
+        756
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Yarrow Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        760,
+        761
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Dellwood Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        763
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Glenvale Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        764,
+        765
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Highrock Cairn Park / Highrock Park",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        769,
+        787
+      ],
+      "disposition": "hold",
+      "reason": "Highrock Cairn Park and Highrock Park are separated by mapped land, and no reviewed Esquimalt named boundary confirms they are one destination."
+    },
+    {
+      "id": null,
+      "name": "Foster Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        773
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Sturdee Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        774
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Nelson Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        775
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Bullen Field",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        778
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Kinver Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        779
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Fleming Beach",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        781,
+        782
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Buxton Green",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        783
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "West Bay Walkway",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        786
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "L'ecole Brodeur Field",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        789
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "McNaughton Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        793
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Arm Street Promenade",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        794
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Halkett Island",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        798
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Saghalie Park",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        803,
+        804
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "West-song Walkway",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        811,
+        814,
+        815,
+        1482,
+        1483
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Colville Island",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        819
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Laurel Point Walkway",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        821,
+        1484
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Bellville Street Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        822,
+        823
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Community Garden",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        826
+      ],
+      "disposition": "exclude",
+      "reason": "Community Garden is a standalone garden parcel, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Ernest Todd Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        827
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Chapman Street Playlot",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        833
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Ross Bay Cemetery",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        839
+      ],
+      "disposition": "exclude",
+      "reason": "Ross Bay Cemetery is a cemetery, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Little Ross Bay Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        840
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Gonzales Beach Area",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        842
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Gonzales Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        843
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Walbran Park",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        844,
+        845
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Traffic Corner",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        848
+      ],
+      "disposition": "exclude",
+      "reason": "Traffic Corner is traffic-control land, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Queens Avenue Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        850
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Mason Street Playlot",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        852
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "King's Playlot",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        854
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Harris Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        858,
+        859,
+        860
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Connector",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        865,
+        927
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Sumas Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        868
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Jackson Street Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        869
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Quadra Heights Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        870
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Smith Hill Reservoir",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        873
+      ],
+      "disposition": "exclude",
+      "reason": "Smith Hill Reservoir is a reservoir, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Ryan St. Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        878
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Oakland Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        879
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Oswald Street Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        880
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Clawthorpe Playlot",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        881
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Garbally Landing",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        884
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Selkirk Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        885
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Highview Playlot",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        890
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Maddison Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        892
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Native Plant Garden",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        896
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Kitty Islet",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        907
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Firefighter's Park",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        912,
+        921
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Mary Tod Island",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        918
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Bowker Creek Walkway",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        919,
+        920
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Traffic Island",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        923,
+        924,
+        925,
+        932,
+        933,
+        935
+      ],
+      "disposition": "exclude",
+      "reason": "Traffic-control land is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Traffic Circle",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        928
+      ],
+      "disposition": "exclude",
+      "reason": "Traffic Circle is traffic-control land, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Gibbs Traffic Island",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        931
+      ],
+      "disposition": "exclude",
+      "reason": "Gibbs Traffic Island is traffic-control land, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        934
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label Park does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Loon Bay Park",
+      "category": "municipal",
+      "jurisdiction": "District of Oak Bay",
+      "sourceObjectIds": [
+        936,
+        937
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Mowich Drive Park",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        944,
+        945
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Broom Hill Park",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        947,
+        975
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Throup Road Ball Fields",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        955
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Ponds Park Corridor",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        966,
+        972,
+        980,
+        1012
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "West Coast Road Shoreline Access",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        974
+      ],
+      "disposition": "exclude",
+      "reason": "West Coast Road Shoreline Access is an access parcel, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Demamiel Creek Park",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        982,
+        983,
+        1491
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Sunriver Stormwater Pond and Trail",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        984
+      ],
+      "disposition": "exclude",
+      "reason": "Sunriver Stormwater Pond and Trail is mapped stormwater/trail land, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Sunriver Nature Trail Park",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        985,
+        1841
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Ella Road Trail",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        988
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Walkway",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        995,
+        997,
+        999,
+        1000,
+        1004,
+        1005,
+        1006,
+        1007,
+        1009,
+        1011,
+        1013
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Sunriver Place Tot Lot",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        996
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Marine Boardwalk",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        1002
+      ],
+      "disposition": "hold",
+      "reason": "Marine Boardwalk is a boardwalk corridor without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Rotary Pier",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        1010
+      ],
+      "disposition": "exclude",
+      "reason": "Rotary Pier is a standalone pier parcel, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Saanich Water Access",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        1039,
+        1040,
+        1041,
+        1042,
+        1043,
+        1044,
+        1045,
+        1046,
+        1047,
+        1048,
+        1049,
+        1051,
+        1052,
+        1053,
+        1054,
+        1058,
+        1494
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Saanichton Green",
+      "category": "municipal",
+      "jurisdiction": "District of Central Saanich",
+      "sourceObjectIds": [
+        1069
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Cy Hampson Park",
+      "category": "municipal",
+      "jurisdiction": "District of North Saanich",
+      "sourceObjectIds": [
+        1075,
+        1495
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Reay Creek Park",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1089,
+        1090
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Greenglade Road",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1093
+      ],
+      "disposition": "exclude",
+      "reason": "CRD comments explicitly say Greenglade Road was not confirmed with Sidney."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1094,
+        1095,
+        1115,
+        1438
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Sidney Lawn Bowling Club",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1096
+      ],
+      "disposition": "exclude",
+      "reason": "Sidney Lawn Bowling Club is a standalone club facility, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Tulista Park",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1098,
+        1099
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Waterfront Walkway",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1100
+      ],
+      "disposition": "exclude",
+      "reason": "Walkway corridor is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Beacon Ave",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1102
+      ],
+      "disposition": "hold",
+      "reason": "Beacon Ave is a road-corridor label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Rose Garden",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1105
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Melissa Playground",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1106,
+        1107
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Skateboard Facility",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1112
+      ],
+      "disposition": "exclude",
+      "reason": "Skateboard Facility is a standalone facility parcel, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Resthaven Dr. & White Birch Rd.",
+      "category": "municipal",
+      "jurisdiction": "Town of Sidney",
+      "sourceObjectIds": [
+        1117
+      ],
+      "disposition": "hold",
+      "reason": "Resthaven Dr. & White Birch Rd. is a road/intersection parcel label without evidence of a distinct municipal park destination."
+    },
+    {
+      "id": null,
+      "name": "Wieland Trail",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1183
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Butler Trail",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1184,
+        1410
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1185
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label Park is not an official park name; source comments describe it only as an aka/local label."
+    },
+    {
+      "id": null,
+      "name": "Bader's Beach Ravine Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1191
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Bryant Hill Trail",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1193,
+        1420
+      ],
+      "disposition": "exclude",
+      "reason": "Trail-only source record is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Bullock Lake Linear Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1194,
+        1195
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Blackburn Road Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1196
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Cudmore Height Park and Wilkie Way",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1200,
+        1201,
+        1202
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Cudmore Heights Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1203
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Wilkie Way Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1204
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Desiree Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1205
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Mount Erskine Drive Linear Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1209
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Rainbow Grove Phase II Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1211,
+        1241
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Mount Erskine Upper Access Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1212
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Eagle Ridge Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1215
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Fern Creek Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1216
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Forest Ridge Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1217
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Fulford Ballpark",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1218
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Fulford Tennis Court",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1219
+      ],
+      "disposition": "hold",
+      "reason": "Fulford Tennis Court is a standalone facility parcel without evidence of a distinct community park destination."
+    },
+    {
+      "id": null,
+      "name": "Harrison Avenue Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1220
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Isabella Point Road Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1222
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Linear Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1223
+      ],
+      "disposition": "exclude",
+      "reason": "Generic Linear Park label has no distinct destination name."
+    },
+    {
+      "id": null,
+      "name": "Lawnhill Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1227
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Trincomali Heights Linear Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1228,
+        1229
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Meyer Road Linear Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1232
+      ],
+      "disposition": "hold",
+      "reason": "Meyer Road Linear Park is a mapped linear parcel with a small overlap against the existing Ruckle Park boundary; identity/overlap is unresolved, so no new place or synthetic geometry is emitted."
+    },
+    {
+      "id": null,
+      "name": "Monteith Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1235
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Quarry Drive - Baker Road Linear Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1237
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Quarry Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1238
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Rainbow Grove Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1239,
+        1240,
+        1244
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Reginald Hill Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1242
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "South Ridge Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1243
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Vesuvius Beach Public Access Park",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1246
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Webster Drive Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1247
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Wildwood Crescent Park Reserve",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1249
+      ],
+      "disposition": "exclude",
+      "reason": "Park reserve record is held out under the reviewed destination-only inclusion rule."
+    },
+    {
+      "id": null,
+      "name": "Dinner Bay Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Mayne Island)",
+      "sourceObjectIds": [
+        1251,
+        1252
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Mayne Island)",
+      "sourceObjectIds": [
+        1270,
+        1271,
+        1272,
+        1273,
+        1275,
+        1276,
+        1278
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Tricia Way Community Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Galiano Island)",
+      "sourceObjectIds": [
+        1287,
+        1417
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1301,
+        1761,
+        1762,
+        1763,
+        1764,
+        1765,
+        1768,
+        1943
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "municipal",
+      "jurisdiction": "Town of View Royal",
+      "sourceObjectIds": [
+        1394,
+        1397,
+        1399,
+        1401,
+        1402,
+        1499,
+        1912,
+        1913
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Hereward Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        1408
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Rainbow Road Recreation Centre",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1413
+      ],
+      "disposition": "exclude",
+      "reason": "CRD comments identify Rainbow Road Recreation Centre as a parks maintenance service yard."
+    },
+    {
+      "id": null,
+      "name": "ArtSpring Community Arts Centre (Mouat Park)",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1422
+      ],
+      "disposition": "exclude",
+      "reason": "ArtSpring Community Arts Centre is a facility parcel, not a park destination. CRD comments say it was not in Islands Trust parks data; QA found it touches but has no interior overlap with Mouat Park OID 1421."
+    },
+    {
+      "id": null,
+      "name": "Zuker Road Shore Access",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Galiano Island)",
+      "sourceObjectIds": [
+        1424
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area (Galiano Island)",
+      "sourceObjectIds": [
+        1425,
+        1778
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Community Park",
+      "category": "community",
+      "jurisdiction": "Southern Gulf Islands Electoral Area",
+      "sourceObjectIds": [
+        1429,
+        1430,
+        1431,
+        1432
+      ],
+      "disposition": "exclude",
+      "reason": "Generic source label does not identify a distinct park destination."
+    },
+    {
+      "id": null,
+      "name": "Leigh Road Beach",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        1448
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Turnstone Park",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        1449,
+        1451
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Pioneer Cemetery",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1469
+      ],
+      "disposition": "exclude",
+      "reason": "Pioneer Cemetery is a cemetery, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Millstream 2",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1471
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Denniston Water Access",
+      "category": "municipal",
+      "jurisdiction": "Township of Esquimalt",
+      "sourceObjectIds": [
+        1475
+      ],
+      "disposition": "exclude",
+      "reason": "Access parcel is not treated as a park destination."
+    },
+    {
+      "id": null,
+      "name": "Transcanada Parkette",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        1481
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Wilmer Green",
+      "category": "municipal",
+      "jurisdiction": "City of Victoria",
+      "sourceObjectIds": [
+        1487
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Fred Milne Play Field",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        1489
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "The Shores Park",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1536,
+        1537
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Swan Lake Nature Sanctuary",
+      "category": "municipal",
+      "jurisdiction": "District of Saanich",
+      "sourceObjectIds": [
+        1538
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Katie's Pond",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        1711
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Sarah Beckett Memorial Playground",
+      "category": "municipal",
+      "jurisdiction": "City of Langford",
+      "sourceObjectIds": [
+        1734
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Coleman Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1757,
+        1758,
+        1759,
+        1760
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Regency Park",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1766,
+        1767
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Musgrave Green Belt",
+      "category": "community",
+      "jurisdiction": "Salt Spring Island Electoral Area",
+      "sourceObjectIds": [
+        1780
+      ],
+      "disposition": "hold",
+      "reason": "Source Type labels this as a Municipal/Community Park, but the source name does not identify a park destination and no reviewed official named park boundary confirms its identity."
+    },
+    {
+      "id": null,
+      "name": "Park (Matheson Lake Trail)",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        1828
+      ],
+      "disposition": "exclude",
+      "reason": "Park (Matheson Lake Trail) is an access parcel to an existing regional park."
+    },
+    {
+      "id": null,
+      "name": "Park (Horse Trail)",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        1835
+      ],
+      "disposition": "exclude",
+      "reason": "Generic Park-with-feature label identifies a trail/access parcel, not a named park destination."
+    },
+    {
+      "id": null,
+      "name": "Park (Lisandra Trail)",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        1836
+      ],
+      "disposition": "exclude",
+      "reason": "Generic Park-with-feature label identifies a trail/access parcel, not a named park destination."
+    },
+    {
+      "id": null,
+      "name": "Blinkhorn Nature Park",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        1838,
+        1839
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "St. John's Church",
+      "category": "municipal",
+      "jurisdiction": "City of Colwood",
+      "sourceObjectIds": [
+        1862
+      ],
+      "disposition": "exclude",
+      "reason": "St. John's Church is a church parcel, not a park destination."
+    },
+    {
+      "id": null,
+      "name": "Copper Mine Park",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1867,
+        1868
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Nature Reserve",
+      "category": "municipal",
+      "jurisdiction": "District of Metchosin",
+      "sourceObjectIds": [
+        1899
+      ],
+      "disposition": "hold",
+      "reason": "Nature Reserve is a generic label. The CRD comment identifies foundation management but does not establish a distinct named public park destination."
+    },
+    {
+      "id": null,
+      "name": "Fishboat Bay Park",
+      "category": "community",
+      "jurisdiction": "Juan de Fuca Electoral Area",
+      "sourceObjectIds": [
+        1950,
+        1951,
+        1952
+      ],
+      "disposition": "hold",
+      "reason": "Same-name source features are spatially disconnected and no reviewed official boundary confirms that all pieces are one park."
+    },
+    {
+      "id": null,
+      "name": "Sooke River Park",
+      "category": "municipal",
+      "jurisdiction": "District of Sooke",
+      "sourceObjectIds": [
+        1958
+      ],
+      "disposition": "exclude",
+      "reason": "CRD source OBJECTID 1958 maps to the existing regional-sooke-river-regional-park. QA found 97.59% CRD-source coverage and 98.09% existing-boundary coverage; preserve the existing place, category, ID and boundary unchanged."
+    }
+  ]
+}

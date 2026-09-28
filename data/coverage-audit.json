@@ -1,13 +1,15 @@
 {
-  "generatedAt": "2026-09-24T01:31:50.205Z",
+  "generatedAt": "2026-09-27T23:27:06.580Z",
   "counts": {
     "national": 7,
     "provincial": 693,
     "regional": 293,
-    "island": 37
+    "island": 37,
+    "municipal": 548,
+    "community": 78
   },
   "bcParksBroadBboxFeatures": 693,
-  "polygonPinsVerified": 982,
+  "polygonPinsVerified": 1608,
   "officialRegionalSourceCounts": {
     "metro": 24,
     "rdco": 30,
@@ -390,9 +392,50 @@
   "scopeRetirements": [],
   "excludedProvincialParksOutsideMask": [],
   "extents": {
-    "south": 48.339419,
+    "south": 48.337083,
     "north": 59.962748,
     "west": -137.442832,
     "east": -114.178063
+  },
+  "crdLocalParksImport": {
+    "sourceUrl": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+    "includedCount": 626,
+    "sourceCounts": {
+      "Salt Spring Island Electoral Area (CRD Park GIS)": 25,
+      "District of Central Saanich (CRD Park GIS)": 32,
+      "District of Saanich (CRD Park GIS)": 145,
+      "District of North Saanich (CRD Park GIS)": 28,
+      "District of Oak Bay (CRD Park GIS)": 21,
+      "City of Victoria (CRD Park GIS)": 57,
+      "Southern Gulf Islands Electoral Area (North Pender Island) (CRD Park GIS)": 14,
+      "Town of View Royal (CRD Park GIS)": 36,
+      "City of Langford (CRD Park GIS)": 96,
+      "Juan de Fuca Electoral Area (CRD Park GIS)": 20,
+      "District of Sooke (CRD Park GIS)": 46,
+      "Southern Gulf Islands Electoral Area (Mayne Island) (CRD Park GIS)": 5,
+      "Southern Gulf Islands Electoral Area (CRD Park GIS)": 4,
+      "District of Metchosin (CRD Park GIS)": 11,
+      "City of Colwood (CRD Park GIS)": 36,
+      "District of Highlands (CRD Park GIS)": 5,
+      "Township of Esquimalt (CRD Park GIS)": 17,
+      "District of North Saanich/Town of Sidney (CRD Park GIS)": 1,
+      "Town of Sidney (CRD Park GIS)": 17,
+      "Southern Gulf Islands Electoral Area (South Pender Island) (CRD Park GIS)": 5,
+      "Southern Gulf Islands Electoral Area (Saturna Island) (CRD Park GIS)": 1,
+      "Southern Gulf Islands Electoral Area (Galiano Island) (CRD Park GIS)": 4
+    },
+    "snapshotSha256": "2f3a89357b995cdf33b5027e2edff304cc2d364a9f9fd3e218adaff922212232",
+    "dispositionCounts": {
+      "entries": {
+        "include": 626,
+        "hold": 144,
+        "exclude": 102
+      },
+      "sourceFeatures": {
+        "include": 699,
+        "hold": 258,
+        "exclude": 316
+      }
+    }
   }
 }

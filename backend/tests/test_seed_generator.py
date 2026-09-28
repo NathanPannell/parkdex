@@ -18,7 +18,7 @@ def load_generator():
 def test_seed_generator_is_schema_aware_without_rewriting_history() -> None:
     generator = load_generator()
     manifest_target = generator.manifest_target()
-    assert manifest_target.name == "0024_expand_bc_places.sql"
+    assert manifest_target.name == "0029_import_crd_local_parks.sql"
     assert generator.render_for_target(manifest_target) == manifest_target.read_text(
         encoding="utf-8"
     )
