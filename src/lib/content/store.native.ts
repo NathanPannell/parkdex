@@ -1,6 +1,7 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import type { ContentStore, RetainedPark, StoredRelease } from "./contracts";
+import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
+import type { ArchivedScene, ContentStore, RetainedPark, StoredRelease } from "./contracts";
 
 const DATABASE = "parkdex_content";
 const ROOT = "parkdex-content-v1";
@@ -263,8 +264,9 @@ export class NativeContentStore implements ContentStore {
       const active = activeId ? await this.getRelease(activeId) : undefined;
       const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
       const retainedReferencesFile = (await this.getRetainedParks()).some((park) => park.sceneFile?.sha256.toLowerCase() === key);
-      if (activeReferencesFile || retainedReferencesFile) {
-        throw new Error(`Cannot delete content file referenced by active or retained content: ${key}`);
+      const archivedReferencesFile = (await this.listArchivedScenes()).some((scene) => scene.file.sha256 === key);
+      if (activeReferencesFile || retainedReferencesFile || archivedReferencesFile) {
+        throw new Error(`Cannot delete content file referenced by active or retained content, including archived scenes: ${key}`);
       }
       const path = blobPath(key);
       try {
@@ -304,6 +306,56 @@ export class NativeContentStore implements ContentStore {
     });
   }
 
+  async getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined> {
+    assertArchivedSceneIdentity(releaseId, scene);
+    const rows = await this.db().query(
+      "SELECT release_id, scene, file_json FROM content_archived_scenes WHERE release_id = ? AND scene = ?",
+      [releaseId, scene],
+    );
+    const row = rows.values?.[0];
+    if (!row) return undefined;
+    if (row.release_id !== releaseId || row.scene !== scene || typeof row.file_json !== "string") {
+      throw new Error("Archived scene storage row does not match its key");
+    }
+    const descriptor: ArchivedScene = {
+      releaseId,
+      scene,
+      file: JSON.parse(row.file_json) as ArchivedScene["file"],
+    };
+    assertArchivedSceneDescriptor(descriptor);
+    return descriptor;
+  }
+
+  async retainArchivedScene(scene: ArchivedScene): Promise<void> {
+    assertArchivedSceneDescriptor(scene);
+    const descriptor: ArchivedScene = { releaseId: scene.releaseId, scene: scene.scene, file: { ...scene.file } };
+    const fileJson = JSON.stringify(descriptor.file);
+    await this.exclusive(async () => {
+      await this.db().run(
+        "INSERT OR REPLACE INTO content_archived_scenes(release_id, scene, file_json) VALUES(?, ?, ?)",
+        [descriptor.releaseId, descriptor.scene, fileJson],
+      );
+    });
+  }
+
+  async listArchivedScenes(): Promise<ArchivedScene[]> {
+    const rows = await this.db().query(
+      "SELECT release_id, scene, file_json FROM content_archived_scenes ORDER BY release_id, scene",
+    );
+    return (rows.values ?? []).map((row) => {
+      if (typeof row.release_id !== "string" || typeof row.scene !== "string" || typeof row.file_json !== "string") {
+        throw new Error("Archived scene storage row is invalid");
+      }
+      const descriptor: ArchivedScene = {
+        releaseId: row.release_id,
+        scene: row.scene,
+        file: JSON.parse(row.file_json) as ArchivedScene["file"],
+      };
+      assertArchivedSceneDescriptor(descriptor);
+      return descriptor;
+    });
+  }
+
   async close(): Promise<void> {
     for (const url of this.objectUrls.values()) URL.revokeObjectURL(url);
     this.objectUrls.clear();
@@ -339,6 +391,12 @@ export class NativeContentStore implements ContentStore {
           park_id TEXT PRIMARY KEY NOT NULL,
           park_json TEXT NOT NULL,
           scene_file_json TEXT NULL
+        );
+        CREATE TABLE IF NOT EXISTS content_archived_scenes (
+          release_id TEXT NOT NULL,
+          scene TEXT NOT NULL,
+          file_json TEXT NOT NULL,
+          PRIMARY KEY (release_id, scene)
         );
         INSERT OR IGNORE INTO content_active(singleton, release_id) VALUES('${ACTIVE_POINTER}', NULL);
       `);

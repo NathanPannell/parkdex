@@ -7,6 +7,7 @@ import { formatDistance, type LngLat } from "../../lib/geo";
 import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
+import { recordDirectionsOpened } from "../../lib/interactions";
 
 type Props = {
   park: Park;
@@ -18,6 +19,7 @@ type Props = {
   onCheckIn: () => void;
   onViewCase: () => void;
   onFeedback: () => void;
+  entryPoint: "map" | "nearby" | "collection";
 };
 
 const stagger = { show: { transition: { staggerChildren: 0.05, delayChildren: 0.12 } } };
@@ -32,13 +34,16 @@ export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase, onFeedback }: Props) {
+export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
   const walk = finalWalk(park, content?.drive);
   const live = isLive(park);
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
+  const openDirections = () => {
+    if (content) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
+  };
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) onClose();
@@ -143,7 +148,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
             <button className="btn btn--block btn--paper" disabled>
               Badge art coming soon
             </button>
-            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps">
+            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
               <Icon name="car" />
             </a>
           </>
@@ -156,7 +161,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
             <button className="btn btn--block" onClick={onGo}>
               <Icon name="route" /> Let's go
             </button>
-            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps">
+            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
               <Icon name="car" />
             </a>
           </>

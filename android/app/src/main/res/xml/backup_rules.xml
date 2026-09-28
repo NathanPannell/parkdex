@@ -5,4 +5,5 @@
     <exclude domain="database" path="parkdex_contentSQLite.db-wal" />
     <exclude domain="database" path="parkdex_contentSQLite.db-shm" />
     <exclude domain="file" path="parkdex-content-v1/" />
+    <exclude domain="file" path="kip-identity/" />
 </full-backup-content>

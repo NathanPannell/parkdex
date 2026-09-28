@@ -12,10 +12,12 @@ import {
   type ContentRuntimeOptions,
   type ContentSnapshot,
   type ContentStatus,
+  type ArchivedScene,
   type MapPoint,
   type RetainedPark,
   type StoredRelease,
 } from "./contracts";
+import { assertArchivedSceneDescriptor, restoreArchivedScene } from "./archived-art";
 import {
   ContentValidationError,
   assertFileBytes,
@@ -53,8 +55,34 @@ export class ContentUnavailableOfflineError extends Error {
   }
 }
 
+export class ArchivedSceneRestoreDeferredError extends Error {
+  constructor() {
+    super("Archived badge art will be restored when the app is online and in the foreground.");
+    this.name = "ArchivedSceneRestoreDeferredError";
+  }
+}
+
+type ArchivedSceneRequest = { controller: AbortController; networkStarted: boolean };
+
 function fileKey(hash: string, size: number) {
   return `${hash}:${size}`;
+}
+
+function archivedSceneKey(releaseId: string, scene: string) {
+  return `${releaseId}:${scene}`;
+}
+
+function validateArchivedSceneDescriptor(entry: ArchivedScene, releaseId: string, scene: string): ContentFile {
+  assertArchivedSceneDescriptor(entry);
+  if (entry.releaseId !== releaseId || entry.scene !== scene) {
+    throw new ContentValidationError("Archived scene descriptor does not match its immutable release and scene key");
+  }
+  return entry.file;
+}
+
+function sameContentFile(left: ContentFile, right: ContentFile): boolean {
+  return left.path === right.path && left.key === right.key && left.url === right.url &&
+    left.sha256 === right.sha256 && left.byte_size === right.byte_size && left.content_type === right.content_type;
 }
 
 function isMapChunk(path: string) {
@@ -139,6 +167,9 @@ class ContentRuntimeController implements ContentRuntime {
   private readonly candidatePromises = new Map<string, Promise<void>>();
   private readonly localFileCheckPromises = new Map<string, Promise<boolean>>();
   private readonly fileUrlPromises = new Map<string, Promise<string>>();
+  private readonly archivedScenePromises = new Map<string, Promise<string>>();
+  private readonly archivedSceneRequests = new Map<string, ArchivedSceneRequest>();
+  private artifactMaintenance: Promise<void> = Promise.resolve();
   private startPromise: Promise<void> | null = null;
   private discoveryPromise: Promise<void> | null = null;
   private initialized = false;
@@ -200,6 +231,7 @@ class ContentRuntimeController implements ContentRuntime {
     this.policyForeground = foreground;
     this.scheduler.setPolicy({ ...this.currentPolicy(), foreground });
     if (!foreground) {
+      this.abortArchivedSceneRequests(true);
       if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
       this.nearbyTimer = undefined;
       return;
@@ -218,6 +250,7 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.stopped) return;
     const wasWifi = this.options.connectivity?.wifi ?? false;
     this.options.connectivity = { connected: connectivity.connected, wifi: connectivity.wifi };
+    if (!connectivity.connected) this.abortArchivedSceneRequests(true);
     this.scheduler.setPolicy(this.currentPolicy());
     if (!connectivity.wifi) this.waitingForUpdateWifi = this.waitingForUpdateWifi || this.hasPendingUpdateChunks();
     else this.waitingForUpdateWifi = false;
@@ -301,6 +334,27 @@ class ContentRuntimeController implements ContentRuntime {
     return promise;
   }
 
+  async ensureArchivedScene(releaseId: string, scene: string): Promise<string> {
+    this.assertRunning();
+    if (!/^[a-f\d]{64}$/i.test(releaseId) || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(scene)) {
+      throw new ContentValidationError("Archived scene key is invalid");
+    }
+    const normalizedReleaseId = releaseId.toLowerCase();
+    const key = archivedSceneKey(normalizedReleaseId, scene);
+    let promise = this.archivedScenePromises.get(key);
+    if (!promise) {
+      const request: ArchivedSceneRequest = { controller: new AbortController(), networkStarted: false };
+      this.archivedSceneRequests.set(key, request);
+      promise = this.withArtifactMaintenance(() => this.ensureArchivedSceneInner(normalizedReleaseId, scene, request))
+        .finally(() => {
+          if (this.archivedScenePromises.get(key) === promise) this.archivedScenePromises.delete(key);
+          if (this.archivedSceneRequests.get(key) === request) this.archivedSceneRequests.delete(key);
+        });
+      this.archivedScenePromises.set(key, promise);
+    }
+    return promise;
+  }
+
   async stop(): Promise<void> {
     if (this.closePromise) return this.closePromise;
     this.stopped = true;
@@ -309,11 +363,13 @@ class ContentRuntimeController implements ContentRuntime {
     this.nearbyAbort?.abort();
     this.scheduler.dispose();
     this.closePromise = (async () => {
+      this.abortArchivedSceneRequests();
       await Promise.allSettled([
         this.startPromise ?? Promise.resolve(),
         this.discoveryPromise ?? Promise.resolve(),
         ...this.candidatePromises.values(),
         ...this.bulkPromises.values(),
+        ...this.archivedScenePromises.values(),
       ]);
       if (this.initialized) await this.options.store.close();
     })();
@@ -850,7 +906,82 @@ class ContentRuntimeController implements ContentRuntime {
     await this.processChannel(channel);
   }
 
-  private async collectGarbage(): Promise<void> {
+  private withArtifactMaintenance<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.artifactMaintenance;
+    let unlock = () => {};
+    this.artifactMaintenance = new Promise<void>((resolve) => { unlock = resolve; });
+    return previous.then(work).finally(unlock);
+  }
+
+  private async ensureArchivedSceneInner(releaseId: string, scene: string, request: ArchivedSceneRequest): Promise<string> {
+    const path = `art/badges/scenes/${scene}.webp`;
+    this.assertRunning();
+    const cached = await this.options.store.getArchivedScene(releaseId, scene);
+    if (cached) {
+      const file = validateArchivedSceneDescriptor(cached, releaseId, scene);
+      if (await this.options.store.hasFile(file.sha256, file.byte_size)) {
+        this.assertRunning();
+        const url = await this.localFileUrl(file);
+        this.assertRunning();
+        this.publishArchivedSceneUrl(releaseId, scene, url);
+        return url;
+      }
+    }
+
+    this.assertRunning();
+    if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
+    if (!this.foreground) throw new ArchivedSceneRestoreDeferredError();
+    if (request.controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
+    request.networkStarted = true;
+    let file: ContentFile;
+    try {
+      file = await restoreArchivedScene(releaseId, scene, this.options.store, this.fetcher, request.controller.signal);
+    } catch (error) {
+      if (this.stopped) throw new Error("Content runtime is stopped");
+      if (!this.connectivity().connected || !this.foreground || request.controller.signal.aborted) {
+        if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
+        throw new ArchivedSceneRestoreDeferredError();
+      }
+      throw error;
+    }
+    this.assertRunning();
+    const returnedFile = validateArchivedSceneDescriptor({ releaseId, scene, file }, releaseId, scene);
+    const persisted = await this.options.store.getArchivedScene(releaseId, scene);
+    if (!persisted) throw new Error("Archived scene descriptor was not durably retained");
+    const storedFile = validateArchivedSceneDescriptor(persisted, releaseId, scene);
+    if (!sameContentFile(returnedFile, storedFile)) throw new ContentValidationError("Archived scene descriptor changed during restore");
+    if (!(await this.options.store.hasFile(storedFile.sha256, storedFile.byte_size))) {
+      throw new Error("Archived scene bytes were not durably stored");
+    }
+    this.assertRunning();
+    const url = await this.localFileUrl(storedFile);
+    this.assertRunning();
+    this.publishArchivedSceneUrl(releaseId, scene, url);
+    return url;
+  }
+
+  private publishArchivedSceneUrl(releaseId: string, scene: string, url: string): void {
+    const snapshot = this.status.snapshot;
+    if (!snapshot) return;
+    const key = archivedSceneKey(releaseId, scene);
+    if (snapshot.retainedSceneUrls.get(key) === url) return;
+    const retainedSceneUrls = new Map(snapshot.retainedSceneUrls);
+    retainedSceneUrls.set(key, url);
+    this.setStatus({ snapshot: { ...snapshot, retainedSceneUrls } });
+  }
+
+  private abortArchivedSceneRequests(networkOnly = false): void {
+    for (const request of this.archivedSceneRequests.values()) {
+      if (!networkOnly || request.networkStarted) request.controller.abort();
+    }
+  }
+
+  private collectGarbage(): Promise<void> {
+    if (this.stopped || !this.initialized) return Promise.resolve();
+    return this.withArtifactMaintenance(() => this.collectGarbageLocked());
+  }
+
+  private async collectGarbageLocked(): Promise<void> {
     if (this.stopped || !this.initialized) return;
     const activeId = await this.options.store.getActiveId();
     const releases = await this.options.store.listReleases();
@@ -873,6 +1004,7 @@ class ContentRuntimeController implements ContentRuntime {
       for (const file of remoteFiles(release.manifest)) referenced.add(file.sha256);
     }
     for (const entry of retained) if (entry.sceneFile) referenced.add(entry.sceneFile.sha256);
+    for (const entry of await this.options.store.listArchivedScenes()) referenced.add(entry.file.sha256);
     for (const [hash, count] of this.inFlightHashes) if (count > 0) referenced.add(hash);
     for (const file of await this.options.store.listFiles()) {
       if (referenced.has(file.hash)) continue;

@@ -1,16 +1,19 @@
-import type { ContentStore, RetainedPark, StoredRelease } from "./contracts";
+import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
+import type { ArchivedScene, ContentStore, RetainedPark, StoredRelease } from "./contracts";
 
 const DATABASE = "parkdex-content-v1";
-const VERSION = 1;
+const VERSION = 2;
 const RELEASES = "releases";
 const META = "meta";
 const FILES = "files";
 const RETAINED_PARKS = "retainedParks";
+const ARCHIVED_SCENES = "archivedScenes";
 const ACTIVE_KEY = "activeReleaseId";
 
 type MetaRecord = { key: string; value: string | null };
 type FileRecord = { hash: string; size: number; bytes: Blob };
 type RetainedRecord = { parkId: string; park: RetainedPark["park"]; sceneFile?: RetainedPark["sceneFile"] };
+type ArchivedRecord = ArchivedScene & { key: string };
 
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
@@ -273,19 +276,34 @@ export class WebContentStore implements ContentStore {
   async deleteFile(hash: string): Promise<void> {
     const key = assertHash(hash);
     const db = await this.database();
-    await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS], "readwrite", (tx, complete, fail) => {
+    await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES], "readwrite", (tx, complete, fail) => {
       const activeRequest = tx.objectStore(META).get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;
       const retainedRequest = tx.objectStore(RETAINED_PARKS).getAll() as IDBRequest<RetainedRecord[]>;
+      const archivedRequest = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedRecord[]>;
       let ready = 0;
       let activeId: string | null = null;
       let activeRelease: StoredRelease | undefined;
       let retainedParks: RetainedRecord[] = [];
+      let archivedScenes: ArchivedRecord[] = [];
       const finish = () => {
-        if (ready !== 2) return;
+        if (ready !== 3) return;
         const activeReferencesFile = activeRelease?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
         const retainedReferencesFile = retainedParks.some((park) => park.sceneFile?.sha256.toLowerCase() === key);
-        if (activeReferencesFile || retainedReferencesFile) {
-          fail(new Error(`Cannot delete content file referenced by active or retained content: ${key}`));
+        try {
+          for (const archived of archivedScenes) {
+            const { key: storedKey, ...descriptor } = archived;
+            assertArchivedSceneDescriptor(descriptor);
+            if (storedKey !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) {
+              throw new Error("Archived scene storage key does not match its descriptor");
+            }
+          }
+        } catch (error) {
+          fail(error);
+          return;
+        }
+        const archivedReferencesFile = archivedScenes.some((scene) => scene.file.sha256 === key);
+        if (activeReferencesFile || retainedReferencesFile || archivedReferencesFile) {
+          fail(new Error(`Cannot delete content file referenced by active or retained content, including archived scenes: ${key}`));
           return;
         }
         const request = tx.objectStore(FILES).delete(key);
@@ -314,6 +332,12 @@ export class WebContentStore implements ContentStore {
         finish();
       };
       retainedRequest.onerror = () => fail(retainedRequest.error);
+      archivedRequest.onsuccess = () => {
+        archivedScenes = archivedRequest.result;
+        ready += 1;
+        finish();
+      };
+      archivedRequest.onerror = () => fail(archivedRequest.error);
     });
     this.revokeHashUrls(key);
   }
@@ -354,6 +378,70 @@ export class WebContentStore implements ContentStore {
     });
   }
 
+  async getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined> {
+    const db = await this.database();
+    const key = archivedSceneStorageKey(releaseId, scene);
+    return waitForTransaction<ArchivedScene | undefined>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(ARCHIVED_SCENES).get(key) as IDBRequest<ArchivedRecord | undefined>;
+      request.onsuccess = () => {
+        const record = request.result;
+        if (!record) {
+          complete(undefined);
+          return;
+        }
+        const { key: storedKey, ...descriptor } = record;
+        try {
+          assertArchivedSceneDescriptor(descriptor);
+          if (storedKey !== key || descriptor.releaseId !== releaseId || descriptor.scene !== scene) {
+            throw new Error("Archived scene storage key does not match its descriptor");
+          }
+          complete(descriptor);
+        } catch (error) {
+          fail(error);
+        }
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async retainArchivedScene(scene: ArchivedScene): Promise<void> {
+    assertArchivedSceneDescriptor(scene);
+    const descriptor: ArchivedScene = { releaseId: scene.releaseId, scene: scene.scene, file: { ...scene.file } };
+    const db = await this.database();
+    const key = archivedSceneStorageKey(descriptor.releaseId, descriptor.scene);
+    await waitForTransaction<void>(db, ARCHIVED_SCENES, "readwrite", (tx, complete, fail) => {
+      const request = tx.objectStore(ARCHIVED_SCENES).put({ ...descriptor, key } satisfies ArchivedRecord);
+      request.onsuccess = () => complete(undefined);
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async listArchivedScenes(): Promise<ArchivedScene[]> {
+    const db = await this.database();
+    return waitForTransaction<ArchivedScene[]>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedRecord[]>;
+      request.onsuccess = () => {
+        try {
+          const descriptors = request.result.map((record) => {
+            const { key, ...descriptor } = record;
+            assertArchivedSceneDescriptor(descriptor);
+            if (key !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) {
+              throw new Error("Archived scene storage key does not match its descriptor");
+            }
+            return descriptor;
+          });
+          complete(descriptors.sort((left, right) =>
+            left.releaseId < right.releaseId ? -1 : left.releaseId > right.releaseId ? 1 :
+              left.scene < right.scene ? -1 : left.scene > right.scene ? 1 : 0,
+          ));
+        } catch (error) {
+          fail(error);
+        }
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
   async close(): Promise<void> {
     for (const url of this.objectUrls.values()) URL.revokeObjectURL(url);
     this.objectUrls.clear();
@@ -387,6 +475,7 @@ export class WebContentStore implements ContentStore {
           if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" });
           if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: "hash" });
           if (!db.objectStoreNames.contains(RETAINED_PARKS)) db.createObjectStore(RETAINED_PARKS, { keyPath: "parkId" });
+          if (!db.objectStoreNames.contains(ARCHIVED_SCENES)) db.createObjectStore(ARCHIVED_SCENES, { keyPath: "key" });
         };
         request.onsuccess = () => {
           const db = request.result;

@@ -10,6 +10,7 @@ export type ContentFile = {
   byte_size: number;
   content_type: string;
 };
+export type ArchivedScene = { releaseId: string; scene: string; file: ContentFile };
 export type MapManifest = { size: number; chunkBytes: number; count: number };
 export type ContentManifest = {
   version: string;
@@ -63,6 +64,9 @@ export interface ContentStore {
   deleteFile(hash: string): Promise<void>;
   getRetainedParks(): Promise<RetainedPark[]>;
   retainParks(parks: RetainedPark[]): Promise<void>;
+  getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined>;
+  retainArchivedScene(scene: ArchivedScene): Promise<void>;
+  listArchivedScenes(): Promise<ArchivedScene[]>;
   close(): Promise<void>;
 }
 
@@ -106,6 +110,7 @@ export interface ContentRuntime {
   ensureFile(releaseId: string, path: string, purpose: DownloadPurpose, signal?: AbortSignal): Promise<void>;
   readFile(releaseId: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer>;
   getFileUrl(releaseId: string, path: string): Promise<string>;
+  ensureArchivedScene(releaseId: string, scene: string): Promise<string>;
   stop(): Promise<void>;
 }
 

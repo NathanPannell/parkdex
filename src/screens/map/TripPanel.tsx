@@ -8,6 +8,7 @@ import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import { FIELD } from "../../lib/native";
 import { directionsUrl } from "./ParkSheet";
+import { recordDirectionsOpened } from "../../lib/interactions";
 
 type TripProps = {
   park: Park;
@@ -17,9 +18,11 @@ type TripProps = {
   onSimulate: () => void;
   onEnd: () => void;
   onOpen: () => void;
+  entryPoint: "map" | "nearby" | "collection";
+  contentReleaseId: string;
 };
 
-export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen }: TripProps) {
+export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
   const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
   return (
@@ -62,7 +65,7 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
         </div>
       </div>
       <div className="trip__actions">
-        <a className="btn btn--paper btn--sm" href={directionsUrl(park)} target="_blank" rel="noreferrer">
+        <a className="btn btn--paper btn--sm" href={directionsUrl(park)} target="_blank" rel="noreferrer" onClick={() => void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId }).catch(() => {})}>
           <Icon name="car" size={18} /> Open in Maps
         </a>
         {!FIELD && (
