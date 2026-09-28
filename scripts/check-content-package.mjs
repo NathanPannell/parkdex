@@ -26,6 +26,10 @@ try {
 
   const files = await collectFiles(outputDirectory);
   const failures = [];
+  const packagedPaths = new Set(files.map((file) => toPosix(relative(outputDirectory, file))));
+  for (const required of ["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs"]) {
+    if (!packagedPaths.has(required)) failures.push({ path: required, reason: "required MapLibre runtime module is missing" });
+  }
   for (const file of files) {
     const relativePath = toPosix(relative(outputDirectory, file));
     const reason = forbiddenAssetReason(relativePath);

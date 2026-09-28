@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 
 const PUBLIC_ROOT = resolve("public");
 const PUBLIC_DIRS = ["art/kip", "art/products"];
-const PUBLIC_FILES = new Set(["maplibre/maplibre-gl-worker.mjs", "release.json", "email/kip-wave.png"]);
+const PUBLIC_FILES = new Set(["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png"]);
 
 function allowedPublicPath(path: string) {
   return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`));
