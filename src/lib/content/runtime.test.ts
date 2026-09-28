@@ -182,6 +182,7 @@ class MemoryContentStore implements ContentStore {
 function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
   let current = initial.channel;
   const corruptUrls = new Set<string>();
+  const redirectUrls = new Map<string, string>();
   const fetcher: typeof fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url === DISCOVERY_URL) return new Response(JSON.stringify(current), { status: 200 });
@@ -189,8 +190,12 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
     if (!release) return new Response("missing", { status: 404 });
     const bytes = release.content.get(url);
     if (!bytes) return new Response("missing", { status: 404 });
-    if (corruptUrls.has(url)) return new Response(new Uint8Array([255, 1, 2]).buffer, { status: 200 });
-    return new Response(bytes.slice(0), { status: 200 });
+    const response = corruptUrls.has(url)
+      ? new Response(new Uint8Array([255, 1, 2]).buffer, { status: 200 })
+      : new Response(bytes.slice(0), { status: 200 });
+    const destination = redirectUrls.get(url);
+    if (destination) Object.defineProperty(response, "url", { value: destination });
+    return response;
   });
   const serverReleases = [initial];
   return {
@@ -198,6 +203,7 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
     add(release: Awaited<ReturnType<typeof makeRelease>>) { serverReleases.push(release); },
     setCurrent(channel: ContentChannel) { current = channel; },
     corrupt(url: string) { corruptUrls.add(url); },
+    redirect(url: string, destination: string) { redirectUrls.set(url, destination); },
   };
 }
 
@@ -316,6 +322,21 @@ describe("content runtime", () => {
     expect(server.fetcher).not.toHaveBeenCalled();
   });
 
+  it("rejects a CDN manifest response redirected away from its immutable HTTPS URL", async () => {
+    const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
+    const server = contentServer(a);
+    server.redirect(a.channel.manifestUrl, "https://evil.example/manifest.json");
+    const store = new MemoryContentStore();
+    const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: true }));
+
+    await runtime.start();
+
+    expect(runtime.getStatus().phase).toBe("error");
+    expect(runtime.getStatus().snapshot).toBeNull();
+    expect(runtime.getStatus().error).toMatch(/redirected away/);
+    expect(await store.getActiveId()).toBeNull();
+  });
+
   it("rejects a checksum failure and keeps the previously active release visible", async () => {
     const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
     const b = await makeRelease("b".repeat(64), 2, "provincial-b-park", "scene-b");
@@ -425,6 +446,7 @@ describe("content runtime", () => {
     const store = new MemoryContentStore();
     const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: false }));
     await runtime.start();
+    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
 
     runtime.setForeground(false);
     runtime.setConnectivity({ connected: true, wifi: true });
