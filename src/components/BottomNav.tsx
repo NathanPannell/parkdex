@@ -52,7 +52,7 @@ export function BottomNav() {
           <button key={t} className={`nav__tab ${tab === t ? "is-on" : ""}`} onClick={() => go(t)}>
             {tab === t && <motion.span layoutId="nav-pill" className="nav__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
             <Icon name={t === "map" ? "map" : "case"} size={22} />
-            <span>{t === "map" ? "Explore" : "My case"}</span>
+            <span>{t === "map" ? "Explore" : "My Dex"}</span>
           </button>
         ))}
       </div>

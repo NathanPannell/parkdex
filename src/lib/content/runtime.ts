@@ -1,5 +1,7 @@
 import {
+  canDownloadContent,
   CONTENT_BOUNDS,
+  isWaitingForContentWifi,
   VICTORIA,
   type Connectivity,
   type ContentChannel,
@@ -232,9 +234,15 @@ class ContentRuntimeController implements ContentRuntime {
       await this.start();
       return;
     }
-    if (!this.connectivity().wifi) {
-      if (this.status.snapshot) this.setStatus({ phase: phaseForActive(this.connectivity().connected), error: null, syncStage: "waiting-for-wifi", waitingForWifi: true });
-      else this.setStatus({ phase: "error", error: "Connect to Wi-Fi to download park content.", syncStage: "waiting-for-wifi", waitingForWifi: true });
+    if (!this.canDownloadContent()) {
+      const waitingForWifi = this.isWaitingForWifi();
+      const connected = this.connectivity().connected;
+      this.setStatus({
+        phase: this.status.snapshot ? phaseForActive(connected) : connected ? "error" : "offline",
+        error: waitingForWifi && !this.status.snapshot ? "Connect to Wi-Fi to download park content." : null,
+        syncStage: waitingForWifi ? "waiting-for-wifi" : "idle",
+        waitingForWifi,
+      });
       return;
     }
     if (this.now() - this.lastManualRetryAt < MANUAL_RETRY_COOLDOWN_MS) return;
@@ -286,33 +294,43 @@ class ContentRuntimeController implements ContentRuntime {
 
   setConnectivity(connectivity: Connectivity): void {
     if (this.stopped) return;
-    const wasWifi = this.options.connectivity?.wifi ?? false;
-    this.options.connectivity = { connected: connectivity.connected, wifi: connectivity.wifi };
-    if (!wasWifi && connectivity.wifi) {
+    const wasDownloadAllowed = this.options.connectivity ? canDownloadContent(this.options.connectivity) : false;
+    this.options.connectivity = { ...connectivity };
+    const downloadAllowed = canDownloadContent(connectivity);
+    if (!wasDownloadAllowed && downloadAllowed) {
       this.lastDiscoveryAt = Number.NEGATIVE_INFINITY;
       if (this.syncPromise) this.syncRetryRequested = true;
       if (this.mapSyncPromise) this.mapRetryRequested = true;
     }
-    if (!connectivity.wifi) {
-      this.syncAbort?.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
-      this.mapAbort?.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
-      for (const controller of this.archivedSceneAborts.values()) controller.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
+    if (!downloadAllowed) {
+      const reason = new DOMException("Content download connectivity was lost", "AbortError");
+      this.syncAbort?.abort(reason);
+      this.mapAbort?.abort(reason);
+      for (const controller of this.archivedSceneAborts.values()) controller.abort(reason);
     }
     this.scheduler.setPolicy(this.currentPolicy());
-    if (!connectivity.wifi) this.waitingForUpdateWifi = this.waitingForUpdateWifi || this.hasPendingUpdateChunks();
+    const waitingForWifi = isWaitingForContentWifi(connectivity);
+    if (waitingForWifi) this.waitingForUpdateWifi = this.waitingForUpdateWifi || this.hasPendingUpdateChunks();
     else this.waitingForUpdateWifi = false;
-    if (!connectivity.wifi) this.waitingForBulkWifi = this.waitingForBulkWifi || this.hasPendingBulkMap();
+    if (waitingForWifi) this.waitingForBulkWifi = this.waitingForBulkWifi || this.hasPendingBulkMap();
     else this.waitingForBulkWifi = false;
-    if (this.status.snapshot && !connectivity.connected && this.status.phase !== "updating") {
-      this.setStatus({ phase: "offline", error: null, waitingForWifi: false });
-    } else if (this.status.snapshot && connectivity.connected && this.status.phase === "offline") {
-      this.setStatus({ phase: "ready", error: null });
+    if (!connectivity.connected) {
+      this.setStatus({ phase: "offline", error: null, syncStage: "idle", waitingForWifi: false });
+    } else if (!downloadAllowed) {
+      this.setStatus({
+        phase: this.status.snapshot ? "ready" : "error",
+        error: null,
+        syncStage: waitingForWifi ? "waiting-for-wifi" : "idle",
+        waitingForWifi,
+      });
+    } else if (this.status.phase === "offline") {
+      this.setStatus({ phase: this.status.snapshot ? "ready" : "starting", error: null, syncStage: "idle", waitingForWifi: false });
     }
     this.updateWaitingStatus();
-    if (this.initialized && connectivity.wifi && this.foreground) {
+    if (this.initialized && downloadAllowed && this.foreground) {
       void this.checkCurrentRelease(false);
-      if (connectivity.wifi && !wasWifi && this.status.snapshot) {
-      if (this.hasSyncApi()) this.startMapSync();
+      if (!wasDownloadAllowed && this.status.snapshot) {
+        if (this.hasSyncApi()) this.startMapSync();
         else this.startBulkMap(this.status.snapshot.releaseId);
       }
       if (this.currentLocation && this.status.snapshot) this.scheduleNearbyPrefetch(false);
@@ -355,7 +373,7 @@ class ContentRuntimeController implements ContentRuntime {
       }
     }
     if (!this.foreground) throw new ArchivedSceneRestoreDeferredError();
-    if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+    if (!this.canDownloadContent()) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
 
     const controller = new AbortController();
     this.archivedSceneAborts.set(requestKey, controller);
@@ -387,14 +405,14 @@ class ContentRuntimeController implements ContentRuntime {
       if (!(await this.hasVerifiedLocalFile(file))) await this.scheduleFileDownload(file, "update", controller.signal);
       this.assertRunning();
       if (!this.foreground || controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
-      if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+      if (!this.canDownloadContent()) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
       const fileUrl = await this.localFileUrl(file);
       this.publishArchivedSceneUrl(releaseId, scene, fileUrl);
       return fileUrl;
     } catch (error) {
       if (this.stopped) throw new Error("Content runtime is stopped");
       if (!this.foreground || controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
-      if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+      if (!this.canDownloadContent()) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
       throw error;
     }
   }
@@ -619,14 +637,15 @@ class ContentRuntimeController implements ContentRuntime {
       }
     }
 
-    if (this.connectivity().wifi && this.foreground) {
+    if (this.canDownloadContent() && this.foreground) {
       await this.syncContent(true, false);
     } else {
+      const waitingForWifi = this.isWaitingForWifi();
       this.setStatus({
-        phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "error",
-        error: this.status.snapshot ? null : "Connect to Wi-Fi to download park content.",
-        syncStage: "waiting-for-wifi",
-        waitingForWifi: true,
+        phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : this.connectivity().connected ? "error" : "offline",
+        error: waitingForWifi && !this.status.snapshot ? "Connect to Wi-Fi to download park content." : null,
+        syncStage: waitingForWifi ? "waiting-for-wifi" : "idle",
+        waitingForWifi,
       });
     }
 
@@ -661,11 +680,7 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private async requestContent(url: string, signal: AbortSignal): Promise<Response> {
-    if (!this.connectivity().wifi || !this.connectivity().connected) {
-      const error = new Error("Connect to Wi-Fi to download Parkdex content.");
-      error.name = "WifiUnavailableError";
-      throw error;
-    }
+    if (!this.canDownloadContent()) throw this.contentUnavailableError();
     if (!this.foreground) throw new DOMException("Content sync paused in the background", "AbortError");
     if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
     const response = await this.fetcher(url, {
@@ -684,11 +699,13 @@ class ContentRuntimeController implements ContentRuntime {
       return;
     }
     if (this.syncPromise) return this.syncPromise;
-    if (!this.foreground || !this.connectivity().wifi || !this.connectivity().connected) {
+    if (!this.foreground) return;
+    if (!this.canDownloadContent()) {
+      const waitingForWifi = this.isWaitingForWifi();
       this.setStatus({
-        syncStage: "waiting-for-wifi",
-        waitingForWifi: true,
-        error: this.status.snapshot ? null : "Connect to Wi-Fi to download park content.",
+        syncStage: waitingForWifi ? "waiting-for-wifi" : "idle",
+        waitingForWifi,
+        error: waitingForWifi && !this.status.snapshot ? "Connect to Wi-Fi to download park content." : null,
       });
       return;
     }
@@ -703,20 +720,21 @@ class ContentRuntimeController implements ContentRuntime {
       await work;
     } catch (error) {
       if (!this.stopped && (error as Error)?.name !== "AbortError") {
-        const waiting = (error as Error)?.name === "WifiUnavailableError" || !this.connectivity().wifi;
+        const waiting = (error as Error)?.name === "WifiUnavailableError" || this.isWaitingForWifi();
         this.setStatus({
           phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "error",
           syncStage: waiting ? "waiting-for-wifi" : "error",
           waitingForWifi: waiting,
           error: waiting ? (this.status.snapshot ? null : "Connect to Wi-Fi to download park content.") : errorText(error),
         });
-      } else if (!this.stopped && !this.connectivity().wifi) {
-        this.setStatus({ syncStage: "waiting-for-wifi", waitingForWifi: true });
+      } else if (!this.stopped && !this.canDownloadContent()) {
+        const waitingForWifi = this.isWaitingForWifi();
+        this.setStatus({ syncStage: waitingForWifi ? "waiting-for-wifi" : "idle", waitingForWifi });
       }
     } finally {
       if (this.syncAbort === controller) this.syncAbort = null;
       if (this.syncPromise === work) this.syncPromise = null;
-      if (this.syncRetryRequested && !this.stopped && this.foreground && this.connectivity().wifi) {
+      if (this.syncRetryRequested && !this.stopped && this.foreground && this.canDownloadContent()) {
         this.syncRetryRequested = false;
         void Promise.resolve().then(() => this.syncContent(true, false));
       }
@@ -756,7 +774,7 @@ class ContentRuntimeController implements ContentRuntime {
       state = next;
     }
 
-    while (!signal.aborted && this.foreground && this.connectivity().wifi) {
+    while (!signal.aborted && this.foreground && this.canDownloadContent()) {
       const url = new URL(this.contentApiUrl("changes"));
       url.searchParams.set("after", String(state.revision));
       url.searchParams.set("limit", String(SYNC_BATCH_LIMIT));
@@ -866,11 +884,7 @@ class ContentRuntimeController implements ContentRuntime {
   private async scheduleFileDownload(file: ContentFile, purpose: "core" | "nearby" | "bulk" | "update", signal?: AbortSignal): Promise<void> {
     const key = fileKey(file.sha256, file.byte_size);
     if (await this.hasVerifiedLocalFile(file)) return;
-    if (!this.connectivity().wifi || !this.connectivity().connected) {
-      const error = new Error("Connect to Wi-Fi to download Parkdex content.");
-      error.name = "WifiUnavailableError";
-      throw error;
-    }
+    if (!this.canDownloadContent()) throw this.contentUnavailableError();
     this.incrementInFlight(file.sha256);
     try {
       await this.scheduler.enqueue({
@@ -1025,7 +1039,7 @@ class ContentRuntimeController implements ContentRuntime {
       if (this.mapSyncPromise === work) this.mapSyncPromise = null;
       if (this.mapAbort === controller) this.mapAbort = null;
       this.updateWaitingStatus();
-      if (this.mapRetryRequested && !this.stopped && this.foreground && this.connectivity().wifi && this.syncState?.map?.version === pointer.version) {
+      if (this.mapRetryRequested && !this.stopped && this.foreground && this.canDownloadContent() && this.syncState?.map?.version === pointer.version) {
         this.mapRetryRequested = false;
         this.startMapSync();
       }
@@ -1033,7 +1047,7 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private async runMapSync(pointer: ContentMapPointer, signal: AbortSignal): Promise<void> {
-    if (!this.connectivity().wifi || !this.connectivity().connected) return;
+    if (!this.canDownloadContent()) return;
     let inventory = await this.getVerifiedMapInventory(pointer.version);
     if (!inventory) {
       const response = await this.requestContent(pointer.manifestUrl, signal);
@@ -1073,6 +1087,25 @@ class ContentRuntimeController implements ContentRuntime {
     return this.options.connectivity ?? { connected: true, wifi: false };
   }
 
+  private canDownloadContent(): boolean {
+    return canDownloadContent(this.connectivity());
+  }
+
+  private isWaitingForWifi(): boolean {
+    return isWaitingForContentWifi(this.connectivity());
+  }
+
+  private contentUnavailableError(): Error {
+    if (this.isWaitingForWifi()) {
+      const error = new Error("Connect to Wi-Fi to download Parkdex content.");
+      error.name = "WifiUnavailableError";
+      return error;
+    }
+    const error = new Error("Content downloads are unavailable while offline.");
+    error.name = "ContentOfflineError";
+    return error;
+  }
+
   private now(): number {
     return this.options.now?.() ?? Date.now();
   }
@@ -1082,8 +1115,8 @@ class ContentRuntimeController implements ContentRuntime {
       await this.syncContent(force, false);
       return;
     }
-    if (this.stopped || !this.initialized || !this.foreground || !this.connectivity().wifi) {
-      if (!this.connectivity().wifi && this.initialized) this.setStatus({ syncStage: "waiting-for-wifi", waitingForWifi: true });
+    if (this.stopped || !this.initialized || !this.foreground || !this.canDownloadContent()) {
+      if (this.initialized && this.isWaitingForWifi()) this.setStatus({ syncStage: "waiting-for-wifi", waitingForWifi: true });
       return;
     }
     if (this.discoveryPromise) return this.discoveryPromise;
@@ -1180,7 +1213,7 @@ class ContentRuntimeController implements ContentRuntime {
     } else {
       const files = remoteFiles(manifest);
       const missingChunks = await this.missingFiles(mapChunkFiles(manifest));
-      this.waitingForUpdateWifi = missingChunks.length > 0 && !this.connectivity().wifi;
+      this.waitingForUpdateWifi = missingChunks.length > 0 && this.isWaitingForWifi();
       this.updateWaitingStatus();
       await this.ensureFiles(files, candidate.id, "update");
       const snapshot = await this.prepareSnapshot(candidate, payload);
@@ -1461,7 +1494,7 @@ class ContentRuntimeController implements ContentRuntime {
     const chunks = mapChunkFiles(manifest);
     this.trackFiles(chunks);
     const missing = await this.missingFiles(chunks);
-    this.waitingForBulkWifi = missing.length > 0 && !this.connectivity().wifi;
+    this.waitingForBulkWifi = missing.length > 0 && this.isWaitingForWifi();
     this.updateWaitingStatus();
     if (missing.length === 0) {
       setAllowedMapChunks(releaseId, chunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
@@ -1543,15 +1576,15 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private hasPendingUpdateChunks(): boolean {
-    return this.status.phase === "updating" && !this.connectivity().wifi;
+    return this.status.phase === "updating" && this.isWaitingForWifi();
   }
 
   private hasPendingBulkMap(): boolean {
-    return this.bulkPromises.size > 0 && !this.connectivity().wifi;
+    return this.bulkPromises.size > 0 && this.isWaitingForWifi();
   }
 
   private async resumeStoredCandidate(): Promise<void> {
-    if (this.stopped || !this.initialized || !this.connectivity().connected || !this.foreground) return;
+    if (this.stopped || !this.initialized || !this.canDownloadContent() || !this.foreground) return;
     const activeId = await this.options.store.getActiveId();
     const releases = await this.options.store.listReleases();
     const active = activeId ? await this.options.store.getRelease(activeId) : undefined;

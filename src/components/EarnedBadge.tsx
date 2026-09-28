@@ -3,34 +3,38 @@ import { Badge, type BadgeState } from "./Badge";
 import { scenePath, type Park } from "../lib/parks";
 import type { Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
+import { canDownloadContent, isWaitingForContentWifi, type Connectivity } from "../lib/content/contracts";
 import { subscribeContentConnectivity } from "../lib/content/transport";
 
-let wifiAvailableSnapshot = false;
-let stopWifiSubscription: (() => void) | null = null;
-const wifiSubscribers = new Set<() => void>();
+let contentNetworkSnapshot: Connectivity = { connected: false, wifi: false, contentDownloadAllowed: false };
+let stopContentNetworkSubscription: (() => void) | null = null;
+const contentNetworkSubscribers = new Set<() => void>();
 
-function subscribeToWifiAvailability(listener: () => void) {
-  wifiSubscribers.add(listener);
-  if (!stopWifiSubscription) {
-    stopWifiSubscription = subscribeContentConnectivity((connectivity) => {
-      const next = connectivity.connected && connectivity.wifi;
-      if (next === wifiAvailableSnapshot) return;
-      wifiAvailableSnapshot = next;
-      for (const subscriber of wifiSubscribers) subscriber();
+function subscribeToContentNetwork(listener: () => void) {
+  contentNetworkSubscribers.add(listener);
+  if (!stopContentNetworkSubscription) {
+    stopContentNetworkSubscription = subscribeContentConnectivity((connectivity) => {
+      if (
+        connectivity.connected === contentNetworkSnapshot.connected &&
+        connectivity.wifi === contentNetworkSnapshot.wifi &&
+        connectivity.contentDownloadAllowed === contentNetworkSnapshot.contentDownloadAllowed
+      ) return;
+      contentNetworkSnapshot = { ...connectivity };
+      for (const subscriber of contentNetworkSubscribers) subscriber();
     });
   }
   return () => {
-    wifiSubscribers.delete(listener);
-    if (!wifiSubscribers.size) {
-      stopWifiSubscription?.();
-      stopWifiSubscription = null;
-      wifiAvailableSnapshot = false;
+    contentNetworkSubscribers.delete(listener);
+    if (!contentNetworkSubscribers.size) {
+      stopContentNetworkSubscription?.();
+      stopContentNetworkSubscription = null;
+      contentNetworkSnapshot = { connected: false, wifi: false, contentDownloadAllowed: false };
     }
   };
 }
 
-function getWifiAvailability() {
-  return wifiAvailableSnapshot;
+function getContentNetworkSnapshot() {
+  return contentNetworkSnapshot;
 }
 
 type Props = {
@@ -48,7 +52,9 @@ function useEarnedScene(park: Park, claim: Claim) {
   const content = useContent();
   const runtime = useContentRuntime();
   const status = useContentStatus();
-  const wifiAvailable = useSyncExternalStore(subscribeToWifiAvailability, getWifiAvailability, getWifiAvailability);
+  const connectivity = useSyncExternalStore(subscribeToContentNetwork, getContentNetworkSnapshot, getContentNetworkSnapshot);
+  const contentDownloadAvailable = canDownloadContent(connectivity);
+  const waitingForWifi = isWaitingForContentWifi(connectivity);
   const activePark = content?.liveParks.find((candidate) => candidate.id === earnedPark.id);
   const activeSceneVersion = runtime.getSceneAssetVersion(earnedPark.id, earnedPark.scene);
   const matchesActiveArt = !!earnedPark.scene && !!claim.contentReleaseId &&
@@ -78,9 +84,9 @@ function useEarnedScene(park: Park, claim: Claim) {
       .then((url) => { if (live) setArchivedScene({ key: sceneKey, url }); })
       .catch(() => {});
     return () => { live = false; };
-  }, [activeSceneHref, archivedScene, claim.contentReleaseId, earnedPark.id, earnedPark.scene, runtime, sceneKey, status.phase, wifiAvailable]);
+  }, [activeSceneHref, archivedScene, claim.contentReleaseId, earnedPark.id, earnedPark.scene, runtime, sceneKey, status.phase, contentDownloadAvailable]);
 
-  return { sceneHref, wifiAvailable, matchesActiveArt };
+  return { sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt };
 }
 
 export function useEarnedSceneAsset(park: Park, claim: Claim) {
@@ -93,15 +99,17 @@ export function useEarnedSceneHref(park: Park, claim: Claim) {
 
 export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
   const earnedPark = claim.parkSnapshot ?? park;
-  const { sceneHref, wifiAvailable, matchesActiveArt } = useEarnedSceneAsset(earnedPark, claim);
+  const { sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt } = useEarnedSceneAsset(earnedPark, claim);
   const needsExactScene = earnedPark.scene !== null && (!matchesActiveArt || !sceneHref);
   if (needsExactScene && !sceneHref) {
     const size = badgeProps.size ?? 120;
     const message = !claim.contentReleaseId
       ? "Art unavailable"
-      : !wifiAvailable
+      : waitingForWifi
         ? "Connect to Wi-Fi to restore art"
-        : "Restoring badge art";
+        : !contentDownloadAvailable
+          ? "Go online to restore art"
+          : "Restoring badge art";
     return <div className="earned-badge__restoring" style={{ width: size, height: size }} role="img" aria-label={`${earnedPark.short} badge. ${message}.`}><span>{message}</span></div>;
   }
   return <Badge park={earnedPark} sceneHref={sceneHref} {...badgeProps} />;

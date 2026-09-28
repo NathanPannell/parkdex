@@ -142,7 +142,21 @@ export type ContentStatus = {
   error: string | null;
 };
 export type DownloadPurpose = "core" | "nearby" | "bulk" | "update";
-export type Connectivity = { connected: boolean; wifi: boolean };
+export type Connectivity = {
+  connected: boolean;
+  /** True only when the platform confirms a physical Wi-Fi connection. */
+  wifi: boolean;
+  /** Platform policy for content downloads: online on web, confirmed Wi-Fi on Android. */
+  contentDownloadAllowed?: boolean;
+};
+
+export function canDownloadContent(connectivity: Connectivity): boolean {
+  return connectivity.connected && (connectivity.contentDownloadAllowed ?? connectivity.wifi);
+}
+
+export function isWaitingForContentWifi(connectivity: Connectivity): boolean {
+  return connectivity.connected && !canDownloadContent(connectivity);
+}
 export type MapPoint = [number, number];
 
 export interface ContentRuntime {

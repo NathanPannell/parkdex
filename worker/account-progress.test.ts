@@ -265,6 +265,38 @@ test("claim uploads are account scoped, idempotent, and conflict on changed retr
   assert.equal((await pageB?.json() as { claims: unknown[] }).claims.length, 1);
 });
 
+test("all catalogue park categories upload and restore with their frozen category", async () => {
+  const store = new MemoryProgressStore();
+  const deps = { createStore: () => store };
+  for (const [claimId, category, parkId, name] of [
+    [CLAIM_A, "municipal", "municipal-city-of-victoria-1442", "Beacon Hill Park"],
+    [CLAIM_B, "community", "community-cove", "Community Cove"],
+    ["be172e85-a8ab-4e1d-a032-901100000003", "regional", "regional-qa-park", "QA Regional Park"],
+    ["be172e85-a8ab-4e1d-a032-901100000004", "provincial", "provincial-qa-park", "QA Provincial Park"],
+    ["be172e85-a8ab-4e1d-a032-901100000005", "national", "national-qa-park", "QA National Park"],
+  ] as const) {
+    const payload = claimPayload(claimId, name);
+    payload.parkId = parkId;
+    payload.parkSnapshot = { ...payload.parkSnapshot, id: parkId, category };
+    const created = await handleProgressRequest(claimRequest(claimId, payload), env, authA, deps);
+    assert.equal(created?.status, 201);
+    assert.deepEqual((await created?.json() as { claim: { parkSnapshot: unknown } }).claim.parkSnapshot, payload.parkSnapshot);
+    const retry = await handleProgressRequest(claimRequest(claimId, payload), env, authA, deps);
+    assert.equal(retry?.status, 200);
+  }
+  const page = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
+  const restored = (await page?.json() as { claims: ClaimRecord[] }).claims;
+  assert.equal(restored.length, 5);
+  assert.deepEqual(restored.map((claim) => claim.parkSnapshot.category).sort(), ["community", "municipal", "national", "provincial", "regional"]);
+
+  const invalid = claimPayload("be172e85-a8ab-4e1d-a032-901100000006");
+  const rejected = await handleProgressRequest(claimRequest("be172e85-a8ab-4e1d-a032-901100000006", {
+    ...invalid, parkSnapshot: { ...invalid.parkSnapshot, category: "unknown" },
+  }), env, authA, deps);
+  assert.equal(rejected?.status, 400);
+  assert.equal(store.claims.size, 5);
+});
+
 test("claim cursor is account scoped and the final nonempty page carries a high-water cursor", async () => {
   const store = new MemoryProgressStore();
   addClaim(store, ACCOUNT_A, CLAIM_A);

@@ -16,7 +16,7 @@ import { claimEventContext } from "../lib/accounts/progressSync";
 import { recordParkClaimed } from "../lib/interactions";
 
 const HOLD_MS = 1500;
-const CHEERS = ["KLEEP! Beauty!", "Into the case!", "Look at that shine!", "Another one!"];
+const CHEERS = ["KLEEP! Beauty!", "Into the Dex!", "Look at that shine!", "Another one!"];
 
 type ClaimEntry = { park: Park; contentReleaseId: string | null; sceneHref: string | null };
 
@@ -47,7 +47,7 @@ export function Claim() {
     if (sceneHref) entryRef.current = { ...entry, sceneHref };
   }
 
-  if (!state.progressReady) return <div className="screen claim-progress-wait"><div className="card"><Kip pose="think" size={72} /><strong>Opening your saved case…</strong><span>Your photo is still here. Kip will save this badge as soon as the case is ready.</span></div></div>;
+  if (!state.progressReady) return <div className="screen claim-progress-wait"><div className="card"><Kip pose="think" size={72} /><strong>Opening your saved Dex…</strong><span>Your photo is still here. Kip will save this badge as soon as your Dex is ready.</span></div></div>;
   if (!entryRef.current) return <ContentGate />;
   return <ClaimReady identity={entryRef.current} />;
 }
@@ -316,7 +316,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
               </motion.button>
               <motion.div variants={pop} className="claim__row">
                 <button className="btn btn--sm btn--ink" onClick={() => dispatch({ type: "go", screen: "collection" })}>
-                  <Icon name="case" size={18} /> See my case
+                  <Icon name="case" size={18} /> See my Dex
                 </button>
                 <button
                   className="btn btn--sm btn--paper"

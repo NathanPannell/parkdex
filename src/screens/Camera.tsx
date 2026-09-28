@@ -5,31 +5,14 @@ import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { ContentGate } from "../components/ContentGate";
 import { buzz, sfx } from "../lib/feedback";
-import { PALETTES, type Park } from "../lib/parks";
+import type { Park } from "../lib/parks";
 import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
 import { useContent } from "../lib/content/provider";
+import { sceneSvg } from "../lib/accounts/photoBackupRendition";
 
 // When no camera is available (desktop without webcam, denied permission),
 // the mockup "photographs" an illustrated scene so the flow still completes.
-function sceneSvg(park: Park) {
-  const p = PALETTES[park.biome];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice">
-<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.skyTop}"/><stop offset="1" stop-color="${p.skyBottom}"/></linearGradient></defs>
-<rect width="600" height="800" fill="url(#s)"/>
-<circle cx="${180 + (park.seed % 240)}" cy="220" r="70" fill="${p.sun}"/>
-<path d="M0 420 Q120 330 240 400 T480 370 T600 390 L600 800 L0 800Z" fill="${p.far}"/>
-<path d="M0 500 Q150 430 300 490 T600 470 L600 800 L0 800Z" fill="${p.mid}"/>
-<path d="M0 560 L600 540 L600 800 L0 800Z" fill="${p.water}" opacity=".85"/>
-<path d="M0 640 Q160 590 320 650 T600 630 L600 800 L0 800Z" fill="${p.near}"/>
-${Array.from({ length: 7 }, (_, i) => {
-    const x = 30 + i * 90 + ((park.seed * (i + 3)) % 40);
-    const h = 120 + ((park.seed * (i + 7)) % 90);
-    return `<path d="M${x} ${700 - h} l${h * 0.28} ${h * 0.55} h-${h * 0.12} l${h * 0.2} ${h * 0.45} h-${h * 0.72} l${h * 0.2} -${h * 0.45} h-${h * 0.12}Z" fill="#14231C" opacity=".9"/>`;
-  }).join("")}
-</svg>`;
-}
-
 function rasterizeSyntheticScene(svg: string): Promise<string> {
   const objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
   return new Promise((resolve, reject) => {

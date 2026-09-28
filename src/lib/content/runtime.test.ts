@@ -739,6 +739,69 @@ describe("legacy archived art compatibility", () => {
 });
 
 describe("incremental content sync", () => {
+  it("syncs content over an online browser connection without a physical Wi-Fi signal", async () => {
+    const release = await makeRelease("a".repeat(64), 1, "municipal-browser-park", "scene-browser");
+    const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
+    const server = contentSyncServer(snapshot);
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, {
+      connected: true,
+      wifi: false,
+      contentDownloadAllowed: true,
+    }));
+
+    await runtime.start();
+
+    expect(runtime.getStatus().snapshot?.parks.map((park) => park.id)).toEqual(["municipal-browser-park"]);
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
+    expect(server.calls.filter((url) => new URL(url).pathname.endsWith("/snapshot"))).toHaveLength(1);
+  });
+
+  it("shows offline during a first sync interruption and resumes when an online browser returns", async () => {
+    const release = await makeRelease("9".repeat(64), 1, "municipal-resume-park", "scene-resume");
+    const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
+    const server = contentSyncServer(snapshot);
+    let blockFirstSnapshot = true;
+    let resolveFirstSnapshot!: () => void;
+    const firstSnapshotStarted = new Promise<void>((resolve) => { resolveFirstSnapshot = resolve; });
+    let snapshotRequests = 0;
+    const fetcher: typeof fetch = (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/snapshot")) {
+        snapshotRequests += 1;
+        if (blockFirstSnapshot) {
+          blockFirstSnapshot = false;
+          resolveFirstSnapshot();
+          return new Promise<Response>((_resolve, reject) => {
+            if (init?.signal?.aborted) {
+              reject(init.signal.reason);
+              return;
+            }
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+          });
+        }
+      }
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
+      connected: true,
+      wifi: false,
+      contentDownloadAllowed: true,
+    }));
+    const firstStart = runtime.start();
+
+    await firstSnapshotStarted;
+    expect(runtime.getStatus().phase).toBe("downloading");
+    runtime.setConnectivity({ connected: false, wifi: false, contentDownloadAllowed: false });
+    expect(runtime.getStatus().phase).toBe("offline");
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
+    await firstStart;
+
+    runtime.setConnectivity({ connected: true, wifi: false, contentDownloadAllowed: true });
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-resume-park"));
+    expect(snapshotRequests).toBe(2);
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
+  });
+
   it("keeps skeleton parks in the catalogue, skips map traffic for a null pointer, and reuses an unchanged cursor", async () => {
     const release = await makeRelease("a".repeat(64), 1, "municipal-skeleton-park", "scene-a");
     const skeleton = { ...release.park, scene: null };
@@ -773,7 +836,7 @@ describe("incremental content sync", () => {
     expect(runtime.getStatus().snapshot).toBeNull();
     expect(server.calls).toEqual([]);
 
-    runtime.setConnectivity({ connected: true, wifi: true });
+    runtime.setConnectivity({ connected: true, wifi: false, contentDownloadAllowed: true });
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-current-park"));
     expect(server.calls.some((url) => new URL(url).pathname.endsWith("/snapshot"))).toBe(true);
     expect(server.calls.some((url) => new URL(url).pathname.endsWith("/changes") && new URL(url).searchParams.get("after") === "11")).toBe(false);

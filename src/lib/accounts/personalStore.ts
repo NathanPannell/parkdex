@@ -1,4 +1,5 @@
 import type { Park } from "../parks";
+import { MAX_BACKUP_PHOTO_BYTES, type ConvertedPhotoRendition, type SupportedPhotoType as SupportedPhotoTypeInternal } from "./photoBackupRendition";
 
 const DATABASE = "parkdex-personal-v1";
 const DATABASE_VERSION = 1;
@@ -12,14 +13,16 @@ const LEGACY_PHOTOS = "photos";
 const LEGACY_MIGRATION_KEY = "legacy:parkdex-mockup-v1";
 const GUEST_RESERVATION_PREFIX = "guest-reservation:";
 const LAST_BACKUP_PREFIX = "last-successful-backup:";
-export const MAX_BACKUP_PHOTO_BYTES = 2_621_440;
+const LAST_COMPLETE_SYNC_PREFIX = "last-complete-sync:";
+
+export { MAX_BACKUP_PHOTO_BYTES };
+export type { SupportedPhotoType } from "./photoBackupRendition";
 
 export type ProgressOwner = { kind: "guest" } | { kind: "account"; accountId: string };
 export type PhotoBackupState = "pending" | "backed-up" | "unsupported" | "conflict";
 export type RemotePhoto =
   | { status: "missing" | "pending" }
-  | { status: "ready"; sha256: string; sizeBytes: number; contentType: SupportedPhotoType };
-export type SupportedPhotoType = "image/jpeg" | "image/png" | "image/webp";
+  | { status: "ready"; sha256: string; sizeBytes: number; contentType: SupportedPhotoTypeInternal };
 
 export type PersonalClaim = {
   ownerKey: string;
@@ -42,6 +45,20 @@ export type PersonalPhoto = {
   sha256: string;
   backupState: PhotoBackupState;
   unsupportedReason: "type" | "size" | "magic" | null;
+  backupRendition?: PhotoBackupRendition | null;
+};
+
+export type PhotoBackupRendition = ConvertedPhotoRendition & {
+  sourceSha256: string;
+  sourceContentType: string;
+  sourceSizeBytes: number;
+};
+
+export type PersonalPhotoBackupSource = {
+  blob: Blob;
+  contentType: SupportedPhotoTypeInternal;
+  sizeBytes: number;
+  sha256: string;
 };
 
 export type ClaimUploadPayload = {
@@ -89,6 +106,10 @@ function lastBackupKey(accountKey: string): string {
   return `${LAST_BACKUP_PREFIX}${accountKey}`;
 }
 
+function lastCompleteSyncKey(accountKey: string): string {
+  return `${LAST_COMPLETE_SYNC_PREFIX}${accountKey}`;
+}
+
 function reservedGuestClaimIds(values: Meta[]): Set<string> {
   return new Set(values.flatMap((item) => typeof item.key === "string" && item.key.startsWith(GUEST_RESERVATION_PREFIX)
     ? [item.key.slice(GUEST_RESERVATION_PREFIX.length)] : []));
@@ -131,7 +152,7 @@ export function freezeParkSnapshot(park: Park): Park {
   const biome = ["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"] as const;
   const shape = ["circle", "hex", "shield", "arch", "seal"] as const;
   const rarity = ["common", "uncommon", "rare", "epic", "legendary"] as const;
-  const category = ["national", "provincial", "regional"] as const;
+  const category = ["national", "provincial", "regional", "municipal", "community"] as const;
   if (!(biome as readonly unknown[]).includes(park.biome) || !(shape as readonly unknown[]).includes(park.shape) ||
       !(rarity as readonly unknown[]).includes(park.rarity) || !(category as readonly unknown[]).includes(park.category)) {
     throw new Error("Invalid park snapshot category.");
@@ -401,7 +422,7 @@ async function sha256Blob(blob: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function supportedPhotoType(value: string): value is SupportedPhotoType {
+function supportedPhotoType(value: string): value is SupportedPhotoTypeInternal {
   return value === "image/jpeg" || value === "image/png" || value === "image/webp";
 }
 
@@ -417,12 +438,28 @@ async function photoEligibility(blob: Blob): Promise<{ supported: boolean; reaso
   return matches ? { supported: true, reason: null } : { supported: false, reason: "magic" };
 }
 
+/** Resolve the bytes and metadata used by backup while keeping the original local photo untouched. */
+export function personalPhotoBackupSource(photo: PersonalPhoto): PersonalPhotoBackupSource | null {
+  const rendition = photo.backupRendition;
+  if (rendition && rendition.sourceSha256 === photo.sha256 && rendition.sourceContentType === photo.contentType &&
+      rendition.sourceSizeBytes === photo.sizeBytes && supportedPhotoType(rendition.contentType) &&
+      rendition.sizeBytes > 0 && rendition.sizeBytes <= MAX_BACKUP_PHOTO_BYTES && rendition.blob instanceof Blob &&
+      rendition.blob.size === rendition.sizeBytes && rendition.blob.type.toLowerCase() === rendition.contentType &&
+      /^[a-f\d]{64}$/i.test(rendition.sha256)) {
+    return { blob: rendition.blob, contentType: rendition.contentType, sizeBytes: rendition.sizeBytes, sha256: rendition.sha256.toLowerCase() };
+  }
+  if (photo.unsupportedReason !== null || !supportedPhotoType(photo.contentType) || photo.sizeBytes <= 0 ||
+      photo.sizeBytes > MAX_BACKUP_PHOTO_BYTES || !(photo.blob instanceof Blob) || photo.blob.size !== photo.sizeBytes ||
+      photo.blob.type.toLowerCase() !== photo.contentType || !/^[a-f\d]{64}$/i.test(photo.sha256)) return null;
+  return { blob: photo.blob, contentType: photo.contentType, sizeBytes: photo.sizeBytes, sha256: photo.sha256.toLowerCase() };
+}
+
 async function preparePhoto(owner: ProgressOwner, claimId: string, blob: Blob): Promise<PersonalPhoto> {
   const eligibility = await photoEligibility(blob);
   return {
     ownerKey: ownerKey(owner), claimId, blob, contentType: blob.type.toLowerCase(), sizeBytes: blob.size,
     sha256: await sha256Blob(blob), backupState: eligibility.supported ? "pending" : "unsupported",
-    unsupportedReason: eligibility.reason,
+    unsupportedReason: eligibility.reason, backupRendition: null,
   };
 }
 
@@ -692,18 +729,40 @@ export async function listPersonalOutbox(owner: ProgressOwner): Promise<Outbox[]
   }));
 }
 
-export async function markClaimUploaded(owner: ProgressOwner, claimId: string, payload: ClaimUploadPayload): Promise<void> {
+export async function markClaimUploaded(owner: ProgressOwner, claimId: string, payload: ClaimUploadPayload, remotePhoto?: RemotePhoto): Promise<void> {
   await initializePersonalStore();
   const key = ownerKey(owner);
-  await withDatabase((db) => transaction(db, [CLAIMS, OUTBOX], "readwrite", (tx, complete, fail) => {
+  await withDatabase((db) => transaction(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
     const request = tx.objectStore(CLAIMS).get([key, claimId]);
     request.onsuccess = () => {
       const row = request.result as PersonalClaim | undefined;
       if (!row || !samePayload(row, payload)) { fail(new PersonalClaimConflictError()); return; }
       row.syncState = "acknowledged";
+      if (remotePhoto) row.remotePhoto = remotePhoto;
       tx.objectStore(CLAIMS).put(row);
       tx.objectStore(OUTBOX).delete([key, claimId, "claim"]);
-      complete(undefined);
+      if (!remotePhoto) { complete(undefined); return; }
+      const photoRequest = tx.objectStore(PHOTOS).get([key, claimId]);
+      photoRequest.onsuccess = () => {
+        const photo = photoRequest.result as PersonalPhoto | undefined;
+        if (!photo) { complete(undefined); return; }
+        const backupSource = personalPhotoBackupSource(photo);
+        const outbox = tx.objectStore(OUTBOX);
+        if (remotePhoto.status === "ready") {
+          const samePhoto = backupSource && backupSource.sha256 === remotePhoto.sha256 && backupSource.sizeBytes === remotePhoto.sizeBytes && backupSource.contentType === remotePhoto.contentType;
+          photo.backupState = samePhoto ? "backed-up" : "conflict";
+          if (samePhoto) photo.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(photo);
+          outbox.delete([key, claimId, "photo"]);
+        } else if (backupSource && photo.backupState !== "conflict") {
+          photo.backupState = "pending";
+          photo.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(photo);
+          outbox.put({ ownerKey: key, claimId, kind: "photo" } satisfies PhotoOutbox);
+        }
+        complete(undefined);
+      };
+      photoRequest.onerror = () => fail(photoRequest.error);
     };
     request.onerror = () => fail(request.error);
   }));
@@ -717,7 +776,8 @@ export async function markPhotoUploaded(owner: ProgressOwner, claimId: string, s
     const request = photos.get([key, claimId]);
     request.onsuccess = () => {
       const photo = request.result as PersonalPhoto | undefined;
-      if (!photo || photo.sha256 !== sha256) { fail(new PersonalClaimConflictError("The local photo changed during upload.")); return; }
+      const backupSource = photo ? personalPhotoBackupSource(photo) : null;
+      if (!photo || !backupSource || backupSource.sha256 !== sha256) { fail(new PersonalClaimConflictError("The local photo changed during upload.")); return; }
       photo.backupState = "backed-up";
       photo.unsupportedReason = null;
       photos.put(photo);
@@ -726,7 +786,7 @@ export async function markPhotoUploaded(owner: ProgressOwner, claimId: string, s
       claimRequest.onerror = () => fail(claimRequest.error);
       claimRequest.onsuccess = () => {
         const claim = claimRequest.result as PersonalClaim | undefined;
-        if (claim) { claim.remotePhoto = { status: "ready", sha256, sizeBytes: photo.sizeBytes, contentType: photo.contentType as SupportedPhotoType }; tx.objectStore(CLAIMS).put(claim); }
+        if (claim) { claim.remotePhoto = { status: "ready", sha256, sizeBytes: backupSource.sizeBytes, contentType: backupSource.contentType }; tx.objectStore(CLAIMS).put(claim); }
         complete(undefined);
       };
     };
@@ -769,6 +829,139 @@ export async function markPhotoUnsupported(owner: ProgressOwner, claimId: string
       complete(undefined);
     };
     request.onerror = () => fail(request.error);
+  }));
+}
+
+/** Save a converted upload copy only if the owner, original, state, and frozen claim snapshot still match. */
+export async function commitPhotoBackupRendition(
+  owner: ProgressOwner,
+  claimId: string,
+  expected: Pick<PersonalPhoto, "sha256" | "contentType" | "sizeBytes" | "backupState"> & { parkSnapshot: Park | null },
+  converted: ConvertedPhotoRendition,
+  isCurrent: () => boolean = () => true,
+): Promise<"stored" | "stale" | "session-changed"> {
+  await initializePersonalStore();
+  if (owner.kind !== "account") return "stale";
+  const key = ownerKey(owner);
+  const contentType = converted.contentType.toLowerCase();
+  const eligible = supportedPhotoType(contentType) && contentType === converted.blob.type.toLowerCase() &&
+    converted.sizeBytes === converted.blob.size && converted.sizeBytes > 0 && converted.sizeBytes <= MAX_BACKUP_PHOTO_BYTES &&
+    /^[a-f\d]{64}$/i.test(converted.sha256);
+  if (!eligible || !isCurrent()) return isCurrent() ? "stale" : "session-changed";
+  const rendition: PhotoBackupRendition = {
+    ...converted, contentType, sha256: converted.sha256.toLowerCase(), sourceSha256: expected.sha256.toLowerCase(),
+    sourceContentType: expected.contentType, sourceSizeBytes: expected.sizeBytes,
+  };
+  return withDatabase((db) => transaction<"stored" | "stale" | "session-changed">(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
+    const claimRequest = tx.objectStore(CLAIMS).get([key, claimId]);
+    const photoRequest = tx.objectStore(PHOTOS).get([key, claimId]);
+    let ready = 0;
+    let claim: PersonalClaim | undefined;
+    let photo: PersonalPhoto | undefined;
+    const finish = () => {
+      ready += 1;
+      if (ready !== 2) return;
+      if (!isCurrent()) { complete("session-changed"); return; }
+      if (!claim || !photo || claim.ownerKey !== key || photo.ownerKey !== key || photo.claimId !== claimId ||
+          photo.sha256 !== expected.sha256 || photo.contentType !== expected.contentType || photo.sizeBytes !== expected.sizeBytes ||
+          photo.backupState !== expected.backupState || JSON.stringify(claim.parkSnapshot) !== JSON.stringify(expected.parkSnapshot)) {
+        complete("stale");
+        return;
+      }
+      const existing = personalPhotoBackupSource(photo);
+      if (photo.backupRendition && existing?.blob === photo.backupRendition.blob) {
+        if (claim.remotePhoto.status === "ready") {
+          const sameRemote = existing.sha256 === claim.remotePhoto.sha256 && existing.sizeBytes === claim.remotePhoto.sizeBytes && existing.contentType === claim.remotePhoto.contentType;
+          photo.backupState = sameRemote ? "backed-up" : "conflict";
+          if (sameRemote) photo.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(photo);
+          tx.objectStore(OUTBOX).delete([key, claimId, "photo"]);
+        } else {
+          photo.backupState = "pending";
+          photo.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(photo);
+          tx.objectStore(OUTBOX).put({ ownerKey: key, claimId, kind: "photo" } satisfies PhotoOutbox);
+        }
+        complete("stored");
+        return;
+      }
+      photo.backupRendition = rendition;
+      if (claim.remotePhoto.status === "ready") {
+        const sameRemote = rendition.sha256 === claim.remotePhoto.sha256 && rendition.sizeBytes === claim.remotePhoto.sizeBytes && rendition.contentType === claim.remotePhoto.contentType;
+        photo.backupState = sameRemote ? "backed-up" : "conflict";
+        photo.unsupportedReason = null;
+        tx.objectStore(PHOTOS).put(photo);
+        tx.objectStore(OUTBOX).delete([key, claimId, "photo"]);
+      } else {
+        photo.backupState = "pending";
+        photo.unsupportedReason = null;
+        tx.objectStore(PHOTOS).put(photo);
+        tx.objectStore(OUTBOX).put({ ownerKey: key, claimId, kind: "photo" } satisfies PhotoOutbox);
+      }
+      complete("stored");
+    };
+    claimRequest.onsuccess = () => { claim = claimRequest.result as PersonalClaim | undefined; finish(); };
+    photoRequest.onsuccess = () => { photo = photoRequest.result as PersonalPhoto | undefined; finish(); };
+    claimRequest.onerror = () => fail(claimRequest.error);
+    photoRequest.onerror = () => fail(photoRequest.error);
+  }));
+}
+
+/** Requeue a valid saved upload copy, or reconcile it against an immutable remote photo. */
+export async function queuePhotoBackup(owner: ProgressOwner, claimId: string, expectedSha256: string): Promise<"queued" | "backed-up" | "conflict" | "unsupported" | "stale"> {
+  await initializePersonalStore();
+  const key = ownerKey(owner);
+  return withDatabase((db) => transaction<"queued" | "backed-up" | "conflict" | "unsupported" | "stale">(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
+    const claimRequest = tx.objectStore(CLAIMS).get([key, claimId]);
+    const photoRequest = tx.objectStore(PHOTOS).get([key, claimId]);
+    let ready = 0;
+    let claim: PersonalClaim | undefined;
+    let photo: PersonalPhoto | undefined;
+    const finish = () => {
+      ready += 1;
+      if (ready !== 2) return;
+      if (!claim || !photo || photo.sha256 !== expectedSha256) { complete("stale"); return; }
+      const source = personalPhotoBackupSource(photo);
+      const outbox = tx.objectStore(OUTBOX);
+      if (claim.remotePhoto.status === "ready") {
+        const sameRemote = source && source.sha256 === claim.remotePhoto.sha256 && source.sizeBytes === claim.remotePhoto.sizeBytes && source.contentType === claim.remotePhoto.contentType;
+        if (sameRemote) {
+          photo.backupState = "backed-up";
+          photo.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(photo);
+          outbox.delete([key, claimId, "photo"]);
+          complete("backed-up");
+        } else {
+          photo.backupState = "conflict";
+          tx.objectStore(PHOTOS).put(photo);
+          outbox.delete([key, claimId, "photo"]);
+          complete("conflict");
+        }
+        return;
+      }
+      if (photo.backupState === "conflict") {
+        outbox.delete([key, claimId, "photo"]);
+        complete("conflict");
+        return;
+      }
+      if (!source) {
+        photo.backupState = "unsupported";
+        if (photo.unsupportedReason === null) photo.unsupportedReason = "magic";
+        tx.objectStore(PHOTOS).put(photo);
+        outbox.delete([key, claimId, "photo"]);
+        complete("unsupported");
+        return;
+      }
+      photo.backupState = "pending";
+      photo.unsupportedReason = null;
+      tx.objectStore(PHOTOS).put(photo);
+      outbox.put({ ownerKey: key, claimId, kind: "photo" } satisfies PhotoOutbox);
+      complete("queued");
+    };
+    claimRequest.onsuccess = () => { claim = claimRequest.result as PersonalClaim | undefined; finish(); };
+    photoRequest.onsuccess = () => { photo = photoRequest.result as PersonalPhoto | undefined; finish(); };
+    claimRequest.onerror = () => fail(claimRequest.error);
+    photoRequest.onerror = () => fail(photoRequest.error);
   }));
 }
 
@@ -856,7 +1049,8 @@ export async function commitRemotePage(owner: ProgressOwner, incoming: RemoteCla
           outbox.delete(`${remote.claimId}:claim`);
           const localPhoto = photos.get(remote.claimId);
           if (remote.photo.status === "ready" && localPhoto) {
-            if (localPhoto.sha256 === remote.photo.sha256) {
+            const backupSource = personalPhotoBackupSource(localPhoto);
+            if (backupSource && backupSource.sha256 === remote.photo.sha256 && backupSource.sizeBytes === remote.photo.sizeBytes && backupSource.contentType === remote.photo.contentType) {
               localPhoto.backupState = "backed-up";
               localPhoto.unsupportedReason = null;
               tx.objectStore(PHOTOS).put(localPhoto);
@@ -867,8 +1061,9 @@ export async function commitRemotePage(owner: ProgressOwner, incoming: RemoteCla
               tx.objectStore(OUTBOX).delete([key, remote.claimId, "photo"]);
             }
           } else if ((remote.photo.status === "missing" || remote.photo.status === "pending") && localPhoto) {
-            if (localPhoto.backupState !== "conflict" && localPhoto.unsupportedReason === null) {
+            if (localPhoto.backupState !== "conflict" && personalPhotoBackupSource(localPhoto)) {
               localPhoto.backupState = "pending";
+              localPhoto.unsupportedReason = null;
               tx.objectStore(PHOTOS).put(localPhoto);
               if (!outbox.has(`${remote.claimId}:photo`)) tx.objectStore(OUTBOX).put({ ownerKey: key, claimId: remote.claimId, kind: "photo" } satisfies PhotoOutbox);
             }
@@ -905,7 +1100,8 @@ export async function listPhotosNeedingDownload(owner: ProgressOwner): Promise<A
   return claims.flatMap((claim) => {
     if (claim.remotePhoto.status !== "ready") return [];
     const local = localPhotos.get(claim.claimId);
-    if (local?.sha256 === claim.remotePhoto.sha256) return [];
+    const backupSource = local ? personalPhotoBackupSource(local) : null;
+    if (backupSource && backupSource.sha256 === claim.remotePhoto.sha256 && backupSource.sizeBytes === claim.remotePhoto.sizeBytes && backupSource.contentType === claim.remotePhoto.contentType) return [];
     if (local?.backupState === "conflict") return [];
     return [{ claim, photo: claim.remotePhoto }];
   });
@@ -933,13 +1129,22 @@ export async function commitDownloadedPhoto(owner: ProgressOwner, claimId: strin
         fail(new PersonalClaimConflictError("The server photo changed while it was downloading."));
         return;
       }
-      if (existing && existing.sha256 !== remote.sha256) {
+      if (existing) {
+        const backupSource = personalPhotoBackupSource(existing);
+        if (backupSource && backupSource.sha256 === remote.sha256 && backupSource.sizeBytes === remote.sizeBytes && backupSource.contentType === remote.contentType) {
+          existing.backupState = "backed-up";
+          existing.unsupportedReason = null;
+          tx.objectStore(PHOTOS).put(existing);
+          tx.objectStore(OUTBOX).delete([key, claimId, "photo"]);
+          complete("stored");
+          return;
+        }
         existing.backupState = "conflict";
         tx.objectStore(PHOTOS).put(existing);
         complete("conflict");
         return;
       }
-      tx.objectStore(PHOTOS).put({ ownerKey: key, claimId, blob, contentType: blob.type.toLowerCase(), sizeBytes: blob.size, sha256, backupState: "backed-up", unsupportedReason: null } satisfies PersonalPhoto);
+      tx.objectStore(PHOTOS).put({ ownerKey: key, claimId, blob, contentType: blob.type.toLowerCase(), sizeBytes: blob.size, sha256, backupState: "backed-up", unsupportedReason: null, backupRendition: null } satisfies PersonalPhoto);
       tx.objectStore(OUTBOX).delete([key, claimId, "photo"]);
       complete("stored");
     };
@@ -1041,8 +1246,11 @@ export async function reserveGuestClaimsForAccount(accountId: string): Promise<n
           if (sourcePhoto && priorPhoto && !matchingPhotoCopy(sourcePhoto, priorPhoto)) {
             throw new PersonalClaimConflictError("A guest photo conflicts with its existing account copy.");
           }
-          if (sourcePhoto && priorOwner?.remotePhoto.status === "ready" && priorOwner.remotePhoto.sha256 !== sourcePhoto.sha256) {
-            throw new PersonalClaimConflictError("A guest photo conflicts with the existing account backup.");
+          if (sourcePhoto && priorOwner?.remotePhoto.status === "ready") {
+            const backupSource = personalPhotoBackupSource(sourcePhoto);
+            if (!backupSource || backupSource.sha256 !== priorOwner.remotePhoto.sha256 || backupSource.sizeBytes !== priorOwner.remotePhoto.sizeBytes || backupSource.contentType !== priorOwner.remotePhoto.contentType) {
+              throw new PersonalClaimConflictError("A guest photo conflicts with the existing account backup.");
+            }
           }
           if (reservationById.has(source.claimId)) {
             const reservationOwner = reservationById.get(source.claimId);
@@ -1088,28 +1296,42 @@ export async function reserveGuestClaimsForAccount(accountId: string): Promise<n
           if (existing && !matchingPhotoCopy(sourcePhoto, existing)) {
             throw new PersonalClaimConflictError("A guest photo conflicts with progress already on this account.");
           }
-          if (claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 !== sourcePhoto.sha256) {
-            throw new PersonalClaimConflictError("The account already has a different backed-up photo for this claim.");
-          }
           if (!existing) {
-            const sameAsServer = claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 === sourcePhoto.sha256;
+            const backupSource = personalPhotoBackupSource(sourcePhoto);
+            const sameAsServer = claim.remotePhoto.status === "ready" && Boolean(backupSource && backupSource.sha256 === claim.remotePhoto.sha256 &&
+              backupSource.sizeBytes === claim.remotePhoto.sizeBytes && backupSource.contentType === claim.remotePhoto.contentType);
+            if (claim.remotePhoto.status === "ready" && !sameAsServer) {
+              throw new PersonalClaimConflictError("The account already has a different backed-up photo for this claim.");
+            }
             const copied: PersonalPhoto = {
               ...sourcePhoto,
               ownerKey: accountKey,
-              backupState: sourcePhoto.unsupportedReason || sourcePhoto.backupState === "unsupported" ? "unsupported" : sameAsServer ? "backed-up" : "pending",
+              backupState: backupSource ? sameAsServer ? "backed-up" : "pending" : "unsupported",
+              unsupportedReason: backupSource ? null : sourcePhoto.unsupportedReason,
             };
             photoById.set(copied.claimId, copied);
             targetPhotos.put(copied);
-            if (!copied.unsupportedReason && copied.backupState !== "unsupported" && !sameAsServer) {
+            if (backupSource && !sameAsServer) {
               targetOutbox.put({ ownerKey: accountKey, claimId: copied.claimId, kind: "photo" } satisfies PhotoOutbox);
             }
-          } else if (claim.remotePhoto.status === "ready" && claim.remotePhoto.sha256 === existing.sha256 && existing.backupState !== "backed-up") {
-            existing.backupState = "backed-up";
-            existing.unsupportedReason = null;
-            targetPhotos.put(existing);
-            targetOutbox.delete([accountKey, existing.claimId, "photo"]);
-          } else if (existing.backupState === "pending" && existing.unsupportedReason === null) {
-            targetOutbox.put({ ownerKey: accountKey, claimId: existing.claimId, kind: "photo" } satisfies PhotoOutbox);
+          } else {
+            if (!existing.backupRendition && sourcePhoto.backupRendition && personalPhotoBackupSource(sourcePhoto)) {
+              existing.backupRendition = sourcePhoto.backupRendition;
+            }
+            const backupSource = personalPhotoBackupSource(existing);
+            if (claim.remotePhoto.status === "ready") {
+              const sameAsServer = backupSource && backupSource.sha256 === claim.remotePhoto.sha256 && backupSource.sizeBytes === claim.remotePhoto.sizeBytes && backupSource.contentType === claim.remotePhoto.contentType;
+              if (!sameAsServer) throw new PersonalClaimConflictError("The account already has a different backed-up photo for this claim.");
+              existing.backupState = "backed-up";
+              existing.unsupportedReason = null;
+              targetPhotos.put(existing);
+              targetOutbox.delete([accountKey, existing.claimId, "photo"]);
+            } else if (backupSource && existing.backupState !== "conflict") {
+              existing.backupState = "pending";
+              existing.unsupportedReason = null;
+              targetPhotos.put(existing);
+              targetOutbox.put({ ownerKey: accountKey, claimId: existing.claimId, kind: "photo" } satisfies PhotoOutbox);
+            }
           }
         }
         for (const claim of claimsForAccount) {
@@ -1185,8 +1407,15 @@ export async function finalizeReservedGuestClaims(accountId: string): Promise<nu
         if (sourcePhoto) {
           const accountPhoto = accountPhotoById.get(claimId);
           if (!matchingPhotoCopy(sourcePhoto, accountPhoto)) continue;
-          const unsupported = sourcePhoto.unsupportedReason != null || sourcePhoto.backupState === "unsupported";
-          if (!unsupported && accountPhoto.backupState !== "backed-up") continue;
+          const sourceBackup = personalPhotoBackupSource(sourcePhoto);
+          if (sourceBackup) {
+            const accountBackup = personalPhotoBackupSource(accountPhoto!);
+            const sameBackup = accountBackup && sourceBackup.sha256 === accountBackup.sha256 && sourceBackup.sizeBytes === accountBackup.sizeBytes && sourceBackup.contentType === accountBackup.contentType;
+            if (!sameBackup || accountPhoto!.backupState !== "backed-up") continue;
+          } else {
+            const unsupported = sourcePhoto.unsupportedReason != null || sourcePhoto.backupState === "unsupported";
+            if (!unsupported && accountPhoto!.backupState !== "backed-up") continue;
+          }
         }
         claims.delete([guestKey, claimId]);
         photos.delete([guestKey, claimId]);
@@ -1242,6 +1471,39 @@ export async function setLastSuccessfulBackupAt(accountId: string, timestamp: nu
       const existing = request.result?.value;
       const existingTimestamp = typeof existing === "number" && Number.isSafeInteger(existing) && existing >= 0 ? existing : -1;
       meta.put({ key: backupKey, value: Math.max(existingTimestamp, timestamp) } satisfies Meta);
+      complete(undefined);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+/** Read the separate timestamp written only after a complete account restore pass. */
+export async function getLastCompleteSyncAt(accountId: string): Promise<number | null> {
+  await initializePersonalStore();
+  const key = ownerKey({ kind: "account", accountId });
+  return withDatabase((db) => transaction<number | null>(db, META, "readonly", (tx, complete, fail) => {
+    const request = tx.objectStore(META).get(lastCompleteSyncKey(key)) as IDBRequest<Meta | undefined>;
+    request.onsuccess = () => {
+      const value = request.result?.value;
+      complete(typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+/** Persist a completed-sync timestamp without changing the legacy outbound-backup marker. */
+export async function setLastCompleteSyncAt(accountId: string, timestamp: number): Promise<void> {
+  await initializePersonalStore();
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) throw new Error("Invalid complete sync timestamp.");
+  const key = ownerKey({ kind: "account", accountId });
+  await withDatabase((db) => transaction(db, META, "readwrite", (tx, complete, fail) => {
+    const meta = tx.objectStore(META);
+    const markerKey = lastCompleteSyncKey(key);
+    const request = meta.get(markerKey) as IDBRequest<Meta | undefined>;
+    request.onsuccess = () => {
+      const existing = request.result?.value;
+      const existingTimestamp = typeof existing === "number" && Number.isSafeInteger(existing) && existing >= 0 ? existing : -1;
+      meta.put({ key: markerKey, value: Math.max(existingTimestamp, timestamp) } satisfies Meta);
       complete(undefined);
     };
     request.onerror = () => fail(request.error);

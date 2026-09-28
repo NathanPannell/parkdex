@@ -29,7 +29,12 @@ function contentEnvironment(): ContentEnvironment {
 }
 
 function initialConnectivity() {
-  return { connected: typeof navigator === "undefined" ? true : navigator.onLine, wifi: false };
+  const connected = typeof navigator === "undefined" ? true : navigator.onLine;
+  return {
+    connected,
+    wifi: false,
+    contentDownloadAllowed: !Capacitor.isNativePlatform() && connected,
+  };
 }
 
 export function ContentProvider({ children }: { children: ReactNode }) {
