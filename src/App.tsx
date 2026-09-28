@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
+import { ContentProvider } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
 import { StoreProvider, useStore } from "./lib/store";
@@ -20,11 +21,10 @@ import { Splash } from "./screens/Splash";
 
 export function App() {
   if (location.pathname === "/feedback/review") return <FeedbackReview />;
-  if (location.hash === "#gallery") return <Gallery />;
   return (
     <MotionConfig reducedMotion="user">
       <StoreProvider>
-        <Stage />
+        <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
       </StoreProvider>
     </MotionConfig>
   );

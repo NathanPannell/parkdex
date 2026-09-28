@@ -1,22 +1,33 @@
 import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useTransform } from "motion/react";
 import { useRef, useState } from "react";
 import { Badge } from "../components/Badge";
+import { ContentGate } from "../components/ContentGate";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
-import { PALETTES, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, type Park } from "../lib/parks";
 import { useStore } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 const HOLD_MS = 1500;
 const CHEERS = ["KLEEP! Beauty!", "Into the case!", "Look at that shine!", "Another one!"];
 
 export function Claim() {
+  const { state } = useStore();
+  const content = useContent();
+  const [parkId] = useState(() => state.tripId ?? "");
+  const park = content?.parkById.get(parkId);
+  if (!park) return <ContentGate />;
+  return <ClaimReady park={park} />;
+}
+
+function ClaimReady({ park }: { park: Park }) {
   const { state, dispatch } = useStore();
-  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
-  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
+  const content = useContent();
   const photo = state.pendingPhoto ?? "";
+  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
@@ -202,7 +213,7 @@ export function Claim() {
                   {"★".repeat(rarity.stars)} {rarity.label}
                 </span>
                 <span className="claim__count">
-                  Badge #<RollingNumber value={count} />&nbsp;of {TOTAL_BADGES.toLocaleString("en-CA")}
+                  Badge #<RollingNumber value={count} />&nbsp;of {totalBadges.toLocaleString("en-CA")}
                 </span>
               </motion.div>
               <motion.button variants={pop} className="btn btn--block btn--sun" onClick={() => dispatch({ type: "go", screen: "share" })}>

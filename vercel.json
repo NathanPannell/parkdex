@@ -6,6 +6,7 @@
   "git": { "deploymentEnabled": false },
   "functions": { "api/feedback-api.ts": { "maxDuration": 60 } },
   "rewrites": [
+    { "source": "/api/content/current", "destination": "/api/content/current" },
     { "source": "/api/:path*", "destination": "/api/feedback-api?path=:path*" },
     { "source": "/map/island/:path*", "destination": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/island/:path*" },
     { "source": "/map/fonts/:path*", "destination": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/fonts/:path*" },

@@ -34,6 +34,7 @@ import {
   type FeedbackNotificationState,
 } from "../lib/feedbackReport";
 import { useStore, type FeedbackOrigin } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 type Status = "editing" | "sending" | "failed" | "sent";
 type Shot = SavedFeedbackScreenshot & { url: string };
@@ -88,13 +89,15 @@ function notificationCopy(state: FeedbackNotificationState | undefined, target: 
 // Origin arrives as a prop so the sheet keeps it while animating out after the store clears it.
 export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const { dispatch } = useStore();
+  const content = useContent();
+  const park = origin.parkId ? content?.parkById.get(origin.parkId) : undefined;
   const [initialDraftSession] = useState(() => loadDraftSession());
   const [draftGeneration, setDraftGeneration] = useState(initialDraftSession.generation);
   const [nativeAppVersion, setNativeAppVersion] = useState<FeedbackAppVersion | null>(null);
   const [nativeInfoStatus, setNativeInfoStatus] = useState<"loading" | "ready">(isNative ? "loading" : "ready");
   const context = useMemo(
-    () => feedbackContext(origin, nativeAppVersion ?? (isNative ? { version: "loading", build: "loading" } : undefined)),
-    [origin, nativeAppVersion],
+    () => feedbackContext(origin, park, nativeAppVersion ?? (isNative ? { version: "loading", build: "loading" } : undefined)),
+    [origin, park, nativeAppVersion],
   );
   const [draft, setDraft] = useState<FeedbackDraft>(initialDraftSession.draft);
   const [shot, setShot] = useState<Shot | null>(null);

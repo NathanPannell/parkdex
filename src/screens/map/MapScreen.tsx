@@ -5,15 +5,17 @@ import { Badge } from "../../components/Badge";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
+import { ContentGate } from "../../components/ContentGate";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip, formatTrip } from "../../lib/drive";
-import { arcPath, arrivalPoint, distanceKm, ringBounds, type LngLat } from "../../lib/geo";
-import { isLive, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES } from "../../lib/parks";
+import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
+import { badgeTotal, isLive, RARITY } from "../../lib/parks";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
+import { useContent } from "../../lib/content/provider";
 import { MapView } from "./MapView";
 import { ParkSheet } from "./ParkSheet";
 import { ArrivalCard, TripPanel } from "./TripPanel";
@@ -25,6 +27,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export function MapScreen() {
   const { state, dispatch } = useStore();
+  const content = useContent();
   const mapRef = useRef<MLMap | null>(null);
   const bounds = useBoundaries();
   const [route, setRoute] = useState<LngLat[] | null>(null);
@@ -34,20 +37,23 @@ export function MapScreen() {
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
   const { user, claims, selectedId, tripId } = state;
-  const selected = selectedId ? PARK_BY_ID.get(selectedId) : undefined;
-  const trip = tripId ? PARK_BY_ID.get(tripId) : undefined;
-  const here = useMemo(() => parkContaining(user, bounds?.byId, state.accuracy ?? 0), [user, bounds, state.accuracy]);
+  const parks = content?.parks ?? [];
+  const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
+  const trip = tripId ? content?.parkById.get(tripId) : undefined;
+  const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
+  const here = useMemo(() => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? state.accuracy ?? 0 : 0), [user, parks, bounds, state.accuracy, hasUsableGpsFix]);
   const arrivedId = here && isLive(here) && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
+  const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
 
   const nearby = useMemo(
     () =>
-      LIVE_PARKS.filter((p) => !claims[p.id])
-        .map((p) => ({ p, trip: estimateTrip(user, p) }))
+      (content?.liveParks ?? []).filter((p) => !claims[p.id])
+        .map((p) => ({ p, trip: estimateTrip(user, p, content?.drive) }))
         .sort((a, b) => a.trip.minutes - b.trip.minutes)
         .slice(0, 8),
-    [user, claims],
+    [content?.liveParks, content?.drive, user, claims],
   );
 
   // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
@@ -67,29 +73,31 @@ export function MapScreen() {
   // Jump to the visitor the first time a real GPS fix lands.
   const hadFix = useRef(false);
   useEffect(() => {
-    if (state.accuracy === null || hadFix.current) return;
+    if (!hasUsableGpsFix || hadFix.current) return;
     hadFix.current = true;
     // Visitors off the island keep the island in view instead of an empty ocean.
     const [w, s, e, n] = ISLAND_BOUNDS;
     if (user[0] < w || user[0] > e || user[1] < s || user[1] > n) return;
     mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
-  }, [state.accuracy]);
+  }, [hasUsableGpsFix, state.accuracy]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
-    if (state.focusId) {
+    if (state.focusId && content) {
       select(state.focusId);
       dispatch({ type: "focus", id: null });
     }
-  }, [state.focusId]);
+  }, [state.focusId, content]);
 
   function select(id: string | null) {
     if (simulating) return;
+    if (id && !content?.parkById.has(id)) return;
     dispatch({ type: "select", id });
     if (!id) return;
     sfx.pop();
     buzz(10);
-    const p = PARK_BY_ID.get(id)!;
+    const p = content?.parkById.get(id);
+    if (!p) return;
     mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
@@ -97,7 +105,7 @@ export function MapScreen() {
     if (!selected || !bounds) return;
     const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
     const path = arcPath(user, target);
-    tripStart.current = { from: user, total: estimateTrip(user, selected).km };
+    tripStart.current = { from: user, total: estimateTrip(user, selected, content?.drive).km };
     setRoute(path);
     sfx.whoosh();
     buzz(15);
@@ -132,7 +140,7 @@ export function MapScreen() {
       const idx = Math.round(ease(t) * (route.length - 1));
       if (idx !== lastStep) {
         lastStep = idx;
-        dispatch({ type: "move", user: route[idx] });
+        dispatch({ type: "move", user: route[idx], accuracy: null });
       }
       if (t < 1) requestAnimationFrame(step);
       else setSimulating(false);
@@ -148,7 +156,7 @@ export function MapScreen() {
     setDemoOpen(false);
     dispatch({ type: "select", id: null });
     dispatch({ type: "trip", id: target.id });
-    dispatch({ type: "move", user: point });
+    dispatch({ type: "move", user: point, accuracy: null });
   }
 
   function checkIn(id: string) {
@@ -163,7 +171,11 @@ export function MapScreen() {
     mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }
 
-  const remaining = trip ? estimateTrip(user, trip) : null;
+  const remaining = trip ? estimateTrip(user, trip, content?.drive) : null;
+
+  if (!content) {
+    return <ContentGate />;
+  }
 
   return (
     <div className="screen map-screen">
@@ -194,7 +206,7 @@ export function MapScreen() {
           <span className="counter__text">
             <strong>
               <RollingNumber value={claimedCount} />
-              <em> / {TOTAL_BADGES.toLocaleString("en-CA")}</em>
+              <em> / {totalBadges.toLocaleString("en-CA")}</em>
             </strong>
             <span>badges collected</span>
           </span>
@@ -231,7 +243,7 @@ export function MapScreen() {
               onClick={() => {
                 setDemoOpen(false);
                 endTrip();
-                dispatch({ type: "move", user: [-123.3656, 48.4284] });
+                dispatch({ type: "move", user: [-123.3656, 48.4284], accuracy: null });
                 recenter();
               }}
             >
@@ -346,7 +358,7 @@ export function MapScreen() {
       </AnimatePresence>
 
       {!bounds && <div className="map-loading">Loading parks…</div>}
-      {FIELD && state.accuracy === null && !state.locationError && <div className="finding card">Finding you…</div>}
+      {FIELD && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
     </div>
   );
 }

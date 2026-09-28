@@ -1,6 +1,6 @@
 # Kip cloud content baseline
 
-The current bundled content has been copied to a separate Neon database and Cloudflare R2. The Android app and its local content readers are unchanged. This is a one-time baseline import, not a new content publishing system or an account backend.
+The current bundled content has been copied to a separate Neon database and Cloudflare R2. This documents the baseline content and its public delivery. It does not add a database-backed account service.
 
 ## Frozen source
 
@@ -61,6 +61,32 @@ The existing map manifest remains exactly `{"size":95805433,"chunkBytes":2097152
 Objects use `releases/<content-version>/<existing-path>`. Responses preserve MIME types, expose CORS headers, support conditional and range requests, and cache successful complete downloads with `public, max-age=31536000, immutable`. A real edge-cache HIT was verified on the custom hostname. Direct R2 public access is not needed.
 
 This account has no Cloudflare-managed DNS zones. A Pages custom subdomain supports the existing external DNS provider while providing a working Cache API. No nameservers or existing app hosts were changed. There is no Git integration, scheduled process, or automatic deployment workflow for this content service.
+
+## Current content channel
+
+The app discovers its release through https://kip-assets.parkdex.app/channels/staging/current.json or channels/main/current.json. These two public objects contain the small parkdex.content-channel/v1 pointer. The Worker accepts only GET and HEAD for these exact paths and gives them a 60-second cache lifetime. Release manifests and assets stay under their immutable releases/<content-version>/ keys.
+
+Staging generation 1 is bootstrapped and points at the verified baseline release. The `main` Neon branch exists with the same baseline database, but the `main` content pointer has not been published and production has not been released. A production release must publish and verify its own pointer before production clients use it.
+
+The web API route `/api/content/current` reads the configured public channel directly from the CDN. It does not query Neon. Set `CONTENT_CHANNEL=staging` on staging and preview deployments. Preview app builds use `VITE_CONTENT_ENV=staging` for read-only public content while keeping their app release environment set to preview. Local development defaults to staging. Native builds default to staging discovery unless `VITE_CONTENT_API_URL` points to a different discovery endpoint. A production native build requires `VITE_CONTENT_ENV=main` and `VITE_CONTENT_API_URL=<confirmed-Kip-production-origin>/api/content/current`; that API deployment must set `CONTENT_CHANNEL=main`, and the `main` pointer must be published first. Confirm the Kip production host before configuring this; the legacy web app host is not a Kip deployment. The current delivery slice is staging-only, so it does not enable a production release. The client cannot override the server-selected channel.
+
+The API allows exact origins https://localhost, https://staging.web.parkdex.app, and https://web.parkdex.app. The localhost origin supports the Capacitor web view. The API validates the pointer schema, selected channel, release ID, manifest URL, generation, and manifest hash before returning it. It uses a 10-second upstream timeout and a 60-second response cache lifetime.
+
+Prepare a channel pointer only after checking that the public release manifest has the exact snapshot SHA-256 and every referenced public asset has the expected length and SHA-256. The helper also checks that the current pointer is the generation you expect. For the next staging update, generation 1 is the expected current pointer and generation 2 is the candidate:
+
+    node scripts/publish-content-channel.mjs --prepare-only --environment staging --snapshot .codex/cloud-snapshot --expected-generation 1 --generation 2 --output .codex/channel-staging-current.json
+
+The helper prints the required atomic write condition. For initial creation it is `If-None-Match: *`. For an update it is `If-Match` with the exact current pointer ETag. The output file contains only the validated pointer JSON, so it can be reviewed before uploading. Publish with the S3-compatible R2 `PutObject` API, which enforces these preconditions atomically. The helper does not upload assets, regenerate maps, or change the release manifest.
+
+Do not use an unconditional object upload for a channel pointer. Existing Wrangler OAuth and `wrangler r2 object put` do not provide the documented conditional S3 `PutObject` headers. If using temporary R2 S3 credentials, include the session token in SigV4 signing. Never overwrite release assets or regenerate the map files while publishing a channel pointer.
+
+## Client offline behavior
+
+The native app stores content metadata in SQLite and private downloaded files in its app-private file storage. The web app uses its own IndexedDB content store. Each platform stages an update separately from the active release so it can continue using the last complete release while the new one is downloaded and checked. Existing claims and photos remain untouched; this content delivery flow adds no account system, account tables, or activity logging.
+
+Content bootstrap prioritizes the small core set and the Victoria starter area, then uses a real GPS fix to request nearby content over any available network connection. This gives the app locally stored starter and nearby content for later offline use without bundling a park catalog, artwork, maps, or glyphs in the application. Bulk downloads for broader coverage run only while the app is foregrounded and on Wi-Fi.
+
+An update is a candidate until the client has fetched and fully validated its pointer, manifest, metadata, and every referenced file against the declared hashes and lengths. The client switches active releases atomically only when validation succeeds and the app is not busy with an active user journey. The old release remains available through the current session and is eligible for cleanup at the next safe startup. Cleanup must preserve the local display data for badges the user has already earned, even when those badges are retired from the current release.
 
 ## Reproduce and verify
 

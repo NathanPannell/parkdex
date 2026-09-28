@@ -2,13 +2,15 @@ import { toBlob } from "html-to-image";
 import { LayoutGroup, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
+import { ContentGate } from "../components/ContentGate";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useToast } from "../components/Toast";
 import { sfx } from "../lib/feedback";
 import { isNative, shareImage } from "../lib/native";
-import { PALETTES, PARK_BY_ID, RARITY, sceneUrl, TOTAL_BADGES, type Park } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
 import { useStore, type Claim } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 type Look = "polaroid" | "badge";
 
@@ -17,6 +19,7 @@ export function StoryCard({
   claim,
   number,
   look,
+  totalBadges,
   cardRef,
   sceneHref,
 }: {
@@ -24,6 +27,7 @@ export function StoryCard({
   claim: Claim;
   number: number;
   look: Look;
+  totalBadges: number;
   cardRef?: React.Ref<HTMLDivElement>;
   sceneHref?: string;
 }) {
@@ -46,7 +50,7 @@ export function StoryCard({
         <span>I collected</span>
         <strong>{park.short}</strong>
         <em>
-          Badge #{number} of {TOTAL_BADGES.toLocaleString("en-CA")} · {RARITY[park.rarity].label}
+          Badge #{number} of {totalBadges.toLocaleString("en-CA")} · {RARITY[park.rarity].label}
         </em>
       </motion.div>
       <div className="story__kip">
@@ -57,20 +61,32 @@ export function StoryCard({
 }
 
 export function Share() {
+  const { state } = useStore();
+  const content = useContent();
+  const [parkId] = useState(() => state.tripId ?? "");
+  const park = content?.parkById.get(parkId);
+  if (!park) return <ContentGate />;
+  return <ShareReady park={park} />;
+}
+
+function ShareReady({ park }: { park: Park }) {
   const { state, dispatch } = useStore();
   const toast = useToast();
-  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
-  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
+  const content = useContent();
   const claim = state.claims[park.id];
   const number = Object.keys(state.claims).indexOf(park.id) + 1;
+  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const [look, setLook] = useState<Look>("polaroid");
   const card = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
   const [sceneHref, setSceneHref] = useState<string>();
+  const sceneAsset = park.scene
+    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id)
+    : undefined;
   useEffect(() => {
-    if (!park.scene) return;
-    fetch(sceneUrl(park.scene))
+    if (!sceneAsset) return;
+    fetch(sceneAsset)
       .then((r) => r.blob())
       .then((b) => new Promise<string>((res) => {
         const fr = new FileReader();
@@ -79,7 +95,7 @@ export function Share() {
       }))
       .then(setSceneHref)
       .catch(() => {});
-  }, [park.scene]);
+  }, [sceneAsset]);
 
   const image = async () => {
     const blob = await toBlob(card.current!, { pixelRatio: 3, cacheBust: true });
@@ -136,7 +152,7 @@ export function Share() {
 
       <LayoutGroup>
         <motion.div className="share__preview" initial={{ scale: 0.8, rotate: 6, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.15 }}>
-          <StoryCard park={park} claim={claim} number={number} look={look} cardRef={card} sceneHref={sceneHref} />
+          <StoryCard park={park} claim={claim} number={number} look={look} totalBadges={totalBadges} cardRef={card} sceneHref={sceneHref} />
         </motion.div>
       </LayoutGroup>
 

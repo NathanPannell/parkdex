@@ -7,25 +7,30 @@ import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Tilt } from "../components/Motion";
 import { sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
-import { CATEGORY_LABEL, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES, type Park, type Rarity } from "../lib/parks";
+import { badgeTotal, CATEGORY_LABEL, RARITY, type Park, type Rarity } from "../lib/parks";
 import { useStore } from "../lib/store";
+import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 
 export function Collection() {
   const { state, dispatch } = useStore();
+  const content = useContent();
+  const status = useContentStatus();
+  const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
   const claimedIds = Object.keys(state.claims);
-  const claimed = claimedIds.map((id) => PARK_BY_ID.get(id)!).filter(Boolean);
-  const count = claimed.length;
+  const claimed = claimedIds.map((id) => content?.parkById.get(id)).filter((park): park is Park => !!park);
+  const count = claimedIds.length;
+  const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
 
   const next = useMemo(
-    () => LIVE_PARKS.filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
-    [state.claims, state.user],
+    () => (content?.liveParks ?? []).filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
+    [content?.liveParks, state.claims, state.user],
   );
   // The case always shows every live badge: claimed ones shine, the rest wait as silhouettes.
   const ghosts = next;
 
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const openPark = open ? PARK_BY_ID.get(open) : undefined;
+  const openPark = open ? content?.parkById.get(open) : undefined;
 
   return (
     <motion.div
@@ -40,7 +45,7 @@ export function Collection() {
           <span className="eyebrow">Your case</span>
           <h1>
             <RollingNumber value={count} />
-            <small> / {TOTAL_BADGES.toLocaleString("en-CA")}</small>
+            <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"}</small>
           </h1>
         </div>
         <motion.div className="col-head__kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
@@ -52,7 +57,7 @@ export function Collection() {
         <motion.div
           className="col-progress__fill"
           initial={{ width: 0 }}
-          animate={{ width: `${Math.max(1.5, (count / TOTAL_BADGES) * 100)}%` }}
+          animate={{ width: `${totalBadges ? Math.max(1.5, Math.min(100, (count / totalBadges) * 100)) : 1.5}%` }}
           transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }}
         />
       </div>
@@ -66,10 +71,18 @@ export function Collection() {
 
       <div className="case">
         <div className="case__glass" />
-        {count === 0 && (
+        {!content ? (
           <div className="case__empty">
             <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              Your case is empty. I'm saving this spot for badge #1.
+              {status.error ? "I couldn't download the park guides." : status.waitingForWifi ? "Park guides are waiting for Wi-Fi." : status.phase === "offline" ? "Connect to download your park guides." : "Loading your park guides…"}
+              {status.totalBytes > 0 && ` ${Math.floor((status.downloadedBytes / status.totalBytes) * 100)}%`}
+            </Bubble>
+            {(status.error || status.phase === "offline") && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
+          </div>
+        ) : count === 0 && (
+          <div className="case__empty">
+            <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
+              Your case is empty. I’m saving this spot for badge #1.
             </Bubble>
           </div>
         )}

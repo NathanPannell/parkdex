@@ -10,7 +10,7 @@
   "stagingAlias": "parkdex-kip-staging.vercel.app",
   "stagingUrl": "https://parkdex-kip-staging.vercel.app",
   "neonProjectId": "small-cloud-35890217",
-  "neonParentBranchId": "br-shy-hat-akg1paip",
+  "neonParentBranchId": "br-orange-lake-akrxmy23",
   "neonDatabaseName": "parkdex_kip",
   "neonRoleName": "parkdex_kip_owner",
   "migrationPath": "database/migrations/feedback_001_init.sql",

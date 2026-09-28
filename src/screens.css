@@ -358,6 +358,23 @@
   pointer-events: none;
 }
 
+.map-loading--content {
+  z-index: 10;
+  pointer-events: auto;
+  padding: 24px;
+  background: var(--paper);
+}
+
+.map-loading__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  padding: 24px;
+  text-align: center;
+}
+
 .pm-host {
   cursor: pointer;
 }

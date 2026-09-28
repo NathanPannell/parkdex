@@ -1,5 +1,3 @@
-import raw from "../data/parks.json";
-
 export type Biome = "coast" | "forest" | "mountain" | "lake" | "waterfall" | "river" | "cave" | "marsh" | "heritage";
 export type Shape = "circle" | "hex" | "shield" | "arch" | "seal";
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
@@ -21,14 +19,15 @@ export type Park = {
   scene: string | null;
 };
 
-export const PARKS = raw as Park[];
-export const PARK_BY_ID = new Map(PARKS.map((p) => [p.id, p]));
-export const LIVE_PARKS = PARKS.filter((p) => p.scene);
-// Only parks with finished art count toward the collection.
-export const TOTAL_BADGES = LIVE_PARKS.length;
+export const isLive = (park: Park) => park.scene !== null;
+export const scenePath = (scene: string) => `art/badges/scenes/${scene}.webp`;
+// Kept as a path helper for callers that also have to resolve the active release URL.
+export const sceneUrl = (scene: string) => `/${scenePath(scene)}`;
 
-export const isLive = (p: Park) => p.scene !== null;
-export const sceneUrl = (scene: string) => `/art/badges/scenes/${scene}.webp`;
+// Keep earned retired badges in the visitor's lifetime collection denominator.
+export function badgeTotal(liveParks: readonly Pick<Park, "id">[], claimedParkIds: Iterable<string>) {
+  return new Set([...liveParks.map((park) => park.id), ...claimedParkIds]).size;
+}
 
 export type Palette = {
   skyTop: string;
@@ -43,6 +42,7 @@ export type Palette = {
   ribbonText: string;
 };
 
+// These are presentation tokens, not park content, so they remain in the app bundle.
 export const PALETTES: Record<Biome, Palette> = {
   coast: { skyTop: "#FFB38A", skyBottom: "#FFE3B3", sun: "#FFF4D6", far: "#7FB8D8", mid: "#3E97B8", near: "#F4CF8E", water: "#27A9C4", accent: "#FF5A1F", ribbon: "#0E6E86", ribbonText: "#FFF8EC" },
   forest: { skyTop: "#A6E6C3", skyBottom: "#E7F8D8", sun: "#FFD45C", far: "#6CC08F", mid: "#2F9E6B", near: "#1C5B43", water: "#6FD1C4", accent: "#FFC93C", ribbon: "#1C5B43", ribbonText: "#FFF8EC" },
@@ -76,10 +76,10 @@ export const BIOME_LABEL: Record<Biome, string> = {
 };
 
 // The landscape label follows the badge art when a park has it.
-export function landscapeLabel(p: Park) {
-  const kind = p.scene?.split("-")[0];
+export function landscapeLabel(park: Park) {
+  const kind = park.scene?.split("-")[0];
   if (kind === "legendary") return "Legendary vista";
-  return BIOME_LABEL[(kind as Biome) ?? p.biome] ?? BIOME_LABEL[p.biome];
+  return BIOME_LABEL[(kind as Biome) ?? park.biome] ?? BIOME_LABEL[park.biome];
 }
 
 export const CATEGORY_LABEL = { national: "National Park", provincial: "Provincial Park", regional: "Regional Park" };

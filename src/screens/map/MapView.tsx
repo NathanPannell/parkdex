@@ -1,7 +1,6 @@
 import { AttributionControl, Map as MLMap, Marker, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 
 setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
-registerOfflineTiles(location.origin);
 import { motion } from "motion/react";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -10,8 +9,9 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { registerOfflineTiles } from "../../lib/offlineTiles";
-import { isLive, PARKS, type Park } from "../../lib/parks";
+import { registerContentMapProtocols } from "../../lib/offlineTiles";
+import { isLive, type Park } from "../../lib/parks";
+import { useContent, useContentRuntime } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
 const tierOf = (z: number): Tier => (z < 8.6 ? "far" : z < 10.4 ? "mid" : "near");
@@ -43,26 +43,39 @@ const BIOME_FILL = [
 ] as unknown as string;
 
 export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedId, route, onSelect }: Props) {
+  const content = useContent();
+  const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
   const userMarker = useRef<Marker | null>(null);
+  const camera = useRef<{ center: LngLat; zoom: number; bearing: number; pitch: number } | null>(null);
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
-  const [loaded, setLoaded] = useState(false);
+  const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  const releaseId = content?.releaseId;
+  const loaded = releaseId !== undefined && loadedRelease === releaseId && !!mapRef.current?.isStyleLoaded();
 
   useEffect(() => {
+    if (!content || !releaseId) return;
+    setLoadedRelease(null);
+    setHosts([]);
+    setUserHost(null);
+    const unregisterProtocols = registerContentMapProtocols(runtime, content);
+    const savedCamera = camera.current;
     const map = new MLMap({
       container: container.current!,
-      style: mapStyle(location.origin),
+      style: mapStyle(releaseId),
       minZoom: 6.5,
       maxBounds: [
         [ISLAND_BOUNDS[0] - 1.5, ISLAND_BOUNDS[1] - 0.8],
         [ISLAND_BOUNDS[2] + 1.5, ISLAND_BOUNDS[3] + 0.8],
       ],
-      center: user,
-      zoom: 10.7,
+      center: savedCamera?.center ?? user,
+      zoom: savedCamera?.zoom ?? 10.7,
+      bearing: savedCamera?.bearing ?? 0,
+      pitch: savedCamera?.pitch ?? 0,
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
@@ -72,7 +85,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
 
-    const ranked = [...PARKS].sort(
+    const ranked = [...content.parks].sort(
       (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
     );
     setHosts(
@@ -94,13 +107,21 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
       if ((e.originalEvent.target as HTMLElement).closest(".pm")) return;
       selectRef.current(null);
     });
-    map.on("load", () => setLoaded(true));
+    map.on("load", () => setLoadedRelease(releaseId));
 
     return () => {
+      const center = map.getCenter();
+      camera.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
       map.remove();
       mapRef.current = null;
+      unregisterProtocols();
     };
-  }, []);
+  }, [releaseId]);
 
   useEffect(() => {
     userMarker.current?.setLngLat(user);

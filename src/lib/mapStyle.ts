@@ -1,6 +1,5 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
-import { OFFLINE_TILES } from "./offlineTiles";
 
 // Must match the extract bounds in scripts/fetch-map.mjs.
 export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
@@ -64,7 +63,8 @@ const FLAVOR: Flavor = {
   pois: undefined,
 };
 
-export function mapStyle(origin: string): StyleSpecification {
+export function mapStyle(releaseId: string): StyleSpecification {
+  if (!releaseId) throw new Error("A content release is required to build the map style");
   // No sprite ships offline, so drop icon-only layers and icons on labels.
   const base = (layers("protomaps", FLAVOR, { lang: "en" }) as LayerSpecification[])
     .filter((l) => l.id !== "roads_oneway" && l.id !== "roads_shields")
@@ -85,11 +85,11 @@ export function mapStyle(origin: string): StyleSpecification {
   const style = waterIndex >= 0 ? [...base.slice(0, waterIndex), shadow, ...base.slice(waterIndex)] : base;
   return {
     version: 8,
-    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
+    glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf`,
     sources: {
       protomaps: {
         type: "vector",
-        tiles: [OFFLINE_TILES],
+        tiles: [`pmtiles://${encodeURIComponent(releaseId)}/{z}/{x}/{y}`],
         minzoom: 0,
         maxzoom: 14,
         bounds: ISLAND_BOUNDS,

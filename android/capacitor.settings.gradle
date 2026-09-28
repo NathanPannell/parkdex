@@ -19,3 +19,9 @@ project(':capacitor-haptics').projectDir = new File('../node_modules/@capacitor/
 
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+
+include ':capacitor-community-sqlite'
+project(':capacitor-community-sqlite').projectDir = new File('../node_modules/@capacitor-community/sqlite/android')
+
+include ':capacitor-network'
+project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/network/android')
