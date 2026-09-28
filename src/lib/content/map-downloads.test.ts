@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { PMTiles } from "pmtiles";
+import { PMTiles, Protocol } from "pmtiles";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mapAreaTiles } from "./map-downloads";
@@ -8,6 +8,7 @@ import {
   BundledOverviewSource,
   getAllowedMapChunks,
   ISLAND_OVERVIEW_PATH,
+  registerContentMapProtocols,
   resetAllowedMapChunks,
   reloadDetailedMapSource,
   RuntimeChunkSource,
@@ -192,6 +193,47 @@ describe("detail map coverage notifications", () => {
     expect(reloadDetailedMapSource(map)).toBe(true);
     expect(setTiles).toHaveBeenCalledOnce();
     expect(setTiles).toHaveBeenCalledWith(urls);
+  });
+
+  it("replaces a PMTiles reader whose header was denied before coverage arrived", async () => {
+    const path = join(process.cwd(), "public", "map", "bootstrap", "island-overview.pmtiles");
+    const file = readFileSync(path);
+    const archiveBytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
+    const releaseId = "failed-header-retry-test";
+    const manifest: MapManifest = { size: archiveBytes.byteLength, chunkBytes: archiveBytes.byteLength, count: 1 };
+    const runtime = {
+      ensureFile: vi.fn(async () => undefined),
+      readFile: vi.fn(async () => archiveBytes),
+    } as unknown as ContentRuntime;
+    const snapshot = {
+      releaseId,
+      manifest: { mapManifest: manifest, files: [] },
+    } as unknown as ContentSnapshot;
+    const addArchive = vi.spyOn(Protocol.prototype, "add");
+    resetAllowedMapChunks(releaseId);
+    const unregister = registerContentMapProtocols(runtime, snapshot);
+    try {
+      const archives = () => addArchive.mock.calls.map(([pmtiles]) => pmtiles).filter((pmtiles) => pmtiles.source.getKey() === releaseId);
+      const first = archives().at(-1)!;
+      const zoom = ISLAND_OVERVIEW_MAX_ZOOM;
+      const scale = 2 ** zoom;
+      const radians = (VICTORIA[1] * Math.PI) / 180;
+      const x = Math.floor(((VICTORIA[0] + 180) / 360) * scale);
+      const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
+
+      await expect(first.getZxy(zoom, x, y)).rejects.toThrow("has not been downloaded");
+      setAllowedMapChunks(releaseId, [0]);
+      await expect(first.getZxy(zoom, x, y)).rejects.toThrow("has not been downloaded");
+
+      const replacement = archives().at(-1)!;
+      expect(replacement).not.toBe(first);
+      const tile = await replacement.getZxy(zoom, x, y);
+      expect(tile?.data.byteLength).toBeGreaterThan(0);
+    } finally {
+      unregister();
+      resetAllowedMapChunks(releaseId);
+      addArchive.mockRestore();
+    }
   });
 });
 

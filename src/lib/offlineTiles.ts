@@ -260,6 +260,13 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     changed = true;
   }
   if (changed) {
+    const registration = registrations.get(releaseId);
+    if (registration && tileProtocol) {
+      // PMTiles v4.5 keeps rejected header and directory promises in its shared
+      // cache. setTiles() retries MapLibre's source, so replace its PMTiles
+      // reader first while retaining the same verified chunk source and LRU.
+      tileProtocol.add(new PMTiles(registration.source));
+    }
     for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
   }
 }
