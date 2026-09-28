@@ -16,7 +16,9 @@ Claim and photo transfers run automatically while the app is foregrounded. Andro
 
 Claims and photos are separate from downloaded catalogue content. Each claim retains its stable park ID, original claim time, and frozen park snapshot. A retired park therefore remains visible in the earned collection. When its original scene art is needed, the app retrieves it from the claim's immutable content release, verifies it against that release's manifest and file hash, and caches it under the release and scene identity. If the device is offline, the claim stays visible while the matching art waits to restore. Multiple historical claim records for one park remain in progress history while the badge display continues to show one earned badge for that park.
 
-Personal photos use the private photo API and a Cloudflare/R2 service boundary. This does not make provider setup complete: actual Cloudflare resources, secret wiring, and deployed private-photo acceptance still require the owned preview workflow. Photos are not stored in the public content CDN.
+The Account screen also records **Last synced** after a complete, clean claim and photo sync, including restored progress and unchanged saved claims. This marker is separate from the older outgoing-backup timestamp. The personal collection is called **My Dex** throughout the app.
+
+Personal photos use the private photo API and a Cloudflare/R2 service boundary. Legacy app-generated SVG photos and supported oversized rasters can receive a separate bounded JPEG upload rendition while the original stays on the device. Unsupported or conflicting photos remain local. This does not make provider setup complete: actual Cloudflare resources, secret wiring, and deployed private-photo acceptance still require the owned preview workflow. Photos are not stored in the public content CDN.
 
 ## Approved interaction events
 

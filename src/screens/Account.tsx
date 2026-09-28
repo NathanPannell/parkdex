@@ -161,6 +161,7 @@ export function Account({ onBack }: { onBack: () => void }) {
   const canGoogleReauth = hasGoogle && googleAvailable;
   const canPasswordReauth = hasPassword;
   const backupTimestamp = formatBackupTimestamp(auth.backup.updatedAt);
+  const lastSyncedTimestamp = formatBackupTimestamp(auth.backup.lastSyncedAt);
   const backupStatus = backupStatusText(auth.backup.phase, auth.backup.message);
 
   useEffect(() => {
@@ -357,15 +358,15 @@ export function Account({ onBack }: { onBack: () => void }) {
         {auth.phase === "starting" && (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Opening your case…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
+            <div><strong>Opening your Dex…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
           </section>
         )}
 
         {offlineAccount && (
           <section className="account-card card">
             <span className="eyebrow">Offline</span>
-            <h2>Your saved case is here</h2>
-            <p>Parkdex couldn't confirm the account while offline. The previous account's saved collection remains in its private device partition and is not being backed up.</p>
+            <h2>Your saved Dex is here</h2>
+            <p>Parkdex couldn't confirm the account while offline. The previous account's saved Dex remains in its private device partition and is not being backed up.</p>
             <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
             {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
           </section>
@@ -375,7 +376,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-card card" role="alert">
             <span className="eyebrow">Saved progress</span>
             <h2>Storage needs attention</h2>
-            <p>{auth.startupError ?? "The saved collection could not be opened. Your previous data was left untouched."}</p>
+            <p>{auth.startupError ?? "Your saved Dex could not be opened. Your previous data was left untouched."}</p>
             <button className="btn btn--paper btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
           </section>
         )}
@@ -393,6 +394,11 @@ export function Account({ onBack }: { onBack: () => void }) {
                 {account.emailVerified ? "Email verified" : "Email not verified"}
               </span>
               <div className="account-profile__backup" aria-live="polite">
+                <p className="account-profile__backup-time">
+                  {lastSyncedTimestamp
+                    ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
+                    : "Not synced yet"}
+                </p>
                 <p className="account-profile__backup-time">
                   {backupTimestamp
                     ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
@@ -436,7 +442,7 @@ export function Account({ onBack }: { onBack: () => void }) {
 
             <section className="account-card card account-privacy-card">
               <span className="eyebrow">Privacy</span>
-              <p>Signing out hides this account’s saved case on this device. Sign in again to see its collection.</p>
+              <p>Signing out hides this account’s saved Dex on this device. Sign in again to open it.</p>
               <button className="btn btn--paper btn--block" disabled={busy} onClick={() => void run(auth.signOut)}>Sign out on this device</button>
             </section>
 
@@ -517,7 +523,7 @@ export function Account({ onBack }: { onBack: () => void }) {
               ) : (
                 <>
                   <div className="account-form-card__heading">
-                    <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your case safe"}</span>
+                    <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your Dex safe"}</span>
                     <h2>{mode === "sign_up" ? "Create your Parkdex account" : "Sign in to Parkdex"}</h2>
                     <p>{mode === "sign_up" ? "Badges and photos collected before signing in join the first Parkdex account you sign in to." : "Your badges and photos stay on this device until you sign in."}</p>
                   </div>
@@ -585,7 +591,7 @@ function formatBackupTimestamp(timestamp: number | null) {
 
 function backupStatusText(phase: BackupPhase, message: string | null) {
   if (phase === "syncing") return "Backing up saved progress.";
-  if (phase === "offline") return message ?? "Waiting for Wi-Fi to back up saved progress.";
+  if (phase === "offline") return message ?? "You're offline. Saved progress will sync when you reconnect.";
   if (phase === "pending") return message ?? "Some saved progress is waiting for backup.";
   if (phase === "error") return message ?? "Backup couldn’t finish. Your saved data is still on this device.";
   return null;

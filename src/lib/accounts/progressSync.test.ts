@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Park } from "../parks";
 import type { ProgressSyncResult } from "./progressSync";
 
@@ -67,6 +67,34 @@ function requestHeader(init: RequestInit | undefined, name: string) {
   return new Headers(init?.headers).get(name);
 }
 
+function installPhotoConversionBrowser() {
+  let urlCount = 0;
+  const NativeURL = globalThis.URL;
+  class ConversionURL extends NativeURL {
+    static createObjectURL(_blob: Blob | MediaSource) { urlCount += 1; return `blob:test-photo-${urlCount}`; }
+    static revokeObjectURL(_url: string) {}
+  }
+  class ConversionImage {
+    naturalWidth = 600;
+    naturalHeight = 800;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+  }
+  const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+  vi.stubGlobal("URL", ConversionURL);
+  vi.stubGlobal("Image", ConversionImage);
+  vi.stubGlobal("document", {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({ fillStyle: "", fillRect() {}, drawImage() {} }),
+      toBlob(callback: BlobCallback, type = "image/jpeg") { callback(new Blob([jpegBytes.slice().buffer as ArrayBuffer], { type })); },
+    }),
+  });
+  return { get urlCount() { return urlCount; } };
+}
+
 function makeSession(accountId: string, fetchAuthenticated: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, isCurrent?: () => boolean) {
   return { accountId, fetchAuthenticated, isCurrent };
 }
@@ -77,6 +105,11 @@ beforeEach(async () => {
   photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: true });
   for (const name of DB_NAMES) await deleteDatabase(name);
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: new MemoryStorage() });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("account progress sync", () => {
@@ -177,7 +210,7 @@ describe("account progress sync", () => {
     const sync = await import("./progressSync");
     const successful = {
       ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-      claimsPending: 0, photosPending: 0, issues: [],
+      fullPullCompleted: true, savedClaimCount: 1, claimsPending: 0, photosPending: 0, issues: [],
     } satisfies ProgressSyncResult;
     const restoreOnly = { ...successful, claimsUploaded: 0, claimsRestored: 1 };
     const get = vi.fn(async () => 99);
@@ -196,11 +229,97 @@ describe("account progress sync", () => {
     expect(durable).toBe(200);
   });
 
+  it("persists Last synced after a clean restore-only full pull with saved Dex records", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const ids = [
+      "55555555-5555-4555-8555-555555555555",
+      "66666666-6666-4666-8666-666666666666",
+      "77777777-7777-4777-8777-777777777777",
+      "88888888-8888-4888-8888-888888888888",
+      "99999999-9999-4999-8999-999999999999",
+    ];
+    const fetcher = async (input: RequestInfo | URL) => {
+      const url = requestUrl(input);
+      if (url === "/api/claims") {
+        return jsonResponse({
+          claims: ids.map((id, index) => remoteClaim(id, park(`saved-park-${index}`, `Saved Park ${index + 1}`))),
+          nextCursor: "after-five-restored-claims",
+        });
+      }
+      if (url === "/api/claims?cursor=after-five-restored-claims") return jsonResponse({ claims: [], nextCursor: null });
+      throw new Error(`Unexpected request: ${url}`);
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(result.fullPullCompleted).toBe(true);
+    expect(result.claimsUploaded).toBe(0);
+    expect(result.claimsRestored).toBe(5);
+    expect(result.savedClaimCount).toBe(5);
+    expect(sync.canPersistLastCompleteSync(result)).toBe(true);
+
+    let durable: number | null = null;
+    const storage = {
+      get: vi.fn(async () => durable),
+      set: vi.fn(async (_accountId: string, timestamp: number) => { durable = Math.max(durable ?? 0, timestamp); }),
+    };
+    const timestamp = await sync.persistLastCompleteSyncTimestamp(ACCOUNT_A, result, null, storage, async () => true, 10_000);
+    expect(timestamp).toBe(10_000);
+    expect(durable).toBe(10_000);
+    expect((await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A }))).toHaveLength(5);
+  });
+
+  it("does not persist Last synced for partial pulls, pending photos, issues, empty accounts, or invalid sessions", async () => {
+    const sync = await import("./progressSync");
+    const complete = {
+      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 0, photosUploaded: 0, claimsRestored: 5, photosRestored: 0,
+      fullPullCompleted: true, savedClaimCount: 5, claimsPending: 0, photosPending: 0, issues: [],
+    } satisfies ProgressSyncResult;
+    const ineligible = [
+      { ...complete, fullPullCompleted: false },
+      { ...complete, photosPending: 1 },
+      { ...complete, issues: [{ operation: "photo-restore" as const, code: "network_error", message: "Photo restore failed." }] },
+      { ...complete, issues: [{ operation: "photo-upload" as const, code: "unsupported_photo", message: "An old photo is unsupported." }] },
+      { ...complete, issues: [{ operation: "photo-upload" as const, code: "photo_conflict", message: "An old photo conflicts." }] },
+      { ...complete, savedClaimCount: 0, claimsRestored: 0 },
+    ];
+    for (const result of ineligible) expect(sync.canPersistLastCompleteSync(result)).toBe(false);
+
+    const set = vi.fn(async () => {});
+    const get = vi.fn(async () => 10);
+    const invalidSessionOrRuntime = await sync.persistLastCompleteSyncTimestamp(
+      ACCOUNT_A, complete, 10, { get, set }, async () => false, 20,
+    );
+    expect(invalidSessionOrRuntime).toBe(10);
+    expect(set).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("leaves Last synced unchanged when claim pagination fails partway through", async () => {
+    const sync = await import("./progressSync");
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, async (input) => {
+      const url = requestUrl(input);
+      if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim()], nextCursor: "one-more-page" });
+      if (url === "/api/claims?cursor=one-more-page") return jsonResponse({ error: "temporarily unavailable" }, 503);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    const set = vi.fn(async () => {});
+
+    expect(result.fullPullCompleted).toBe(false);
+    expect(result.savedClaimCount).toBe(1);
+    expect(result.issues.some((issue) => issue.operation === "claim-restore")).toBe(true);
+    expect(await sync.persistLastCompleteSyncTimestamp(ACCOUNT_A, result, 50, {
+      get: async () => 50,
+      set,
+    }, async () => true, 100)).toBe(50);
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it("does not advance the successful-backup timestamp while persistent photo issues remain", async () => {
     const sync = await import("./progressSync");
     const successful = {
       ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-      claimsPending: 0, photosPending: 0, issues: [],
+      fullPullCompleted: true, savedClaimCount: 1, claimsPending: 0, photosPending: 0, issues: [],
     } satisfies ProgressSyncResult;
     const unsupported = {
       ...successful,
@@ -212,6 +331,8 @@ describe("account progress sync", () => {
     };
     expect(sync.canPersistSuccessfulOutboundBackup(unsupported)).toBe(false);
     expect(sync.canPersistSuccessfulOutboundBackup(conflict)).toBe(false);
+    expect(sync.canPersistLastCompleteSync(unsupported)).toBe(false);
+    expect(sync.canPersistLastCompleteSync(conflict)).toBe(false);
     const set = vi.fn(async () => {});
     const get = vi.fn(async () => 100);
     expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, unsupported, 50, { get, set }, 200)).toBe(50);
@@ -220,13 +341,16 @@ describe("account progress sync", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
-  it("keeps old unsupported photos visible as issues after a newer claim uploads", async () => {
+  it("keeps old unsupported and conflicting photos visible after a newer claim uploads", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
     const owner = { kind: "account" as const, accountId: ACCOUNT_A };
     const oldClaim = await personal.createPersonalClaim(owner, { park: park(), photo: png(9) });
     await personal.markClaimUploaded(owner, oldClaim.claimId, personal.claimPayload(oldClaim));
     await personal.markPhotoUnsupported(owner, oldClaim.claimId);
+    const conflictingClaim = await personal.createPersonalClaim(owner, { park: park("harbor-point", "Harbor Point Park"), photo: png(10) });
+    await personal.markClaimUploaded(owner, conflictingClaim.claimId, personal.claimPayload(conflictingClaim));
+    await personal.markPhotoConflict(owner, conflictingClaim.claimId);
     const newClaim = await personal.createPersonalClaim(owner, { park: park("maple-cove", "Maple Cove Park") });
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "PUT") {
@@ -240,7 +364,9 @@ describe("account progress sync", () => {
     expect(result.claimsUploaded).toBe(1);
     expect(result.photosPending).toBe(0);
     expect(result.issues).toContainEqual(expect.objectContaining({ claimId: oldClaim.claimId, code: "unsupported_photo" }));
+    expect(result.issues).toContainEqual(expect.objectContaining({ claimId: conflictingClaim.claimId, code: "photo_conflict" }));
     expect(sync.canPersistSuccessfulOutboundBackup(result)).toBe(false);
+    expect(sync.canPersistLastCompleteSync(result)).toBe(false);
   });
 
   it("retries an offline claim with the same immutable UUID and acknowledges only after the server response", async () => {
@@ -256,6 +382,7 @@ describe("account progress sync", () => {
     }));
     const first = await offline;
     expect(first.claimsPending).toBe(1);
+    expect(sync.canPersistLastCompleteSync(first)).toBe(false);
     expect((await personal.listPersonalClaims(owner))[0].syncState).toBe("pending");
 
     const retried = await sync.syncProgress(makeSession(ACCOUNT_A, async (input, init) => {
@@ -524,6 +651,7 @@ describe("account progress sync", () => {
     const result = await sync.syncProgress(session);
     expect(result.issues.some((issue) => issue.code === "session_changed")).toBe(true);
     expect(result.issues.some((issue) => issue.operation === "claim-restore")).toBe(false);
+    expect(sync.canPersistLastCompleteSync(result)).toBe(false);
     expect((await personal.listPersonalClaims(owner))[0].syncState).toBe("pending");
   });
 
@@ -649,6 +777,163 @@ describe("account progress sync", () => {
     expect((await personal.getPersonalPhoto(owner, local.claimId))?.backupState).toBe("backed-up");
   });
 
+  it("backs up a trusted legacy SVG rendition beside the unchanged guest photo and a new camera photo", async () => {
+    const browser = installPhotoConversionBrowser();
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const { sceneSvg } = await import("./photoBackupRendition");
+    const legacySvg = sceneSvg(park());
+    const originalBlob = new Blob([legacySvg], { type: "image/svg+xml" });
+    const guestClaim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: originalBlob });
+    const accountOwner = { kind: "account" as const, accountId: ACCOUNT_A };
+    await personal.reserveGuestClaimsForAccount(ACCOUNT_A);
+    const newClaim = await personal.createPersonalClaim(accountOwner, { park: park("new-capture"), photo: png(2) });
+    const uploads: Array<{ claimId: string; contentType: string; sizeBytes: number; sha256: string }> = [];
+
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) {
+        const claimId = url.split("/").at(-2)!;
+        const body = init.body as Blob;
+        const digest = await personal.hashPhoto(body);
+        uploads.push({ claimId, contentType: String(requestHeader(init, "Content-Type")), sizeBytes: body.size, sha256: digest });
+        return jsonResponse({ claimId, photo: { status: "ready", sha256: digest, sizeBytes: body.size, contentType: body.type } }, 201);
+      }
+      if (init?.method === "PUT") {
+        const claimId = url.split("/").at(-1)!;
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    const savedPhoto = await personal.getPersonalPhoto(accountOwner, guestClaim.claimId);
+    const backupSource = savedPhoto && personal.personalPhotoBackupSource(savedPhoto);
+
+    expect(result.photosUploaded).toBe(2);
+    expect(result.photosPending).toBe(0);
+    expect(result.issues).toEqual([]);
+    expect(uploads.map((upload) => upload.claimId).sort()).toEqual([guestClaim.claimId, newClaim.claimId].sort());
+    expect(uploads.find((upload) => upload.claimId === guestClaim.claimId)).toMatchObject({ contentType: "image/jpeg" });
+    expect(uploads.find((upload) => upload.claimId === newClaim.claimId)).toMatchObject({ contentType: "image/png" });
+    expect(backupSource).toMatchObject({ sha256: uploads.find((upload) => upload.claimId === guestClaim.claimId)?.sha256, contentType: "image/jpeg" });
+    expect(savedPhoto).toMatchObject({
+      claimId: guestClaim.claimId, contentType: "image/svg+xml", sizeBytes: originalBlob.size,
+      backupState: "backed-up", backupRendition: { sourceSha256: await personal.hashPhoto(originalBlob) },
+    });
+    expect(await savedPhoto?.blob.text()).toBe(legacySvg);
+    expect((await personal.listPersonalClaims(accountOwner)).map((claim) => claim.claimId)).toContain(guestClaim.claimId);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    expect(await personal.listPersonalOutbox(accountOwner)).toEqual([]);
+    expect(browser.urlCount).toBe(1);
+  });
+
+  it("keeps a different ready server photo immutable and does not upload over it", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const original = png(8);
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: original });
+    const remotePhoto = { status: "ready", sha256: "a".repeat(64), sizeBytes: original.size, contentType: "image/png" };
+    const photoUploads: string[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) {
+        photoUploads.push(url);
+        return jsonResponse({ claimId: claim.claimId, photo: remotePhoto }, 201);
+      }
+      if (init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId: claim.claimId, ...payload, photo: remotePhoto } }, 200);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    const saved = await personal.getPersonalPhoto(owner, claim.claimId);
+    const savedClaim = (await personal.listPersonalClaims(owner))[0];
+    expect(photoUploads).toEqual([]);
+    expect(result.issues).toContainEqual(expect.objectContaining({ claimId: claim.claimId, code: "photo_conflict" }));
+    expect(saved?.backupState).toBe("conflict");
+    expect(savedClaim.remotePhoto).toEqual(remotePhoto);
+    expect(await saved?.blob.arrayBuffer()).toEqual(await original.arrayBuffer());
+  });
+
+  it("leaves a non-template SVG local and unsupported without attempting to load or upload it", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const hostileSvg = '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("/private")</script><image href="https://example.invalid/x.svg"/></svg>';
+    const original = new Blob([hostileSvg], { type: "image/svg+xml" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: original });
+    const photoUrls: string[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) photoUrls.push(url);
+      if (init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId: claim.claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    const saved = await personal.getPersonalPhoto(owner, claim.claimId);
+    expect(photoUrls).toEqual([]);
+    expect(result.issues).toContainEqual(expect.objectContaining({ claimId: claim.claimId, code: "unsupported_photo" }));
+    expect(saved).toMatchObject({ backupState: "unsupported", unsupportedReason: "type", backupRendition: null });
+    expect(await saved?.blob.text()).toBe(hostileSvg);
+    expect(await personal.listPersonalOutbox(owner)).toEqual([]);
+  });
+
+  it("reuses its durable legacy photo rendition after an offline upload and module restart", async () => {
+    const browser = installPhotoConversionBrowser();
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const { sceneSvg } = await import("./photoBackupRendition");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const originalBlob = new Blob([sceneSvg(park())], { type: "image/svg+xml" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: originalBlob });
+    const offlineFetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) throw new TypeError("offline");
+      if (init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId: claim.claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+    const first = await sync.syncProgress(makeSession(ACCOUNT_A, offlineFetcher));
+    const firstCopy = await personal.getPersonalPhoto(owner, claim.claimId);
+    expect(first.photosPending).toBe(1);
+    expect(firstCopy?.backupRendition?.contentType).toBe("image/jpeg");
+    expect(await personal.listPersonalOutbox(owner)).toContainEqual({ ownerKey: `account:${ACCOUNT_A}`, claimId: claim.claimId, kind: "photo" });
+    expect(browser.urlCount).toBe(1);
+
+    vi.resetModules();
+    const restartedPersonal = await import("./personalStore");
+    const restartedSync = await import("./progressSync");
+    const uploaded: Blob[] = [];
+    const onlineFetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT" && url.endsWith("/photo")) {
+        const blob = init.body as Blob;
+        uploaded.push(blob);
+        const digest = await restartedPersonal.hashPhoto(blob);
+        return jsonResponse({ claimId: claim.claimId, photo: { status: "ready", sha256: digest, sizeBytes: blob.size, contentType: blob.type } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+    const second = await restartedSync.syncProgress(makeSession(ACCOUNT_A, onlineFetcher));
+
+    expect(second.photosUploaded).toBe(1);
+    expect(second.photosPending).toBe(0);
+    expect(browser.urlCount).toBe(1);
+    expect(uploaded[0]?.type).toBe("image/jpeg");
+    expect(await (await restartedPersonal.getPersonalPhoto(owner, claim.claimId))?.blob.text()).toBe(await originalBlob.text());
+  });
+
   it("rejects corrupt private photo bytes and retains the claim for later restore retry", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
@@ -669,6 +954,7 @@ describe("account progress sync", () => {
     expect(requestCount).toBe(1);
     expect(result.photosRestored).toBe(0);
     expect(result.issues.some((issue) => issue.operation === "photo-restore")).toBe(true);
+    expect(sync.canPersistLastCompleteSync(result)).toBe(false);
     expect(await personal.getPersonalPhoto({ kind: "account", accountId: ACCOUNT_A }, REMOTE_ID)).toBeNull();
     expect((await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A }))[0].remotePhoto).toMatchObject({ status: "ready", sha256: digest });
   });
