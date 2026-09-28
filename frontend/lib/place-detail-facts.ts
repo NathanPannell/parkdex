@@ -1,4 +1,5 @@
 import catalogue from "./place-areas.catalogue.json";
+import { authorityForPlace } from "./collection";
 import type { Place } from "./places";
 
 /**
@@ -23,10 +24,11 @@ const EARTH_MEAN_RADIUS_METERS = 6_371_008.8;
  * locality. The ACRD Mount Arrowsmith record is explicitly identified in the
  * catalogue because its mapped geometry and source are shared with the RDN.
  */
-export function shortOriginForPlace(place: Pick<Place, "id" | "category" | "region" | "sourceName">): string | null {
+export function shortOriginForPlace(place: Pick<Place, "id" | "category" | "region" | "sourceName" | "authority">): string | null {
   if (place.category === "national") return "Parks Canada";
   if (place.category === "provincial") return "BC Parks";
   if (place.category === "island") return "BC Geographical Names";
+  if (place.category === "municipal" || place.category === "community") return authorityForPlace(place);
 
   if (place.id === "regional-mount-arrowsmith-regional-park-acrd") return "Alberni-Clayoquot";
   if (place.sourceName.includes("Capital Regional District")) return "Capital Region";

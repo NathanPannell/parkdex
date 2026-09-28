@@ -69,4 +69,26 @@ describe("park detail facts", () => {
     expect(shortOriginForPlace({ id: "future-regional-place", category: "regional", region: "North Island", sourceName: "Unknown publisher" })).toBe("North Island");
     expect(shortOriginForPlace({ id: "future-regional-place", category: "regional", region: "  ", sourceName: "Unknown publisher" })).toBeNull();
   });
+
+  it("uses municipal and community authorities as origins instead of their shared region", () => {
+    expect(shortOriginForPlace({
+      id: "municipal-beacon-hill-park",
+      category: "municipal",
+      region: "Southern Vancouver Island",
+      sourceName: "City of Victoria (CRD Park GIS)",
+    })).toBe("City of Victoria");
+    expect(shortOriginForPlace({
+      id: "community-juan-de-fuca-park",
+      category: "community",
+      region: "Southern Vancouver Island",
+      sourceName: "Juan de Fuca Electoral Area (CRD Park GIS)",
+    })).toBe("Juan de Fuca Electoral Area");
+    expect(shortOriginForPlace({
+      id: "municipal-beacon-hill-park",
+      category: "municipal",
+      region: "Southern Vancouver Island",
+      sourceName: "City of Victoria (CRD Park GIS)",
+      authority: "City of Victoria parks",
+    })).toBe("City of Victoria parks");
+  });
 });

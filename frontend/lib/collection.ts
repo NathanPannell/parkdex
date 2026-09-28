@@ -42,7 +42,7 @@ export function listRegionForPlace(place: Place): string {
   return islandListRegions[place.region] ?? place.region;
 }
 
-export function authorityForPlace(place: Place): string {
+export function authorityForPlace(place: Pick<Place, "authority" | "category" | "sourceName">): string {
   if (place.authority) return place.authority;
   if (place.category === "national") return "Parks Canada";
   if (place.category === "provincial") return "BC Parks";
