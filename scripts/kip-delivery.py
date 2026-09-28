@@ -374,10 +374,35 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
     run([sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_kip*.py"], cwd=candidate_root, env=env, label="candidate delivery tests")
     state["validation"].append({"check": "delivery-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
     save_json(path, state)
-    if state.get("accountsPresent"):
-        run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
-        state["validation"].append({"check": "postgresql-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+    if content_sync_present(load_config(), candidate_root):
+        feature = load_config()["contentSync"]
+        requirements = candidate_root / feature["pythonRequirementsPath"]
+        run(
+            [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-r", str(requirements)],
+            cwd=candidate_root,
+            env=env,
+            label="candidate content Python dependencies",
+        )
+        run_content_sync_sql_qa(load_config(), candidate_root)
+        state["validation"].append({"check": "postgresql-content-sync-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
         save_json(path, state)
+        for name in feature["pythonTestPaths"]:
+            run(
+                [sys.executable, str(candidate_root / name)],
+                cwd=candidate_root,
+                env=env,
+                label=f"candidate content Python test {Path(name).name}",
+            )
+        state["validation"].append({"check": "content-python-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+
+    account_sql = candidate_root / "scripts" / "qa-account-sql.mjs"
+    if account_sql.is_file():
+        run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
+        state["validation"].append({"check": "postgresql-account-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+
+    if state.get("accountsPresent"):
         photo_provider().validate_candidate(sys.modules[__name__], load_config(), candidate_root)
         state["validation"].append({"check": "private-photo-worker-bundle", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
         save_json(path, state)
@@ -392,9 +417,22 @@ def candidate_sql_env() -> dict[str, str]:
         or not values["PGPASSWORD"]
         or (values["PGPORT"] and (not values["PGPORT"].isdigit() or not 1 <= int(values["PGPORT"]) <= 65535))
     ):
-        raise DeliveryError("Account candidate SQL tests require PG* credentials for a disposable loopback kip_qa_ database.")
+        raise DeliveryError("Candidate SQL tests require PG* credentials for a disposable loopback kip_qa_ database.")
     register_secret(values["PGPASSWORD"])
     return safe_env(extra={key: value for key, value in values.items() if value})
+
+
+def candidate_database_url(env: dict[str, str]) -> str:
+    host = env["PGHOST"]
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    port = env.get("PGPORT", "5432")
+    user = urllib.parse.quote(env["PGUSER"], safe="")
+    password = urllib.parse.quote(env["PGPASSWORD"], safe="")
+    database = urllib.parse.quote(env["PGDATABASE"], safe="")
+    value = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    register_secret(value)
+    return value
 
 
 def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
@@ -822,7 +860,7 @@ def parse_database_url(value: str, expected_database: str | None = None) -> tupl
     return uri, urllib.parse.unquote(uri.username), urllib.parse.unquote(uri.password)
 
 
-def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> list[str]:
+def psql_executable() -> str:
     executable = shutil.which("psql")
     if not executable and os.name == "nt":
         for candidate in sorted(Path("C:/Program Files/PostgreSQL").glob("*/bin/psql.exe"), reverse=True):
@@ -831,8 +869,12 @@ def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> li
                 break
     if not executable:
         raise DeliveryError("PostgreSQL client psql was not found.")
+    return executable
+
+
+def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> list[str]:
     return [
-        executable, "-X", "-v", "ON_ERROR_STOP=1", "-h", uri.hostname,
+        psql_executable(), "-X", "-v", "ON_ERROR_STOP=1", "-h", uri.hostname,
         "-p", str(uri.port or 5432), "-U", username, "-d", database,
     ]
 
@@ -856,7 +898,28 @@ def preview_psql_query(database_url: str, sql: str) -> str:
     return output.strip()
 
 
-def verify_preview_database_empty(database_url: str, *, migration_applied: bool) -> None:
+def candidate_psql_args(env: dict[str, str], *, database_override: str | None = None) -> list[str]:
+    args = [psql_executable(), "-X", "-v", "ON_ERROR_STOP=1"]
+    for key, flag in (("PGHOST", "-h"), ("PGPORT", "-p"), ("PGUSER", "-U"), ("PGDATABASE", "-d")):
+        if key == "PGDATABASE" and database_override is not None:
+            continue
+        if env.get(key):
+            args.extend((flag, env[key]))
+    if database_override is not None:
+        args.extend(("-d", database_override))
+    return args
+
+
+def run_candidate_sql_file(script: Path, env: dict[str, str], *, cwd: Path = ROOT, transactional: bool = True) -> None:
+    args = candidate_psql_args(env)
+    if transactional:
+        args.extend(("-1", "-f", str(script)))
+    else:
+        args.extend(("-f", str(script)))
+    run(args, cwd=cwd, env=env, label=f"candidate SQL {script.name}")
+
+
+def verify_preview_database_empty(database_url: str, *, migration_applied: bool, allow_content_clock: bool = False) -> None:
     if not migration_applied:
         tables = preview_psql_query(
             database_url,
@@ -865,12 +928,33 @@ def verify_preview_database_empty(database_url: str, *, migration_applied: bool)
         if tables != "0":
             raise DeliveryError("The fresh preview database already contains application tables; refusing to use it.")
         return
-    preview_psql_query(database_url, """
-        DO $$ DECLARE item record; populated boolean;
+    clock_guard = ""
+    clock_skip = "false"
+    if allow_content_clock:
+        clock_table = load_config().get("contentSync", {}).get("previewClockTable")
+        if not isinstance(clock_table, str) or not re.fullmatch(r"[a-z_][a-z0-9_]*", clock_table):
+            raise DeliveryError("The content sync clock allowlist is invalid.")
+        clock_guard = f"""
+          SELECT count(*) INTO clock_rows FROM public.{clock_table};
+          IF clock_rows <> 1 OR NOT EXISTS (
+            SELECT 1 FROM public.{clock_table}
+             WHERE singleton IS TRUE
+               AND revision = 0
+               AND retention_floor = 0
+               AND last_transaction_id IS NULL
+          ) THEN
+            RAISE EXCEPTION 'Fresh preview content clock is not exactly initialized';
+          END IF;
+        """
+        clock_skip = f"(item.table_schema = 'public' AND item.table_name = '{clock_table}')"
+    preview_psql_query(database_url, f"""
+        DO $$ DECLARE item record; populated boolean; clock_rows bigint;
         BEGIN
+          {clock_guard}
           FOR item IN SELECT table_schema, table_name FROM information_schema.tables
             WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'
           LOOP
+            IF {clock_skip} THEN CONTINUE; END IF;
             EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I.%I LIMIT 1)', item.table_schema, item.table_name) INTO populated;
             IF populated THEN RAISE EXCEPTION 'Fresh preview database contains data'; END IF;
           END LOOP;
@@ -920,12 +1004,134 @@ def migration_presence(candidate_root: Path) -> tuple[bool, bool]:
     return has_api, has_migration
 
 
+def content_sync_present(config: dict, candidate_root: Path) -> bool:
+    feature = config.get("contentSync")
+    if not isinstance(feature, dict):
+        raise DeliveryError("The content sync delivery allowlist is invalid.")
+    migration_names = feature.get("migrationPaths")
+    api_names = feature.get("apiPaths")
+    bootstrap_name = feature.get("bootstrapPath")
+    qa_sql_name = feature.get("qaSqlPath")
+    python_test_names = feature.get("pythonTestPaths")
+    python_requirements_name = feature.get("pythonRequirementsPath")
+    if (
+        not isinstance(migration_names, list) or not migration_names
+        or not isinstance(api_names, list) or not api_names
+        or not isinstance(bootstrap_name, str) or not bootstrap_name
+        or not isinstance(qa_sql_name, str) or not qa_sql_name
+        or not isinstance(python_test_names, list) or not python_test_names
+        or not isinstance(python_requirements_name, str) or not python_requirements_name
+        or any(not isinstance(name, str) or not name for name in [*migration_names, *api_names])
+        or any(not isinstance(name, str) or not name for name in python_test_names)
+    ):
+        raise DeliveryError("The content sync delivery allowlist is invalid.")
+    marker_names = [*migration_names, *api_names, bootstrap_name, qa_sql_name]
+    present = [ (candidate_root / name).is_file() for name in marker_names ]
+    if any(present) and not all(present):
+        raise DeliveryError("The content sync migration, API routes, bootstrap helper, SQL QA, and Python test assets must ship together.")
+    if not any(present):
+        return False
+    support_names = [*python_test_names, python_requirements_name]
+    if any(not (candidate_root / name).is_file() for name in support_names):
+        raise DeliveryError("The complete content sync feature requires its allowlisted Python tests and pinned dependencies.")
+    supporting = feature.get("supportingMigrationPaths")
+    if not isinstance(supporting, list) or not supporting or any(not isinstance(name, str) or not name for name in supporting):
+        raise DeliveryError("The content sync supporting migration allowlist is invalid.")
+    if any(not (candidate_root / name).is_file() for name in supporting):
+        raise DeliveryError("Content sync requires its allowlisted public content schema migration.")
+    return True
+
+
+def bootstrap_content(config: dict, candidate_root: Path, database_url: str, environment: str) -> None:
+    if environment not in ("preview", "staging"):
+        raise DeliveryError("Public content bootstrap requires a preview or staging environment.")
+    if not content_sync_present(config, candidate_root):
+        raise DeliveryError("Public content bootstrap requires the complete content sync feature.")
+    helper = candidate_root / config["contentSync"]["bootstrapPath"]
+    register_secret(database_url)
+    env = safe_env(extra={"MIGRATION_DATABASE_URL": database_url})
+    run(
+        [sys.executable, str(helper), "--apply", "--environment", environment],
+        cwd=candidate_root,
+        env=env,
+        label=f"public content bootstrap ({environment})",
+    )
+
+
+def run_content_sync_sql_qa(config: dict, candidate_root: Path) -> None:
+    feature = config.get("contentSync", {})
+    qa_name = feature.get("qaSqlPath") if isinstance(feature, dict) else None
+    if not isinstance(qa_name, str) or not qa_name:
+        raise DeliveryError("The content sync SQL QA allowlist is invalid.")
+    qa_script = candidate_root / qa_name
+    if not qa_script.is_file():
+        raise DeliveryError("The allowlisted content sync SQL QA script is missing.")
+    if not content_sync_present(config, candidate_root):
+        raise DeliveryError("Content sync SQL QA requires the complete content sync feature.")
+
+    admin_env = candidate_sql_env()
+    database_name = f"kip_qa_content_sync_{uuid.uuid4().hex}"
+    if not re.fullmatch(r"kip_qa_content_sync_[0-9a-f]{32}", database_name):
+        raise DeliveryError("Could not create a safe owned content QA database name.")
+    admin_psql = candidate_psql_args(admin_env, database_override="postgres")
+    existing = run(
+        [*admin_psql, "-qAt", "-c", f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{database_name}'"],
+        cwd=candidate_root,
+        env=admin_env,
+        label="candidate content QA database ownership check",
+    ).strip()
+    if existing:
+        raise DeliveryError("The unique content QA database name already exists; refusing to use or remove it.")
+    run(
+        [*admin_psql, "-c", f'CREATE DATABASE "{database_name}"'],
+        cwd=candidate_root,
+        env=admin_env,
+        label="create owned content QA database",
+    )
+    qa_env = dict(admin_env)
+    qa_env["PGDATABASE"] = database_name
+    try:
+        table_count = run(
+            [*candidate_psql_args(qa_env), "-qAt", "-c",
+             "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'"],
+            cwd=candidate_root,
+            env=qa_env,
+            label="candidate PostgreSQL initialization check",
+        ).strip()
+        if table_count != "0":
+            raise DeliveryError("The newly created content QA database is not empty.")
+
+        for migration in migration_paths(config, candidate_root):
+            run_candidate_sql_file(migration, qa_env, cwd=candidate_root)
+        database_url = candidate_database_url(qa_env)
+        bootstrap_content(config, candidate_root, database_url, "preview")
+        run_candidate_sql_file(qa_script, qa_env, cwd=candidate_root, transactional=False)
+    finally:
+        run(
+            [*admin_psql, "-c", f'DROP DATABASE "{database_name}"'],
+            cwd=candidate_root,
+            env=admin_env,
+            label="drop owned content QA database",
+        )
+
+
+def qa_content_sync() -> None:
+    config = load_config()
+    run_content_sync_sql_qa(config, ROOT)
+
+
 def migration_paths(config: dict, candidate_root: Path) -> list[Path]:
     """Trusted ordered inventory. Never execute arbitrary candidate SQL filenames."""
+    has_content_sync = content_sync_present(config, candidate_root)
     has_api, _ = migration_presence(candidate_root)
     if not has_api:
+        if has_content_sync:
+            raise DeliveryError("Content sync requires the existing application API and feedback migration.")
         return []
     paths = [candidate_root / config["migrationPath"]]
+    if has_content_sync:
+        feature = config["contentSync"]
+        paths.extend(candidate_root / name for name in feature["supportingMigrationPaths"])
     optional = [candidate_root / name for name in config.get("optionalMigrationPaths", [])]
     present = [path for path in optional if path.is_file()]
     feature_markers = (candidate_root / "worker/accounts", candidate_root / config["privatePhotos"]["sourcePath"])
@@ -936,12 +1142,15 @@ def migration_paths(config: dict, candidate_root: Path) -> list[Path]:
     if present and not (candidate_root / config["privatePhotos"]["sourcePath"]).is_file():
         raise DeliveryError("Account migrations require the private photo Worker service.")
     paths.extend(present)
+    if has_content_sync:
+        paths.extend(candidate_root / name for name in config["contentSync"]["migrationPaths"])
     return paths
 
 
 def accounts_present(config: dict, candidate_root: Path) -> bool:
     paths = migration_paths(config, candidate_root)
-    return len(paths) > 1
+    account_names = config.get("optionalMigrationPaths", [])
+    return bool(account_names) and all(candidate_root / name in paths for name in account_names)
 
 
 def require_account_runtime(config: dict, bundle: dict, candidate_root: Path) -> None:
@@ -1090,7 +1299,8 @@ def preview_plan(pr: int) -> None:
     print("plan=validate the clean exact origin/staging harness and the open same-repository draft PR")
     print("plan=build a synthetic merge in a temporary worktree with provider credentials removed")
     print("plan=create a 72-hour schema-only Neon branch, fresh app role and empty database, then verify zero rows")
-    print("plan=apply only the feedback migration when the API is present")
+    print("plan=apply only trusted allowlisted migrations required by complete API, account, and content feature markers")
+    print("plan=after the fresh-database proof, seed only manifest-verified public content when content sync is present")
     print("plan=deploy one Vercel Preview deployment with isolated runtime credentials and email disabled")
     print(f"plan=journal outside the repository at {journal_path(pr)}")
     print(f"apply-command=pwsh -File scripts/preview-pr.ps1 -PullRequest {pr} -Apply")
@@ -1156,6 +1366,7 @@ def preview_apply(pr: int) -> None:
         state["apiPresent"] = has_api
         migrations = migration_paths(config, candidate_root)
         state["accountsPresent"] = accounts_present(config, candidate_root)
+        state["contentSyncPresent"] = content_sync_present(config, candidate_root)
         set_release_file(candidate_root, head_sha, "preview")
         candidate_checks(candidate_root, state, path)
         pr_latest = gh_pr(pr)
@@ -1224,7 +1435,14 @@ def preview_apply(pr: int) -> None:
             verify_preview_database_empty(database_url, migration_applied=False)
             for migration in migrations:
                 run_migration(database_url, migration)
-            verify_preview_database_empty(database_url, migration_applied=True)
+            verify_preview_database_empty(
+                database_url,
+                migration_applied=True,
+                allow_content_clock=state["contentSyncPresent"],
+            )
+            if state["contentSyncPresent"]:
+                bootstrap_content(config, candidate_root, database_url, "preview")
+                state["contentSeededAt"] = datetime.now(timezone.utc).isoformat()
             state["status"] = "neon-migrated"
             save_json(path, state)
 
@@ -1548,20 +1766,28 @@ def migration_staging(args) -> None:
     config = load_config()
     verify_git_sha(args.sha, staging_only=True, clean=False)
     has_api, has_migration = staging_api_state(config)
+    migrations = migration_paths(config, ROOT)
+    has_content_sync = content_sync_present(config, ROOT)
     if not has_migration:
         print("migration=skipped static bootstrap has no API or feedback schema")
         return
     if not args.apply:
-        print(f"plan=apply {config['migrationPath']} to the dedicated Parkdex Kip staging database")
+        for migration in migrations:
+            print(f"plan=apply {migration.relative_to(ROOT).as_posix()} to the dedicated Parkdex Kip staging database")
+        if has_content_sync:
+            print("plan=run the all-or-nothing verified public content bootstrap after the additive migrations")
         return
     bundle = read_runtime_bundle(config)
     verify_runtime_bundle(bundle, config)
     database_url = bundle.get("MIGRATION_DATABASE_URL") or bundle["DATABASE_URL"]
     parse_database_url(database_url, config["neonDatabaseName"])
     require_account_runtime(config, bundle, ROOT)
-    for migration in migration_paths(config, ROOT):
+    for migration in migrations:
         run_migration(database_url, migration)
         print(f"migration-applied={migration.relative_to(ROOT).as_posix()}")
+    if has_content_sync:
+        bootstrap_content(config, ROOT, database_url, "staging")
+        print("content-bootstrap=verified public content inserted missing-only in one staging transaction")
 
 
 def ensure_previous_staging_resolved(config: dict, project_id: str) -> None:
@@ -1883,6 +2109,7 @@ def build_parser() -> argparse.ArgumentParser:
     item = sub.add_parser("migrate-staging")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
+    sub.add_parser("qa-content-sync")
     item = sub.add_parser("deploy-staging")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
@@ -1920,6 +2147,8 @@ def main() -> int:
             prepare_release(args)
         elif args.command == "migrate-staging":
             migration_staging(args)
+        elif args.command == "qa-content-sync":
+            qa_content_sync()
         elif args.command == "deploy-staging":
             dispatch_staging(args)
         elif args.command == "deploy-staging-services":
