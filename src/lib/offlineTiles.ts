@@ -1,4 +1,4 @@
-import { addProtocol, removeProtocol } from "maplibre-gl";
+import { addProtocol, removeProtocol, type Map as MapLibreMap, type StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol, type RangeResponse, type Source } from "pmtiles";
 import type { ContentRuntime, ContentSnapshot, MapManifest } from "./content/contracts";
 
@@ -22,6 +22,7 @@ let tileProtocol: Protocol | null = null;
 let tileProtocolInstalled = false;
 let glyphProtocolInstalled = false;
 let bundledOverview: PMTiles | null = null;
+let detailedSourceRevision = 0;
 
 /**
  * Install the PMTiles and glyph handlers for a ready content snapshot.
@@ -263,8 +264,8 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     const registration = registrations.get(releaseId);
     if (registration && tileProtocol) {
       // PMTiles v4.5 keeps rejected header and directory promises in its shared
-      // cache. setTiles() retries MapLibre's source, so replace its PMTiles
-      // reader first while retaining the same verified chunk source and LRU.
+      // cache. Replace its reader before the coverage listener asks MapLibre to
+      // recreate the detail source, while retaining verified chunk bytes and LRU.
       tileProtocol.add(new PMTiles(registration.source));
     }
     for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
@@ -294,17 +295,51 @@ export function subscribeMapCoverage(releaseId: string, listener: () => void): (
   };
 }
 
-/** Refresh the detailed vector source after its allowlist gains local chunks. */
-export function reloadDetailedMapSource(map: {
-  getSource: (id: string) => unknown;
-  getStyle: () => { sources?: Record<string, unknown> };
-}): boolean {
-  const source = map.getSource("protomaps") as { setTiles?: (tiles: string[]) => unknown } | undefined;
-  const sourceStyle = map.getStyle().sources?.protomaps as { tiles?: unknown } | undefined;
-  if (!source || typeof source.setTiles !== "function" || !Array.isArray(sourceStyle?.tiles)) return false;
-  if (!sourceStyle.tiles.every((url): url is string => typeof url === "string")) return false;
-  source.setTiles([...sourceStyle.tiles]);
+/** Recreate the detailed vector source after its allowlist gains local chunks. */
+export function reloadDetailedMapSource(map: Pick<MapLibreMap, "getStyle" | "setStyle">): boolean {
+  const currentStyle = map.getStyle();
+  const source = currentStyle.sources?.protomaps;
+  if (!source) return false;
+  if (source.type !== "vector" || !Array.isArray(source.tiles) || source.tiles.length === 0) return false;
+  if (!source.tiles.every((url): url is string => typeof url === "string")) return false;
+
+  // MapLibre's setTiles reload leaves failed in-view tiles in an errored actor
+  // state. Changing this URL makes a style diff replace the detail source and
+  // TileManager, while preserving the overview, overlays, and current camera.
+  const tiles = [...source.tiles];
+  tiles[0] = withCoverageRevision(tiles[0]);
+  const nextStyle: StyleSpecification = {
+    ...currentStyle,
+    sources: {
+      ...currentStyle.sources,
+      protomaps: { ...source, tiles },
+    },
+  };
+  map.setStyle(nextStyle, { diff: true });
   return true;
+}
+
+/** Consume a pending refresh before changing style, including synchronous style.load events. */
+export function flushPendingDetailedMapSourceRefresh(
+  map: Pick<MapLibreMap, "getStyle" | "setStyle">,
+  pending: { current: boolean },
+): boolean {
+  if (!pending.current) return false;
+  pending.current = false;
+  if (reloadDetailedMapSource(map)) return true;
+  pending.current = true;
+  return false;
+}
+
+function withCoverageRevision(tileTemplate: string): string {
+  const hashIndex = tileTemplate.indexOf("#");
+  const fragment = hashIndex < 0 ? "" : tileTemplate.slice(hashIndex);
+  const withoutFragment = hashIndex < 0 ? tileTemplate : tileTemplate.slice(0, hashIndex);
+  const queryIndex = withoutFragment.indexOf("?");
+  const base = queryIndex < 0 ? withoutFragment : withoutFragment.slice(0, queryIndex);
+  const query = new URLSearchParams(queryIndex < 0 ? "" : withoutFragment.slice(queryIndex + 1));
+  query.set("coverage", String(++detailedSourceRevision));
+  return `${base}?${query.toString()}${fragment}`;
 }
 
 function validateMapManifest(manifest: MapManifest): void {

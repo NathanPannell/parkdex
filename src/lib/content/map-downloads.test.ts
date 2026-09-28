@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { PMTiles, Protocol } from "pmtiles";
+import type { StyleSpecification } from "maplibre-gl";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mapAreaTiles } from "./map-downloads";
 import { prefetchMapArea } from "./map-downloads";
 import {
   BundledOverviewSource,
+  flushPendingDetailedMapSourceRefresh,
   getAllowedMapChunks,
   ISLAND_OVERVIEW_PATH,
   registerContentMapProtocols,
@@ -182,17 +184,74 @@ describe("detail map coverage notifications", () => {
     }
   });
 
-  it("invalidates failed detail requests by reloading the source with its existing URLs", () => {
-    const urls = ["pmtiles://release-v2/{z}/{x}/{y}"];
-    const setTiles = vi.fn();
-    const map = {
-      getSource: vi.fn(() => ({ setTiles })),
-      getStyle: () => ({ sources: { protomaps: { tiles: urls } } }),
+  it("recreates the detail source through a style diff and preserves overview and live overlays", () => {
+    const style: StyleSpecification = {
+      version: 8,
+      name: "map refresh fixture",
+      glyphs: "contentglyph://release-v2/map/fonts/{fontstack}/{range}.pbf",
+      center: [-123.36, 48.43],
+      zoom: 10,
+      sources: {
+        protomaps: { type: "vector", tiles: ["pmtiles://release-v2/{z}/{x}/{y}"], maxzoom: 14 },
+        islandOverview: { type: "vector", tiles: ["pmtiles://bundled-overview/{z}/{x}/{y}"], maxzoom: 7 },
+        parks: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+        route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
+      },
+      layers: [
+        { id: "overview-land", type: "fill", source: "islandOverview", "source-layer": "land" },
+        { id: "detail-water", type: "fill", source: "protomaps", "source-layer": "water" },
+        { id: "park-fill", type: "fill", source: "parks" },
+        { id: "route-line", type: "line", source: "route" },
+      ],
     };
+    const setStyle = vi.fn();
+    const map = { getStyle: () => style, setStyle } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
 
     expect(reloadDetailedMapSource(map)).toBe(true);
-    expect(setTiles).toHaveBeenCalledOnce();
-    expect(setTiles).toHaveBeenCalledWith(urls);
+    expect(setStyle).toHaveBeenCalledOnce();
+    expect(setStyle.mock.calls[0][1]).toEqual({ diff: true });
+    const refreshed = setStyle.mock.calls[0][0] as StyleSpecification;
+    const originalDetailUrl = style.sources.protomaps.type === "vector" ? style.sources.protomaps.tiles?.[0] : undefined;
+    const refreshedDetailUrl = refreshed.sources.protomaps.type === "vector" ? refreshed.sources.protomaps.tiles?.[0] : undefined;
+    expect(refreshedDetailUrl).not.toBe(originalDetailUrl);
+    expect(refreshedDetailUrl).toMatch(/[?&]coverage=\d+/);
+    expect(refreshed.sources.islandOverview).toEqual(style.sources.islandOverview);
+    expect(refreshed.sources.parks).toEqual(style.sources.parks);
+    expect(refreshed.sources.route).toEqual(style.sources.route);
+    expect(refreshed.layers).toEqual(style.layers);
+    expect(refreshed.center).toEqual(style.center);
+    expect(refreshed.zoom).toBe(style.zoom);
+  });
+
+  it("leaves a missing detail source pending instead of applying an incomplete style", () => {
+    const setStyle = vi.fn();
+    const map = {
+      getStyle: () => ({ version: 8, sources: {}, layers: [] } as unknown as StyleSpecification),
+      setStyle,
+    } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
+    const pending = { current: true };
+
+    expect(flushPendingDetailedMapSourceRefresh(map, pending)).toBe(false);
+    expect(pending.current).toBe(true);
+    expect(setStyle).not.toHaveBeenCalled();
+  });
+
+  it("clears the pending flag before a synchronous style.load refresh callback", () => {
+    const style: StyleSpecification = {
+      version: 8,
+      sources: { protomaps: { type: "vector", tiles: ["pmtiles://release-v2/{z}/{x}/{y}"], maxzoom: 14 } },
+      layers: [{ id: "detail-water", type: "fill", source: "protomaps", "source-layer": "water" }],
+    };
+    const pending = { current: true };
+    let map: Parameters<typeof reloadDetailedMapSource>[0];
+    const setStyle = vi.fn(() => {
+      flushPendingDetailedMapSourceRefresh(map, pending);
+    });
+    map = { getStyle: () => style, setStyle } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
+
+    expect(flushPendingDetailedMapSourceRefresh(map, pending)).toBe(true);
+    expect(setStyle).toHaveBeenCalledOnce();
+    expect(pending.current).toBe(false);
   });
 
   it("replaces a PMTiles reader whose header was denied before coverage arrived", async () => {

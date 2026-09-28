@@ -9,7 +9,7 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { registerContentMapProtocols, reloadDetailedMapSource, subscribeMapCoverage } from "../../lib/offlineTiles";
+import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
 
@@ -53,6 +53,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
   const styleRelease = useRef<string | null>(null);
   const styleGeneration = useRef(0);
   const pendingDetailReload = useRef(false);
+  const styleReady = useRef(false);
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
@@ -68,6 +69,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     if (!content || !releaseId) return;
     setLoadedRelease(null);
     setInitialStyleLoaded(false);
+    styleReady.current = false;
     setHosts([]);
     setUserHost(null);
     const unregisterProtocols = registerContentMapProtocols(runtime, content);
@@ -110,9 +112,10 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     const markStyleReady = () => {
       const currentRelease = styleRelease.current;
       if (!currentRelease || !map.getStyle().glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
+      styleReady.current = true;
       setInitialStyleLoaded(true);
       setLoadedRelease(currentRelease);
-      if (pendingDetailReload.current && reloadDetailedMapSource(map)) pendingDetailReload.current = false;
+      if (pendingDetailReload.current) flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
     };
     map.on("style.load", markStyleReady);
     map.on("load", markStyleReady);
@@ -134,6 +137,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
       styleRelease.current = null;
       styleGeneration.current += 1;
       pendingDetailReload.current = false;
+      styleReady.current = false;
     };
   }, [hasReadyMapContent]);
 
@@ -157,6 +161,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
         protocolCleanups.current.delete(registeredRelease);
       }
     });
+    styleReady.current = false;
     map.setStyle(mapStyle(releaseId), { diff: true });
   }, [releaseId, initialStyleLoaded]);
 
@@ -192,8 +197,10 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
   useEffect(() => {
     if (!releaseId) return;
     return subscribeMapCoverage(releaseId, () => {
+      pendingDetailReload.current = true;
       const map = mapRef.current;
-      if (!map || !reloadDetailedMapSource(map)) pendingDetailReload.current = true;
+      if (!map || !styleReady.current) return;
+      flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
     });
   }, [releaseId]);
 
