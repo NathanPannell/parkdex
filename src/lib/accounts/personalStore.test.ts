@@ -54,6 +54,44 @@ async function readLegacyPhoto(parkId: string) {
   });
 }
 
+async function mutatePersonalDatabase(work: (tx: IDBTransaction) => void) {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("parkdex-personal-v1");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(["claims", "photos", "outbox", "meta"], "readwrite");
+      try { work(tx); }
+      catch (error) { tx.abort(); db.close(); reject(error); return; }
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  });
+}
+
+async function readPersonalValue<T>(storeName: string, key: IDBValidKey): Promise<T | undefined> {
+  return new Promise<T | undefined>((resolve, reject) => {
+    const request = indexedDB.open("parkdex-personal-v1");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(storeName, "readonly");
+      const valueRequest = tx.objectStore(storeName).get(key);
+      let value: T | undefined;
+      valueRequest.onsuccess = () => { value = valueRequest.result as T | undefined; };
+      valueRequest.onerror = () => reject(valueRequest.error);
+      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+      tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  });
+}
+
+function pngPhoto() {
+  return new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer], { type: "image/png" });
+}
+
 function installTestFileReader() {
   vi.stubGlobal("FileReader", class {
     result: string | null = null;
@@ -118,7 +156,7 @@ describe("durable personal progress storage", () => {
     expect((await restarted.listPersonalClaims({ kind: "guest" })).map((claim) => claim.claimId)).toEqual([first[0].claimId]);
   });
 
-  it("migrates legacy ;utf8 SVG photos as viewable local-only photos and keeps them through guest attach", async () => {
+  it("keeps unsupported guest photos until the acknowledged account copy is durable", async () => {
     const storage = globalThis.localStorage as unknown as MemoryStorage;
     const accountId = "89abcdef-1234-4234-8234-123456789abc";
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="#f80"/></svg>';
@@ -137,7 +175,7 @@ describe("durable personal progress storage", () => {
     expect(await readLegacyPhoto("cedar-point")).toBeUndefined();
 
     await personal.setLegacyClaimSnapshot({ kind: "guest" }, guestClaim.claimId, park(), "staging-r17");
-    await personal.copyGuestClaimsToAccount(accountId);
+    await personal.reserveGuestClaimsForAccount(accountId);
     const account = { kind: "account" as const, accountId };
     const attachedPhoto = await personal.getPersonalPhoto(account, guestClaim.claimId);
     expect(attachedPhoto).toMatchObject({ contentType: "image/svg+xml", backupState: "unsupported", unsupportedReason: "type" });
@@ -146,8 +184,10 @@ describe("durable personal progress storage", () => {
     expect(await personal.listPersonalOutbox(account)).toEqual([
       { ownerKey: `account:${accountId}`, claimId: guestClaim.claimId, kind: "claim" },
     ]);
-    await expect(personal.removeAttachedGuestClaims(accountId)).rejects.toThrow("waiting for server acknowledgement");
-    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).not.toBeNull();
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(0);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    expect(await personal.listPersonalPhotos({ kind: "guest" })).toEqual([]);
+    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).toBeNull();
 
     const attachedClaim = (await personal.listPersonalClaims(account))[0];
     await personal.markClaimUploaded(account, guestClaim.claimId, {
@@ -169,11 +209,11 @@ describe("durable personal progress storage", () => {
         tx.onerror = () => { db.close(); reject(tx.error); };
       };
     });
-    await expect(personal.removeAttachedGuestClaims(accountId)).rejects.toThrow("not durably attached");
-    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).not.toBeNull();
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(0);
+    expect(await readPersonalValue("claims", ["guest", guestClaim.claimId])).toBeDefined();
 
-    await personal.copyGuestClaimsToAccount(accountId);
-    expect(await personal.removeAttachedGuestClaims(accountId)).toBe(1);
+    await personal.reserveGuestClaimsForAccount(accountId);
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(1);
     expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).toBeNull();
     const retainedAccountPhoto = await personal.getPersonalPhoto(account, guestClaim.claimId);
     expect(retainedAccountPhoto).toMatchObject({ contentType: "image/svg+xml", backupState: "unsupported", unsupportedReason: "type" });
@@ -221,12 +261,222 @@ describe("durable personal progress storage", () => {
     expect((await personal.getPersonalPhoto({ kind: "account", accountId: "89abcdef-1234-4234-8234-123456789abc" }, claim.claimId))?.backupState).toBe("pending");
   });
 
+  it("accepts frozen municipal and community park snapshots for local claims", async () => {
+    const personal = await import("./personalStore");
+    const municipal = await personal.createPersonalClaim({ kind: "guest" }, { park: { ...park("beacon-hill"), category: "municipal" } });
+    const community = await personal.createPersonalClaim({ kind: "guest" }, { park: { ...park("cedar-grove"), category: "community" } });
+
+    expect(municipal.parkSnapshot?.category).toBe("municipal");
+    expect(community.parkSnapshot?.category).toBe("community");
+  });
+
+  it("commits an upload rendition only for the same owner, original digest, and frozen snapshot", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x01]).buffer], { type: "image/jpeg" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: new Blob(["<svg />"], { type: "image/svg+xml" }) });
+    const original = await personal.getPersonalPhoto(owner, claim.claimId);
+    if (!original) throw new Error("Original test photo missing.");
+    const converted = { blob: jpeg, contentType: "image/jpeg" as const, sizeBytes: jpeg.size, sha256: await personal.hashPhoto(jpeg) };
+    const expected = {
+      sha256: original.sha256, contentType: original.contentType, sizeBytes: original.sizeBytes,
+      backupState: original.backupState, parkSnapshot: claim.parkSnapshot,
+    };
+
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, { ...expected, sha256: "0".repeat(64) }, converted)).toBe("stale");
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, expected, converted, () => false)).toBe("session-changed");
+    expect(await personal.commitPhotoBackupRendition({ kind: "account", accountId: "12345678-1234-4234-8234-123456789abc" }, claim.claimId, expected, converted)).toBe("stale");
+    expect(await personal.getPersonalPhoto(owner, claim.claimId)).toMatchObject({ sha256: original.sha256, backupState: "unsupported", backupRendition: null });
+    expect(await personal.listPersonalOutbox(owner)).toEqual([{ ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "claim" }]);
+
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, expected, converted)).toBe("stored");
+    expect(await personal.getPersonalPhoto(owner, claim.claimId)).toMatchObject({
+      sha256: original.sha256, contentType: "image/svg+xml", backupState: "pending",
+      backupRendition: { sha256: converted.sha256, sizeBytes: converted.sizeBytes, sourceSha256: original.sha256 },
+    });
+    expect(await personal.listPersonalOutbox(owner)).toEqual([
+      { ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "claim" },
+      { ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "photo" },
+    ]);
+    expect(await (await personal.getPersonalPhoto(owner, claim.claimId))?.blob.text()).toBe("<svg />");
+  });
+
+  it("matches remote ready metadata against the rendition without replacing the original photo", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const originalBlob = new Blob(["<svg />"], { type: "image/svg+xml" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: originalBlob });
+    const original = await personal.getPersonalPhoto(owner, claim.claimId);
+    if (!original) throw new Error("Original test photo missing.");
+    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x01]).buffer], { type: "image/jpeg" });
+    const converted = { blob: jpeg, contentType: "image/jpeg" as const, sizeBytes: jpeg.size, sha256: await personal.hashPhoto(jpeg) };
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, {
+      sha256: original.sha256, contentType: original.contentType, sizeBytes: original.sizeBytes,
+      backupState: original.backupState, parkSnapshot: claim.parkSnapshot,
+    }, converted)).toBe("stored");
+
+    const remote = personal.validateRemoteClaim({
+      claimId: claim.claimId, ...personal.claimPayload(claim),
+      photo: { status: "ready", sha256: converted.sha256, sizeBytes: converted.sizeBytes, contentType: converted.contentType },
+    });
+    await personal.commitRemotePage(owner, [remote], "rendition-cursor");
+    expect((await personal.getPersonalPhoto(owner, claim.claimId))?.backupState).toBe("backed-up");
+    expect(await personal.listPhotosNeedingDownload(owner)).toEqual([]);
+    expect(await personal.listPersonalOutbox(owner)).toEqual([]);
+    expect(await (await personal.getPersonalPhoto(owner, claim.claimId))?.blob.text()).toBe(await originalBlob.text());
+  });
+
   it("does not project an older photo when the latest visit has no photo", async () => {
     const personal = await import("./personalStore");
     const png = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer], { type: "image/png" });
     await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", photo: png });
     await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-04T12:34:56.000Z" });
     expect(await personal.loadPersonalPhotos({ kind: "guest" })).toEqual({});
+  });
+
+  it("lets only the first concurrent account reserve a guest claim and hides its guest projections", async () => {
+    const personal = await import("./personalStore");
+    const accountA = "89abcdef-1234-4234-8234-123456789abc";
+    const accountB = "12345678-1234-4234-8234-123456789abc";
+    const source = await personal.createPersonalClaim({ kind: "guest" }, {
+      park: park(), claimedAt: "2025-04-03T12:34:56.000Z", photo: pngPhoto(),
+    });
+
+    const [reservedA, reservedB] = await Promise.all([
+      personal.reserveGuestClaimsForAccount(accountA),
+      personal.reserveGuestClaimsForAccount(accountB),
+    ]);
+    expect([reservedA, reservedB].sort()).toEqual([0, 1]);
+
+    const ownerId = reservedA === 1 ? accountA : accountB;
+    const otherId = ownerId === accountA ? accountB : accountA;
+    const owner = { kind: "account" as const, accountId: ownerId };
+    expect((await personal.listPersonalClaims(owner)).map((claim) => claim.claimId)).toEqual([source.claimId]);
+    expect((await personal.listPersonalClaims({ kind: "account", accountId: otherId }))).toEqual([]);
+    expect(await personal.listPersonalOutbox(owner)).toEqual([
+      { ownerKey: `account:${ownerId}`, claimId: source.claimId, kind: "claim" },
+      { ownerKey: `account:${ownerId}`, claimId: source.claimId, kind: "photo" },
+    ]);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    expect(await personal.listPersonalPhotos({ kind: "guest" })).toEqual([]);
+    expect(await personal.loadPersonalPhotos({ kind: "guest" })).toEqual({});
+    expect(await personal.getPersonalPhoto({ kind: "guest" }, source.claimId)).toBeNull();
+    expect(await readPersonalValue("meta", `guest-reservation:${source.claimId}`)).toMatchObject({ value: ownerId });
+    expect(await personal.reserveGuestClaimsForAccount(ownerId)).toBe(1);
+  });
+
+  it("finalizes acknowledged claims independently and retains each pending recovery row", async () => {
+    const personal = await import("./personalStore");
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const account = { kind: "account" as const, accountId };
+    const first = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z" });
+    const second = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-04T12:34:56.000Z" });
+    expect(await personal.reserveGuestClaimsForAccount(accountId)).toBe(2);
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(0);
+    expect(await readPersonalValue("claims", ["guest", first.claimId])).toBeDefined();
+    expect(await readPersonalValue("claims", ["guest", second.claimId])).toBeDefined();
+
+    const [accountFirst, accountSecond] = await personal.listPersonalClaims(account);
+    await personal.markClaimUploaded(account, accountFirst.claimId, personal.claimPayload(accountFirst));
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(1);
+    expect(await readPersonalValue("claims", ["guest", first.claimId])).toBeUndefined();
+    expect(await readPersonalValue("meta", `guest-reservation:${first.claimId}`)).toBeUndefined();
+    expect(await readPersonalValue("claims", ["guest", second.claimId])).toBeDefined();
+    expect(await readPersonalValue("meta", `guest-reservation:${second.claimId}`)).toMatchObject({ value: accountId });
+
+    await personal.markClaimUploaded(account, accountSecond.claimId, personal.claimPayload(accountSecond));
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(1);
+    expect(await readPersonalValue("claims", ["guest", second.claimId])).toBeUndefined();
+  });
+
+  it("retains a supported guest photo until the matching account photo is backed up", async () => {
+    const personal = await import("./personalStore");
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const account = { kind: "account" as const, accountId };
+    const source = await personal.createPersonalClaim({ kind: "guest" }, {
+      park: park(), claimedAt: "2025-04-03T12:34:56.000Z", photo: pngPhoto(),
+    });
+    expect(await personal.reserveGuestClaimsForAccount(accountId)).toBe(1);
+    const accountClaim = (await personal.listPersonalClaims(account))[0];
+    const accountPhoto = await personal.getPersonalPhoto(account, source.claimId);
+    expect(accountPhoto?.backupState).toBe("pending");
+    await personal.markClaimUploaded(account, source.claimId, personal.claimPayload(accountClaim));
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(0);
+    expect(await readPersonalValue("claims", ["guest", source.claimId])).toBeDefined();
+    expect(await readPersonalValue("photos", ["guest", source.claimId])).toBeDefined();
+
+    await personal.markPhotoUploaded(account, source.claimId, accountPhoto!.sha256);
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(1);
+    expect(await readPersonalValue("claims", ["guest", source.claimId])).toBeUndefined();
+    expect(await readPersonalValue("photos", ["guest", source.claimId])).toBeUndefined();
+    expect((await personal.getPersonalPhoto(account, source.claimId))?.backupState).toBe("backed-up");
+  });
+
+  it("preserves a prior account owner for duplicate claim IDs and fails closed on conflicts", async () => {
+    const personal = await import("./personalStore");
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const otherAccountId = "12345678-1234-4234-8234-123456789abc";
+    const account = { kind: "account" as const, accountId };
+    const source = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z" });
+    await mutatePersonalDatabase((tx) => {
+      tx.objectStore("claims").put({ ...source, ownerKey: `account:${accountId}`, syncState: "acknowledged" });
+    });
+
+    expect(await personal.reserveGuestClaimsForAccount(otherAccountId)).toBe(0);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    expect(await readPersonalValue("meta", `guest-reservation:${source.claimId}`)).toMatchObject({ value: accountId });
+    expect(await personal.listPersonalClaims({ kind: "account", accountId: otherAccountId })).toEqual([]);
+    expect(await personal.reserveGuestClaimsForAccount(accountId)).toBe(1);
+    const prior = (await personal.listPersonalClaims(account))[0];
+    expect(prior).toMatchObject({ ownerKey: `account:${accountId}`, claimId: source.claimId, syncState: "acknowledged" });
+    expect(await personal.listPersonalOutbox(account)).toEqual([]);
+    expect(await personal.finalizeReservedGuestClaims(accountId)).toBe(1);
+    expect(await readPersonalValue("claims", ["guest", source.claimId])).toBeUndefined();
+
+    const conflictingGuest = await personal.createPersonalClaim({ kind: "guest" }, { park: park("cedar-point-2"), claimedAt: "2025-04-05T12:34:56.000Z" });
+    await mutatePersonalDatabase((tx) => {
+      tx.objectStore("claims").put({ ...conflictingGuest, ownerKey: `account:${accountId}`, claimedAt: "2025-04-06T12:34:56.000Z" });
+    });
+    await expect(personal.reserveGuestClaimsForAccount(accountId)).rejects.toBeInstanceOf(personal.PersonalClaimConflictError);
+    expect((await personal.listPersonalClaims({ kind: "guest" })).map((claim) => claim.claimId)).toContain(conflictingGuest.claimId);
+    expect(await readPersonalValue("meta", `guest-reservation:${conflictingGuest.claimId}`)).toBeUndefined();
+
+    const ambiguousGuest = await personal.createPersonalClaim({ kind: "guest" }, { park: park("cedar-point-3"), claimedAt: "2025-04-07T12:34:56.000Z" });
+    await mutatePersonalDatabase((tx) => {
+      tx.objectStore("claims").put({ ...ambiguousGuest, ownerKey: `account:${accountId}` });
+      tx.objectStore("claims").put({ ...ambiguousGuest, ownerKey: `account:${otherAccountId}` });
+    });
+    await expect(personal.reserveGuestClaimsForAccount(accountId)).rejects.toBeInstanceOf(personal.PersonalClaimConflictError);
+    expect((await personal.listPersonalClaims({ kind: "guest" })).map((claim) => claim.claimId)).toContain(ambiguousGuest.claimId);
+    expect(await readPersonalValue("meta", `guest-reservation:${ambiguousGuest.claimId}`)).toBeUndefined();
+  });
+
+  it("stores successful backup timestamps per account and releases guest recovery rows after deletion", async () => {
+    const personal = await import("./personalStore");
+    const accountA = "89abcdef-1234-4234-8234-123456789abc";
+    const accountB = "12345678-1234-4234-8234-123456789abc";
+    expect(await personal.getLastSuccessfulBackupAt(accountA)).toBeNull();
+    expect(await personal.getLastSuccessfulBackupAt(accountB)).toBeNull();
+    await personal.setLastSuccessfulBackupAt(accountA, 1_735_689_600_000);
+    await personal.setLastSuccessfulBackupAt(accountA, 1_735_689_500_000);
+    await personal.setLastSuccessfulBackupAt(accountB, 1_735_689_700_000);
+    expect(await personal.getLastSuccessfulBackupAt(accountA)).toBe(1_735_689_600_000);
+    expect(await personal.getLastSuccessfulBackupAt(accountB)).toBe(1_735_689_700_000);
+
+    const source = await personal.createPersonalClaim({ kind: "guest" }, {
+      park: park(), claimedAt: "2025-04-03T12:34:56.000Z", photo: pngPhoto(),
+    });
+    await personal.reserveGuestClaimsForAccount(accountA);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
+    await personal.clearAccountProgressAfterServerDeletion(accountA);
+
+    expect(await personal.listPersonalClaims({ kind: "account", accountId: accountA })).toEqual([]);
+    expect(await personal.getLastSuccessfulBackupAt(accountA)).toBeNull();
+    expect(await personal.getLastSuccessfulBackupAt(accountB)).toBe(1_735_689_700_000);
+    expect(await readPersonalValue("meta", `guest-reservation:${source.claimId}`)).toBeUndefined();
+    expect(await readPersonalValue("claims", ["guest", source.claimId])).toBeUndefined();
+    expect(await readPersonalValue("photos", ["guest", source.claimId])).toBeUndefined();
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
   });
 
   it("does not return claim success when durable storage is unavailable", async () => {

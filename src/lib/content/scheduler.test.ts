@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DownloadPurpose } from "./contracts";
-import { ContentDownloadScheduler, type DownloadPolicy, type ScheduledDownload } from "./scheduler";
+import { ContentDownloadScheduler, isDownloadAllowed, type DownloadPolicy, type ScheduledDownload } from "./scheduler";
 
 function deferred() {
   let resolve!: () => void;
@@ -30,6 +30,24 @@ const wifi: DownloadPolicy = { foreground: true, connectivity: { connected: true
 const cellular: DownloadPolicy = { foreground: true, connectivity: { connected: true, wifi: false } };
 
 describe("ContentDownloadScheduler policy transitions", () => {
+  it("allows an online browser policy without treating it as physical Wi-Fi", () => {
+    const browser: DownloadPolicy = {
+      foreground: true,
+      connectivity: { connected: true, wifi: false, contentDownloadAllowed: true },
+    };
+
+    expect(isDownloadAllowed("core", "data/parks.json", browser)).toBe(true);
+  });
+
+  it("keeps an Android Wi-Fi-only policy blocked when native Wi-Fi is not confirmed", () => {
+    const androidCellular: DownloadPolicy = {
+      foreground: true,
+      connectivity: { connected: true, wifi: false, contentDownloadAllowed: false },
+    };
+
+    expect(isDownloadAllowed("core", "data/parks.json", androidCellular)).toBe(false);
+  });
+
   it("aborts a bulk fetch on WiFi loss, keeps deduped waiters, and restores queue priority on resume", async () => {
     const scheduler = new ContentDownloadScheduler(wifi, 1);
     const attempts: { signal: AbortSignal; gate: ReturnType<typeof deferred> }[] = [];

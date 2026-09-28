@@ -40,7 +40,7 @@ const SCREEN_LABEL: Record<Screen, string> = {
   splash: "Splash",
   onboarding: "Onboarding",
   map: "Map",
-  collection: "My case",
+  collection: "My Dex",
   camera: "Camera",
   claim: "Claim",
   share: "Share",

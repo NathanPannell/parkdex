@@ -34,17 +34,19 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
-import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
+import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDownloadAvailable, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
 
 const API_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
 const CDN_URL = "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin";
 const browserConnection = new EventTarget() as EventTarget & { type?: string; effectiveType?: string };
 const browserWindow = new EventTarget();
 
-function setBrowserNetwork(options: { online?: boolean; type?: string; effectiveType?: string } = {}) {
+function setBrowserNetwork(options: { online?: boolean; type?: string; effectiveType?: string; connectionApi?: boolean } = {}) {
   browserConnection.type = options.type;
   browserConnection.effectiveType = options.effectiveType;
-  vi.stubGlobal("navigator", { onLine: options.online ?? true, connection: browserConnection });
+  const navigatorStub: { onLine: boolean; connection?: typeof browserConnection } = { onLine: options.online ?? true };
+  if (options.connectionApi !== false) navigatorStub.connection = browserConnection;
+  vi.stubGlobal("navigator", navigatorStub);
 }
 
 describe("content transport", () => {
@@ -75,41 +77,65 @@ describe("content transport", () => {
     mocks.native.abort.mockResolvedValue(undefined);
   });
 
-  it("requires the browser physical Wi-Fi type, not a Capacitor speed mapping", async () => {
-    setBrowserNetwork({ online: true, effectiveType: "4g" });
+  it.each([
+    { name: "a browser without Network Information API", options: { connectionApi: false } },
+    { name: "an unknown browser network type", options: { type: "unknown", effectiveType: "4g" } },
+    { name: "a cellular browser connection", options: { type: "cellular", effectiveType: "4g" } },
+  ])("allows content sync on $name while preserving an unknown Wi-Fi signal", async ({ options }) => {
+    setBrowserNetwork({ online: true, ...options });
     mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "unknown" });
 
-    await expect(contentFetch(API_URL)).rejects.toMatchObject({ name: "WifiUnavailableError" });
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false, contentDownloadAllowed: true });
+    await expect(isContentWifiAvailable()).resolves.toBe(false);
+    await expect(contentFetch(API_URL)).resolves.toMatchObject({ status: 200 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     expect(mocks.network.getStatus).not.toHaveBeenCalled();
-    expect(await isContentWifiAvailable()).toBe(false);
   });
 
-  it("refuses cellular and offline browser connectivity and accepts actual Wi-Fi", async () => {
+  it("allows any online browser network, reports actual Wi-Fi, and pauses while offline", async () => {
     setBrowserNetwork({ online: true, type: "cellular", effectiveType: "4g" });
-    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false, contentDownloadAllowed: true });
     await expect(isContentWifiAvailable()).resolves.toBe(false);
+    await expect(isContentDownloadAvailable()).resolves.toBe(true);
 
     setBrowserNetwork({ online: false, type: "wifi" });
-    await expect(getContentConnectivity()).resolves.toEqual({ connected: false, wifi: false });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: false, wifi: false, contentDownloadAllowed: false });
+    await expect(isContentDownloadAvailable()).resolves.toBe(false);
+    await expect(contentFetch(API_URL)).rejects.toMatchObject({ name: "ContentOfflineError" });
 
     setBrowserNetwork({ online: true, type: "wifi" });
-    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: true });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: true, contentDownloadAllowed: true });
   });
 
-  it("subscribes to online, offline, and physical network type changes", () => {
+  it("subscribes to online and offline changes without requiring Network Information API", () => {
+    setBrowserNetwork({ online: true, connectionApi: false });
+    const listener = vi.fn();
+    const stop = subscribeContentConnectivity(listener);
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: false, contentDownloadAllowed: true });
+
+    setBrowserNetwork({ online: false, connectionApi: false });
+    browserWindow.dispatchEvent(new Event("offline"));
+    expect(listener).toHaveBeenLastCalledWith({ connected: false, wifi: false, contentDownloadAllowed: false });
+
+    setBrowserNetwork({ online: true, connectionApi: false });
+    browserWindow.dispatchEvent(new Event("online"));
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: false, contentDownloadAllowed: true });
+    stop();
+  });
+
+  it("subscribes to physical network type changes when the browser exposes them", () => {
     setBrowserNetwork({ online: true, type: "wifi" });
     const listener = vi.fn();
     const stop = subscribeContentConnectivity(listener);
-    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: true });
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: true, contentDownloadAllowed: true });
 
     browserConnection.type = "cellular";
     browserConnection.dispatchEvent(new Event("change"));
-    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: false });
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: false, contentDownloadAllowed: true });
 
     setBrowserNetwork({ online: false, type: "wifi" });
     browserWindow.dispatchEvent(new Event("offline"));
-    expect(listener).toHaveBeenLastCalledWith({ connected: false, wifi: false });
+    expect(listener).toHaveBeenLastCalledWith({ connected: false, wifi: false, contentDownloadAllowed: false });
     stop();
   });
 
@@ -151,7 +177,32 @@ describe("content transport", () => {
     }));
   });
 
-  it("aborts browser content when Wi-Fi is lost while its response body is streaming", async () => {
+  it("continues browser content when physical Wi-Fi is unknown or changes to cellular", async () => {
+    setBrowserNetwork({ online: true, type: "wifi" });
+    let releaseBody!: () => void;
+    const bodyStarted = new Promise<void>((resolve) => { releaseBody = resolve; });
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        streamController = controller;
+        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+        releaseBody();
+      },
+    }), { headers: { "content-type": "application/octet-stream" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = contentFetch(CDN_URL);
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await bodyStarted;
+    browserConnection.type = "cellular";
+    browserConnection.dispatchEvent(new Event("change"));
+    streamController?.enqueue(new Uint8Array([1]));
+    streamController?.close();
+
+    await expect(pending).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("aborts browser content when the browser goes offline during a streaming response", async () => {
     setBrowserNetwork({ online: true, type: "wifi" });
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
       start(controller) {
@@ -162,10 +213,10 @@ describe("content transport", () => {
     const pending = contentFetch(CDN_URL);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    browserConnection.type = "cellular";
-    browserConnection.dispatchEvent(new Event("change"));
+    setBrowserNetwork({ online: false, type: "wifi" });
+    browserWindow.dispatchEvent(new Event("offline"));
 
-    await expect(pending).rejects.toMatchObject({ name: "WifiUnavailableError" });
+    await expect(pending).rejects.toMatchObject({ name: "ContentOfflineError" });
   });
 
   it("bounds buffered browser content responses to four MiB", async () => {
@@ -284,8 +335,20 @@ describe("content transport", () => {
     mocks.capacitor.isNativePlatform.mockReturnValue(true);
     mocks.capacitor.getPlatform.mockReturnValue("ios");
 
+    expect(await getContentConnectivity()).toEqual({ connected: false, wifi: false, contentDownloadAllowed: false });
     expect(await isContentWifiAvailable()).toBe(false);
     await expect(contentFetch(API_URL)).rejects.toThrow("unavailable on this native platform");
     expect(mocks.native.request).not.toHaveBeenCalled();
+  });
+
+  it("keeps Android content downloads blocked unless native Wi-Fi is confirmed", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "cellular" });
+    mocks.native.getWifiStatus.mockResolvedValue({ wifi: false });
+
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false, contentDownloadAllowed: false });
+    await expect(isContentDownloadAvailable()).resolves.toBe(false);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

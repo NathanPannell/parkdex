@@ -1,8 +1,9 @@
 import {
   claimPayload,
   commitDownloadedPhoto,
+  commitPhotoBackupRendition,
   commitRemotePage,
-  copyGuestClaimsToAccount,
+  finalizeReservedGuestClaims,
   getPersonalPhoto,
   hashPhoto,
   getPullCursor,
@@ -10,19 +11,22 @@ import {
   listPhotosNeedingDownload,
   listPersonalClaims,
   listPersonalOutbox,
+  listPersonalPhotos,
+  personalPhotoBackupSource,
+  queuePhotoBackup,
   markClaimUploaded,
   markPhotoConflict,
   markPhotoUnsupported,
   markPhotoUploaded,
   ownerKey,
-  removeAttachedGuestClaims,
   validateRemoteClaim,
   type PersonalClaim,
   type ProgressOwner,
   type RemoteClaim,
   type RemotePhoto,
 } from "./personalStore";
-import { isContentWifiAvailable } from "../content/transport";
+import { getAccountBackupConnectivity, isAccountBackupAvailable, type AccountBackupConnectivity } from "./accountBackupConnectivity";
+import { createPhotoBackupRendition } from "./photoBackupRendition";
 
 export type AuthenticatedFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -35,7 +39,7 @@ export type ProgressSession = {
 };
 
 export type SyncIssue = {
-  operation: "claim-upload" | "photo-upload" | "claim-restore" | "photo-restore" | "session";
+  operation: "claim-upload" | "photo-upload" | "claim-restore" | "photo-restore" | "guest-finalize" | "session";
   claimId?: string;
   code: string;
   message: string;
@@ -47,14 +51,11 @@ export type ProgressSyncResult = {
   photosUploaded: number;
   claimsRestored: number;
   photosRestored: number;
+  fullPullCompleted: boolean;
+  savedClaimCount: number;
   claimsPending: number;
   photosPending: number;
   issues: SyncIssue[];
-};
-
-export type GuestAttachResult = ProgressSyncResult & {
-  guestClaimsCopied: number;
-  guestClaimsRemoved: number;
 };
 
 export class ProgressSessionChangedError extends Error {
@@ -136,8 +137,7 @@ async function responseJson(response: Response, fallback: string): Promise<Recor
 
 function sameWirePayload(a: Pick<RemoteClaim, "parkId" | "claimedAt" | "parkSnapshot" | "contentReleaseId">, b: PersonalClaim) {
   if (!b.parkSnapshot) return false;
-  return JSON.stringify({ parkId: a.parkId, claimedAt: a.claimedAt, parkSnapshot: a.parkSnapshot, contentReleaseId: a.contentReleaseId }) ===
-    JSON.stringify({ parkId: b.parkId, claimedAt: b.claimedAt, parkSnapshot: b.parkSnapshot, contentReleaseId: b.contentReleaseId });
+  return JSON.stringify(claimPayload(a)) === JSON.stringify(claimPayload(b));
 }
 
 async function ensureOk(response: Response, operation: SyncIssue["operation"]) {
@@ -166,7 +166,7 @@ async function pushClaims(session: ProgressSession, owner: ProgressOwner, result
         throw new Error("The server confirmed different immutable claim data.");
       }
       assertCurrent(session);
-      await markClaimUploaded(owner, claim.claimId, payload);
+      await markClaimUploaded(owner, claim.claimId, payload, saved.photo);
       result.claimsUploaded += 1;
     } catch (error) {
       result.issues.push(issueFor(error, "claim-upload", item.claimId));
@@ -175,7 +175,69 @@ async function pushClaims(session: ProgressSession, owner: ProgressOwner, result
   }
 }
 
+async function recoverPhotoBackups(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
+  const [claims, photos] = await Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)]);
+  const claimsById = new Map(claims.map((claim) => [claim.claimId, claim]));
+  for (const photo of photos) {
+    const claim = claimsById.get(photo.claimId);
+    if (!claim || claim.syncState !== "acknowledged" || photo.backupState === "conflict") continue;
+    try {
+      assertCurrent(session);
+      const source = personalPhotoBackupSource(photo);
+      if (!source && (photo.unsupportedReason === "type" || photo.unsupportedReason === "size")) {
+        const converted = await createPhotoBackupRendition(photo.blob, claim.parkSnapshot);
+        assertCurrent(session);
+        if (converted) {
+          const outcome = await commitPhotoBackupRendition(owner, photo.claimId, {
+            sha256: photo.sha256,
+            contentType: photo.contentType,
+            sizeBytes: photo.sizeBytes,
+            backupState: photo.backupState,
+            parkSnapshot: claim.parkSnapshot,
+          }, converted, () => !session.isCurrent || session.isCurrent());
+          if (outcome === "session-changed") throw new ProgressSessionChangedError();
+          if (outcome === "stale") continue;
+          if (claim.remotePhoto.status === "ready" && (converted.sha256 !== claim.remotePhoto.sha256 ||
+              converted.sizeBytes !== claim.remotePhoto.sizeBytes || converted.contentType !== claim.remotePhoto.contentType)) {
+            result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_conflict", message: "A different photo is already backed up for this claim." });
+          }
+          continue;
+        }
+      }
+
+      if (source) {
+        const eligible = await isPhotoEligible(source.blob);
+        assertCurrent(session);
+        if (!eligible) {
+          if (source.blob === photo.blob) await markPhotoUnsupported(owner, photo.claimId);
+          else await markPhotoConflict(owner, photo.claimId);
+          result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: source.blob === photo.blob ? "unsupported_photo" : "photo_changed", message: "This photo cannot be backed up in its current format." });
+          continue;
+        }
+        const digest = await hashPhoto(source.blob);
+        assertCurrent(session);
+        if (digest !== source.sha256) {
+          await markPhotoConflict(owner, photo.claimId);
+          result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_changed", message: "The saved photo failed its integrity check." });
+          continue;
+        }
+      }
+
+      const queued = await queuePhotoBackup(owner, photo.claimId, photo.sha256);
+      if (queued === "unsupported") {
+        result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
+      } else if (queued === "conflict") {
+        result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_conflict", message: "A different photo is already backed up for this claim." });
+      }
+    } catch (error) {
+      result.issues.push(issueFor(error, "photo-upload", photo.claimId));
+      if (error instanceof ProgressSessionChangedError) return;
+    }
+  }
+}
+
 async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
+  await recoverPhotoBackups(session, owner, result);
   const outbox = await listPersonalOutbox(owner);
   for (const item of outbox) {
     if (item.kind !== "photo") continue;
@@ -186,16 +248,22 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
         getPersonalPhoto(owner, item.claimId),
       ]);
       if (!claim || claim.syncState !== "acknowledged" || !photo) continue;
-      const eligible = await isPhotoEligible(photo.blob);
-      assertCurrent(session);
-      if (!eligible) {
-        await markPhotoUnsupported(owner, item.claimId);
+      const upload = personalPhotoBackupSource(photo);
+      if (!upload) {
         result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
         continue;
       }
-      const digest = await hashPhoto(photo.blob);
+      const eligible = await isPhotoEligible(upload.blob);
       assertCurrent(session);
-      if (digest !== photo.sha256) {
+      if (!eligible) {
+        if (upload.blob === photo.blob) await markPhotoUnsupported(owner, item.claimId);
+        else await markPhotoConflict(owner, item.claimId);
+        result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
+        continue;
+      }
+      const digest = await hashPhoto(upload.blob);
+      assertCurrent(session);
+      if (digest !== upload.sha256) {
         await markPhotoConflict(owner, item.claimId);
         result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "photo_changed", message: "The saved photo failed its integrity check." });
         continue;
@@ -203,8 +271,8 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
       assertCurrent(session);
       const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claimId)}/photo`, {
         method: "PUT",
-        headers: { "Content-Type": photo.contentType },
-        body: photo.blob,
+        headers: { "Content-Type": upload.contentType },
+        body: upload.blob,
       });
       assertCurrent(session);
       if (response.status === 409) {
@@ -224,7 +292,7 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
         photo: remotePhoto,
       }).photo;
       if (body.claimId !== item.claimId || photoState.status !== "ready" || photoState.sha256 !== digest ||
-          photoState.sizeBytes !== photo.sizeBytes || photoState.contentType !== photo.contentType) {
+          photoState.sizeBytes !== upload.sizeBytes || photoState.contentType !== upload.contentType) {
         throw new Error("The server confirmed different photo data.");
       }
       assertCurrent(session);
@@ -288,11 +356,11 @@ async function pullClaims(session: ProgressSession, owner: ProgressOwner, result
 
 async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
   const pending = await listPhotosNeedingDownload(owner);
-  if (pending.length === 0 || !(await isContentWifiAvailable())) return;
+  if (pending.length === 0 || !(await isAccountBackupAvailable())) return;
   for (const item of pending) {
     try {
       assertCurrent(session);
-      if (!(await isContentWifiAvailable())) return;
+      if (!(await isAccountBackupAvailable())) return;
       const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claim.claimId)}/photo`, { method: "GET" });
       assertCurrent(session);
       await ensureOk(response, "photo-restore");
@@ -307,7 +375,7 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
     } catch (error) {
       result.issues.push(issueFor(error, "photo-restore", item.claim.claimId));
       if (error instanceof ProgressSessionChangedError) return;
-      if (error instanceof Error && (error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
+      if (error instanceof Error && (error.name === "AccountBackupUnavailableError" || error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
     }
   }
 }
@@ -315,11 +383,24 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
 async function countPending(owner: ProgressOwner, result: ProgressSyncResult) {
   const claims = await listPersonalClaims(owner);
   const outbox = await listPersonalOutbox(owner);
+  const photos = await listPersonalPhotos(owner);
   const photoIds = new Set(outbox.filter((item) => item.kind === "photo").map((item) => item.claimId));
   for (const claim of claims) {
     if (claim.remotePhoto.status === "pending") photoIds.add(claim.claimId);
   }
   for (const item of await listPhotosNeedingDownload(owner)) photoIds.add(item.claim.claimId);
+  result.savedClaimCount = claims.length;
+  for (const photo of photos) {
+    const hasUsableBackupSource = personalPhotoBackupSource(photo) !== null;
+    const issue = photo.backupState === "unsupported" && !hasUsableBackupSource
+      ? { code: "unsupported_photo", message: "This saved photo cannot be backed up in its current format." }
+      : photo.backupState === "conflict"
+        ? { code: "photo_conflict", message: "A different photo is already backed up for this claim." }
+        : null;
+    if (issue && !result.issues.some((existing) => existing.claimId === photo.claimId && existing.code === issue.code)) {
+      result.issues.push({ operation: "photo-upload", claimId: photo.claimId, ...issue });
+    }
+  }
   result.claimsPending = outbox.filter((item) => item.kind === "claim").length + claims.filter((claim) => claim.syncState === "pending" && !outbox.some((item) => item.kind === "claim" && item.claimId === claim.claimId)).length;
   result.photosPending = photoIds.size;
 }
@@ -330,34 +411,132 @@ export async function syncProgress(session: ProgressSession): Promise<ProgressSy
   const owner = accountOwner(capturedSession);
   const result: ProgressSyncResult = {
     ownerKey: ownerKey(owner), claimsUploaded: 0, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-    claimsPending: 0, photosPending: 0, issues: [],
+    fullPullCompleted: false, savedClaimCount: 0, claimsPending: 0, photosPending: 0, issues: [],
   };
   try {
     assertCurrent(capturedSession);
     await pushClaims(capturedSession, owner, result);
     if (!result.issues.some((issue) => issue.operation === "session")) await pushPhotos(capturedSession, owner, result);
-    if (!result.issues.some((issue) => issue.operation === "session")) await pullClaims(capturedSession, owner, result);
-    if (!result.issues.some((issue) => issue.operation === "session")) await pullPhotos(capturedSession, owner, result);
+    if (!result.issues.some((issue) => issue.operation === "session")) {
+      await pullClaims(capturedSession, owner, result);
+      if (!result.issues.some((issue) => issue.operation === "session")) {
+        await pullPhotos(capturedSession, owner, result);
+        result.fullPullCompleted = true;
+      }
+    }
   } catch (error) {
     result.issues.push(sessionIssue(error));
+  }
+  try {
+    await finalizeReservedGuestClaims(capturedSession.accountId);
+  } catch (error) {
+    result.issues.push({
+      operation: "guest-finalize",
+      code: "guest_finalize_failed",
+      message: error instanceof Error ? error.message : "Reserved guest progress could not be finalized.",
+    });
   }
   await countPending(owner, result);
   return result;
 }
 
-/** Call only from an explicit user-approved guest-collection attachment flow. */
-export async function attachGuestProgress(session: ProgressSession): Promise<GuestAttachResult> {
-  const capturedSession = captureProgressSession(session);
-  const owner = accountOwner(capturedSession);
-  assertCurrent(capturedSession);
-  const guestClaimsCopied = await copyGuestClaimsToAccount(capturedSession.accountId);
-  const sync = await syncProgress(capturedSession);
-  let guestClaimsRemoved = 0;
-  if (sync.issues.length === 0 && sync.claimsPending === 0 && sync.photosPending === 0) {
-    assertCurrent(capturedSession);
-    guestClaimsRemoved = await removeAttachedGuestClaims(capturedSession.accountId);
+/** Run a backup only when the app is foregrounded and platform policy allows its connection. */
+export async function runProgressSyncWhenReady(
+  session: ProgressSession,
+  isForeground: () => boolean,
+  knownConnectivity?: AccountBackupConnectivity,
+): Promise<ProgressSyncResult | null> {
+  if (!isForeground()) return null;
+  const connectivity = knownConnectivity ?? await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+  if (!connectivity.connected || !connectivity.allowed || !isForeground()) return null;
+  return syncProgress(session);
+}
+
+/** Coalesce concurrent triggers and optionally queue one follow-up for a meaningful new trigger. */
+export function coalesceProgressSync<T>(
+  inFlight: Map<string, Promise<T>>,
+  rerunRequested: Set<string>,
+  key: string,
+  run: () => Promise<T>,
+  retryAfterFlight: boolean,
+  rerun: () => void,
+): Promise<T> {
+  const active = inFlight.get(key);
+  if (active) {
+    if (retryAfterFlight) rerunRequested.add(key);
+    return active;
   }
-  return { ...sync, guestClaimsCopied, guestClaimsRemoved, ownerKey: ownerKey(owner) };
+
+  let task: Promise<T>;
+  task = Promise.resolve().then(run).finally(() => {
+    if (inFlight.get(key) === task) inFlight.delete(key);
+    if (rerunRequested.delete(key)) queueMicrotask(rerun);
+  });
+  inFlight.set(key, task);
+  return task;
+}
+
+/** Record only acknowledged outgoing work after all backup work is clear. */
+export function canPersistSuccessfulOutboundBackup(result: ProgressSyncResult): boolean {
+  if (result.claimsUploaded + result.photosUploaded === 0 || result.claimsPending > 0 || result.photosPending > 0) return false;
+  return !result.issues.some((issue) => issue.operation === "session" || issue.operation === "claim-upload" || issue.operation === "photo-upload" || /conflict|changed/i.test(issue.code));
+}
+
+/** Schedule backup only when a real connectivity transition makes the account backup available. */
+export function shouldScheduleAccountBackup(
+  previous: AccountBackupConnectivity | null,
+  current: AccountBackupConnectivity,
+): boolean {
+  return previous !== null && current.connected && current.allowed && (!previous.connected || !previous.allowed);
+}
+
+export async function persistSuccessfulOutboundBackupTimestamp(
+  accountId: string,
+  result: ProgressSyncResult,
+  currentTimestamp: number | null,
+  storage: {
+    get: (accountId: string) => Promise<number | null>;
+    set: (accountId: string, timestamp: number) => Promise<void>;
+  },
+  timestamp = Date.now(),
+): Promise<number | null> {
+  if (!canPersistSuccessfulOutboundBackup(result)) return currentTimestamp;
+  try {
+    await storage.set(accountId, timestamp);
+    const durableTimestamp = await storage.get(accountId);
+    return Math.max(currentTimestamp ?? 0, durableTimestamp ?? timestamp);
+  } catch {
+    return currentTimestamp;
+  }
+}
+
+/** A Last synced marker requires a complete, clean pass over an account with saved progress. */
+export function canPersistLastCompleteSync(result: ProgressSyncResult): boolean {
+  return result.fullPullCompleted && result.savedClaimCount > 0 &&
+    result.claimsPending === 0 && result.photosPending === 0 && result.issues.length === 0;
+}
+
+/** Persist a complete-sync marker only while the captured session and runtime policy remain valid. */
+export async function persistLastCompleteSyncTimestamp(
+  accountId: string,
+  result: ProgressSyncResult,
+  currentTimestamp: number | null,
+  storage: {
+    get: (accountId: string) => Promise<number | null>;
+    set: (accountId: string, timestamp: number) => Promise<void>;
+  },
+  canCommit: () => Promise<boolean>,
+  timestamp = Date.now(),
+): Promise<number | null> {
+  if (!canPersistLastCompleteSync(result)) return currentTimestamp;
+  try {
+    if (!(await canCommit())) return currentTimestamp;
+    await storage.set(accountId, timestamp);
+    const durableTimestamp = await storage.get(accountId);
+    return Math.max(currentTimestamp ?? 0, durableTimestamp ?? timestamp);
+  } catch {
+    return currentTimestamp;
+  }
 }
 
 export function claimEventContext(claim: Pick<PersonalClaim, "claimId" | "parkId">, firstClaim: boolean) {

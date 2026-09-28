@@ -81,7 +81,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           </Tilt>
         </motion.div>
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {claim ? "In your case" : live ? "You'll earn this" : "Badge coming soon"}
+          {claim ? "In your Dex" : live ? "You'll earn this" : "Badge coming soon"}
         </motion.div>
       </div>
 
@@ -141,7 +141,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
         {claim ? (
           <button className="btn btn--block btn--ink" onClick={onViewCase}>
-            <Icon name="case" /> View in your case
+            <Icon name="case" /> View in your Dex
           </button>
         ) : !live ? (
           <>

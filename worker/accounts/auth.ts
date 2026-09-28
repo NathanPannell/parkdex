@@ -513,7 +513,7 @@ function escapeHtml(value: string): string {
 
 function authMailHtml(link: string, kind: "verification" | "password_reset"): string {
   const action = kind === "verification" ? "verify your email address" : "reset your password";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Parkdex account</title></head><body style="margin:0;background:#fff8ec;color:#14231c;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:32px auto;padding:32px;background:#fffdf8;border:1px solid #ead6b6;border-radius:20px"><p style="font-weight:800;letter-spacing:.1em">PARKDEX</p><h1 style="font-size:28px">${kind === "verification" ? "Verify your email" : "Reset your password"}</h1><p>Use this link to ${action}. It expires in one hour and works once.</p><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 20px;background:#ff5a1f;color:#14231c;font-weight:700;text-decoration:none;border-radius:12px">${kind === "verification" ? "Verify email" : "Reset password"}</a></p><p style="font-size:13px;overflow-wrap:anywhere">If the button does not work, paste this address into Kip:<br>${escapeHtml(link)}</p><p style="font-size:13px">If you did not request this, you can ignore this email.</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Parkdex account</title></head><body style="margin:0;background:#fff8ec;color:#14231c;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:32px auto;padding:32px;background:#fffdf8;border:1px solid #ead6b6;border-radius:20px"><p style="font-weight:800;letter-spacing:.1em">PARKDEX</p><h1 style="font-size:28px">${kind === "verification" ? "Verify your email" : "Reset your password"}</h1><p>Use this link to ${action}. It expires in one hour and works once.</p><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 20px;background:#ff5a1f;color:#14231c;font-weight:700;text-decoration:none;border-radius:12px">${kind === "verification" ? "Verify email" : "Reset password"}</a></p><p style="font-size:13px;overflow-wrap:anywhere">If the button does not work, copy and paste this address into your browser:<br>${escapeHtml(link)}</p><p style="font-size:13px">If you did not request this, you can ignore this email.</p></main></body></html>`;
 }
 
 function authMailText(link: string, kind: "verification" | "password_reset"): string {
@@ -978,7 +978,7 @@ async function routeAuth(
     });
     if (linkResult === "email_conflict" || linkResult === "subject_conflict") {
       await store.recordSecurityEvent("google_link", scopeHash, linkResult).catch(() => undefined);
-      throw new HttpError(409, "account_conflict", "This Google account is linked to another Kip account.");
+      throw new HttpError(409, "account_conflict", "This Google account is linked to another Parkdex account.");
     }
     if (linkResult !== "ok") throw new HttpError(403, "reauthentication_required", "Please reauthenticate before linking Google.");
     const account = await store.findAccountById(lookup.context.accountId);

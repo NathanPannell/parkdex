@@ -1,12 +1,12 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { CONTENT_CDN_ORIGIN } from "./contracts";
+import { canDownloadContent, CONTENT_CDN_ORIGIN, type Connectivity } from "./contracts";
 
 const DEFAULT_API_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_BRIDGED_BASE64_CHARS = Math.ceil((MAX_RESPONSE_BYTES * 4) / 3) + 4;
 
-export type ContentConnectivity = { connected: boolean; wifi: boolean };
+export type ContentConnectivity = Connectivity;
 type BrowserNetworkInformation = EventTarget & { type?: string; effectiveType?: string };
 
 type NativeWifiStatus = { wifi: boolean };
@@ -16,6 +16,18 @@ type NativeContentResponse = {
   headers: Record<string, string>;
   bodyBase64: string;
   url: string;
+};
+
+export type NativeAccountBackupRequestOptions = {
+  requestId: string;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  bodyBase64: string;
+  approvedApiOrigin: string;
+  maxRequestBytes: number;
+  maxResponseBytes: number;
+  timeoutMs: number;
 };
 
 type NativeContentTransport = {
@@ -30,11 +42,21 @@ type NativeContentTransport = {
     maxResponseBytes: number;
     timeoutMs: number;
   }): Promise<NativeContentResponse>;
+  accountRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse>;
   abort(options: { requestId: string }): Promise<void>;
 };
 
 const NativeTransport = registerPlugin<NativeContentTransport>("WifiContentTransport");
 let nextRequestId = 0;
+
+/** Account backup shares the Wi-Fi plugin registration but keeps its own strict native request method. */
+export function nativeAccountBackupRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse> {
+  return NativeTransport.accountRequest(options);
+}
+
+export function abortNativeAccountBackupRequest(requestId: string): Promise<void> {
+  return NativeTransport.abort({ requestId });
+}
 
 function browserNetworkInformation(): BrowserNetworkInformation | undefined {
   if (typeof navigator === "undefined") return undefined;
@@ -44,13 +66,17 @@ function browserNetworkInformation(): BrowserNetworkInformation | undefined {
 function readBrowserConnectivity(): ContentConnectivity {
   const connected = typeof navigator !== "undefined" && navigator.onLine === true;
   const connection = browserNetworkInformation();
-  return { connected, wifi: connected && connection?.type === "wifi" };
+  return {
+    connected,
+    wifi: connected && connection?.type === "wifi",
+    contentDownloadAllowed: connected,
+  };
 }
 
 /** Report connectivity without treating an effective connection speed as a network type. */
 export async function getContentConnectivity(): Promise<ContentConnectivity> {
   if (!Capacitor.isNativePlatform()) return readBrowserConnectivity();
-  if (Capacitor.getPlatform() !== "android") return { connected: false, wifi: false };
+  if (Capacitor.getPlatform() !== "android") return { connected: false, wifi: false, contentDownloadAllowed: false };
 
   const [networkResult, wifiResult] = await Promise.allSettled([
     Network.getStatus(),
@@ -58,14 +84,15 @@ export async function getContentConnectivity(): Promise<ContentConnectivity> {
   ]);
   const connected = networkResult.status === "fulfilled" && networkResult.value.connected === true;
   const wifi = wifiResult.status === "fulfilled" && wifiResult.value.wifi === true;
-  return { connected: connected || wifi, wifi };
+  const connectedOrWifi = connected || wifi;
+  return { connected: connectedOrWifi, wifi, contentDownloadAllowed: connectedOrWifi && wifi };
 }
 
 /** Subscribe to online state and the browser's physical network type, or native network changes. */
 export function subscribeContentConnectivity(listener: (connectivity: ContentConnectivity) => void): () => void {
   if (Capacitor.isNativePlatform()) {
     if (Capacitor.getPlatform() !== "android") {
-      listener({ connected: false, wifi: false });
+      listener({ connected: false, wifi: false, contentDownloadAllowed: false });
       return () => {};
     }
 
@@ -101,12 +128,17 @@ export function subscribeContentConnectivity(listener: (connectivity: ContentCon
   };
 }
 
-/** Convenience gate for download callsites that only need an affirmative Wi-Fi value. */
+/** Convenience check for callers that need to display the physical Wi-Fi signal. */
 export async function isContentWifiAvailable(): Promise<boolean> {
   return (await getContentConnectivity()).wifi;
 }
 
-/** Fetch content through Android's Wi-Fi-bound network, or through a Wi-Fi-gated browser fetch. */
+/** Convenience gate for content downloads under the current platform's network policy. */
+export async function isContentDownloadAvailable(): Promise<boolean> {
+  return canDownloadContent(await getContentConnectivity());
+}
+
+/** Fetch content through Android's Wi-Fi-bound network, or through any online browser connection. */
 export async function contentFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const request = input instanceof Request ? new Request(input, init) : new Request(input, init);
   const url = new URL(request.url);
@@ -130,18 +162,19 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
 }
 
 async function browserFetch(request: Request, url: URL): Promise<Response> {
-  if (!(await isContentWifiAvailable())) throw wifiUnavailableError();
+  const initialConnectivity = await getContentConnectivity();
+  if (!canDownloadContent(initialConnectivity)) throw contentUnavailableError(initialConnectivity);
   throwIfAborted(request.signal);
 
   const controller = new AbortController();
-  const abortForWifi = () => {
-    if (!controller.signal.aborted) controller.abort(wifiUnavailableError());
+  const abortForConnectivity = (connectivity: ContentConnectivity) => {
+    if (!controller.signal.aborted) controller.abort(contentUnavailableError(connectivity));
   };
   const abortForCaller = () => {
     if (!controller.signal.aborted) controller.abort(abortReason(request.signal));
   };
   const onConnectivity = (connectivity: ContentConnectivity) => {
-    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+    if (!canDownloadContent(connectivity)) abortForConnectivity(connectivity);
   };
   const unsubscribe = subscribeContentConnectivity(onConnectivity);
   request.signal.addEventListener("abort", abortForCaller, { once: true });
@@ -149,7 +182,7 @@ async function browserFetch(request: Request, url: URL): Promise<Response> {
   try {
     if (request.signal.aborted) abortForCaller();
     const connectivity = await getContentConnectivity();
-    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+    if (!canDownloadContent(connectivity)) abortForConnectivity(connectivity);
     if (controller.signal.aborted) throw abortReason(controller.signal);
 
     const response = await globalThis.fetch(url, {
@@ -342,5 +375,12 @@ function abortReason(signal: AbortSignal): unknown {
 function wifiUnavailableError(): Error {
   const error = new Error("Connect to Wi-Fi to download Parkdex content.");
   error.name = "WifiUnavailableError";
+  return error;
+}
+
+function contentUnavailableError(connectivity: ContentConnectivity): Error {
+  if (connectivity.connected && !connectivity.wifi) return wifiUnavailableError();
+  const error = new Error("Content downloads are unavailable while offline.");
+  error.name = "ContentOfflineError";
   return error;
 }

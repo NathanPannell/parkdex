@@ -2,12 +2,10 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { motion } from "motion/react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
-import { useAuth } from "../lib/accounts/AuthProvider";
+import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
-import { listPersonalClaims, setLegacyClaimSnapshot } from "../lib/accounts/personalStore";
 import { useStore } from "../lib/store";
-import { useContent } from "../lib/content/provider";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -129,7 +127,6 @@ function GoogleSignInButton({
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const { state } = useStore();
-  const content = useContent();
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -138,8 +135,6 @@ export function Account({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string | null>(null);
-  const [guestClaims, setGuestClaims] = useState(0);
-  const [mergeConfirm, setMergeConfirm] = useState(false);
   const [googleLinkStep, setGoogleLinkStep] = useState<"closed" | "verify" | "link">("closed");
   const [googleLinkPassword, setGoogleLinkPassword] = useState("");
   const [googleResetKey, setGoogleResetKey] = useState(0);
@@ -165,6 +160,9 @@ export function Account({ onBack }: { onBack: () => void }) {
   const hasGoogle = !!account?.providers.includes("google");
   const canGoogleReauth = hasGoogle && googleAvailable;
   const canPasswordReauth = hasPassword;
+  const backupTimestamp = formatBackupTimestamp(auth.backup.updatedAt);
+  const lastSyncedTimestamp = formatBackupTimestamp(auth.backup.lastSyncedAt);
+  const backupStatus = backupStatusText(auth.backup.phase, auth.backup.message);
 
   useEffect(() => {
     setGoogleLinkStep("closed");
@@ -176,13 +174,6 @@ export function Account({ onBack }: { onBack: () => void }) {
     setDeleteError(null);
     setDeletionReceipt(null);
   }, [accountId]);
-
-  useEffect(() => {
-    if (!signedIn) { setGuestClaims(0); return; }
-    let live = true;
-    void listPersonalClaims({ kind: "guest" }).then((claims) => { if (live) setGuestClaims(claims.length); }).catch(() => {});
-    return () => { live = false; };
-  }, [signedIn, accountId, auth.progressRevision]);
 
   useEffect(() => {
     if (!auth.pendingAction) return;
@@ -317,34 +308,6 @@ export function Account({ onBack }: { onBack: () => void }) {
     }
   };
 
-  const attachGuest = async () => {
-    setMergeConfirm(false);
-    setBusy(true);
-    setFormError(null);
-    setFormMessage(null);
-    try {
-      const guestRows = await listPersonalClaims({ kind: "guest" });
-      if (content) {
-        for (const claim of guestRows) {
-          if (claim.parkSnapshot) continue;
-          const currentPark = content.liveParks.find((candidate) => candidate.id === claim.parkId);
-          const park = currentPark ?? content.retiredParks.find((candidate) => candidate.id === claim.parkId);
-          if (park) {
-            await setLegacyClaimSnapshot({ kind: "guest" }, claim.claimId, park, claim.contentReleaseId);
-          }
-        }
-      }
-      const result = await auth.attachGuestCollection();
-      setFormMessage(result.guestClaimsRemoved > 0 || result.guestClaimsCopied === 0
-        ? "The guest collection was attached to this account."
-        : "The guest collection is queued for backup. Its original copy stays here until the server confirms every saved item.");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "The guest collection could not be attached yet.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const renderGoogleButton = (purpose: "sign_in" | "reauth" | "link", resetKey: number, disabled: boolean, onCredential: (idToken: string, nonce: string) => Promise<void>, onError: (message: string) => void) => {
     if (!googleAvailable) return null;
     if (auth.isNative) {
@@ -371,7 +334,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <Icon name="back" size={20} />
         </button>
         <div className="account-head__title">
-          <span className="eyebrow">Your Kip account</span>
+          <span className="eyebrow">Your Parkdex account</span>
           <h1 id="account-title">Account &amp; backup</h1>
         </div>
         <div className="account-head__kip"><Kip size={54} pose="avatar" /></div>
@@ -395,15 +358,15 @@ export function Account({ onBack }: { onBack: () => void }) {
         {auth.phase === "starting" && (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Opening your case…</strong><p>Your saved progress stays on this device while Kip checks your account.</p></div>
+            <div><strong>Opening your Dex…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
           </section>
         )}
 
         {offlineAccount && (
           <section className="account-card card">
             <span className="eyebrow">Offline</span>
-            <h2>Your saved case is here</h2>
-            <p>Kip couldn't confirm the account while offline. The previous account's saved collection remains in its private device partition and is not being backed up.</p>
+            <h2>Your saved Dex is here</h2>
+            <p>Parkdex couldn't confirm the account while offline. The previous account's saved Dex remains in its private device partition and is not being backed up.</p>
             <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
             {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
           </section>
@@ -413,7 +376,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-card card" role="alert">
             <span className="eyebrow">Saved progress</span>
             <h2>Storage needs attention</h2>
-            <p>{auth.startupError ?? "The saved collection could not be opened. Your previous data was left untouched."}</p>
+            <p>{auth.startupError ?? "Your saved Dex could not be opened. Your previous data was left untouched."}</p>
             <button className="btn btn--paper btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
           </section>
         )}
@@ -423,13 +386,30 @@ export function Account({ onBack }: { onBack: () => void }) {
             <section className="account-card card account-profile">
               <div className="account-profile__main">
                 <span className="eyebrow">Signed in</span>
-                <h2>{account.displayName || "Your Kip account"}</h2>
+                <h2>{account.displayName || "Your Parkdex account"}</h2>
                 <p>{account.email}</p>
               </div>
               <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
                 <Icon name={account.emailVerified ? "check" : "image"} size={16} />
                 {account.emailVerified ? "Email verified" : "Email not verified"}
               </span>
+              <div className="account-profile__backup" aria-live="polite">
+                <p className="account-profile__backup-time">
+                  {lastSyncedTimestamp
+                    ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
+                    : backupTimestamp
+                      ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
+                      : "Not synced yet"}
+                </p>
+                {backupStatus && (
+                  <p className={`account-profile__backup-status is-${auth.backup.phase}`} role="status">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.08a6 6 0 0 1 6.94 0M12 20h.01" />
+                    </svg>
+                    <span>{backupStatus}</span>
+                  </p>
+                )}
+              </div>
               {!account.emailVerified && (
                 <div className="account-profile__verify">
                   <p>{canRequestEmail ? "Use the link we sent to verify this address and help protect account recovery." : "Email delivery is not enabled in this environment."}</p>
@@ -457,48 +437,15 @@ export function Account({ onBack }: { onBack: () => void }) {
               )}
             </section>
 
-            <section className="account-card card account-backup">
-              <div className="account-section-title">
-                <div><span className="eyebrow">Collection backup</span><h2>{backupHeading(auth.backup.phase)}</h2></div>
-                <span className={`account-backup__dot is-${auth.backup.phase}`} aria-hidden="true" />
-              </div>
-              <p>{auth.backup.message ?? "Your collection is saved on this device. Kip keeps a copy with your account when a connection is available."}</p>
-              {(auth.backup.claimsPending > 0 || auth.backup.photosPending > 0) && (
-                <div className="account-pending" aria-live="polite">
-                  {auth.backup.claimsPending > 0 && <span>{auth.backup.claimsPending} {auth.backup.claimsPending === 1 ? "badge" : "badges"} waiting</span>}
-                  {auth.backup.photosPending > 0 && <span>{auth.backup.photosPending} {auth.backup.photosPending === 1 ? "photo" : "photos"} waiting</span>}
-                </div>
-              )}
-              {auth.backup.message && auth.backup.phase !== "success" && <p className="account-help" role="status">{auth.backup.message}</p>}
-              <button className="btn btn--sun btn--block" onClick={() => void auth.syncBackup()} disabled={busy || auth.backup.phase === "syncing"}>
-                <Icon name={auth.backup.phase === "syncing" ? "download" : "refresh"} /> {auth.backup.phase === "syncing" ? "Backing up…" : "Back up now"}
-              </button>
-              <p className="account-privacy">Your collection and photos are private to this account. Switching accounts never moves a collection automatically.</p>
-            </section>
-
-            <section className="account-card card account-merge">
-              <span className="eyebrow">This device</span>
-              <h2>{guestClaims ? `${guestClaims} guest ${guestClaims === 1 ? "badge" : "badges"}` : "No guest badges to add"}</h2>
-              <p>Guest badges stay separate until you choose to add them. The guest copy remains until the server confirms every saved badge and supported photo.</p>
-              {!mergeConfirm ? (
-                <button className="btn btn--paper btn--block" disabled={busy || guestClaims === 0} onClick={() => setMergeConfirm(true)}>Add this device’s collection</button>
-              ) : (
-                <div className="account-merge__confirm">
-                  <strong>Attach {guestClaims} {guestClaims === 1 ? "badge" : "badges"} to {account.displayName || "this account"}?</strong>
-                  <div><button className="btn btn--sun btn--sm" disabled={busy} onClick={() => void attachGuest()}>Confirm attach</button><button className="btn btn--paper btn--sm" onClick={() => setMergeConfirm(false)}>Keep separate</button></div>
-                </div>
-              )}
-            </section>
-
             <section className="account-card card account-privacy-card">
               <span className="eyebrow">Privacy</span>
-              <p>Signing out hides this account’s saved case on this device. It does not move badges into the guest case. Sign in again to see this account’s collection.</p>
+              <p>Signing out hides this account’s saved Dex on this device. Sign in again to open it.</p>
               <button className="btn btn--paper btn--block" disabled={busy} onClick={() => void run(auth.signOut)}>Sign out on this device</button>
             </section>
 
             <section className="account-delete">
               <button className="account-delete__open" disabled={busy} onClick={() => { setDeleteStep("confirm"); setDeleteError(null); }}>
-                Delete Kip account
+                Delete Parkdex account
               </button>
             </section>
           </>
@@ -509,8 +456,8 @@ export function Account({ onBack }: { onBack: () => void }) {
             <span className="eyebrow">Account deletion</span>
             {deleteStep === "confirm" ? (
               <>
-                <h2>Delete this Kip account?</h2>
-                <p>This removes the account and its server backup. Badges in the separate guest case stay on this device. First verify your account again.</p>
+                <h2>Delete this Parkdex account?</h2>
+                <p>This permanently deletes your Parkdex account, its saved badges and photos, and its server backup. The account’s saved copy on this device is cleared after Parkdex accepts the request. First verify your account again.</p>
                 {canPasswordReauth && (
                   <form className="account-form" onSubmit={(event) => void submitDeleteReauth(event)}>
                     <label className="fb-field"><span className="fb-label">Current password</span><input className="fb-input" type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} /></label>
@@ -534,7 +481,7 @@ export function Account({ onBack }: { onBack: () => void }) {
               </>
             )}
             {deleteError && <p className="account-error" role="alert">{deleteError}</p>}
-            <p className="account-privacy">If Kip returns a pending receipt, deletion is still in progress. Keep the receipt if you contact support.</p>
+            <p className="account-privacy">If Parkdex returns a pending receipt, deletion is still in progress. Keep the receipt if you contact support.</p>
           </section>
         )}
 
@@ -573,9 +520,9 @@ export function Account({ onBack }: { onBack: () => void }) {
               ) : (
                 <>
                   <div className="account-form-card__heading">
-                    <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your case safe"}</span>
-                    <h2>{mode === "sign_up" ? "Create your Kip account" : "Sign in to Kip"}</h2>
-                    <p>{mode === "sign_up" ? "Back up your badges and photos. Your guest case stays separate until you choose to attach it." : "Your badges and photos stay on this device until you sign in."}</p>
+                    <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your Dex safe"}</span>
+                    <h2>{mode === "sign_up" ? "Create your Parkdex account" : "Sign in to Parkdex"}</h2>
+                    <p>{mode === "sign_up" ? "Badges and photos collected before signing in join the first Parkdex account you sign in to." : "Your badges and photos stay on this device until you sign in."}</p>
                   </div>
                   {googleAvailable && renderGoogleButton("sign_in", googleResetKey, busy, onGoogleCredential, onGoogleError)}
                   {googleAvailable && emailAvailable && <div className="account-or"><span>or use email</span></div>}
@@ -590,16 +537,12 @@ export function Account({ onBack }: { onBack: () => void }) {
                   </form>
                   {mode === "sign_in" && canRequestEmail && <button className="account-text-button" onClick={() => setMode("reset")}>Forgot password?</button>}
                   <div className="account-form-card__switch">
-                    {mode === "sign_in" ? <><span>New to Kip?</span><button className="account-text-button" onClick={() => setMode("sign_up")}>Create account</button></> : <><span>Already have an account?</span><button className="account-text-button" onClick={() => setMode("sign_in")}>Sign in</button></>}
+                    {mode === "sign_in" ? <><span>New to Parkdex?</span><button className="account-text-button" onClick={() => setMode("sign_up")}>Create account</button></> : <><span>Already have an account?</span><button className="account-text-button" onClick={() => setMode("sign_in")}>Sign in</button></>}
                   </div>
                 </>
               )}
             </section>
 
-            <section className="account-card card account-guest-note">
-              <span className="eyebrow">Guest case</span>
-              <p>Your badges stay on this device if you keep using Kip as a guest. Signing in does not merge them automatically.</p>
-            </section>
           </>
         )}
 
@@ -626,10 +569,27 @@ export function Account({ onBack }: { onBack: () => void }) {
   );
 }
 
-function backupHeading(phase: string) {
-  if (phase === "syncing") return "Backing up";
-  if (phase === "success") return "Up to date";
-  if (phase === "offline") return "Waiting for connection";
-  if (phase === "pending" || phase === "error") return "Backup pending";
-  return "Saved on this device";
+function formatBackupTimestamp(timestamp: number | null) {
+  if (timestamp === null || !Number.isFinite(timestamp) || timestamp <= 0) return null;
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return null;
+  const options: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  if (date.getFullYear() !== new Date().getFullYear()) options.year = "numeric";
+  return {
+    dateTime: date.toISOString(),
+    label: new Intl.DateTimeFormat(undefined, options).format(date),
+  };
+}
+
+function backupStatusText(phase: BackupPhase, message: string | null) {
+  if (phase === "syncing") return "Backing up saved progress.";
+  if (phase === "offline") return message ?? "You're offline. Saved progress will sync when you reconnect.";
+  if (phase === "pending") return message ?? "Some saved progress is waiting for backup.";
+  if (phase === "error") return message ?? "Backup couldn’t finish. Your saved data is still on this device.";
+  return null;
 }

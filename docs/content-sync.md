@@ -58,13 +58,13 @@ See [content-authoring.md](content-authoring.md) for the publishing command and 
 
 ## Offline and Wi-Fi behavior
 
-Saved parks remain usable offline. Content checks and downloads wait for Wi-Fi, including restored badge artwork, private collection photos, map chunks and map fonts. Android binds these downloads to the Wi-Fi network so an interrupted Wi-Fi connection cannot fall back to cellular data. Sign-in and explicit uploads retain their existing behavior.
+Saved parks remain usable offline. Web content checks and downloads use any online connection, including in browsers without the Network Information API. Android requires confirmed Wi-Fi and binds content requests to that network so they cannot fall back to cellular data. Content downloads pause while the browser is offline or Android loses Wi-Fi. Sign-in and explicit uploads retain their existing behavior.
 
-The web app also requires an explicit Wi-Fi connection type. Some browsers expose only a connection speed estimate, which cannot distinguish Wi-Fi from cellular. Those browsers keep saved content available and wait instead of downloading updates. Android can identify and bind to the actual Wi-Fi network.
+The app reports physical Wi-Fi only when the platform confirms it. Browser connection speed and unknown connection types never count as Wi-Fi; they do not block content downloads while the browser is online.
 
-The app checks at startup, when it returns to the foreground, when Wi-Fi returns, and when the visitor retries. These checks run while the app is open. There is no hourly polling service on the phone or server.
+The app checks at startup, when it returns to the foreground, when the browser comes online or Android Wi-Fi returns, and when the visitor retries. These checks run while the app is open. There is no hourly polling service on the phone or server.
 
-The map header shows a small status indicator while checking, downloading or saving updates. It shows a waiting state when Wi-Fi is unavailable and an error state when an update fails.
+The map header shows a small status indicator while checking, downloading or saving updates. Android shows a Wi-Fi waiting state when another connection is active, and the app shows an error state when an update fails.
 
 Earned claims keep their original park snapshot and immutable badge identity. A later catalogue edit or park retirement does not replace the artwork already earned.
 

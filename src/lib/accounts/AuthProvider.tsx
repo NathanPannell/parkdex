@@ -1,13 +1,17 @@
 import { App as CapacitorApp } from "@capacitor/app";
-import { Network } from "@capacitor/network";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   clearAccountProgressAfterServerDeletion,
+  getLastSuccessfulBackupAt,
+  getLastCompleteSyncAt,
   initializePersonalStore,
   listPersonalClaims,
   listPersonalPhotos,
+  reserveGuestClaimsForAccount,
+  setLastSuccessfulBackupAt,
+  setLastCompleteSyncAt,
 } from "./personalStore";
-import { attachGuestProgress, syncProgress, type GuestAttachResult, type ProgressSyncResult } from "./progressSync";
+import { coalesceProgressSync, persistLastCompleteSyncTimestamp, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
 import {
   AuthHttpError,
   clearLocalNativeSession,
@@ -37,6 +41,7 @@ import {
   type GooglePurpose,
 } from "./authClient";
 import { listenForNativeAuthLinks, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
+import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 
 const LAST_ACCOUNT_KEY = "kip-account-last-id";
 
@@ -48,8 +53,10 @@ export type BackupStatus = {
   photosPending: number;
   message: string | null;
   updatedAt: number | null;
+  lastSyncedAt: number | null;
 };
 export type AuthAction = { kind: "password_reset"; token: string } | null;
+export type SyncBackupOptions = { retryAfterFlight?: boolean };
 
 type AuthState = {
   phase: AuthPhase;
@@ -82,14 +89,13 @@ type AuthContextValue = AuthState & {
   reauthPassword: (password: string) => Promise<void>;
   reauthGoogle: (idToken: string, nonce: string) => Promise<void>;
   googleChallenge: (purpose: GooglePurpose) => ReturnType<typeof createGoogleChallenge>;
-  syncBackup: () => Promise<ProgressSyncResult | null>;
-  attachGuestCollection: () => Promise<GuestAttachResult>;
+  syncBackup: (options?: SyncBackupOptions) => Promise<ProgressSyncResult | null>;
   deleteAccount: () => Promise<DeletionResponse>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const EMPTY_BACKUP: BackupStatus = { phase: "idle", claimsPending: 0, photosPending: 0, message: null, updatedAt: null };
+const EMPTY_BACKUP: BackupStatus = { phase: "idle", claimsPending: 0, photosPending: 0, message: null, updatedAt: null, lastSyncedAt: null };
 const EMPTY_AUTH: AuthState = {
   phase: "starting",
   account: null,
@@ -125,9 +131,21 @@ function isUnauthorized(error: unknown) {
 }
 
 function networkMessage(error: unknown) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved collection stays on this device until you reconnect.";
+  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved Dex stays on this device until you reconnect.";
   if (error instanceof AuthHttpError && error.status >= 500) return "The account service is having trouble. Try again shortly.";
   return "The account service could not be reached. Check your connection and try again.";
+}
+
+class GuestReservationFailedError extends Error {
+  constructor() {
+    super("Saved progress could not be prepared for this account. Retry while this device can access its saved Dex.");
+    this.name = "GuestReservationFailedError";
+  }
+}
+
+function abortProgressRequests(controllers: Map<string, AbortController>) {
+  for (const controller of controllers.values()) controller.abort();
+  controllers.clear();
 }
 
 function parseWebAuthAction(): { kind: "verification" | "password_reset"; token: string } | null {
@@ -156,14 +174,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshInFlight = useRef<{ operation: number; promise: Promise<void> } | null>(null);
   const lastRenewalAt = useRef(0);
   const syncInFlight = useRef(new Map<string, Promise<ProgressSyncResult | null>>());
-  const syncRef = useRef<() => Promise<ProgressSyncResult | null>>(async () => null);
+  const syncRerunRequested = useRef(new Set<string>());
+  const syncAbortControllers = useRef(new Map<string, AbortController>());
+  const syncRef = useRef<(options?: SyncBackupOptions) => Promise<ProgressSyncResult | null>>(async () => null);
   const refreshRef = useRef<(expectedOverride?: string | null) => Promise<void>>(async () => {});
   const resumeInFlight = useRef<Promise<void> | null>(null);
   const lastResumeAt = useRef(0);
+  const foreground = useRef(typeof document === "undefined" || document.visibilityState !== "hidden");
   const isNative = isNativeAccountRuntime();
 
-  const establishAccount = useCallback((account: AccountProfile, operation?: number) => {
-    if (operation !== undefined && authOperationGeneration.current !== operation) throw new Error("The account session changed before this action finished.");
+  const establishAccount = useCallback(async (account: AccountProfile, operation?: number) => {
+    const startingSessionGeneration = sessionGeneration.current;
+    const current = () => (operation === undefined || authOperationGeneration.current === operation) && sessionGeneration.current === startingSessionGeneration;
+    if (!current()) throw new Error("The account session changed before this action finished.");
+    try {
+      await reserveGuestClaimsForAccount(account.id);
+    } catch {
+      if (current()) {
+        setState((value) => ({ ...value, phase: "error", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: new GuestReservationFailedError().message }));
+      }
+      throw new GuestReservationFailedError();
+    }
+    if (!current()) throw new Error("The account session changed before this action finished.");
+    let lastSuccessfulBackupAt: number | null = null;
+    try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(account.id); }
+    catch { /* A local status read must not prevent a verified account from opening. */ }
+    let lastCompleteSyncAt: number | null = null;
+    try { lastCompleteSyncAt = await getLastCompleteSyncAt(account.id); }
+    catch { /* A local status read must not prevent a verified account from opening. */ }
+    if (!current()) throw new Error("The account session changed before this action finished.");
+    abortProgressRequests(syncAbortControllers.current);
+    syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     lastRenewalAt.current = Date.now();
     rememberAccount(account.id);
@@ -174,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       offlineAccountId: null,
       startupError: null,
       notice: null,
-      backup: { ...EMPTY_BACKUP, phase: "syncing" },
+      backup: { ...EMPTY_BACKUP, updatedAt: lastSuccessfulBackupAt, lastSyncedAt: lastCompleteSyncAt },
       progressRevision: current.progressRevision + 1,
     }));
     return account;
@@ -209,12 +250,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try { localSession = await readLocalNativeSession(); }
         catch {
           if (!current()) return;
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
+          sessionGeneration.current += 1;
           setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null }));
           rememberAccount(null);
           return;
         }
         if (!current()) return;
         if (!localSession) {
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
+          sessionGeneration.current += 1;
           setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP }));
           rememberAccount(null);
           return;
@@ -227,9 +274,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // /me is intentionally usable to discover a cookie session, so compare its
         // result locally before any account-scoped renew or progress operation.
         if (expectedAccountId && account.id.toLowerCase() !== expectedAccountId.toLowerCase()) {
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
           rememberAccount(null);
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved case." }));
+          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved Dex." }));
           return;
         }
 
@@ -247,12 +296,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // was just confirmed by /me. A later foreground event can retry it.
           }
         }
-        if (current()) establishAccount(account, operation);
+        if (current()) await establishAccount(account, operation);
       } catch (error) {
         if (!current()) return;
+        if (error instanceof GuestReservationFailedError) return;
         if (isUnauthorized(error)) {
           if (isNative) await clearLocalNativeSession().catch(() => {});
           if (!current()) return;
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
           rememberAccount(null);
           setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: null }));
@@ -260,16 +312,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const cachedId = expectedAccountId ?? lastAccountId();
         if (cachedId) {
+          let lastSuccessfulBackupAt: number | null = null;
+          try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(cachedId); }
+          catch { /* Keep offline access available if status metadata cannot be read. */ }
+          let lastCompleteSyncAt: number | null = null;
+          try { lastCompleteSyncAt = await getLastCompleteSyncAt(cachedId); }
+          catch { /* Keep offline access available if status metadata cannot be read. */ }
+          if (!current()) return;
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
           setState((value) => ({
             ...value,
             phase: "offline-account",
             account: null,
             offlineAccountId: cachedId,
-            backup: { ...EMPTY_BACKUP, phase: "offline", message: networkMessage(error) },
+            backup: { ...EMPTY_BACKUP, phase: "offline", message: networkMessage(error), updatedAt: lastSuccessfulBackupAt, lastSyncedAt: lastCompleteSyncAt },
             startupError: networkMessage(error),
           }));
         } else {
+          abortProgressRequests(syncAbortControllers.current);
+          syncRerunRequested.current.clear();
+          sessionGeneration.current += 1;
           setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: networkMessage(error) }));
         }
       }
@@ -308,9 +372,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-    if (!accountId) throw new Error("Reconnect before signing out so Kip can revoke this session safely.");
+    if (!accountId) throw new Error("Reconnect before signing out so Parkdex can revoke this session safely.");
     const operation = ++authOperationGeneration.current;
     const generation = sessionGeneration.current;
+    abortProgressRequests(syncAbortControllers.current);
+    syncRerunRequested.current.clear();
     await logoutAccount(accountId);
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return;
     let localCleanupFailed = false;
@@ -319,9 +385,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       catch { localCleanupFailed = true; }
     }
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return;
+    abortProgressRequests(syncAbortControllers.current);
+    syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     rememberAccount(null);
-    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's collection remains saved separately on this device." }, progressRevision: current.progressRevision + 1 }));
+    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's Dex remains saved separately on this device." }, progressRevision: current.progressRevision + 1 }));
   }, [isNative]);
 
   const sendVerification = useCallback(async () => {
@@ -368,74 +436,117 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return createGoogleChallenge(purpose, accountId);
   }, []);
 
-  const syncBackup = useCallback(async (): Promise<ProgressSyncResult | null> => {
+  const syncBackup = useCallback((options: SyncBackupOptions = {}): Promise<ProgressSyncResult | null> => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-    if (!accountId) return null;
+    if (!accountId || !foreground.current) return Promise.resolve(null);
     const generation = sessionGeneration.current;
     const flightKey = `${generation}:${accountId.toLowerCase()}`;
-    const previous = syncInFlight.current.get(flightKey);
-    if (previous) return previous;
-    const setOfflineStatus = async () => {
+    const isCurrentSession = () => sessionGeneration.current === generation && stateRef.current.phase === "authenticated" && stateRef.current.account?.id?.toLowerCase() === accountId.toLowerCase();
+    const setUnavailableStatus = async (connected: boolean) => {
       const owner = { kind: "account" as const, accountId };
       const [claims, photos] = await Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)]);
-      if (sessionGeneration.current === generation && stateRef.current.account?.id === accountId) {
-        setState((current) => ({ ...current, backup: { phase: "offline", claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length, photosPending: photos.filter((photo) => photo.backupState === "pending").length, message: "You're offline. Your saved collection stays on this device until you reconnect.", updatedAt: current.backup.updatedAt } }));
+      if (isCurrentSession()) {
+        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+          ? { ...current, backup: {
+            phase: connected ? "pending" : "offline",
+            claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
+            photosPending: photos.filter((photo) => photo.backupState === "pending").length,
+            message: connected ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available." : "You're offline. Your saved Dex stays on this device until you reconnect.",
+            updatedAt: current.backup.updatedAt,
+            lastSyncedAt: current.backup.lastSyncedAt,
+          } }
+          : current);
       }
       return null;
     };
-    if (typeof navigator !== "undefined" && !navigator.onLine) return setOfflineStatus();
+    const run = async (): Promise<ProgressSyncResult | null> => {
+      let controller: AbortController | null = null;
+      try {
+        const connectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+        if (!isCurrentSession() || !foreground.current) return null;
+        if (!connectivity.connected || !connectivity.allowed) return setUnavailableStatus(connectivity.connected);
 
-    setState((current) => ({ ...current, backup: { ...current.backup, phase: "syncing", message: null } }));
-    const task = syncProgress({
-      accountId,
-      fetchAuthenticated: (input, init) => fetchAuthenticated(input, init, accountId),
-      isCurrent: () => sessionGeneration.current === generation && stateRef.current.phase === "authenticated" && stateRef.current.account?.id === accountId,
-    }).then((result) => {
-      if (sessionGeneration.current !== generation) return result;
-      const offline = typeof navigator !== "undefined" && !navigator.onLine;
-      const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : result.claimsPending + result.photosPending > 0 ? "pending" : "success";
-      const message = offline
-        ? "You're offline. Your saved collection stays on this device until you reconnect."
-        : result.issues.length
-          ? "Some saved progress is waiting for backup. Retry when your connection is steady."
-          : result.claimsPending + result.photosPending > 0
-            ? "Some saved progress is waiting for backup."
-            : "Your collection is backed up.";
-      setState((current) => ({ ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt: Date.now() }, progressRevision: current.progressRevision + 1 }));
-      return result;
-    }).catch(() => {
-      if (sessionGeneration.current === generation) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your local collection is safe." } }));
-      return null;
-    }).finally(() => {
-      if (syncInFlight.current.get(flightKey) === task) syncInFlight.current.delete(flightKey);
-    });
-    syncInFlight.current.set(flightKey, task);
-    return task;
+        controller = new AbortController();
+        syncAbortControllers.current.set(flightKey, controller);
+        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+          ? { ...current, backup: { ...current.backup, phase: "syncing", message: null } }
+          : current);
+        const result = await runProgressSyncWhenReady({
+          accountId,
+          fetchAuthenticated: (input, init) => fetchAuthenticated(input, { ...init, signal: controller?.signal }, accountId),
+          isCurrent: isCurrentSession,
+        }, () => foreground.current, connectivity);
+        if (!result) {
+          if (isCurrentSession() && foreground.current) {
+            const latest = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+            if (!latest.connected || !latest.allowed) await setUnavailableStatus(latest.connected);
+          }
+          return null;
+        }
+        if (!isCurrentSession()) return result;
+
+        let updatedAt = stateRef.current.backup.updatedAt;
+        updatedAt = await persistSuccessfulOutboundBackupTimestamp(accountId, result, updatedAt, {
+          get: getLastSuccessfulBackupAt,
+          set: setLastSuccessfulBackupAt,
+        });
+        if (!isCurrentSession()) return result;
+
+        let lastSyncedAt = stateRef.current.backup.lastSyncedAt;
+        lastSyncedAt = await persistLastCompleteSyncTimestamp(accountId, result, lastSyncedAt, {
+          get: getLastCompleteSyncAt,
+          set: setLastCompleteSyncAt,
+        }, async () => {
+          const currentConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+          return isCurrentSession() && foreground.current && currentConnectivity.connected && currentConnectivity.allowed;
+        });
+        if (!isCurrentSession()) return result;
+
+        const afterSyncConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+        const offline = !afterSyncConnectivity.connected;
+        const hasPending = result.claimsPending + result.photosPending > 0;
+        const waitingForConnection = afterSyncConnectivity.connected && !afterSyncConnectivity.allowed && (hasPending || result.issues.length > 0);
+        const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForConnection ? "pending" : "success";
+        const message = offline
+          ? "You're offline. Your saved Dex stays on this device until you reconnect."
+          : waitingForConnection
+            ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available."
+            : result.issues.length
+              ? result.issues.some((issue) => issue.operation === "photo-upload")
+                ? "Some saved photos remain on this device because they could not be backed up."
+                : "Some saved progress is waiting for backup. It will sync when a usable connection is available."
+              : hasPending
+                ? "Some saved progress is waiting for backup."
+                : "Your Dex is backed up.";
+        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+          ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt }, progressRevision: current.progressRevision + 1 }
+          : current);
+        return result;
+      } catch {
+        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your local Dex is safe." } }));
+        return null;
+      } finally {
+        if (controller && syncAbortControllers.current.get(flightKey) === controller) syncAbortControllers.current.delete(flightKey);
+      }
+    };
+    return coalesceProgressSync(
+      syncInFlight.current,
+      syncRerunRequested.current,
+      flightKey,
+      run,
+      options.retryAfterFlight === true,
+      () => { if (isCurrentSession() && foreground.current) void syncRef.current(); },
+    );
   }, []);
   syncRef.current = syncBackup;
-
-  const attachGuestCollection = useCallback(async () => {
-    const accountId = stateRef.current.account?.id;
-    if (stateRef.current.phase !== "authenticated" || !accountId) throw new Error("Sign in before attaching this device's collection.");
-    const generation = sessionGeneration.current;
-    setState((current) => ({ ...current, backup: { ...current.backup, phase: "syncing", message: null } }));
-    const result = await attachGuestProgress({
-      accountId,
-      fetchAuthenticated: (input, init) => fetchAuthenticated(input, init, accountId),
-      isCurrent: () => sessionGeneration.current === generation && stateRef.current.phase === "authenticated" && stateRef.current.account?.id === accountId,
-    });
-    if (sessionGeneration.current === generation) {
-      const phase: BackupPhase = result.issues.length ? "error" : result.claimsPending + result.photosPending > 0 ? "pending" : "success";
-      setState((current) => ({ ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message: result.issues.length ? "Guest progress is still waiting for backup. The guest copy remains on this device." : result.guestClaimsRemoved ? "The guest collection was attached and confirmed by the server." : "The collection was attached. The guest copy stays until every saved item is confirmed." , updatedAt: Date.now() }, progressRevision: current.progressRevision + 1 }));
-    }
-    return result;
-  }, []);
 
   const deleteAccount = useCallback(async () => {
     const accountId = stateRef.current.account?.id;
     if (stateRef.current.phase !== "authenticated" || !accountId) throw new Error("Sign in again before deleting this account.");
     const operation = ++authOperationGeneration.current;
     const generation = sessionGeneration.current;
+    abortProgressRequests(syncAbortControllers.current);
+    syncRerunRequested.current.clear();
     const response = await deleteCurrentAccount(accountId);
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
     let localCleanupError = false;
@@ -444,6 +555,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
     if (isNative) await clearLocalNativeSession().catch(() => { localCleanupError = true; });
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
+    abortProgressRequests(syncAbortControllers.current);
+    syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     rememberAccount(null);
     setState((current) => ({
@@ -463,32 +576,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state.phase, state.account?.id, syncBackup]);
 
   useEffect(() => {
-    const resumeWork = async () => {
-      if (document.visibilityState === "hidden" || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+    let live = true;
+    let lastConnectivity: AccountBackupConnectivity | null = null;
+    const setForeground = (isForeground: boolean) => {
+      foreground.current = isForeground;
+      if (!isForeground) {
+        abortProgressRequests(syncAbortControllers.current);
+        syncRerunRequested.current.clear();
+      }
+    };
+    setForeground(document.visibilityState !== "hidden");
+    const resumeWork = async (retryAfterFlight = false) => {
+      if (!foreground.current || document.visibilityState === "hidden") return;
+      const connectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+      if (!live || !foreground.current || !connectivity.connected) return;
       const now = Date.now();
       if (resumeInFlight.current) return resumeInFlight.current;
-      if (now - lastResumeAt.current < 3000) return;
+      if (!retryAfterFlight && now - lastResumeAt.current < 3000) return;
       lastResumeAt.current = now;
       const task = (async () => {
         await refreshRef.current();
-        if (stateRef.current.phase === "authenticated") await syncRef.current();
+        if (stateRef.current.phase === "authenticated") await syncRef.current({ retryAfterFlight });
       })();
       resumeInFlight.current = task;
       try { await task; }
       finally { if (resumeInFlight.current === task) resumeInFlight.current = null; }
     };
-    const resumeSync = () => { void resumeWork(); };
-    const onNetwork = (status: { connected: boolean }) => { if (status.connected) resumeSync(); };
-    window.addEventListener("online", resumeSync);
-    document.addEventListener("visibilitychange", resumeSync);
-    let networkListener: { remove: () => Promise<void> } | undefined;
+    const onVisibility = () => {
+      const visible = document.visibilityState !== "hidden";
+      const becameVisible = visible && !foreground.current;
+      setForeground(visible);
+      if (becameVisible) void resumeWork(true);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const stopConnectivity = subscribeAccountBackupConnectivity((connectivity) => {
+      const previous = lastConnectivity;
+      lastConnectivity = connectivity;
+      if (!connectivity.connected || !connectivity.allowed) abortProgressRequests(syncAbortControllers.current);
+      if (!previous) return;
+      if (shouldScheduleAccountBackup(previous, connectivity) && stateRef.current.phase === "authenticated") void syncRef.current({ retryAfterFlight: true });
+      if (!previous.connected && connectivity.connected) void resumeWork(false);
+    });
     let appListener: { remove: () => Promise<void> } | undefined;
-    void Network.addListener("networkStatusChange", onNetwork).then((listener) => { networkListener = listener; }).catch(() => {});
-    if (isNative) void CapacitorApp.addListener("appStateChange", ({ isActive }) => { if (isActive) resumeSync(); }).then((listener) => { appListener = listener; }).catch(() => {});
+    if (isNative) void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      const becameActive = isActive && !foreground.current;
+      setForeground(isActive);
+      if (becameActive) void resumeWork(true);
+    }).then((listener) => { if (live) appListener = listener; else void listener.remove(); }).catch(() => {});
+    if (isNative) void CapacitorApp.getState().then(({ isActive }) => {
+      if (!live) return;
+      const becameActive = isActive && !foreground.current;
+      setForeground(isActive);
+      if (becameActive) void resumeWork(true);
+    }).catch(() => {});
     return () => {
-      window.removeEventListener("online", resumeSync);
-      document.removeEventListener("visibilitychange", resumeSync);
-      void networkListener?.remove();
+      live = false;
+      abortProgressRequests(syncAbortControllers.current);
+      syncRerunRequested.current.clear();
+      document.removeEventListener("visibilitychange", onVisibility);
+      stopConnectivity();
       void appListener?.remove();
     };
   }, [isNative]);
@@ -502,6 +648,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentId = stateRef.current.account?.id ?? stateRef.current.offlineAccountId;
       if ((currentId ?? null)?.toLowerCase() === (nextId ?? null)?.toLowerCase()) return;
       authOperationGeneration.current += 1;
+      abortProgressRequests(syncAbortControllers.current);
+      syncRerunRequested.current.clear();
       sessionGeneration.current += 1;
       setState((current) => ({
         ...current,
@@ -579,7 +727,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reauthGoogle,
     googleChallenge,
     syncBackup,
-    attachGuestCollection,
     deleteAccount,
   };
 
