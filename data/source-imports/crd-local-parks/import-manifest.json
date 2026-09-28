@@ -15,7 +15,7 @@
   "officialBoundaryReview": {
     "file": "official-boundary-crosschecks.json",
     "snapshot": "official-boundary-crosschecks.geojson",
-    "snapshotSha256": "cda30522104ed162ce05e4590f02356e6a2ef5406fd859f542968fd70fc57741",
+    "snapshotSha256": "eb13dffd4dedc07f4b0385ae68ce29cde079f2e650e12b312339f76b29e30137",
     "reviewedGroups": 19,
     "minimumPerFeatureSourceCoveragePercent": 70,
     "saanichLayer": "https://map.saanich.ca/server/rest/services/MAPS/SaanichBaseMap/MapServer/26",
