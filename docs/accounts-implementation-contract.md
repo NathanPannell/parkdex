@@ -65,6 +65,12 @@ Claim and photo requests run while the app is foregrounded. Android requires con
 
 The `PUT /api/claims/:claimId` JSON body is `{parkId, claimedAt, parkSnapshot, contentReleaseId}`. `claimId` is a UUID path parameter. `parkSnapshot` is a bounded copy of the public `Park` shape in `src/lib/parks.ts`, including the park centroid but no visitor location. It is validated and frozen at claim time. `contentReleaseId` is a string or `null`. The list response is `{claims: ClaimBackup[], nextCursor: string | null}`, where each `ClaimBackup` has `claimId`, `parkId`, `claimedAt`, `parkSnapshot`, `contentReleaseId`, and `photo: {status: 'missing' | 'pending' | 'ready', sha256?, sizeBytes?, contentType?}`. The opaque cursor is account-bound and uses a bigint change revision. Claims are ordered by revision, so a claim may appear again after its photo changes from missing to pending or ready; clients upsert by claim UUID. Pages contain at most 50 records. Every nonempty page returns a cursor for its final record, including a short final page. An empty terminal page returns `nextCursor: null`; clients preserve their previous cursor anchor. Clients persist received pages locally before advancing their restore cursor.
 
+The separate per-account `last-complete-sync` marker supports the visible **Last synced** timestamp. It advances after a complete claim pull and photo reconciliation with saved claims, no issues, and no pending work, including a restore-only or unchanged pass. The captured session, foreground state, and platform connection policy must still be valid at commit. Keep the older outgoing-backup marker separate and retain its **Last backed up** label until a complete sync is recorded.
+
+Local and server claim validators accept the catalogue's five categories: national, provincial, regional, municipal, and community. Unknown categories remain invalid.
+
+Recover legacy demo SVG photos only when their bytes exactly match the app-generated scene for the claim's frozen park snapshot. A bounded raster conversion may also recover oversized JPEG, PNG, or WebP photos. Persist the resulting JPEG as a separate upload rendition; preserve the original blob, hash, owner, claim UUID, and frozen claim metadata. Reuse the saved rendition on retry and compare its hash with remote photo metadata. Unsupported or conflicting images stay local with an honest error, and server photo format, size, and overwrite restrictions remain unchanged.
+
 ### Progress and photo HTTP surface
 
 | Endpoint | Behavior |

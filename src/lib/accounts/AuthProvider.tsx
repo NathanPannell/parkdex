@@ -3,13 +3,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import {
   clearAccountProgressAfterServerDeletion,
   getLastSuccessfulBackupAt,
+  getLastCompleteSyncAt,
   initializePersonalStore,
   listPersonalClaims,
   listPersonalPhotos,
   reserveGuestClaimsForAccount,
   setLastSuccessfulBackupAt,
+  setLastCompleteSyncAt,
 } from "./personalStore";
-import { coalesceProgressSync, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
+import { coalesceProgressSync, persistLastCompleteSyncTimestamp, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
 import {
   AuthHttpError,
   clearLocalNativeSession,
@@ -51,6 +53,7 @@ export type BackupStatus = {
   photosPending: number;
   message: string | null;
   updatedAt: number | null;
+  lastSyncedAt: number | null;
 };
 export type AuthAction = { kind: "password_reset"; token: string } | null;
 export type SyncBackupOptions = { retryAfterFlight?: boolean };
@@ -92,7 +95,7 @@ type AuthContextValue = AuthState & {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const EMPTY_BACKUP: BackupStatus = { phase: "idle", claimsPending: 0, photosPending: 0, message: null, updatedAt: null };
+const EMPTY_BACKUP: BackupStatus = { phase: "idle", claimsPending: 0, photosPending: 0, message: null, updatedAt: null, lastSyncedAt: null };
 const EMPTY_AUTH: AuthState = {
   phase: "starting",
   account: null,
@@ -128,14 +131,14 @@ function isUnauthorized(error: unknown) {
 }
 
 function networkMessage(error: unknown) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved collection stays on this device until you reconnect.";
+  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved Dex stays on this device until you reconnect.";
   if (error instanceof AuthHttpError && error.status >= 500) return "The account service is having trouble. Try again shortly.";
   return "The account service could not be reached. Check your connection and try again.";
 }
 
 class GuestReservationFailedError extends Error {
   constructor() {
-    super("Saved progress could not be prepared for this account. Retry while this device can access its saved collection.");
+    super("Saved progress could not be prepared for this account. Retry while this device can access its saved Dex.");
     this.name = "GuestReservationFailedError";
   }
 }
@@ -196,6 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let lastSuccessfulBackupAt: number | null = null;
     try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(account.id); }
     catch { /* A local status read must not prevent a verified account from opening. */ }
+    let lastCompleteSyncAt: number | null = null;
+    try { lastCompleteSyncAt = await getLastCompleteSyncAt(account.id); }
+    catch { /* A local status read must not prevent a verified account from opening. */ }
     if (!current()) throw new Error("The account session changed before this action finished.");
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
@@ -209,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       offlineAccountId: null,
       startupError: null,
       notice: null,
-      backup: { ...EMPTY_BACKUP, updatedAt: lastSuccessfulBackupAt },
+      backup: { ...EMPTY_BACKUP, updatedAt: lastSuccessfulBackupAt, lastSyncedAt: lastCompleteSyncAt },
       progressRevision: current.progressRevision + 1,
     }));
     return account;
@@ -272,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
           rememberAccount(null);
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved case." }));
+          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved Dex." }));
           return;
         }
 
@@ -309,6 +315,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           let lastSuccessfulBackupAt: number | null = null;
           try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(cachedId); }
           catch { /* Keep offline access available if status metadata cannot be read. */ }
+          let lastCompleteSyncAt: number | null = null;
+          try { lastCompleteSyncAt = await getLastCompleteSyncAt(cachedId); }
+          catch { /* Keep offline access available if status metadata cannot be read. */ }
           if (!current()) return;
           abortProgressRequests(syncAbortControllers.current);
           syncRerunRequested.current.clear();
@@ -318,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phase: "offline-account",
             account: null,
             offlineAccountId: cachedId,
-            backup: { ...EMPTY_BACKUP, phase: "offline", message: networkMessage(error), updatedAt: lastSuccessfulBackupAt },
+            backup: { ...EMPTY_BACKUP, phase: "offline", message: networkMessage(error), updatedAt: lastSuccessfulBackupAt, lastSyncedAt: lastCompleteSyncAt },
             startupError: networkMessage(error),
           }));
         } else {
@@ -380,7 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     rememberAccount(null);
-    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's collection remains saved separately on this device." }, progressRevision: current.progressRevision + 1 }));
+    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's Dex remains saved separately on this device." }, progressRevision: current.progressRevision + 1 }));
   }, [isNative]);
 
   const sendVerification = useCallback(async () => {
@@ -442,8 +451,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phase: connected ? "pending" : "offline",
             claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
             photosPending: photos.filter((photo) => photo.backupState === "pending").length,
-            message: connected ? "Backup waits for Wi-Fi. Your saved collection stays on this device until Wi-Fi is available." : "You're offline. Your saved collection stays on this device until you reconnect.",
+            message: connected ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available." : "You're offline. Your saved Dex stays on this device until you reconnect.",
             updatedAt: current.backup.updatedAt,
+            lastSyncedAt: current.backup.lastSyncedAt,
           } }
           : current);
       }
@@ -482,28 +492,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         if (!isCurrentSession()) return result;
 
+        let lastSyncedAt = stateRef.current.backup.lastSyncedAt;
+        lastSyncedAt = await persistLastCompleteSyncTimestamp(accountId, result, lastSyncedAt, {
+          get: getLastCompleteSyncAt,
+          set: setLastCompleteSyncAt,
+        }, async () => {
+          const currentConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+          return isCurrentSession() && foreground.current && currentConnectivity.connected && currentConnectivity.allowed;
+        });
+        if (!isCurrentSession()) return result;
+
         const afterSyncConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
         const offline = !afterSyncConnectivity.connected;
         const hasPending = result.claimsPending + result.photosPending > 0;
         const waitingForConnection = afterSyncConnectivity.connected && !afterSyncConnectivity.allowed && (hasPending || result.issues.length > 0);
         const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForConnection ? "pending" : "success";
         const message = offline
-          ? "You're offline. Your saved collection stays on this device until you reconnect."
+          ? "You're offline. Your saved Dex stays on this device until you reconnect."
           : waitingForConnection
-            ? "Backup waits for Wi-Fi. Your saved collection stays on this device until Wi-Fi is available."
+            ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available."
             : result.issues.length
               ? result.issues.some((issue) => issue.operation === "photo-upload")
                 ? "Some saved photos remain on this device because they could not be backed up."
                 : "Some saved progress is waiting for backup. It will sync when a usable connection is available."
               : hasPending
                 ? "Some saved progress is waiting for backup."
-                : "Your collection is backed up.";
+                : "Your Dex is backed up.";
         setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
-          ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt }, progressRevision: current.progressRevision + 1 }
+          ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt }, progressRevision: current.progressRevision + 1 }
           : current);
         return result;
       } catch {
-        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your local collection is safe." } }));
+        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your local Dex is safe." } }));
         return null;
       } finally {
         if (controller && syncAbortControllers.current.get(flightKey) === controller) syncAbortControllers.current.delete(flightKey);

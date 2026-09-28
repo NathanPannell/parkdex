@@ -261,6 +261,71 @@ describe("durable personal progress storage", () => {
     expect((await personal.getPersonalPhoto({ kind: "account", accountId: "89abcdef-1234-4234-8234-123456789abc" }, claim.claimId))?.backupState).toBe("pending");
   });
 
+  it("accepts frozen municipal and community park snapshots for local claims", async () => {
+    const personal = await import("./personalStore");
+    const municipal = await personal.createPersonalClaim({ kind: "guest" }, { park: { ...park("beacon-hill"), category: "municipal" } });
+    const community = await personal.createPersonalClaim({ kind: "guest" }, { park: { ...park("cedar-grove"), category: "community" } });
+
+    expect(municipal.parkSnapshot?.category).toBe("municipal");
+    expect(community.parkSnapshot?.category).toBe("community");
+  });
+
+  it("commits an upload rendition only for the same owner, original digest, and frozen snapshot", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x01]).buffer], { type: "image/jpeg" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: new Blob(["<svg />"], { type: "image/svg+xml" }) });
+    const original = await personal.getPersonalPhoto(owner, claim.claimId);
+    if (!original) throw new Error("Original test photo missing.");
+    const converted = { blob: jpeg, contentType: "image/jpeg" as const, sizeBytes: jpeg.size, sha256: await personal.hashPhoto(jpeg) };
+    const expected = {
+      sha256: original.sha256, contentType: original.contentType, sizeBytes: original.sizeBytes,
+      backupState: original.backupState, parkSnapshot: claim.parkSnapshot,
+    };
+
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, { ...expected, sha256: "0".repeat(64) }, converted)).toBe("stale");
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, expected, converted, () => false)).toBe("session-changed");
+    expect(await personal.commitPhotoBackupRendition({ kind: "account", accountId: "12345678-1234-4234-8234-123456789abc" }, claim.claimId, expected, converted)).toBe("stale");
+    expect(await personal.getPersonalPhoto(owner, claim.claimId)).toMatchObject({ sha256: original.sha256, backupState: "unsupported", backupRendition: null });
+    expect(await personal.listPersonalOutbox(owner)).toEqual([{ ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "claim" }]);
+
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, expected, converted)).toBe("stored");
+    expect(await personal.getPersonalPhoto(owner, claim.claimId)).toMatchObject({
+      sha256: original.sha256, contentType: "image/svg+xml", backupState: "pending",
+      backupRendition: { sha256: converted.sha256, sizeBytes: converted.sizeBytes, sourceSha256: original.sha256 },
+    });
+    expect(await personal.listPersonalOutbox(owner)).toEqual([
+      { ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "claim" },
+      { ownerKey: `account:${owner.accountId}`, claimId: claim.claimId, kind: "photo" },
+    ]);
+    expect(await (await personal.getPersonalPhoto(owner, claim.claimId))?.blob.text()).toBe("<svg />");
+  });
+
+  it("matches remote ready metadata against the rendition without replacing the original photo", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const originalBlob = new Blob(["<svg />"], { type: "image/svg+xml" });
+    const claim = await personal.createPersonalClaim(owner, { park: park(), photo: originalBlob });
+    const original = await personal.getPersonalPhoto(owner, claim.claimId);
+    if (!original) throw new Error("Original test photo missing.");
+    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x01]).buffer], { type: "image/jpeg" });
+    const converted = { blob: jpeg, contentType: "image/jpeg" as const, sizeBytes: jpeg.size, sha256: await personal.hashPhoto(jpeg) };
+    expect(await personal.commitPhotoBackupRendition(owner, claim.claimId, {
+      sha256: original.sha256, contentType: original.contentType, sizeBytes: original.sizeBytes,
+      backupState: original.backupState, parkSnapshot: claim.parkSnapshot,
+    }, converted)).toBe("stored");
+
+    const remote = personal.validateRemoteClaim({
+      claimId: claim.claimId, ...personal.claimPayload(claim),
+      photo: { status: "ready", sha256: converted.sha256, sizeBytes: converted.sizeBytes, contentType: converted.contentType },
+    });
+    await personal.commitRemotePage(owner, [remote], "rendition-cursor");
+    expect((await personal.getPersonalPhoto(owner, claim.claimId))?.backupState).toBe("backed-up");
+    expect(await personal.listPhotosNeedingDownload(owner)).toEqual([]);
+    expect(await personal.listPersonalOutbox(owner)).toEqual([]);
+    expect(await (await personal.getPersonalPhoto(owner, claim.claimId))?.blob.text()).toBe(await originalBlob.text());
+  });
+
   it("does not project an older photo when the latest visit has no photo", async () => {
     const personal = await import("./personalStore");
     const png = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer], { type: "image/png" });

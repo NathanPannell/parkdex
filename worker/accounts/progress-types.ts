@@ -1,4 +1,4 @@
-export type ParkCategory = "national" | "provincial" | "regional";
+export type ParkCategory = "national" | "provincial" | "regional" | "municipal" | "community";
 export type ParkBiome = "coast" | "forest" | "mountain" | "lake" | "waterfall" | "river" | "cave" | "marsh" | "heritage";
 export type ParkShape = "circle" | "hex" | "shield" | "arch" | "seal";
 export type ParkRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";

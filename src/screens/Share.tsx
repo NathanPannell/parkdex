@@ -94,7 +94,7 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
   const [busy, setBusy] = useState(false);
   // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
   const [sceneHref, setSceneHref] = useState<string>();
-  const { sceneHref: earnedSceneHref, wifiAvailable } = useEarnedSceneAsset(park, claim);
+  const { sceneHref: earnedSceneHref, contentDownloadAvailable, waitingForWifi } = useEarnedSceneAsset(park, claim);
   const sceneAsset = park.scene ? earnedSceneHref : undefined;
   const [sceneState, setSceneState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   useEffect(() => {
@@ -128,11 +128,13 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
 
   const sceneMessage = !claim.contentReleaseId
     ? "Archived badge art is not available for this claim."
-    : !wifiAvailable
+    : waitingForWifi
       ? "Connect to Wi-Fi to restore the original badge art."
-      : sceneState === "error"
-        ? "Badge art could not be loaded. Try again shortly."
-        : "Restoring the original badge art…";
+      : !contentDownloadAvailable
+        ? "Go online to restore the original badge art."
+        : sceneState === "error"
+          ? "Badge art could not be loaded. Try again shortly."
+          : "Restoring the original badge art…";
   const sceneReady = !park.scene || sceneState === "ready";
 
   const image = async () => {
