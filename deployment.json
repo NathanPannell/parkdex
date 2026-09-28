@@ -14,6 +14,24 @@
   "neonDatabaseName": "parkdex_kip",
   "neonRoleName": "parkdex_kip_owner",
   "migrationPath": "database/migrations/feedback_001_init.sql",
+  "optionalMigrationPaths": [
+    "database/migrations/accounts_001_init.sql",
+    "database/migrations/progress_001_init.sql",
+    "database/migrations/interactions_001_init.sql"
+  ],
+  "runtimeOptionalKeys": [
+    "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
+    "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"
+  ],
+  "privatePhotos": {
+    "accountId": "6f0eb57971124f41fadc7897ace74dac",
+    "sourcePath": "cloudflare/private-photos.mjs",
+    "stagingWorkerName": "parkdex-kip-photos-staging",
+    "stagingBucketName": "parkdex-kip-photos-staging",
+    "wranglerVersion": "4.132.0",
+    "compatibilityDate": "2026-09-27",
+    "retentionCron": "23 9 * * *"
+  },
   "apiEntrypoint": "api/feedback-api.ts",
   "healthPath": "/api/health",
   "releasePath": "/release.json",
