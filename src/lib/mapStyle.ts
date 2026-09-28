@@ -1,8 +1,10 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
+import { ISLAND_OVERVIEW_KEY } from "./offlineTiles";
 
 // Must match the extract bounds in scripts/fetch-map.mjs.
 export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
+export const ISLAND_OVERVIEW_MAX_ZOOM = 7;
 
 // Storybook palette over the bundled Protomaps tiles: warm paper land,
 // candy water, soft greens and quiet roads.
@@ -73,7 +75,14 @@ export function mapStyle(releaseId: string): StyleSpecification {
       const { ["icon-image"]: _icon, ...layout } = l.layout;
       return { ...l, layout };
     });
-  const waterIndex = base.findIndex((l) => l.id === "water");
+  const overview = (layers("island-overview", FLAVOR, { lang: "en" }) as LayerSpecification[])
+    .filter((layer) => layer.type !== "symbol" && layer.type !== "background")
+    .map((layer) => ({ ...layer, id: `overview-${layer.id}`, source: "islandOverview" }));
+  const backgroundIndex = base.findIndex((layer) => layer.type === "background");
+  const withOverview = backgroundIndex < 0
+    ? [...overview, ...base]
+    : [...base.slice(0, backgroundIndex + 1), ...overview, ...base.slice(backgroundIndex + 1)];
+  const waterIndex = withOverview.findIndex((l) => l.id === "water");
   // An offset copy of the water under itself gives coastlines a soft sticker edge.
   const shadow: LayerSpecification = {
     id: "water-shadow",
@@ -82,7 +91,9 @@ export function mapStyle(releaseId: string): StyleSpecification {
     "source-layer": "water",
     paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] },
   };
-  const style = waterIndex >= 0 ? [...base.slice(0, waterIndex), shadow, ...base.slice(waterIndex)] : base;
+  const style = waterIndex >= 0
+    ? [...withOverview.slice(0, waterIndex), shadow, ...withOverview.slice(waterIndex)]
+    : withOverview;
   return {
     version: 8,
     glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf`,
@@ -92,6 +103,14 @@ export function mapStyle(releaseId: string): StyleSpecification {
         tiles: [`pmtiles://${encodeURIComponent(releaseId)}/{z}/{x}/{y}`],
         minzoom: 0,
         maxzoom: 14,
+        bounds: ISLAND_BOUNDS,
+        attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+      },
+      islandOverview: {
+        type: "vector",
+        tiles: [`pmtiles://${ISLAND_OVERVIEW_KEY}/{z}/{x}/{y}`],
+        minzoom: 0,
+        maxzoom: ISLAND_OVERVIEW_MAX_ZOOM,
         bounds: ISLAND_BOUNDS,
         attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
       },

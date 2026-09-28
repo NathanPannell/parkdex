@@ -1,4 +1,5 @@
 import { readdir, readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,8 +12,22 @@ if (process.argv.length > 3 || outputArg === "--help" || outputArg === "-h") {
 
 const outputDirectory = resolve(outputArg ?? resolve(projectRoot, "dist"));
 const parkCatalogPath = resolve(projectRoot, "src/data/parks.json");
+const OVERVIEW_PATH = "map/bootstrap/island-overview.pmtiles";
+const OVERVIEW_PROVENANCE_PATH = resolve(projectRoot, "public/map/bootstrap/island-overview.provenance.json");
+const MAX_BUNDLED_OVERVIEW_BYTES = 2_000_000;
 
 try {
+  const overviewProvenance = JSON.parse(await readFile(OVERVIEW_PROVENANCE_PATH, "utf8"));
+  const pinnedOverview = overviewProvenance?.artifact;
+  if (overviewProvenance?.schema !== "parkdex.bundled-map-overview/v1"
+    || pinnedOverview?.path !== `public/${OVERVIEW_PATH}`
+    || !/^[a-f0-9]{64}$/.test(pinnedOverview?.sha256 ?? "")
+    || !Number.isSafeInteger(pinnedOverview?.bytes)
+    || pinnedOverview.bytes <= 0
+    || pinnedOverview.bytes > MAX_BUNDLED_OVERVIEW_BYTES) {
+    throw new Error("Pinned bundled island overview provenance is invalid or exceeds its size budget");
+  }
+
   const outputStat = await stat(outputDirectory).catch((error) => {
     if (error?.code === "ENOENT") throw new Error(`Package output directory does not exist: ${displayPath(outputDirectory)}. Build the package first.`);
     throw error;
@@ -29,6 +44,19 @@ try {
   const packagedPaths = new Set(files.map((file) => toPosix(relative(outputDirectory, file))));
   for (const required of ["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs"]) {
     if (!packagedPaths.has(required)) failures.push({ path: required, reason: "required MapLibre runtime module is missing" });
+  }
+  if (!packagedPaths.has(OVERVIEW_PATH)) failures.push({ path: OVERVIEW_PATH, reason: "required bundled island overview is missing" });
+  const overviewFile = files.find((file) => toPosix(relative(outputDirectory, file)) === OVERVIEW_PATH);
+  if (overviewFile) {
+    const overviewStat = await stat(overviewFile);
+    if (overviewStat.size > MAX_BUNDLED_OVERVIEW_BYTES) {
+      failures.push({ path: OVERVIEW_PATH, reason: `bundled island overview exceeds ${MAX_BUNDLED_OVERVIEW_BYTES} bytes` });
+    } else if (overviewStat.size !== pinnedOverview.bytes) {
+      failures.push({ path: OVERVIEW_PATH, reason: `bundled island overview has ${overviewStat.size} bytes; expected pinned size ${pinnedOverview.bytes}` });
+    } else {
+      const digest = createHash("sha256").update(await readFile(overviewFile)).digest("hex");
+      if (digest !== pinnedOverview.sha256) failures.push({ path: OVERVIEW_PATH, reason: "bundled island overview does not match its pinned SHA-256" });
+    }
   }
   for (const file of files) {
     const relativePath = toPosix(relative(outputDirectory, file));
@@ -71,9 +99,10 @@ function forbiddenAssetReason(path) {
   if (/(^|\/)(parks|drive)(?:[-.][^/]*)?\.json$/.test(normalized)) return "park or drive catalog file is packaged";
   if (/(^|\/)[^/]*boundar(?:y|ies)[^/]*\.(?:geojson|json|pbf)$/.test(normalized)) return "park boundaries are packaged";
   if (/(^|\/)art\/badges\/scenes(?:\/|$)/.test(normalized)) return "badge scene asset is packaged";
-  if (/(^|\/)map\/island\/\d+\.bin$/.test(normalized)) return "PMTiles map chunk is packaged";
-  if (/(^|\/)map\/fonts\/.*\.(?:pbf|bin)$/.test(normalized)) return "map glyph binary is packaged";
-  if (/\.pmtiles$/.test(normalized)) return "PMTiles archive is packaged";
+  if (normalized.startsWith("/map/island/")) return "detailed PMTiles map content is packaged";
+  if (normalized.startsWith("/map/fonts/")) return "map glyph binary is packaged";
+  if (normalized.startsWith("/map/bootstrap/") && path !== OVERVIEW_PATH) return "unexpected bootstrap map asset is packaged";
+  if (/\.pmtiles$/.test(normalized) && path !== OVERVIEW_PATH) return "PMTiles archive is packaged";
   return null;
 }
 

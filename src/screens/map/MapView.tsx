@@ -9,7 +9,7 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { registerContentMapProtocols } from "../../lib/offlineTiles";
+import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
 
@@ -48,22 +48,35 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
   const container = useRef<HTMLDivElement>(null);
   const userMarker = useRef<Marker | null>(null);
   const camera = useRef<{ center: LngLat; zoom: number; bearing: number; pitch: number } | null>(null);
+  const parkMarkers = useRef(new Map<string, { park: Park; el: HTMLElement; marker: Marker; rank: number }>());
+  const protocolCleanups = useRef(new Map<string, () => void>());
+  const styleRelease = useRef<string | null>(null);
+  const styleGeneration = useRef(0);
+  const pendingDetailReload = useRef(false);
+  const styleReady = useRef(false);
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
   const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
+  const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
   const releaseId = content?.releaseId;
-  const loaded = releaseId !== undefined && loadedRelease === releaseId && !!mapRef.current?.isStyleLoaded();
+  const hasReadyMapContent = !!content && !!releaseId;
+  const loaded = releaseId !== undefined && loadedRelease === releaseId;
 
   useEffect(() => {
     if (!content || !releaseId) return;
     setLoadedRelease(null);
+    setInitialStyleLoaded(false);
+    styleReady.current = false;
     setHosts([]);
     setUserHost(null);
     const unregisterProtocols = registerContentMapProtocols(runtime, content);
+    protocolCleanups.current.set(releaseId, unregisterProtocols);
+    styleRelease.current = releaseId;
     const savedCamera = camera.current;
+    const zoom = savedCamera?.zoom ?? 10.7;
     const map = new MLMap({
       container: container.current!,
       style: mapStyle(releaseId),
@@ -73,7 +86,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
         [ISLAND_BOUNDS[2] + 1.5, ISLAND_BOUNDS[3] + 0.8],
       ],
       center: savedCamera?.center ?? user,
-      zoom: savedCamera?.zoom ?? 10.7,
+      zoom,
       bearing: savedCamera?.bearing ?? 0,
       pitch: savedCamera?.pitch ?? 0,
       attributionControl: false,
@@ -84,18 +97,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     map.touchZoomRotate.disableRotation();
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
-
-    const ranked = [...content.parks].sort(
-      (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
-    );
-    setHosts(
-      ranked.map((park, rank) => {
-        const el = document.createElement("div");
-        el.className = "pm-host";
-        new Marker({ element: el, anchor: "bottom" }).setLngLat([park.lng, park.lat]).addTo(map);
-        return { park, el, rank };
-      }),
-    );
+    setTier(tierOf(zoom));
 
     const uEl = document.createElement("div");
     uEl.className = "user-host";
@@ -107,7 +109,16 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
       if ((e.originalEvent.target as HTMLElement).closest(".pm")) return;
       selectRef.current(null);
     });
-    map.on("load", () => setLoadedRelease(releaseId));
+    const markStyleReady = () => {
+      const currentRelease = styleRelease.current;
+      if (!currentRelease || !map.getStyle().glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
+      styleReady.current = true;
+      setInitialStyleLoaded(true);
+      setLoadedRelease(currentRelease);
+      if (pendingDetailReload.current) flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+    };
+    map.on("style.load", markStyleReady);
+    map.on("load", markStyleReady);
 
     return () => {
       const center = map.getCenter();
@@ -118,72 +129,132 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
         pitch: map.getPitch(),
       };
       map.remove();
-      mapRef.current = null;
-      unregisterProtocols();
+      if (mapRef.current === map) mapRef.current = null;
+      for (const cleanup of protocolCleanups.current.values()) cleanup();
+      protocolCleanups.current.clear();
+      parkMarkers.current.clear();
+      userMarker.current = null;
+      styleRelease.current = null;
+      styleGeneration.current += 1;
+      pendingDetailReload.current = false;
+      styleReady.current = false;
     };
+  }, [hasReadyMapContent]);
+
+  useEffect(() => {
+    if (!content || !releaseId) return;
+    if (!initialStyleLoaded) return;
+    const map = mapRef.current;
+    if (!map || styleRelease.current === releaseId) return;
+
+    if (!protocolCleanups.current.has(releaseId)) {
+      protocolCleanups.current.set(releaseId, registerContentMapProtocols(runtime, content));
+    }
+    setLoadedRelease(null);
+    styleRelease.current = releaseId;
+    const generation = ++styleGeneration.current;
+    map.once("style.load", () => {
+      if (styleGeneration.current !== generation) return;
+      for (const [registeredRelease, cleanup] of protocolCleanups.current) {
+        if (registeredRelease === releaseId) continue;
+        cleanup();
+        protocolCleanups.current.delete(registeredRelease);
+      }
+    });
+    styleReady.current = false;
+    map.setStyle(mapStyle(releaseId), { diff: true });
+  }, [releaseId, initialStyleLoaded]);
+
+  useEffect(() => {
+    if (!content || !releaseId) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const ranked = [...content.parks].sort(
+      (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
+    );
+    const wanted = new Set(ranked.map((park) => park.id));
+    for (const [id, record] of parkMarkers.current) {
+      if (wanted.has(id)) continue;
+      record.marker.remove();
+      parkMarkers.current.delete(id);
+    }
+    setHosts(ranked.map((park, rank) => {
+      const current = parkMarkers.current.get(park.id);
+      if (current) {
+        current.park = park;
+        current.rank = rank;
+        current.marker.setLngLat([park.lng, park.lat]);
+        return { park, el: current.el, rank };
+      }
+      const el = document.createElement("div");
+      el.className = "pm-host";
+      const marker = new Marker({ element: el, anchor: "bottom" }).setLngLat([park.lng, park.lat]).addTo(map);
+      parkMarkers.current.set(park.id, { park, el, marker, rank });
+      return { park, el, rank };
+    }));
+  }, [content?.parks, hasReadyMapContent]);
+
+  useEffect(() => {
+    if (!releaseId) return;
+    return subscribeMapCoverage(releaseId, () => {
+      pendingDetailReload.current = true;
+      const map = mapRef.current;
+      if (!map || !styleReady.current) return;
+      flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+    });
   }, [releaseId]);
 
   useEffect(() => {
     userMarker.current?.setLngLat(user);
   }, [user]);
 
-  // Park boundary layers go in once both the style and the data are ready.
+  // Park and route overlays are restored after a content style transition.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loaded || !fc || map.getSource("parks")) return;
-    map.addSource("parks", { type: "geojson", data: fc });
-    map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    const before = "water_waterway_label";
-    map.addLayer(
-      {
-        id: "park-fill",
-        type: "fill",
-        source: "parks",
-        paint: { "fill-color": BIOME_FILL, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.12, 12, 0.22] },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-line",
-        type: "line",
-        source: "parks",
-        minzoom: 9,
-        paint: { "line-color": BIOME_FILL, "line-width": 1.6, "line-dasharray": [2, 2], "line-opacity": 0.7 },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-glow",
-        type: "line",
-        source: "parks",
-        filter: ["==", ["get", "id"], ""],
-        paint: { "line-color": "#FFC93C", "line-width": 14, "line-blur": 8, "line-opacity": 0.9 },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-selected",
-        type: "line",
-        source: "parks",
-        filter: ["==", ["get", "id"], ""],
-        paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
-      },
-      before,
-    );
-    map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFF8EC", "line-width": 10 } }, before);
-    map.addLayer(
-      {
-        id: "route-line",
-        type: "line",
-        source: "route",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#FF5A1F", "line-width": 5, "line-dasharray": [0.1, 2] },
-      },
-      before,
-    );
+    if (!map || !loaded || !fc) return;
+    const parksSource = map.getSource("parks") as GeoJSONSource | undefined;
+    if (parksSource) parksSource.setData(fc);
+    else map.addSource("parks", { type: "geojson", data: fc });
+    if (!map.getSource("route")) map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    const before = map.getLayer("water_waterway_label") ? "water_waterway_label" : undefined;
+    const addLayer = (layer: Parameters<MLMap["addLayer"]>[0]) => {
+      if (!map.getLayer(layer.id)) map.addLayer(layer, before);
+    };
+    addLayer({
+      id: "park-fill",
+      type: "fill",
+      source: "parks",
+      paint: { "fill-color": BIOME_FILL, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.12, 12, 0.22] },
+    });
+    addLayer({
+      id: "park-line",
+      type: "line",
+      source: "parks",
+      minzoom: 9,
+      paint: { "line-color": BIOME_FILL, "line-width": 1.6, "line-dasharray": [2, 2], "line-opacity": 0.7 },
+    });
+    addLayer({
+      id: "park-glow",
+      type: "line",
+      source: "parks",
+      filter: ["==", ["get", "id"], ""],
+      paint: { "line-color": "#FFC93C", "line-width": 14, "line-blur": 8, "line-opacity": 0.9 },
+    });
+    addLayer({
+      id: "park-selected",
+      type: "line",
+      source: "parks",
+      filter: ["==", ["get", "id"], ""],
+      paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
+    });
+    addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFF8EC", "line-width": 10 } });
+    addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FF5A1F", "line-width": 5, "line-dasharray": [0.1, 2] },
+    });
   }, [loaded, fc]);
 
   useEffect(() => {
