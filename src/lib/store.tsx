@@ -30,7 +30,7 @@ type Action =
   | { type: "onboarded" }
   | { type: "select"; id: string | null }
   | { type: "trip"; id: string | null }
-  | { type: "move"; user: LngLat; accuracy?: number }
+  | { type: "move"; user: LngLat; accuracy?: number | null }
   | { type: "locationError"; error: string | null }
   | { type: "photos"; photos: Record<string, string> }
   | { type: "photo"; photo: string | null }
@@ -80,7 +80,7 @@ function reducer(state: State, action: Action): State {
     case "trip":
       return { ...state, tripId: action.id };
     case "move":
-      return { ...state, user: action.user, accuracy: action.accuracy ?? state.accuracy, locationError: null };
+      return { ...state, user: action.user, accuracy: action.accuracy === undefined ? state.accuracy : action.accuracy, locationError: null };
     case "locationError":
       return { ...state, locationError: action.error };
     case "photos": {

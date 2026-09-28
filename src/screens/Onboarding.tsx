@@ -7,7 +7,8 @@ import { useToast } from "../components/Toast";
 import { buzz, sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
-import { PARK_BY_ID } from "../lib/parks";
+import type { Park } from "../lib/parks";
+import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
 
 const SLIDES = [
@@ -31,11 +32,8 @@ const SLIDES = [
   },
 ];
 
-const fan = ["regional-thetis-lake-regional-park", "national-pacific-rim-national-park-reserve", "provincial-goldstream-park"].map(
-  (id) => PARK_BY_ID.get(id)!,
-);
-
-function BadgeFan() {
+function BadgeFan({ parks }: { parks: readonly Park[] }) {
+  const fan = parks.slice(0, 3);
   const pos = [
     { x: -92, y: 26, r: -14, s: 0.78, d: 0.1 },
     { x: 0, y: -8, r: 0, s: 1, d: 0 },
@@ -122,10 +120,10 @@ function GoThere() {
   );
 }
 
-function SnapClaimKeep() {
-  const park = PARK_BY_ID.get("regional-east-sooke-regional-park")!;
+function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
+  const park = parks[0];
   const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.6 };
-  const cells = ["regional-mount-work-regional-park", "provincial-goldstream-park", "regional-thetis-lake-regional-park", "provincial-horne-lake-caves-park", "regional-witty-s-lagoon-regional-park"];
+  const cells = parks.slice(0, 5);
   return (
     <div className="ob-snap">
       <motion.div
@@ -143,19 +141,19 @@ function SnapClaimKeep() {
           </svg>
           <motion.div className="ob-flash" animate={{ opacity: [0, 0, 1, 0, 0] }} transition={{ ...loop, times: [0, 0.14, 0.16, 0.26, 1] }} />
         </div>
-        <span>east sooke · sep 26</span>
+        <span>{park?.short ?? "your park"} · your visit</span>
       </motion.div>
       <motion.div
         className="ob-stamp"
         animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 30, 30, 30, 30, 118] }}
         transition={{ ...loop, times: [0, 0.3, 0.4, 0.46, 0.5, 0.72, 0.86], ease: "easeOut" }}
       >
-        <Badge park={park} size={120} />
+        {park ? <Badge park={park} size={120} /> : <Kip pose="think" size={100} />}
       </motion.div>
       <div className="ob-case">
-        {cells.map((id, i) => (
-          <div key={id} className="ob-case__cell">
-            <Badge park={PARK_BY_ID.get(id)!} size={32} showName={false} state={i < 3 ? "earned" : "silhouette"} />
+        {cells.map((item, i) => (
+          <div key={item.id} className="ob-case__cell">
+            <Badge park={item} size={32} showName={false} state={i < 3 ? "earned" : "silhouette"} />
           </div>
         ))}
         <motion.div className="ob-case__cell ob-case__cell--new" animate={{ boxShadow: ["0 0 0 0 #FFC93C00", "0 0 0 0 #FFC93C00", "0 0 0 6px #FFC93Cff", "0 0 0 0 #FFC93C00"] }} transition={{ ...loop, times: [0, 0.84, 0.9, 1] }} />
@@ -164,10 +162,9 @@ function SnapClaimKeep() {
   );
 }
 
-const VISUALS = [BadgeFan, GoThere, SnapClaimKeep];
-
 export function Onboarding() {
   const { dispatch } = useStore();
+  const content = useContent();
   const toast = useToast();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
@@ -183,7 +180,7 @@ export function Onboarding() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const Visual = VISUALS[index];
+  const parks = content?.liveParks ?? [];
 
   const goTo = (i: number) => {
     if (i < 0 || i >= SLIDES.length) return;
@@ -209,7 +206,7 @@ export function Onboarding() {
       (pos) => {
         const here: [number, number] = [pos.coords.longitude, pos.coords.latitude];
         if (distanceKm(here, DEMO_START) > 300) toast("You're far from the Island. Using a Victoria demo spot.", "kip");
-        else dispatch({ type: "move", user: here });
+        else dispatch({ type: "move", user: here, accuracy: pos.coords.accuracy });
         dispatch({ type: "onboarded" });
       },
       () => {
@@ -253,7 +250,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                <Visual />
+                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere /> : <SnapClaimKeep parks={parks} />}
               </div>
             </motion.div>
           </AnimatePresence>

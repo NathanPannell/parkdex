@@ -6,6 +6,7 @@ import { estimateTrip, finalWalk } from "../../lib/drive";
 import { formatDistance, type LngLat } from "../../lib/geo";
 import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { Claim } from "../../lib/store";
+import { useContent } from "../../lib/content/provider";
 
 type Props = {
   park: Park;
@@ -32,8 +33,9 @@ export function directionsUrl(park: Park) {
 }
 
 export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase, onFeedback }: Props) {
-  const trip = estimateTrip(user, park);
-  const walk = finalWalk(park);
+  const content = useContent();
+  const trip = estimateTrip(user, park, content?.drive);
+  const walk = finalWalk(park, content?.drive);
   const live = isLive(park);
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];

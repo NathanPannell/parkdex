@@ -14,6 +14,7 @@ import {
   type FeedbackDraft,
 } from "../lib/feedbackReport";
 import { useStore, type FeedbackOrigin } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 type Status = "editing" | "sending" | "failed" | "sent";
 
@@ -23,7 +24,9 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Origin arrives as a prop so the sheet keeps it while animating out after the store clears it.
 export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const { dispatch } = useStore();
-  const context = useMemo(() => feedbackContext(origin), [origin]);
+  const content = useContent();
+  const park = origin.parkId ? content?.parkById.get(origin.parkId) : undefined;
+  const context = useMemo(() => feedbackContext(origin, park), [origin, park]);
   const [draft, setDraft] = useState<FeedbackDraft>(loadDraft);
   const [shot, setShot] = useState<{ url: string; name: string } | null>(null);
   const [shotError, setShotError] = useState<string | null>(null);

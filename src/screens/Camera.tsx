@@ -3,10 +3,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
+import { ContentGate } from "../components/ContentGate";
 import { buzz, sfx } from "../lib/feedback";
-import { PALETTES, PARK_BY_ID, type Park } from "../lib/parks";
+import { PALETTES, type Park } from "../lib/parks";
 import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 // When no camera is available (desktop without webcam, denied permission),
 // the mockup "photographs" an illustrated scene so the flow still completes.
@@ -29,9 +31,15 @@ ${Array.from({ length: 7 }, (_, i) => {
 }
 
 export function Camera() {
-  const { state, dispatch } = useStore();
-  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
-  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
+  const { state } = useStore();
+  const content = useContent();
+  const park = content?.parkById.get(state.tripId ?? "");
+  if (!park) return <ContentGate />;
+  return <CameraReady park={park} />;
+}
+
+function CameraReady({ park }: { park: Park }) {
+  const { dispatch } = useStore();
   const video = useRef<HTMLVideoElement>(null);
   const [live, setLive] = useState<"pending" | "on" | "off">("pending");
   const [photo, setPhoto] = useState<string | null>(null);

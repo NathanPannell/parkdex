@@ -2,7 +2,7 @@
 
 Parkdex Kip is a Vite app with one Vercel serverless API and a dedicated Neon PostgreSQL database. It has no Railway service, durable worker, scheduled job, or automatic retry service. The feedback email work is attempted during the request; failed deliveries remain available for operator review.
 
-The Neon project is small-cloud-35890217. Its persistent staging parent is branch br-shy-hat-akg1paip, database parkdex_kip, role parkdex_kip_owner. Isolated PR branches use Neon parent-schema initialization and expire after 72 hours. Each receives a new branch-scoped role and a fresh database, with an explicit empty-schema check before applying only database/migrations/feedback_001_init.sql and a zero-row check afterward. Report rows, attachments, and staging role credentials are never copied into the preview application.
+The Neon project is small-cloud-35890217. Its persistent staging parent is branch br-orange-lake-akrxmy23, database parkdex_kip, role parkdex_kip_owner. The root main branch is br-shy-hat-akg1paip; preview databases must branch from staging. Isolated PR branches use Neon parent-schema initialization and expire after 72 hours. Each receives a new branch-scoped role and a fresh database, with an explicit empty-schema check before applying only database/migrations/feedback_001_init.sql and a zero-row check afterward. Report rows, attachments, and staging role credentials are never copied into the preview application.
 
 ## One-time release setup
 

@@ -3,12 +3,16 @@ import { parkContaining, useBoundaries } from "../lib/boundaries";
 import { buzz, sfx } from "../lib/feedback";
 import { isLive } from "../lib/parks";
 import { useStore } from "../lib/store";
+import { useContent } from "../lib/content/provider";
+import { isUsableGpsAccuracy } from "../lib/geo";
 import { Icon } from "./Icon";
 
 export function BottomNav() {
   const { state, dispatch } = useStore();
+  const content = useContent();
   const bounds = useBoundaries();
-  const here = parkContaining(state.user, bounds?.byId, state.accuracy ?? 0);
+  const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? state.accuracy : 0;
+  const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
   const canClaim = !!here && isLive(here) && !state.claims[here.id];
   const tab = state.screen === "collection" ? "collection" : "map";
 

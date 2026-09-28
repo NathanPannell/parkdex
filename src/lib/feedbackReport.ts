@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { PARK_BY_ID } from "./parks";
+import type { Park } from "./parks";
 import type { FeedbackOrigin, Screen } from "./store";
 
 export type FeedbackKind = "bug" | "idea" | "general";
@@ -27,8 +27,7 @@ const SCREEN_LABEL: Record<Screen, string> = {
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.
-export function feedbackContext(origin: FeedbackOrigin): FeedbackContext {
-  const park = origin.parkId ? PARK_BY_ID.get(origin.parkId) : undefined;
+export function feedbackContext(origin: FeedbackOrigin, park?: Park): FeedbackContext {
   return {
     version: __APP_VERSION__,
     platform: Capacitor.getPlatform(),

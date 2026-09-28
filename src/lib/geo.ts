@@ -1,5 +1,9 @@
 export type LngLat = [number, number];
 
+export function isUsableGpsAccuracy(accuracy: number | null | undefined): accuracy is number {
+  return accuracy !== null && accuracy !== undefined && Number.isFinite(accuracy) && accuracy > 0 && accuracy <= 100;
+}
+
 export function distanceKm([aLng, aLat]: LngLat, [bLng, bLat]: LngLat) {
   const r = Math.PI / 180;
   const dLat = (bLat - aLat) * r;

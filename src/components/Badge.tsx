@@ -1,5 +1,6 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
-import { PALETTES, RARITY, sceneUrl, type Park, type Palette, type Shape } from "../lib/parks";
+import { PALETTES, RARITY, scenePath, type Park, type Palette, type Shape } from "../lib/parks";
+import { useOptionalContent } from "../lib/content/provider";
 
 export type BadgeState = "earned" | "preview" | "silhouette";
 
@@ -104,8 +105,12 @@ function Mystery() {
 }
 
 function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref }: Props) {
+  const content = useOptionalContent();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const live = park.scene !== null;
+  const resolvedSceneHref = sceneHref ?? (park.scene
+    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id)
+    : undefined);
   const p = live ? PALETTES[park.biome] : MYSTERY_PALETTE;
   const shape = SHAPES[park.shape];
   const rim = RIM[park.rarity];
@@ -157,8 +162,8 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
       {defs}
       <path d={shape} fill={`url(#r${uid})`} stroke="#14231C" strokeWidth={4} transform="translate(0 3)" opacity={0.25} />
       <g clipPath={`url(#c${uid})`}>
-        {park.scene ? (
-          <image href={sceneHref ?? sceneUrl(park.scene)} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
+        {park.scene && resolvedSceneHref ? (
+          <image href={resolvedSceneHref} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
         ) : (
           <Mystery />
         )}
