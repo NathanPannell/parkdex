@@ -1,3 +1,4 @@
 Pillow==11.3.0
 psycopg[binary]==3.2.9
 requests==2.34.2
+Shapely==2.1.1

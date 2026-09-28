@@ -395,6 +395,17 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
             )
         state["validation"].append({"check": "content-python-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
         save_json(path, state)
+        run(
+            [sys.executable, str(candidate_root / feature["legacyImporterTestPath"]), "ImportPlanTests"],
+            cwd=candidate_root,
+            env=env,
+            label="candidate legacy import unit tests",
+        )
+        state["validation"].append({"check": "legacy-import-unit-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+        run_legacy_import_postgres_qa(load_config(), candidate_root)
+        state["validation"].append({"check": "postgresql-legacy-import-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
 
     account_sql = candidate_root / "scripts" / "qa-account-sql.mjs"
     if account_sql.is_file():
@@ -1014,6 +1025,8 @@ def content_sync_present(config: dict, candidate_root: Path) -> bool:
     qa_sql_name = feature.get("qaSqlPath")
     python_test_names = feature.get("pythonTestPaths")
     python_requirements_name = feature.get("pythonRequirementsPath")
+    importer_name = feature.get("legacyImporterPath")
+    importer_test_name = feature.get("legacyImporterTestPath")
     if (
         not isinstance(migration_names, list) or not migration_names
         or not isinstance(api_names, list) or not api_names
@@ -1021,6 +1034,8 @@ def content_sync_present(config: dict, candidate_root: Path) -> bool:
         or not isinstance(qa_sql_name, str) or not qa_sql_name
         or not isinstance(python_test_names, list) or not python_test_names
         or not isinstance(python_requirements_name, str) or not python_requirements_name
+        or not isinstance(importer_name, str) or not importer_name
+        or not isinstance(importer_test_name, str)
         or any(not isinstance(name, str) or not name for name in [*migration_names, *api_names])
         or any(not isinstance(name, str) or not name for name in python_test_names)
     ):
@@ -1030,8 +1045,10 @@ def content_sync_present(config: dict, candidate_root: Path) -> bool:
     if any(present) and not all(present):
         raise DeliveryError("The content sync migration, API routes, bootstrap helper, SQL QA, and Python test assets must ship together.")
     if not any(present):
+        if (candidate_root / importer_name).exists() or (candidate_root / importer_test_name).exists():
+            raise DeliveryError("The legacy importer requires the complete content sync feature.")
         return False
-    support_names = [*python_test_names, python_requirements_name]
+    support_names = [*python_test_names, python_requirements_name, importer_name, importer_test_name]
     if any(not (candidate_root / name).is_file() for name in support_names):
         raise DeliveryError("The complete content sync feature requires its allowlisted Python tests and pinned dependencies.")
     supporting = feature.get("supportingMigrationPaths")
@@ -1127,9 +1144,59 @@ def run_content_sync_sql_qa(config: dict, candidate_root: Path) -> None:
         )
 
 
+def run_legacy_import_postgres_qa(config: dict, candidate_root: Path) -> None:
+    feature = config.get("contentSync", {})
+    test_name = feature.get("legacyImporterTestPath") if isinstance(feature, dict) else None
+    if not isinstance(test_name, str) or not test_name or not content_sync_present(config, candidate_root):
+        raise DeliveryError("Legacy import PostgreSQL QA requires the complete content sync feature and allowlisted test.")
+    test_script = candidate_root / test_name
+    admin_env = candidate_sql_env()
+    database_name = f"kip_qa_legacy_import_{uuid.uuid4().hex}"
+    if not re.fullmatch(r"kip_qa_legacy_import_[0-9a-f]{32}", database_name):
+        raise DeliveryError("Could not create a safe owned legacy import QA database name.")
+    admin_psql = candidate_psql_args(admin_env, database_override="postgres")
+    existing = run(
+        [*admin_psql, "-qAt", "-c", f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{database_name}'"],
+        cwd=candidate_root, env=admin_env, label="candidate legacy import QA database ownership check",
+    ).strip()
+    if existing:
+        raise DeliveryError("The unique legacy import QA database name already exists; refusing to use or remove it.")
+    run(
+        [*admin_psql, "-c", f'CREATE DATABASE "{database_name}"'],
+        cwd=candidate_root, env=admin_env, label="create owned legacy import QA database",
+    )
+    qa_env = dict(admin_env)
+    qa_env["PGDATABASE"] = database_name
+    try:
+        table_count = run(
+            [*candidate_psql_args(qa_env), "-qAt", "-c",
+             "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'"],
+            cwd=candidate_root, env=qa_env, label="candidate legacy import QA initialization check",
+        ).strip()
+        if table_count != "0":
+            raise DeliveryError("The newly created legacy import QA database is not empty.")
+        database_url = candidate_database_url(qa_env)
+        run(
+            [sys.executable, str(test_script), "PostgreSQLImportTests"],
+            cwd=candidate_root,
+            env={**qa_env, "LEGACY_IMPORT_TEST_DATABASE_URL": database_url},
+            label="candidate legacy import PostgreSQL integration tests",
+        )
+    finally:
+        run(
+            [*admin_psql, "-c", f'DROP DATABASE "{database_name}"'],
+            cwd=candidate_root, env=admin_env, label="drop owned legacy import QA database",
+        )
+
+
 def qa_content_sync() -> None:
     config = load_config()
     run_content_sync_sql_qa(config, ROOT)
+
+
+def qa_legacy_import() -> None:
+    config = load_config()
+    run_legacy_import_postgres_qa(config, ROOT)
 
 
 def migration_paths(config: dict, candidate_root: Path) -> list[Path]:
@@ -2122,6 +2189,7 @@ def build_parser() -> argparse.ArgumentParser:
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
     sub.add_parser("qa-content-sync")
+    sub.add_parser("qa-legacy-import")
     item = sub.add_parser("deploy-staging")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
@@ -2161,6 +2229,8 @@ def main() -> int:
             migration_staging(args)
         elif args.command == "qa-content-sync":
             qa_content_sync()
+        elif args.command == "qa-legacy-import":
+            qa_legacy_import()
         elif args.command == "deploy-staging":
             dispatch_staging(args)
         elif args.command == "deploy-staging-services":
