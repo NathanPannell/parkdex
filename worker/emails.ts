@@ -202,10 +202,10 @@ function hero(report: FeedbackEmailReport, base: URL, headline: string, support:
                     <p class="mail-muted" style="margin:16px 0 0;color:${INK_SOFT};font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;letter-spacing:.6px;line-height:1.4;text-transform:uppercase;">${label} &nbsp; / &nbsp; ${reference}</p>
                   </td>
                   <td class="hero-art" width="42%" align="right" valign="middle" style="width:42%;">
-                    <table role="presentation" class="mail-art" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${CORAL}" style="background-color:${CORAL};border:2px solid ${INK};border-radius:28px;">
+                    <table role="presentation" class="mail-art" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${CORAL}" style="background-color:${CORAL};border:2px solid ${INK};border-collapse:separate;border-spacing:0;border-radius:28px;overflow:hidden;">
                       <tr>
-                        <td class="hero-art-cell mobile-center" align="center" valign="middle" style="padding:8px 4px;">
-                          <img class="hero-image" src="${image}" width="176" height="176" alt="Kip waves hello" style="display:block;width:176px;height:176px;max-width:100%;object-fit:contain;">
+                        <td class="hero-art-cell mobile-center" align="center" valign="middle" bgcolor="${CORAL}" style="padding:8px 4px;background-color:${CORAL};border-radius:26px;">
+                          <img class="hero-image" src="${image}" width="176" height="176" align="center" alt="Kip waves hello" style="display:block;width:176px;height:176px;max-width:100%;margin:0 auto;object-fit:contain;">
                         </td>
                       </tr>
                     </table>
@@ -280,6 +280,18 @@ export function renderOperatorEmail(report: FeedbackEmailReport, options: Feedba
   const html = `${documentStart("New Parkdex feedback", `${label} ${reference} is ready to review.`)}
 ${hero(report, base, headline, "A new community note is ready in the Parkdex feedback desk.")}
           <tr>
+            <td class="mail-paper email-gutter" bgcolor="${PAPER}" style="padding:25px 30px 0;background-color:${PAPER};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;">
+                <tr>
+                  <td align="center" bgcolor="${ORANGE}" style="background-color:${ORANGE};border:2px solid ${INK};border-radius:16px;overflow:hidden;box-shadow:0 4px 0 ${INK};">
+                    <a class="mail-button mobile-button" href="${safeReportUrl}" style="display:inline-block;padding:15px 22px;border-radius:14px;color:${INK};font-family:'Trebuchet MS',Arial,sans-serif;font-size:16px;font-weight:800;line-height:1.2;text-decoration:none;">Open private report</a>
+                  </td>
+                </tr>
+              </table>
+              <p class="mail-muted" style="margin:17px 0 0;color:${INK_SOFT};font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;">The review page keeps the report and any protected screenshot together.</p>
+            </td>
+          </tr>
+          <tr>
             <td class="mail-paper email-gutter" bgcolor="${PAPER}" style="padding:27px 30px 0;background-color:${PAPER};">
               <h2 class="mail-ink" style="margin:0;color:${INK};font-family:'Trebuchet MS',Arial,sans-serif;font-size:22px;font-weight:800;line-height:1.15;letter-spacing:-.5px;">The message</h2>
               <div class="mail-message" dir="auto" style="margin-top:13px;padding:18px 20px;background-color:${PAPER_PALE};border:1px solid ${RULE};border-radius:16px;color:${INK};font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(message)}</div>
@@ -293,23 +305,13 @@ ${hero(report, base, headline, "A new community note is ready in the Parkdex fee
               </table>
             </td>
           </tr>
-          <tr>
-            <td class="mail-paper email-gutter" bgcolor="${PAPER}" style="padding:25px 30px 30px;background-color:${PAPER};">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" bgcolor="${ORANGE}" style="background-color:${ORANGE};border:2px solid ${INK};border-radius:16px;box-shadow:0 4px 0 ${INK};">
-                    <a class="mail-button mobile-button" href="${safeReportUrl}" style="display:inline-block;padding:15px 22px;border-radius:14px;color:${INK};font-family:'Trebuchet MS',Arial,sans-serif;font-size:16px;font-weight:800;line-height:1.2;text-decoration:none;">Open private report</a>
-                  </td>
-                </tr>
-              </table>
-              <p class="mail-muted" style="margin:17px 0 0;color:${INK_SOFT};font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;">The review page keeps the report and any protected screenshot together.</p>
-            </td>
-          </tr>
 ${closeDocument()}`;
 
   const lines = [
     "PARKDEX FEEDBACK DESK",
     `${label} - ${reference}`,
+    "",
+    `Open private report: ${reportUrl}`,
     "",
     "The message:",
     message,
@@ -324,8 +326,6 @@ ${closeDocument()}`;
       : []),
     textDetail("Contact", report.contact && report.email ? `Follow-up permitted at ${report.email}` : report.contact ? "Follow-up permitted, but no email address was included" : "Follow-up not permitted"),
     textDetail("Screenshot", report.hasScreenshot ? `View protected screenshot in private report: ${screenshotUrl}` : "No screenshot attached"),
-    "",
-    `Open private report: ${reportUrl}`,
   ];
 
   return {
@@ -361,9 +361,9 @@ ${hero(report, base, "Thanks for your note.", "Your feedback has been saved. Tha
           </tr>
           <tr>
             <td class="mail-paper email-gutter" bgcolor="${PAPER}" style="padding:25px 30px 30px;background-color:${PAPER};">
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0;">
                 <tr>
-                  <td align="center" bgcolor="${ORANGE}" style="background-color:${ORANGE};border:2px solid ${INK};border-radius:16px;box-shadow:0 4px 0 ${INK};">
+                  <td align="center" bgcolor="${ORANGE}" style="background-color:${ORANGE};border:2px solid ${INK};border-radius:16px;overflow:hidden;box-shadow:0 4px 0 ${INK};">
                     <a class="mail-button mobile-button" href="${safeAppUrl}" style="display:inline-block;padding:15px 22px;border-radius:14px;color:${INK};font-family:'Trebuchet MS',Arial,sans-serif;font-size:16px;font-weight:800;line-height:1.2;text-decoration:none;">Back to Parkdex</a>
                   </td>
                 </tr>

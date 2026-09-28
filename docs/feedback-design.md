@@ -30,4 +30,6 @@ The current extension contains local color values alongside the shared tokens. T
 
 ## Review status
 
-This note is based on source inspection. Browser visual review remains pending because the Chrome workflow is unavailable and its permission is pending. No visual approval is recorded.
+Chrome desktop and mobile review covered the deployed form, saved draft after connection failure, successful submission, private inbox, and both HTML email templates. A fresh finish review preserved the established form and brand direction and identified five corrections: bring the operator email action before long details, center mobile Kip artwork and finish rounded controls, widen the mobile status selector, display the saved build, and label unattempted delivery truthfully.
+
+The final confirmation captures, finish verdict, before/after evidence, and exact release validation are recorded in the PR thread. Email previews validate browser rendering and conservative table-based markup; inbox rendering can vary between email clients.

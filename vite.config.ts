@@ -2,9 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import pkg from "./package.json" with { type: "json" };
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 function sourceRevision() {
-  if (process.env.RELEASE_SHA || process.env.VERCEL_GIT_COMMIT_SHA) return process.env.RELEASE_SHA || process.env.VERCEL_GIT_COMMIT_SHA;
+  const environmentRevision = process.env.RELEASE_SHA || process.env.VERCEL_GIT_COMMIT_SHA;
+  if (environmentRevision) return environmentRevision;
+  try {
+    const release = JSON.parse(readFileSync(new URL("./public/release.json", import.meta.url), "utf8")) as { sha?: unknown };
+    if (typeof release.sha === "string" && /^[a-f0-9]{40}$/i.test(release.sha)) return release.sha;
+  } catch {
+    // The release manifest is only present in delivery builds.
+  }
   try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
   catch { return 'local'; }
 }

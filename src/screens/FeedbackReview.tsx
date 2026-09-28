@@ -10,6 +10,7 @@ type EmailStatus = "pending" | "sending" | "sent" | "failed" | "ambiguous" | str
 
 type FeedbackContext = {
   version?: unknown;
+  build?: unknown;
   platform?: unknown;
   screen?: unknown;
   parkId?: unknown;
@@ -797,6 +798,7 @@ export function FeedbackReview() {
                       {safeText(detail.context?.screen) && <ContextItem label="Screen" value={safeText(detail.context?.screen)!} />}
                       {safeText(detail.context?.platform) && <ContextItem label="Platform" value={safeText(detail.context?.platform)!} />}
                       {safeText(detail.context?.version) && <ContextItem label="App version" value={safeText(detail.context?.version)!} />}
+                      {safeText(detail.context?.build) && <ContextItem label="Build" value={safeText(detail.context?.build)!} />}
                       {safeText(detail.context?.parkId) && <ContextItem label="Park ID" value={safeText(detail.context?.parkId)!} />}
                     </dl>
                     {!detail.context || Object.values(detail.context).every((value) => !safeText(value)) ? <p className="fr-muted-copy">No additional app context was included.</p> : null}
@@ -851,7 +853,7 @@ export function FeedbackReview() {
                           <div className="fr-delivery-row" key={delivery.audience}>
                             <span className="fr-delivery-label">{delivery.audience === "operator" ? "Operator copy" : "Receipt to sender"}</span>
                             <span className={`fr-delivery-status fr-delivery-status--${delivery.requiresConfirmation ? "needs-confirmation" : delivery.canRetry && delivery.status === "sending" ? "retryable" : delivery.status}`}>{emailStatusLabel(delivery)}</span>
-                            <span className="fr-delivery-time">{delivery.sentAt ? `Sent ${formatDate(delivery.sentAt)}` : delivery.lastAttemptAt ? `Last attempt ${formatDate(delivery.lastAttemptAt)}` : delivery.status === "pending" ? "Not attempted yet" : "Date unavailable"}</span>
+                            <span className="fr-delivery-time">{delivery.sentAt ? `Sent ${formatDate(delivery.sentAt)}` : delivery.lastAttemptAt ? `Last attempt ${formatDate(delivery.lastAttemptAt)}` : delivery.status === "pending" ? "Not attempted yet" : delivery.status === "disabled" && (delivery.attempts ?? 0) === 0 ? "Not attempted" : "Date unavailable"}</span>
                             {delivery.attempts !== undefined && <span className="fr-delivery-attempts">{delivery.attempts} {delivery.attempts === 1 ? "attempt" : "attempts"}</span>}
                             {delivery.lastError && <p className="fr-delivery-error">The previous delivery returned an error. Review it before retrying.</p>}
                           </div>

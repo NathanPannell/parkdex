@@ -1201,7 +1201,8 @@
   }
 
   .fr-detail-header {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 9px;
     padding: 13px 15px;
   }
@@ -1242,20 +1243,23 @@
   }
 
   .fr-status-control {
-    grid-column: 3;
-    grid-row: 1;
-    gap: 5px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
 
   .fr-status-control span:first-child {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .fr-status-control select {
-    min-width: 0;
-    width: 102px;
+    min-width: 174px;
+    width: 190px;
     min-height: 36px;
-    padding: 0 22px 0 8px;
+    padding: 0 28px 0 10px;
     font-size: 12px;
   }
 
@@ -1360,10 +1364,6 @@
   .fr-back-button {
     gap: 1px;
     font-size: 12px;
-  }
-
-  .fr-status-control select {
-    width: 94px;
   }
 
   .fr-context-grid {
