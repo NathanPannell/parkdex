@@ -308,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-    if (!accountId) throw new Error("Reconnect before signing out so Kip can revoke this session safely.");
+    if (!accountId) throw new Error("Reconnect before signing out so Parkdex can revoke this session safely.");
     const operation = ++authOperationGeneration.current;
     const generation = sessionGeneration.current;
     await logoutAccount(accountId);

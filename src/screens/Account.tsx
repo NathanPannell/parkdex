@@ -369,7 +369,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <Icon name="back" size={20} />
         </button>
         <div className="account-head__title">
-          <span className="eyebrow">Your Kip account</span>
+          <span className="eyebrow">Your Parkdex account</span>
           <h1 id="account-title">Account &amp; backup</h1>
         </div>
         <div className="account-head__kip"><Kip size={54} pose="avatar" /></div>
@@ -393,7 +393,7 @@ export function Account({ onBack }: { onBack: () => void }) {
         {auth.phase === "starting" && (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Opening your case…</strong><p>Your saved progress stays on this device while Kip checks your account.</p></div>
+            <div><strong>Opening your case…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
           </section>
         )}
 
@@ -401,7 +401,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-card card">
             <span className="eyebrow">Offline</span>
             <h2>Your saved case is here</h2>
-            <p>Kip couldn't confirm the account while offline. The previous account's saved collection remains in its private device partition and is not being backed up.</p>
+            <p>Parkdex couldn't confirm the account while offline. The previous account's saved collection remains in its private device partition and is not being backed up.</p>
             <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
             {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
           </section>
@@ -421,7 +421,7 @@ export function Account({ onBack }: { onBack: () => void }) {
             <section className="account-card card account-profile">
               <div className="account-profile__main">
                 <span className="eyebrow">Signed in</span>
-                <h2>{account.displayName || "Your Kip account"}</h2>
+                <h2>{account.displayName || "Your Parkdex account"}</h2>
                 <p>{account.email}</p>
               </div>
               <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
@@ -460,7 +460,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                 <div><span className="eyebrow">Collection backup</span><h2>{backupHeading(auth.backup.phase)}</h2></div>
                 <span className={`account-backup__dot is-${auth.backup.phase}`} aria-hidden="true" />
               </div>
-              <p>{auth.backup.message ?? "Your collection is saved on this device. Kip keeps a copy with your account when a connection is available."}</p>
+              <p>{auth.backup.message ?? "Your collection is saved on this device. Parkdex keeps a copy with your account when a connection is available."}</p>
               {(auth.backup.claimsPending > 0 || auth.backup.photosPending > 0) && (
                 <div className="account-pending" aria-live="polite">
                   {auth.backup.claimsPending > 0 && <span>{auth.backup.claimsPending} {auth.backup.claimsPending === 1 ? "badge" : "badges"} waiting</span>}
@@ -496,7 +496,7 @@ export function Account({ onBack }: { onBack: () => void }) {
 
             <section className="account-delete">
               <button className="account-delete__open" disabled={busy} onClick={() => { setDeleteStep("confirm"); setDeleteError(null); }}>
-                Delete Kip account
+                Delete Parkdex account
               </button>
             </section>
           </>
@@ -507,7 +507,7 @@ export function Account({ onBack }: { onBack: () => void }) {
             <span className="eyebrow">Account deletion</span>
             {deleteStep === "confirm" ? (
               <>
-                <h2>Delete this Kip account?</h2>
+                <h2>Delete this Parkdex account?</h2>
                 <p>This removes the account and its server backup. Badges in the separate guest case stay on this device. First verify your account again.</p>
                 {canPasswordReauth && (
                   <form className="account-form" onSubmit={(event) => void submitDeleteReauth(event)}>
@@ -532,7 +532,7 @@ export function Account({ onBack }: { onBack: () => void }) {
               </>
             )}
             {deleteError && <p className="account-error" role="alert">{deleteError}</p>}
-            <p className="account-privacy">If Kip returns a pending receipt, deletion is still in progress. Keep the receipt if you contact support.</p>
+            <p className="account-privacy">If Parkdex returns a pending receipt, deletion is still in progress. Keep the receipt if you contact support.</p>
           </section>
         )}
 
@@ -572,7 +572,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                 <>
                   <div className="account-form-card__heading">
                     <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your case safe"}</span>
-                    <h2>{mode === "sign_up" ? "Create your Kip account" : "Sign in to Kip"}</h2>
+                    <h2>{mode === "sign_up" ? "Create your Parkdex account" : "Sign in to Parkdex"}</h2>
                     <p>{mode === "sign_up" ? "Back up your badges and photos. Your guest case stays separate until you choose to attach it." : "Your badges and photos stay on this device until you sign in."}</p>
                   </div>
                   {googleAvailable && renderGoogleButton("sign_in", googleResetKey, busy, onGoogleCredential, onGoogleError)}
@@ -588,7 +588,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                   </form>
                   {mode === "sign_in" && canRequestEmail && <button className="account-text-button" onClick={() => setMode("reset")}>Forgot password?</button>}
                   <div className="account-form-card__switch">
-                    {mode === "sign_in" ? <><span>New to Kip?</span><button className="account-text-button" onClick={() => setMode("sign_up")}>Create account</button></> : <><span>Already have an account?</span><button className="account-text-button" onClick={() => setMode("sign_in")}>Sign in</button></>}
+                    {mode === "sign_in" ? <><span>New to Parkdex?</span><button className="account-text-button" onClick={() => setMode("sign_up")}>Create account</button></> : <><span>Already have an account?</span><button className="account-text-button" onClick={() => setMode("sign_in")}>Sign in</button></>}
                   </div>
                 </>
               )}
@@ -596,7 +596,7 @@ export function Account({ onBack }: { onBack: () => void }) {
 
             <section className="account-card card account-guest-note">
               <span className="eyebrow">Guest case</span>
-              <p>Your badges stay on this device if you keep using Kip as a guest. Signing in does not merge them automatically.</p>
+              <p>Your badges stay on this device if you keep using Parkdex as a guest. Signing in does not merge them automatically.</p>
             </section>
           </>
         )}
