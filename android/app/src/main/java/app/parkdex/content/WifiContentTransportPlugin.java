@@ -42,6 +42,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class WifiContentTransportPlugin extends Plugin {
     private static final int DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
     private static final int HARD_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_ACCOUNT_BACKUP_BYTES = 2_621_440;
+    private static final int MAX_CLAIM_JSON_BYTES = 16 * 1024;
     private static final int DEFAULT_TIMEOUT_MS = 20_000;
     private static final int WIFI_WAIT_TIMEOUT_MS = 15_000;
     private static final int MAX_TIMEOUT_MS = 60_000;
@@ -167,6 +169,87 @@ public class WifiContentTransportPlugin extends Plugin {
             }
         }
 
+        startWifiRequest(state);
+    }
+
+    @PluginMethod
+    public void accountRequest(PluginCall call) {
+        String requestId = call.getString("requestId");
+        String urlText = call.getString("url");
+        String method = call.getString("method", "GET");
+        String bodyBase64 = call.getString("bodyBase64", "");
+        int maxRequestBytes = call.getInt("maxRequestBytes", MAX_ACCOUNT_BACKUP_BYTES);
+        int maxResponseBytes = call.getInt("maxResponseBytes", MAX_ACCOUNT_BACKUP_BYTES);
+        int timeoutMs = call.getInt("timeoutMs", DEFAULT_TIMEOUT_MS);
+
+        if (requestId == null || requestId.isEmpty() || requestId.length() > 128) {
+            call.reject("A valid requestId is required");
+            return;
+        }
+        if (urlText == null) {
+            call.reject("An account backup URL is required");
+            return;
+        }
+        if (bodyBase64.length() > ((MAX_ACCOUNT_BACKUP_BYTES + 2) / 3) * 4 + 4) {
+            call.reject("The account backup request exceeds its byte limit");
+            return;
+        }
+        final byte[] body;
+        try {
+            body = bodyBase64.isEmpty() ? new byte[0] : Base64.decode(bodyBase64, Base64.DEFAULT);
+        } catch (IllegalArgumentException error) {
+            call.reject("The account backup request body is invalid");
+            return;
+        }
+
+        final URL url;
+        try {
+            url = validateAccountBackupUrl(urlText, call.getString("approvedApiOrigin"), method);
+            validateAccountBackupBody(url, method, body);
+            validateAccountBackupHeaders(accountHeaders(call.getObject("headers")), url, method);
+        } catch (Exception error) {
+            call.reject(error.getMessage() == null ? "The account backup request is not approved" : error.getMessage());
+            return;
+        }
+        int routeRequestLimit = url.getPath().matches("(?i)^/api/claims/[0-9a-f-]{36}$")
+                ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
+        if (maxRequestBytes < 1 || maxRequestBytes > routeRequestLimit || body.length > maxRequestBytes) {
+            call.reject("The account backup request byte limit is invalid");
+            return;
+        }
+        if (maxResponseBytes < 1 || maxResponseBytes > MAX_ACCOUNT_BACKUP_BYTES) {
+            call.reject("The account backup response byte limit is invalid");
+            return;
+        }
+        if (timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) {
+            call.reject("The account backup request timeout is invalid");
+            return;
+        }
+
+        ConnectivityManager manager = connectivityManager();
+        if (manager == null) {
+            call.reject("Wi-Fi networking is unavailable");
+            return;
+        }
+
+        ActiveRequest state;
+        synchronized (lifecycleLock) {
+            if (paused || destroyed) {
+                call.reject("Account backup requests require Parkdex to be in the foreground");
+                return;
+            }
+            state = new ActiveRequest(requestId, call, manager, url, method,
+                    call.getObject("headers"), maxResponseBytes, timeoutMs, true, body);
+            ActiveRequest existing = activeRequests.putIfAbsent(requestId, state);
+            if (existing != null) {
+                call.reject("A request already uses this requestId");
+                return;
+            }
+        }
+        startWifiRequest(state);
+    }
+
+    private void startWifiRequest(ActiveRequest state) {
         NetworkRequest wifiRequest = new NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -175,7 +258,8 @@ public class WifiContentTransportPlugin extends Plugin {
             @Override
             public void onAvailable(Network network) {
                 if (!state.bindNetwork(network)) return;
-                REQUEST_EXECUTOR.execute(() -> performRequest(state, network));
+                if (state.accountBackup) REQUEST_EXECUTOR.execute(() -> performAccountBackupRequest(state, network));
+                else REQUEST_EXECUTOR.execute(() -> performRequest(state, network));
             }
 
             @Override
@@ -187,9 +271,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
             @Override
             public void onBlockedStatusChanged(Network network, boolean blocked) {
-                if (blocked && state.isSelectedNetwork(network)) {
-                    state.fail("The Wi-Fi connection is blocked");
-                }
+                if (blocked && state.isSelectedNetwork(network)) state.fail("The Wi-Fi connection is blocked");
             }
 
             @Override
@@ -199,7 +281,9 @@ public class WifiContentTransportPlugin extends Plugin {
 
             @Override
             public void onUnavailable() {
-                state.fail("Wi-Fi is unavailable for content downloads");
+                state.fail(state.accountBackup
+                        ? "Wi-Fi is unavailable for account backup"
+                        : "Wi-Fi is unavailable for content downloads");
             }
         };
 
@@ -262,6 +346,151 @@ public class WifiContentTransportPlugin extends Plugin {
             state.clearConnection(connection);
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private void performAccountBackupRequest(ActiveRequest state, Network network) {
+        if (state.isFinished()) return;
+        HttpURLConnection connection = null;
+        try {
+            URLConnection opened = network.openConnection(state.url);
+            if (!(opened instanceof HttpURLConnection)) throw new IOException("Only HTTPS account backup URLs are supported");
+            connection = (HttpURLConnection) opened;
+            state.setConnection(connection);
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestMethod(state.method);
+            connection.setConnectTimeout(state.timeoutMs);
+            connection.setReadTimeout(state.timeoutMs);
+            connection.setUseCaches(false);
+            connection.setRequestProperty("Accept-Encoding", "identity");
+            applyHeaders(connection, state.headers);
+
+            if ("PUT".equals(state.method)) {
+                writeAccountBackupBody(connection, state.requestBody);
+            }
+
+            int status = connection.getResponseCode();
+            if (status < 200 || status > 599) throw new IOException("Account backup server returned an invalid HTTP status");
+            if (status >= 300 && status < 400 && status != HttpURLConnection.HTTP_NOT_MODIFIED) {
+                throw new IOException("Account backup redirects are not permitted");
+            }
+            int declaredLength = connection.getContentLength();
+            if (declaredLength > state.maxResponseBytes) throw new IOException("Account backup response exceeds its byte limit");
+
+            boolean noBody = status == HttpURLConnection.HTTP_NO_CONTENT || status == 205 || status == HttpURLConnection.HTTP_NOT_MODIFIED;
+            byte[] responseBody = noBody ? new byte[0] : readBoundedBody(connection, status, state.maxResponseBytes, state);
+            if (state.isFinished()) return;
+
+            JSObject result = new JSObject();
+            result.put("status", status);
+            result.put("statusText", nullToEmpty(connection.getResponseMessage()));
+            result.put("headers", responseHeaders(connection.getHeaderFields()));
+            result.put("bodyBase64", Base64.encodeToString(responseBody, Base64.NO_WRAP));
+            result.put("url", state.url.toString());
+            state.resolve(result);
+        } catch (Exception error) {
+            if (!state.isFinished()) {
+                String message = error.getMessage();
+                state.fail(message == null || message.isEmpty() ? "Wi-Fi account backup request failed" : message);
+            }
+        } finally {
+            state.clearConnection(connection);
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    static URL validateAccountBackupUrl(String value, String apiOrigin, String method) throws Exception {
+        URI uri = new URI(value);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException("Account backup requires an approved HTTPS URL");
+        }
+        int port = uri.getPort();
+        if (port != -1 && port != 443) throw new IllegalArgumentException("Account backup cannot use a custom port");
+        String host = uri.getHost().toLowerCase(Locale.ROOT);
+        String origin = "https://" + host;
+        String approvedApi = canonicalApprovedOrigin(apiOrigin, true);
+        if (approvedApi == null || !origin.equals(approvedApi)) {
+            throw new IllegalArgumentException("The account backup origin is not approved");
+        }
+
+        String path = uri.getRawPath();
+        String query = uri.getRawQuery();
+        String normalizedMethod = method == null ? "" : method;
+        boolean allowed = false;
+        if ("/api/claims".equals(path)) {
+            allowed = "GET".equals(normalizedMethod) && (query == null || query.matches("cursor=[A-Za-z0-9_-]{1,1024}"));
+        } else if (path != null && path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) {
+            allowed = "PUT".equals(normalizedMethod) && query == null;
+        } else if (path != null && path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/photo$")) {
+            allowed = ("GET".equals(normalizedMethod) || "PUT".equals(normalizedMethod)) && query == null;
+        }
+        if (!allowed) throw new IllegalArgumentException("The account backup path or method is not approved");
+        return uri.toURL();
+    }
+
+    static void validateAccountBackupBody(URL url, String method, byte[] body) {
+        if (body == null) throw new IllegalArgumentException("The account backup body is invalid");
+        String path = url.getPath();
+        if ("GET".equals(method)) {
+            if (body.length != 0) throw new IllegalArgumentException("Account backup GET requests cannot contain a body");
+            return;
+        }
+        int maximum = path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+                ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
+        if (!"PUT".equals(method) || body.length < 1 || body.length > maximum) {
+            throw new IllegalArgumentException("The account backup request body is invalid or exceeds its byte limit");
+        }
+    }
+
+    static void writeAccountBackupBody(HttpURLConnection connection, byte[] requestBody) throws IOException {
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(requestBody.length);
+        try (java.io.OutputStream output = connection.getOutputStream()) {
+            output.write(requestBody);
+            output.flush();
+        }
+    }
+
+    static void validateAccountBackupHeaders(Map<String, String> headers, URL url, String method) {
+        String authorization = headerValue(headers, "authorization");
+        String accountId = headerValue(headers, "x-kip-account-id");
+        String transport = headerValue(headers, "x-kip-auth-transport");
+        if (authorization == null || !authorization.matches("(?i)^Bearer [^\\s]{1,4096}$")) {
+            throw new IllegalArgumentException("Native account backup requires a bearer session");
+        }
+        if (accountId == null || !accountId.matches("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) {
+            throw new IllegalArgumentException("Native account backup requires an account scope");
+        }
+        if (!"native".equals(transport)) throw new IllegalArgumentException("Native account backup requires the native transport marker");
+        if (headerValue(headers, "cookie") != null) throw new IllegalArgumentException("Native account backup does not accept cookies");
+        if ("PUT".equals(method)) {
+            String rawContentType = headerValue(headers, "content-type");
+            String contentType = rawContentType == null ? "" : rawContentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            String path = url.getPath();
+            boolean allowed = path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+                    ? "application/json".equals(contentType)
+                    : "image/jpeg".equals(contentType) || "image/png".equals(contentType) || "image/webp".equals(contentType);
+            if (!allowed) throw new IllegalArgumentException("Native account backup content type is not approved for this route");
+        }
+    }
+
+    private static Map<String, String> accountHeaders(JSObject headers) throws JSONException {
+        Map<String, String> result = new java.util.HashMap<>();
+        if (headers == null) return result;
+        Iterator<String> keys = headers.keys();
+        while (keys.hasNext()) {
+            String name = keys.next();
+            Object value = headers.get(name);
+            if (value != null && value != JSONObjectNull.VALUE) result.put(name, String.valueOf(value));
+        }
+        return result;
+    }
+
+    private static String headerValue(Map<String, String> headers, String expectedName) {
+        if (headers == null) return null;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            if (expectedName.equals(entry.getKey().toLowerCase(Locale.ROOT))) return entry.getValue();
+        }
+        return null;
     }
 
     private static byte[] readBoundedBody(HttpURLConnection connection, int status, int maxBytes, ActiveRequest state) throws IOException {
@@ -400,6 +629,8 @@ public class WifiContentTransportPlugin extends Plugin {
         final JSObject headers;
         final int maxResponseBytes;
         final int timeoutMs;
+        final boolean accountBackup;
+        final byte[] requestBody;
         final AtomicBoolean finished = new AtomicBoolean(false);
         private final Object registrationLock = new Object();
         private boolean callbackRegistered;
@@ -409,6 +640,11 @@ public class WifiContentTransportPlugin extends Plugin {
 
         ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
                       JSObject headers, int maxResponseBytes, int timeoutMs) {
+            this(requestId, call, manager, url, method, headers, maxResponseBytes, timeoutMs, false, new byte[0]);
+        }
+
+        ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
+                      JSObject headers, int maxResponseBytes, int timeoutMs, boolean accountBackup, byte[] requestBody) {
             this.requestId = requestId;
             this.call = call;
             this.manager = manager;
@@ -417,6 +653,8 @@ public class WifiContentTransportPlugin extends Plugin {
             this.headers = headers;
             this.maxResponseBytes = maxResponseBytes;
             this.timeoutMs = timeoutMs;
+            this.accountBackup = accountBackup;
+            this.requestBody = requestBody;
         }
 
         synchronized boolean bindNetwork(Network network) {

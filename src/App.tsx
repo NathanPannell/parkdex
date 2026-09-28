@@ -91,8 +91,8 @@ function ClaimSnapshotRestorer() {
         if (!live || !changed) return;
         const restored = await loadPersonalProgress(owner);
         if (!live || state.progressOwnerKey !== ownerKey) return;
-        dispatch({ type: "progressLoaded", ownerKey, claims: projectClaims(restored.claims, restored.photos) });
-        if (owner.kind === "account" && auth.phase === "authenticated" && auth.ownerAccountId?.toLowerCase() === owner.accountId.toLowerCase()) void auth.syncBackup();
+        dispatch({ type: "progressLoaded", ownerKey, claims: projectClaims(restored.claims, restored.photos), claimRevisionAtStart: state.claimRevision });
+        if (owner.kind === "account" && auth.phase === "authenticated" && auth.ownerAccountId?.toLowerCase() === owner.accountId.toLowerCase()) void auth.syncBackup({ retryAfterFlight: true });
       } catch {
         if (live) attemptKey.current = null;
       }

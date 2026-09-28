@@ -1,11 +1,16 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Park } from "../parks";
+import type { ProgressSyncResult } from "./progressSync";
 
-const photoTransport = vi.hoisted(() => ({ isContentWifiAvailable: vi.fn(async () => true) }));
+const photoTransport = vi.hoisted(() => ({
+  isContentWifiAvailable: vi.fn(async () => true),
+  getContentConnectivity: vi.fn(async () => ({ connected: true, wifi: true })),
+}));
 vi.mock("../content/transport", () => ({
   contentFetch: vi.fn(),
   isContentWifiAvailable: photoTransport.isContentWifiAvailable,
+  getContentConnectivity: photoTransport.getContentConnectivity,
 }));
 
 class MemoryStorage {
@@ -69,11 +74,167 @@ function makeSession(accountId: string, fetchAuthenticated: (input: RequestInfo 
 beforeEach(async () => {
   vi.resetModules();
   photoTransport.isContentWifiAvailable.mockResolvedValue(true);
+  photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: true });
   for (const name of DB_NAMES) await deleteDatabase(name);
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: new MemoryStorage() });
 });
 
 describe("account progress sync", () => {
+  it("does not call the account API on cellular or outside the foreground", async () => {
+    const sync = await import("./progressSync");
+    const fetcher = vi.fn(async () => jsonResponse({ claims: [], nextCursor: null }));
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: false });
+
+    const cellularResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true);
+    photoTransport.getContentConnectivity.mockResolvedValue({ connected: true, wifi: true });
+    const backgroundResult = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => false);
+
+    expect(cellularResult).toBeNull();
+    expect(backgroundResult).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("coalesces concurrent initial backup triggers into one run", async () => {
+    const sync = await import("./progressSync");
+    const inFlight = new Map<string, Promise<number>>();
+    const rerunRequested = new Set<string>();
+    let finish!: (value: number) => void;
+    const run = vi.fn(() => new Promise<number>((resolve) => { finish = resolve; }));
+    const rerun = vi.fn();
+    const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    const duplicate = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    expect(duplicate).toBe(first);
+    await Promise.resolve();
+    expect(run).toHaveBeenCalledTimes(1);
+    finish(42);
+    expect(await first).toBe(42);
+    expect(rerun).not.toHaveBeenCalled();
+    expect(inFlight.size).toBe(0);
+  });
+
+  it("coalesces meaningful follow-up triggers during an active backup into one retry", async () => {
+    const sync = await import("./progressSync");
+    const inFlight = new Map<string, Promise<number>>();
+    const rerunRequested = new Set<string>();
+    let finishFirst!: (value: number) => void;
+    let calls = 0;
+    const run = vi.fn(() => {
+      calls += 1;
+      return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
+    });
+    const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
+    const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
+    expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
+    await Promise.resolve();
+    finishFirst(1);
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(calls).toBe(2);
+  });
+
+  it("schedules one coalesced retry for cellular-to-Wi-Fi recovery and ignores the initial Wi-Fi snapshot", async () => {
+    const sync = await import("./progressSync");
+    const inFlight = new Map<string, Promise<number>>();
+    const rerunRequested = new Set<string>();
+    let finishFirst!: (value: number) => void;
+    let calls = 0;
+    const run = vi.fn(() => {
+      calls += 1;
+      return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
+    });
+    const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
+    expect(sync.shouldScheduleWifiBackup(null, { connected: true, wifi: true })).toBe(false);
+
+    let previous = { connected: true, wifi: false };
+    const firstWifi = { connected: true, wifi: true };
+    expect(sync.shouldScheduleWifiBackup(previous, firstWifi)).toBe(true);
+    previous = firstWifi;
+    const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    expect(sync.shouldScheduleWifiBackup(previous, { connected: true, wifi: true })).toBe(false);
+    previous = { connected: true, wifi: false };
+    expect(sync.shouldScheduleWifiBackup(previous, firstWifi)).toBe(true);
+    expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
+
+    await Promise.resolve();
+    finishFirst(1);
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(calls).toBe(2);
+  });
+
+  it("persists a successful outbound timestamp only after durable storage succeeds", async () => {
+    const sync = await import("./progressSync");
+    const successful = {
+      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
+      claimsPending: 0, photosPending: 0, issues: [],
+    } satisfies ProgressSyncResult;
+    const restoreOnly = { ...successful, claimsUploaded: 0, claimsRestored: 1 };
+    const get = vi.fn(async () => 99);
+    const failSet = vi.fn(async () => { throw new Error("storage failed"); });
+
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 50, { get, set: failSet }, 100)).toBe(50);
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, restoreOnly, 50, { get, set: failSet }, 100)).toBe(50);
+    expect(failSet).toHaveBeenCalledTimes(1);
+    expect(get).not.toHaveBeenCalled();
+
+    let durable = 75;
+    const set = vi.fn(async (_accountId: string, timestamp: number) => { durable = Math.max(durable, timestamp); });
+    const read = vi.fn(async () => durable);
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 50, { get: read, set }, 200)).toBe(200);
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 200, { get: read, set }, 150)).toBe(200);
+    expect(durable).toBe(200);
+  });
+
+  it("does not advance the successful-backup timestamp while persistent photo issues remain", async () => {
+    const sync = await import("./progressSync");
+    const successful = {
+      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
+      claimsPending: 0, photosPending: 0, issues: [],
+    } satisfies ProgressSyncResult;
+    const unsupported = {
+      ...successful,
+      issues: [{ operation: "photo-upload" as const, code: "unsupported_photo", message: "This saved photo cannot be backed up." }],
+    };
+    const conflict = {
+      ...successful,
+      issues: [{ operation: "photo-upload" as const, code: "photo_conflict", message: "A different photo is already backed up." }],
+    };
+    expect(sync.canPersistSuccessfulOutboundBackup(unsupported)).toBe(false);
+    expect(sync.canPersistSuccessfulOutboundBackup(conflict)).toBe(false);
+    const set = vi.fn(async () => {});
+    const get = vi.fn(async () => 100);
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, unsupported, 50, { get, set }, 200)).toBe(50);
+    expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, conflict, 50, { get, set }, 200)).toBe(50);
+    expect(set).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("keeps old unsupported photos visible as issues after a newer claim uploads", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const oldClaim = await personal.createPersonalClaim(owner, { park: park(), photo: png(9) });
+    await personal.markClaimUploaded(owner, oldClaim.claimId, personal.claimPayload(oldClaim));
+    await personal.markPhotoUnsupported(owner, oldClaim.claimId);
+    const newClaim = await personal.createPersonalClaim(owner, { park: park("maple-cove", "Maple Cove Park") });
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId: newClaim.claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(result.claimsUploaded).toBe(1);
+    expect(result.photosPending).toBe(0);
+    expect(result.issues).toContainEqual(expect.objectContaining({ claimId: oldClaim.claimId, code: "unsupported_photo" }));
+    expect(sync.canPersistSuccessfulOutboundBackup(result)).toBe(false);
+  });
+
   it("retries an offline claim with the same immutable UUID and acknowledges only after the server response", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
@@ -321,12 +482,12 @@ describe("account progress sync", () => {
     expect((await personal.listPersonalClaims(owner))[0].syncState).toBe("pending");
   });
 
-  it("keeps guest data until each claim is acknowledged, then completes explicit attachment", async () => {
+  it("automatically adopts reserved guest claims and finalizes them after server acknowledgement", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
     const guestClaim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" });
-    const guest = await personal.listPersonalClaims({ kind: "guest" });
-    expect(guest).toHaveLength(1);
+    expect(await personal.reserveGuestClaimsForAccount(ACCOUNT_A)).toBe(1);
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
 
     let shouldFail = true;
     const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -338,18 +499,51 @@ describe("account progress sync", () => {
       }
       return jsonResponse({ claims: [], nextCursor: null });
     };
-    const first = await sync.attachGuestProgress(makeSession(ACCOUNT_A, fetcher));
-    expect(first.guestClaimsCopied).toBe(1);
-    expect(first.guestClaimsRemoved).toBe(0);
-    expect((await personal.listPersonalClaims({ kind: "guest" }))).toHaveLength(1);
-    expect((await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A }))[0].syncState).toBe("pending");
+    const first = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(first.claimsPending).toBe(1);
+    expect((await personal.listPersonalClaims(owner))[0].syncState).toBe("pending");
+    expect(await personal.reserveGuestClaimsForAccount(ACCOUNT_A)).toBe(1);
 
     shouldFail = false;
-    const second = await sync.attachGuestProgress(makeSession(ACCOUNT_A, fetcher));
+    const second = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
     expect(second.claimsUploaded).toBe(1);
-    expect(second.guestClaimsRemoved).toBe(1);
     expect(await personal.listPersonalClaims({ kind: "guest" })).toHaveLength(0);
-    expect((await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A }))[0].claimId).toBe(guestClaim.claimId);
+    expect((await personal.listPersonalClaims(owner))[0].claimId).toBe(guestClaim.claimId);
+  });
+
+  it("finalizes acknowledged guest claims after a partially successful sync", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z" });
+    await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-04T12:34:56.000Z" });
+    expect(await personal.reserveGuestClaimsForAccount(ACCOUNT_A)).toBe(2);
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const rows = await personal.listPersonalClaims(owner);
+    const acknowledgedId = rows[0].claimId;
+    const failedId = rows[1].claimId;
+    let allowAll = false;
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      if (init?.method === "PUT") {
+        const claimId = url.split("/").at(-1)!;
+        if (claimId === failedId && !allowAll) throw new TypeError("offline");
+        const payload = JSON.parse(String(init.body));
+        return jsonResponse({ claim: { claimId, ...payload, photo: { status: "missing" } } }, 201);
+      }
+      return jsonResponse({ claims: [], nextCursor: null });
+    };
+
+    const partial = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(partial.claimsUploaded).toBe(1);
+    expect(partial.claimsPending).toBe(1);
+    expect((await personal.listPersonalClaims(owner)).find((claim) => claim.claimId === acknowledgedId)?.syncState).toBe("acknowledged");
+    expect((await personal.listPersonalClaims(owner)).find((claim) => claim.claimId === failedId)?.syncState).toBe("pending");
+    expect(await personal.reserveGuestClaimsForAccount(ACCOUNT_A)).toBe(1);
+
+    allowAll = true;
+    const completed = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(completed.claimsPending).toBe(0);
+    expect(await personal.listPersonalClaims({ kind: "guest" })).toHaveLength(0);
   });
 
   it("preserves a local immutable record when the same UUID arrives with changed claim data", async () => {
@@ -366,13 +560,12 @@ describe("account progress sync", () => {
 
   it("keeps the guest collection intact when an account has a conflicting claim with the same UUID", async () => {
     const personal = await import("./personalStore");
-    const sync = await import("./progressSync");
     const guest = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" });
     const accountOwner = { kind: "account" as const, accountId: ACCOUNT_A };
     await personal.commitRemotePage(accountOwner, [personal.validateRemoteClaim({
       ...remoteClaim(guest.claimId), claimedAt: "2025-04-04T12:34:56.000Z",
     })], "existing-account-revision");
-    await expect(sync.attachGuestProgress(makeSession(ACCOUNT_A, async () => jsonResponse({ claims: [], nextCursor: null })))).rejects.toThrow("conflicts");
+    await expect(personal.reserveGuestClaimsForAccount(ACCOUNT_A)).rejects.toThrow("conflicts");
     expect((await personal.listPersonalClaims({ kind: "guest" }))[0].claimId).toBe(guest.claimId);
     expect((await personal.listPersonalClaims(accountOwner))[0].claimedAt).toBe("2025-04-04T12:34:56.000Z");
   });

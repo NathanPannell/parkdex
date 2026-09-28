@@ -17,6 +17,8 @@ type State = {
   progressReady: boolean;
   progressError: string | null;
   progressOwnerKey: string | null;
+  claimRevision: number;
+  claimRevisionByPark: Record<string, number>;
   user: LngLat;
   // Metres of GPS uncertainty; null until the first real fix arrives.
   accuracy: number | null;
@@ -45,7 +47,7 @@ type Action =
   | { type: "mute" }
   | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "progressLoading"; ownerKey: string | null }
-  | { type: "progressLoaded"; ownerKey: string; claims: Record<string, Claim> }
+  | { type: "progressLoaded"; ownerKey: string; claims: Record<string, Claim>; claimRevisionAtStart?: number }
   | { type: "progressFailed"; ownerKey: string; message: string }
   | { type: "reset" };
 
@@ -59,6 +61,8 @@ const initial: State = {
   progressReady: false,
   progressError: null,
   progressOwnerKey: null,
+  claimRevision: 0,
+  claimRevisionByPark: {},
   user: DEMO_START,
   accuracy: null,
   locationError: null,
@@ -84,7 +88,7 @@ function load(): State {
   }
 }
 
-function reducer(state: State, action: Action): State {
+export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "go":
       return { ...state, screen: action.screen };
@@ -102,15 +106,19 @@ function reducer(state: State, action: Action): State {
       return { ...state, locationError: action.error };
     case "photo":
       return { ...state, pendingPhoto: action.photo };
-    case "claim":
+    case "claim": {
       if (state.progressOwnerKey !== action.ownerKey) return state;
+      const claimRevision = state.claimRevision + 1;
       return {
         ...state,
         claims: { ...state.claims, [action.id]: { claimId: action.claimId, at: action.at, photo: action.photo, parkSnapshot: action.parkSnapshot, contentReleaseId: action.contentReleaseId } },
+        claimRevision,
+        claimRevisionByPark: { ...state.claimRevisionByPark, [action.id]: claimRevision },
         tripId: null,
         shareClaimId: action.claimId,
         pendingPhoto: null,
       };
+    }
     case "focus":
       return { ...state, focusId: action.id };
     case "mute":
@@ -119,11 +127,15 @@ function reducer(state: State, action: Action): State {
       if (!action.open) return { ...state, feedback: null };
       return { ...state, feedback: { screen: state.screen, parkId: action.parkId ?? state.selectedId ?? state.tripId } };
     case "progressLoading":
-      if (state.progressOwnerKey === action.ownerKey) return { ...state, progressReady: false, progressError: null };
+      // Refreshing the same owner's durable projection happens during normal
+      // backup. Keep the current screen mounted while that read is in flight.
+      if (state.progressOwnerKey === action.ownerKey) return { ...state, progressError: null };
       return {
         ...state,
         claims: {},
         progressOwnerKey: action.ownerKey,
+        claimRevision: 0,
+        claimRevisionByPark: {},
         progressReady: false,
         progressError: null,
         selectedId: null,
@@ -135,14 +147,26 @@ function reducer(state: State, action: Action): State {
       };
     case "progressLoaded":
       if (state.progressOwnerKey !== action.ownerKey) return state;
-      return { ...state, claims: action.claims, progressReady: true, progressError: null };
+      {
+        const claimRevisionAtStart = action.claimRevisionAtStart ?? state.claimRevision;
+        const claims = { ...action.claims };
+        // A refresh may have started just before a new durable claim committed.
+        // Preserve only claims written after that read began. Later fresh reads
+        // can still replace them with a newer visit restored from another device.
+        for (const [parkId, revision] of Object.entries(state.claimRevisionByPark)) {
+          const localClaim = state.claims[parkId];
+          if (revision > claimRevisionAtStart && localClaim) claims[parkId] = localClaim;
+        }
+        return { ...state, claims, progressReady: true, progressError: null };
+      }
     case "progressFailed":
       if (state.progressOwnerKey !== action.ownerKey) return state;
+      if (state.progressReady) return { ...state, progressError: action.message };
       return { ...state, claims: {}, progressReady: false, progressError: action.message };
     case "reset":
       // The demo reset replays onboarding, while a visitor's personal collection
       // remains in its owner partition and must not be cleared by a UI reset.
-      return { ...initial, claims: state.claims, progressReady: state.progressReady, progressError: state.progressError, progressOwnerKey: state.progressOwnerKey };
+      return { ...initial, claims: state.claims, progressReady: state.progressReady, progressError: state.progressError, progressOwnerKey: state.progressOwnerKey, claimRevision: state.claimRevision, claimRevisionByPark: state.claimRevisionByPark };
   }
 }
 
@@ -184,13 +208,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     dispatch({ type: "progressLoading", ownerKey: key });
     let live = true;
+    const claimRevisionAtStart = state.progressOwnerKey === key ? state.claimRevision : 0;
     void loadPersonalProgress(owner).then(({ claims, photos }) => {
-      if (live && currentOwnerKey.current === key) dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos) });
+      if (live && currentOwnerKey.current === key) dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
     }).catch(() => {
       if (live && currentOwnerKey.current === key) dispatch({ type: "progressFailed", ownerKey: key, message: "Saved progress could not be opened. Retry from your account." });
     });
     return () => { live = false; };
-  }, [key, owner, auth.progressRevision]);
+  }, [key, owner, auth.progressRevision, state.claimRevision]);
 
   useEffect(() => {
     if (auth.phase === "starting" || auth.phase === "error") return;

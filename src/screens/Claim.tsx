@@ -165,7 +165,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
         return;
       }
       dispatch({ type: "claim", ownerKey, id: parkSnapshot.id, claimId: saved.claimId, at: saved.claimedAt, photo, parkSnapshot, contentReleaseId });
-      if (authRef.current.phase === "authenticated" && authRef.current.ownerAccountId?.toLowerCase() === ownerKey.slice("account:".length)) void authRef.current.syncBackup();
+      if (authRef.current.phase === "authenticated" && authRef.current.ownerAccountId?.toLowerCase() === ownerKey.slice("account:".length)) void authRef.current.syncBackup({ retryAfterFlight: true });
       celebrate();
     } catch {
       setSaveError(true);
