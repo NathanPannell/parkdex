@@ -375,9 +375,26 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
     state["validation"].append({"check": "delivery-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
     save_json(path, state)
     if state.get("accountsPresent"):
+        run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
+        state["validation"].append({"check": "postgresql-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
         photo_provider().validate_candidate(sys.modules[__name__], load_config(), candidate_root)
         state["validation"].append({"check": "private-photo-worker-bundle", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
         save_json(path, state)
+
+
+def candidate_sql_env() -> dict[str, str]:
+    values = {key: os.environ.get(key, "") for key in ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD")}
+    if (
+        values["PGHOST"] not in ("127.0.0.1", "localhost", "::1")
+        or not re.fullmatch(r"kip_qa_[a-z0-9_]+|kip_accounts_qa", values["PGDATABASE"])
+        or not values["PGUSER"]
+        or not values["PGPASSWORD"]
+        or (values["PGPORT"] and (not values["PGPORT"].isdigit() or not 1 <= int(values["PGPORT"]) <= 65535))
+    ):
+        raise DeliveryError("Account candidate SQL tests require PG* credentials for a disposable loopback kip_qa_ database.")
+    register_secret(values["PGPASSWORD"])
+    return safe_env(extra={key: value for key, value in values.items() if value})
 
 
 def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
@@ -1572,6 +1589,7 @@ def staging_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_pres
     return {
         **{key: bundle[key] for key in config["runtimeSecretBundleKeys"]},
         **{key: bundle[key] for key in config.get("runtimeOptionalKeys", []) if key in bundle},
+        "AUTH_EMAIL_FROM": bundle.get("AUTH_EMAIL_FROM", bundle["EMAIL_FROM"]),
         "EMAIL_MODE": config["stagingEmailMode"],
         "PUBLIC_APP_URL": config["stagingUrl"],
         "ALLOWED_ORIGINS": ",".join([
@@ -1684,9 +1702,111 @@ def dispatch_staging_services(args) -> None:
 
 def provision_staging_photos(args) -> None:
     config = load_config()
-    assert_clean_staging_harness(config)
+    base_sha, _ = assert_clean_staging_harness(config)
     path = state_root() / "persistent" / "private-photos-staging.json"
-    photo_provider().provision_staging(sys.modules[__name__], config, path, apply=args.apply)
+    preview_pr = getattr(args, "from_preview_pr", None)
+    if preview_pr is None:
+        photo_provider().provision_staging(sys.modules[__name__], config, path, apply=args.apply)
+        return
+    if not 1 <= preview_pr <= 999999:
+        raise DeliveryError("Preview PR number is invalid.")
+    with lifecycle_lock(preview_pr):
+        state = verified_photo_source(config, preview_pr, base_sha)
+        # Only the standalone Worker from the verified merge tree is copied. No
+        # candidate scripts, runtime credentials, or local working files run here.
+        source_path = config["privatePhotos"]["sourcePath"]
+        if not re.fullmatch(r"cloudflare/[A-Za-z0-9_-]+\.mjs", source_path):
+            raise DeliveryError("The trusted private-photo source path is invalid.")
+        object_name = f"{state['candidateSha']}:{source_path}"
+        try:
+            blob = subprocess.run(["git", "-C", str(ROOT), "show", object_name], env=safe_env(), capture_output=True, check=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise DeliveryError("Could not read the exact verified Worker blob.") from exc
+        object_hash = hashlib.sha1(b"blob " + str(len(blob)).encode("ascii") + b"\0" + blob).hexdigest()
+        if object_hash != git("rev-parse", object_name):
+            raise DeliveryError("The extracted Worker bytes do not match the verified Git blob.")
+        with tempfile.TemporaryDirectory(prefix="parkdex-kip-photo-provision-") as directory:
+            root = Path(directory)
+            worker = root / source_path
+            worker.parent.mkdir(parents=True)
+            worker.write_bytes(blob)
+            photo_provider().provision_staging(
+                sys.modules[__name__], config, path, apply=args.apply,
+                candidate_root=root, release_sha=state["headSha"],
+            )
+        persistent = json.loads(path.read_text(encoding="utf-8"))
+        persistent["sourcePreview"] = {
+            key: state[key] for key in ("pullRequest", "releaseId", "headSha", "baseSha", "candidateSha")
+        }
+        save_json(path, persistent)
+
+
+def attest_preview_browser(args) -> None:
+    if not 1 <= args.pr <= 999999 or not re.fullmatch(r"dpl_[A-Za-z0-9]+", args.deployment_id):
+        raise DeliveryError("Browser attestation requires a valid PR and full Vercel deployment ID.")
+    config = load_config()
+    base_sha, _ = assert_clean_staging_harness(config)
+    with lifecycle_lock(args.pr):
+        state = verified_photo_source(config, args.pr, base_sha, require_attestation=False)
+        deployment_id = state["resources"]["vercelDeploymentId"]
+        if deployment_id != args.deployment_id:
+            raise DeliveryError("Browser attestation deployment ID does not match the owned preview.")
+        state.update({
+            "browserVerifiedHeadSha": state["headSha"],
+            "browserVerifiedCandidateSha": state["candidateSha"],
+            "browserVerifiedDeploymentId": deployment_id,
+            "browserVerifiedAt": datetime.now(timezone.utc).isoformat(),
+        })
+        save_json(journal_path(args.pr), state)
+    print(f"browser-attested-preview=PR #{args.pr} deployment {deployment_id}")
+
+
+def verified_photo_source(config: dict, pr: int, base_sha: str, *, require_attestation: bool = True) -> dict:
+    try:
+        state = json.loads(journal_path(pr).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DeliveryError("The source preview journal is unavailable.") from exc
+    head_sha, head_ref = validate_pr(gh_pr(pr), pr)
+    if (
+        state.get("schema") != "parkdex-kip.preview/v1"
+        or state.get("repository") != REPOSITORY
+        or state.get("pullRequest") != pr
+        or not UUID_RE.fullmatch(state.get("releaseId", ""))
+        or state.get("status") != "ready-for-browser-verification"
+        or state.get("accountsPresent") is not True
+        or state.get("headSha") != head_sha
+        or state.get("baseSha") != base_sha
+        or not SHA_RE.fullmatch(state.get("candidateSha", ""))
+    ):
+        raise DeliveryError("Staging photo provisioning requires the current owned account preview.")
+    if require_attestation and (
+        state.get("browserVerifiedHeadSha") != head_sha
+        or state.get("browserVerifiedCandidateSha") != state["candidateSha"]
+        or state.get("browserVerifiedDeploymentId") != state.get("resources", {}).get("vercelDeploymentId")
+        or not state.get("browserVerifiedAt")
+    ):
+        raise DeliveryError("Staging photo provisioning requires browser attestation for the current preview deployment.")
+    if fetch_pr_head(head_ref, pr) != head_sha:
+        raise DeliveryError("The source preview PR changed while fetching.")
+    parents = git("rev-list", "--parents", "-n", "1", state["candidateSha"]).split()
+    if parents != [state["candidateSha"], base_sha, head_sha]:
+        raise DeliveryError("The source preview merge candidate has unexpected parents.")
+    tree = git("merge-tree", "--write-tree", base_sha, head_sha).splitlines()[0]
+    if tree != git("rev-parse", f"{state['candidateSha']}^{{tree}}"):
+        raise DeliveryError("The source preview is not the exact current merge candidate.")
+    photo_provider().verify_preview(sys.modules[__name__], config, state)
+    deployment_id = state.get("resources", {}).get("vercelDeploymentId", "")
+    if not re.fullmatch(r"dpl_[A-Za-z0-9]+", deployment_id):
+        raise DeliveryError("The source preview deployment ID is invalid.")
+    deployment = vercel_request(config, f"/v13/deployments/{deployment_id}")
+    verify_deployment(config, state, deployment)
+    if (deployment.get("readyState") or deployment.get("state")) != "READY":
+        raise DeliveryError("The source preview deployment is not ready.")
+    url = state.get("url")
+    if url != deployment_url(deployment):
+        raise DeliveryError("The source preview deployment URL is missing.")
+    verify_release_url(config, url, head_sha, "preview", api_present=True)
+    return state
 
 
 def assign_staging(args) -> None:
@@ -1776,7 +1896,11 @@ def build_parser() -> argparse.ArgumentParser:
     item = sub.add_parser("verify-staging")
     item.add_argument("--sha", required=True)
     item = sub.add_parser("provision-staging-photos")
+    item.add_argument("--from-preview-pr", type=int)
     item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("attest-preview-browser")
+    item.add_argument("--pr", required=True, type=int)
+    item.add_argument("--deployment-id", required=True)
     return parser
 
 
@@ -1806,6 +1930,8 @@ def main() -> int:
             verify_staging(args)
         elif args.command == "provision-staging-photos":
             provision_staging_photos(args)
+        elif args.command == "attest-preview-browser":
+            attest_preview_browser(args)
     except (DeliveryError, OSError, ValueError) as exc:
         print(redact(str(exc)), file=sys.stderr)
         return 1

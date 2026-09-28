@@ -1,6 +1,9 @@
 """Release gates that prevent incomplete or cross-environment account deployments."""
 import importlib.util
+import argparse
+import contextlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -110,6 +113,66 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertIn("-1", args)
         self.assertIn("ON_ERROR_STOP=1", args)
         self.assertNotIn("secret", " ".join(args))
+
+    def test_candidate_sql_credentials_are_local_only_and_provider_secrets_are_removed(self):
+        values = {"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only", "NEON_API_KEY": "persistent-secret"}
+        with patch.dict(os.environ, values, clear=True):
+            env = delivery.candidate_sql_env()
+            self.assertNotIn("NEON_API_KEY", env)
+            self.assertEqual(env["PGDATABASE"], "kip_qa_candidate")
+            self.assertNotIn("qa-only", delivery.redact("failure qa-only"))
+        for overrides in ({"PGHOST": "ep-staging.neon.tech"}, {"PGDATABASE": "parkdex_kip"}, {"PGPORT": "65536"}):
+            with patch.dict(os.environ, {**values, **overrides}, clear=True), self.assertRaises(delivery.DeliveryError):
+                delivery.candidate_sql_env()
+
+    def test_staging_bootstrap_source_requires_current_browser_verified_preview(self):
+        head, base, candidate = "a" * 40, "b" * 40, "c" * 40
+        path = self.root / "preview.json"
+        state = {
+            "schema": "parkdex-kip.preview/v1", "repository": delivery.REPOSITORY,
+            "pullRequest": 12, "releaseId": "a1111111-1111-4111-8111-111111111111",
+            "status": "ready-for-browser-verification", "accountsPresent": True,
+            "headSha": head, "baseSha": base, "candidateSha": candidate,
+            "browserVerifiedHeadSha": head, "browserVerifiedCandidateSha": candidate,
+            "browserVerifiedDeploymentId": "dpl_owned", "browserVerifiedAt": "2026-09-28T00:00:00Z",
+            "resources": {"vercelDeploymentId": "dpl_owned"}, "url": "https://owned.vercel.app",
+        }
+        pr = {"number": 12, "state": "OPEN", "isDraft": True, "isCrossRepository": False,
+              "baseRefName": "staging", "headRefName": "feat/accounts", "headRefOid": head}
+        with patch.object(delivery, "journal_path", return_value=path), patch.object(delivery, "gh_pr", return_value=pr), patch.object(delivery, "fetch_pr_head", return_value=head), patch.object(delivery, "photo_provider") as provider, patch.object(delivery, "git") as git, patch.object(delivery, "vercel_request", return_value={"readyState": "READY", "url": "owned.vercel.app"}), patch.object(delivery, "verify_deployment"), patch.object(delivery, "verify_release_url"):
+            for change in ({"browserVerifiedHeadSha": None}, {"browserVerifiedCandidateSha": "d" * 40},
+                           {"browserVerifiedDeploymentId": "dpl_other"}, {"headSha": "d" * 40},
+                           {"baseSha": "e" * 40}, {"status": "failed-needs-teardown"}):
+                path.write_text(json.dumps({**state, **change}), encoding="utf-8")
+                with self.subTest(change=change), self.assertRaises(delivery.DeliveryError):
+                    delivery.verified_photo_source(self.config, 12, base)
+            provider.assert_not_called()
+            path.write_text(json.dumps(state), encoding="utf-8")
+            git.side_effect = [f"{candidate} {base} {head}", "f" * 40, "f" * 40]
+            self.assertEqual(delivery.verified_photo_source(self.config, 12, base), state)
+            provider.return_value.verify_preview.assert_called_once()
+
+    def test_browser_attestation_binds_current_preview_and_deployment(self):
+        path = self.root / "preview.json"
+        state = {
+            "headSha": "a" * 40, "candidateSha": "c" * 40,
+            "resources": {"vercelDeploymentId": "dpl_owned"},
+        }
+        args = argparse.Namespace(pr=12, deployment_id="dpl_owned")
+        with patch.object(delivery, "load_config", return_value=self.config), \
+             patch.object(delivery, "assert_clean_staging_harness", return_value=("b" * 40, None)), \
+             patch.object(delivery, "lifecycle_lock", return_value=contextlib.nullcontext()), \
+             patch.object(delivery, "journal_path", return_value=path), \
+             patch.object(delivery, "verified_photo_source", return_value=state):
+            delivery.attest_preview_browser(args)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["browserVerifiedHeadSha"], state["headSha"])
+            self.assertEqual(saved["browserVerifiedCandidateSha"], state["candidateSha"])
+            self.assertEqual(saved["browserVerifiedDeploymentId"], args.deployment_id)
+            self.assertTrue(saved["browserVerifiedAt"])
+            with self.assertRaises(delivery.DeliveryError):
+                delivery.attest_preview_browser(argparse.Namespace(pr=12, deployment_id="dpl_wrong"))
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
 
 
 if __name__ == "__main__":
