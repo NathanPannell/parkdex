@@ -562,6 +562,79 @@
   gap: 8px;
 }
 
+.content-sync {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(260px, calc(100vw - 28px));
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.content-sync__icon,
+.content-sync__wheel {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.content-sync__wheel--active svg {
+  animation: content-sync-spin 1.15s linear infinite;
+}
+
+.content-sync--waiting-for-wifi .content-sync__icon {
+  color: var(--pine);
+}
+
+.content-sync--error .content-sync__icon {
+  color: var(--kip-dark);
+}
+
+.content-sync__progress {
+  padding-left: 7px;
+  border-left: 1px solid var(--paper-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.content-sync__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+
+@keyframes content-sync-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-sync__wheel--active svg {
+    animation: none;
+  }
+}
+
 .tool {
   width: 48px;
   height: 48px;

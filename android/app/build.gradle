@@ -13,16 +13,26 @@ def releaseValue = { String key -> System.getenv(key) ?: releaseProps.getPropert
 def releaseKeystore = releaseValue('PARKDEX_RELEASE_KEYSTORE_FILE')
 def releaseVersionCode = releaseValue('PARKDEX_ANDROID_VERSION_CODE')
 def releaseVersionName = releaseValue('PARKDEX_ANDROID_VERSION_NAME')
+def contentApiHost = (System.getenv('PARKDEX_CONTENT_API_HOST') ?: System.getenv('PARKDEX_AUTH_LINK_HOST') ?: '')
+        .trim()
+        .toLowerCase(Locale.ROOT)
+if (contentApiHost && !(contentApiHost ==~ /(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/)) {
+    throw new GradleException("PARKDEX_CONTENT_API_HOST must be a hostname without a scheme, path, port, or credentials")
+}
 
 android {
     namespace = "app.parkdex"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "app.parkdex"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode releaseVersionCode ? Integer.parseInt(releaseVersionCode) : 1
         versionName releaseVersionName ?: "0.0.0-dev"
+        buildConfigField "String", "CONTENT_API_HOST", "\"${contentApiHost}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

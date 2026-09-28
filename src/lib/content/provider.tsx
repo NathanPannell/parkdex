@@ -4,6 +4,7 @@ import { Network } from "@capacitor/network";
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
+import { contentFetch, getContentApiOrigin } from "./transport";
 import type { ContentEnvironment, ContentRuntime, ContentStatus } from "./contracts";
 import { useStore } from "../store";
 import { isUsableGpsAccuracy } from "../geo";
@@ -15,6 +16,7 @@ const EMPTY_STATUS: ContentStatus = {
   totalBytes: 0,
   fullMapReady: false,
   waitingForWifi: false,
+  syncStage: "idle",
   error: null,
 };
 
@@ -23,15 +25,13 @@ const ContentContext = createContext<ContentRuntime | null>(null);
 
 function contentEnvironment(): ContentEnvironment {
   const value = import.meta.env.VITE_CONTENT_ENV;
-  // Preview app deployments intentionally read the shared staging content channel.
+  // Keep the existing data-environment label; the API source ID also binds the cache to its host.
   return value === "main" ? "main" : "staging";
 }
 
 function initialConnectivity() {
   return { connected: typeof navigator === "undefined" ? true : navigator.onLine, wifi: false };
 }
-
-const STAGING_DISCOVERY_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
 
 export function ContentProvider({ children }: { children: ReactNode }) {
   const { state } = useStore();
@@ -43,12 +43,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     const store = createContentStore();
     runtimeRef.current = createContentRuntime({
       store,
-      discoveryUrl: import.meta.env.VITE_CONTENT_API_URL || (Capacitor.isNativePlatform() || import.meta.env.DEV
-        ? STAGING_DISCOVERY_URL
-        : "/api/content/current"),
+      apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
       claimedParkIds: () => Object.keys(claimsRef.current),
       connectivity: initialConnectivity(),
+      fetch: contentFetch,
     });
   }
   const runtime = runtimeRef.current;

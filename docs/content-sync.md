@@ -14,6 +14,8 @@ When the app is open on Wi-Fi, it calls `GET /api/content/snapshot` once. The re
 
 The app downloads missing badge images from their R2 URLs and verifies their bytes. It then saves the catalogue and revision together. Map files download afterward. An unfinished map download does not prevent the park catalogue from becoming available.
 
+The snapshot contains public park content. Account details, visits and private photos continue to use their existing private APIs.
+
 On Android, catalogue records live in SQLite and downloaded files live in the app's private data directory. On the web, the equivalent data is stored in IndexedDB. These are explicit offline stores; routine HTTP cache eviction is not the mechanism used to manage them. Uninstalling or clearing application data removes the saved copy.
 
 ## The next update check
@@ -58,6 +60,14 @@ See [content-authoring.md](content-authoring.md) for the publishing command and 
 
 Saved parks remain usable offline. Content checks and downloads wait for Wi-Fi, including restored badge artwork, private collection photos, map chunks and map fonts. Android binds these downloads to the Wi-Fi network so an interrupted Wi-Fi connection cannot fall back to cellular data. Sign-in and explicit uploads retain their existing behavior.
 
+The app checks at startup, when it returns to the foreground, when Wi-Fi returns, and when the visitor retries. These checks run while the app is open. There is no hourly polling service on the phone or server.
+
 The map header shows a small status indicator while checking, downloading or saving updates. It shows a waiting state when Wi-Fi is unavailable and an error state when an update fails.
 
 Earned claims keep their original park snapshot and immutable badge identity. A later catalogue edit or park retirement does not replace the artwork already earned.
+
+This migration retains previously verified badge files on the device. Safe removal can be added later once the app knows all personal claims have loaded.
+
+## Rolling out the change
+
+An installed Android app needs this new app build once to adopt the Changes API. Subsequent park edits arrive through the API without reinstalling the app. Older builds keep their existing release-channel behavior, so their immutable R2 files remain available.
