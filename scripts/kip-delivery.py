@@ -1106,6 +1106,18 @@ def run_content_sync_sql_qa(config: dict, candidate_root: Path) -> None:
         database_url = candidate_database_url(qa_env)
         bootstrap_content(config, candidate_root, database_url, "preview")
         run_candidate_sql_file(qa_script, qa_env, cwd=candidate_root, transactional=False)
+        queue_test = "scripts/test_authoring_queue.py"
+        if queue_test in feature.get("pythonTestPaths", []):
+            run(
+                [
+                    sys.executable,
+                    str(candidate_root / queue_test),
+                    "AuthoringQueuePostgresTests.test_expired_lease_renewal_cannot_overlap_a_new_claim",
+                ],
+                cwd=candidate_root,
+                env={**qa_env, "AUTHORING_QUEUE_TEST_DATABASE_URL": database_url},
+                label="candidate authoring queue concurrency test",
+            )
     finally:
         run(
             [*admin_psql, "-c", f'DROP DATABASE "{database_name}"'],
