@@ -18,11 +18,13 @@ function installImageBrowser(options: {
   width?: number;
   height?: number;
   decodeFails?: boolean;
+  decodeRejects?: boolean;
   jpeg?: Blob | null;
 } = {}) {
   const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo-test");
   const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   let imageCreations = 0;
+  let decodeCalls = 0;
   class FakeImage {
     naturalWidth = options.width ?? 600;
     naturalHeight = options.height ?? 800;
@@ -32,12 +34,18 @@ function installImageBrowser(options: {
     set src(_value: string) {
       queueMicrotask(() => options.decodeFails ? this.onerror?.() : this.onload?.());
     }
+    decode() {
+      decodeCalls += 1;
+      return options.decodeRejects ? Promise.reject(new Error("decode rejected")) : Promise.resolve();
+    }
   }
   vi.stubGlobal("Image", FakeImage);
   const fills: string[] = [];
   const encodedSizes: Array<[number, number]> = [];
+  const revocationsAtEncode: number[] = [];
   const toBlob = vi.fn(function (this: { width: number; height: number }, callback: (blob: Blob | null) => void, _type: string, _quality: number) {
     encodedSizes.push([this.width, this.height]);
+    revocationsAtEncode.push(revokeUrl.mock.calls.length);
     callback(options.jpeg === undefined ? new Blob([JPEG_BYTES], { type: "image/jpeg" }) : options.jpeg);
   });
   vi.stubGlobal("document", {
@@ -51,7 +59,7 @@ function installImageBrowser(options: {
     })),
   });
   vi.stubGlobal("crypto", webcrypto);
-  return { createUrl, revokeUrl, toBlob, encodedSizes, fills, imageCreations: () => imageCreations };
+  return { createUrl, revokeUrl, toBlob, encodedSizes, revocationsAtEncode, fills, imageCreations: () => imageCreations, decodeCalls: () => decodeCalls };
 }
 
 function oversizedWebpVp8l(height: number) {
@@ -170,5 +178,27 @@ describe("photo backup rendition", () => {
     const unrelated = installImageBrowser({ width: 1_000, height: 2_048 });
     expect(await createPhotoBackupRendition(original, THETIS)).toBeNull();
     expect(unrelated.toBlob).not.toHaveBeenCalled();
+  });
+
+  it("keeps the validated object URL alive through canvas encoding and releases it afterward", async () => {
+    const browser = installImageBrowser();
+    const original = new Blob([sceneSvg(THETIS)], { type: "image/svg+xml" });
+
+    expect(await createPhotoBackupRendition(original, THETIS)).toMatchObject({ contentType: "image/jpeg" });
+    expect(browser.decodeCalls()).toBe(1);
+    expect(browser.toBlob).toHaveBeenCalledTimes(1);
+    expect(browser.revocationsAtEncode).toEqual([0]);
+    expect(browser.revokeUrl).toHaveBeenCalledTimes(1);
+    expect(browser.revokeUrl).toHaveBeenCalledWith("blob:photo-test");
+  });
+
+  it("releases the object URL when image.decode rejects and never starts canvas encoding", async () => {
+    const browser = installImageBrowser({ decodeRejects: true });
+    const original = new Blob([sceneSvg(THETIS)], { type: "image/svg+xml" });
+
+    expect(await createPhotoBackupRendition(original, THETIS)).toBeNull();
+    expect(browser.decodeCalls()).toBe(1);
+    expect(browser.toBlob).not.toHaveBeenCalled();
+    expect(browser.revokeUrl).toHaveBeenCalledTimes(1);
   });
 });

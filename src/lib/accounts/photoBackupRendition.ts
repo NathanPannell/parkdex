@@ -113,22 +113,47 @@ function isSupportedRasterHeader(bytes: Uint8Array, contentType: string): conten
   return contentType === "image/webp" && bytes.length >= 12 && ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP";
 }
 
-function loadImage(blob: Blob): Promise<HTMLImageElement> {
+type LoadedImage = { image: HTMLImageElement; release: () => void };
+
+function loadImage(blob: Blob): Promise<LoadedImage> {
   if (typeof Image !== "function" || !globalThis.URL?.createObjectURL) return Promise.reject(new Error("Browser image conversion is unavailable."));
   const url = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
-    const image = new Image();
+    let image: HTMLImageElement;
+    try { image = new Image(); }
+    catch {
+      URL.revokeObjectURL(url);
+      reject(new Error("The saved photo could not be decoded."));
+      return;
+    }
     let settled = false;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      URL.revokeObjectURL(url);
+    };
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
-      URL.revokeObjectURL(url);
-      if (error) reject(error);
-      else resolve(image);
+      if (error) {
+        release();
+        reject(error);
+      } else resolve({ image, release });
     };
-    image.onload = () => finish();
+    image.onload = () => {
+      void (async () => {
+        try {
+          if (typeof image.decode === "function") await image.decode();
+          finish();
+        } catch {
+          finish(new Error("The saved photo could not be decoded."));
+        }
+      })();
+    };
     image.onerror = () => finish(new Error("The saved photo could not be decoded."));
-    image.src = url;
+    try { image.src = url; }
+    catch { finish(new Error("The saved photo could not be decoded.")); }
   });
 }
 
@@ -201,9 +226,12 @@ export async function createPhotoBackupRendition(original: Blob, parkSnapshot: P
     try {
       const safeSvg = sceneSvg(parkSnapshot).replace("<svg ", '<svg width="600" height="800" ');
       const safeSvgBytes = new TextEncoder().encode(safeSvg);
-      const image = await loadImage(new Blob([safeSvgBytes.slice().buffer as ArrayBuffer], { type: "image/svg+xml;charset=utf-8" }));
-      if (!dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
-      return rendition(await encodeJpeg(image, image.naturalWidth, image.naturalHeight, 960) ?? new Blob());
+      const loaded = await loadImage(new Blob([safeSvgBytes.slice().buffer as ArrayBuffer], { type: "image/svg+xml;charset=utf-8" }));
+      try {
+        const image = loaded.image;
+        if (!dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
+        return rendition(await encodeJpeg(image, image.naturalWidth, image.naturalHeight, 960) ?? new Blob());
+      } finally { loaded.release(); }
     } catch { return null; }
   }
 
@@ -216,11 +244,14 @@ export async function createPhotoBackupRendition(original: Blob, parkSnapshot: P
   const dimensions = rasterDimensions(bytes, contentType);
   if (!dimensions || !dimensionsAreSafe(dimensions.width, dimensions.height)) return null;
   try {
-    const image = await loadImage(original);
-    const sameDimensions = image.naturalWidth === dimensions.width && image.naturalHeight === dimensions.height;
-    const exifOrientedDimensions = image.naturalWidth === dimensions.height && image.naturalHeight === dimensions.width;
-    if ((!sameDimensions && !exifOrientedDimensions) || !dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
-    const converted = await encodeJpeg(image, image.naturalWidth, image.naturalHeight, MAX_OUTPUT_DIMENSION);
-    return converted ? rendition(converted) : null;
+    const loaded = await loadImage(original);
+    try {
+      const image = loaded.image;
+      const sameDimensions = image.naturalWidth === dimensions.width && image.naturalHeight === dimensions.height;
+      const exifOrientedDimensions = image.naturalWidth === dimensions.height && image.naturalHeight === dimensions.width;
+      if ((!sameDimensions && !exifOrientedDimensions) || !dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
+      const converted = await encodeJpeg(image, image.naturalWidth, image.naturalHeight, MAX_OUTPUT_DIMENSION);
+      return converted ? rendition(converted) : null;
+    } finally { loaded.release(); }
   } catch { return null; }
 }
