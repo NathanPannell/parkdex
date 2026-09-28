@@ -11,7 +11,7 @@ import type { Park } from "../lib/parks";
 import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
 import { RARITY } from "../lib/parks";
-import { RARITY_REQUIREMENTS, RARITY_TIERS } from "../lib/progression";
+import { COLLECTION_RANKS, RARITY_REQUIREMENTS, RARITY_TIERS } from "../lib/progression";
 import { formatRarityRequirements } from "../lib/rarityUi";
 
 const SLIDES = [
@@ -36,7 +36,7 @@ const SLIDES = [
   {
     eyebrow: "Step 4 · Unlock",
     title: ["Unlock", "rarer parks."],
-    body: "Claim badges to open the next rarity tier. Your park sheet always shows what you need next.",
+    body: "Claim badges to open rarer parks and grow through four ranks. Your Dex and account show what you need for the next rank.",
     tint: "#E8E2FF",
   },
 ];
@@ -58,7 +58,8 @@ function RarityRoadmap() {
               transition={{ delay: index * 0.08, type: "spring", stiffness: 320, damping: 24 }}
             >
               <span className="ob-roadmap__tier" style={{ background: RARITY[rarity].color, color: RARITY[rarity].ink }}>
-                {RARITY[rarity].label}
+                <span>{RARITY[rarity].label}</span>
+                <strong>{COLLECTION_RANKS[rarity]}</strong>
               </span>
               <span className="ob-roadmap__need">{need || "Open now"}</span>
             </motion.div>

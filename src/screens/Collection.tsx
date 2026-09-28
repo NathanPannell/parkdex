@@ -9,9 +9,10 @@ import { RollingNumber, Tilt } from "../components/Motion";
 import { sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { badgeTotal, CATEGORY_LABEL, RARITY, type Park, type Rarity } from "../lib/parks";
-import { getRarityProgress, RARITY_TIERS, type ProgressionRarity, type RarityCounts, type RarityProgress, type RarityTierProgress } from "../lib/progression";
+import { getCollectionRankProgress, getRarityProgress, RARITY_TIERS, type ProgressionRarity, type RarityCounts, type RarityProgress, type RarityTierProgress } from "../lib/progression";
 import { useStore, type Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
+import { RankProgressSummary } from "../components/RankProgressSummary";
 
 export function Collection() {
   const { state, dispatch } = useStore();
@@ -22,6 +23,14 @@ export function Collection() {
   const claimedIds = Object.keys(state.claims);
   const claimed = claimedIds.map((id) => content?.parkById.get(id) ?? state.claims[id]?.parkSnapshot ?? undefined).filter((park): park is Park => !!park);
   const count = claimedIds.length;
+  const showContentRetry = !status.waitingForWifi && (status.error || status.phase === "offline");
+  const catalogueMessage = status.waitingForWifi
+    ? null
+    : status.phase === "offline"
+      ? "Connect to the internet to download your park guides."
+      : status.error
+        ? "I couldn't download the park guides."
+        : "Loading your park guides…";
   const totalBadges = content ? badgeTotal(content.parks, claimedIds) : undefined;
   const rarityProgress = useMemo(
     () => getRarityProgress(
@@ -30,6 +39,7 @@ export function Collection() {
     ),
     [state.claims, state.progressReady, state.progressOwnerKey, content],
   );
+  const rankProgress = getCollectionRankProgress(rarityProgress);
 
   const next = useMemo(
     () => (content?.parks ?? []).filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
@@ -96,6 +106,7 @@ export function Collection() {
           <strong>Rarity progression</strong>
           <span>{rarityProgress.available ? `${RARITY[rarityProgress.highestUnlocked].label} tier open` : "Checking progress"}</span>
         </div>
+        <RankProgressSummary progress={rankProgress} />
         {rarityProgress.available ? (
           <div className="collection-rarity-progress__requirements">
             {RARITY_TIERS.map((rarity) => (
@@ -118,11 +129,13 @@ export function Collection() {
           </div>
         ) : !content ? (
           <div className="case__empty">
-            <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              {status.error ? "I couldn't download the park guides." : status.waitingForWifi ? "Park guides are waiting for Wi-Fi." : status.phase === "offline" ? "Connect to download your park guides." : "Loading your park guides…"}
-              {status.totalBytes > 0 && ` ${Math.floor((status.downloadedBytes / status.totalBytes) * 100)}%`}
-            </Bubble>
-            {(status.error || status.phase === "offline") && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
+            {catalogueMessage && (
+              <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
+                {catalogueMessage}
+                {status.syncStage === "downloading" && status.totalBytes > 0 && ` ${Math.floor((status.downloadedBytes / status.totalBytes) * 100)}%`}
+              </Bubble>
+            )}
+            {showContentRetry && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
           </div>
         ) : count === 0 && (
           <div className="case__empty">

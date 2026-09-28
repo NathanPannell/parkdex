@@ -1,11 +1,12 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
 import type { ContentEnvironment, ContentRuntime, ContentStatus } from "./contracts";
 import { useStore } from "../store";
+import { useAuth } from "../accounts/AuthProvider";
 import { isUsableGpsAccuracy } from "../geo";
 
 const EMPTY_STATUS: ContentStatus = {
@@ -13,6 +14,7 @@ const EMPTY_STATUS: ContentStatus = {
   snapshot: null,
   downloadedBytes: 0,
   totalBytes: 0,
+  activeDownloads: 0,
   fullMapReady: false,
   waitingForWifi: false,
   syncStage: "idle",
@@ -39,8 +41,17 @@ function initialConnectivity() {
 
 export function ContentProvider({ children }: { children: ReactNode }) {
   const { state } = useStore();
+  const auth = useAuth();
+  const activeOwnerKey = auth.phase === "guest"
+    ? "guest"
+    : (auth.phase === "authenticated" || auth.phase === "offline-account") && auth.ownerAccountId
+      ? `account:${auth.ownerAccountId.toLowerCase()}`
+      : null;
+  const claimsReady = state.progressReady && state.progressOwnerKey === activeOwnerKey;
   const claimsRef = useRef(state.claims);
+  const claimsReadyRef = useRef(claimsReady);
   claimsRef.current = state.claims;
+  claimsReadyRef.current = claimsReady;
 
   const runtimeRef = useRef<ContentRuntime | null>(null);
   if (!runtimeRef.current) {
@@ -49,13 +60,17 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       store,
       apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
-      claimedParkIds: () => Object.keys(claimsRef.current),
+      claimedParkIds: () => claimsReadyRef.current ? Object.keys(claimsRef.current) : [],
       connectivity: initialConnectivity(),
       fetch: contentFetch,
     });
   }
   const runtime = runtimeRef.current;
   const stopTimer = useRef<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    runtime.refreshClaimedParks();
+  }, [runtime, state.progressReady, state.progressOwnerKey, state.claimRevision, auth.phase, auth.ownerAccountId]);
 
   useEffect(() => {
     if (stopTimer.current !== undefined) window.clearTimeout(stopTimer.current);

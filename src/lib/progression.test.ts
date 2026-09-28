@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertParkClaimEligible,
+  getCollectionRankProgress,
   getParkRarityEligibility,
   getRarityProgress,
   ParkAlreadyClaimedError,
@@ -36,6 +37,58 @@ describe("rarity progression", () => {
       uncommon: { common: 4 },
       rare: { common: 10, uncommon: 3 },
       legendary: { common: 20, uncommon: 6, rare: 2 },
+    });
+  });
+
+  it.each([
+    { name: "starts at Scout with four Common needed", counts: {}, rank: "Scout", nextRank: "Explorer", remaining: { common: 4 } },
+    { name: "stays Scout one Common short of Explorer", counts: { common: 3 }, rank: "Scout", nextRank: "Explorer", remaining: { common: 1 } },
+    { name: "reaches Explorer at four Common", counts: { common: 4 }, rank: "Explorer", nextRank: "Adventurer", remaining: { common: 6, uncommon: 3 } },
+    { name: "stays Explorer one Uncommon short of Adventurer", counts: { common: 10, uncommon: 2 }, rank: "Explorer", nextRank: "Adventurer", remaining: { common: 0, uncommon: 1 } },
+    { name: "reaches Adventurer at ten Common and three Uncommon", counts: { common: 10, uncommon: 3 }, rank: "Adventurer", nextRank: "Legend", remaining: { common: 10, uncommon: 3, rare: 2 } },
+    { name: "stays Adventurer one Rare short of Legend", counts: { common: 20, uncommon: 6, rare: 1 }, rank: "Adventurer", nextRank: "Legend", remaining: { common: 0, uncommon: 0, rare: 1 } },
+    { name: "reaches Legend at the Legendary threshold", counts: { common: 20, uncommon: 6, rare: 2 }, rank: "Legend", nextRank: null, remaining: null },
+  ] as const)("$name", ({ counts, rank, nextRank, remaining }) => {
+    const claims = claimsWith(counts);
+    const rankProgress = getCollectionRankProgress(getRarityProgress(claims, catalogueFor(claims)));
+
+    expect(rankProgress.available).toBe(true);
+    expect(rankProgress.rank).toBe(rank);
+    if (nextRank) {
+      expect(rankProgress.next).toMatchObject({ rank: nextRank, remaining });
+    } else {
+      expect(rankProgress.next).toBeNull();
+    }
+  });
+
+  it("does not show Scout while the current owner catalogue is unavailable", () => {
+    const claims = claimsWith({ common: 20, uncommon: 6, rare: 2 });
+
+    expect(getCollectionRankProgress(getRarityProgress(claims))).toEqual({
+      available: false,
+      rank: null,
+      openTiers: [],
+      next: null,
+    });
+  });
+
+  it("does not let duplicate claim rows advance the rank", () => {
+    const claims = claimsWith({ common: 3 });
+    claims.duplicate = { parkSnapshot: { id: "common-0", rarity: "common" } };
+    const rankProgress = getCollectionRankProgress(getRarityProgress(claims, catalogueFor(claims)));
+
+    expect(rankProgress).toMatchObject({ rank: "Scout", next: { rank: "Explorer", remaining: { common: 1 } } });
+  });
+
+  it("recomputes rank from current catalogue rarity after reclassification", () => {
+    const claims = claimsWith({ common: 10, uncommon: 3 });
+    const currentCatalogue = catalogueFor(claims, { "common-0": "uncommon" });
+    const progress = getRarityProgress(claims, currentCatalogue);
+
+    expect(progress.counts).toEqual({ common: 9, uncommon: 4, rare: 0 });
+    expect(getCollectionRankProgress(progress)).toMatchObject({
+      rank: "Explorer",
+      next: { rank: "Adventurer", remaining: { common: 1, uncommon: 0 } },
     });
   });
 

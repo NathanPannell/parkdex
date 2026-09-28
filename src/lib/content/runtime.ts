@@ -43,7 +43,7 @@ import {
 import { ContentDownloadScheduler, type DownloadPolicy } from "./scheduler";
 import { prefetchMapArea } from "./map-downloads";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity, restoreArchivedScene as restoreLegacyArchivedScene } from "./archived-art";
-import { setAllowedMapChunks } from "../offlineTiles";
+import { resetAllowedMapChunks, setAllowedMapChunks } from "../offlineTiles";
 
 const DISCOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const MANUAL_RETRY_COOLDOWN_MS = 15 * 1000;
@@ -55,6 +55,7 @@ const EMPTY_STATUS: ContentStatus = {
   snapshot: null,
   downloadedBytes: 0,
   totalBytes: 0,
+  activeDownloads: 0,
   fullMapReady: false,
   waitingForWifi: false,
   syncStage: "idle",
@@ -173,6 +174,9 @@ class ContentRuntimeController implements ContentRuntime {
   private readonly fileUrlPromises = new Map<string, Promise<string>>();
   private readonly syncManifests = new Map<string, ContentManifest>();
   private readonly mapInventories = new Map<string, ContentMapInventory>();
+  private activeDownloads = 0;
+  private localFileIndexPromise: Promise<void> | null = null;
+  private retainedProjectionRevision = 0;
   private startPromise: Promise<void> | null = null;
   private discoveryPromise: Promise<void> | null = null;
   private initialized = false;
@@ -433,6 +437,21 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.status.snapshot) this.scheduleNearbyPrefetch(false);
   }
 
+  refreshClaimedParks(): void {
+    if (this.stopped) return;
+    const projectionRevision = ++this.retainedProjectionRevision;
+    const snapshot = this.status.snapshot;
+    if (!snapshot) return;
+    const claimed = new Set(this.options.claimedParkIds());
+    const currentIds = new Set(snapshot.parks.map((park) => park.id));
+    const retiredParks = snapshot.retiredParks.filter((park) => claimed.has(park.id));
+    const parkById = new Map([...snapshot.parks, ...retiredParks].map((park) => [park.id, park]));
+    const retainedSceneUrls = new Map([...snapshot.retainedSceneUrls].filter(([parkId]) => claimed.has(parkId) && !currentIds.has(parkId)));
+    this.setStatus({ snapshot: { ...snapshot, parkById, retiredParks, retainedSceneUrls } });
+    const state = this.syncState;
+    if (state) void this.hydrateCachedRetainedParks(state, snapshot.releaseId, projectionRevision).catch(() => {});
+  }
+
   setBusy(busy: boolean): void {
     if (this.stopped) return;
     const wasBusy = this.busy;
@@ -529,7 +548,6 @@ class ContentRuntimeController implements ContentRuntime {
     try {
       await this.options.store.initialize();
       this.initialized = true;
-      await this.refreshLocalFileIndex();
       if (this.hasSyncApi()) {
         await this.startSyncInternal();
         return;
@@ -558,8 +576,13 @@ class ContentRuntimeController implements ContentRuntime {
         if (!verifiedRelease) throw new Error("The hydrated content release record is missing");
         if (!verifiedRelease.healthy) await this.options.store.putRelease({ ...verifiedRelease, healthy: true });
         this.publishSnapshot(activeSnapshot, phaseForActive(this.connectivity().connected), startupError);
+        if (this.canDownloadContent() && this.foreground) {
+          void prefetchMapArea(this, activeSnapshot.releaseId, VICTORIA, "starter", undefined, activeSnapshot).catch(() => {});
+        }
+        this.refreshLocalFileIndexInBackground();
         await this.refreshMapReadiness(activeSnapshot);
       } else {
+        this.refreshLocalFileIndexInBackground();
         this.setStatus({ phase: this.connectivity().connected ? "downloading" : "error", error: this.connectivity().connected ? null : "Connect to the internet to download park content." });
       }
       if (this.connectivity().connected && this.foreground) await this.checkCurrentRelease(true);
@@ -596,7 +619,9 @@ class ContentRuntimeController implements ContentRuntime {
           stored = null;
         } else {
           this.syncState = stored;
-          await this.publishSyncState(stored, phaseForActive(this.connectivity().connected), null);
+          const cachedSnapshot = await this.publishCachedSyncState(stored, phaseForActive(this.connectivity().connected), null);
+          this.refreshLocalFileIndexInBackground();
+          this.hydrateCachedSnapshotInBackground(stored, cachedSnapshot.releaseId);
         }
       }
     } catch (error) {
@@ -604,6 +629,7 @@ class ContentRuntimeController implements ContentRuntime {
       this.syncCacheInvalid = true;
       this.setStatus({ phase: "error", syncStage: "error", error: `Saved park content could not be opened: ${errorText(error)}` });
     }
+    if (!stored) this.refreshLocalFileIndexInBackground();
     if (!stored && !this.syncCacheInvalid) {
       const cursor = await this.options.store.getSyncCursor(this.environment);
       if (cursor) {
@@ -933,6 +959,7 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private async publishSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null): Promise<void> {
+    const retainedProjectionRevision = this.retainedProjectionRevision;
     const validated = validateContentSyncState(state);
     let inventory: ContentMapInventory | null = null;
     if (validated.map) inventory = await this.getVerifiedMapInventory(validated.map.version);
@@ -963,18 +990,26 @@ class ContentRuntimeController implements ContentRuntime {
     }
     const retained = await this.options.store.getRetainedParks();
     const currentIds = new Set(validated.parks.map((park) => park.id));
-    const claimed = new Set(this.options.claimedParkIds());
-    const retiredParks = retained.filter((entry) => claimed.has(entry.park.id) && !currentIds.has(entry.park.id)).map((entry) => entry.park);
-    const parkById = new Map([...validated.parks, ...retiredParks].map((park) => [park.id, park]));
+    const claimedForVerification = new Set(this.options.claimedParkIds());
     const retainedSceneUrls = new Map<string, string>();
     for (const entry of retained) {
-      if (!claimed.has(entry.park.id) || currentIds.has(entry.park.id) || !entry.sceneFile) continue;
+      if (!claimedForVerification.has(entry.park.id) || currentIds.has(entry.park.id) || !entry.sceneFile) continue;
       if (await this.hasVerifiedLocalFile(entry.sceneFile)) retainedSceneUrls.set(entry.park.id, await this.localFileUrl(entry.sceneFile));
     }
     const chunks = mapChunkFiles(manifest);
     const locallyPresent: number[] = [];
     for (const file of chunks) if (await this.hasVerifiedLocalFile(file)) locallyPresent.push(Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]));
     if (locallyPresent.length) setAllowedMapChunks(releaseId, locallyPresent.filter(Number.isSafeInteger));
+    this.syncState = validated;
+    const fullMapReady = chunks.length > 0 && (await Promise.all(chunks.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
+    const claimedAtPublication = new Set(this.options.claimedParkIds());
+    const retiredParks = retained
+      .filter((entry) => claimedAtPublication.has(entry.park.id) && !currentIds.has(entry.park.id))
+      .map((entry) => entry.park);
+    const parkById = new Map([...validated.parks, ...retiredParks].map((park) => [park.id, park]));
+    const publishedRetainedSceneUrls = new Map(
+      [...retainedSceneUrls].filter(([parkId]) => claimedAtPublication.has(parkId) && !currentIds.has(parkId)),
+    );
     const snapshot: ContentSnapshot = {
       releaseId,
       generation: validated.revision,
@@ -986,11 +1021,169 @@ class ContentRuntimeController implements ContentRuntime {
       boundaries: validated.boundaries,
       drive: validated.drive,
       assetUrls,
-      retainedSceneUrls,
+      retainedSceneUrls: publishedRetainedSceneUrls,
+    };
+    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+    if (retainedProjectionRevision !== this.retainedProjectionRevision) this.refreshClaimedParks();
+  }
+
+  private async publishCachedSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null): Promise<ContentSnapshot> {
+    const validated = validateContentSyncState(state);
+    let inventory: ContentMapInventory | null = null;
+    if (validated.map) {
+      try {
+        const saved = await this.options.store.getMapInventory(validated.map.version);
+        if (saved) inventory = parseContentMapInventory(saved, validated.map.version);
+      } catch {
+        // The catalogue remains useful while optional map metadata is repaired.
+      }
+    }
+    if (inventory) this.mapInventories.set(inventory.version, inventory);
+    const legacy = inventory || validated.map ? null : await this.getLegacyMapRelease();
+    const matchingLegacy = legacy && (!validated.map || legacy.manifest.version === validated.map.version) ? legacy : null;
+    const mapVersion = inventory?.version ?? matchingLegacy?.manifest.version ?? (validated.map ? "pending" : "none");
+    const mapFiles = inventory?.files ?? matchingLegacy?.manifest.files.filter((file) => file.path.startsWith("map/")) ?? [];
+    const mapManifest = inventory?.mapManifest ?? matchingLegacy?.manifest.mapManifest ?? { size: 1, chunkBytes: 1, count: 1 };
+    const releaseId = `sync-${this.environment}-${validated.revision}-${mapVersion}`;
+    const manifest: ContentManifest = {
+      version: mapVersion,
+      sourceCommit: "0".repeat(40),
+      cdnOrigin: "https://kip-assets.parkdex.app",
+      files: [...validated.assets, ...mapFiles],
+      parkIds: validated.parks.map((park) => park.id),
+      boundaryIds: validated.boundaries.features.map((feature) => feature.properties.id),
+      mapManifest,
+    };
+    this.syncManifests.set(releaseId, manifest);
+    resetAllowedMapChunks(releaseId);
+    const snapshot: ContentSnapshot = {
+      releaseId,
+      generation: validated.revision,
+      manifest,
+      parks: validated.parks,
+      parkById: new Map(validated.parks.map((park) => [park.id, park])),
+      liveParks: validated.parks.filter((park) => park.scene !== null),
+      retiredParks: [],
+      boundaries: validated.boundaries,
+      drive: validated.drive,
+      assetUrls: new Map(),
+      retainedSceneUrls: new Map(),
     };
     this.syncState = validated;
-    const fullMapReady = chunks.length > 0 && (await Promise.all(chunks.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
-    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+    this.setStatus({
+      snapshot,
+      phase,
+      syncStage: "idle",
+      fullMapReady: false,
+      error,
+      waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi,
+    });
+    return snapshot;
+  }
+
+  private hydrateCachedSnapshotInBackground(state: ContentSyncState, releaseId: string): void {
+    void this.hydrateCachedSceneAssets(state, releaseId).catch(() => {});
+    void this.hydrateCachedRetainedParks(state, releaseId, this.retainedProjectionRevision).catch(() => {});
+    void this.hydrateCachedMapChunks(state, releaseId).catch(() => {});
+  }
+
+  private async hydrateCachedSceneAssets(state: ContentSyncState, releaseId: string): Promise<void> {
+    const filesByPath = new Map(state.assets.map((file) => [file.path, file]));
+    const files = [...new Set(state.parks.flatMap((park) => {
+      if (!park.scene) return [];
+      const file = filesByPath.get(`art/badges/scenes/${park.scene}.webp`);
+      return file ? [file] : [];
+    }))];
+    const results = await this.verifyFilesBounded(files, 6, async (file) => {
+      try {
+        if (!(await this.hasVerifiedLocalFile(file))) {
+          if (!this.canDownloadContent() || !this.foreground) return null;
+          await this.ensureFile(releaseId, file.path, "update");
+          if (!(await this.hasVerifiedLocalFile(file))) return null;
+        }
+        return await this.localFileUrl(file);
+      } catch {
+        return null;
+      }
+    });
+    if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
+    const snapshot = this.status.snapshot;
+    if (!snapshot) return;
+    const assetUrls = new Map(snapshot.assetUrls);
+    for (let index = 0; index < files.length; index += 1) {
+      const url = results[index];
+      if (url) assetUrls.set(files[index]!.path, url);
+    }
+    if (assetUrls.size !== snapshot.assetUrls.size) this.setStatus({ snapshot: { ...snapshot, assetUrls } });
+  }
+
+  private async hydrateCachedRetainedParks(state: ContentSyncState, releaseId: string, projectionRevision: number): Promise<void> {
+    const retained = await this.options.store.getRetainedParks();
+    if (!this.isCurrentCachedSnapshot(state, releaseId) || projectionRevision !== this.retainedProjectionRevision) return;
+    const currentIds = new Set(state.parks.map((park) => park.id));
+    const claimed = new Set(this.options.claimedParkIds());
+    const retiredParks = retained.filter((entry) => claimed.has(entry.park.id) && !currentIds.has(entry.park.id)).map((entry) => entry.park);
+    const retainedFiles = retained
+      .filter((entry) => claimed.has(entry.park.id) && !currentIds.has(entry.park.id) && entry.sceneFile)
+      .map((entry) => ({ parkId: entry.park.id, file: entry.sceneFile! }));
+    const retainedUrls = await this.verifyFilesBounded(retainedFiles, 6, async ({ file }) => {
+      try {
+        return await this.hasVerifiedLocalFile(file) ? await this.localFileUrl(file) : null;
+      } catch {
+        return null;
+      }
+    });
+    if (!this.isCurrentCachedSnapshot(state, releaseId) || projectionRevision !== this.retainedProjectionRevision) return;
+    const snapshot = this.status.snapshot;
+    if (!snapshot) return;
+    const parkById = new Map([...snapshot.parks, ...retiredParks].map((park) => [park.id, park]));
+    const retainedSceneUrls = new Map(snapshot.retainedSceneUrls);
+    for (let index = 0; index < retainedFiles.length; index += 1) {
+      const url = retainedUrls[index];
+      if (url) retainedSceneUrls.set(retainedFiles[index]!.parkId, url);
+    }
+    this.setStatus({ snapshot: { ...snapshot, parkById, retiredParks, retainedSceneUrls } });
+  }
+
+  private async hydrateCachedMapChunks(state: ContentSyncState, releaseId: string): Promise<void> {
+    const manifest = this.syncManifests.get(releaseId);
+    if (!manifest || !manifest.files.some((file) => file.path.startsWith("map/"))) return;
+    const mapFile = manifest.files.find((file) => file.path === "map/island/manifest.json");
+    if (!mapFile || !(await this.hasVerifiedLocalFile(mapFile))) return;
+    parseMapFile(await this.options.store.readFile(mapFile.sha256), manifest.mapManifest);
+    const chunks = mapChunkFiles(manifest);
+    const checked = await this.verifyFilesBounded(chunks, 6, async (file) => {
+      try { return await this.hasVerifiedLocalFile(file) ? file : null; }
+      catch { return null; }
+    });
+    if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
+    const allowed = checked.filter((file): file is ContentFile => file !== null)
+      .map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]))
+      .filter(Number.isSafeInteger);
+    setAllowedMapChunks(releaseId, allowed);
+    this.setStatus({ fullMapReady: chunks.length > 0 && allowed.length === chunks.length });
+  }
+
+  private async verifyFilesBounded<TFile, TResult>(
+    files: readonly TFile[],
+    concurrency: number,
+    verify: (file: TFile) => Promise<TResult>,
+  ): Promise<TResult[]> {
+    const results = new Array<TResult>(files.length);
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(concurrency, files.length) }, async () => {
+      while (nextIndex < files.length) {
+        const index = nextIndex++;
+        results[index] = await verify(files[index]!);
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
+
+  private isCurrentCachedSnapshot(state: ContentSyncState, releaseId: string): boolean {
+    return !this.stopped && this.status.snapshot?.releaseId === releaseId &&
+      this.syncState?.revision === state.revision && this.syncState.sourceId === state.sourceId;
   }
 
   private async getLegacyMapRelease(): Promise<StoredRelease | null> {
@@ -1302,10 +1495,18 @@ class ContentRuntimeController implements ContentRuntime {
     this.incrementInFlight(file.sha256);
     try {
       if (signal.aborted) throw signal.reason ?? new DOMException("Download cancelled", "AbortError");
-      const response = await this.fetcher(file.url, { signal, cache: "force-cache" });
-      if (!response.ok) throw new Error(`Content file ${file.path} returned HTTP ${response.status}`);
-      assertUnredirected(response, file.url, `Content file ${file.path}`);
-      const bytes = await response.arrayBuffer();
+      this.activeDownloads += 1;
+      this.setStatus({ activeDownloads: this.activeDownloads });
+      let bytes: ArrayBuffer;
+      try {
+        const response = await this.fetcher(file.url, { signal, cache: "force-cache" });
+        if (!response.ok) throw new Error(`Content file ${file.path} returned HTTP ${response.status}`);
+        assertUnredirected(response, file.url, `Content file ${file.path}`);
+        bytes = await response.arrayBuffer();
+      } finally {
+        this.activeDownloads = Math.max(0, this.activeDownloads - 1);
+        this.setStatus({ activeDownloads: this.activeDownloads });
+      }
       await assertFileBytes(file, bytes);
       await this.options.store.putFile(file.sha256, bytes);
       this.verifiedHashes.add(hash);
@@ -1324,7 +1525,6 @@ class ContentRuntimeController implements ContentRuntime {
     const payload = await this.readAndValidatePayload(release, manifest);
     const hydrated = { ...release, channel, manifest, payload };
     const snapshot = await this.prepareSnapshot(hydrated, payload);
-    await prefetchMapArea(this, release.id, VICTORIA, "starter", undefined, snapshot);
     await this.options.store.putRelease(hydrated);
     return snapshot;
   }
@@ -1444,7 +1644,16 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private publishSnapshot(snapshot: ContentSnapshot, phase: ContentPhase, error: string | null): void {
-    this.setStatus({ snapshot, phase, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+    const claimed = new Set(this.options.claimedParkIds());
+    const currentIds = new Set(snapshot.parks.map((park) => park.id));
+    const retiredParks = snapshot.retiredParks.filter((park) => claimed.has(park.id));
+    const currentSnapshot = {
+      ...snapshot,
+      retiredParks,
+      parkById: new Map([...snapshot.parks, ...retiredParks].map((park) => [park.id, park])),
+      retainedSceneUrls: new Map([...snapshot.retainedSceneUrls].filter(([parkId]) => claimed.has(parkId) && !currentIds.has(parkId))),
+    };
+    this.setStatus({ snapshot: currentSnapshot, phase, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
   }
 
   private scheduleNearbyPrefetch(force: boolean): void {
@@ -1523,7 +1732,7 @@ class ContentRuntimeController implements ContentRuntime {
 
   private async refreshMapReadinessForManifest(releaseId: string, manifest: ContentManifest): Promise<void> {
     const chunks = mapChunkFiles(manifest);
-    const fullMapReady = chunks.every((file) => this.localFileSizes.get(file.sha256) === file.byte_size || this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)));
+    const fullMapReady = chunks.length > 0 && chunks.every((file) => this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)));
     if (this.status.snapshot?.releaseId === releaseId && this.status.fullMapReady !== fullMapReady) this.setStatus({ fullMapReady });
   }
 
@@ -1546,6 +1755,15 @@ class ContentRuntimeController implements ContentRuntime {
   private async refreshLocalFileIndex(): Promise<void> {
     this.localFileSizes.clear();
     for (const file of await this.options.store.listFiles()) this.localFileSizes.set(file.hash, file.size);
+  }
+
+  private refreshLocalFileIndexInBackground(): void {
+    if (this.localFileIndexPromise) return;
+    const work = this.refreshLocalFileIndex();
+    this.localFileIndexPromise = work;
+    void work.catch(() => {}).finally(() => {
+      if (this.localFileIndexPromise === work) this.localFileIndexPromise = null;
+    });
   }
 
   private trackFile(file: ContentFile): void {

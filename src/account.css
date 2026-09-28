@@ -72,6 +72,10 @@
   font-weight: 800;
 }
 
+.account-rank h2 {
+  font-size: 20px;
+}
+
 .account-card p {
   color: var(--ink-soft);
   font-size: 14px;

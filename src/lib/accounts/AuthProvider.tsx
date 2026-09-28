@@ -451,7 +451,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phase: connected ? "pending" : "offline",
             claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
             photosPending: photos.filter((photo) => photo.backupState === "pending").length,
-            message: connected ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available." : "You're offline. Your saved Dex stays on this device until you reconnect.",
+            message: "Your saved Dex stays on this device.",
             updatedAt: current.backup.updatedAt,
             lastSyncedAt: current.backup.lastSyncedAt,
           } }
@@ -508,15 +508,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const waitingForConnection = afterSyncConnectivity.connected && !afterSyncConnectivity.allowed && (hasPending || result.issues.length > 0);
         const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForConnection ? "pending" : "success";
         const message = offline
-          ? "You're offline. Your saved Dex stays on this device until you reconnect."
+          ? "Your saved Dex stays on this device."
           : waitingForConnection
-            ? "Backup waits for Wi-Fi. Your saved Dex stays on this device until Wi-Fi is available."
+            ? "Your saved Dex stays on this device."
             : result.issues.length
               ? result.issues.some((issue) => issue.operation === "photo-upload")
                 ? "Some saved photos remain on this device because they could not be backed up."
                 : "Some saved progress is waiting for backup. It will sync when a usable connection is available."
               : hasPending
-                ? "Some saved progress is waiting for backup."
+                ? "Your saved Dex stays on this device."
                 : "Your Dex is backed up.";
         setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
           ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt }, progressRevision: current.progressRevision + 1 }

@@ -18,6 +18,14 @@ The snapshot contains public park content. Account details, visits and private p
 
 On Android, catalogue records live in SQLite and downloaded files live in the app's private data directory. On the web, the equivalent data is stored in IndexedDB. These are explicit offline stores; routine HTTP cache eviction is not the mechanism used to manage them. Uninstalling or clearing application data removes the saved copy.
 
+The app includes a compact overview map of Vancouver Island. It appears with the first park pins while detailed map files download, remains available offline, and stays in place as downloaded detail becomes usable.
+
+## Opening an app with saved parks
+
+During the short orange splash, the app opens its saved catalogue and cached map inventory. It validates the catalogue's source and structure before publishing the saved parks to the map. Reading and checking every image or detailed map chunk happens afterward, alongside the normal update check. The opening map does not wait for either operation.
+
+Only hash-verified local image and map files become available for rendering. Until those checks finish, the bundled overview remains visible and badge illustrations can use their placeholders. Account ranks and earned badges separately wait for the current owner's saved claims, so an account change cannot reuse another owner's progress.
+
 ## The next update check
 
 If the phone has revision `42`, it calls:
@@ -64,9 +72,9 @@ The app reports physical Wi-Fi only when the platform confirms it. Browser conne
 
 The app checks at startup, when it returns to the foreground, when the browser comes online or Android Wi-Fi returns, and when the visitor retries. These checks run while the app is open. There is no hourly polling service on the phone or server.
 
-The map header shows a small status indicator while checking, downloading or saving updates. Android shows a Wi-Fi waiting state when another connection is active, and the app shows an error state when an update fails.
+The map header shows `Downloading update` while content file bytes are transferring. Update discovery, local file verification and paused downloads stay quiet. There is no Wi-Fi waiting banner. An app with no saved catalogue can still show its initial download or connection screen; an app with saved parks keeps its map available.
 
-Earned claims keep their original park snapshot and immutable badge identity. A later catalogue edit or park retirement does not replace the artwork already earned.
+Earned claims keep their original park snapshot, photo and content provenance. Their display adopts current catalogue artwork once its verified image is saved locally, including artwork published after a skeleton park was claimed. Until then, the previous image or placeholder remains. Removed parks fall back to their saved snapshot and retained artwork.
 
 This migration retains previously verified badge files on the device. Safe removal can be added later once the app knows all personal claims have loaded.
 

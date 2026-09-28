@@ -4,7 +4,7 @@ import { scenePath, type Park } from "../lib/parks";
 import { resolveEarnedParkDisplay } from "../lib/earnedParkDisplay";
 import type { Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
-import { canDownloadContent, isWaitingForContentWifi, type Connectivity } from "../lib/content/contracts";
+import { canDownloadContent, type Connectivity } from "../lib/content/contracts";
 import { subscribeContentConnectivity } from "../lib/content/transport";
 
 let contentNetworkSnapshot: Connectivity = { connected: false, wifi: false, contentDownloadAllowed: false };
@@ -55,7 +55,6 @@ function useEarnedScene(park: Park, claim: Claim) {
   const status = useContentStatus();
   const connectivity = useSyncExternalStore(subscribeToContentNetwork, getContentNetworkSnapshot, getContentNetworkSnapshot);
   const contentDownloadAvailable = canDownloadContent(connectivity);
-  const waitingForWifi = isWaitingForContentWifi(connectivity);
   const activePark = content?.parkById.get(earnedPark.id);
   const currentSceneHref = activePark?.scene ? content?.assetUrls.get(scenePath(activePark.scene)) : undefined;
   const display = resolveEarnedParkDisplay(park, claim, activePark, !!currentSceneHref);
@@ -93,7 +92,7 @@ function useEarnedScene(park: Park, claim: Claim) {
     return () => { live = false; };
   }, [activeSceneHref, archivedScene, claim.contentReleaseId, earnedPark.id, earnedPark.scene, runtime, sceneKey, status.phase, contentDownloadAvailable]);
 
-  return { displayPark, sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt, adoptedCurrentArt: display.usesCurrentArt };
+  return { displayPark, sceneHref, contentDownloadAvailable, matchesActiveArt, adoptedCurrentArt: display.usesCurrentArt };
 }
 
 export function useEarnedSceneAsset(park: Park, claim: Claim) {
@@ -105,18 +104,16 @@ export function useEarnedSceneHref(park: Park, claim: Claim) {
 }
 
 export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
-  const { displayPark, sceneHref, contentDownloadAvailable, waitingForWifi, matchesActiveArt, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
+  const { displayPark, sceneHref, contentDownloadAvailable, matchesActiveArt, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
   const earnedPark = claim.parkSnapshot ?? park;
   const needsExactScene = displayPark.scene !== null && (!matchesActiveArt || !sceneHref);
   if (needsExactScene && !sceneHref) {
     const size = badgeProps.size ?? 120;
     const message = !claim.contentReleaseId && !adoptedCurrentArt
       ? "Art unavailable"
-      : waitingForWifi
-        ? "Connect to Wi-Fi to restore art"
-        : !contentDownloadAvailable
-          ? "Go online to restore art"
-          : "Restoring badge art";
+      : !contentDownloadAvailable
+        ? "Badge art unavailable"
+        : "Restoring badge art";
     return <div className="earned-badge__restoring" style={{ width: size, height: size }} role="img" aria-label={`${earnedPark.short} badge. ${message}.`}><span>{message}</span></div>;
   }
   return <Badge park={displayPark} sceneHref={sceneHref} {...badgeProps} />;

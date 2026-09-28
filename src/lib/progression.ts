@@ -37,6 +37,28 @@ export type RarityProgress = {
   tiers: Record<ProgressionRarity, RarityTierProgress>;
 };
 
+export const COLLECTION_RANKS = Object.freeze({
+  common: "Scout",
+  uncommon: "Explorer",
+  rare: "Adventurer",
+  legendary: "Legend",
+} as const satisfies Record<ProgressionRarity, string>);
+
+export type CollectionRank = (typeof COLLECTION_RANKS)[ProgressionRarity];
+
+export type CollectionRankProgress = {
+  available: boolean;
+  rank: CollectionRank | null;
+  openTiers: ProgressionRarity[];
+  next: {
+    rank: CollectionRank;
+    rarity: ProgressionRarity;
+    requirements: RarityRequirement;
+    current: RarityRequirement;
+    remaining: RarityRequirement;
+  } | null;
+};
+
 export type ParkRarityEligibility = {
   eligible: boolean;
   reason: "already-earned" | "unlocked" | "locked" | "unsupported-rarity" | "unavailable";
@@ -119,6 +141,29 @@ export function getRarityProgress(
 
   const highestUnlocked = [...RARITY_TIERS].reverse().find((rarity) => tiers[rarity].unlocked) ?? "common";
   return { available, counts, highestUnlocked, tiers };
+}
+
+export function getCollectionRankProgress(progress: RarityProgress): CollectionRankProgress {
+  if (!progress.available) return { available: false, rank: null, openTiers: [], next: null };
+
+  const currentTierIndex = RARITY_TIERS.indexOf(progress.highestUnlocked);
+  const nextRarity = RARITY_TIERS[currentTierIndex + 1];
+  const nextTier = nextRarity ? progress.tiers[nextRarity] : null;
+
+  return {
+    available: true,
+    rank: COLLECTION_RANKS[progress.highestUnlocked],
+    openTiers: RARITY_TIERS.slice(0, currentTierIndex + 1),
+    next: nextRarity && nextTier
+      ? {
+        rank: COLLECTION_RANKS[nextRarity],
+        rarity: nextRarity,
+        requirements: { ...nextTier.requirements },
+        current: { ...nextTier.current },
+        remaining: { ...nextTier.remaining },
+      }
+      : null,
+  };
 }
 
 export function getParkRarityEligibility(

@@ -69,6 +69,7 @@ export function MapScreen() {
   // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
   const lastArrived = useRef<string | null>(null);
   useEffect(() => {
+    if (state.screen === "splash") return;
     if (arrivedId && arrivedId !== lastArrived.current) {
       sfx.arrive();
       buzz([30, 60, 30]);
@@ -78,7 +79,7 @@ export function MapScreen() {
       setRoute(null);
     }
     lastArrived.current = arrivedId;
-  }, [arrivedId]);
+  }, [arrivedId, state.screen]);
 
   // Jump to the visitor the first time a real GPS fix lands.
   const hadFix = useRef(false);
