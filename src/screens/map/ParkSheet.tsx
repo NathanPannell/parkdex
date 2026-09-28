@@ -1,10 +1,15 @@
 import { motion, type PanInfo } from "motion/react";
 import { Badge } from "../../components/Badge";
+import { EarnedBadge } from "../../components/EarnedBadge";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
 import { estimateTrip, finalWalk } from "../../lib/drive";
 import { formatDistance, type LngLat } from "../../lib/geo";
+import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
+import type { ParkRarityEligibility } from "../../lib/progression";
+import { RarityGuide } from "../../components/RarityGuide";
+import { rarityLockMessage } from "../../lib/rarityUi";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -14,6 +19,9 @@ type Props = {
   user: LngLat;
   claim?: Claim;
   inside: boolean;
+  eligibility: ParkRarityEligibility;
+  progressReady: boolean;
+  progressOwnerKey: string | null;
   onClose: () => void;
   onGo: () => void;
   onCheckIn: () => void;
@@ -34,16 +42,20 @@ export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
+export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, progressOwnerKey, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
   const walk = finalWalk(park, content?.drive);
   const live = isLive(park);
+  const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
     if (content) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
+  const badge = claim
+    ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
+    : <Badge park={park} size={176} animated state="preview" />;
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) onClose();
@@ -76,25 +88,21 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           animate={{ scale: 1, rotate: 0, y: 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
         >
-          <Tilt>
-            <Badge park={park} size={176} animated state={claim ? "earned" : "preview"} />
-          </Tilt>
+          {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
+          {isNative ? badge : <Tilt>{badge}</Tilt>}
         </motion.div>
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {claim ? "In your Dex" : live ? "You'll earn this" : "Badge coming soon"}
+          {claim ? "In your Dex" : eligibility.reason === "unavailable" ? "Checking rarity" : locked ? `${rarity.label} · Locked` : live ? "You can claim this" : "Claimable · art coming soon"}
         </motion.div>
       </div>
 
       <motion.div className="park-sheet__body scroll" variants={stagger} initial="hidden" animate="show">
         <motion.div className="park-sheet__pills" variants={item}>
-          {live ? (
-            <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
-              {"★".repeat(rarity.stars)} {rarity.label}
-            </span>
-          ) : (
-            <span className="pill">Badge coming soon</span>
-          )}
+          <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
+            {"★".repeat(rarity.stars)} {rarity.label}
+          </span>
           <span className="pill">{landscapeLabel(park)}</span>
+          {!live && <span className="pill park-sheet__art-pill">Badge art coming soon</span>}
         </motion.div>
         <motion.h2 variants={item} className="park-sheet__name">
           {park.name}
@@ -102,6 +110,7 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
         <motion.p variants={item} className="park-sheet__meta">
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
+        <RarityGuide rarity={park.rarity} eligibility={eligibility} progressReady={progressReady} ownerKey={progressOwnerKey} />
 
         <motion.div variants={item} className="stats">
           <div className="stat">
@@ -143,15 +152,25 @@ export function ParkSheet({ park, user, claim, inside, onClose, onGo, onCheckIn,
           <button className="btn btn--block btn--ink" onClick={onViewCase}>
             <Icon name="case" /> View in your Dex
           </button>
-        ) : !live ? (
-          <>
+        ) : !eligibility.eligible ? (
+          eligibility.reason === "unavailable" || !progressReady ? (
             <button className="btn btn--block btn--paper" disabled>
-              Badge art coming soon
+              Checking saved progress
             </button>
-            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
-              <Icon name="car" />
-            </a>
-          </>
+          ) : inside ? (
+            <button className="btn btn--block btn--paper" disabled aria-label={rarityLockMessage(eligibility)}>
+              {rarityLockMessage(eligibility)}
+            </button>
+          ) : (
+            <>
+              <button className="btn btn--block" onClick={onGo}>
+                <Icon name="route" /> Preview route
+              </button>
+              <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
+                <Icon name="car" />
+              </a>
+            </>
+          )
         ) : inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
             <Icon name="camera" /> Check in &amp; claim

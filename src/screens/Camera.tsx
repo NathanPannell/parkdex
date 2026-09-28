@@ -1,6 +1,6 @@
 import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { ContentGate } from "../components/ContentGate";
@@ -9,6 +9,7 @@ import type { Park } from "../lib/parks";
 import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
 import { useContent } from "../lib/content/provider";
+import { getParkRarityEligibility, getRarityProgress } from "../lib/progression";
 import { sceneSvg } from "../lib/accounts/photoBackupRendition";
 
 // When no camera is available (desktop without webcam, denied permission),
@@ -45,10 +46,21 @@ function rasterizeSyntheticScene(svg: string): Promise<string> {
 }
 
 export function Camera() {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const content = useContent();
   const park = content?.parkById.get(state.tripId ?? "");
-  if (!park) return <ContentGate />;
+  const rarityProgress = useMemo(() => getRarityProgress(state.claims, content?.parkById), [state.claims, content?.parkById]);
+  const eligibility = park ? getParkRarityEligibility(park, rarityProgress, !!state.claims[park.id]) : null;
+  const canClaim = !!park && state.progressReady && !state.claims[park.id] && !!eligibility?.eligible && eligibility.reason === "unlocked";
+
+  useEffect(() => {
+    if (!park || !state.progressReady || canClaim) return;
+    dispatch({ type: "trip", id: null });
+    dispatch({ type: "select", id: park.id });
+    dispatch({ type: "go", screen: "map" });
+  }, [canClaim, dispatch, park, state.progressReady]);
+
+  if (!park || !state.progressReady || !canClaim) return <ContentGate />;
   return <CameraReady park={park} />;
 }
 

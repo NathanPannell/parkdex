@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
-import { useStore } from "../lib/store";
+import { getCollectionRankProgress, getRarityProgress } from "../lib/progression";
+import { progressOwnerKey, useStore } from "../lib/store";
+import { useContent } from "../lib/content/provider";
+import { RankProgressSummary } from "../components/RankProgressSummary";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -127,6 +130,7 @@ function GoogleSignInButton({
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const { state } = useStore();
+  const content = useContent();
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -150,6 +154,29 @@ export function Account({ onBack }: { onBack: () => void }) {
   const signedIn = auth.phase === "authenticated" && !!account;
   const offlineAccount = auth.phase === "offline-account";
   const accountId = account?.id;
+  const accountOwnerKey = auth.ownerAccountId
+    ? progressOwnerKey({ kind: "account", accountId: auth.ownerAccountId })
+    : null;
+  const accountRarityProgress = useMemo(
+    () => getRarityProgress(
+      state.claims,
+      (signedIn || offlineAccount)
+        && state.progressReady
+        && accountOwnerKey
+        && state.progressOwnerKey === accountOwnerKey
+        && content
+        ? content.parkById
+        : undefined,
+    ),
+    [state.claims, state.progressReady, state.progressOwnerKey, accountOwnerKey, content, signedIn, offlineAccount],
+  );
+  const accountRankProgress = getCollectionRankProgress(accountRarityProgress);
+  const accountRankCard = (signedIn || offlineAccount) && deleteStep === "closed" ? (
+    <section className="account-card card account-rank" aria-labelledby="account-rank-title">
+      <h2 id="account-rank-title">Parkdex rank</h2>
+      <RankProgressSummary progress={accountRankProgress} />
+    </section>
+  ) : null;
   const nativeClientId = auth.config?.googleWebClientId ?? null;
   const nativeGoogleAvailable = !!auth.config?.googleNativeEnabled && isAndroidNativeIdentityAvailable() && isValidGoogleWebClientId(nativeClientId);
   const webGoogleAvailable = !!auth.googleWebClientId;
@@ -363,13 +390,16 @@ export function Account({ onBack }: { onBack: () => void }) {
         )}
 
         {offlineAccount && (
-          <section className="account-card card">
-            <span className="eyebrow">Offline</span>
-            <h2>Your saved Dex is here</h2>
-            <p>Parkdex couldn't confirm the account while offline. The previous account's saved Dex remains in its private device partition and is not being backed up.</p>
-            <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
-            {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
-          </section>
+          <>
+            <section className="account-card card">
+              <span className="eyebrow">Offline</span>
+              <h2>Your saved Dex is here</h2>
+              <p>Parkdex couldn't confirm the account while offline. The previous account's saved Dex remains in its private device partition and is not being backed up.</p>
+              <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
+              {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
+            </section>
+            {accountRankCard}
+          </>
         )}
 
         {auth.phase === "error" && (
@@ -436,6 +466,8 @@ export function Account({ onBack }: { onBack: () => void }) {
                 </div>
               )}
             </section>
+
+            {accountRankCard}
 
             <section className="account-card card account-privacy-card">
               <span className="eyebrow">Privacy</span>
@@ -588,8 +620,7 @@ function formatBackupTimestamp(timestamp: number | null) {
 
 function backupStatusText(phase: BackupPhase, message: string | null) {
   if (phase === "syncing") return "Backing up saved progress.";
-  if (phase === "offline") return message ?? "You're offline. Saved progress will sync when you reconnect.";
-  if (phase === "pending") return message ?? "Some saved progress is waiting for backup.";
+  if (phase === "offline" || phase === "pending") return message ?? "Your saved Dex stays on this device.";
   if (phase === "error") return message ?? "Backup couldn’t finish. Your saved data is still on this device.";
   return null;
 }

@@ -136,6 +136,8 @@ export type ContentStatus = {
   snapshot: ContentSnapshot | null;
   downloadedBytes: number;
   totalBytes: number;
+  /** Number of content file transfers currently in progress. */
+  activeDownloads: number;
   fullMapReady: boolean;
   waitingForWifi: boolean;
   syncStage: ContentSyncStage;
@@ -167,6 +169,7 @@ export interface ContentRuntime {
   setForeground(foreground: boolean): void;
   setConnectivity(connectivity: Connectivity): void;
   setLocation(point: MapPoint | null): void;
+  refreshClaimedParks(): void;
   setBusy(busy: boolean): void;
   ensureFile(releaseId: string, path: string, purpose: DownloadPurpose, signal?: AbortSignal): Promise<void>;
   readFile(releaseId: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer>;

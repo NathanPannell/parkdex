@@ -1,0 +1,629 @@
+{
+  "schema": "parkdex.rarity-assignment/v1",
+  "environment": "staging",
+  "counts": {
+    "common": 59,
+    "rare": 10,
+    "uncommon": 30,
+    "legendary": 1
+  },
+  "rationale": "Keep a broad nearby common starter pool, use varied regional destinations for uncommon, reserve rare for distinctive major landscapes or landmarks, and assign the operator-selected Sooke Potholes as the sole legendary.",
+  "unlock_requirements": {
+    "common": {},
+    "uncommon": {
+      "common": 4
+    },
+    "rare": {
+      "common": 10,
+      "uncommon": 3
+    },
+    "legendary": {
+      "common": 20,
+      "uncommon": 6,
+      "rare": 2
+    }
+  },
+  "counting": "Distinct visited park IDs, never repeat visits. Existing earned badges remain accessible.",
+  "parks": [
+    {
+      "rank": 1,
+      "id": "municipal-city-of-victoria-1442",
+      "name": "Beacon Hill Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 2,
+      "id": "provincial-goldstream-park",
+      "name": "Goldstream Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 3,
+      "id": "regional-east-sooke-regional-park",
+      "name": "East Sooke Regional Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 4,
+      "id": "regional-thetis-lake-regional-park",
+      "name": "Thetis Lake Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 5,
+      "id": "regional-sooke-potholes-regional-park",
+      "name": "Sooke Potholes Regional Park",
+      "rarity": "legendary"
+    },
+    {
+      "rank": 6,
+      "id": "municipal-district-of-saanich-244",
+      "name": "PKOLS (Mount Douglas Park)",
+      "rarity": "rare"
+    },
+    {
+      "rank": 7,
+      "id": "regional-elk-beaver-lake-regional-park",
+      "name": "Elk/Beaver Lake Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 8,
+      "id": "municipal-city-of-colwood-1866",
+      "name": "Esquimalt Lagoon Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 9,
+      "id": "regional-witty-s-lagoon-regional-park",
+      "name": "Witty's Lagoon Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 10,
+      "id": "regional-island-view-beach-regional-park",
+      "name": "Island View Beach Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 11,
+      "id": "municipal-district-of-sooke-970",
+      "name": "Whiffin Spit Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 12,
+      "id": "provincial-gowlland-tod-park",
+      "name": "Gowlland Tod Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 13,
+      "id": "municipal-district-of-oak-bay-916",
+      "name": "Uplands Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 14,
+      "id": "municipal-district-of-saanich-220",
+      "name": "Cadboro Gyro Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 15,
+      "id": "provincial-au-welnew-john-dean-park",
+      "name": "Ƚáuˌwelṉew̱ / John Dean Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 16,
+      "id": "regional-mount-work-regional-park",
+      "name": "Mount Work Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 17,
+      "id": "municipal-district-of-oak-bay-911",
+      "name": "Willows Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 18,
+      "id": "regional-matheson-lake-regional-park",
+      "name": "Matheson Lake Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 19,
+      "id": "municipal-district-of-saanich-52",
+      "name": "Mount Tolmie Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 20,
+      "id": "municipal-township-of-esquimalt-1476",
+      "name": "Saxe Point Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 21,
+      "id": "municipal-township-of-esquimalt-767",
+      "name": "Esquimalt Gorge Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 22,
+      "id": "municipal-city-of-victoria-834",
+      "name": "Clover Point Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 23,
+      "id": "regional-francis-king-regional-park",
+      "name": "Francis/King Regional Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 24,
+      "id": "municipal-city-of-victoria-825",
+      "name": "Fisherman's Wharf Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 25,
+      "id": "municipal-township-of-esquimalt-1477",
+      "name": "Macaulay Point Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 26,
+      "id": "municipal-city-of-langford-658",
+      "name": "Langford Lake Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 27,
+      "id": "regional-sooke-hills-wilderness-regional-park",
+      "name": "Sooke Hills Wilderness Regional Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 28,
+      "id": "provincial-spectacle-lake-park",
+      "name": "Spectacle Lake Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 29,
+      "id": "regional-mount-wells-regional-park",
+      "name": "Mount Wells Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 30,
+      "id": "municipal-district-of-saanich-280",
+      "name": "Playfair Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 31,
+      "id": "municipal-district-of-sooke-946",
+      "name": "Ed Macgregor Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 32,
+      "id": "regional-gonzales-hill-regional-park",
+      "name": "Gonzales Hill Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 33,
+      "id": "regional-mill-hill-regional-park",
+      "name": "Mill Hill Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 34,
+      "id": "municipal-city-of-victoria-799",
+      "name": "Banfield Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 35,
+      "id": "municipal-city-of-langford-622",
+      "name": "Jordie Lunn Bike Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 36,
+      "id": "provincial-bamberton-park",
+      "name": "Bamberton Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 37,
+      "id": "municipal-district-of-saanich-1920",
+      "name": "Cuthbert Holmes Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 38,
+      "id": "regional-albert-head-lagoon-regional-park",
+      "name": "Albert Head Lagoon Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 39,
+      "id": "municipal-city-of-langford-628",
+      "name": "Glen Lake Beach Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 40,
+      "id": "regional-sea-to-sea-regional-park",
+      "name": "Sea to Sea Regional Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 41,
+      "id": "municipal-city-of-victoria-871",
+      "name": "Topaz Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 42,
+      "id": "regional-roche-cove-regional-park",
+      "name": "Roche Cove Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 43,
+      "id": "municipal-district-of-saanich-54",
+      "name": "Cedar Hill Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 44,
+      "id": "regional-coles-bay-regional-park",
+      "name": "Coles Bay Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 45,
+      "id": "municipal-city-of-colwood-1463",
+      "name": "Havenwood Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 46,
+      "id": "municipal-city-of-colwood-1299",
+      "name": "Lookout Lake Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 47,
+      "id": "regional-bear-hill-regional-park",
+      "name": "Bear Hill Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 48,
+      "id": "regional-lone-tree-hill-regional-park",
+      "name": "Lone Tree Hill Regional Park",
+      "rarity": "rare"
+    },
+    {
+      "rank": 49,
+      "id": "regional-horth-hill-regional-park",
+      "name": "Horth Hill Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 50,
+      "id": "regional-devonian-regional-park",
+      "name": "Devonian Regional Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 51,
+      "id": "municipal-district-of-north-saanich-1076",
+      "name": "Dominion Brook Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 52,
+      "id": "municipal-district-of-saanich-238",
+      "name": "Glencoe Cove - Kwatsech Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 53,
+      "id": "municipal-district-of-saanich-149",
+      "name": "Cordova Bay Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 54,
+      "id": "municipal-district-of-saanich-212",
+      "name": "Whitehead Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 55,
+      "id": "municipal-district-of-saanich-232",
+      "name": "Gorge Waterway Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 56,
+      "id": "municipal-city-of-victoria-872",
+      "name": "Summit Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 57,
+      "id": "municipal-district-of-saanich-543",
+      "name": "Outerbridge Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 58,
+      "id": "municipal-district-of-saanich-27",
+      "name": "Quick's Bottom Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 59,
+      "id": "municipal-district-of-central-saanich-377",
+      "name": "Oak Haven Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 60,
+      "id": "municipal-district-of-oak-bay-900",
+      "name": "Anderson Hill Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 61,
+      "id": "municipal-city-of-colwood-709",
+      "name": "Latoria Creek Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 62,
+      "id": "municipal-district-of-sooke-973",
+      "name": "Sooke Bluffs Park",
+      "rarity": "uncommon"
+    },
+    {
+      "rank": 63,
+      "id": "municipal-district-of-north-saanich-1437",
+      "name": "Nymph Point Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 64,
+      "id": "municipal-district-of-north-saanich-1080",
+      "name": "Patricia Bay Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 65,
+      "id": "municipal-town-of-sidney-1103",
+      "name": "Seaport Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 66,
+      "id": "municipal-town-of-sidney-1118",
+      "name": "Resthaven Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 67,
+      "id": "municipal-town-of-sidney-1097",
+      "name": "Iroquois Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 68,
+      "id": "municipal-district-of-north-saanich-1435",
+      "name": "Lillian Hoffar Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 69,
+      "id": "municipal-district-of-north-saanich-1850",
+      "name": "Bazan Bay Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 70,
+      "id": "municipal-district-of-north-saanich-town-of-sidney-1078",
+      "name": "Reay Creek Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 71,
+      "id": "municipal-district-of-central-saanich-15",
+      "name": "Butterfield Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 72,
+      "id": "municipal-district-of-central-saanich-1073",
+      "name": "HEL,HILEȻ",
+      "rarity": "common"
+    },
+    {
+      "rank": 73,
+      "id": "municipal-district-of-central-saanich-186",
+      "name": "Verdier Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 74,
+      "id": "municipal-town-of-view-royal-1387",
+      "name": "Welland Legacy Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 75,
+      "id": "municipal-town-of-view-royal-461",
+      "name": "View Royal Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 76,
+      "id": "municipal-town-of-view-royal-1500",
+      "name": "Helmcken Centennial Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 77,
+      "id": "municipal-town-of-view-royal-537",
+      "name": "Knockan Hill Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 78,
+      "id": "municipal-town-of-view-royal-1904",
+      "name": "Portage Inlet Linear Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 79,
+      "id": "municipal-township-of-esquimalt-777",
+      "name": "Memorial Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 80,
+      "id": "municipal-township-of-esquimalt-771",
+      "name": "Propeller Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 81,
+      "id": "municipal-city-of-langford-692",
+      "name": "Veteran's Memorial Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 82,
+      "id": "municipal-city-of-langford-669",
+      "name": "Lake Ida Anne",
+      "rarity": "common"
+    },
+    {
+      "rank": 83,
+      "id": "municipal-city-of-langford-642",
+      "name": "Willing Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 84,
+      "id": "municipal-district-of-metchosin-562",
+      "name": "Buckbrush Swamp Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 85,
+      "id": "municipal-district-of-metchosin-1834",
+      "name": "Eleanor Mann Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 86,
+      "id": "municipal-district-of-metchosin-560",
+      "name": "Carlton Cosh Nature Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 87,
+      "id": "community-juan-de-fuca-electoral-area-1842",
+      "name": "Otter Point Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 88,
+      "id": "municipal-district-of-saanich-343",
+      "name": "Beckwith Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 89,
+      "id": "municipal-district-of-saanich-159",
+      "name": "Rutledge Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 90,
+      "id": "municipal-district-of-oak-bay-913",
+      "name": "Carnarvon Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 91,
+      "id": "municipal-district-of-oak-bay-906",
+      "name": "Windsor Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 92,
+      "id": "municipal-district-of-oak-bay-846",
+      "name": "Trafalgar Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 93,
+      "id": "municipal-district-of-oak-bay-929",
+      "name": "Henderson Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 94,
+      "id": "municipal-district-of-saanich-281",
+      "name": "Arbutus Cove Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 95,
+      "id": "municipal-city-of-victoria-801",
+      "name": "Victoria West Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 96,
+      "id": "municipal-city-of-victoria-938",
+      "name": "Cecelia Ravine Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 97,
+      "id": "municipal-city-of-victoria-893",
+      "name": "Stadacona Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 98,
+      "id": "municipal-city-of-colwood-1863",
+      "name": "Herm Williams Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 99,
+      "id": "municipal-city-of-colwood-705",
+      "name": "Outlook Park",
+      "rarity": "common"
+    },
+    {
+      "rank": 100,
+      "id": "municipal-city-of-victoria-836",
+      "name": "Moss Rocks Park",
+      "rarity": "common"
+    }
+  ]
+}

@@ -151,12 +151,22 @@ function Screens() {
     [],
   );
 
-  const showMap = onboarded && screen !== "splash" && screen !== "onboarding" && screen !== "account";
+  // Mount the map behind the splash so saved pins and tiles can warm while the
+  // opening animation plays. Keep the same map instance when the splash leaves.
+  const showMap = onboarded && screen !== "onboarding" && screen !== "account";
   const showNav = showMap && (screen === "map" || screen === "collection");
 
   return (
     <>
-      {showMap && <MapScreen />}
+      {showMap && (
+        <div
+          style={{ position: "absolute", inset: 0 }}
+          inert={screen === "splash"}
+          aria-hidden={screen === "splash"}
+        >
+          <MapScreen />
+        </div>
+      )}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
       <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "collection" : "onboarding" })} />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>

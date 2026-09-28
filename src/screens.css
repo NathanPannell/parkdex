@@ -126,6 +126,69 @@
   max-width: 330px;
 }
 
+.ob-roadmap {
+  width: min(320px, calc(100vw - 48px));
+  padding: 14px;
+  background: #fff9ef;
+  border: 2.5px solid var(--ink);
+  border-radius: 22px;
+  box-shadow: 0 6px 0 var(--ink);
+}
+
+.ob-roadmap__heading {
+  margin-bottom: 10px;
+  font-family: var(--display);
+  font-size: 17px;
+  line-height: 1.1;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ob-roadmap__rows {
+  display: grid;
+  gap: 7px;
+}
+
+.ob-roadmap__row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-roadmap__tier {
+  display: inline-grid;
+  justify-content: center;
+  justify-items: center;
+  gap: 2px;
+  padding: 5px 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.ob-roadmap__tier strong {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.ob-roadmap__need {
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.ob-roadmap__foot {
+  margin-top: 9px;
+  color: var(--ink-soft);
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
 .onboarding__foot {
   display: flex;
   justify-content: space-between;
@@ -415,6 +478,26 @@
   border-radius: 50%;
 }
 
+.pm__lock {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--sun);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 1px 0 rgba(20, 35, 28, 0.25);
+}
+
+.pm--locked .pm__dot {
+  background: #d6aa33;
+  box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 3px var(--paper);
+}
+
 .pm__dot {
   display: block;
   width: 14px;
@@ -595,14 +678,6 @@
 
 .content-sync__wheel--active svg {
   animation: content-sync-spin 1.15s linear infinite;
-}
-
-.content-sync--waiting-for-wifi .content-sync__icon {
-  color: var(--pine);
-}
-
-.content-sync--error .content-sync__icon {
-  color: var(--kip-dark);
 }
 
 .content-sync__progress {
@@ -868,8 +943,130 @@
 
 .park-sheet__pills {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.park-sheet__art-pill {
+  background: #f2ead9;
+  color: var(--ink-2);
+}
+
+.rarity-guide {
+  margin: 10px 0 16px;
+  padding: 12px;
+  background: #fffaf0;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 3px 0 rgba(20, 35, 28, 0.18);
+}
+
+.rarity-guide--locked {
+  background: #fff3d4;
+}
+
+.rarity-guide__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rarity-guide__head .eyebrow {
+  font-size: 11px;
+}
+
+.rarity-guide__status {
+  padding: 3px 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.rarity-guide__status--locked {
+  color: #775000;
+  background: #ffe49b;
+}
+
+.rarity-guide__status--unlocked {
+  color: #1c5b43;
+  background: #ddefe3;
+}
+
+.rarity-guide__status--earned {
+  color: #0e6e86;
+  background: #cdefff;
+}
+
+.rarity-guide__status--loading {
+  color: var(--ink-soft);
+  background: var(--paper-2);
+}
+
+.rarity-guide__requirements {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rarity-guide__requirements li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.rarity-guide__requirements li span {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.rarity-guide__requirements li strong {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rarity-guide__requirements li em {
+  color: #775000;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.rarity-guide__requirements li em:last-child {
+  color: var(--moss);
+}
+
+.rarity-guide__loading,
+.rarity-guide__explanation {
+  margin: 9px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.rarity-guide__toggle {
+  margin-top: 9px;
+  padding: 4px 0;
+  color: var(--moss);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rarity-guide__toggle:focus-visible {
+  outline: 3px solid var(--kip);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .park-sheet__name {
@@ -1301,6 +1498,14 @@
 
 .fab__hint[data-reason="soon"]::before {
   content: "This park's badge is coming soon";
+}
+
+.fab__hint[data-reason="locked"]::before {
+  content: "This rarity is locked. Open the park for requirements";
+}
+
+.fab__hint[data-reason="progress"]::before {
+  content: "Checking your saved rarity progress";
 }
 
 .fab__hint[data-reason="claimed"]::before {
@@ -2147,6 +2352,12 @@
   padding: 0 18px;
 }
 
+.col-rarity-label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 11px;
+}
+
 .col-rarity__chip {
   flex: none;
   padding: 5px 10px;
@@ -2158,6 +2369,164 @@
 
 .col-rarity__chip.is-empty {
   opacity: 0.45;
+}
+
+.collection-rarity-progress {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  background: #fff9ef;
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 4px 0 rgba(20, 35, 28, 0.2);
+}
+
+.collection-rarity-progress__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+}
+
+.collection-rarity-progress__head strong {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.collection-rarity-progress__head span {
+  padding: 4px 8px;
+  color: var(--moss);
+  background: #ddefe3;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.1;
+  font-weight: 800;
+  text-align: center;
+}
+
+.collection-rarity-progress__requirements {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.collection-rarity-progress__row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(20, 35, 28, 0.12);
+}
+
+.collection-rarity-progress__row > span:first-child {
+  display: inline-flex;
+  justify-content: center;
+  padding: 4px 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.collection-rarity-progress__row > span:nth-child(2) {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.collection-rarity-progress__row strong {
+  color: #775000;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.collection-rarity-progress__row[data-state="unlocked"] strong {
+  color: var(--moss);
+}
+
+.collection-rarity-progress > p {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.collection-rarity-progress .rank-progress-summary {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 35, 28, 0.12);
+}
+
+.rank-progress-summary {
+  display: grid;
+  grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.rank-progress-summary__current,
+.rank-progress-summary__next {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rank-progress-summary__current > span,
+.rank-progress-summary__next > span {
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.15;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+}
+
+.rank-progress-summary__current > strong {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 5px 9px;
+  color: var(--moss);
+  background: #ddefe3;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.rank-progress-summary__next > strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.rank-progress-summary__next > p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.rank-progress-summary__open {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.account-rank .rank-progress-summary {
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 35, 28, 0.12);
 }
 
 .case {

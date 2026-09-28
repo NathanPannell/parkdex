@@ -88,19 +88,19 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
   const { state, dispatch } = useStore();
   const toast = useToast();
   const content = useContent();
-  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
+  const totalBadges = badgeTotal(content?.parks ?? [], Object.keys(state.claims));
   const [look, setLook] = useState<Look>("polaroid");
   const card = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
   const [sceneHref, setSceneHref] = useState<string>();
-  const { sceneHref: earnedSceneHref, contentDownloadAvailable, waitingForWifi } = useEarnedSceneAsset(park, claim);
-  const sceneAsset = park.scene ? earnedSceneHref : undefined;
+  const { displayPark, sceneHref: earnedSceneHref, contentDownloadAvailable, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
+  const sceneAsset = displayPark.scene ? earnedSceneHref : undefined;
   const [sceneState, setSceneState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   useEffect(() => {
     let live = true;
     setSceneHref(undefined);
-    if (!park.scene) {
+    if (!displayPark.scene) {
       setSceneState("ready");
       return () => { live = false; };
     }
@@ -124,18 +124,20 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
       })
       .catch(() => { if (live) setSceneState("error"); });
     return () => { live = false; };
-  }, [park.id, park.scene, sceneAsset]);
+  }, [displayPark.id, displayPark.scene, sceneAsset]);
 
-  const sceneMessage = !claim.contentReleaseId
-    ? "Archived badge art is not available for this claim."
-    : waitingForWifi
-      ? "Connect to Wi-Fi to restore the original badge art."
+  const sceneMessage = adoptedCurrentArt
+    ? sceneState === "error"
+      ? "Newly published badge art could not be loaded. Try again shortly."
+      : "Loading newly published badge art…"
+    : !claim.contentReleaseId
+      ? "Archived badge art is not available for this claim."
       : !contentDownloadAvailable
-        ? "Go online to restore the original badge art."
+        ? "Original badge art is unavailable right now."
         : sceneState === "error"
           ? "Badge art could not be loaded. Try again shortly."
           : "Restoring the original badge art…";
-  const sceneReady = !park.scene || sceneState === "ready";
+  const sceneReady = !displayPark.scene || sceneState === "ready";
 
   const image = async () => {
     const blob = await toBlob(card.current!, { pixelRatio: 3, cacheBust: true });
@@ -192,7 +194,7 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
 
       <LayoutGroup>
         <motion.div className="share__preview" initial={{ scale: 0.8, rotate: 6, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.15 }}>
-          <StoryCard park={park} claim={claim} number={number} look={look} totalBadges={totalBadges} cardRef={card} sceneHref={sceneHref} sceneMessage={sceneMessage} />
+          <StoryCard park={displayPark} claim={claim} number={number} look={look} totalBadges={totalBadges} cardRef={card} sceneHref={sceneHref} sceneMessage={sceneMessage} />
         </motion.div>
       </LayoutGroup>
 

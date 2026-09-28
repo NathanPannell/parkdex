@@ -5,7 +5,9 @@ import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
 import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
-import type { Park } from "../../lib/parks";
+import { RARITY, type Park } from "../../lib/parks";
+import type { ParkRarityEligibility } from "../../lib/progression";
+import { rarityLockMessage } from "../../lib/rarityUi";
 import { FIELD } from "../../lib/native";
 import { directionsUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -78,7 +80,15 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
   );
 }
 
-export function ArrivalCard({ park, onCheckIn, onDismiss }: { park: Park; onCheckIn: () => void; onDismiss: () => void }) {
+export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onShowRequirements, onDismiss }: {
+  park: Park;
+  eligibility: ParkRarityEligibility;
+  artComingSoon: boolean;
+  onCheckIn: () => void;
+  onShowRequirements: () => void;
+  onDismiss: () => void;
+}) {
+  const canCheckIn = eligibility.eligible && eligibility.reason !== "already-earned";
   return (
     <motion.div
       className="arrival"
@@ -105,11 +115,23 @@ export function ArrivalCard({ park, onCheckIn, onDismiss }: { park: Park; onChec
           <br />
           {park.short}
         </h2>
-        <p>Snap a photo of where you're standing to claim your badge.</p>
+        <p>
+          {canCheckIn
+            ? `Snap a photo of where you're standing to claim your badge${artComingSoon ? ". Badge art is coming soon, but your visit counts now" : ""}.`
+            : eligibility.reason === "unavailable"
+              ? "Checking your saved rarity progress before check-in."
+              : `${RARITY[park.rarity].label} parks are locked. ${rarityLockMessage(eligibility)}.`}
+        </p>
         <AnimatePresence>
-          <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-            <Icon name="camera" /> Check in &amp; snap
-          </motion.button>
+          {canCheckIn ? (
+            <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="camera" /> Check in &amp; snap
+            </motion.button>
+          ) : (
+            <motion.button className="btn btn--block btn--paper" onClick={onShowRequirements} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="book" /> See rarity requirements
+            </motion.button>
+          )}
         </AnimatePresence>
         <button className="arrival__later" onClick={onDismiss}>
           Look around first

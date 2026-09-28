@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { reducer } from "./store";
-import type { Park } from "./parks";
+import { getCollectionRankProgress, getRarityProgress } from "./progression";
+import { reducer, type Claim } from "./store";
+import type { Park, Rarity } from "./parks";
 
 type StoreState = Parameters<typeof reducer>[0];
 
@@ -41,7 +42,40 @@ const readyState: StoreState = {
   feedback: null,
 };
 
+function restoredClaim(id: string, rarity: Rarity): Claim {
+  const parkSnapshot = { ...park, id, name: id, short: id, rarity };
+  return {
+    claimId: `claim-${id}`,
+    at: "2026-09-28T12:00:00.000Z",
+    photo: "",
+    parkSnapshot,
+    contentReleaseId: "release-1",
+  };
+}
+
 describe("claim progress hydration", () => {
+  it("derives the same rank after owner claims are restored", () => {
+    const restoredClaims: Record<string, Claim> = {};
+    const catalogue: Pick<Park, "id" | "rarity">[] = [];
+    for (const [rarity, count] of [["common", 10], ["uncommon", 3]] as const) {
+      for (let index = 0; index < count; index += 1) {
+        const id = `${rarity}-${index}`;
+        restoredClaims[id] = restoredClaim(id, rarity);
+        catalogue.push({ id, rarity });
+      }
+    }
+
+    const restored = reducer({ ...readyState, claims: {}, progressReady: false }, {
+      type: "progressLoaded",
+      ownerKey: "guest",
+      claims: restoredClaims,
+    });
+    const rank = getCollectionRankProgress(getRarityProgress(restored.claims, catalogue));
+
+    expect(restored.progressReady).toBe(true);
+    expect(rank).toMatchObject({ available: true, rank: "Adventurer" });
+  });
+
   it("keeps a ready owner's claim screen mounted during background refresh", () => {
     const next = reducer(readyState, { type: "progressLoading", ownerKey: "guest" });
 

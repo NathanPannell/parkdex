@@ -8,6 +8,7 @@ import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
+import { assertParkClaimEligible, ParkAlreadyClaimedError, ParkClaimEligibilityError, type ProgressionRarity } from "../lib/progression";
 import { progressOwnerKey, useStore } from "../lib/store";
 import { useContent, useContentRuntime } from "../lib/content/provider";
 import { useAuth } from "../lib/accounts/AuthProvider";
@@ -57,6 +58,8 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
   const { state, dispatch } = useStore();
   const auth = useAuth();
   const content = useContent();
+  const contentRef = useRef(content);
+  contentRef.current = content;
   const [photo] = useState(() => state.pendingPhoto ?? "");
   const [owner] = useState(() => auth.ownerAccountId ? { kind: "account" as const, accountId: auth.ownerAccountId } : { kind: "guest" as const });
   const ownerKey = progressOwnerKey(owner)!;
@@ -73,14 +76,30 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
         : null;
     return currentOwnerKey === ownerKey && stateRef.current.progressOwnerKey === ownerKey && stateRef.current.progressReady;
   };
+  const currentClaimBlockMessage = () => {
+    if (!claimOwnerIsCurrent()) return "Your saved Dex is still loading. Return to the map and try again.";
+    const currentClaims = stateRef.current.claims;
+    if (currentClaims[park.id]) return "This badge is already in your Dex. Your photo is still here. Return to the park list.";
+    const currentContent = contentRef.current;
+    if (!currentContent) return "The park catalogue is still loading. Return to the map and try again.";
+    const currentPark = currentContent.parkById.get(park.id);
+    if (!currentPark) return "This park is no longer in the current catalogue. Your photo is still here.";
+    try {
+      assertParkClaimEligible(currentPark, currentClaims, currentContent.parkById);
+      return null;
+    } catch (error) {
+      return describeClaimEligibilityFailure(error);
+    }
+  };
   const [firstClaim] = useState(() => !state.claims[park.id]);
-  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
+  const totalBadges = badgeTotal(content?.parks ?? [], Object.keys(state.claims));
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
   const [holding, setHolding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [eligibilityMessage, setEligibilityMessage] = useState<string | null>(null);
   // Frozen at mount: the claim itself bumps the live count mid-ceremony.
   const [before] = useState(() => Object.keys(state.claims).length);
   const [count, setCount] = useState(before);
@@ -105,12 +124,16 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
 
   const start = (e: React.PointerEvent) => {
     if (phase !== "charge" || savingRef.current) return;
-    if (park.scene !== null && !contentReleaseId) {
+    const blockMessage = currentClaimBlockMessage();
+    if (blockMessage || (park.scene !== null && !contentReleaseId)) {
+      setEligibilityMessage(blockMessage);
       setSaveError(true);
       progress.set(0);
       lastTick.current = 0;
       return;
     }
+    setEligibilityMessage(null);
+    setSaveError(false);
     e.currentTarget.setPointerCapture(e.pointerId);
     setHolding(true);
     anim.current?.stop();
@@ -139,8 +162,10 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
 
   async function saveClaim() {
     if (phase !== "charge" || savingRef.current) return;
-    if (park.scene !== null && !contentReleaseId) {
+    const blockMessage = currentClaimBlockMessage();
+    if (blockMessage || (park.scene !== null && !contentReleaseId)) {
       setHolding(false);
+      setEligibilityMessage(blockMessage);
       setSaveError(true);
       progress.set(0);
       lastTick.current = 0;
@@ -150,6 +175,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
     setHolding(false);
     setSaving(true);
     setSaveError(false);
+    setEligibilityMessage(null);
     const claimedAt = new Date().toISOString();
     const parkSnapshot = park;
     try {
@@ -157,7 +183,8 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
       // account sync outbox have committed in one durable transaction.
       const saved = await createPersonalClaim(owner, { park: parkSnapshot, claimedAt, contentReleaseId, photo: photo || null });
       const event = claimEventContext(saved, firstClaim);
-      void recordParkClaimed({ parkId: event.parkId, claimId: event.claimId, claimStatus: event.firstClaim ? "first" : "repeat", contentReleaseId: contentReleaseId ?? "" }).catch(() => {});
+      const interactionReleaseId = contentRef.current?.releaseId ?? contentReleaseId ?? "";
+      void recordParkClaimed({ parkId: event.parkId, claimId: event.claimId, claimStatus: event.firstClaim ? "first" : "repeat", contentReleaseId: interactionReleaseId }).catch(() => {});
       if (!claimOwnerIsCurrent()) {
         setSaveError(true);
         progress.set(0);
@@ -299,7 +326,23 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
               <motion.p className="hold__label" animate={{ opacity: holding ? 0.5 : 1 }}>
                 {saving ? "Saving your badge…" : holding ? "Keep holding…" : "Press and hold to claim"}
               </motion.p>
-              {saveError && <p className="claim-save-error" role="alert">That badge couldn’t be saved yet. Your photo is still here. Release and try again.</p>}
+              {saveError && eligibilityMessage ? (
+                <div className="claim-save-error" role="alert">
+                  <p>{eligibilityMessage}</p>
+                  <button
+                    className="btn btn--sm btn--paper"
+                    onClick={() => {
+                      dispatch({ type: "trip", id: null });
+                      dispatch({ type: "select", id: park.id });
+                      dispatch({ type: "go", screen: "map" });
+                    }}
+                  >
+                    Return to the park
+                  </button>
+                </div>
+              ) : saveError ? (
+                <p className="claim-save-error" role="alert">That badge couldn’t be saved yet. Your photo is still here. Release and try again.</p>
+              ) : null}
             </motion.div>
           ) : (
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}>
@@ -345,6 +388,23 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
       </AnimatePresence>
     </motion.div>
   );
+}
+
+function describeClaimEligibilityFailure(error: unknown): string {
+  if (error instanceof ParkAlreadyClaimedError) return "This badge is already in your Dex. Your photo is still here. Return to the park list.";
+  if (!(error instanceof ParkClaimEligibilityError)) return "Your claim is not ready yet. Your photo is still here. Return to the map and try again.";
+  if (error.eligibility.reason === "locked") {
+    const remaining = Object.entries(error.eligibility.remaining).flatMap(([rarity, count]) => {
+      if (!count) return [];
+      const label = RARITY[rarity as ProgressionRarity].label.toLowerCase();
+      return [`${count} more ${label} ${count === 1 ? "park" : "parks"}`];
+    });
+    const requirement = remaining.length > 0 ? remaining.join(" and ") : "the tier requirements";
+    return `This rarity is locked. Earn ${requirement} to unlock it. Your photo is still here.`;
+  }
+  if (error.eligibility.reason === "unsupported-rarity") return "New Epic parks are not open for claims yet. Your photo is still here.";
+  if (error.eligibility.reason === "unavailable") return "The park catalogue is still loading. Your photo is still here. Return to the map and try again.";
+  return "Your claim is not ready yet. Your photo is still here. Return to the map and try again.";
 }
 
 const pop = {
