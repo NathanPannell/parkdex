@@ -47,6 +47,8 @@ class AccountReleaseGates(unittest.TestCase):
             feature["qaSqlPath"],
             *feature["pythonTestPaths"],
             feature["pythonRequirementsPath"],
+            feature["legacyImporterPath"],
+            feature["legacyImporterTestPath"],
         ]:
             self.touch(name)
 
@@ -109,12 +111,19 @@ class AccountReleaseGates(unittest.TestCase):
             self.config["contentSync"]["qaSqlPath"],
             self.config["contentSync"]["pythonTestPaths"][0],
             self.config["contentSync"]["pythonRequirementsPath"],
+            self.config["contentSync"]["legacyImporterPath"],
+            self.config["contentSync"]["legacyImporterTestPath"],
         ):
             path = self.root / name
             path.unlink()
             with self.subTest(missing=name), self.assertRaises(delivery.DeliveryError):
                 delivery.content_sync_present(self.config, self.root)
             self.touch(name)
+
+    def test_legacy_importer_without_content_sync_fails_closed(self):
+        self.touch(self.config["contentSync"]["legacyImporterPath"])
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.content_sync_present(self.config, self.root)
 
     def test_account_detection_stays_independent_of_content_migration_count(self):
         self.content_files()
@@ -222,6 +231,69 @@ class AccountReleaseGates(unittest.TestCase):
                 delivery.run_content_sync_sql_qa(self.config, self.root)
         self.assertEqual(run.call_count, 1)
         self.assertIn("pg_catalog.pg_database", " ".join(run.call_args.args[0]))
+
+    def test_legacy_import_pg_qa_uses_its_own_empty_database_and_drops_it(self):
+        self.content_files()
+        commands = []
+        def qa_run(args, **kwargs):
+            commands.append((args, kwargs))
+            if any("FROM information_schema.tables" in arg for arg in args):
+                return "0"
+            return ""
+        local_env = {
+            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+        }
+        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
+             patch.object(delivery, "psql_executable", return_value="psql"), \
+             patch.object(delivery, "run", side_effect=qa_run):
+            delivery.run_legacy_import_postgres_qa(self.config, self.root)
+        create = next(args for args, _ in commands if args[-1].startswith("CREATE DATABASE"))
+        database_name = create[-1].split('"')[1]
+        self.assertRegex(database_name, r"^kip_qa_legacy_import_[0-9a-f]{32}$")
+        self.assertNotEqual(database_name, local_env["PGDATABASE"])
+        self.assertEqual(commands[-1][0][-1], f'DROP DATABASE "{database_name}"')
+        test_command, test_kwargs = next((args, kwargs) for args, kwargs in commands if "PostgreSQLImportTests" in args)
+        self.assertEqual(test_command[-2:], [str(self.root / self.config["contentSync"]["legacyImporterTestPath"]), "PostgreSQLImportTests"])
+        self.assertEqual(test_kwargs["env"]["PGDATABASE"], database_name)
+        self.assertTrue(test_kwargs["env"]["LEGACY_IMPORT_TEST_DATABASE_URL"].endswith("/" + database_name))
+        self.assertFalse(any("feedback_001_init.sql" in " ".join(args) for args, _ in commands))
+
+    def test_legacy_import_pg_qa_does_not_drop_a_preexisting_name(self):
+        self.content_files()
+        local_env = {
+            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+        }
+        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
+             patch.object(delivery, "psql_executable", return_value="psql"), \
+             patch.object(delivery, "run", return_value="1") as run:
+            with self.assertRaises(delivery.DeliveryError):
+                delivery.run_legacy_import_postgres_qa(self.config, self.root)
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("pg_catalog.pg_database", " ".join(run.call_args.args[0]))
+
+    def test_legacy_import_pg_qa_drops_its_database_when_regression_fails(self):
+        self.content_files()
+        commands = []
+        def qa_run(args, **_kwargs):
+            commands.append(args)
+            if any("PostgreSQLImportTests" == item for item in args):
+                raise delivery.DeliveryError("regression failed")
+            if any("FROM information_schema.tables" in item for item in args):
+                return "0"
+            return ""
+        local_env = {
+            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+        }
+        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
+             patch.object(delivery, "psql_executable", return_value="psql"), \
+             patch.object(delivery, "run", side_effect=qa_run):
+            with self.assertRaisesRegex(delivery.DeliveryError, "regression failed"):
+                delivery.run_legacy_import_postgres_qa(self.config, self.root)
+        created_name = next(args[-1].split('"')[1] for args in commands if args[-1].startswith("CREATE DATABASE"))
+        self.assertEqual(commands[-1][-1], f'DROP DATABASE "{created_name}"')
 
     def test_staging_rejects_preview_photo_origin_and_missing_google(self):
         self.account_files()

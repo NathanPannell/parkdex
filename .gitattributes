@@ -1,2 +1,5 @@
 # The published manifest must retain its exact uploaded bytes on every platform.
 database/content-manifest.json -text
+
+# Boundary import provenance hashes the exact reviewed source bytes.
+database/imports/legacy-boundaries-20260928/boundaries.geojson -text

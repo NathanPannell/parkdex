@@ -39,6 +39,8 @@
       "scripts/test_publish_content.py",
       "scripts/test_publish_park_update.py"
     ],
+    "legacyImporterPath": "scripts/import_legacy_parks.py",
+    "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
     "pythonRequirementsPath": "database/delivery-test-requirements.txt",
     "previewClockTable": "content_clock"
   },
