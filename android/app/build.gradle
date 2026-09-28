@@ -17,8 +17,10 @@ def rawAuthLinkHost = project.findProperty('PARKDEX_AUTH_LINK_HOST') ?: System.g
 def requestedAuthLinkHost = rawAuthLinkHost ? rawAuthLinkHost.toString().trim().toLowerCase() : null
 def resolveAuthLinkHost = { String fallback ->
     if (!requestedAuthLinkHost) return fallback
-    if (!(requestedAuthLinkHost ==~ /^parkdex-kip-[a-z0-9]+(-[a-z0-9]+)*\.vercel\.app$/)) {
-        throw new GradleException('PARKDEX_AUTH_LINK_HOST must be the Kip staging host or a Kip Vercel preview host')
+    def kipPreview = requestedAuthLinkHost ==~ /^parkdex-kip-[a-z0-9]+(-[a-z0-9]+)*\.vercel\.app$/
+    def ownerPreview = requestedAuthLinkHost ==~ /^parkdex-[a-z0-9]+-nathanpannells-projects\.vercel\.app$/
+    if (!kipPreview && !ownerPreview) {
+        throw new GradleException('PARKDEX_AUTH_LINK_HOST must be the Kip staging host, a Kip Vercel preview host, or an owner-scoped Parkdex Vercel preview host')
     }
     return requestedAuthLinkHost
 }

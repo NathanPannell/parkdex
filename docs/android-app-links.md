@@ -15,7 +15,7 @@ Google Android OAuth clients also need the matching package and signing SHA-1 fo
 
 ## Implementation and verification status
 
-The Android manifest declares auto-verified HTTPS `/account` links for the configured auth-link host. Gradle defaults debug and release variants to the staging host and permits `PARKDEX_AUTH_LINK_HOST` only for `parkdex-kip-*.vercel.app` preview hosts. The preview-host override was added after the last successful Android compile, so it still needs a compile check using the exact owned preview hostname.
+The Android manifest declares auto-verified HTTPS `/account` links for the configured auth-link host. Gradle defaults debug and release variants to the staging host and permits `PARKDEX_AUTH_LINK_HOST` for Kip preview hosts and owner-scoped Parkdex Vercel deployments matching `parkdex-<deployment>-nathanpannells-projects.vercel.app`. The focused Gradle manifest check covers this owner-scoped pattern. A hostname allowlist does not establish that `assetlinks.json` is deployed or OS-verified on any preview.
 
 The Capacitor listener handles both `appUrlOpen` and the initial launch URL. It accepts an HTTPS `/account` action-token fragment on the exact configured origin and removes the token fragment from the WebView URL before passing the action to the auth flow. Parser tests pass. No device link dispatch or Android OS App Links verification has been run.
 
