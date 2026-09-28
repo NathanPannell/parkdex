@@ -64,12 +64,23 @@ function fromBase64(encoded: string): ArrayBuffer {
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message.toLowerCase();
+  if (error && typeof error === "object") {
+    const details = error as { code?: unknown; message?: unknown };
+    const code = typeof details.code === "string" ? details.code : "";
+    const message = typeof details.message === "string" ? details.message : "";
+    return `${code} ${message}`.toLowerCase();
+  }
   return String(error).toLowerCase();
 }
 
 function isMissingFile(error: unknown): boolean {
   const message = errorMessage(error);
-  return message.includes("does not exist") || message.includes("not found") || message.includes("no such file");
+  return message.includes("os-plug-file-0008") || message.includes("does not exist") || message.includes("not found") || message.includes("no such file");
+}
+
+function isExistingDirectory(error: unknown): boolean {
+  const message = errorMessage(error);
+  return message.includes("os-plug-file-0010") || message.includes("already exists") || message.includes("cannot be overwritten");
 }
 
 function blobPath(hash: string) {
@@ -94,6 +105,8 @@ export class NativeContentStore implements ContentStore {
   private initializing: Promise<void> | null = null;
   private readonly objectUrls = new Map<string, string>();
   private readonly writeLocks = new Map<string, Promise<void>>();
+  private readonly knownDirectories = new Set<string>();
+  private directoryQueue: Promise<void> = Promise.resolve();
   private mutationQueue: Promise<void> = Promise.resolve();
 
   initialize(): Promise<void> {
@@ -412,10 +425,29 @@ export class NativeContentStore implements ContentStore {
   }
 
   private async ensureDirectory(path: string) {
+    const previous = this.directoryQueue;
+    let release!: () => void;
+    this.directoryQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous.catch(() => {});
     try {
-      await Filesystem.mkdir({ path, directory: Directory.Data, recursive: true });
-    } catch (error) {
-      if (!(await this.fileExists(path).catch(() => false))) throw error;
+      let current = "";
+      for (const segment of path.split("/").filter(Boolean)) {
+        current = current ? `${current}/${segment}` : segment;
+        if (this.knownDirectories.has(current)) continue;
+        try {
+          await Filesystem.mkdir({ path: current, directory: Directory.Data, recursive: false });
+        } catch (error) {
+          if (!isExistingDirectory(error)) throw error;
+          // The plugin reports an existing path as an error. Confirm it is a directory,
+          // since silently accepting a file at this path would only defer the failure.
+          await Filesystem.readdir({ path: current, directory: Directory.Data });
+        }
+        this.knownDirectories.add(current);
+      }
+    } finally {
+      release();
     }
   }
 
