@@ -3,39 +3,49 @@ import {
   VICTORIA,
   type Connectivity,
   type ContentChannel,
+  type ContentChangeBatch,
   type ContentEnvironment,
   type ContentFile,
+  type ContentMapInventory,
+  type ContentMapPointer,
   type ContentManifest,
+  type ContentSyncState,
   type ContentPayload,
   type ContentPhase,
   type ContentRuntime,
   type ContentRuntimeOptions,
   type ContentSnapshot,
   type ContentStatus,
-  type ArchivedScene,
   type MapPoint,
   type RetainedPark,
   type StoredRelease,
 } from "./contracts";
-import { assertArchivedSceneDescriptor, restoreArchivedScene } from "./archived-art";
 import {
   ContentValidationError,
+  applyContentChangeBatch,
   assertFileBytes,
   coreFiles,
   fileByPath,
   mapChunkFiles,
   parseContentChannel,
+  parseContentChanges,
+  parseContentMapInventory,
   parseContentManifest,
+  parseContentSnapshot,
   parseJsonBytes,
   remoteFiles,
   sha256Hex,
   validateContentPayload,
+  validateContentSyncState,
 } from "./manifest";
 import { ContentDownloadScheduler, type DownloadPolicy } from "./scheduler";
 import { prefetchMapArea } from "./map-downloads";
+import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity, restoreArchivedScene as restoreLegacyArchivedScene } from "./archived-art";
 import { setAllowedMapChunks } from "../offlineTiles";
 
 const DISCOVERY_COOLDOWN_MS = 5 * 60 * 1000;
+const MANUAL_RETRY_COOLDOWN_MS = 15 * 1000;
+const SYNC_BATCH_LIMIT = 50;
 const LOCATION_DEBOUNCE_MS = 800;
 const LOCATION_MOVE_THRESHOLD_KM = 5;
 const EMPTY_STATUS: ContentStatus = {
@@ -45,6 +55,7 @@ const EMPTY_STATUS: ContentStatus = {
   totalBytes: 0,
   fullMapReady: false,
   waitingForWifi: false,
+  syncStage: "idle",
   error: null,
 };
 
@@ -62,31 +73,22 @@ export class ArchivedSceneRestoreDeferredError extends Error {
   }
 }
 
-type ArchivedSceneRequest = { controller: AbortController; networkStarted: boolean };
-
 function fileKey(hash: string, size: number) {
   return `${hash}:${size}`;
 }
 
-function archivedSceneKey(releaseId: string, scene: string) {
-  return `${releaseId}:${scene}`;
-}
-
-function validateArchivedSceneDescriptor(entry: ArchivedScene, releaseId: string, scene: string): ContentFile {
-  assertArchivedSceneDescriptor(entry);
-  if (entry.releaseId !== releaseId || entry.scene !== scene) {
-    throw new ContentValidationError("Archived scene descriptor does not match its immutable release and scene key");
-  }
-  return entry.file;
-}
-
-function sameContentFile(left: ContentFile, right: ContentFile): boolean {
-  return left.path === right.path && left.key === right.key && left.url === right.url &&
-    left.sha256 === right.sha256 && left.byte_size === right.byte_size && left.content_type === right.content_type;
-}
-
 function isMapChunk(path: string) {
   return /^map\/island\/\d{3,}\.bin$/.test(path);
+}
+
+function versionFromAssetKey(file: ContentFile, scene: string): string | null {
+  const path = `art/badges/scenes/${scene}.webp`;
+  if (file.path !== path || file.content_type !== "image/webp") return null;
+  const match = /^releases\/([a-f0-9]{64})\/art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.exec(file.key);
+  if (!match) return null;
+  const expectedUrl = `https://kip-assets.parkdex.app/${file.key.split("/").map(encodeURIComponent).join("/")}`;
+  if (file.url !== expectedUrl) return null;
+  return match[1]!;
 }
 
 function errorText(error: unknown): string {
@@ -167,15 +169,29 @@ class ContentRuntimeController implements ContentRuntime {
   private readonly candidatePromises = new Map<string, Promise<void>>();
   private readonly localFileCheckPromises = new Map<string, Promise<boolean>>();
   private readonly fileUrlPromises = new Map<string, Promise<string>>();
-  private readonly archivedScenePromises = new Map<string, Promise<string>>();
-  private readonly archivedSceneRequests = new Map<string, ArchivedSceneRequest>();
-  private artifactMaintenance: Promise<void> = Promise.resolve();
+  private readonly syncManifests = new Map<string, ContentManifest>();
+  private readonly mapInventories = new Map<string, ContentMapInventory>();
   private startPromise: Promise<void> | null = null;
   private discoveryPromise: Promise<void> | null = null;
   private initialized = false;
   private stopped = false;
   private closePromise: Promise<void> | null = null;
   private lastDiscoveryAt = Number.NEGATIVE_INFINITY;
+  private lastManualRetryAt = Number.NEGATIVE_INFINITY;
+  private syncState: ContentSyncState | null = null;
+  private syncPreviousState: ContentSyncState | null = null;
+  private syncCacheInvalid = false;
+  private sourceMismatch = false;
+  private syncRetryRequested = false;
+  private mapRetryRequested = false;
+  private archivedScenePromises = new Map<string, Promise<string>>();
+  private syncAbort: AbortController | null = null;
+  private syncPromise: Promise<void> | null = null;
+  private mapAbort: AbortController | null = null;
+  private archivedSceneAborts = new Map<string, AbortController>();
+  private mapSyncPromise: Promise<void> | null = null;
+  private mapSyncVersion: string | null = null;
+  private legacyMapReleaseId: string | null = null;
   private discoveryEtag: string | null = null;
   private latestChannel: ContentChannel | null = null;
   private currentLocation: MapPoint | null = null;
@@ -216,31 +232,53 @@ class ContentRuntimeController implements ContentRuntime {
       await this.start();
       return;
     }
-    if (!this.connectivity().connected) {
-      if (this.status.snapshot) this.setStatus({ phase: "offline", error: null });
-      else this.setStatus({ phase: "error", error: "Connect to the internet to download park content." });
+    if (!this.connectivity().wifi) {
+      if (this.status.snapshot) this.setStatus({ phase: phaseForActive(this.connectivity().connected), error: null, syncStage: "waiting-for-wifi", waitingForWifi: true });
+      else this.setStatus({ phase: "error", error: "Connect to Wi-Fi to download park content.", syncStage: "waiting-for-wifi", waitingForWifi: true });
       return;
     }
+    if (this.now() - this.lastManualRetryAt < MANUAL_RETRY_COOLDOWN_MS) return;
+    this.lastManualRetryAt = this.now();
     this.setStatus({ error: null, phase: this.status.snapshot ? "updating" : "downloading" });
-    if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
-    await this.checkCurrentRelease(true);
+    if (this.hasSyncApi()) {
+      if (this.options.apiUrl === null) {
+        this.setStatus({ phase: "error", syncStage: "error", error: "The content API is not configured for this environment." });
+        return;
+      }
+      await this.syncContent(true, true);
+      this.startMapSync();
+    } else {
+      if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+      await this.checkCurrentRelease(true);
+    }
   }
 
   setForeground(foreground: boolean): void {
     if (this.stopped) return;
+    const wasForeground = this.policyForeground;
     this.policyForeground = foreground;
     this.scheduler.setPolicy({ ...this.currentPolicy(), foreground });
     if (!foreground) {
-      this.abortArchivedSceneRequests(true);
       if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
       this.nearbyTimer = undefined;
+      this.syncAbort?.abort(new DOMException("Content sync paused in the background", "AbortError"));
+      this.mapAbort?.abort(new DOMException("Map sync paused in the background", "AbortError"));
+      for (const controller of this.archivedSceneAborts.values()) controller.abort(new DOMException("Content restore paused in the background", "AbortError"));
       return;
+    }
+    if (!wasForeground && foreground) {
+      if (this.syncPromise) {
+        this.lastDiscoveryAt = Number.NEGATIVE_INFINITY;
+        this.syncRetryRequested = true;
+      }
+      if (this.mapSyncPromise) this.mapRetryRequested = true;
     }
     if (this.initialized) {
       if (this.pendingActivationId && !this.busy) void this.activatePending();
       void this.checkCurrentRelease(false);
       if (this.status.snapshot) {
-        this.startBulkMap(this.status.snapshot.releaseId);
+        if (this.hasSyncApi()) this.startMapSync();
+        else this.startBulkMap(this.status.snapshot.releaseId);
         this.scheduleNearbyPrefetch(true);
       }
     }
@@ -250,7 +288,16 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.stopped) return;
     const wasWifi = this.options.connectivity?.wifi ?? false;
     this.options.connectivity = { connected: connectivity.connected, wifi: connectivity.wifi };
-    if (!connectivity.connected) this.abortArchivedSceneRequests(true);
+    if (!wasWifi && connectivity.wifi) {
+      this.lastDiscoveryAt = Number.NEGATIVE_INFINITY;
+      if (this.syncPromise) this.syncRetryRequested = true;
+      if (this.mapSyncPromise) this.mapRetryRequested = true;
+    }
+    if (!connectivity.wifi) {
+      this.syncAbort?.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
+      this.mapAbort?.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
+      for (const controller of this.archivedSceneAborts.values()) controller.abort(new DOMException("Wi-Fi connection was lost", "AbortError"));
+    }
     this.scheduler.setPolicy(this.currentPolicy());
     if (!connectivity.wifi) this.waitingForUpdateWifi = this.waitingForUpdateWifi || this.hasPendingUpdateChunks();
     else this.waitingForUpdateWifi = false;
@@ -262,11 +309,104 @@ class ContentRuntimeController implements ContentRuntime {
       this.setStatus({ phase: "ready", error: null });
     }
     this.updateWaitingStatus();
-    if (this.initialized && connectivity.connected && this.foreground) {
+    if (this.initialized && connectivity.wifi && this.foreground) {
       void this.checkCurrentRelease(false);
-      if (connectivity.wifi && !wasWifi && this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+      if (connectivity.wifi && !wasWifi && this.status.snapshot) {
+      if (this.hasSyncApi()) this.startMapSync();
+        else this.startBulkMap(this.status.snapshot.releaseId);
+      }
       if (this.currentLocation && this.status.snapshot) this.scheduleNearbyPrefetch(false);
     }
+  }
+
+  getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null {
+    const snapshot = this.status.snapshot;
+    const park = snapshot?.parks.find((entry) => entry.id === parkId);
+    if (!snapshot || !park?.scene) return null;
+    if (expectedScene !== undefined && park.scene !== expectedScene) return null;
+    const file = snapshot.manifest.files.find((entry) => entry.path === `art/badges/scenes/${park.scene}.webp`);
+    return file ? versionFromAssetKey(file, park.scene) : null;
+  }
+
+  async ensureArchivedScene(releaseId: string, scene: string): Promise<string> {
+    this.assertRunning();
+    assertArchivedSceneIdentity(releaseId, scene);
+    const key = `${releaseId}:${scene}`;
+    const existing = this.archivedScenePromises.get(key);
+    if (existing) return existing;
+    const work = this.restoreArchivedScene(releaseId, scene, key);
+    this.archivedScenePromises.set(key, work);
+    try {
+      return await work;
+    } finally {
+      if (this.archivedScenePromises.get(key) === work) this.archivedScenePromises.delete(key);
+      this.archivedSceneAborts.delete(key);
+    }
+  }
+
+  private async restoreArchivedScene(releaseId: string, scene: string, requestKey: string): Promise<string> {
+    const cached = await this.options.store.getArchivedScene(releaseId, scene);
+    if (cached) {
+      assertArchivedSceneDescriptor(cached);
+      if (await this.hasVerifiedLocalFile(cached.file)) {
+        const url = await this.localFileUrl(cached.file);
+        this.publishArchivedSceneUrl(releaseId, scene, url);
+        return url;
+      }
+    }
+    if (!this.foreground) throw new ArchivedSceneRestoreDeferredError();
+    if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+
+    const controller = new AbortController();
+    this.archivedSceneAborts.set(requestKey, controller);
+    try {
+      let file: ContentFile;
+      if (cached) {
+        file = cached.file;
+      } else {
+        const url = new URL(this.contentApiUrl("scene"));
+        url.searchParams.set("releaseId", releaseId);
+        url.searchParams.set("scene", scene);
+        const response = await this.requestContent(url.href, controller.signal);
+        if (response.status === 404) {
+          file = await restoreLegacyArchivedScene(releaseId, scene, this.options.store, this.fetcher, controller.signal);
+        } else {
+          if (!response.ok) throw new Error(`Archived scene lookup returned HTTP ${response.status}`);
+          const value = await response.json() as unknown;
+          if (!value || typeof value !== "object" || Array.isArray(value)) throw new ContentValidationError("Archived scene lookup has an invalid shape");
+          const record = value as Record<string, unknown>;
+          if (Object.keys(record).sort().join("\0") !== ["file", "schema"].join("\0") || record.schema !== "parkdex.scene-asset/v1") {
+            throw new ContentValidationError("Archived scene lookup has an unsupported schema");
+          }
+          const archived = { releaseId, scene, file: record.file };
+          assertArchivedSceneDescriptor(archived);
+          await this.options.store.retainArchivedScene(archived);
+          file = archived.file;
+        }
+      }
+      if (!(await this.hasVerifiedLocalFile(file))) await this.scheduleFileDownload(file, "update", controller.signal);
+      this.assertRunning();
+      if (!this.foreground || controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
+      if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+      const fileUrl = await this.localFileUrl(file);
+      this.publishArchivedSceneUrl(releaseId, scene, fileUrl);
+      return fileUrl;
+    } catch (error) {
+      if (this.stopped) throw new Error("Content runtime is stopped");
+      if (!this.foreground || controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
+      if (!this.connectivity().wifi || !this.connectivity().connected) throw new ContentUnavailableOfflineError(`art/badges/scenes/${scene}.webp`);
+      throw error;
+    }
+  }
+
+  private publishArchivedSceneUrl(releaseId: string, scene: string, url: string): void {
+    const snapshot = this.status.snapshot;
+    if (!snapshot) return;
+    const key = `${releaseId}:${scene}`;
+    if (snapshot.retainedSceneUrls.get(key) === url) return;
+    const retainedSceneUrls = new Map(snapshot.retainedSceneUrls);
+    retainedSceneUrls.set(key, url);
+    this.setStatus({ snapshot: { ...snapshot, retainedSceneUrls } });
   }
 
   setLocation(point: MapPoint | null): void {
@@ -285,14 +425,19 @@ class ContentRuntimeController implements ContentRuntime {
   async ensureFile(releaseId: string, path: string, purpose: "core" | "nearby" | "bulk" | "update", signal?: AbortSignal): Promise<void> {
     this.assertRunning();
     const release = await this.options.store.getRelease(releaseId);
-    if (!release) throw new Error(`Content release ${releaseId} is not available locally`);
-    const file = fileByPath(release.manifest, path);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) throw new Error(`Content release ${releaseId} is not available locally`);
+    const file = fileByPath(manifest, path);
     const key = fileKey(file.sha256, file.byte_size);
     this.trackFile(file);
     if (this.verifiedHashes.has(key)) return;
     const hasLocal = await this.hasVerifiedLocalFile(file);
     if (hasLocal) return;
     if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
+    if (this.hasSyncApi() && path.startsWith("map/") &&
+      (!this.syncState?.map || manifest.version !== this.syncState.map.version)) {
+      throw new ContentUnavailableOfflineError(path);
+    }
     const effectivePurpose = isMapChunk(path) && purpose !== "nearby" && purpose !== "update" ? "bulk" : purpose;
     this.incrementInFlight(file.sha256);
     try {
@@ -313,8 +458,9 @@ class ContentRuntimeController implements ContentRuntime {
 
   async readFile(releaseId: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer> {
     const release = await this.options.store.getRelease(releaseId);
-    if (!release) throw new Error(`Content release ${releaseId} is not available locally`);
-    const file = fileByPath(release.manifest, path);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) throw new Error(`Content release ${releaseId} is not available locally`);
+    const file = fileByPath(manifest, path);
     const purpose = isMapChunk(path) ? "nearby" : "core";
     await this.ensureFile(releaseId, path, purpose);
     return this.withInFlight(file, () => this.options.store.readFile(file.sha256, offset, length));
@@ -322,8 +468,9 @@ class ContentRuntimeController implements ContentRuntime {
 
   async getFileUrl(releaseId: string, path: string): Promise<string> {
     const release = await this.options.store.getRelease(releaseId);
-    if (!release) throw new Error(`Content release ${releaseId} is not available locally`);
-    const file = fileByPath(release.manifest, path);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) throw new Error(`Content release ${releaseId} is not available locally`);
+    const file = fileByPath(manifest, path);
     await this.ensureFile(releaseId, path, isMapChunk(path) ? "nearby" : "core");
     const key = `${file.sha256}:${file.content_type}`;
     let promise = this.fileUrlPromises.get(key);
@@ -334,39 +481,22 @@ class ContentRuntimeController implements ContentRuntime {
     return promise;
   }
 
-  async ensureArchivedScene(releaseId: string, scene: string): Promise<string> {
-    this.assertRunning();
-    if (!/^[a-f\d]{64}$/i.test(releaseId) || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(scene)) {
-      throw new ContentValidationError("Archived scene key is invalid");
-    }
-    const normalizedReleaseId = releaseId.toLowerCase();
-    const key = archivedSceneKey(normalizedReleaseId, scene);
-    let promise = this.archivedScenePromises.get(key);
-    if (!promise) {
-      const request: ArchivedSceneRequest = { controller: new AbortController(), networkStarted: false };
-      this.archivedSceneRequests.set(key, request);
-      promise = this.withArtifactMaintenance(() => this.ensureArchivedSceneInner(normalizedReleaseId, scene, request))
-        .finally(() => {
-          if (this.archivedScenePromises.get(key) === promise) this.archivedScenePromises.delete(key);
-          if (this.archivedSceneRequests.get(key) === request) this.archivedSceneRequests.delete(key);
-        });
-      this.archivedScenePromises.set(key, promise);
-    }
-    return promise;
-  }
-
   async stop(): Promise<void> {
     if (this.closePromise) return this.closePromise;
     this.stopped = true;
     if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
     this.nearbyTimer = undefined;
     this.nearbyAbort?.abort();
+    this.syncAbort?.abort();
+    this.mapAbort?.abort();
+    for (const controller of this.archivedSceneAborts.values()) controller.abort();
     this.scheduler.dispose();
     this.closePromise = (async () => {
-      this.abortArchivedSceneRequests();
       await Promise.allSettled([
         this.startPromise ?? Promise.resolve(),
         this.discoveryPromise ?? Promise.resolve(),
+        this.syncPromise ?? Promise.resolve(),
+        this.mapSyncPromise ?? Promise.resolve(),
         ...this.candidatePromises.values(),
         ...this.bulkPromises.values(),
         ...this.archivedScenePromises.values(),
@@ -382,6 +512,10 @@ class ContentRuntimeController implements ContentRuntime {
       await this.options.store.initialize();
       this.initialized = true;
       await this.refreshLocalFileIndex();
+      if (this.hasSyncApi()) {
+        await this.startSyncInternal();
+        return;
+      }
       const initialActiveId = await this.options.store.getActiveId();
       let activeId = initialActiveId;
       if (activeId) {
@@ -426,6 +560,504 @@ class ContentRuntimeController implements ContentRuntime {
     }
   }
 
+  private async startSyncInternal(): Promise<void> {
+    if (this.options.apiUrl === null) {
+      this.setStatus({ phase: "error", syncStage: "error", error: "The content API is not configured for this environment." });
+      return;
+    }
+    const sourceId = this.configuredSourceId();
+    let stored: ContentSyncState | null = null;
+    try {
+      stored = await this.options.store.getSyncState(this.environment);
+      if (stored) {
+        stored = validateContentSyncState(stored);
+        if (stored.sourceId !== sourceId) {
+          this.sourceMismatch = true;
+          this.syncCacheInvalid = true;
+          this.syncPreviousState = stored;
+          stored = null;
+        } else {
+          this.syncState = stored;
+          await this.publishSyncState(stored, phaseForActive(this.connectivity().connected), null);
+        }
+      }
+    } catch (error) {
+      stored = null;
+      this.syncCacheInvalid = true;
+      this.setStatus({ phase: "error", syncStage: "error", error: `Saved park content could not be opened: ${errorText(error)}` });
+    }
+    if (!stored && !this.syncCacheInvalid) {
+      const cursor = await this.options.store.getSyncCursor(this.environment);
+      if (cursor) {
+        this.syncCacheInvalid = true;
+        this.sourceMismatch = cursor.sourceId !== sourceId;
+      }
+    }
+
+    // Existing v1 installs keep their last verified release usable while the
+    // first normalized snapshot is fetched only when no source-bound cache has
+    // ever been installed. A cache from another API source must stay hidden.
+    if (!stored && !this.status.snapshot && !this.sourceMismatch && !this.syncCacheInvalid) {
+      const activeId = await this.options.store.getActiveId();
+      const legacy = activeId ? await this.options.store.getRelease(activeId) : undefined;
+      if (legacy) {
+        try {
+          const channel = parseContentChannel(legacy.channel, this.environment);
+          const manifest = parseContentManifest(legacy.manifest, channel);
+          const required = coreFiles(manifest);
+          const allLocal = await Promise.all(required.map((file) => this.hasVerifiedLocalFile(file)));
+          if (allLocal.every(Boolean)) {
+            const payload = await this.readAndValidatePayload(legacy, manifest);
+            const snapshot = await this.prepareSnapshot({ ...legacy, channel, manifest, payload }, payload);
+            this.legacyMapReleaseId = legacy.id;
+            this.publishSnapshot(snapshot, phaseForActive(this.connectivity().connected), null);
+            await this.refreshMapReadiness(snapshot);
+          }
+        } catch {
+          // A partial legacy cache must not prevent the normalized API snapshot.
+        }
+      }
+    }
+
+    if (this.connectivity().wifi && this.foreground) {
+      await this.syncContent(true, false);
+    } else {
+      this.setStatus({
+        phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "error",
+        error: this.status.snapshot ? null : "Connect to Wi-Fi to download park content.",
+        syncStage: "waiting-for-wifi",
+        waitingForWifi: true,
+      });
+    }
+
+    if (this.status.snapshot) {
+      if (this.hasSyncApi()) this.startMapSync();
+      else this.startBulkMap(this.status.snapshot.releaseId);
+      this.scheduleNearbyPrefetch(false);
+    }
+  }
+
+  private hasSyncApi(): boolean {
+    return this.options.apiUrl !== undefined;
+  }
+
+  private configuredSourceId(): string {
+    const url = new URL(this.contentApiUrl("snapshot"));
+    return `${this.environment}|${url.origin}/api/content`;
+  }
+
+  private contentApiUrl(endpoint: "snapshot" | "changes" | "scene"): string {
+    if (this.options.apiUrl === null) throw new Error("The content API is not configured for this environment.");
+    const configured = this.options.apiUrl ?? this.options.discoveryUrl;
+    if (!configured) throw new Error("Content API URL is not configured");
+    const base = typeof globalThis.location === "undefined" ? "https://parkdex.invalid/" : globalThis.location.href;
+    const url = new URL(configured, base);
+    url.pathname = url.pathname.replace(/\/(?:current|snapshot|changes|scene)\/?$/, "");
+    if (!url.pathname.endsWith("/api/content")) url.pathname = `${url.pathname.replace(/\/$/, "")}/api/content`;
+    url.pathname = `${url.pathname}/${endpoint}`;
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  }
+
+  private async requestContent(url: string, signal: AbortSignal): Promise<Response> {
+    if (!this.connectivity().wifi || !this.connectivity().connected) {
+      const error = new Error("Connect to Wi-Fi to download Parkdex content.");
+      error.name = "WifiUnavailableError";
+      throw error;
+    }
+    if (!this.foreground) throw new DOMException("Content sync paused in the background", "AbortError");
+    if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
+    const response = await this.fetcher(url, {
+      signal,
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    assertUnredirected(response, url, "Content API request");
+    return response;
+  }
+
+  private async syncContent(force: boolean, manual: boolean): Promise<void> {
+    if (this.stopped || !this.initialized || !this.hasSyncApi()) return;
+    if (this.options.apiUrl === null) {
+      this.setStatus({ phase: "error", syncStage: "error", error: "The content API is not configured for this environment." });
+      return;
+    }
+    if (this.syncPromise) return this.syncPromise;
+    if (!this.foreground || !this.connectivity().wifi || !this.connectivity().connected) {
+      this.setStatus({
+        syncStage: "waiting-for-wifi",
+        waitingForWifi: true,
+        error: this.status.snapshot ? null : "Connect to Wi-Fi to download park content.",
+      });
+      return;
+    }
+    const now = this.now();
+    if (!force && !manual && now - this.lastDiscoveryAt < DISCOVERY_COOLDOWN_MS) return;
+    this.lastDiscoveryAt = now;
+    const controller = new AbortController();
+    this.syncAbort = controller;
+    const work = this.runContentSync(controller.signal);
+    this.syncPromise = work;
+    try {
+      await work;
+    } catch (error) {
+      if (!this.stopped && (error as Error)?.name !== "AbortError") {
+        const waiting = (error as Error)?.name === "WifiUnavailableError" || !this.connectivity().wifi;
+        this.setStatus({
+          phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "error",
+          syncStage: waiting ? "waiting-for-wifi" : "error",
+          waitingForWifi: waiting,
+          error: waiting ? (this.status.snapshot ? null : "Connect to Wi-Fi to download park content.") : errorText(error),
+        });
+      } else if (!this.stopped && !this.connectivity().wifi) {
+        this.setStatus({ syncStage: "waiting-for-wifi", waitingForWifi: true });
+      }
+    } finally {
+      if (this.syncAbort === controller) this.syncAbort = null;
+      if (this.syncPromise === work) this.syncPromise = null;
+      if (this.syncRetryRequested && !this.stopped && this.foreground && this.connectivity().wifi) {
+        this.syncRetryRequested = false;
+        void Promise.resolve().then(() => this.syncContent(true, false));
+      }
+    }
+  }
+
+  private async runContentSync(signal: AbortSignal): Promise<void> {
+    this.setStatus({
+      phase: this.status.snapshot ? "updating" : "downloading",
+      syncStage: "checking",
+      waitingForWifi: false,
+      error: null,
+    });
+    const sourceId = this.configuredSourceId();
+    let state = this.syncState ?? await this.options.store.getSyncState(this.environment);
+    if (state) {
+      try {
+        state = validateContentSyncState(state);
+        if (state.sourceId !== sourceId) {
+          state = null;
+          this.sourceMismatch = true;
+          this.syncCacheInvalid = true;
+        }
+      } catch {
+        state = null;
+        this.syncCacheInvalid = true;
+      }
+    }
+    if (!state) {
+      const snapshotResponse = await this.requestContent(this.contentApiUrl("snapshot"), signal);
+      if (!snapshotResponse.ok) throw new Error(`Content snapshot returned HTTP ${snapshotResponse.status}`);
+      const next = { ...parseContentSnapshot(await snapshotResponse.json()), sourceId };
+      await this.commitContentSnapshot(next, this.syncPreviousState, signal, this.syncCacheInvalid);
+      this.syncCacheInvalid = false;
+      this.sourceMismatch = false;
+      this.syncPreviousState = null;
+      state = next;
+    }
+
+    while (!signal.aborted && this.foreground && this.connectivity().wifi) {
+      const url = new URL(this.contentApiUrl("changes"));
+      url.searchParams.set("after", String(state.revision));
+      url.searchParams.set("limit", String(SYNC_BATCH_LIMIT));
+      const response = await this.requestContent(url.href, signal);
+      if (response.status === 410 || response.status === 413 || response.status === 400) {
+        const fullResponse = await this.requestContent(this.contentApiUrl("snapshot"), signal);
+        if (!fullResponse.ok) throw new Error(`Content snapshot returned HTTP ${fullResponse.status}`);
+        const replacement = { ...parseContentSnapshot(await fullResponse.json()), sourceId };
+        const resetCursor = response.status === 400;
+        await this.commitContentSnapshot(replacement, state, signal, resetCursor);
+        this.syncCacheInvalid = false;
+        this.sourceMismatch = false;
+        this.syncPreviousState = null;
+        state = replacement;
+        continue;
+      }
+      if (!response.ok) throw new Error(`Content changes returned HTTP ${response.status}`);
+      const changes = parseContentChanges(await response.json(), state.revision);
+      if (changes.batches.length > 0) {
+        for (const batch of changes.batches) {
+          const previous = state;
+          const candidate = applyContentChangeBatch(state, batch);
+          await this.retainChangedClaimedScenes(previous, candidate, signal);
+          await this.ensureSyncAssets(candidate.assets, signal);
+          this.setStatus({ syncStage: "applying" });
+          await this.options.store.applySyncBatch(this.environment, previous.revision, this.withInactiveAssetDeletes(previous, candidate, batch), sourceId);
+          state = candidate;
+          this.syncState = state;
+          await this.publishSyncState(state, phaseForActive(this.connectivity().connected), null);
+        }
+      }
+      if (!changes.hasMore) break;
+    }
+    if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
+    this.setStatus({
+      phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "ready",
+      syncStage: "idle",
+      waitingForWifi: false,
+      error: null,
+    });
+    if (this.hasSyncApi()) this.startMapSync();
+    else if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+  }
+
+  private withInactiveAssetDeletes(previous: ContentSyncState, next: ContentSyncState, batch: ContentChangeBatch): ContentChangeBatch {
+    const nextPaths = new Set(next.assets.map((file) => file.path));
+    const changes = batch.changes.filter((change) => !(change.entity === "asset" && change.op === "upsert" && !nextPaths.has(change.id)));
+    const alreadyChanged = new Set(changes.filter((change) => change.entity === "asset").map((change) => change.id));
+    const deletes = previous.assets
+      .filter((file) => !nextPaths.has(file.path) && !alreadyChanged.has(file.path))
+      .map((file) => ({ entity: "asset" as const, op: "delete" as const, id: file.path }));
+    return { ...batch, changes: [...changes, ...deletes] };
+  }
+
+  private async commitContentSnapshot(next: ContentSyncState, previous: ContentSyncState | null, signal: AbortSignal, resetCursor = false): Promise<void> {
+    const sourceId = this.configuredSourceId();
+    const candidate = validateContentSyncState({ ...next, sourceId });
+    await this.retainChangedClaimedScenes(previous, candidate, signal);
+    await this.ensureSyncAssets(candidate.assets, signal);
+    const persistedCursor = await this.options.store.getSyncCursor(this.environment);
+    const expectedRevision = persistedCursor?.revision ?? null;
+    const expectedSourceId = persistedCursor?.sourceId ?? null;
+    const sourceChanged = expectedSourceId !== sourceId;
+    let replaceCursorReset = sourceChanged || resetCursor || this.syncCacheInvalid;
+    if (expectedRevision !== null && candidate.revision < expectedRevision && !replaceCursorReset) {
+      try {
+        const persisted = await this.options.store.getSyncState(this.environment);
+        const latest = persisted ? validateContentSyncState(persisted) : null;
+        if (latest && latest.sourceId === sourceId) {
+          this.syncState = latest;
+          await this.publishSyncState(latest, phaseForActive(this.connectivity().connected), null);
+          return;
+        }
+      } catch {
+        replaceCursorReset = true;
+      }
+      if (!replaceCursorReset) throw new Error("Content snapshot is older than the saved sync cursor");
+    }
+    this.setStatus({ syncStage: "applying" });
+    await this.options.store.replaceSyncState(this.environment, expectedRevision, candidate, sourceId, expectedSourceId, replaceCursorReset);
+    this.syncState = candidate;
+    await this.publishSyncState(candidate, phaseForActive(this.connectivity().connected), null);
+  }
+
+  private async ensureSyncAssets(assets: ContentFile[], signal: AbortSignal): Promise<void> {
+    const missing: ContentFile[] = [];
+    for (const file of assets) {
+      this.trackFile(file);
+      if (!(await this.hasVerifiedLocalFile(file))) missing.push(file);
+    }
+    if (!missing.length) return;
+    this.setStatus({ syncStage: "downloading", waitingForWifi: false });
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal.reason);
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+    try {
+      await Promise.all(missing.map((file) => this.scheduleFileDownload(file, "update", controller.signal).catch((error) => {
+        controller.abort(error);
+        throw error;
+      })));
+    } finally {
+      signal.removeEventListener("abort", abort);
+    }
+  }
+
+  private async scheduleFileDownload(file: ContentFile, purpose: "core" | "nearby" | "bulk" | "update", signal?: AbortSignal): Promise<void> {
+    const key = fileKey(file.sha256, file.byte_size);
+    if (await this.hasVerifiedLocalFile(file)) return;
+    if (!this.connectivity().wifi || !this.connectivity().connected) {
+      const error = new Error("Connect to Wi-Fi to download Parkdex content.");
+      error.name = "WifiUnavailableError";
+      throw error;
+    }
+    this.incrementInFlight(file.sha256);
+    try {
+      await this.scheduler.enqueue({
+        key: file.sha256,
+        path: file.path,
+        purpose,
+        priority: requestPriority(purpose, file.path),
+        run: (downloadSignal) => this.downloadFile(file, downloadSignal),
+      }, signal);
+      this.verifiedHashes.add(key);
+      this.localFileSizes.set(file.sha256, file.byte_size);
+      this.refreshProgress();
+    } finally {
+      this.decrementInFlight(file.sha256);
+    }
+  }
+
+  private async retainChangedClaimedScenes(previous: ContentSyncState | null, next: ContentSyncState, signal: AbortSignal): Promise<void> {
+    const snapshot = this.status.snapshot;
+    const previousParks = previous?.parks ?? snapshot?.parks ?? [];
+    const previousFiles = previous?.assets ?? snapshot?.manifest.files ?? [];
+    const nextParks = new Map(next.parks.map((park) => [park.id, park]));
+    const nextFiles = new Map(next.assets.map((file) => [file.path, file]));
+    const claimed = new Set(this.options.claimedParkIds());
+    const retained: RetainedPark[] = [];
+    for (const park of previousParks) {
+      if (!claimed.has(park.id) || !park.scene) continue;
+      const nextPark = nextParks.get(park.id);
+      const sceneFile = previousFiles.find((file) => file.path === `art/badges/scenes/${park.scene}.webp`);
+      if (!sceneFile) continue;
+      const nextFile = nextFiles.get(sceneFile.path);
+      if (nextPark?.scene === park.scene && nextFile?.key === sceneFile.key && nextFile.sha256 === sceneFile.sha256) continue;
+      const releaseId = versionFromAssetKey(sceneFile, park.scene);
+      if (releaseId) {
+        const archived = { releaseId, scene: park.scene, file: sceneFile };
+        assertArchivedSceneDescriptor(archived);
+        await this.options.store.retainArchivedScene(archived);
+      }
+      if (!(await this.hasVerifiedLocalFile(sceneFile))) {
+        if (snapshot?.releaseId) await this.ensureFile(snapshot.releaseId, sceneFile.path, "update", signal);
+        else await this.scheduleFileDownload(sceneFile, "update", signal);
+      }
+      if (nextPark?.scene !== park.scene) retained.push({ park, sceneFile });
+    }
+    if (retained.length) await this.options.store.retainParks(retained);
+  }
+
+  private async publishSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null): Promise<void> {
+    const validated = validateContentSyncState(state);
+    let inventory: ContentMapInventory | null = null;
+    if (validated.map) inventory = await this.getVerifiedMapInventory(validated.map.version);
+    if (inventory) this.mapInventories.set(inventory.version, inventory);
+    const legacy = inventory ? null : await this.getLegacyMapRelease();
+    const mapFiles = inventory?.files ?? legacy?.manifest.files.filter((file) => file.path.startsWith("map/")) ?? [];
+    const mapManifest = inventory?.mapManifest ?? legacy?.manifest.mapManifest ?? { size: 1, chunkBytes: 1, count: 1 };
+    const mapVersion = inventory?.version ?? legacy?.manifest.version ?? "pending";
+    const releaseId = `sync-${this.environment}-${validated.revision}-${mapVersion}`;
+    const manifest: ContentManifest = {
+      version: mapVersion,
+      sourceCommit: "0".repeat(40),
+      cdnOrigin: "https://kip-assets.parkdex.app",
+      files: [...validated.assets, ...mapFiles],
+      parkIds: validated.parks.map((park) => park.id),
+      boundaryIds: validated.boundaries.features.map((feature) => feature.properties.id),
+      mapManifest,
+    };
+    this.syncManifests.set(releaseId, manifest);
+
+    const assetUrls = new Map<string, string>();
+    for (const park of validated.parks) {
+      if (!park.scene) continue;
+      const path = `art/badges/scenes/${park.scene}.webp`;
+      const file = validated.assets.find((entry) => entry.path === path);
+      if (!file || !(await this.hasVerifiedLocalFile(file))) throw new Error(`Required park badge art is missing: ${path}`);
+      assetUrls.set(path, await this.localFileUrl(file));
+    }
+    const retained = await this.options.store.getRetainedParks();
+    const currentIds = new Set(validated.parks.map((park) => park.id));
+    const claimed = new Set(this.options.claimedParkIds());
+    const retiredParks = retained.filter((entry) => claimed.has(entry.park.id) && !currentIds.has(entry.park.id)).map((entry) => entry.park);
+    const parkById = new Map([...validated.parks, ...retiredParks].map((park) => [park.id, park]));
+    const retainedSceneUrls = new Map<string, string>();
+    for (const entry of retained) {
+      if (!claimed.has(entry.park.id) || currentIds.has(entry.park.id) || !entry.sceneFile) continue;
+      if (await this.hasVerifiedLocalFile(entry.sceneFile)) retainedSceneUrls.set(entry.park.id, await this.localFileUrl(entry.sceneFile));
+    }
+    const chunks = mapChunkFiles(manifest);
+    const locallyPresent: number[] = [];
+    for (const file of chunks) if (await this.hasVerifiedLocalFile(file)) locallyPresent.push(Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]));
+    if (locallyPresent.length) setAllowedMapChunks(releaseId, locallyPresent.filter(Number.isSafeInteger));
+    const snapshot: ContentSnapshot = {
+      releaseId,
+      generation: validated.revision,
+      manifest,
+      parks: validated.parks,
+      parkById,
+      liveParks: validated.parks.filter((park) => park.scene !== null),
+      retiredParks,
+      boundaries: validated.boundaries,
+      drive: validated.drive,
+      assetUrls,
+      retainedSceneUrls,
+    };
+    this.syncState = validated;
+    const fullMapReady = chunks.length > 0 && (await Promise.all(chunks.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
+    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+  }
+
+  private async getLegacyMapRelease(): Promise<StoredRelease | null> {
+    const id = this.legacyMapReleaseId ?? await this.options.store.getActiveId();
+    if (!id) return null;
+    const stored = await this.options.store.getRelease(id);
+    if (!stored) return null;
+    try {
+      const channel = parseContentChannel(stored.channel, this.environment);
+      const manifest = parseContentManifest(stored.manifest, channel);
+      this.legacyMapReleaseId = id;
+      return { ...stored, channel, manifest };
+    } catch {
+      return null;
+    }
+  }
+
+  private async getVerifiedMapInventory(version: string): Promise<ContentMapInventory | null> {
+    const cached = this.mapInventories.get(version) ?? await this.options.store.getMapInventory(version);
+    if (!cached) return null;
+    try {
+      const inventory = parseContentMapInventory(cached, version);
+      const manifestFile = inventory.files.find((file) => file.path === "map/island/manifest.json");
+      if (!manifestFile || !(await this.hasVerifiedLocalFile(manifestFile))) return null;
+      parseMapFile(await this.options.store.readFile(manifestFile.sha256), inventory.mapManifest);
+      return inventory;
+    } catch {
+      return null;
+    }
+  }
+
+  private startMapSync(): void {
+    if (!this.hasSyncApi() || this.options.apiUrl === null || !this.initialized || this.stopped || !this.foreground || !this.syncState) return;
+    const pointer = this.syncState.map;
+    if (!pointer) return;
+    if (this.mapSyncPromise && this.mapSyncVersion === pointer.version) return;
+    this.mapAbort?.abort(new DOMException("Map inventory changed", "AbortError"));
+    const controller = new AbortController();
+    this.mapAbort = controller;
+    this.mapSyncVersion = pointer.version;
+    const work = this.runMapSync(pointer, controller.signal);
+    this.mapSyncPromise = work;
+    void work.catch(() => {
+      // Map inventory and chunks are optional for catalogue activation.
+    }).finally(() => {
+      if (this.mapSyncPromise === work) this.mapSyncPromise = null;
+      if (this.mapAbort === controller) this.mapAbort = null;
+      this.updateWaitingStatus();
+      if (this.mapRetryRequested && !this.stopped && this.foreground && this.connectivity().wifi && this.syncState?.map?.version === pointer.version) {
+        this.mapRetryRequested = false;
+        this.startMapSync();
+      }
+    });
+  }
+
+  private async runMapSync(pointer: ContentMapPointer, signal: AbortSignal): Promise<void> {
+    if (!this.connectivity().wifi || !this.connectivity().connected) return;
+    let inventory = await this.getVerifiedMapInventory(pointer.version);
+    if (!inventory) {
+      const response = await this.requestContent(pointer.manifestUrl, signal);
+      if (!response.ok) throw new Error(`Map inventory returned HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      if ((await sha256Hex(bytes)) !== pointer.manifestSha256) throw new ContentValidationError("map inventory failed SHA-256 verification");
+      inventory = parseContentMapInventory(parseJsonBytes(bytes), pointer.version);
+      const innerManifest = inventory.files.find((file) => file.path === "map/island/manifest.json");
+      if (!innerManifest) throw new ContentValidationError("map inventory has no island manifest");
+      await this.scheduleFileDownload(innerManifest, "bulk", signal);
+      parseMapFile(await this.options.store.readFile(innerManifest.sha256), inventory.mapManifest);
+      await this.options.store.putMapInventory(inventory);
+      this.mapInventories.set(inventory.version, inventory);
+    }
+    if (signal.aborted) throw signal.reason ?? new DOMException("Map sync cancelled", "AbortError");
+    if (this.syncState?.map?.version !== pointer.version) return;
+    const glyphs = inventory.files.filter((file) => file.path.startsWith("map/fonts/"));
+    await Promise.all(glyphs.map((file) => this.scheduleFileDownload(file, "bulk", signal)));
+    if (this.syncState?.map?.version !== pointer.version) return;
+    await this.publishSyncState(this.syncState, phaseForActive(this.connectivity().connected), null);
+    this.waitingForBulkWifi = false;
+    if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+  }
+
   private get foreground() {
     // Web starts visible by default. Native lifecycle wiring sets this explicitly.
     return this.policyForeground;
@@ -441,10 +1073,21 @@ class ContentRuntimeController implements ContentRuntime {
     return this.options.connectivity ?? { connected: true, wifi: false };
   }
 
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
+  }
+
   private async checkCurrentRelease(force: boolean): Promise<void> {
-    if (this.stopped || !this.initialized || !this.foreground || !this.connectivity().connected) return;
+    if (this.hasSyncApi()) {
+      await this.syncContent(force, false);
+      return;
+    }
+    if (this.stopped || !this.initialized || !this.foreground || !this.connectivity().wifi) {
+      if (!this.connectivity().wifi && this.initialized) this.setStatus({ syncStage: "waiting-for-wifi", waitingForWifi: true });
+      return;
+    }
     if (this.discoveryPromise) return this.discoveryPromise;
-    const now = Date.now();
+    const now = this.now();
     if (!force && now - this.lastDiscoveryAt < DISCOVERY_COOLDOWN_MS) return;
     this.lastDiscoveryAt = now;
     const work = this.discoverCurrentRelease();
@@ -458,9 +1101,11 @@ class ContentRuntimeController implements ContentRuntime {
 
   private async discoverCurrentRelease(): Promise<void> {
     try {
+      const discoveryUrl = this.options.discoveryUrl;
+      if (!discoveryUrl) throw new Error("Content discovery URL is not configured");
       const headers: Record<string, string> = {};
       if (this.discoveryEtag) headers["If-None-Match"] = this.discoveryEtag;
-      const response = await this.fetcher(this.options.discoveryUrl, { headers, cache: "no-store" });
+      const response = await this.fetcher(discoveryUrl, { headers, cache: "no-store" });
       const nextEtag = response.headers.get("ETag");
       if (nextEtag) this.discoveryEtag = nextEtag;
       if (response.status === 304) {
@@ -811,36 +1456,50 @@ class ContentRuntimeController implements ContentRuntime {
 
   private async runBulkMap(releaseId: string, signal: AbortSignal): Promise<void> {
     const release = await this.options.store.getRelease(releaseId);
-    if (!release) return;
-    const chunks = mapChunkFiles(release.manifest);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) return;
+    const chunks = mapChunkFiles(manifest);
     this.trackFiles(chunks);
     const missing = await this.missingFiles(chunks);
     this.waitingForBulkWifi = missing.length > 0 && !this.connectivity().wifi;
     this.updateWaitingStatus();
     if (missing.length === 0) {
       setAllowedMapChunks(releaseId, chunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
-      await this.refreshMapReadinessForRelease(release);
+      await this.refreshMapReadinessForManifest(releaseId, manifest);
       return;
     }
     await this.ensureFiles(missing, releaseId, "bulk", signal);
     setAllowedMapChunks(releaseId, chunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
     this.waitingForBulkWifi = false;
-    await this.refreshMapReadinessForRelease(release);
+    await this.refreshMapReadinessForManifest(releaseId, manifest);
     this.updateWaitingStatus();
   }
 
   private async refreshMapReadiness(snapshot: ContentSnapshot): Promise<void> {
     const release = await this.options.store.getRelease(snapshot.releaseId);
     if (release) await this.refreshMapReadinessForRelease(release);
+    else {
+      const manifest = this.syncManifests.get(snapshot.releaseId);
+      if (manifest) await this.refreshMapReadinessForManifest(snapshot.releaseId, manifest);
+    }
   }
 
   private async refreshMapReadinessForRelease(release: StoredRelease): Promise<void> {
-    const chunks = mapChunkFiles(release.manifest);
+    await this.refreshMapReadinessForManifest(release.id, release.manifest);
+  }
+
+  private async refreshMapReadinessForManifest(releaseId: string, manifest: ContentManifest): Promise<void> {
+    const chunks = mapChunkFiles(manifest);
     const fullMapReady = chunks.every((file) => this.localFileSizes.get(file.sha256) === file.byte_size || this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)));
-    if (this.status.snapshot?.releaseId === release.id && this.status.fullMapReady !== fullMapReady) this.setStatus({ fullMapReady });
+    if (this.status.snapshot?.releaseId === releaseId && this.status.fullMapReady !== fullMapReady) this.setStatus({ fullMapReady });
   }
 
   private async refreshMapReadinessForHash(hash: string): Promise<void> {
+    for (const [releaseId, manifest] of this.syncManifests) {
+      if (this.status.snapshot?.releaseId === releaseId && manifest.files.some((file) => file.sha256 === hash && isMapChunk(file.path))) {
+        await this.refreshMapReadinessForManifest(releaseId, manifest);
+      }
+    }
     const activeId = await this.options.store.getActiveId();
     const active = activeId ? await this.options.store.getRelease(activeId) : undefined;
     if (active?.manifest.files.some((file) => file.sha256 === hash && isMapChunk(file.path))) await this.refreshMapReadinessForRelease(active);
@@ -906,82 +1565,7 @@ class ContentRuntimeController implements ContentRuntime {
     await this.processChannel(channel);
   }
 
-  private withArtifactMaintenance<T>(work: () => Promise<T>): Promise<T> {
-    const previous = this.artifactMaintenance;
-    let unlock = () => {};
-    this.artifactMaintenance = new Promise<void>((resolve) => { unlock = resolve; });
-    return previous.then(work).finally(unlock);
-  }
-
-  private async ensureArchivedSceneInner(releaseId: string, scene: string, request: ArchivedSceneRequest): Promise<string> {
-    const path = `art/badges/scenes/${scene}.webp`;
-    this.assertRunning();
-    const cached = await this.options.store.getArchivedScene(releaseId, scene);
-    if (cached) {
-      const file = validateArchivedSceneDescriptor(cached, releaseId, scene);
-      if (await this.options.store.hasFile(file.sha256, file.byte_size)) {
-        this.assertRunning();
-        const url = await this.localFileUrl(file);
-        this.assertRunning();
-        this.publishArchivedSceneUrl(releaseId, scene, url);
-        return url;
-      }
-    }
-
-    this.assertRunning();
-    if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
-    if (!this.foreground) throw new ArchivedSceneRestoreDeferredError();
-    if (request.controller.signal.aborted) throw new ArchivedSceneRestoreDeferredError();
-    request.networkStarted = true;
-    let file: ContentFile;
-    try {
-      file = await restoreArchivedScene(releaseId, scene, this.options.store, this.fetcher, request.controller.signal);
-    } catch (error) {
-      if (this.stopped) throw new Error("Content runtime is stopped");
-      if (!this.connectivity().connected || !this.foreground || request.controller.signal.aborted) {
-        if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
-        throw new ArchivedSceneRestoreDeferredError();
-      }
-      throw error;
-    }
-    this.assertRunning();
-    const returnedFile = validateArchivedSceneDescriptor({ releaseId, scene, file }, releaseId, scene);
-    const persisted = await this.options.store.getArchivedScene(releaseId, scene);
-    if (!persisted) throw new Error("Archived scene descriptor was not durably retained");
-    const storedFile = validateArchivedSceneDescriptor(persisted, releaseId, scene);
-    if (!sameContentFile(returnedFile, storedFile)) throw new ContentValidationError("Archived scene descriptor changed during restore");
-    if (!(await this.options.store.hasFile(storedFile.sha256, storedFile.byte_size))) {
-      throw new Error("Archived scene bytes were not durably stored");
-    }
-    this.assertRunning();
-    const url = await this.localFileUrl(storedFile);
-    this.assertRunning();
-    this.publishArchivedSceneUrl(releaseId, scene, url);
-    return url;
-  }
-
-  private publishArchivedSceneUrl(releaseId: string, scene: string, url: string): void {
-    const snapshot = this.status.snapshot;
-    if (!snapshot) return;
-    const key = archivedSceneKey(releaseId, scene);
-    if (snapshot.retainedSceneUrls.get(key) === url) return;
-    const retainedSceneUrls = new Map(snapshot.retainedSceneUrls);
-    retainedSceneUrls.set(key, url);
-    this.setStatus({ snapshot: { ...snapshot, retainedSceneUrls } });
-  }
-
-  private abortArchivedSceneRequests(networkOnly = false): void {
-    for (const request of this.archivedSceneRequests.values()) {
-      if (!networkOnly || request.networkStarted) request.controller.abort();
-    }
-  }
-
-  private collectGarbage(): Promise<void> {
-    if (this.stopped || !this.initialized) return Promise.resolve();
-    return this.withArtifactMaintenance(() => this.collectGarbageLocked());
-  }
-
-  private async collectGarbageLocked(): Promise<void> {
+  private async collectGarbage(): Promise<void> {
     if (this.stopped || !this.initialized) return;
     const activeId = await this.options.store.getActiveId();
     const releases = await this.options.store.listReleases();
@@ -1004,7 +1588,6 @@ class ContentRuntimeController implements ContentRuntime {
       for (const file of remoteFiles(release.manifest)) referenced.add(file.sha256);
     }
     for (const entry of retained) if (entry.sceneFile) referenced.add(entry.sceneFile.sha256);
-    for (const entry of await this.options.store.listArchivedScenes()) referenced.add(entry.file.sha256);
     for (const [hash, count] of this.inFlightHashes) if (count > 0) referenced.add(hash);
     for (const file of await this.options.store.listFiles()) {
       if (referenced.has(file.hash)) continue;

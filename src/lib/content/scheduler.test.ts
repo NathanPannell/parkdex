@@ -71,20 +71,22 @@ describe("ContentDownloadScheduler policy transitions", () => {
     expect(firstResult).toBe("pending");
     expect(dedupedResult).toBe("pending");
     expect(attempts).toHaveLength(1);
-    expect(starts).toEqual(["queued"]);
+    expect(starts).toEqual([]);
 
     scheduler.setPolicy(wifi);
-    queuedGate.resolve();
     await flushMicrotasks();
 
-    expect(starts).toEqual(["queued"]);
     expect(attempts).toHaveLength(2);
     expect(attempts[1].signal.aborted).toBe(false);
+    expect(starts).toEqual([]);
     attempts[1].gate.resolve();
     await flushMicrotasks();
 
     expect(firstResult).toBe("resolved");
     expect(dedupedResult).toBe("resolved");
+    expect(starts).toEqual(["queued"]);
+    queuedGate.resolve();
+    await flushMicrotasks();
     expect(starts).toEqual(["queued", "nearby"]);
     nearbyGate.resolve();
     await flushMicrotasks();

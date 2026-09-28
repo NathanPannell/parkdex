@@ -2,6 +2,7 @@ import type { Map as MLMap } from "maplibre-gl";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
+import { ContentSyncStatus } from "../../components/ContentSyncStatus";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
@@ -228,6 +229,7 @@ export function MapScreen() {
             </button>
           )}
         </motion.div>
+        <ContentSyncStatus />
       </div>
 
       <AnimatePresence>

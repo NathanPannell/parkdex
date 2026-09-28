@@ -1,9 +1,9 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { Network } from "@capacitor/network";
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
+import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
 import type { ContentEnvironment, ContentRuntime, ContentStatus } from "./contracts";
 import { useStore } from "../store";
 import { isUsableGpsAccuracy } from "../geo";
@@ -15,6 +15,7 @@ const EMPTY_STATUS: ContentStatus = {
   totalBytes: 0,
   fullMapReady: false,
   waitingForWifi: false,
+  syncStage: "idle",
   error: null,
 };
 
@@ -23,15 +24,13 @@ const ContentContext = createContext<ContentRuntime | null>(null);
 
 function contentEnvironment(): ContentEnvironment {
   const value = import.meta.env.VITE_CONTENT_ENV;
-  // Preview app deployments intentionally read the shared staging content channel.
+  // Keep the existing data-environment label; the API source ID also binds the cache to its host.
   return value === "main" ? "main" : "staging";
 }
 
 function initialConnectivity() {
   return { connected: typeof navigator === "undefined" ? true : navigator.onLine, wifi: false };
 }
-
-const STAGING_DISCOVERY_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
 
 export function ContentProvider({ children }: { children: ReactNode }) {
   const { state } = useStore();
@@ -43,12 +42,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     const store = createContentStore();
     runtimeRef.current = createContentRuntime({
       store,
-      discoveryUrl: import.meta.env.VITE_CONTENT_API_URL || (Capacitor.isNativePlatform() || import.meta.env.DEV
-        ? STAGING_DISCOVERY_URL
-        : "/api/content/current"),
+      apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
       claimedParkIds: () => Object.keys(claimsRef.current),
       connectivity: initialConnectivity(),
+      fetch: contentFetch,
     });
   }
   const runtime = runtimeRef.current;
@@ -57,21 +55,13 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (stopTimer.current !== undefined) window.clearTimeout(stopTimer.current);
     let live = true;
-    let networkListener: { remove: () => Promise<void> } | undefined;
+    const stopConnectivity = subscribeContentConnectivity((connectivity) => runtime.setConnectivity(connectivity));
     let appListener: { remove: () => Promise<void> } | undefined;
     const setForeground = (foreground: boolean) => runtime.setForeground(foreground);
     const onVisibility = () => setForeground(document.visibilityState !== "hidden");
-    const onNetwork = (status: { connected: boolean; connectionType: string }) => {
-      runtime.setConnectivity({ connected: status.connected, wifi: status.connectionType === "wifi" });
-    };
 
     onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
-    void Network.getStatus().then(onNetwork).catch(() => {});
-    void Network.addListener("networkStatusChange", onNetwork).then((listener) => {
-      if (live) networkListener = listener;
-      else void listener.remove();
-    }).catch(() => {});
     if (Capacitor.isNativePlatform()) {
       void CapacitorApp.addListener("appStateChange", ({ isActive }) => setForeground(isActive)).then((listener) => {
         if (live) appListener = listener;
@@ -84,7 +74,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     return () => {
       live = false;
       document.removeEventListener("visibilitychange", onVisibility);
-      void networkListener?.remove();
+      stopConnectivity();
       void appListener?.remove();
       runtime.setForeground(false);
       // React StrictMode replays effects during development. Give the next setup

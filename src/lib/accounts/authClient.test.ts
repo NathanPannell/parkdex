@@ -9,6 +9,12 @@ const nativeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => nativeMocks.native } }));
+vi.mock("../content/transport", () => ({
+  contentFetch: vi.fn(),
+  getContentApiOrigin: () => "https://parkdex-kip-staging.vercel.app",
+  getContentConnectivity: vi.fn(async () => ({ connected: true, wifi: true })),
+  subscribeContentConnectivity: vi.fn(() => () => {}),
+}));
 vi.mock("./nativeIdentity", () => ({
   nativeAuthFetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     nativeMocks.calls.push({ input, headers: new Headers(init?.headers), tokenAtCall: nativeMocks.activeToken });

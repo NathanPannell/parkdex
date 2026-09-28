@@ -35,15 +35,14 @@ function abortError() {
   return error;
 }
 
-function isMapChunk(path: string) {
-  return /^map\/island\/\d{3,}\.bin$/.test(path);
+export function isDownloadAllowed(_purpose: DownloadPurpose, _path: string, policy: DownloadPolicy): boolean {
+  // Every content byte is Wi-Fi only. Priority still controls which Wi-Fi
+  // work starts first, but cellular never starts a queued content request.
+  return policy.foreground && policy.connectivity.connected && policy.connectivity.wifi;
 }
 
-export function isDownloadAllowed(purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
-  if (!policy.foreground || !policy.connectivity.connected) return false;
-  if (purpose === "bulk") return policy.connectivity.wifi;
-  if (purpose === "update" && isMapChunk(path)) return policy.connectivity.wifi;
-  return true;
+function isMapWork(task: Pick<ScheduledDownload, "path" | "purpose">): boolean {
+  return task.purpose === "bulk" || /^map\//.test(task.path);
 }
 
 /** A foreground-only queue that deduplicates byte downloads by immutable hash. */
@@ -151,7 +150,10 @@ export class ContentDownloadScheduler {
     if (this.disposed) return;
     while (this.active < this.concurrency) {
       this.sortQueue();
-      const nextIndex = this.queue.findIndex((task) => task.waiters.size > 0 && isDownloadAllowed(task.purpose, task.path, this.policy));
+      const mapLimit = Math.max(1, this.concurrency - 1);
+      const activeMap = [...this.tasks.values()].filter((task) => task.state === "running" && isMapWork(task)).length;
+      const nextIndex = this.queue.findIndex((task) => task.waiters.size > 0 &&
+        (!isMapWork(task) || activeMap < mapLimit) && isDownloadAllowed(task.purpose, task.path, this.policy));
       if (nextIndex < 0) return;
       const [task] = this.queue.splice(nextIndex, 1);
       if (!task || task.state !== "queued") continue;

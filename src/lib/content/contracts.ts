@@ -10,7 +10,6 @@ export type ContentFile = {
   byte_size: number;
   content_type: string;
 };
-export type ArchivedScene = { releaseId: string; scene: string; file: ContentFile };
 export type MapManifest = { size: number; chunkBytes: number; count: number };
 export type ContentManifest = {
   version: string;
@@ -36,6 +35,42 @@ export type DriveData = {
 };
 export type ContentBoundaries = FeatureCollection<MultiPolygon, { id: string; biome: string }>;
 export type ContentPayload = { parks: Park[]; boundaries: ContentBoundaries; drive: DriveData };
+export type ContentMapPointer = { version: string; manifestUrl: string; manifestSha256: string };
+export type ContentMapInventory = {
+  schema: "parkdex.content-map/v1";
+  version: string;
+  mapManifest: MapManifest;
+  files: ContentFile[];
+};
+export type ArchivedScene = { releaseId: string; scene: string; file: ContentFile };
+export type ContentChange =
+  | { entity: "park"; op: "upsert"; id: string; value: Park }
+  | { entity: "boundary"; op: "upsert"; id: string; value: ContentBoundaries["features"][number] }
+  | { entity: "drive"; op: "upsert"; id: string; value: DriveData["parks"][string] }
+  | { entity: "asset"; op: "upsert"; id: string; value: ContentFile }
+  | { entity: "hubs"; op: "upsert"; id: "default"; value: DriveData["hubs"] }
+  | { entity: "map"; op: "upsert"; id: "default"; value: ContentMapPointer | null }
+  | { entity: "park" | "boundary" | "drive" | "asset"; op: "delete"; id: string };
+export type ContentChangeBatch = { revision: number; changes: ContentChange[] };
+export type ContentChangesResponse = {
+  schema: "parkdex.content-sync/v1";
+  fromRevision: number;
+  throughRevision: number;
+  headRevision: number;
+  hasMore: boolean;
+  batches: ContentChangeBatch[];
+};
+export type ContentSyncState = {
+  revision: number;
+  /** Local source binding persisted beside the cursor, never sent by the API. */
+  sourceId?: string;
+  parks: Park[];
+  boundaries: ContentBoundaries;
+  drive: DriveData;
+  assets: ContentFile[];
+  map: ContentMapPointer | null;
+};
+export type ContentSyncCursor = { revision: number; sourceId: string };
 export type StoredRelease = {
   id: string;
   channel: ContentChannel;
@@ -55,6 +90,7 @@ export interface ContentStore {
   listReleases(): Promise<StoredRelease[]>;
   putRelease(release: StoredRelease): Promise<void>;
   activateRelease(id: string, expectedActiveId: string | null): Promise<void>;
+  clearActiveRelease(expectedActiveId: string): Promise<void>;
   deleteRelease(id: string): Promise<void>;
   hasFile(hash: string, expectedSize: number): Promise<boolean>;
   putFile(hash: string, bytes: ArrayBuffer): Promise<void>;
@@ -67,6 +103,15 @@ export interface ContentStore {
   getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined>;
   retainArchivedScene(scene: ArchivedScene): Promise<void>;
   listArchivedScenes(): Promise<ArchivedScene[]>;
+  getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null>;
+  getSyncState(environment: ContentEnvironment): Promise<ContentSyncState | null>;
+  replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor?: boolean): Promise<void>;
+  applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string): Promise<void>;
+  advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string): Promise<void>;
+  getMapInventory(version: string): Promise<ContentMapInventory | null>;
+  putMapInventory(inventory: ContentMapInventory): Promise<void>;
+  pruneMapInventories(keepVersions: readonly string[]): Promise<void>;
+  getCachedMapPointer(environment: ContentEnvironment): Promise<ContentMapPointer | null>;
   close(): Promise<void>;
 }
 
@@ -85,6 +130,7 @@ export type ContentSnapshot = {
   retainedSceneUrls: ReadonlyMap<string, string>;
 };
 export type ContentPhase = "starting" | "downloading" | "ready" | "updating" | "offline" | "error";
+export type ContentSyncStage = "idle" | "checking" | "waiting-for-wifi" | "downloading" | "applying" | "error";
 export type ContentStatus = {
   phase: ContentPhase;
   snapshot: ContentSnapshot | null;
@@ -92,6 +138,7 @@ export type ContentStatus = {
   totalBytes: number;
   fullMapReady: boolean;
   waitingForWifi: boolean;
+  syncStage: ContentSyncStage;
   error: string | null;
 };
 export type DownloadPurpose = "core" | "nearby" | "bulk" | "update";
@@ -110,17 +157,22 @@ export interface ContentRuntime {
   ensureFile(releaseId: string, path: string, purpose: DownloadPurpose, signal?: AbortSignal): Promise<void>;
   readFile(releaseId: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer>;
   getFileUrl(releaseId: string, path: string): Promise<string>;
+  getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null;
   ensureArchivedScene(releaseId: string, scene: string): Promise<string>;
   stop(): Promise<void>;
 }
 
 export type ContentRuntimeOptions = {
   store: ContentStore;
-  discoveryUrl: string;
+  /** A configured null value means sync mode is selected but its origin is invalid. */
+  apiUrl?: string | null;
+  /** Temporary legacy bridge while existing installations transition from the R2 channel. */
+  discoveryUrl?: string;
   environment: ContentEnvironment;
   claimedParkIds: () => string[];
   fetch?: typeof fetch;
   connectivity?: Connectivity;
+  now?: () => number;
 };
 
 export const CONTENT_READER_VERSION = 1;

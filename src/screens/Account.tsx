@@ -329,7 +329,9 @@ export function Account({ onBack }: { onBack: () => void }) {
           if (claim.parkSnapshot) continue;
           const currentPark = content.liveParks.find((candidate) => candidate.id === claim.parkId);
           const park = currentPark ?? content.retiredParks.find((candidate) => candidate.id === claim.parkId);
-          if (park) await setLegacyClaimSnapshot({ kind: "guest" }, claim.claimId, park, claim.contentReleaseId ?? (currentPark ? content.releaseId : null));
+          if (park) {
+            await setLegacyClaimSnapshot({ kind: "guest" }, claim.claimId, park, claim.contentReleaseId);
+          }
         }
       }
       const result = await auth.attachGuestCollection();

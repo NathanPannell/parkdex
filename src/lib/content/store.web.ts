@@ -1,19 +1,45 @@
+import type { ArchivedScene, ContentChangeBatch, ContentEnvironment, ContentMapInventory, ContentMapPointer, ContentStore, ContentSyncCursor, ContentSyncState, RetainedPark, StoredRelease } from "./contracts";
 import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
-import type { ArchivedScene, ContentStore, RetainedPark, StoredRelease } from "./contracts";
 
 const DATABASE = "parkdex-content-v1";
-const VERSION = 2;
+const VERSION = 3;
 const RELEASES = "releases";
 const META = "meta";
 const FILES = "files";
 const RETAINED_PARKS = "retainedParks";
+const SYNC_ROWS = "syncRows";
+const SYNC_CURSORS = "syncCursors";
+const MAP_INVENTORIES = "mapInventories";
+const CACHED_MAP_POINTERS = "cachedMapPointers";
 const ARCHIVED_SCENES = "archivedScenes";
 const ACTIVE_KEY = "activeReleaseId";
 
 type MetaRecord = { key: string; value: string | null };
 type FileRecord = { hash: string; size: number; bytes: Blob };
 type RetainedRecord = { parkId: string; park: RetainedPark["park"]; sceneFile?: RetainedPark["sceneFile"] };
-type ArchivedRecord = ArchivedScene & { key: string };
+type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | "boundary" | "drive" | "asset" | "hubs" | "map"; id: string; value: unknown; position: number };
+type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string };
+type MapInventoryRecord = { version: string; inventory: ContentMapInventory };
+type CachedMapPointer = { environment: ContentEnvironment; pointer: ContentMapPointer };
+type ArchivedSceneRecord = ArchivedScene & { key: string };
+
+function syncKey(environment: ContentEnvironment, entity: SyncRow["entity"], id: string) {
+  return `${environment}\u0000${entity}\u0000${id}`;
+}
+
+function contentRows(environment: ContentEnvironment, state: ContentSyncState): SyncRow[] {
+  const rows: SyncRow[] = [];
+  state.parks.forEach((value, position) => rows.push({ key: syncKey(environment, "park", value.id), environment, entity: "park", id: value.id, value, position }));
+  state.boundaries.features.forEach((value, position) => {
+    const id = value.properties.id;
+    rows.push({ key: syncKey(environment, "boundary", id), environment, entity: "boundary", id, value, position });
+  });
+  Object.entries(state.drive.parks).forEach(([id, value], position) => rows.push({ key: syncKey(environment, "drive", id), environment, entity: "drive", id, value, position }));
+  state.assets.forEach((value, position) => rows.push({ key: syncKey(environment, "asset", value.path), environment, entity: "asset", id: value.path, value, position }));
+  rows.push({ key: syncKey(environment, "hubs", "default"), environment, entity: "hubs", id: "default", value: state.drive.hubs, position: 0 });
+  if (state.map) rows.push({ key: syncKey(environment, "map", "default"), environment, entity: "map", id: "default", value: state.map, position: 0 });
+  return rows;
+}
 
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
@@ -276,17 +302,23 @@ export class WebContentStore implements ContentStore {
   async deleteFile(hash: string): Promise<void> {
     const key = assertHash(hash);
     const db = await this.database();
-    await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES], "readwrite", (tx, complete, fail) => {
+    await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES, SYNC_ROWS, MAP_INVENTORIES, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
       const activeRequest = tx.objectStore(META).get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;
       const retainedRequest = tx.objectStore(RETAINED_PARKS).getAll() as IDBRequest<RetainedRecord[]>;
-      const archivedRequest = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedRecord[]>;
+      const archivedRequest = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedSceneRecord[]>;
+      const syncRequest = tx.objectStore(SYNC_ROWS).getAll() as IDBRequest<SyncRow[]>;
+      const inventoryRequest = tx.objectStore(MAP_INVENTORIES).getAll() as IDBRequest<MapInventoryRecord[]>;
+      const pointersRequest = tx.objectStore(CACHED_MAP_POINTERS).getAll() as IDBRequest<CachedMapPointer[]>;
       let ready = 0;
       let activeId: string | null = null;
       let activeRelease: StoredRelease | undefined;
       let retainedParks: RetainedRecord[] = [];
-      let archivedScenes: ArchivedRecord[] = [];
+      let archivedScenes: ArchivedSceneRecord[] = [];
+      let syncRows: SyncRow[] = [];
+      let inventories: MapInventoryRecord[] = [];
+      let cachedPointers: CachedMapPointer[] = [];
       const finish = () => {
-        if (ready !== 3) return;
+        if (ready !== 6) return;
         const activeReferencesFile = activeRelease?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
         const retainedReferencesFile = retainedParks.some((park) => park.sceneFile?.sha256.toLowerCase() === key);
         try {
@@ -302,8 +334,12 @@ export class WebContentStore implements ContentStore {
           return;
         }
         const archivedReferencesFile = archivedScenes.some((scene) => scene.file.sha256 === key);
-        if (activeReferencesFile || retainedReferencesFile || archivedReferencesFile) {
-          fail(new Error(`Cannot delete content file referenced by active or retained content, including archived scenes: ${key}`));
+        const syncReferencesFile = syncRows.some((row) => row.entity === "asset" && (row.value as { sha256?: unknown }).sha256 === key);
+        const currentMapVersions = new Set(cachedPointers.map((entry) => entry.pointer.version));
+        for (const row of syncRows) if (row.entity === "map" && row.value) currentMapVersions.add((row.value as ContentMapPointer).version);
+        const mapReferencesFile = inventories.some((entry) => currentMapVersions.has(entry.version) && entry.inventory.files.some((file) => file.sha256 === key));
+        if (activeReferencesFile || retainedReferencesFile || archivedReferencesFile || syncReferencesFile || mapReferencesFile) {
+          fail(new Error(`Cannot delete content file referenced by active or retained content: ${key}`));
           return;
         }
         const request = tx.objectStore(FILES).delete(key);
@@ -332,12 +368,14 @@ export class WebContentStore implements ContentStore {
         finish();
       };
       retainedRequest.onerror = () => fail(retainedRequest.error);
-      archivedRequest.onsuccess = () => {
-        archivedScenes = archivedRequest.result;
-        ready += 1;
-        finish();
-      };
+      archivedRequest.onsuccess = () => { archivedScenes = archivedRequest.result; ready += 1; finish(); };
       archivedRequest.onerror = () => fail(archivedRequest.error);
+      syncRequest.onsuccess = () => { syncRows = syncRequest.result; ready += 1; finish(); };
+      syncRequest.onerror = () => fail(syncRequest.error);
+      inventoryRequest.onsuccess = () => { inventories = inventoryRequest.result; ready += 1; finish(); };
+      inventoryRequest.onerror = () => fail(inventoryRequest.error);
+      pointersRequest.onsuccess = () => { cachedPointers = pointersRequest.result; ready += 1; finish(); };
+      pointersRequest.onerror = () => fail(pointersRequest.error);
     });
     this.revokeHashUrls(key);
   }
@@ -365,11 +403,9 @@ export class WebContentStore implements ContentStore {
       for (const [parkId, retained] of unique) {
         const request = store.get(parkId) as IDBRequest<RetainedRecord | undefined>;
         request.onsuccess = () => {
-          store.put({
-            parkId,
-            park: retained.park,
-            sceneFile: retained.sceneFile ?? request.result?.sceneFile,
-          } satisfies RetainedRecord);
+          const existing = request.result;
+          if (!existing) store.put({ parkId, park: retained.park, sceneFile: retained.sceneFile } satisfies RetainedRecord);
+          else store.put({ parkId, park: retained.park, sceneFile: retained.sceneFile ?? existing.sceneFile } satisfies RetainedRecord);
           remaining -= 1;
           if (remaining === 0) complete(undefined);
         };
@@ -378,27 +414,40 @@ export class WebContentStore implements ContentStore {
     });
   }
 
-  async getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined> {
+  async clearActiveRelease(expectedActiveId: string): Promise<void> {
     const db = await this.database();
-    const key = archivedSceneStorageKey(releaseId, scene);
-    return waitForTransaction<ArchivedScene | undefined>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
-      const request = tx.objectStore(ARCHIVED_SCENES).get(key) as IDBRequest<ArchivedRecord | undefined>;
+    await waitForTransaction<void>(db, META, "readwrite", (tx, complete, fail) => {
+      const store = tx.objectStore(META);
+      const request = store.get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;
       request.onsuccess = () => {
-        const record = request.result;
-        if (!record) {
-          complete(undefined);
+        if ((request.result?.value ?? null) !== expectedActiveId) {
+          fail(new Error("Active content changed before its legacy pointer could be cleared"));
           return;
         }
-        const { key: storedKey, ...descriptor } = record;
+        const write = store.put({ key: ACTIVE_KEY, value: null } satisfies MetaRecord);
+        write.onsuccess = () => complete(undefined);
+        write.onerror = () => fail(write.error);
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined> {
+    const key = archivedSceneStorageKey(releaseId, scene);
+    const db = await this.database();
+    return waitForTransaction<ArchivedScene | undefined>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(ARCHIVED_SCENES).get(key) as IDBRequest<ArchivedSceneRecord | undefined>;
+      request.onsuccess = () => {
+        const record = request.result;
+        if (!record) { complete(undefined); return; }
+        const { key: storedKey, ...archived } = record;
         try {
-          assertArchivedSceneDescriptor(descriptor);
-          if (storedKey !== key || descriptor.releaseId !== releaseId || descriptor.scene !== scene) {
+          assertArchivedSceneDescriptor(archived);
+          if (storedKey !== key || archived.releaseId !== releaseId || archived.scene !== scene) {
             throw new Error("Archived scene storage key does not match its descriptor");
           }
-          complete(descriptor);
-        } catch (error) {
-          fail(error);
-        }
+          complete(archived);
+        } catch (error) { fail(error); }
       };
       request.onerror = () => fail(request.error);
     });
@@ -410,7 +459,7 @@ export class WebContentStore implements ContentStore {
     const db = await this.database();
     const key = archivedSceneStorageKey(descriptor.releaseId, descriptor.scene);
     await waitForTransaction<void>(db, ARCHIVED_SCENES, "readwrite", (tx, complete, fail) => {
-      const request = tx.objectStore(ARCHIVED_SCENES).put({ ...descriptor, key } satisfies ArchivedRecord);
+      const request = tx.objectStore(ARCHIVED_SCENES).put({ ...descriptor, key } satisfies ArchivedSceneRecord);
       request.onsuccess = () => complete(undefined);
       request.onerror = () => fail(request.error);
     });
@@ -419,7 +468,7 @@ export class WebContentStore implements ContentStore {
   async listArchivedScenes(): Promise<ArchivedScene[]> {
     const db = await this.database();
     return waitForTransaction<ArchivedScene[]>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
-      const request = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedRecord[]>;
+      const request = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedSceneRecord[]>;
       request.onsuccess = () => {
         try {
           const descriptors = request.result.map((record) => {
@@ -430,14 +479,186 @@ export class WebContentStore implements ContentStore {
             }
             return descriptor;
           });
-          complete(descriptors.sort((left, right) =>
+          descriptors.sort((left, right) =>
             left.releaseId < right.releaseId ? -1 : left.releaseId > right.releaseId ? 1 :
               left.scene < right.scene ? -1 : left.scene > right.scene ? 1 : 0,
-          ));
-        } catch (error) {
-          fail(error);
-        }
+          );
+          complete(descriptors);
+        } catch (error) { fail(error); }
       };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async getSyncState(environment: ContentEnvironment): Promise<ContentSyncState | null> {
+    const db = await this.database();
+    return waitForTransaction<ContentSyncState | null>(db, [SYNC_ROWS, SYNC_CURSORS], "readonly", (tx, complete, fail) => {
+      const rowsRequest = tx.objectStore(SYNC_ROWS).getAll() as IDBRequest<SyncRow[]>;
+      const cursorRequest = tx.objectStore(SYNC_CURSORS).get(environment) as IDBRequest<SyncCursor | undefined>;
+      let rows: SyncRow[] | undefined;
+      let cursor: SyncCursor | undefined;
+      const finish = () => {
+        if (!rows || (cursor === undefined && cursorRequest.readyState !== "done")) return;
+        if (!cursor) { complete(null); return; }
+        const local = rows.filter((row) => row.environment === environment).sort((a, b) => a.entity.localeCompare(b.entity) || a.position - b.position || a.id.localeCompare(b.id));
+        const parks = local.filter((row) => row.entity === "park").map((row) => row.value as ContentSyncState["parks"][number]);
+        const boundaries = local.filter((row) => row.entity === "boundary").map((row) => row.value as ContentSyncState["boundaries"]["features"][number]);
+        const drives = Object.fromEntries(local.filter((row) => row.entity === "drive").map((row) => [row.id, row.value as ContentSyncState["drive"]["parks"][string]]));
+        const hubs = local.find((row) => row.entity === "hubs")?.value as ContentSyncState["drive"]["hubs"] | undefined;
+        if (!hubs) { complete(null); return; }
+        const assets = local.filter((row) => row.entity === "asset").map((row) => row.value as ContentSyncState["assets"][number]);
+        const map = local.find((row) => row.entity === "map")?.value as ContentSyncState["map"] | undefined;
+        const parkOrder = new Map(parks.map((park, index) => [park.id, index]));
+        boundaries.sort((a, b) => (parkOrder.get(a.properties.id) ?? Number.MAX_SAFE_INTEGER) - (parkOrder.get(b.properties.id) ?? Number.MAX_SAFE_INTEGER));
+        complete({ revision: cursor.revision, sourceId: cursor.sourceId, parks, boundaries: { type: "FeatureCollection", features: boundaries }, drive: { hubs, parks: drives }, assets, map: map ?? null });
+      };
+      rowsRequest.onsuccess = () => { rows = rowsRequest.result; finish(); };
+      rowsRequest.onerror = () => fail(rowsRequest.error);
+      cursorRequest.onsuccess = () => { cursor = cursorRequest.result; finish(); };
+      cursorRequest.onerror = () => fail(cursorRequest.error);
+    });
+  }
+
+  async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
+    const db = await this.database();
+    return waitForTransaction<ContentSyncCursor | null>(db, SYNC_CURSORS, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(SYNC_CURSORS).get(environment) as IDBRequest<SyncCursor | undefined>;
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor || !Number.isSafeInteger(cursor.revision) || typeof cursor.sourceId !== "string") complete(null);
+        else complete({ revision: cursor.revision, sourceId: cursor.sourceId });
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false): Promise<void> {
+    if (!resetCursor && expectedRevision !== null && state.revision < expectedRevision) throw new Error("Content snapshot cannot move the sync cursor backwards");
+    const db = await this.database();
+    await waitForTransaction<void>(db, [SYNC_ROWS, SYNC_CURSORS, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
+      const rowsStore = tx.objectStore(SYNC_ROWS);
+      const getAll = rowsStore.getAll() as IDBRequest<SyncRow[]>;
+      const cursorStore = tx.objectStore(SYNC_CURSORS);
+      const cursorRequest = cursorStore.get(environment) as IDBRequest<SyncCursor | undefined>;
+      let rowsReady = false;
+      let cursorReady = false;
+      const finish = () => {
+        if (!rowsReady || !cursorReady) return;
+        const current = cursorRequest.result?.revision ?? null;
+        if (current !== expectedRevision || (cursorRequest.result?.sourceId ?? null) !== expectedSourceId) {
+          fail(new Error("Content sync cursor changed before the snapshot could be committed"));
+          return;
+        }
+        for (const row of getAll.result) if (row.environment === environment) rowsStore.delete(row.key);
+        for (const row of contentRows(environment, state)) rowsStore.put(row);
+        cursorStore.put({ environment, revision: state.revision, sourceId } satisfies SyncCursor);
+        if (state.map) tx.objectStore(CACHED_MAP_POINTERS).put({ environment, pointer: state.map } satisfies CachedMapPointer);
+        complete(undefined);
+      };
+      getAll.onsuccess = () => { rowsReady = true; finish(); };
+      getAll.onerror = () => fail(getAll.error);
+      cursorRequest.onsuccess = () => { cursorReady = true; finish(); };
+      cursorRequest.onerror = () => fail(cursorRequest.error);
+    });
+  }
+
+  async applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string): Promise<void> {
+    const db = await this.database();
+    await waitForTransaction<void>(db, [SYNC_ROWS, SYNC_CURSORS, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
+      const cursorStore = tx.objectStore(SYNC_CURSORS);
+      const request = cursorStore.get(environment) as IDBRequest<SyncCursor | undefined>;
+      const allRowsRequest = tx.objectStore(SYNC_ROWS).getAll() as IDBRequest<SyncRow[]>;
+      let cursorReady = false;
+      let allRows: SyncRow[] | undefined;
+      const finish = () => {
+        if (!cursorReady || !allRows) return;
+        const cursor = request.result;
+        if (!cursor || cursor.revision !== expectedRevision || cursor.sourceId !== sourceId || batch.revision !== expectedRevision + 1) {
+          fail(new Error("Content sync cursor changed before the batch could be committed"));
+          return;
+        }
+        const rowsStore = tx.objectStore(SYNC_ROWS);
+        const maxPositions = new Map<SyncRow["entity"], number>();
+        for (const row of allRows) {
+          if (row.environment !== environment) continue;
+          maxPositions.set(row.entity, Math.max(maxPositions.get(row.entity) ?? -1, row.position));
+        }
+        for (const change of batch.changes) {
+          const key = syncKey(environment, change.entity, change.id);
+          if (change.op === "delete") rowsStore.delete(key);
+          else if (change.entity === "map" && change.value === null) rowsStore.delete(key);
+          else {
+            const existing = allRows.find((row) => row.environment === environment && row.entity === change.entity && row.id === change.id);
+            const position = existing?.position ?? (maxPositions.get(change.entity) ?? -1) + 1;
+            if (!existing) maxPositions.set(change.entity, position);
+            rowsStore.put({ key, environment, entity: change.entity, id: change.id, value: change.value, position } satisfies SyncRow);
+            if (change.entity === "map" && change.value) tx.objectStore(CACHED_MAP_POINTERS).put({ environment, pointer: change.value } satisfies CachedMapPointer);
+          }
+        }
+        cursorStore.put({ environment, revision: batch.revision, sourceId } satisfies SyncCursor);
+        complete(undefined);
+      };
+      request.onsuccess = () => { cursorReady = true; finish(); };
+      request.onerror = () => fail(request.error);
+      allRowsRequest.onsuccess = () => { allRows = allRowsRequest.result; finish(); };
+      allRowsRequest.onerror = () => fail(allRowsRequest.error);
+    });
+  }
+
+  async advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string): Promise<void> {
+    const db = await this.database();
+    await waitForTransaction<void>(db, SYNC_CURSORS, "readwrite", (tx, complete, fail) => {
+      const store = tx.objectStore(SYNC_CURSORS);
+      const request = store.get(environment) as IDBRequest<SyncCursor | undefined>;
+      request.onsuccess = () => {
+        if (!request.result || request.result.revision !== expectedRevision || request.result.sourceId !== sourceId || revision < expectedRevision) {
+          fail(new Error("Content sync cursor changed before the revision could advance"));
+          return;
+        }
+        store.put({ environment, revision, sourceId } satisfies SyncCursor);
+        complete(undefined);
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async getMapInventory(version: string): Promise<ContentMapInventory | null> {
+    const db = await this.database();
+    return waitForTransaction<ContentMapInventory | null>(db, MAP_INVENTORIES, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(MAP_INVENTORIES).get(version) as IDBRequest<MapInventoryRecord | undefined>;
+      request.onsuccess = () => complete(request.result?.inventory ?? null);
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async putMapInventory(inventory: ContentMapInventory): Promise<void> {
+    const db = await this.database();
+    await waitForTransaction<void>(db, MAP_INVENTORIES, "readwrite", (tx, complete, fail) => {
+      const request = tx.objectStore(MAP_INVENTORIES).put({ version: inventory.version, inventory } satisfies MapInventoryRecord);
+      request.onsuccess = () => complete(undefined);
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async pruneMapInventories(keepVersions: readonly string[]): Promise<void> {
+    const db = await this.database();
+    const keep = new Set(keepVersions);
+    await waitForTransaction<void>(db, MAP_INVENTORIES, "readwrite", (tx, complete, fail) => {
+      const store = tx.objectStore(MAP_INVENTORIES);
+      const request = store.getAll() as IDBRequest<MapInventoryRecord[]>;
+      request.onsuccess = () => {
+        for (const record of request.result) if (!keep.has(record.version)) store.delete(record.version);
+        complete(undefined);
+      };
+      request.onerror = () => fail(request.error);
+    });
+  }
+
+  async getCachedMapPointer(environment: ContentEnvironment): Promise<ContentMapPointer | null> {
+    const db = await this.database();
+    return waitForTransaction<ContentMapPointer | null>(db, CACHED_MAP_POINTERS, "readonly", (tx, complete, fail) => {
+      const request = tx.objectStore(CACHED_MAP_POINTERS).get(environment) as IDBRequest<CachedMapPointer | undefined>;
+      request.onsuccess = () => complete(request.result?.pointer ?? null);
       request.onerror = () => fail(request.error);
     });
   }
@@ -475,6 +696,10 @@ export class WebContentStore implements ContentStore {
           if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" });
           if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: "hash" });
           if (!db.objectStoreNames.contains(RETAINED_PARKS)) db.createObjectStore(RETAINED_PARKS, { keyPath: "parkId" });
+          if (!db.objectStoreNames.contains(SYNC_ROWS)) db.createObjectStore(SYNC_ROWS, { keyPath: "key" });
+          if (!db.objectStoreNames.contains(SYNC_CURSORS)) db.createObjectStore(SYNC_CURSORS, { keyPath: "environment" });
+          if (!db.objectStoreNames.contains(MAP_INVENTORIES)) db.createObjectStore(MAP_INVENTORIES, { keyPath: "version" });
+          if (!db.objectStoreNames.contains(CACHED_MAP_POINTERS)) db.createObjectStore(CACHED_MAP_POINTERS, { keyPath: "environment" });
           if (!db.objectStoreNames.contains(ARCHIVED_SCENES)) db.createObjectStore(ARCHIVED_SCENES, { keyPath: "key" });
         };
         request.onsuccess = () => {

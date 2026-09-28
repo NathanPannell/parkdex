@@ -22,6 +22,7 @@ import {
   type RemoteClaim,
   type RemotePhoto,
 } from "./personalStore";
+import { isContentWifiAvailable } from "../content/transport";
 
 export type AuthenticatedFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -287,9 +288,11 @@ async function pullClaims(session: ProgressSession, owner: ProgressOwner, result
 
 async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result: ProgressSyncResult) {
   const pending = await listPhotosNeedingDownload(owner);
+  if (pending.length === 0 || !(await isContentWifiAvailable())) return;
   for (const item of pending) {
     try {
       assertCurrent(session);
+      if (!(await isContentWifiAvailable())) return;
       const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claim.claimId)}/photo`, { method: "GET" });
       assertCurrent(session);
       await ensureOk(response, "photo-restore");
@@ -304,6 +307,7 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
     } catch (error) {
       result.issues.push(issueFor(error, "photo-restore", item.claim.claimId));
       if (error instanceof ProgressSessionChangedError) return;
+      if (error instanceof Error && (error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
     }
   }
 }

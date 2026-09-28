@@ -85,7 +85,7 @@ function ClaimSnapshotRestorer() {
           const currentPark = content.liveParks.find((candidate) => candidate.id === claim.parkId);
           const park = currentPark ?? content.retiredParks.find((candidate) => candidate.id === claim.parkId);
           if (!park) continue;
-          await setLegacyClaimSnapshot(owner, claim.claimId, park, claim.contentReleaseId ?? (currentPark ? content.releaseId : null));
+          await setLegacyClaimSnapshot(owner, claim.claimId, park, claim.contentReleaseId);
           changed = true;
         }
         if (!live || !changed) return;

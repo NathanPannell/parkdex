@@ -7,9 +7,9 @@ import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
-import { badgeTotal, PALETTES, RARITY, type Park } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
 import { progressOwnerKey, useStore } from "../lib/store";
-import { useContent } from "../lib/content/provider";
+import { useContent, useContentRuntime } from "../lib/content/provider";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { createPersonalClaim } from "../lib/accounts/personalStore";
 import { claimEventContext } from "../lib/accounts/progressSync";
@@ -18,22 +18,46 @@ import { recordParkClaimed } from "../lib/interactions";
 const HOLD_MS = 1500;
 const CHEERS = ["KLEEP! Beauty!", "Into the case!", "Look at that shine!", "Another one!"];
 
+type ClaimEntry = { park: Park; contentReleaseId: string | null; sceneHref: string | null };
+
 export function Claim() {
   const { state } = useStore();
   const content = useContent();
+  const runtime = useContentRuntime();
   const [parkId] = useState(() => state.tripId ?? "");
-  const park = content?.parkById.get(parkId);
+  const entryRef = useRef<ClaimEntry | null>(null);
+  const currentPark = content?.parkById.get(parkId);
+
+  if (!entryRef.current && state.progressReady && content && currentPark) {
+    const park = { ...currentPark };
+    const contentReleaseId = park.scene ? runtime.getSceneAssetVersion(park.id, park.scene) : null;
+    if (!park.scene || contentReleaseId) {
+      entryRef.current = {
+        park,
+        contentReleaseId,
+        sceneHref: park.scene ? content.assetUrls.get(scenePath(park.scene)) ?? null : null,
+      };
+    }
+  }
+
+  const entry = entryRef.current;
+  if (entry?.park.scene && entry.sceneHref === null && content && currentPark?.scene === entry.park.scene &&
+    runtime.getSceneAssetVersion(entry.park.id, entry.park.scene) === entry.contentReleaseId) {
+    const sceneHref = content.assetUrls.get(scenePath(entry.park.scene));
+    if (sceneHref) entryRef.current = { ...entry, sceneHref };
+  }
+
   if (!state.progressReady) return <div className="screen claim-progress-wait"><div className="card"><Kip pose="think" size={72} /><strong>Opening your saved case…</strong><span>Your photo is still here. Kip will save this badge as soon as the case is ready.</span></div></div>;
-  if (!park) return <ContentGate />;
-  return <ClaimReady park={park} />;
+  if (!entryRef.current) return <ContentGate />;
+  return <ClaimReady identity={entryRef.current} />;
 }
 
-function ClaimReady({ park }: { park: Park }) {
+function ClaimReady({ identity }: { identity: ClaimEntry }) {
+  const { park, contentReleaseId, sceneHref } = identity;
   const { state, dispatch } = useStore();
   const auth = useAuth();
   const content = useContent();
   const [photo] = useState(() => state.pendingPhoto ?? "");
-  const [contentReleaseId] = useState(() => content?.releaseId ?? null);
   const [owner] = useState(() => auth.ownerAccountId ? { kind: "account" as const, accountId: auth.ownerAccountId } : { kind: "guest" as const });
   const ownerKey = progressOwnerKey(owner)!;
   const stateRef = useRef(state);
@@ -81,6 +105,12 @@ function ClaimReady({ park }: { park: Park }) {
 
   const start = (e: React.PointerEvent) => {
     if (phase !== "charge" || savingRef.current) return;
+    if (park.scene !== null && !contentReleaseId) {
+      setSaveError(true);
+      progress.set(0);
+      lastTick.current = 0;
+      return;
+    }
     e.currentTarget.setPointerCapture(e.pointerId);
     setHolding(true);
     anim.current?.stop();
@@ -109,15 +139,23 @@ function ClaimReady({ park }: { park: Park }) {
 
   async function saveClaim() {
     if (phase !== "charge" || savingRef.current) return;
+    if (park.scene !== null && !contentReleaseId) {
+      setHolding(false);
+      setSaveError(true);
+      progress.set(0);
+      lastTick.current = 0;
+      return;
+    }
     savingRef.current = true;
     setHolding(false);
     setSaving(true);
     setSaveError(false);
     const claimedAt = new Date().toISOString();
+    const parkSnapshot = park;
     try {
       // The personal store resolves only after claim metadata, photo bytes and the
       // account sync outbox have committed in one durable transaction.
-      const saved = await createPersonalClaim(owner, { park, claimedAt, contentReleaseId, photo: photo || null });
+      const saved = await createPersonalClaim(owner, { park: parkSnapshot, claimedAt, contentReleaseId, photo: photo || null });
       const event = claimEventContext(saved, firstClaim);
       void recordParkClaimed({ parkId: event.parkId, claimId: event.claimId, claimStatus: event.firstClaim ? "first" : "repeat", contentReleaseId: contentReleaseId ?? "" }).catch(() => {});
       if (!claimOwnerIsCurrent()) {
@@ -126,7 +164,7 @@ function ClaimReady({ park }: { park: Park }) {
         lastTick.current = 0;
         return;
       }
-      dispatch({ type: "claim", ownerKey, id: park.id, claimId: saved.claimId, at: saved.claimedAt, photo, parkSnapshot: park, contentReleaseId });
+      dispatch({ type: "claim", ownerKey, id: parkSnapshot.id, claimId: saved.claimId, at: saved.claimedAt, photo, parkSnapshot, contentReleaseId });
       if (authRef.current.phase === "authenticated" && authRef.current.ownerAccountId?.toLowerCase() === ownerKey.slice("account:".length)) void authRef.current.syncBackup();
       celebrate();
     } catch {
@@ -228,7 +266,7 @@ function ClaimReady({ park }: { park: Park }) {
         >
           <motion.div style={{ filter: phase === "done" ? "none" : filter }}>
             <Tilt idle={phase === "done"} max={phase === "done" ? 22 : 0}>
-              <Badge park={park} size={236} animated state={phase === "done" ? "earned" : "preview"} />
+              <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} animated state={phase === "done" ? "earned" : "preview"} />
             </Tilt>
           </motion.div>
         </motion.div>
