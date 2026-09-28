@@ -1,4 +1,5 @@
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const CHANNEL_CACHE_CONTROL = "public, max-age=60, s-maxage=60";
 const ALLOWED_METHODS = "GET, HEAD, OPTIONS";
 const ALLOWED_HEADERS =
   "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range";
@@ -18,7 +19,14 @@ function response(status, body = null, headers = new Headers()) {
   return new Response(body, { status, headers: corsHeaders(headers) });
 }
 
+function channelKeyFromPath(pathname) {
+  const match = /^\/channels\/(staging|main)\/current\.json$/.exec(pathname);
+  return match ? "channels/" + match[1] + "/current.json" : null;
+}
+
 function keyFromPath(pathname) {
+  const channelKey = channelKeyFromPath(pathname);
+  if (channelKey) return channelKey;
   if (pathname === "/") return null;
 
   const parts = pathname.slice(1).split("/");
@@ -196,7 +204,7 @@ function resolvedRange(range, size) {
   return { start: range.offset, end };
 }
 
-function metadataHeaders(object) {
+function metadataHeaders(object, cacheControl = null) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   const etag = etagFor(object);
@@ -204,7 +212,10 @@ function metadataHeaders(object) {
   if (object.uploaded instanceof Date) {
     headers.set("Last-Modified", object.uploaded.toUTCString());
   }
-  if (!headers.has("Cache-Control")) {
+  if (cacheControl) {
+    headers.set("Cache-Control", cacheControl);
+    headers.set("Content-Type", "application/json; charset=utf-8");
+  } else if (!headers.has("Cache-Control")) {
     headers.set("Cache-Control", IMMUTABLE_CACHE_CONTROL);
   }
   headers.set("Accept-Ranges", "bytes");
@@ -238,6 +249,16 @@ function rangeNotSatisfiable(size, cacheStatus = "BYPASS") {
 }
 
 async function fetchContent(request, env, ctx) {
+  const url = new URL(request.url);
+  const channelKey = channelKeyFromPath(url.pathname);
+  if (
+    channelKey &&
+    request.method !== "GET" &&
+    request.method !== "HEAD"
+  ) {
+    return response(405, "Method Not Allowed", new Headers({ Allow: "GET, HEAD" }));
+  }
+
   if (request.method === "OPTIONS") {
     return response(204, null, new Headers({ "Access-Control-Max-Age": "86400" }));
   }
@@ -246,10 +267,11 @@ async function fetchContent(request, env, ctx) {
     return response(405, "Method Not Allowed", new Headers({ Allow: ALLOWED_METHODS }));
   }
 
-  const url = new URL(request.url);
-  const key = keyFromPath(url.pathname);
+  const key = channelKey ?? keyFromPath(url.pathname);
   if (!key) return response(404, "Not Found", new Headers({ "Content-Type": "text/plain; charset=utf-8" }));
 
+  const channelPointer = channelKey !== null;
+  const cacheControl = channelPointer ? CHANNEL_CACHE_CONTROL : null;
   const isGet = request.method === "GET";
   const hasRange = isGet && request.headers.has("Range");
   let cacheStatus = "BYPASS";
@@ -282,7 +304,7 @@ async function fetchContent(request, env, ctx) {
     object = await env.CONTENT.head(key);
     if (!object) return response(404, "Not Found", new Headers({ "Content-Type": "text/plain; charset=utf-8" }));
 
-    const headers = metadataHeaders(object);
+    const headers = metadataHeaders(object, cacheControl);
     const status = conditionalStatus(request.headers, etagFor(object), object.uploaded, request.method);
     if (status) return conditionResponse(status, headers, "BYPASS");
     headers.set("Content-Length", String(object.size));
@@ -324,7 +346,7 @@ async function fetchContent(request, env, ctx) {
 
   if (!object) return response(404, "Not Found", new Headers({ "Content-Type": "text/plain; charset=utf-8" }));
 
-  const headers = metadataHeaders(object);
+  const headers = metadataHeaders(object, cacheControl);
   if (object.body === undefined) {
     const status = conditionalStatus(request.headers, etagFor(object), object.uploaded, request.method) ?? 412;
     return conditionResponse(status, headers, cacheStatus);

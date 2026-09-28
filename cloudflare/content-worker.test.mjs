@@ -134,6 +134,47 @@ test("OPTIONS is public CORS preflight and unsupported methods cannot access R2"
   assert.equal(put.calls.length, 0);
 });
 
+test("staging and main channel pointers use short cache headers and allow only GET or HEAD", async () => {
+  for (const environment of ["staging", "main"]) {
+    const url = "https://kip-assets.parkdex.app/channels/" + environment + "/current.json";
+    const get = await request(url);
+    assert.equal(get.result.status, 200);
+    assert.equal(get.calls[0].key, "channels/" + environment + "/current.json");
+    assert.equal(get.result.headers.get("Content-Type"), "application/json; charset=utf-8");
+    assert.equal(get.result.headers.get("Cache-Control"), "public, max-age=60, s-maxage=60");
+    assert.equal(get.result.headers.get("Cache-Control").includes("immutable"), false);
+
+    const cached = await request(url, {}, get);
+    assert.equal(cached.result.status, 200);
+    assert.equal(cached.result.headers.get("X-Content-Cache"), "HIT");
+    assert.equal(cached.calls.length, 1);
+
+    const head = await request(url, { method: "HEAD" });
+    assert.equal(head.result.status, 200);
+    assert.equal(head.calls[0].method, "head");
+    assert.equal(await head.result.text(), "");
+
+    for (const method of ["OPTIONS", "PUT", "POST"]) {
+      const denied = await request(url, { method });
+      assert.equal(denied.result.status, 405);
+      assert.equal(denied.result.headers.get("Allow"), "GET, HEAD");
+      assert.equal(denied.calls.length, 0);
+    }
+  }
+});
+
+test("preview and malformed channel paths are not R2 keys", async () => {
+  for (const path of [
+    "/channels/preview/current.json",
+    "/channels/staging/other.json",
+    "/channels/staging/current.json/extra",
+  ]) {
+    const invalid = await request("https://kip-assets.parkdex.app" + path);
+    assert.equal(invalid.result.status, 404, path);
+    assert.equal(invalid.calls.length, 0, path);
+  }
+});
+
 test("GET preserves R2 metadata and caches only a full successful response", async () => {
   const first = await request(`${CONTENT_URL}?source=app`);
   assert.equal(first.result.status, 200);
