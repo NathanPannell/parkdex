@@ -81,6 +81,36 @@ describe("InteractionClient", () => {
   beforeEach(async () => { await deleteDatabase(); });
   afterEach(async () => { await deleteDatabase(); });
 
+  it("calls the default fetcher with the global receiver", async () => {
+    const outbox = new InteractionOutbox();
+    const originalFetch = globalThis.fetch;
+    let receiver: unknown;
+    globalThis.fetch = function (this: unknown) {
+      receiver = this;
+      return Promise.resolve(successfulResponse(1));
+    } as typeof fetch;
+
+    try {
+      const client = new InteractionClient({
+        outbox,
+        now: () => NOW,
+        apiBaseUrl: "https://kip.example.test",
+        appVersion: "0.1.0",
+        appBuild: "abcdef1234567",
+        environment: "staging",
+        lifecycleHooks: false,
+        automaticDelivery: false,
+      });
+      await client.recordParkViewed({ parkId: "provincial-goldstream-park", entryPoint: "map", contentReleaseId: RELEASE_ID });
+      await client.flush(true);
+
+      expect(receiver).toBe(globalThis);
+      expect(await outbox.count()).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("returns after durable queueing and reuses the same event ID after a failed send", async () => {
     const outbox = new InteractionOutbox();
     const attempts: InteractionEvent[][] = [];

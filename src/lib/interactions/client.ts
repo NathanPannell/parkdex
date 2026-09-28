@@ -71,7 +71,8 @@ function environmentValue(): InteractionEnvironment {
 }
 
 function defaultApiBaseUrl(): string {
-  return (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim().replace(/\/+$/, "");
+  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim() || (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim();
+  return configured.replace(/\/+$/, "");
 }
 
 function isBaseInputValid(parkId: string, contentReleaseId: string): boolean {
@@ -100,7 +101,7 @@ export class InteractionClient {
 
   constructor(options: InteractionClientOptions = {}) {
     this.outbox = options.outbox ?? new InteractionOutbox();
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? Date.now;
     this.apiBaseUrl = options.apiBaseUrl ?? defaultApiBaseUrl();
     this.appVersion = options.appVersion ?? (typeof __APP_VERSION__ === "undefined" ? "unknown" : __APP_VERSION__);
