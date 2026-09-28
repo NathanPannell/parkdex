@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { PARK_BY_ID } from "./parks";
 import type { FeedbackOrigin, Screen } from "./store";
+import { createFeedbackDraftGeneration, getFeedbackSubmissionAttempt } from "./feedbackDraft";
 
 export type FeedbackKind = "bug" | "idea" | "general";
 
@@ -11,10 +12,29 @@ export const FEEDBACK_KINDS: { id: FeedbackKind; label: string; icon: "bug" | "b
 ];
 
 export type FeedbackDraft = { kind: FeedbackKind; message: string; contact: boolean; email: string };
+export type FeedbackDraftSession = { draft: FeedbackDraft; generation: string };
 
-export type FeedbackContext = { version: string; platform: string; screen: string; parkId: string | null; parkName: string | null };
+export type FeedbackContext = {
+  version: string;
+  build: string;
+  platform: string;
+  screen: string;
+  parkId: string | null;
+  parkName: string | null;
+};
+
+export type FeedbackAppVersion = Pick<FeedbackContext, "version" | "build">;
 
 export type FeedbackReport = FeedbackDraft & { screenshot: string | null; context: FeedbackContext };
+
+export type FeedbackNotificationState = "sent" | "pending" | "sending" | "ambiguous" | "failed" | "disabled";
+export type FeedbackSubmitResult = {
+  id: string;
+  notification?: {
+    operator?: FeedbackNotificationState;
+    receipt?: FeedbackNotificationState;
+  };
+};
 
 const SCREEN_LABEL: Record<Screen, string> = {
   splash: "Splash",
@@ -27,10 +47,11 @@ const SCREEN_LABEL: Record<Screen, string> = {
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.
-export function feedbackContext(origin: FeedbackOrigin): FeedbackContext {
+export function feedbackContext(origin: FeedbackOrigin, appVersion?: FeedbackAppVersion): FeedbackContext {
   const park = origin.parkId ? PARK_BY_ID.get(origin.parkId) : undefined;
   return {
-    version: __APP_VERSION__,
+    version: appVersion?.version ?? __APP_VERSION__,
+    build: appVersion?.build ?? __APP_BUILD__,
     platform: Capacitor.getPlatform(),
     screen: SCREEN_LABEL[origin.screen],
     parkId: park?.id ?? null,
@@ -39,49 +60,145 @@ export function feedbackContext(origin: FeedbackOrigin): FeedbackContext {
 }
 
 const DRAFT_KEY = "parkdex-feedback-draft";
+const DRAFT_GENERATION_KEY = "parkdex-feedback-generation";
 export const EMPTY_DRAFT: FeedbackDraft = { kind: "bug", message: "", contact: false, email: "" };
 
-// The text draft survives closing the sheet or a failed send; the screenshot stays in memory
-// because data URLs can exceed localStorage limits.
-export function loadDraft(): FeedbackDraft {
+// The text draft stays in localStorage. Attachments and retry identity use IndexedDB.
+export function loadDraftSession(): FeedbackDraftSession {
   try {
-    return { ...EMPTY_DRAFT, ...JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "{}") };
+    const generationKey = localStorage.getItem(DRAFT_GENERATION_KEY);
+    const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as Record<string, unknown> | null;
+    if (stored && stored.draft && typeof stored.draft === "object" && typeof stored.generation === "string") {
+      if (generationKey && generationKey !== stored.generation) return { draft: EMPTY_DRAFT, generation: generationKey };
+      localStorage.setItem(DRAFT_GENERATION_KEY, stored.generation);
+      return { draft: { ...EMPTY_DRAFT, ...(stored.draft as Partial<FeedbackDraft>) }, generation: stored.generation };
+    }
+
+    const generation = generationKey ?? createFeedbackDraftGeneration();
+    localStorage.setItem(DRAFT_GENERATION_KEY, generation);
+    if (stored && typeof stored === "object" && "kind" in stored) {
+      return { draft: { ...EMPTY_DRAFT, ...(stored as Partial<FeedbackDraft>) }, generation };
+    }
+    return { draft: EMPTY_DRAFT, generation };
   } catch {
-    return EMPTY_DRAFT;
+    return { draft: EMPTY_DRAFT, generation: createFeedbackDraftGeneration() };
   }
 }
 
-export function saveDraft(draft: FeedbackDraft) {
+export function saveDraft(draft: FeedbackDraft, generation: string): boolean {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    localStorage.setItem(DRAFT_GENERATION_KEY, generation);
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ draft, generation }));
+    return true;
   } catch {
-    // Private modes may block storage; the draft still lives in the open sheet.
+    return false;
   }
 }
 
-export function clearDraft() {
+export function clearDraft(nextGeneration: string) {
   try {
+    // Advance first. A failed removal leaves an old envelope that loadDraftSession ignores.
+    localStorage.setItem(DRAFT_GENERATION_KEY, nextGeneration);
     localStorage.removeItem(DRAFT_KEY);
   } catch {
     // Nothing to clear.
   }
 }
 
-let failNext = false;
-
-// Demo control so testers can see the failure and retry path without a backend.
-export function setFeedbackFailure(value: boolean) {
-  failNext = value;
+function apiUrl() {
+  return (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim().replace(/\/+$/, "");
 }
 
-export function feedbackFailureOn() {
-  return failNext;
+async function responseError(response: Response): Promise<Error> {
+  if (response.status === 413) return new Error("The feedback service rejected the screenshot as too large. Remove it and try again.");
+  if (response.status === 429) return new Error("The feedback service is busy. Your draft is saved on this phone. Try again shortly.");
+  if (response.status >= 500) return new Error("The feedback service is temporarily unavailable. Your draft is saved on this phone. Try again shortly.");
+  try {
+    const body = (await response.json()) as { error?: unknown; message?: unknown };
+    const message = typeof body.error === "string" ? body.error : typeof body.message === "string" ? body.message : null;
+    if (message && message.length <= 240) return new Error(message);
+  } catch {
+    // Use the status-specific recovery copy below when there is no JSON error body.
+  }
+  if (response.status === 400 || response.status === 422) return new Error("Check the report details and try again.");
+  return new Error(`The feedback service couldn't save this report (HTTP ${response.status}). Your draft is saved on this phone.`);
 }
 
-// Placeholder until the backend lands: resolves after a short delay, or rejects when the
-// device is offline or the demo failure switch is on.
-export async function submitFeedback(_report: FeedbackReport): Promise<{ id: string }> {
-  await new Promise((r) => setTimeout(r, 1100));
-  if (failNext || !navigator.onLine) throw new Error("Could not reach Parkdex");
-  return { id: `FB-${Date.now().toString(36).toUpperCase().slice(-5)}` };
+function isNotificationState(value: unknown): value is FeedbackNotificationState {
+  return value === "sent" || value === "pending" || value === "sending" || value === "ambiguous" || value === "failed" || value === "disabled";
+}
+
+function parseSavedResult(value: unknown): FeedbackSubmitResult | null {
+  if (!value || typeof value !== "object") return null;
+  const body = value as Record<string, unknown>;
+  if (typeof body.id !== "string" || !body.id.trim()) return null;
+
+  const notificationValue = body.notification;
+  if (!notificationValue || typeof notificationValue !== "object") return { id: body.id };
+  const notification = notificationValue as Record<string, unknown>;
+  return {
+    id: body.id,
+    notification: {
+      ...(isNotificationState(notification.operator) ? { operator: notification.operator } : {}),
+      ...(isNotificationState(notification.receipt) ? { receipt: notification.receipt } : {}),
+    },
+  };
+}
+
+// POSTs the exact saved draft. A stable ID makes retries idempotent after a lost response.
+export async function submitFeedback(report: FeedbackReport, generation: string): Promise<FeedbackSubmitResult> {
+  const baseUrl = apiUrl();
+  if (Capacitor.isNativePlatform() && !baseUrl) {
+    throw new Error("Feedback is unavailable in this app build because its feedback service URL is not configured.");
+  }
+
+  let attempt: Awaited<ReturnType<typeof getFeedbackSubmissionAttempt>>;
+  try {
+    attempt = await getFeedbackSubmissionAttempt(report, generation);
+  } catch {
+    throw new Error("Couldn't prepare a safe retry for this report. Check this device's storage and try again.");
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 40_000);
+  try {
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...attempt.report, submissionId: attempt.id }),
+        signal: controller.signal,
+      });
+    } catch {
+      if (controller.signal.aborted) {
+        throw new Error("The feedback request timed out. Your draft is saved on this phone. Try again; the retry uses the same submission ID.");
+      }
+      if (!navigator.onLine) throw new Error("No connection. Your draft is saved on this phone. Reconnect and try again.");
+      throw new Error("Couldn't reach the feedback service. Your draft is saved on this phone. Check your connection and try again.");
+    }
+
+    if (!response.ok) {
+      const error = await responseError(response);
+      if (controller.signal.aborted) {
+        throw new Error("The feedback request timed out. Your draft is saved on this phone. Try again; the retry uses the same submission ID.");
+      }
+      throw error;
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      if (controller.signal.aborted) {
+        throw new Error("The feedback request timed out. Your draft is saved on this phone. Try again; the retry uses the same submission ID.");
+      }
+      throw new Error("The service response couldn't confirm that your report was saved. Your draft is saved on this phone. Try again.");
+    }
+    const saved = parseSavedResult(body);
+    if (!saved) throw new Error("The service response couldn't confirm that your report was saved. Your draft is saved on this phone. Try again.");
+    return saved;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
