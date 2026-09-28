@@ -19,6 +19,29 @@
     "database/migrations/progress_001_init.sql",
     "database/migrations/interactions_001_init.sql"
   ],
+  "contentSync": {
+    "supportingMigrationPaths": [
+      "database/001_cloud_content.sql"
+    ],
+    "migrationPaths": [
+      "database/migrations/content_001_sync.sql"
+    ],
+    "apiPaths": [
+      "api/content/snapshot.ts",
+      "api/content/changes.ts",
+      "api/content/scene.ts"
+    ],
+    "bootstrapPath": "scripts/bootstrap-content.py",
+    "qaSqlPath": "scripts/qa-content-sync.sql",
+    "pythonTestPaths": [
+      "scripts/test_bootstrap_content.py",
+      "scripts/test_map_only_manifest.py",
+      "scripts/test_publish_content.py",
+      "scripts/test_publish_park_update.py"
+    ],
+    "pythonRequirementsPath": "database/delivery-test-requirements.txt",
+    "previewClockTable": "content_clock"
+  },
   "runtimeOptionalKeys": [
     "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
     "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"

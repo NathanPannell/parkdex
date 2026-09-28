@@ -2,13 +2,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Badge } from "../components/Badge";
+import { EarnedBadge } from "../components/EarnedBadge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Tilt } from "../components/Motion";
 import { sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { badgeTotal, CATEGORY_LABEL, RARITY, type Park, type Rarity } from "../lib/parks";
-import { useStore } from "../lib/store";
+import { useStore, type Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 
 export function Collection() {
@@ -18,7 +19,7 @@ export function Collection() {
   const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
   const claimedIds = Object.keys(state.claims);
-  const claimed = claimedIds.map((id) => content?.parkById.get(id)).filter((park): park is Park => !!park);
+  const claimed = claimedIds.map((id) => state.claims[id]?.parkSnapshot ?? content?.parkById.get(id) ?? undefined).filter((park): park is Park => !!park);
   const count = claimedIds.length;
   const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
 
@@ -30,7 +31,8 @@ export function Collection() {
   const ghosts = next;
 
   const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const openPark = open ? content?.parkById.get(open) : undefined;
+  const openPark = state.progressReady && open ? state.claims[open]?.parkSnapshot ?? content?.parkById.get(open) ?? undefined : undefined;
+  const openClaim = open ? state.claims[open] : undefined;
 
   return (
     <motion.div
@@ -48,9 +50,14 @@ export function Collection() {
             <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"}</small>
           </h1>
         </div>
-        <motion.div className="col-head__kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-          <Kip size={82} pose={count ? "idle" : "sleep"} />
-        </motion.div>
+        <div className="col-head__tools">
+          <motion.div className="col-head__kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+            <Kip size={82} pose={count ? "idle" : "sleep"} />
+          </motion.div>
+          <button className="btn btn--paper btn--sm collection-account" onClick={() => dispatch({ type: "go", screen: "account" })}>
+            <Icon name="link" size={17} /> Account
+          </button>
+        </div>
       </header>
 
       <div className="col-progress">
@@ -71,7 +78,14 @@ export function Collection() {
 
       <div className="case">
         <div className="case__glass" />
-        {!content ? (
+        {!state.progressReady ? (
+          <div className="case__empty">
+            <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
+              {state.progressError ? "Your saved case needs attention." : "Opening your saved case…"}
+            </Bubble>
+            {state.progressError && <button className="btn btn--sm btn--paper" onClick={() => dispatch({ type: "go", screen: "account" })}>Account help</button>}
+          </div>
+        ) : !content ? (
           <div className="case__empty">
             <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
               {status.error ? "I couldn't download the park guides." : status.waitingForWifi ? "Park guides are waiting for Wi-Fi." : status.phase === "offline" ? "Connect to download your park guides." : "Loading your park guides…"}
@@ -100,7 +114,7 @@ export function Collection() {
               transition={{ type: "spring", stiffness: 380, damping: 16, delay: 0.2 + i * 0.07 }}
               whileTap={{ scale: 0.92 }}
             >
-              <Badge park={p} size={88} state="earned" showName={false} />
+              <EarnedBadge park={p} claim={state.claims[p.id]} size={88} state="earned" showName={false} />
               <span className="slot__plate">{p.short}</span>
             </motion.button>
           ))}
@@ -122,6 +136,13 @@ export function Collection() {
             </motion.button>
           ))}
         </div>
+        {state.progressReady && content && claimedIds.some((id) => !content.parkById.has(id)) && (
+          <div className="case__empty account-case-note">
+            <Bubble side="left" style={{ position: "relative" }}>
+              Some saved badge details are not in this guide yet. Your visits remain saved for your account backup.
+            </Bubble>
+          </div>
+        )}
       </div>
 
       <section className="fb-cta card">
@@ -140,12 +161,13 @@ export function Collection() {
       {/* Portalled to the device so the detail covers the bottom nav too. */}
       {createPortal(
         <AnimatePresence>
-          {openPark && (
+          {openPark && openClaim && (
             <BadgeDetail
               park={openPark}
+              claim={openClaim}
               onClose={() => setOpen(null)}
               onShare={() => {
-                dispatch({ type: "trip", id: openPark.id });
+                dispatch({ type: "shareClaim", claimId: state.claims[openPark.id]?.claimId ?? null });
                 dispatch({ type: "go", screen: "share" });
               }}
             />
@@ -157,9 +179,7 @@ export function Collection() {
   );
 }
 
-function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => void; onShare: () => void }) {
-  const { state } = useStore();
-  const claim = state.claims[park.id];
+function BadgeDetail({ park, claim, onClose, onShare }: { park: Park; claim: Claim; onClose: () => void; onShare: () => void }) {
   const [flipped, setFlipped] = useState(false);
   const date = new Date(claim.at).toLocaleDateString("en-CA", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
 
@@ -184,7 +204,7 @@ function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => vo
           <motion.div className="flip__card" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: "spring", stiffness: 160, damping: 16 }}>
             <div className="flip__face">
               <Tilt>
-                <Badge park={park} size={250} animated state="earned" />
+                <EarnedBadge park={park} claim={claim} size={250} animated state="earned" />
               </Tilt>
             </div>
             <div className="flip__face flip__face--back">

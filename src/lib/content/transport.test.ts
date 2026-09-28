@@ -34,22 +34,36 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
-import { contentFetch, getContentApiOrigin, isContentWifiAvailable } from "./transport";
+import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
 
 const API_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
 const CDN_URL = "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin";
+const browserConnection = new EventTarget() as EventTarget & { type?: string; effectiveType?: string };
+const browserWindow = new EventTarget();
+
+function setBrowserNetwork(options: { online?: boolean; type?: string; effectiveType?: string } = {}) {
+  browserConnection.type = options.type;
+  browserConnection.effectiveType = options.effectiveType;
+  vi.stubGlobal("navigator", { onLine: options.online ?? true, connection: browserConnection });
+}
 
 describe("content transport", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("web-body", { status: 200 })));
+    vi.stubGlobal("window", browserWindow);
+    setBrowserNetwork({ online: true, type: "wifi", effectiveType: "4g" });
     mocks.capacitor.isNativePlatform.mockReturnValue(false);
     mocks.capacitor.getPlatform.mockReturnValue("web");
     vi.stubEnv("VITE_CONTENT_ENV", "staging");
     vi.stubEnv("VITE_CONTENT_API_URL", "");
+    mocks.network.getStatus.mockClear();
     mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "wifi" });
+    mocks.native.getWifiStatus.mockClear();
     mocks.native.getWifiStatus.mockResolvedValue({ wifi: true });
+    mocks.native.request.mockClear();
     mocks.native.request.mockResolvedValue({
       status: 200,
       statusText: "OK",
@@ -57,15 +71,46 @@ describe("content transport", () => {
       bodyBase64: "AQID",
       url: CDN_URL,
     });
+    mocks.native.abort.mockClear();
     mocks.native.abort.mockResolvedValue(undefined);
   });
 
-  it("requires affirmative Wi-Fi before using browser fetch", async () => {
+  it("requires the browser physical Wi-Fi type, not a Capacitor speed mapping", async () => {
+    setBrowserNetwork({ online: true, effectiveType: "4g" });
     mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "unknown" });
 
     await expect(contentFetch(API_URL)).rejects.toMatchObject({ name: "WifiUnavailableError" });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mocks.network.getStatus).not.toHaveBeenCalled();
     expect(await isContentWifiAvailable()).toBe(false);
+  });
+
+  it("refuses cellular and offline browser connectivity and accepts actual Wi-Fi", async () => {
+    setBrowserNetwork({ online: true, type: "cellular", effectiveType: "4g" });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false });
+    await expect(isContentWifiAvailable()).resolves.toBe(false);
+
+    setBrowserNetwork({ online: false, type: "wifi" });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: false, wifi: false });
+
+    setBrowserNetwork({ online: true, type: "wifi" });
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: true });
+  });
+
+  it("subscribes to online, offline, and physical network type changes", () => {
+    setBrowserNetwork({ online: true, type: "wifi" });
+    const listener = vi.fn();
+    const stop = subscribeContentConnectivity(listener);
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: true });
+
+    browserConnection.type = "cellular";
+    browserConnection.dispatchEvent(new Event("change"));
+    expect(listener).toHaveBeenLastCalledWith({ connected: true, wifi: false });
+
+    setBrowserNetwork({ online: false, type: "wifi" });
+    browserWindow.dispatchEvent(new Event("offline"));
+    expect(listener).toHaveBeenLastCalledWith({ connected: false, wifi: false });
+    stop();
   });
 
   it("uses explicit API configuration and fails closed for an unconfigured native main build", async () => {
@@ -104,6 +149,30 @@ describe("content transport", () => {
       redirect: "error",
       headers: expect.any(Headers),
     }));
+  });
+
+  it("aborts browser content when Wi-Fi is lost while its response body is streaming", async () => {
+    setBrowserNetwork({ online: true, type: "wifi" });
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+      },
+    }), { headers: { "content-type": "application/octet-stream" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = contentFetch(CDN_URL);
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    browserConnection.type = "cellular";
+    browserConnection.dispatchEvent(new Event("change"));
+
+    await expect(pending).rejects.toMatchObject({ name: "WifiUnavailableError" });
+  });
+
+  it("bounds buffered browser content responses to four MiB", async () => {
+    setBrowserNetwork({ online: true, type: "wifi" });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(4 * 1024 * 1024 + 1))));
+
+    await expect(contentFetch(CDN_URL)).rejects.toThrow("exceeds its byte limit");
   });
 
   it.each([

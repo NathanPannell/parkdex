@@ -37,6 +37,19 @@ class AccountReleaseGates(unittest.TestCase):
             self.touch(name)
         self.touch(self.config["privatePhotos"]["sourcePath"])
 
+    def content_files(self):
+        feature = self.config["contentSync"]
+        for name in [
+            *feature["supportingMigrationPaths"],
+            *feature["migrationPaths"],
+            *feature["apiPaths"],
+            feature["bootstrapPath"],
+            feature["qaSqlPath"],
+            *feature["pythonTestPaths"],
+            feature["pythonRequirementsPath"],
+        ]:
+            self.touch(name)
+
     def runtime(self):
         return {
             "SESSION_SECRET": "o" * 48, "AUTH_SESSION_SECRET": "a" * 48,
@@ -68,6 +81,126 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
             "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
         ])
+
+    def test_content_sync_markers_are_all_or_none_and_append_only_allowlisted_migrations(self):
+        self.assertFalse(delivery.content_sync_present(self.config, self.root))
+        self.assertFalse(delivery.accounts_present(self.config, self.root))
+        self.touch(self.config["contentSync"]["apiPaths"][0])
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.migration_paths(self.config, self.root)
+
+        self.content_files()
+        self.assertEqual([p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)], [
+            "database/migrations/feedback_001_init.sql",
+            "database/001_cloud_content.sql",
+            "database/migrations/content_001_sync.sql",
+        ])
+        self.assertFalse(delivery.accounts_present(self.config, self.root))
+
+    def test_tooling_checkout_ignores_existing_publisher_test_without_feature_markers(self):
+        self.assertTrue((delivery.ROOT / "scripts" / "test_publish_content.py").is_file())
+        self.assertFalse(delivery.content_sync_present(self.config, delivery.ROOT))
+
+    def test_content_sync_requires_sql_qa_python_tests_and_pinned_dependencies(self):
+        self.content_files()
+        self.assertTrue(delivery.content_sync_present(self.config, self.root))
+        for name in (
+            self.config["contentSync"]["qaSqlPath"],
+            self.config["contentSync"]["pythonTestPaths"][0],
+            self.config["contentSync"]["pythonRequirementsPath"],
+        ):
+            path = self.root / name
+            path.unlink()
+            with self.subTest(missing=name), self.assertRaises(delivery.DeliveryError):
+                delivery.content_sync_present(self.config, self.root)
+            self.touch(name)
+
+    def test_account_detection_stays_independent_of_content_migration_count(self):
+        self.content_files()
+        self.assertFalse(delivery.accounts_present(self.config, self.root))
+        self.account_files()
+        self.assertTrue(delivery.accounts_present(self.config, self.root))
+        self.assertEqual([p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)], [
+            "database/migrations/feedback_001_init.sql",
+            "database/001_cloud_content.sql",
+            "database/migrations/accounts_001_init.sql",
+            "database/migrations/progress_001_init.sql",
+            "database/migrations/interactions_001_init.sql",
+            "database/migrations/content_001_sync.sql",
+        ])
+
+    def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):
+        queries = []
+        with patch.object(delivery, "preview_psql_query", side_effect=lambda _url, sql: queries.append(sql) or ""):
+            delivery.verify_preview_database_empty("postgresql://role:secret@ep-owned-test.us-west-2.aws.neon.tech/db", migration_applied=True, allow_content_clock=True)
+        sql = queries[0]
+        self.assertIn("SELECT count(*) INTO clock_rows FROM public.content_clock", sql)
+        self.assertIn("singleton IS TRUE", sql)
+        self.assertIn("revision = 0", sql)
+        self.assertIn("retention_floor = 0", sql)
+        self.assertIn("last_transaction_id IS NULL", sql)
+        self.assertIn("item.table_name = 'content_clock'", sql)
+        self.assertIn("IF (item.table_schema", sql)
+        self.assertNotIn("IF true OR", sql)
+
+    def test_public_bootstrap_uses_only_the_migration_database_url_and_selected_environment(self):
+        self.content_files()
+        database_url = "postgresql://kip:secret@ep-owned-test.us-west-2.aws.neon.tech/parkdex_kip"
+        with patch.object(delivery, "run") as run:
+            delivery.bootstrap_content(self.config, self.root, database_url, "preview")
+        args = run.call_args.args[0]
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(args[-3:], ["--apply", "--environment", "preview"])
+        self.assertEqual(env["MIGRATION_DATABASE_URL"], database_url)
+        self.assertNotIn("DATABASE_URL", env)
+        self.assertNotIn("NEON_API_KEY", env)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN", env)
+
+    def test_content_sql_qa_migrates_bootstraps_and_runs_rollback_only(self):
+        self.content_files()
+        self.touch(self.config["contentSync"]["qaSqlPath"])
+        qa_path = self.root / self.config["contentSync"]["qaSqlPath"]
+        steps = []
+        commands = []
+        def qa_run(args, **_kwargs):
+            commands.append(args)
+            if any("FROM pg_catalog.pg_database" in arg for arg in args):
+                return ""
+            if any("FROM information_schema.tables" in arg for arg in args):
+                return "0"
+            return ""
+        with patch.object(delivery, "candidate_sql_env", return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"}), \
+             patch.object(delivery, "candidate_psql_args", return_value=["psql"]), \
+             patch.object(delivery, "run", side_effect=qa_run), \
+             patch.object(delivery, "migration_paths", return_value=[self.root / "feedback.sql", self.root / "content.sql"]), \
+             patch.object(delivery, "run_candidate_sql_file", side_effect=lambda path, _env, **kwargs: steps.append((path.name, kwargs.get("transactional", True)))), \
+             patch.object(delivery, "bootstrap_content", side_effect=lambda _config, _root, url, environment: steps.append(("bootstrap", environment, url))):
+            delivery.run_content_sync_sql_qa(self.config, self.root)
+        self.assertEqual(steps[:2], [("feedback.sql", True), ("content.sql", True)])
+        self.assertEqual(steps[2][:2], ("bootstrap", "preview"))
+        self.assertRegex(steps[2][2], r"/kip_qa_content_sync_[0-9a-f]{32}$")
+        self.assertEqual(steps[3], (qa_path.name, False))
+        create_sql = next(args[-1] for args in commands if args[-1].startswith("CREATE DATABASE"))
+        drop_sql = next(args[-1] for args in commands if args[-1].startswith("DROP DATABASE"))
+        self.assertEqual(create_sql.replace("CREATE", "DROP"), drop_sql)
+
+    def test_content_sql_qa_owns_its_rollback_transaction(self):
+        env = {"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_content_sync_test", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"}
+        with patch.object(delivery, "candidate_psql_args", return_value=["psql"]), patch.object(delivery, "run") as run:
+            delivery.run_candidate_sql_file(self.root / "qa-content-sync.sql", env, cwd=self.root, transactional=False)
+        args = run.call_args.args[0]
+        self.assertEqual(args, ["psql", "-f", str(self.root / "qa-content-sync.sql")])
+
+    def test_content_sql_qa_refuses_a_preexisting_owned_name_without_dropping_it(self):
+        self.content_files()
+        self.touch(self.config["contentSync"]["qaSqlPath"])
+        with patch.object(delivery, "candidate_sql_env", return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"}), \
+             patch.object(delivery, "candidate_psql_args", return_value=["psql"]), \
+             patch.object(delivery, "run", return_value="occupied") as run:
+            with self.assertRaises(delivery.DeliveryError):
+                delivery.run_content_sync_sql_qa(self.config, self.root)
+        self.assertEqual(run.call_count, 1)
+        self.assertIn("pg_catalog.pg_database", " ".join(run.call_args.args[0]))
 
     def test_staging_rejects_preview_photo_origin_and_missing_google(self):
         self.account_files()

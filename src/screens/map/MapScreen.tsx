@@ -17,6 +17,7 @@ import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
+import { recordParkViewed } from "../../lib/interactions";
 import { MapView } from "./MapView";
 import { ParkSheet } from "./ParkSheet";
 import { ArrivalCard, TripPanel } from "./TripPanel";
@@ -35,6 +36,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
   const { user, claims, selectedId, tripId } = state;
@@ -85,20 +87,22 @@ export function MapScreen() {
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
     if (state.focusId && content) {
-      select(state.focusId);
+      select(state.focusId, "collection");
       dispatch({ type: "focus", id: null });
     }
   }, [state.focusId, content]);
 
-  function select(id: string | null) {
+  function select(id: string | null, entryPoint: "map" | "nearby" | "collection" = "map") {
     if (simulating) return;
     if (id && !content?.parkById.has(id)) return;
     dispatch({ type: "select", id });
     if (!id) return;
+    setSelectedEntryPoint(entryPoint);
     sfx.pop();
     buzz(10);
     const p = content?.parkById.get(id);
     if (!p) return;
+    if (content) void recordParkViewed({ parkId: p.id, entryPoint, contentReleaseId: content.releaseId }).catch(() => {});
     mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
@@ -289,7 +293,7 @@ export function MapScreen() {
                 <motion.button
                   key={p.id}
                   className="nearby__card card"
-                  onClick={() => select(p.id)}
+                  onClick={() => select(p.id, "nearby")}
                   initial={{ y: 60, opacity: 0, rotate: 4 }}
                   animate={{ y: 0, opacity: 1, rotate: 0 }}
                   transition={{ type: "spring", stiffness: 380, damping: 22, delay: 0.1 + i * 0.05 }}
@@ -321,6 +325,8 @@ export function MapScreen() {
             onSimulate={simulate}
             onEnd={endTrip}
             onOpen={() => select(trip.id)}
+            entryPoint={selectedEntryPoint}
+            contentReleaseId={content.releaseId}
           />
         )}
       </AnimatePresence>
@@ -343,6 +349,7 @@ export function MapScreen() {
             <ParkSheet
               key={selected.id}
               park={selected}
+              entryPoint={selectedEntryPoint}
               user={user}
               claim={claims[selected.id]}
               inside={here?.id === selected.id}

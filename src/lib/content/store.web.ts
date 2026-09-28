@@ -321,6 +321,18 @@ export class WebContentStore implements ContentStore {
         if (ready !== 6) return;
         const activeReferencesFile = activeRelease?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
         const retainedReferencesFile = retainedParks.some((park) => park.sceneFile?.sha256.toLowerCase() === key);
+        try {
+          for (const archived of archivedScenes) {
+            const { key: storedKey, ...descriptor } = archived;
+            assertArchivedSceneDescriptor(descriptor);
+            if (storedKey !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) {
+              throw new Error("Archived scene storage key does not match its descriptor");
+            }
+          }
+        } catch (error) {
+          fail(error);
+          return;
+        }
         const archivedReferencesFile = archivedScenes.some((scene) => scene.file.sha256 === key);
         const syncReferencesFile = syncRows.some((row) => row.entity === "asset" && (row.value as { sha256?: unknown }).sha256 === key);
         const currentMapVersions = new Set(cachedPointers.map((entry) => entry.pointer.version));
@@ -428,9 +440,12 @@ export class WebContentStore implements ContentStore {
       request.onsuccess = () => {
         const record = request.result;
         if (!record) { complete(undefined); return; }
-        const { key: _key, ...archived } = record;
+        const { key: storedKey, ...archived } = record;
         try {
           assertArchivedSceneDescriptor(archived);
+          if (storedKey !== key || archived.releaseId !== releaseId || archived.scene !== scene) {
+            throw new Error("Archived scene storage key does not match its descriptor");
+          }
           complete(archived);
         } catch (error) { fail(error); }
       };
@@ -440,10 +455,11 @@ export class WebContentStore implements ContentStore {
 
   async retainArchivedScene(scene: ArchivedScene): Promise<void> {
     assertArchivedSceneDescriptor(scene);
+    const descriptor: ArchivedScene = { releaseId: scene.releaseId, scene: scene.scene, file: { ...scene.file } };
     const db = await this.database();
-    const key = archivedSceneStorageKey(scene.releaseId, scene.scene);
+    const key = archivedSceneStorageKey(descriptor.releaseId, descriptor.scene);
     await waitForTransaction<void>(db, ARCHIVED_SCENES, "readwrite", (tx, complete, fail) => {
-      const request = tx.objectStore(ARCHIVED_SCENES).put({ key, ...scene } satisfies ArchivedSceneRecord);
+      const request = tx.objectStore(ARCHIVED_SCENES).put({ ...descriptor, key } satisfies ArchivedSceneRecord);
       request.onsuccess = () => complete(undefined);
       request.onerror = () => fail(request.error);
     });
@@ -455,12 +471,19 @@ export class WebContentStore implements ContentStore {
       const request = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedSceneRecord[]>;
       request.onsuccess = () => {
         try {
-          const archived = request.result.map(({ key: _key, ...scene }) => {
-            assertArchivedSceneDescriptor(scene);
-            return scene;
+          const descriptors = request.result.map((record) => {
+            const { key, ...descriptor } = record;
+            assertArchivedSceneDescriptor(descriptor);
+            if (key !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) {
+              throw new Error("Archived scene storage key does not match its descriptor");
+            }
+            return descriptor;
           });
-          archived.sort((a, b) => a.releaseId.localeCompare(b.releaseId) || a.scene.localeCompare(b.scene));
-          complete(archived);
+          descriptors.sort((left, right) =>
+            left.releaseId < right.releaseId ? -1 : left.releaseId > right.releaseId ? 1 :
+              left.scene < right.scene ? -1 : left.scene > right.scene ? 1 : 0,
+          );
+          complete(descriptors);
         } catch (error) { fail(error); }
       };
       request.onerror = () => fail(request.error);

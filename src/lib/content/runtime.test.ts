@@ -19,7 +19,8 @@ import type {
   StoredRelease,
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
-import { ArchivedSceneRestoreDeferredError, createContentRuntime } from "./runtime";
+import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
+import { CONTENT_CDN_ORIGIN } from "./contracts";
 import { resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
@@ -135,10 +136,47 @@ async function makeRelease(id: string, generation: number, parkId: string, scene
   return { channel, rawManifest: rawManifest as ContentManifest, content, park };
 }
 
+async function makeArchivedRelease(parkId: string, scene: string) {
+  const draft = await makeRelease("0".repeat(64), 1, parkId, scene);
+  const rawManifest = structuredClone(draft.rawManifest);
+  const inventory = rawManifest.files
+    .map(({ path, byte_size, sha256 }) => ({ byte_size, path, sha256 }))
+    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+  const releaseId = await sha256Hex(toBytes(inventory));
+  const files = rawManifest.files.map((file) => {
+    const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
+    return {
+      ...file,
+      key: `releases/${releaseId}/${file.path}`,
+      url: `${CONTENT_CDN_ORIGIN}/releases/${releaseId}/${encodedPath}`,
+    };
+  });
+  rawManifest.version = releaseId;
+  rawManifest.files = files;
+  const content = new Map<string, ArrayBuffer>();
+  for (let index = 0; index < files.length; index += 1) {
+    const source = draft.rawManifest.files[index]!;
+    const bytes = draft.content.get(source.url);
+    if (!bytes) throw new Error(`Archive fixture is missing ${source.path}`);
+    content.set(files[index]!.url, bytes.slice(0));
+  }
+  const manifestBytes = toBytes(rawManifest);
+  const channel: ContentChannel = {
+    ...draft.channel,
+    releaseId,
+    manifestUrl: `${CONTENT_CDN_ORIGIN}/releases/${releaseId}/manifest.json`,
+    manifestSha256: await sha256Hex(manifestBytes),
+  };
+  content.set(channel.manifestUrl, manifestBytes);
+  return { channel, rawManifest: rawManifest as ContentManifest, content, park: draft.park };
+}
+
+
 class MemoryContentStore implements ContentStore {
   activeId: string | null = null;
   releases = new Map<string, StoredRelease>();
   files = new Map<string, ArrayBuffer>();
+  deletedFiles: string[] = [];
   retained = new Map<string, RetainedPark>();
   archived = new Map<string, ArchivedScene>();
   sync = new Map<ContentEnvironment, ContentSyncState>();
@@ -188,6 +226,7 @@ class MemoryContentStore implements ContentStore {
     }
     for (const entry of this.retained.values()) if (entry.sceneFile?.sha256 === hash) throw new Error("File is referenced by retained park");
     for (const scene of this.archived.values()) if (scene.file.sha256 === hash) throw new Error("File is referenced by archived scene");
+    this.deletedFiles.push(hash);
     this.files.delete(hash);
   }
   async getRetainedParks() { return [...this.retained.values()].map((value) => structuredClone(value)); }
@@ -600,6 +639,103 @@ describe("content runtime", () => {
     const secondChunk = a.rawManifest.files.find((file) => file.path === "map/island/001.bin")!;
     await vi.waitFor(async () => expect(await store.hasFile(secondChunk.sha256, 4)).toBe(true));
   });
+});
+
+describe("legacy archived art compatibility", () => {
+  it("restores exact archived badge art, publishes its URL, and keeps the pinned hash through offline GC", async () => {
+    const current = await makeRelease("b".repeat(64), 2, "current-park", "current-scene");
+    const archived = await makeArchivedRelease("retired-park", "retired-scene");
+    const server = contentServer(current);
+    server.add(archived);
+    const archivedRequests: string[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.startsWith(`${CONTENT_CDN_ORIGIN}/releases/${archived.channel.releaseId}/`)) archivedRequests.push(url);
+      return server.fetcher(input, init);
+    };
+    const store = new MemoryContentStore();
+    const runtime = track(createRuntime(store, fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    expect(runtime.getStatus().snapshot?.parkById.has("retired-park")).toBe(false);
+
+    const archivedFile = archived.rawManifest.files.find((file) => file.path === "art/badges/scenes/retired-scene.webp")!;
+    const url = await runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene");
+    expect(url).toBe(`content-store://${archivedFile.sha256}`);
+    expect(await store.getArchivedScene(archived.channel.releaseId, "retired-scene")).toEqual({
+      releaseId: archived.channel.releaseId, scene: "retired-scene", file: archivedFile,
+    });
+    expect(await store.hasFile(archivedFile.sha256, archivedFile.byte_size)).toBe(true);
+    expect(archivedRequests).toContain(archived.channel.manifestUrl);
+    expect(archivedRequests).toContain(archivedFile.url);
+    expect(runtime.getStatus().snapshot?.retainedSceneUrls.get(`${archived.channel.releaseId}:retired-scene`)).toBe(url);
+    expect(runtime.getStatus().snapshot?.parks.map((park) => park.id)).toEqual(["current-park"]);
+    const networkCount = archivedRequests.length;
+    await expect(runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene")).resolves.toBe(url);
+    expect(archivedRequests).toHaveLength(networkCount);
+
+    await runtime.stop();
+    const orphan = toBytes("unreferenced old content");
+    const orphanHash = await sha256Hex(orphan);
+    store.files.set(orphanHash, orphan);
+    const offline = track(createRuntime(store, fetcher, { connected: false, wifi: false }));
+    await offline.start();
+    expect(offline.getStatus().snapshot?.releaseId).toBe(current.channel.releaseId);
+    expect(store.deletedFiles).toContain(orphanHash);
+    expect(store.deletedFiles).not.toContain(archivedFile.sha256);
+    const beforeOfflineResolve = archivedRequests.length;
+    await expect(offline.ensureArchivedScene(archived.channel.releaseId, "retired-scene")).resolves.toBe(url);
+    expect(archivedRequests).toHaveLength(beforeOfflineResolve);
+    expect(offline.getStatus().snapshot?.retainedSceneUrls.get(`${archived.channel.releaseId}:retired-scene`)).toBe(url);
+    expect(offline.getStatus().snapshot?.parkById.has("retired-park")).toBe(false);
+  });
+
+  it("does not fetch archived art offline or while backgrounded", async () => {
+    const archived = await makeArchivedRelease("retired-park", "retired-scene");
+    const fetcher = vi.fn(async () => new Response("missing", { status: 404 })) as unknown as typeof fetch;
+    const runtime = track(createRuntime(new MemoryContentStore(), fetcher, { connected: false, wifi: false }));
+    await runtime.start();
+
+    await expect(runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene")).rejects.toBeInstanceOf(ContentUnavailableOfflineError);
+    expect(fetcher).not.toHaveBeenCalled();
+    runtime.setForeground(false);
+    runtime.setConnectivity({ connected: true, wifi: false });
+    await expect(runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene")).rejects.toBeInstanceOf(ArchivedSceneRestoreDeferredError);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("aborts an in-flight archived restore when the runtime stops", async () => {
+    const current = await makeRelease("c".repeat(64), 3, "current-park", "current-scene");
+    const archived = await makeArchivedRelease("retired-park", "retired-scene");
+    const server = contentServer(current);
+    server.add(archived);
+    let signal: AbortSignal | undefined;
+    let manifestStarted!: () => void;
+    const started = new Promise<void>((resolve) => { manifestStarted = resolve; });
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === archived.channel.manifestUrl) {
+        signal = init?.signal ?? undefined;
+        manifestStarted();
+        return new Promise<Response>((_resolve, reject) => {
+          if (signal?.aborted) {
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+          }
+          signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      }
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createRuntime(new MemoryContentStore(), fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    const pending = runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene");
+    await started;
+    await runtime.stop();
+    await expect(pending).rejects.toThrow("Content runtime is stopped");
+    expect(signal?.aborted).toBe(true);
+  });
+
+
 });
 
 describe("incremental content sync", () => {

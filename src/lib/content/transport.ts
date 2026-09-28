@@ -6,6 +6,9 @@ const DEFAULT_API_URL = "https://parkdex-kip-staging.vercel.app/api/content/curr
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_BRIDGED_BASE64_CHARS = Math.ceil((MAX_RESPONSE_BYTES * 4) / 3) + 4;
 
+export type ContentConnectivity = { connected: boolean; wifi: boolean };
+type BrowserNetworkInformation = EventTarget & { type?: string; effectiveType?: string };
+
 type NativeWifiStatus = { wifi: boolean };
 type NativeContentResponse = {
   status: number;
@@ -33,23 +36,74 @@ type NativeContentTransport = {
 const NativeTransport = registerPlugin<NativeContentTransport>("WifiContentTransport");
 let nextRequestId = 0;
 
-/** Return true only when the current native or browser network is affirmatively Wi-Fi. */
-export async function isContentWifiAvailable(): Promise<boolean> {
+function browserNetworkInformation(): BrowserNetworkInformation | undefined {
+  if (typeof navigator === "undefined") return undefined;
+  return (navigator as Navigator & { connection?: BrowserNetworkInformation }).connection;
+}
+
+function readBrowserConnectivity(): ContentConnectivity {
+  const connected = typeof navigator !== "undefined" && navigator.onLine === true;
+  const connection = browserNetworkInformation();
+  return { connected, wifi: connected && connection?.type === "wifi" };
+}
+
+/** Report connectivity without treating an effective connection speed as a network type. */
+export async function getContentConnectivity(): Promise<ContentConnectivity> {
+  if (!Capacitor.isNativePlatform()) return readBrowserConnectivity();
+  if (Capacitor.getPlatform() !== "android") return { connected: false, wifi: false };
+
+  const [networkResult, wifiResult] = await Promise.allSettled([
+    Network.getStatus(),
+    NativeTransport.getWifiStatus(),
+  ]);
+  const connected = networkResult.status === "fulfilled" && networkResult.value.connected === true;
+  const wifi = wifiResult.status === "fulfilled" && wifiResult.value.wifi === true;
+  return { connected: connected || wifi, wifi };
+}
+
+/** Subscribe to online state and the browser's physical network type, or native network changes. */
+export function subscribeContentConnectivity(listener: (connectivity: ContentConnectivity) => void): () => void {
   if (Capacitor.isNativePlatform()) {
-    if (Capacitor.getPlatform() !== "android") return false;
-    try {
-      return (await NativeTransport.getWifiStatus()).wifi === true;
-    } catch {
-      return false;
+    if (Capacitor.getPlatform() !== "android") {
+      listener({ connected: false, wifi: false });
+      return () => {};
     }
+
+    let active = true;
+    let networkListener: { remove: () => Promise<void> } | undefined;
+    const publish = () => {
+      void getContentConnectivity().then((connectivity) => {
+        if (active) listener(connectivity);
+      });
+    };
+    publish();
+    void Network.addListener("networkStatusChange", publish).then((handle) => {
+      if (active) networkListener = handle;
+      else void handle.remove();
+    }).catch(() => {});
+    return () => {
+      active = false;
+      void networkListener?.remove();
+    };
   }
 
-  try {
-    const status = await Network.getStatus();
-    return status.connected === true && status.connectionType === "wifi";
-  } catch {
-    return false;
-  }
+  const publish = () => listener(readBrowserConnectivity());
+  const browserWindow = typeof window === "undefined" ? undefined : window;
+  const connection = browserNetworkInformation();
+  browserWindow?.addEventListener("online", publish);
+  browserWindow?.addEventListener("offline", publish);
+  connection?.addEventListener("change", publish);
+  publish();
+  return () => {
+    browserWindow?.removeEventListener("online", publish);
+    browserWindow?.removeEventListener("offline", publish);
+    connection?.removeEventListener("change", publish);
+  };
+}
+
+/** Convenience gate for download callsites that only need an affirmative Wi-Fi value. */
+export async function isContentWifiAvailable(): Promise<boolean> {
+  return (await getContentConnectivity()).wifi;
 }
 
 /** Fetch content through Android's Wi-Fi-bound network, or through a Wi-Fi-gated browser fetch. */
@@ -72,16 +126,110 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
     return nativeFetch(request, url, apiOrigin);
   }
 
+  return browserFetch(request, url);
+}
+
+async function browserFetch(request: Request, url: URL): Promise<Response> {
   if (!(await isContentWifiAvailable())) throw wifiUnavailableError();
   throwIfAborted(request.signal);
-  return globalThis.fetch(url, {
-    method: request.method,
-    headers: request.headers,
-    signal: request.signal,
-    redirect: "error",
-    credentials: "omit",
-    cache: request.cache,
-  });
+
+  const controller = new AbortController();
+  const abortForWifi = () => {
+    if (!controller.signal.aborted) controller.abort(wifiUnavailableError());
+  };
+  const abortForCaller = () => {
+    if (!controller.signal.aborted) controller.abort(abortReason(request.signal));
+  };
+  const onConnectivity = (connectivity: ContentConnectivity) => {
+    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+  };
+  const unsubscribe = subscribeContentConnectivity(onConnectivity);
+  request.signal.addEventListener("abort", abortForCaller, { once: true });
+
+  try {
+    if (request.signal.aborted) abortForCaller();
+    const connectivity = await getContentConnectivity();
+    if (!connectivity.connected || !connectivity.wifi) abortForWifi();
+    if (controller.signal.aborted) throw abortReason(controller.signal);
+
+    const response = await globalThis.fetch(url, {
+      method: request.method,
+      headers: request.headers,
+      signal: controller.signal,
+      redirect: "error",
+      credentials: "omit",
+      cache: request.cache,
+    });
+    if (response.status < 200 || response.status > 599) {
+      throw new Error("The browser content transport returned an invalid HTTP status");
+    }
+    if (response.status >= 300 && response.status < 400 && response.status !== 304) {
+      throw new Error("Content server redirects are not permitted");
+    }
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+      const error = new RangeError("The content response exceeds its byte limit");
+      controller.abort(error);
+      if (response.body) void response.body.cancel(error).catch(() => {});
+      throw error;
+    }
+    const bytes = await readBoundedResponseBody(response, MAX_RESPONSE_BYTES, (error) => controller.abort(error));
+    if (controller.signal.aborted) throw abortReason(controller.signal);
+
+    const body = request.method === "HEAD" || [204, 205, 304].includes(response.status) ? null : bytes;
+    const bufferedResponse = new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+    Object.defineProperty(bufferedResponse, "url", { value: response.url || url.href });
+    return bufferedResponse;
+  } catch (error) {
+    if (controller.signal.aborted) throw abortReason(controller.signal);
+    throw error;
+  } finally {
+    unsubscribe();
+    request.signal.removeEventListener("abort", abortForCaller);
+  }
+}
+
+async function readBoundedResponseBody(
+  response: Response,
+  maxBytes: number,
+  abort: (reason: unknown) => void,
+): Promise<ArrayBuffer> {
+  if (!response.body) return new ArrayBuffer(0);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (byteLength + value.byteLength > maxBytes) {
+        const error = new RangeError("The content response exceeds its byte limit");
+        abort(error);
+        void reader.cancel(error).catch(() => {});
+        throw error;
+      }
+      chunks.push(value);
+      byteLength += value.byteLength;
+    }
+  } catch (error) {
+    void reader.cancel(error).catch(() => {});
+    throw error;
+  } finally {
+    try { reader.releaseLock(); } catch { /* A failed stream may keep its reader locked. */ }
+  }
+
+  const buffer = new ArrayBuffer(byteLength);
+  const output = new Uint8Array(buffer);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return buffer;
 }
 
 async function nativeFetch(request: Request, url: URL, apiOrigin: string): Promise<Response> {
