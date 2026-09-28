@@ -4,6 +4,8 @@ import type { ContentRuntime, ContentSnapshot, MapManifest } from "./content/con
 
 const TILE_SCHEME = "pmtiles";
 const GLYPH_SCHEME = "contentglyph";
+export const ISLAND_OVERVIEW_KEY = "bundled-island-overview-v1";
+export const ISLAND_OVERVIEW_PATH = "/map/bootstrap/island-overview.pmtiles";
 const MAX_CACHED_CHUNKS = 12;
 
 type ReleaseRegistration = {
@@ -15,9 +17,11 @@ type ReleaseRegistration = {
 
 const registrations = new Map<string, ReleaseRegistration>();
 const allowedChunkIds = new Map<string, Set<number>>();
+const mapCoverageListeners = new Map<string, Set<() => void>>();
 let tileProtocol: Protocol | null = null;
 let tileProtocolInstalled = false;
 let glyphProtocolInstalled = false;
+let bundledOverview: PMTiles | null = null;
 
 /**
  * Install the PMTiles and glyph handlers for a ready content snapshot.
@@ -73,6 +77,8 @@ function releaseCleanup(releaseId: string, entry: ReleaseRegistration): () => vo
 
 function ensureProtocols(): void {
   if (!tileProtocol) tileProtocol = new Protocol();
+  if (!bundledOverview) bundledOverview = new PMTiles(new BundledOverviewSource());
+  if (!tileProtocol.tiles.has(ISLAND_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
   if (!tileProtocolInstalled) {
     addProtocol(TILE_SCHEME, tileProtocol.tile);
     tileProtocolInstalled = true;
@@ -188,6 +194,54 @@ export class RuntimeChunkSource implements Source {
   }
 }
 
+/**
+ * A small immutable app asset used as a map underlay before detailed content
+ * chunks have arrived. Native Capacitor servers may ignore HTTP byte ranges,
+ * so this source fetches the archive once and slices PMTiles reads in memory.
+ */
+export class BundledOverviewSource implements Source {
+  private archive: Promise<ArrayBuffer> | null = null;
+
+  constructor(
+    private readonly loadArchive: () => Promise<ArrayBuffer> = () => fetchBundledOverview(),
+    private readonly key = ISLAND_OVERVIEW_KEY,
+  ) {}
+
+  getKey(): string {
+    return this.key;
+  }
+
+  async getBytes(offset: number, length: number, signal?: AbortSignal): Promise<RangeResponse> {
+    throwIfAborted(signal);
+    if (
+      !Number.isSafeInteger(offset) || offset < 0 ||
+      !Number.isSafeInteger(length) || length < 0 ||
+      !Number.isSafeInteger(offset + length)
+    ) {
+      throw new RangeError("Invalid bundled PMTiles byte range");
+    }
+    if (length === 0) return { data: new ArrayBuffer(0) };
+
+    const archive = await this.readArchive();
+    throwIfAborted(signal);
+    const start = Math.min(offset, archive.byteLength);
+    const end = Math.min(offset + length, archive.byteLength);
+    if (end <= start) return { data: new ArrayBuffer(0) };
+    return { data: archive.slice(start, end) };
+  }
+
+  private readArchive(): Promise<ArrayBuffer> {
+    if (!this.archive) {
+      const pending = this.loadArchive();
+      this.archive = pending;
+      pending.catch(() => {
+        if (this.archive === pending) this.archive = null;
+      });
+    }
+    return this.archive;
+  }
+}
+
 export function mapChunkPath(index: number): string {
   if (!Number.isInteger(index) || index < 0) throw new RangeError("Map chunk index must be a non-negative integer");
   return `map/island/${String(index).padStart(3, "0")}.bin`;
@@ -199,7 +253,15 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     allowed = new Set<number>();
     allowedChunkIds.set(releaseId, allowed);
   }
-  for (const id of chunkIds) allowed.add(id);
+  let changed = false;
+  for (const id of chunkIds) {
+    if (allowed.has(id)) continue;
+    allowed.add(id);
+    changed = true;
+  }
+  if (changed) {
+    for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
+  }
 }
 
 export function getAllowedMapChunks(releaseId: string): readonly number[] {
@@ -208,6 +270,34 @@ export function getAllowedMapChunks(releaseId: string): readonly number[] {
 
 export function resetAllowedMapChunks(releaseId: string): void {
   allowedChunkIds.delete(releaseId);
+}
+
+/** Subscribe to newly available detailed map chunks for the current release. */
+export function subscribeMapCoverage(releaseId: string, listener: () => void): () => void {
+  let listeners = mapCoverageListeners.get(releaseId);
+  if (!listeners) {
+    listeners = new Set();
+    mapCoverageListeners.set(releaseId, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    const current = mapCoverageListeners.get(releaseId);
+    current?.delete(listener);
+    if (current?.size === 0) mapCoverageListeners.delete(releaseId);
+  };
+}
+
+/** Refresh the detailed vector source after its allowlist gains local chunks. */
+export function reloadDetailedMapSource(map: {
+  getSource: (id: string) => unknown;
+  getStyle: () => { sources?: Record<string, unknown> };
+}): boolean {
+  const source = map.getSource("protomaps") as { setTiles?: (tiles: string[]) => unknown } | undefined;
+  const sourceStyle = map.getStyle().sources?.protomaps as { tiles?: unknown } | undefined;
+  if (!source || typeof source.setTiles !== "function" || !Array.isArray(sourceStyle?.tiles)) return false;
+  if (!sourceStyle.tiles.every((url): url is string => typeof url === "string")) return false;
+  source.setTiles([...sourceStyle.tiles]);
+  return true;
 }
 
 function validateMapManifest(manifest: MapManifest): void {
@@ -219,6 +309,15 @@ function validateMapManifest(manifest: MapManifest): void {
   ) {
     throw new Error("Content map manifest is invalid");
   }
+}
+
+async function fetchBundledOverview(): Promise<ArrayBuffer> {
+  const base = typeof document === "undefined" ? "http://localhost/" : document.baseURI;
+  const response = await fetch(new URL(ISLAND_OVERVIEW_PATH, base));
+  if (!response.ok) throw new Error(`Bundled map overview failed to load (${response.status})`);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength === 0) throw new Error("Bundled map overview is empty");
+  return bytes;
 }
 
 function throwIfAborted(signal?: AbortSignal): void {

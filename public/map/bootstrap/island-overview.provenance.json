@@ -1,0 +1,41 @@
+{
+  "schema": "parkdex.bundled-map-overview/v1",
+  "source": {
+    "path": "parkdex-badge-mockup/.tools/island.pmtiles",
+    "sha256": "b9e13d21f76ad52da76dc1ab2599e3b48c04879af4b91bf4fa3dd62baace4243",
+    "bytes": 95805433,
+    "tileType": "mvt",
+    "bounds": [-128.45, 48.28, -123.25, 50.92],
+    "minZoom": 0,
+    "maxZoom": 14,
+    "tileEntries": 39217,
+    "sourceBuild": "20260925",
+    "osmReplicationTime": "2026-09-25T04:00:00Z",
+    "archiveBasemapVersion": "4.15.2"
+  },
+  "tool": {
+    "path": "parkdex-badge-mockup/.tools/go-pmtiles.exe",
+    "sha256": "77043701c3584b2df0d0491beab8407370a3840025e1384a5eb177b99a69c1f4",
+    "reportedVersion": "pmtiles dev, commit none, built at unknown"
+  },
+  "extract": {
+    "rebuildCommand": "powershell -NoProfile -File scripts/build-map-overview.ps1 -SourceArchive 'C:\\repo\\parkdex-workspace\\parkdex-badge-mockup\\.tools\\island.pmtiles' -PmtilesCli 'C:\\repo\\parkdex-workspace\\parkdex-badge-mockup\\.tools\\go-pmtiles.exe'",
+    "command": "go-pmtiles extract <source> <output> --bbox=-128.45,48.28,-123.25,50.92 --minzoom=0 --maxzoom=7",
+    "minZoom": 0,
+    "maxZoom": 7,
+    "bounds": [-128.45, 48.28, -123.25, 50.92],
+    "tileEntries": 22,
+    "glyphs": []
+  },
+  "artifact": {
+    "path": "public/map/bootstrap/island-overview.pmtiles",
+    "sha256": "53c1a1e0ec2cd80ffdfef98b3400aa9fd87a2ae55359256aa3fba10ff632e07f",
+    "bytes": 1636725,
+    "maxBytes": 2000000,
+    "tileType": "mvt",
+    "minZoom": 0,
+    "maxZoom": 7,
+    "bounds": [-128.45, 48.28, -123.25, 50.92],
+    "attribution": ["Protomaps", "OpenStreetMap"]
+  }
+}
