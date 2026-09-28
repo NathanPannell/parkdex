@@ -44,7 +44,7 @@ export function Collection() {
     >
       <header className="col-head">
         <div>
-          <span className="eyebrow">Your case</span>
+          <span className="eyebrow">Your Dex</span>
           <h1>
             <RollingNumber value={count} />
             <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"}</small>
@@ -81,7 +81,7 @@ export function Collection() {
         {!state.progressReady ? (
           <div className="case__empty">
             <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              {state.progressError ? "Your saved case needs attention." : "Opening your saved case…"}
+              {state.progressError ? "Your saved Dex needs attention." : "Opening your saved Dex…"}
             </Bubble>
             {state.progressError && <button className="btn btn--sm btn--paper" onClick={() => dispatch({ type: "go", screen: "account" })}>Account help</button>}
           </div>
@@ -96,7 +96,7 @@ export function Collection() {
         ) : count === 0 && (
           <div className="case__empty">
             <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              Your case is empty. I’m saving this spot for badge #1.
+              Your Dex is empty. I’m saving this spot for badge #1.
             </Bubble>
           </div>
         )}
