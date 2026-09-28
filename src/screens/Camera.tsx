@@ -30,6 +30,37 @@ ${Array.from({ length: 7 }, (_, i) => {
 </svg>`;
 }
 
+function rasterizeSyntheticScene(svg: string): Promise<string> {
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const releaseUrl = () => URL.revokeObjectURL(objectUrl);
+    image.onload = () => {
+      releaseUrl();
+      try {
+        const width = 720;
+        const height = 960;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("A photo canvas could not be opened.");
+        context.drawImage(image, 0, 0, width, height);
+        const photo = canvas.toDataURL("image/jpeg", 0.82);
+        if (!photo.startsWith("data:image/jpeg;base64,")) throw new Error("The demo photo could not be encoded as JPEG.");
+        resolve(photo);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => {
+      releaseUrl();
+      reject(new Error("The demo scene could not be rasterized."));
+    };
+    image.src = objectUrl;
+  });
+}
+
 export function Camera() {
   const { state } = useStore();
   const content = useContent();
@@ -45,6 +76,8 @@ function CameraReady({ park }: { park: Park }) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [flash, setFlash] = useState(0);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  const [syntheticBusy, setSyntheticBusy] = useState(false);
+  const [syntheticError, setSyntheticError] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -90,6 +123,7 @@ function CameraReady({ park }: { park: Park }) {
   };
 
   const shoot = () => {
+    if (syntheticBusy) return;
     if (FIELD && live !== "on") {
       void nativeShot();
       return;
@@ -115,7 +149,12 @@ function CameraReady({ park }: { park: Park }) {
       ctx.drawImage(v, (w - dw) / 2, (h - dh) / 2, dw, dh);
       setPhoto(c.toDataURL("image/jpeg", 0.82));
     } else {
-      setPhoto(`data:image/svg+xml;utf8,${encodeURIComponent(sceneSvg(park))}`);
+      setSyntheticBusy(true);
+      setSyntheticError(null);
+      void rasterizeSyntheticScene(sceneSvg(park))
+        .then(setPhoto)
+        .catch(() => setSyntheticError("Kip couldn’t prepare the demo photo. Try taking it again."))
+        .finally(() => setSyntheticBusy(false));
     }
   };
 
@@ -172,8 +211,8 @@ function CameraReady({ park }: { park: Park }) {
       </motion.div>
 
       <div className="camera__bottom">
-        <div className="camera__hint">Get the park in the shot. This photo goes on your badge.</div>
-        <motion.button className="shutter" onClick={shoot} whileTap={{ scale: 0.86 }} aria-label="Take photo">
+        <div className="camera__hint" role={syntheticError ? "alert" : undefined}>{syntheticError ?? (syntheticBusy ? "Preparing your demo photo…" : "Get the park in the shot. This photo goes on your badge.")}</div>
+        <motion.button className="shutter" onClick={shoot} disabled={syntheticBusy} whileTap={{ scale: 0.86 }} aria-label="Take photo">
           <span />
         </motion.button>
       </div>

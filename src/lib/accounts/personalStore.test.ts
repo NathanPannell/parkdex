@@ -54,6 +54,28 @@ async function readLegacyPhoto(parkId: string) {
   });
 }
 
+function installTestFileReader() {
+  vi.stubGlobal("FileReader", class {
+    result: string | null = null;
+    error: Error | null = null;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+
+    async readAsDataURL(blob: Blob) {
+      try {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        this.result = `data:${blob.type};base64,${btoa(binary)}`;
+        this.onload?.();
+      } catch (error) {
+        this.error = error instanceof Error ? error : new Error(String(error));
+        this.onerror?.();
+      }
+    }
+  });
+}
+
 function park(id = "cedar-point"): import("../parks").Park {
   return {
     id, name: "Cedar Point Park", short: "Cedar Point", category: "regional", region: "Victoria",
@@ -96,6 +118,70 @@ describe("durable personal progress storage", () => {
     expect((await restarted.listPersonalClaims({ kind: "guest" })).map((claim) => claim.claimId)).toEqual([first[0].claimId]);
   });
 
+  it("migrates legacy ;utf8 SVG photos as viewable local-only photos and keeps them through guest attach", async () => {
+    const storage = globalThis.localStorage as unknown as MemoryStorage;
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="#f80"/></svg>';
+    storage.setItem(LEGACY_KEY, JSON.stringify({ claims: { "cedar-point": { at: "2025-04-03T12:34:56.000Z", photo: "" } } }));
+    await seedLegacyPhotos({ "cedar-point": `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` });
+
+    const personal = await import("./personalStore");
+    await personal.initializePersonalStore();
+    const [guestClaim] = await personal.listPersonalClaims({ kind: "guest" });
+    expect(guestClaim.photoIssue).toBeNull();
+    const guestPhoto = await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId);
+    expect(guestPhoto).toMatchObject({ contentType: "image/svg+xml", backupState: "unsupported", unsupportedReason: "type" });
+    expect(await guestPhoto?.blob.text()).toBe(svg);
+    installTestFileReader();
+    expect((await personal.loadPersonalPhotos({ kind: "guest" }))?.["cedar-point"]).toMatch(/^data:image\/svg\+xml;/);
+    expect(await readLegacyPhoto("cedar-point")).toBeUndefined();
+
+    await personal.setLegacyClaimSnapshot({ kind: "guest" }, guestClaim.claimId, park(), "staging-r17");
+    await personal.copyGuestClaimsToAccount(accountId);
+    const account = { kind: "account" as const, accountId };
+    const attachedPhoto = await personal.getPersonalPhoto(account, guestClaim.claimId);
+    expect(attachedPhoto).toMatchObject({ contentType: "image/svg+xml", backupState: "unsupported", unsupportedReason: "type" });
+    expect(attachedPhoto?.sha256).toBe(guestPhoto?.sha256);
+    expect(await attachedPhoto?.blob.text()).toBe(svg);
+    expect(await personal.listPersonalOutbox(account)).toEqual([
+      { ownerKey: `account:${accountId}`, claimId: guestClaim.claimId, kind: "claim" },
+    ]);
+    await expect(personal.removeAttachedGuestClaims(accountId)).rejects.toThrow("waiting for server acknowledgement");
+    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).not.toBeNull();
+
+    const attachedClaim = (await personal.listPersonalClaims(account))[0];
+    await personal.markClaimUploaded(account, guestClaim.claimId, {
+      parkId: attachedClaim.parkId,
+      claimedAt: attachedClaim.claimedAt,
+      parkSnapshot: attachedClaim.parkSnapshot!,
+      contentReleaseId: attachedClaim.contentReleaseId,
+    });
+
+    // A missing account copy must never cause cleanup to delete the only guest copy.
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("parkdex-personal-v1");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("photos", "readwrite");
+        tx.objectStore("photos").delete([`account:${accountId}`, guestClaim.claimId]);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      };
+    });
+    await expect(personal.removeAttachedGuestClaims(accountId)).rejects.toThrow("not durably attached");
+    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).not.toBeNull();
+
+    await personal.copyGuestClaimsToAccount(accountId);
+    expect(await personal.removeAttachedGuestClaims(accountId)).toBe(1);
+    expect(await personal.getPersonalPhoto({ kind: "guest" }, guestClaim.claimId)).toBeNull();
+    const retainedAccountPhoto = await personal.getPersonalPhoto(account, guestClaim.claimId);
+    expect(retainedAccountPhoto).toMatchObject({ contentType: "image/svg+xml", backupState: "unsupported", unsupportedReason: "type" });
+    expect(await retainedAccountPhoto?.blob.text()).toBe(svg);
+    installTestFileReader();
+    expect((await personal.loadPersonalPhotos(account))["cedar-point"]).toMatch(/^data:image\/svg\+xml;/);
+  });
+
   it("recovers cleanly when migration is interrupted before its destination transaction", async () => {
     const storage = globalThis.localStorage as unknown as MemoryStorage;
     storage.setItem(LEGACY_KEY, "{ broken json");
@@ -111,13 +197,14 @@ describe("durable personal progress storage", () => {
   it("keeps a claim when its legacy photo is corrupt and does not invent a replacement", async () => {
     const storage = globalThis.localStorage as unknown as MemoryStorage;
     storage.setItem(LEGACY_KEY, JSON.stringify({ claims: { "cedar-point": { at: "2025-04-03T12:34:56.000Z", photo: "" } } }));
-    await seedLegacyPhotos({ "cedar-point": "not-a-photo" });
+    const malformedSvg = "data:image/svg+xml;utf8,<svg>%not-encoded</svg>";
+    await seedLegacyPhotos({ "cedar-point": malformedSvg });
     const personal = await import("./personalStore");
     await personal.initializePersonalStore();
     const [claim] = await personal.listPersonalClaims({ kind: "guest" });
     expect(claim.photoIssue).toBe("corrupt");
     expect(await personal.getPersonalPhoto({ kind: "guest" }, claim.claimId)).toBeNull();
-    expect(await readLegacyPhoto("cedar-point")).toBe("not-a-photo");
+    expect(await readLegacyPhoto("cedar-point")).toBe(malformedSvg);
   });
 
   it("commits a new claim, supported photo, and account outbox before returning", async () => {

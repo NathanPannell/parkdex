@@ -356,10 +356,12 @@ async function cleanupLegacySources(manifest: LegacyMigrationManifest, storage?:
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
-  const match = /^data:([^;,]*)(;base64)?,([\s\S]*)$/i.exec(dataUrl);
+  // `;utf8` is a legacy marker used by the old web camera for SVG captures.
+  // Keep accepting only this known parameter plus the standard base64 marker.
+  const match = /^data:([^;,]*)(;base64|;utf8)?,([\s\S]*)$/i.exec(dataUrl);
   if (!match) throw new Error("Saved photo is not a data URL.");
   const contentType = match[1] || "text/plain";
-  if (match[2]) {
+  if (match[2]?.toLowerCase() === ";base64") {
     const binary = atob(match[3]);
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
@@ -979,9 +981,15 @@ export async function removeAttachedGuestClaims(accountId: string): Promise<numb
           const accountPhotoRequest = tx.objectStore(PHOTOS).get([accountKey, claim.claimId]);
           accountPhotoRequest.onsuccess = () => {
             const accountPhoto = accountPhotoRequest.result as PersonalPhoto | undefined;
-            if (guestPhoto && !guestPhoto.unsupportedReason && accountPhoto?.backupState !== "backed-up") {
-              fail(new Error("A guest photo is still waiting for server acknowledgement."));
-              return;
+            if (guestPhoto) {
+              if (accountPhoto?.sha256 !== guestPhoto.sha256) {
+                fail(new Error("A guest photo is not durably attached to the account."));
+                return;
+              }
+              if (!guestPhoto.unsupportedReason && accountPhoto.backupState !== "backed-up") {
+                fail(new Error("A guest photo is still waiting for server acknowledgement."));
+                return;
+              }
             }
             tx.objectStore(CLAIMS).delete([guestKey, claim.claimId]);
             tx.objectStore(PHOTOS).delete([guestKey, claim.claimId]);
