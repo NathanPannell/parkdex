@@ -1,4 +1,4 @@
-import { HttpError } from "./validation.ts";
+import { HttpError } from "./validation.js";
 
 export const OPERATOR_SESSION_COOKIE = "kip_operator_session";
 export const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;

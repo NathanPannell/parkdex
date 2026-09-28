@@ -1,7 +1,7 @@
-import { renderOperatorEmail, renderReceiptEmail } from "./emails.ts";
-import { createSessionToken, getClientAddress, isSameOriginWrite, keyedHash, readSessionCookie, requestOriginAllowed, sessionCookie, clearSessionCookie, verifyOperatorPassword, verifySessionToken } from "./security.ts";
-import { createNeonFeedbackStore } from "./store.ts";
-import type { FeedbackCursor, FeedbackStore, MailIntent, ResendPayload } from "./store.ts";
+import { renderOperatorEmail, renderReceiptEmail } from "./emails.js";
+import { createSessionToken, getClientAddress, isSameOriginWrite, keyedHash, readSessionCookie, requestOriginAllowed, sessionCookie, clearSessionCookie, verifyOperatorPassword, verifySessionToken } from "./security.js";
+import { createNeonFeedbackStore } from "./store.js";
+import type { FeedbackCursor, FeedbackStore, MailIntent, ResendPayload } from "./store.js";
 import {
   HttpError,
   readJsonBody,
@@ -11,7 +11,7 @@ import {
   type EmailAudience,
   type FeedbackEmailReport,
   type ValidatedFeedback,
-} from "./validation.ts";
+} from "./validation.js";
 
 export interface WorkerEnvironment {
   DATABASE_URL?: string;
