@@ -100,6 +100,48 @@ describe("isPointInBoundary", () => {
     expect(isPointInBoundary({ longitude: firstPosition[0], latitude: firstPosition[1] }, park!)).toBe(true);
     expect(isPointInBoundary({ longitude: -100, latitude: 20 }, park!)).toBe(false);
   });
+
+  it("accepts the registered locations of three Shapely-valid CRD boundaries", () => {
+    const catalogue = JSON.parse(readFileSync(new URL("../../data/boundaries.geojson", import.meta.url), "utf8")) as {
+      features: BoundaryFeature[];
+    };
+    const places = JSON.parse(readFileSync(new URL("../../data/places.json", import.meta.url), "utf8")) as Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+    }>;
+    const ids = [
+      "community-southern-gulf-islands-electoral-area-south-pender-island-1259",
+      "municipal-city-of-victoria-855",
+      "municipal-district-of-saanich-1920",
+    ];
+
+    for (const id of ids) {
+      const boundary = catalogue.features.find((entry) => entry.properties.id === id);
+      const place = places.find((entry) => entry.id === id);
+      expect(boundary, `missing canonical boundary ${id}`).toBeDefined();
+      expect(place, `missing canonical place ${id}`).toBeDefined();
+      const point = { longitude: place!.longitude, latitude: place!.latitude };
+      expect(isPointInBoundary(point, boundary!), `${id} claim containment`).toBe(true);
+      expect(validateOfflineLocation(location({ ...point, timestamp: 10_000 }), boundary!, 10_000), `${id} validation`)
+        .toEqual({ status: "inside" });
+      const outside = { longitude: -100, latitude: 20 };
+      expect(isPointInBoundary(outside, boundary!), `${id} outside containment`).toBe(false);
+      expect(validateOfflineLocation(location({ ...outside, timestamp: 10_000 }), boundary!, 10_000), `${id} outside validation`)
+        .toEqual({ status: "outside" });
+    }
+  });
+
+  it("fails closed when a hole crosses, shares an edge with, or sits outside the exterior", () => {
+    const crossingHole = feature([outer, [[8, 4], [12, 4], [12, 6], [8, 6], [8, 4]]]);
+    const sharedEdgeHole = feature([outer, [[0, 2], [2, 2], [2, 4], [0, 4], [0, 2]]]);
+    const outsideHole = feature([outer, [[12, 2], [13, 2], [13, 3], [12, 3], [12, 2]]]);
+
+    for (const invalid of [crossingHole, sharedEdgeHole, outsideHole]) {
+      expect(isPointInBoundary({ longitude: 1, latitude: 1 }, invalid)).toBe(false);
+      expect(validateOfflineLocation(location(), invalid, 1_000)).toEqual({ status: "invalid-boundary" });
+    }
+  });
 });
 
 describe("validateOfflineLocation", () => {
