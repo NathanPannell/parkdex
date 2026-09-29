@@ -173,11 +173,11 @@ function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
           </svg>
           <motion.div className="ob-flash" animate={{ opacity: [0, 0, 1, 0, 0] }} transition={{ ...loop, times: [0, 0.14, 0.16, 0.26, 1] }} />
         </div>
-        <span>{park?.short ?? "your park"} · your visit</span>
+        <span>{park?.short ?? "Your park"}</span>
       </motion.div>
       <motion.div
         className="ob-stamp"
-        animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 30, 30, 30, 30, 118] }}
+        animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 4, 4, 4, 4, 118] }}
         transition={{ ...loop, times: [0, 0.3, 0.4, 0.46, 0.5, 0.72, 0.86], ease: "easeOut" }}
       >
         {park ? <Badge park={park} size={120} /> : <Kip pose="think" size={100} />}

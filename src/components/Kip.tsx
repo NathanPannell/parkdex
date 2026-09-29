@@ -150,8 +150,20 @@ export function Bubble({ children, show = true, side = "left", style }: { childr
           transition={{ type: "spring", stiffness: 520, damping: 22 }}
         >
           {children}
+          {(side === "to-left" || side === "to-right") && <BubbleTail />}
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// A sideways tail drawn as one shape: paper fill with ink only on its two outer
+// edges, overlapping the bubble border so the outline joins without a seam.
+function BubbleTail() {
+  return (
+    <svg className="bubble__tail" viewBox="0 0 18 20" width="18" height="20" aria-hidden="true">
+      <path d="M18 0.5 L1.5 10 L18 19.5 Z" fill="var(--paper)" />
+      <path d="M18 1.25 L1.75 10 L18 18.75" fill="none" stroke="var(--ink)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="butt" />
+    </svg>
   );
 }
