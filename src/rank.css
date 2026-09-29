@@ -311,6 +311,7 @@
   position: absolute;
   inset: 0;
   z-index: 70;
+  container: rankup / size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -397,7 +398,7 @@
 
 .rankup__kip .bubble {
   position: relative;
-  margin-bottom: 52px;
+  margin-bottom: 26px;
   white-space: nowrap;
 }
 
@@ -408,19 +409,23 @@
   width: 100%;
 }
 
-@media (max-height: 700px) {
-  .rankup {
-    gap: 8px;
-    padding-top: calc(var(--safe-top) + 8px);
-  }
-  .rankup__emblem .rank-emblem,
-  .rankup__emblem .rank-emblem svg {
-    width: 120px !important;
-    height: 120px !important;
+/* Fit the frame the app runs in (a phone, or the desktop phone mockup), not the window. */
+.rankup__emblem .rank-emblem,
+.rankup__emblem .rank-emblem svg {
+  width: min(168px, 17cqh) !important;
+  height: min(168px, 17cqh) !important;
+}
+
+@container rankup (max-height: 760px) {
+  .rankup__stamp {
+    font-size: 28px;
   }
   .rankup__text h2 {
-    font-size: 36px;
+    font-size: 38px;
   }
+}
+
+@container rankup (max-height: 680px) {
   .rankup__kip {
     display: none;
   }
