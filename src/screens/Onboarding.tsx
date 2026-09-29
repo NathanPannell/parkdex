@@ -11,8 +11,10 @@ import type { Park } from "../lib/parks";
 import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
 import { RARITY } from "../lib/parks";
-import { COLLECTION_RANKS, RARITY_REQUIREMENTS, RARITY_TIERS } from "../lib/progression";
-import { formatRarityRequirements } from "../lib/rarityUi";
+import { RANKS } from "../lib/progression";
+import { parksLabel } from "../lib/rarityUi";
+import { RankEmblem } from "../components/Rank";
+import goMap from "../assets/onboarding-go-map.webp";
 
 const SLIDES = [
   {
@@ -24,7 +26,7 @@ const SLIDES = [
   {
     eyebrow: "Step 2 · Go",
     title: ["Go there.", "For real."],
-    body: "No couch claims. Badges unlock only when you're standing inside the park boundary.",
+    body: "Pick a park on the map and head over. The badge unlocks once you're standing inside the park boundary.",
     tint: "#D6F0DF",
   },
   {
@@ -34,39 +36,34 @@ const SLIDES = [
     tint: "#DCEBFF",
   },
   {
-    eyebrow: "Step 4 · Unlock",
-    title: ["Unlock", "rarer parks."],
-    body: "Claim badges to open rarer parks and grow through four ranks. Your Dex and account show what you need for the next rank.",
+    eyebrow: "Step 4 · Rank up",
+    title: ["Visit more.", "Rank up."],
+    body: "Every new park counts. Visit 2, 5 and 10 parks to rank up and open Uncommon, Rare and Legendary badges. Track your rank in My Dex.",
     tint: "#E8E2FF",
   },
 ];
 
-function RarityRoadmap() {
+function RankRoadmap() {
   return (
-    <div className="ob-roadmap" aria-label="Badge rarity unlock requirements">
-      <div className="ob-roadmap__heading">Claimed badges unlock rarer parks</div>
-      <div className="ob-roadmap__rows">
-        {RARITY_TIERS.map((rarity, index) => {
-          const requirements = RARITY_REQUIREMENTS[rarity];
-          const need = formatRarityRequirements(requirements);
-          return (
-            <motion.div
-              key={rarity}
-              className="ob-roadmap__row"
-              initial={{ x: 24, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: index * 0.08, type: "spring", stiffness: 320, damping: 24 }}
-            >
-              <span className="ob-roadmap__tier" style={{ background: RARITY[rarity].color, color: RARITY[rarity].ink }}>
-                <span>{RARITY[rarity].label}</span>
-                <strong>{COLLECTION_RANKS[rarity]}</strong>
-              </span>
-              <span className="ob-roadmap__need">{need || "Open now"}</span>
-            </motion.div>
-          );
-        })}
-      </div>
-      <div className="ob-roadmap__foot">Each badge counts once</div>
+    <div className="ob-ranks" aria-label="Collector ranks and the rarities they unlock">
+      {RANKS.map((rank, index) => (
+        <motion.div
+          key={rank.name}
+          className="ob-ranks__row"
+          initial={{ x: 24, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.1 + index * 0.1, type: "spring", stiffness: 320, damping: 24 }}
+        >
+          <RankEmblem rank={rank} size={50} />
+          <span className="ob-ranks__text">
+            <strong>{rank.name}</strong>
+            <span>{rank.parks === 0 ? "Where you start" : `Visit ${parksLabel(rank.parks)}`}</span>
+          </span>
+          <span className="ob-ranks__opens" style={{ background: RARITY[rank.rarity].color, color: RARITY[rank.rarity].ink }}>
+            {RARITY[rank.rarity].label}
+          </span>
+        </motion.div>
+      ))}
     </div>
   );
 }
@@ -74,9 +71,9 @@ function RarityRoadmap() {
 function BadgeFan({ parks }: { parks: readonly Park[] }) {
   const fan = parks.slice(0, 3);
   const pos = [
-    { x: -92, y: 26, r: -14, s: 0.78, d: 0.1 },
-    { x: 0, y: -8, r: 0, s: 1, d: 0 },
-    { x: 92, y: 26, r: 14, s: 0.78, d: 0.2 },
+    { x: -92, y: -8, r: -14, s: 0.78, d: 0.1 },
+    { x: 0, y: -42, r: 0, s: 1, d: 0 },
+    { x: 92, y: -8, r: 14, s: 0.78, d: 0.2 },
   ];
   return (
     <div className="ob-fan">
@@ -95,9 +92,10 @@ function BadgeFan({ parks }: { parks: readonly Park[] }) {
           </motion.div>
         </motion.div>
       ))}
+      {/* Kip stands below the fan with his bubble beside him, clear of every badge ribbon. */}
       <motion.div className="ob-fan__kip" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.6, stiffness: 200, damping: 14 }}>
-        <Kip pose="wave" size={110} />
-        <Bubble side="left" style={{ left: 64, top: -34, whiteSpace: "nowrap" }}>
+        <Kip pose="wave" size={92} />
+        <Bubble side="left" style={{ position: "relative", marginBottom: 46, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
         </Bubble>
       </motion.div>
@@ -105,55 +103,50 @@ function BadgeFan({ parks }: { parks: readonly Park[] }) {
   );
 }
 
-const ROUTE = "M40 214 C 70 200, 60 150, 110 140 S 170 120, 176 96";
+// A real render of the Parkdex map around a badge park, framed so the walk comes in
+// from downtown. The badge shown is whichever published park sits closest to it.
+const GO_MAP_CENTER: [number, number] = [-123.3636, 48.4128];
+const ROUTE = "M62 118 C 92 100, 124 98, 148 112 S 186 142, 200 166";
 
-function GoThere() {
+function GoThere({ parks }: { parks: readonly Park[] }) {
+  const park = parks.length
+    ? parks.reduce((best, candidate) => (distanceKm(GO_MAP_CENTER, [candidate.lng, candidate.lat]) < distanceKm(GO_MAP_CENTER, [best.lng, best.lat]) ? candidate : best))
+    : undefined;
   const dur = "4.2s";
-  const keys = { keyTimes: "0;0.65;1", keyPoints: "0;1;1", calcMode: "linear" as const };
+  const loop = { duration: 4.2, repeat: Infinity, ease: "linear" as const };
+  const keys = { keyTimes: "0;0.6;1", keyPoints: "0;1;1", calcMode: "linear" as const };
   return (
     <div className="ob-go">
-      <svg viewBox="0 0 300 260" width="100%" height="100%">
-        <defs>
-          <pattern id="ob-dots" width="14" height="14" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1.3" fill="#14231C" opacity="0.12" />
-          </pattern>
-        </defs>
-        <rect width="300" height="260" rx="28" fill="#F7ECD8" />
-        <rect width="300" height="260" rx="28" fill="url(#ob-dots)" />
-        <path d="M0 40 Q80 60 150 30 T300 50 L300 0 L0 0Z" fill="#A8E1EC" />
-        <path d="M-10 190 L310 150" stroke="#FFFFFF" strokeWidth="12" strokeLinecap="round" />
-        <path d="M-10 190 L310 150" stroke="#E3C697" strokeWidth="1.5" strokeDasharray="8 8" />
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="#C9E7B2" />
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="none" stroke="#2F9E6B" strokeWidth="3" strokeDasharray="7 6">
-          <animate attributeName="stroke-dashoffset" values="0;-26" dur="1.2s" repeatCount="indefinite" />
-        </path>
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="#2F9E6B" opacity="0">
-          <animate attributeName="opacity" values="0;0;.35;0" keyTimes="0;.64;.72;1" dur={dur} repeatCount="indefinite" />
-        </path>
-        {[[160, 70], [214, 64], [230, 104], [190, 112]].map(([x, y], i) => (
-          <path key={i} d={`M${x} ${y - 16} l7 12 h-4 l6 10 h-18 l6 -10 h-4Z`} fill="#1C5B43" />
-        ))}
-        <path d={ROUTE} fill="none" stroke="#FF5A1F" strokeWidth="4" strokeLinecap="round" strokeDasharray="1 9" />
+      <img className="ob-go__map" src={goMap} alt="" draggable={false} />
+      <svg className="ob-go__route" viewBox="0 0 300 260" width="100%" height="100%" aria-hidden="true">
+        <path d={ROUTE} fill="none" stroke="#FFF8EC" strokeWidth="9" strokeLinecap="round" />
+        <path d={ROUTE} fill="none" stroke="#FF5A1F" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="1 9" />
         <g>
           <circle r="16" fill="#FF5A1F" opacity="0.2">
             <animate attributeName="r" values="10;20;10" dur="1.4s" repeatCount="indefinite" />
           </circle>
-          <circle r="9" fill="#FF5A1F" stroke="#FFF8EC" strokeWidth="3.5" />
+          <circle r="9" fill="#2F7BFF" stroke="#FFF8EC" strokeWidth="3.5" />
           <animateMotion path={ROUTE} dur={dur} repeatCount="indefinite" {...keys} />
         </g>
-        <g transform="translate(206 26)">
-          <g opacity="0">
-            <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;.66;.7;.95;1" dur={dur} repeatCount="indefinite" />
-            <animateTransform attributeName="transform" type="scale" values="0.2;0.2;1.15;1;1" keyTimes="0;.66;.72;.78;1" dur={dur} repeatCount="indefinite" />
-            <rect x="-44" y="-16" width="88" height="32" rx="16" fill="#14231C" />
-            <text x="0" y="5" textAnchor="middle" fill="#FFF8EC" fontFamily="'Bricolage Grotesque Variable'" fontWeight="800" fontSize="14">
-              You're in!
-            </text>
-          </g>
-        </g>
       </svg>
+      <motion.span
+        className="ob-go__in"
+        animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }}
+        transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}
+      >
+        You're in!
+      </motion.span>
+      {park && (
+        <motion.div
+          className="ob-go__badge"
+          animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.2, 0.2, 1.15, 1, 1], rotate: [-30, -30, 6, 0, 0] }}
+          transition={{ ...loop, times: [0, 0.62, 0.7, 0.95, 1] }}
+        >
+          <Badge park={park} size={92} />
+        </motion.div>
+      )}
       <motion.div className="ob-go__kip" animate={{ rotate: [0, -6, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-        <Kip pose="point" size={104} />
+        <Kip pose="point" size={96} />
       </motion.div>
     </div>
   );
@@ -162,7 +155,7 @@ function GoThere() {
 function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
   const park = parks[0];
   const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.6 };
-  const cells = parks.slice(0, 5);
+  const cells = parks.slice(1, 4);
   return (
     <div className="ob-snap">
       <motion.div
@@ -190,9 +183,9 @@ function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
         {park ? <Badge park={park} size={120} /> : <Kip pose="think" size={100} />}
       </motion.div>
       <div className="ob-case">
-        {cells.map((item, i) => (
+        {cells.map((item) => (
           <div key={item.id} className="ob-case__cell">
-            <Badge park={item} size={32} showName={false} state={i < 3 ? "earned" : "silhouette"} />
+            <Badge park={item} size={32} showName={false} state="earned" />
           </div>
         ))}
         <motion.div className="ob-case__cell ob-case__cell--new" animate={{ boxShadow: ["0 0 0 0 #FFC93C00", "0 0 0 0 #FFC93C00", "0 0 0 6px #FFC93Cff", "0 0 0 0 #FFC93C00"] }} transition={{ ...loop, times: [0, 0.84, 0.9, 1] }} />
@@ -289,7 +282,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere /> : index === 2 ? <SnapClaimKeep parks={parks} /> : <RarityRoadmap />}
+                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere parks={parks} /> : index === 2 ? <SnapClaimKeep parks={parks} /> : <RankRoadmap />}
               </div>
             </motion.div>
           </AnimatePresence>
