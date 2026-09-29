@@ -1,0 +1,223 @@
+{
+  "schema": "parkdex.rarity-downshift/v1",
+  "environment": "staging",
+  "source_counts": {
+    "common": 59,
+    "rare": 10,
+    "uncommon": 30,
+    "legendary": 1
+  },
+  "target_counts": {
+    "common": 89,
+    "uncommon": 10,
+    "rare": 1,
+    "legendary": 0
+  },
+  "changes": [
+    {
+      "id": "provincial-goldstream-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-east-sooke-regional-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-thetis-lake-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-sooke-potholes-regional-park",
+      "from": "legendary",
+      "to": "rare"
+    },
+    {
+      "id": "municipal-district-of-saanich-244",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-elk-beaver-lake-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-city-of-colwood-1866",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-witty-s-lagoon-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-island-view-beach-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-sooke-970",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "provincial-gowlland-tod-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "municipal-district-of-oak-bay-916",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "provincial-au-welnew-john-dean-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-mount-work-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-matheson-lake-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-township-of-esquimalt-767",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-city-of-victoria-834",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-francis-king-regional-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "municipal-township-of-esquimalt-1477",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-sooke-hills-wilderness-regional-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "provincial-spectacle-lake-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-mount-wells-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-sooke-946",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-gonzales-hill-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-mill-hill-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-city-of-langford-622",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "provincial-bamberton-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-albert-head-lagoon-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-sea-to-sea-regional-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-roche-cove-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-coles-bay-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-city-of-colwood-1463",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-bear-hill-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-lone-tree-hill-regional-park",
+      "from": "rare",
+      "to": "uncommon"
+    },
+    {
+      "id": "regional-horth-hill-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "regional-devonian-regional-park",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-north-saanich-1076",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-saanich-238",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-city-of-victoria-872",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-central-saanich-377",
+      "from": "uncommon",
+      "to": "common"
+    },
+    {
+      "id": "municipal-district-of-sooke-973",
+      "from": "uncommon",
+      "to": "common"
+    }
+  ]
+}

@@ -3,8 +3,10 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const MANIFEST = new URL("../database/catalogue/victoria-rarities-20260928.json", import.meta.url);
+const TRANSITION = new URL("../database/catalogue/victoria-rarity-downshift-20260928.json", import.meta.url);
 const SEED = new URL("../database/seeds/victoria-100-20260927/victoria-100-seed-v1.json", import.meta.url);
-const EXPECTED_COUNTS = { common: 59, uncommon: 30, rare: 10, legendary: 1 };
+const EXPECTED_COUNTS = { common: 89, uncommon: 10, rare: 1, legendary: 0 };
+const SOURCE_COUNTS = { common: 59, uncommon: 30, rare: 10, legendary: 1 };
 const SOOKE_POTHOLES_ID = "regional-sooke-potholes-regional-park";
 
 test("rarity assignment covers the immutable 100-park seed exactly", async () => {
@@ -38,11 +40,34 @@ test("rarity assignment covers the immutable 100-park seed exactly", async () =>
   }
   assert.deepEqual(counts, EXPECTED_COUNTS);
   assert.deepEqual(manifest.counts, EXPECTED_COUNTS);
-  assert.deepEqual(
-    manifest.parks.filter((park) => park.rarity === "legendary").map((park) => park.id),
-    [SOOKE_POTHOLES_ID],
-  );
+  assert.deepEqual(manifest.parks.filter((park) => park.rarity === "legendary"), []);
+  assert.equal(manifest.parks.find((park) => park.id === SOOKE_POTHOLES_ID)?.rarity, "rare");
   assert.equal(manifest.parks.find((park) => park.id === SOOKE_POTHOLES_ID)?.name, "Sooke Potholes Regional Park");
+});
+
+test("downshift records every changed rarity exactly once", async () => {
+  const [manifest, transition] = await Promise.all([MANIFEST, TRANSITION].map(async (url) => JSON.parse(await readFile(url, "utf8"))));
+  assert.equal(transition.schema, "parkdex.rarity-downshift/v1");
+  assert.equal(transition.environment, "staging");
+  assert.deepEqual(transition.source_counts, SOURCE_COUNTS);
+  assert.deepEqual(transition.target_counts, EXPECTED_COUNTS);
+  const step = { common: "common", uncommon: "common", rare: "uncommon", legendary: "rare" };
+  const before = new Map(manifest.parks.map((park) => [park.id, park.rarity]));
+  const changed = new Set();
+  for (const change of transition.changes) {
+    assert.deepEqual(Object.keys(change), ["id", "from", "to"]);
+    assert.ok(!changed.has(change.id), `duplicate transition for ${change.id}`);
+    assert.equal(step[change.from], change.to);
+    assert.notEqual(change.from, change.to);
+    assert.equal(before.get(change.id), change.to);
+    before.set(change.id, change.from);
+    changed.add(change.id);
+  }
+  assert.equal(changed.size, 41);
+  const sourceCounts = { common: 0, uncommon: 0, rare: 0, legendary: 0 };
+  for (const rarity of before.values()) sourceCounts[rarity] += 1;
+  assert.deepEqual(sourceCounts, SOURCE_COUNTS);
+  for (const park of manifest.parks) assert.equal(park.rarity, step[before.get(park.id)]);
 });
 
 test("rarity assignment declares the agreed unlock thresholds", async () => {

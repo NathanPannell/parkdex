@@ -40,7 +40,8 @@
       "scripts/test_publish_content.py",
       "scripts/test_publish_park_update.py",
       "scripts/test_reset_victoria_100.py",
-      "scripts/test_authoring_queue.py"
+      "scripts/test_authoring_queue.py",
+      "scripts/test_downshift_park_rarities.py"
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
