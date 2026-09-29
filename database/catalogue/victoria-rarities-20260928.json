@@ -2,17 +2,25 @@
   "schema": "parkdex.rarity-assignment/v1",
   "environment": "staging",
   "counts": {
-    "common": 59,
-    "rare": 10,
-    "uncommon": 30,
-    "legendary": 1
+    "common": 89,
+    "uncommon": 10,
+    "rare": 1,
+    "legendary": 0
   },
-  "rationale": "Keep a broad nearby common starter pool, use varied regional destinations for uncommon, reserve rare for distinctive major landscapes or landmarks, and assign the operator-selected Sooke Potholes as the sole legendary.",
+  "rationale": "One-tier downshift of the reviewed Victoria 100 assignment: Common stays Common, Uncommon becomes Common, Rare becomes Uncommon, and Legendary becomes Rare. The unlock thresholds are unchanged.",
   "unlock_requirements": {
-    "common": { "parks": 0 },
-    "uncommon": { "parks": 2 },
-    "rare": { "parks": 5 },
-    "legendary": { "parks": 10 }
+    "common": {
+      "parks": 0
+    },
+    "uncommon": {
+      "parks": 2
+    },
+    "rare": {
+      "parks": 5
+    },
+    "legendary": {
+      "parks": 10
+    }
   },
   "counting": "Distinct visited park IDs of any rarity, never repeat visits. Existing earned badges remain accessible.",
   "parks": [
@@ -26,73 +34,73 @@
       "rank": 2,
       "id": "provincial-goldstream-park",
       "name": "Goldstream Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 3,
       "id": "regional-east-sooke-regional-park",
       "name": "East Sooke Regional Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 4,
       "id": "regional-thetis-lake-regional-park",
       "name": "Thetis Lake Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 5,
       "id": "regional-sooke-potholes-regional-park",
       "name": "Sooke Potholes Regional Park",
-      "rarity": "legendary"
+      "rarity": "rare"
     },
     {
       "rank": 6,
       "id": "municipal-district-of-saanich-244",
       "name": "PKOLS (Mount Douglas Park)",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 7,
       "id": "regional-elk-beaver-lake-regional-park",
       "name": "Elk/Beaver Lake Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 8,
       "id": "municipal-city-of-colwood-1866",
       "name": "Esquimalt Lagoon Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 9,
       "id": "regional-witty-s-lagoon-regional-park",
       "name": "Witty's Lagoon Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 10,
       "id": "regional-island-view-beach-regional-park",
       "name": "Island View Beach Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 11,
       "id": "municipal-district-of-sooke-970",
       "name": "Whiffin Spit Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 12,
       "id": "provincial-gowlland-tod-park",
       "name": "Gowlland Tod Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 13,
       "id": "municipal-district-of-oak-bay-916",
       "name": "Uplands Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 14,
@@ -104,13 +112,13 @@
       "rank": 15,
       "id": "provincial-au-welnew-john-dean-park",
       "name": "Ƚáuˌwelṉew̱ / John Dean Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 16,
       "id": "regional-mount-work-regional-park",
       "name": "Mount Work Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 17,
@@ -122,7 +130,7 @@
       "rank": 18,
       "id": "regional-matheson-lake-regional-park",
       "name": "Matheson Lake Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 19,
@@ -140,19 +148,19 @@
       "rank": 21,
       "id": "municipal-township-of-esquimalt-767",
       "name": "Esquimalt Gorge Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 22,
       "id": "municipal-city-of-victoria-834",
       "name": "Clover Point Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 23,
       "id": "regional-francis-king-regional-park",
       "name": "Francis/King Regional Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 24,
@@ -164,7 +172,7 @@
       "rank": 25,
       "id": "municipal-township-of-esquimalt-1477",
       "name": "Macaulay Point Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 26,
@@ -176,19 +184,19 @@
       "rank": 27,
       "id": "regional-sooke-hills-wilderness-regional-park",
       "name": "Sooke Hills Wilderness Regional Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 28,
       "id": "provincial-spectacle-lake-park",
       "name": "Spectacle Lake Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 29,
       "id": "regional-mount-wells-regional-park",
       "name": "Mount Wells Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 30,
@@ -200,19 +208,19 @@
       "rank": 31,
       "id": "municipal-district-of-sooke-946",
       "name": "Ed Macgregor Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 32,
       "id": "regional-gonzales-hill-regional-park",
       "name": "Gonzales Hill Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 33,
       "id": "regional-mill-hill-regional-park",
       "name": "Mill Hill Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 34,
@@ -224,13 +232,13 @@
       "rank": 35,
       "id": "municipal-city-of-langford-622",
       "name": "Jordie Lunn Bike Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 36,
       "id": "provincial-bamberton-park",
       "name": "Bamberton Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 37,
@@ -242,7 +250,7 @@
       "rank": 38,
       "id": "regional-albert-head-lagoon-regional-park",
       "name": "Albert Head Lagoon Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 39,
@@ -254,7 +262,7 @@
       "rank": 40,
       "id": "regional-sea-to-sea-regional-park",
       "name": "Sea to Sea Regional Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 41,
@@ -266,7 +274,7 @@
       "rank": 42,
       "id": "regional-roche-cove-regional-park",
       "name": "Roche Cove Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 43,
@@ -278,13 +286,13 @@
       "rank": 44,
       "id": "regional-coles-bay-regional-park",
       "name": "Coles Bay Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 45,
       "id": "municipal-city-of-colwood-1463",
       "name": "Havenwood Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 46,
@@ -296,37 +304,37 @@
       "rank": 47,
       "id": "regional-bear-hill-regional-park",
       "name": "Bear Hill Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 48,
       "id": "regional-lone-tree-hill-regional-park",
       "name": "Lone Tree Hill Regional Park",
-      "rarity": "rare"
+      "rarity": "uncommon"
     },
     {
       "rank": 49,
       "id": "regional-horth-hill-regional-park",
       "name": "Horth Hill Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 50,
       "id": "regional-devonian-regional-park",
       "name": "Devonian Regional Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 51,
       "id": "municipal-district-of-north-saanich-1076",
       "name": "Dominion Brook Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 52,
       "id": "municipal-district-of-saanich-238",
       "name": "Glencoe Cove - Kwatsech Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 53,
@@ -350,7 +358,7 @@
       "rank": 56,
       "id": "municipal-city-of-victoria-872",
       "name": "Summit Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 57,
@@ -368,7 +376,7 @@
       "rank": 59,
       "id": "municipal-district-of-central-saanich-377",
       "name": "Oak Haven Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 60,
@@ -386,7 +394,7 @@
       "rank": 62,
       "id": "municipal-district-of-sooke-973",
       "name": "Sooke Bluffs Park",
-      "rarity": "uncommon"
+      "rarity": "common"
     },
     {
       "rank": 63,
