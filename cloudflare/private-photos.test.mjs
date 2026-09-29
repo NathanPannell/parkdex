@@ -413,7 +413,7 @@ test("an upload queued behind account deletion observes the persisted tombstone"
 
 test("daily retention runs only when configured and never logs its secret", async () => {
   const requests = [];
-  const retentionUrl = "https://parkdex-kip-staging.vercel.app/api/retention/interactions/purge";
+  const retentionUrl = "https://staging.web.parkdex.app/api/retention/interactions/purge";
   const h = harness({
     fetchImpl: async (url, options) => {
       requests.push({ url, options });
@@ -427,7 +427,7 @@ test("daily retention runs only when configured and never logs its secret", asyn
 
   h.worker.scheduled(
     {},
-    { RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
+    { KIP_ENVIRONMENT: "staging", RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
     { waitUntil: (promise) => pending.push(promise) },
   );
   assert.equal(requests.length, 1);
@@ -440,7 +440,7 @@ test("daily retention runs only when configured and never logs its secret", asyn
   assert.throws(
     () => invalidUrlWorker.scheduled(
       {},
-      { RETENTION_URL: "https://untrusted.example/api/retention/interactions/purge", KIP_RETENTION_SECRET: TOKEN },
+      { KIP_ENVIRONMENT: "staging", RETENTION_URL: "https://untrusted.example/api/retention/interactions/purge", KIP_RETENTION_SECRET: TOKEN },
       { waitUntil: () => {} },
     ),
     /Retention endpoint configuration is invalid/,
@@ -450,7 +450,7 @@ test("daily retention runs only when configured and never logs its secret", asyn
   const failedPending = [];
   failing.scheduled(
     {},
-    { RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
+    { KIP_ENVIRONMENT: "staging", RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
     { waitUntil: (promise) => failedPending.push(promise) },
   );
   await assert.rejects(failedPending[0], (error) => {
@@ -459,8 +459,43 @@ test("daily retention runs only when configured and never logs its secret", asyn
   });
 });
 
+test("production retention accepts only the production Parkdex endpoint", async () => {
+  const requests = [];
+  const h = harness({
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return Response.json({ deleted: 0, authDeleted: 0, remainingExpired: 0 });
+    },
+  });
+  const pending = [];
+  h.worker.scheduled(
+    {},
+    {
+      KIP_ENVIRONMENT: "production",
+      RETENTION_URL: "https://web.parkdex.app/api/retention/interactions/purge",
+      KIP_RETENTION_SECRET: TOKEN,
+    },
+    { waitUntil: (promise) => pending.push(promise) },
+  );
+  await pending[0];
+  assert.equal(requests[0].url, "https://web.parkdex.app/api/retention/interactions/purge");
+
+  assert.throws(
+    () => h.worker.scheduled(
+      {},
+      {
+        KIP_ENVIRONMENT: "production",
+        RETENTION_URL: "https://staging.web.parkdex.app/api/retention/interactions/purge",
+        KIP_RETENTION_SECRET: TOKEN,
+      },
+      { waitUntil: () => {} },
+    ),
+    /Retention endpoint configuration is invalid/,
+  );
+});
+
 test("daily retention drains a bounded backlog and fails when it stops making progress", async () => {
-  const retentionUrl = "https://parkdex-kip-staging.vercel.app/api/retention/interactions/purge";
+  const retentionUrl = "https://staging.web.parkdex.app/api/retention/interactions/purge";
   const reports = [
     { deleted: 5000, authDeleted: 0, remainingExpired: 4 },
     { deleted: 4, authDeleted: 0, remainingExpired: 0 },
@@ -475,7 +510,7 @@ test("daily retention drains a bounded backlog and fails when it stops making pr
   const pending = [];
   h.worker.scheduled(
     {},
-    { RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
+    { KIP_ENVIRONMENT: "staging", RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
     { waitUntil: (promise) => pending.push(promise) },
   );
   await pending[0];
@@ -488,7 +523,7 @@ test("daily retention drains a bounded backlog and fails when it stops making pr
   const stalledPending = [];
   stalled.scheduled(
     {},
-    { RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
+    { KIP_ENVIRONMENT: "staging", RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
     { waitUntil: (promise) => stalledPending.push(promise) },
   );
   await assert.rejects(stalledPending[0], (error) => {
@@ -503,7 +538,7 @@ test("daily retention drains a bounded backlog and fails when it stops making pr
   const boundedPending = [];
   bounded.scheduled(
     {},
-    { RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
+    { KIP_ENVIRONMENT: "staging", RETENTION_URL: retentionUrl, KIP_RETENTION_SECRET: TOKEN },
     { waitUntil: (promise) => boundedPending.push(promise) },
   );
   await assert.rejects(boundedPending[0], /bounded purge limit/);

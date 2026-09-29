@@ -22,6 +22,16 @@ public class WifiContentTransportPluginTest {
 
     @Test
     public void permitsPinnedContentOriginsAndExactConfiguredPreviewHost() throws Exception {
+        assertEquals("https://staging.web.parkdex.app/api/content/current",
+                WifiContentTransportPlugin.validateContentUrl(
+                        "https://staging.web.parkdex.app/api/content/current",
+                        "https://staging.web.parkdex.app",
+                        CDN_ORIGIN).toString());
+        assertEquals("https://web.parkdex.app/api/content/current",
+                WifiContentTransportPlugin.validateContentUrl(
+                        "https://web.parkdex.app/api/content/current",
+                        "https://web.parkdex.app",
+                        CDN_ORIGIN).toString());
         assertEquals("https://parkdex-kip-staging.vercel.app/api/content/current",
                 WifiContentTransportPlugin.validateContentUrl(
                         "https://parkdex-kip-staging.vercel.app/api/content/current",
@@ -66,6 +76,10 @@ public class WifiContentTransportPluginTest {
 
     @Test
     public void permitsOnlyExactAccountBackupRoutesAndMethods() throws Exception {
+        String productionOrigin = "https://web.parkdex.app";
+        assertEquals(productionOrigin + "/api/claims",
+                WifiContentTransportPlugin.validateAccountBackupUrl(
+                        productionOrigin + "/api/claims", productionOrigin, "GET").toString());
         String origin = "https://parkdex-kip-staging.vercel.app";
         String claimId = "33333333-3333-4333-8333-333333333333";
         assertEquals(origin + "/api/claims",

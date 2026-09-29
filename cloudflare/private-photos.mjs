@@ -6,8 +6,11 @@ const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OBJECT_PATH_PATTERN = /^\/v1\/objects\/accounts\/([^/]+)\/claims\/([^/]+)$/;
 const ACCOUNT_PATH_PATTERN = /^\/v1\/accounts\/([^/]+)$/;
-const RETENTION_ORIGIN = "https://parkdex-kip-staging.vercel.app";
 const RETENTION_PATH = "/api/retention/interactions/purge";
+const RETENTION_ORIGINS = Object.freeze({
+  staging: "https://staging.web.parkdex.app",
+  production: "https://web.parkdex.app",
+});
 const RETENTION_MAX_REQUESTS = 5;
 const RETENTION_MAX_RESPONSE_BYTES = 16 * 1024;
 
@@ -398,7 +401,8 @@ export class AccountPhotos {
   }
 }
 
-function validateRetentionUrl(value) {
+function validateRetentionUrl(value, environment) {
+  const expectedOrigin = RETENTION_ORIGINS[environment];
   let url;
   try {
     url = new URL(value);
@@ -406,7 +410,8 @@ function validateRetentionUrl(value) {
     throw new Error("Retention endpoint configuration is invalid.");
   }
   if (
-    url.origin !== RETENTION_ORIGIN ||
+    !expectedOrigin ||
+    url.origin !== expectedOrigin ||
     url.pathname !== RETENTION_PATH ||
     url.username ||
     url.password ||
@@ -475,7 +480,7 @@ export function createPhotoWorker({ fetchImpl = globalThis.fetch.bind(globalThis
       const hasUrl = Boolean(env.RETENTION_URL);
       const hasSecret = Boolean(env.KIP_RETENTION_SECRET);
       if (!hasUrl || !hasSecret) throw new Error("Retention configuration is incomplete.");
-      const url = validateRetentionUrl(env.RETENTION_URL);
+      const url = validateRetentionUrl(env.RETENTION_URL, env.KIP_ENVIRONMENT);
       const promise = callRetentionEndpoint(url, env.KIP_RETENTION_SECRET, fetchImpl);
       if (typeof ctx?.waitUntil === "function") ctx.waitUntil(promise);
       else return promise;

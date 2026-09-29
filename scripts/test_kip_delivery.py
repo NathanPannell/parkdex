@@ -2,6 +2,7 @@
 import importlib.util
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import sys
@@ -167,6 +168,8 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertNotIn("DATABASE_URL", env)
         self.assertNotIn("NEON_API_KEY", env)
         self.assertNotIn("CLOUDFLARE_API_TOKEN", env)
+        with self.assertRaisesRegex(delivery.DeliveryError, "preview or staging"):
+            delivery.bootstrap_content(self.config, self.root, database_url, "main")
 
     def test_content_sql_qa_migrates_bootstraps_and_runs_rollback_only(self):
         self.content_files()
@@ -324,6 +327,186 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertEqual(env["EMAIL_MODE"], "disabled")
         self.assertEqual(env["KIP_PHOTO_SERVICE_TOKEN"], "p")
         self.assertFalse(set(env) & {"GOOGLE_WEB_CLIENT_ID", "RESEND_API_KEY", "CLOUDFLARE_API_TOKEN", "NEON_API_KEY"})
+
+    def test_main_content_gate_checks_pointer_shape_and_exact_manifest_hash(self):
+        origin = "https://kip-assets.parkdex.app"
+        manifest_bytes = b'{"version":"' + b"a" * 64 + b'","cdnOrigin":"' + origin.encode() + b'","files":[]}'
+        pinned_path = self.root / "database" / "content-manifest.json"
+        pinned_path.parent.mkdir(parents=True, exist_ok=True)
+        pinned_path.write_bytes(manifest_bytes)
+        pointer = {
+            "schema": "parkdex.content-channel/v1",
+            "environment": "main",
+            "generation": 1,
+            "releaseId": "a" * 64,
+            "manifestUrl": f"{origin}/releases/{'a' * 64}/manifest.json",
+            "manifestSha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "minimumReaderVersion": 1,
+        }
+        with patch.object(delivery, "ROOT", self.root), \
+             patch.object(delivery, "http_json", return_value=(200, pointer)), \
+             patch.object(delivery, "http_bytes", return_value=(200, manifest_bytes)):
+            delivery.verify_main_content_channel(self.config)
+
+        with patch.object(delivery, "ROOT", self.root), \
+             patch.object(delivery, "http_json", return_value=(200, {**pointer, "releaseId": None})), \
+             self.assertRaises(delivery.DeliveryError):
+            delivery.verify_main_content_channel(self.config)
+
+        with patch.object(delivery, "ROOT", self.root), \
+             patch.object(delivery, "http_json", return_value=(200, pointer)), \
+             patch.object(delivery, "http_bytes", return_value=(200, b"{}")), \
+             self.assertRaisesRegex(delivery.DeliveryError, "hash"):
+            delivery.verify_main_content_channel(self.config)
+
+        wrong_baseline = json.dumps({"version": "b" * 64}, separators=(",", ":")).encode()
+        pinned_path.write_bytes(wrong_baseline)
+        with patch.object(delivery, "ROOT", self.root), \
+             patch.object(delivery, "http_json", return_value=(200, pointer)), \
+             self.assertRaisesRegex(delivery.DeliveryError, "baseline"):
+            delivery.verify_main_content_channel(self.config)
+
+    def test_production_database_urls_must_match_neon_main_read_write_endpoint(self):
+        endpoints = {"endpoints": [{
+            "branch_id": self.config["neonProductionBranchId"],
+            "type": "read_write",
+            "host": "ep-main.us-west-2.aws.neon.tech",
+        }]}
+        main_url = "postgresql://kip:secret@ep-main-pooler.us-west-2.aws.neon.tech/parkdex_kip"
+        staging_url = "postgresql://kip:secret@ep-staging.us-west-2.aws.neon.tech/parkdex_kip"
+        with patch.dict(os.environ, {}, clear=True), patch.object(delivery, "neon_request", return_value=endpoints) as neon:
+            delivery.verify_production_database_urls(self.config, main_url, main_url)
+            self.assertEqual(neon.call_args.args[1], f"/projects/{self.config['neonProjectId']}/branches/{self.config['neonProductionBranchId']}/endpoints")
+            with self.assertRaisesRegex(delivery.DeliveryError, "Neon main branch"):
+                delivery.verify_production_database_urls(self.config, main_url, staging_url)
+
+    def test_staging_database_urls_must_match_the_new_staging_child_branch(self):
+        endpoints = {"endpoints": [{
+            "branch_id": self.config["neonStagingBranchId"],
+            "type": "read_write",
+            "host": "ep-shiny-cherry-akobwdis.c-3.us-west-2.aws.neon.tech",
+        }]}
+        staging_url = "postgresql://kip:secret@ep-shiny-cherry-akobwdis-pooler.c-3.us-west-2.aws.neon.tech/parkdex_kip"
+        main_url = "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip"
+        with patch.dict(os.environ, {}, clear=True), patch.object(delivery, "neon_request", return_value=endpoints) as neon:
+            delivery.verify_staging_database_urls(self.config, staging_url, staging_url)
+            self.assertEqual(neon.call_args.args[1], f"/projects/{self.config['neonProjectId']}/branches/{self.config['neonStagingBranchId']}/endpoints")
+            with self.assertRaisesRegex(delivery.DeliveryError, "Neon staging branch"):
+                delivery.verify_staging_database_urls(self.config, staging_url, main_url)
+
+    def test_production_migrations_do_not_replay_the_historical_content_bootstrap(self):
+        self.content_files()
+        args = argparse.Namespace(sha="a" * 40, apply=True)
+        bundle = {"DATABASE_URL": "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip"}
+        with patch.object(delivery, "ROOT", self.root), \
+             patch.object(delivery, "load_config", return_value=self.config), \
+             patch.object(delivery, "verify_git_sha"), \
+             patch.object(delivery, "verify_main_content_channel"), \
+             patch.object(delivery, "staging_api_state", return_value=(True, True)), \
+             patch.object(delivery, "migration_paths", return_value=[self.root / "migration.sql"]), \
+             patch.object(delivery, "content_sync_present", return_value=True), \
+             patch.object(delivery, "read_runtime_bundle", return_value=bundle), \
+             patch.object(delivery, "verify_runtime_bundle"), \
+             patch.object(delivery, "verify_production_runtime_branch"), \
+             patch.object(delivery, "require_account_runtime"), \
+             patch.object(delivery, "run_migration"), \
+             patch.object(delivery, "bootstrap_content") as bootstrap:
+            delivery.migration_release(args, "production")
+        bootstrap.assert_not_called()
+
+    def test_production_runtime_bundle_is_separate_and_uses_production_photo_worker(self):
+        bundle = {
+            "DATABASE_URL": "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip",
+            "RESEND_API_KEY": "resend-secret",
+            "EMAIL_FROM": "Parkdex <hello@example.test>",
+            "EMAIL_REPLY_TO": "support@example.test",
+            "OPERATOR_EMAIL": "ops@example.test",
+            "OPERATOR_PASSWORD_HASH": "ab" * 16 + ":" + "cd" * 32,
+            "SESSION_SECRET": "o" * 48,
+            "AUTH_SESSION_SECRET": "a" * 48,
+            "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-production.example.workers.dev",
+            "KIP_PHOTO_SERVICE_TOKEN": "p" * 48,
+            "KIP_RETENTION_SECRET": "r" * 48,
+            "GOOGLE_WEB_CLIENT_ID": "123456-kip.apps.googleusercontent.com",
+        }
+        with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle)}, clear=True):
+            self.assertEqual(delivery.read_runtime_bundle(self.config, environment="production"), bundle)
+        with patch.dict(os.environ, {"KIP_STAGING_RUNTIME_JSON": "{}"}, clear=True), \
+             self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_RUNTIME_JSON"):
+            delivery.read_runtime_bundle(self.config, environment="production")
+
+        self.account_files()
+        production = self.runtime() | {
+            "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-production.owned.workers.dev",
+            "GOOGLE_WEB_CLIENT_ID": "123456-kip.apps.googleusercontent.com",
+        }
+        delivery.require_account_runtime(self.config, production, self.root, environment="production")
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.require_account_runtime(self.config, self.runtime(), self.root, environment="production")
+        runtime = delivery.production_runtime_env(self.config, bundle, "a" * 40, api_present=True)
+        self.assertEqual(runtime["CONTENT_CHANNEL"], "main")
+        self.assertEqual(runtime["PUBLIC_APP_URL"], "https://web.parkdex.app")
+
+    def test_production_dispatch_stages_domain_until_exact_release_verification(self):
+        self.assertEqual(delivery.vercel_release_target_args("production"), ["--prod", "--skip-domain"])
+        self.assertEqual(delivery.vercel_release_target_args("staging"), ["--target", "preview"])
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.vercel_release_target_args("preview")
+
+    def test_exact_release_sha_is_bound_to_the_correct_push_branch(self):
+        sha = "a" * 40
+        def git_result(*args):
+            return "" if args and args[0] == "status" else sha
+
+        with patch.object(delivery, "git", side_effect=git_result), \
+             patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main"}, clear=True):
+            delivery.verify_git_sha(sha, production_only=True)
+            with self.assertRaisesRegex(delivery.DeliveryError, "staging branch"):
+                delivery.verify_git_sha(sha, staging_only=True)
+        with patch.object(delivery, "git", side_effect=git_result), \
+             patch.dict(os.environ, {"GITHUB_REF": "refs/heads/staging"}, clear=True):
+            with self.assertRaisesRegex(delivery.DeliveryError, "main branch"):
+                delivery.verify_git_sha(sha, production_only=True)
+
+    def test_first_staging_release_can_verify_known_cutover_sha_on_legacy_alias(self):
+        sha = self.config["legacyStagingCutoverSha"]
+        deployment = {
+            "createdAt": 1,
+            "readyState": "READY",
+            "target": None,
+            "meta": {"githubCommitSha": sha, "kipEnvironment": "staging"},
+        }
+        def response(url):
+            if url == self.config["stagingUrl"] + "/release.json":
+                return (404, None)
+            if url == "https://" + self.config["legacyStagingAlias"] + "/release.json":
+                return (200, {"sha": sha, "environment": "staging"})
+            self.fail(f"unexpected release URL: {url}")
+
+        with patch.object(delivery, "list_vercel_deployments", return_value=[deployment]) as inventory, \
+             patch.object(delivery, "http_json", side_effect=response):
+            delivery.ensure_previous_release_resolved(self.config, "prj_test", "staging")
+        self.assertNotIn("target", inventory.call_args.kwargs)
+
+    def test_legacy_staging_fallback_is_limited_to_the_known_cutover_sha(self):
+        sha = "a" * 40
+        deployment = {
+            "createdAt": 1,
+            "readyState": "READY",
+            "target": None,
+            "meta": {"githubCommitSha": sha, "kipEnvironment": "staging"},
+        }
+        def response(url):
+            if url == self.config["stagingUrl"] + "/release.json":
+                return (404, None)
+            if url == "https://" + self.config["legacyStagingAlias"] + "/release.json":
+                return (200, {"sha": sha, "environment": "staging"})
+            self.fail(f"unexpected release URL: {url}")
+
+        with patch.object(delivery, "list_vercel_deployments", return_value=[deployment]), \
+             patch.object(delivery, "http_json", side_effect=response), \
+             self.assertRaisesRegex(delivery.DeliveryError, "stable URL verification"):
+            delivery.ensure_previous_release_resolved(self.config, "prj_test", "staging")
 
     def test_all_generated_credentials_are_redacted(self):
         path = self.root / "generated.json"

@@ -130,6 +130,23 @@ test("initial publication uploads only after verification with If-None-Match: *"
   assert.deepEqual(JSON.parse(await readFile(outputPath, "utf8")), result.pointer);
 });
 
+test("temporary R2 credentials include their session token in SigV4", async (t) => {
+  const sample = await fixture(t);
+  const { fetcher, calls } = publicFetch(sample);
+  await publishContentChannel({
+    ...credentials,
+    sessionToken: "temporary-session-token",
+    environment: "staging",
+    snapshotDirectory: sample.directory,
+    generation: 1,
+    expectedGeneration: 0,
+    fetcher,
+  });
+  const put = calls.find((call) => call.options.method === "PUT");
+  assert.equal(put.options.headers["x-amz-security-token"], "temporary-session-token");
+  assert.match(put.options.headers.Authorization, /SignedHeaders=[^,]*x-amz-security-token/);
+});
+
 test("updates require both the expected generation and ETag before If-Match publication", async (t) => {
   const sample = await fixture(t);
   const currentPointer = {

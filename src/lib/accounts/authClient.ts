@@ -3,6 +3,8 @@ import { accountBackupFetch, assertAccountBackupRequest, isAccountBackupPath } f
 import {
   nativeAuthFetch,
   persistNativeSession,
+  isApprovedKipOrigin,
+  KIP_STAGING_ORIGIN,
   type NativeAccountSession,
   type ServerAccountSession,
 } from "./nativeIdentity";
@@ -50,12 +52,11 @@ const isNative = Capacitor.isNativePlatform();
 
 function apiUrl(path: string) {
   const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? import.meta.env.VITE_APP_URL ?? "").trim();
-  let origin = isNative || typeof location === "undefined" ? "https://parkdex-kip-staging.vercel.app" : location.origin;
+  let origin = isNative || typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin;
   if (configured) {
     try {
       const candidate = new URL(configured);
-      const legacyWebHosts = new Set(["web.parkdex.app", "staging.web.parkdex.app"]);
-      if ((!isNative || (candidate.protocol === "https:" && !legacyWebHosts.has(candidate.hostname))) && candidate.protocol === "https:") origin = candidate.origin;
+      if (candidate.protocol === "https:" && (!isNative || isApprovedKipOrigin(candidate.origin))) origin = candidate.origin;
     } catch {
       // An invalid optional override falls back to the environment's known origin.
     }

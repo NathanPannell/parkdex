@@ -36,7 +36,7 @@ vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
 import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDownloadAvailable, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
 
-const API_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
+const API_URL = "https://staging.web.parkdex.app/api/content/current";
 const CDN_URL = "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin";
 const browserConnection = new EventTarget() as EventTarget & { type?: string; effectiveType?: string };
 const browserWindow = new EventTarget();
@@ -252,7 +252,7 @@ describe("content transport", () => {
     expect(mocks.native.request).toHaveBeenCalledWith(expect.objectContaining({
       url: CDN_URL,
       method: "GET",
-      approvedApiOrigin: "https://parkdex-kip-staging.vercel.app",
+      approvedApiOrigin: "https://staging.web.parkdex.app",
       approvedCdnOrigin: "https://kip-assets.parkdex.app",
       maxResponseBytes: 4 * 1024 * 1024,
       headers: { range: "bytes=0-3" },

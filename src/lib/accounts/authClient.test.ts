@@ -21,6 +21,8 @@ vi.mock("../content/transport", () => ({
   abortNativeAccountBackupRequest: vi.fn(),
 }));
 vi.mock("./nativeIdentity", () => ({
+  isApprovedKipOrigin: () => true,
+  KIP_STAGING_ORIGIN: "https://staging.web.parkdex.app",
   nativeAuthFetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     nativeMocks.calls.push({ input, headers: new Headers(init?.headers), tokenAtCall: nativeMocks.activeToken });
     const response = nativeMocks.responses.shift();

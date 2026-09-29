@@ -284,16 +284,20 @@ def validate_pr(pr: dict, pr_number: int) -> tuple[str, str]:
     return head_sha, head_ref
 
 
-def assert_clean_staging_harness(config: dict) -> tuple[str, str]:
+def assert_clean_branch_harness(config: dict, branch: str) -> tuple[str, str]:
     assert_origin()
     if git("status", "--porcelain"):
-        raise DeliveryError("Run preview creation from a clean staging checkout.")
-    git("fetch", "--no-tags", "origin", f"+refs/heads/{config['stagingBranch']}:refs/remotes/origin/{config['stagingBranch']}")
-    base_sha = git("rev-parse", f"refs/remotes/origin/{config['stagingBranch']}")
+        raise DeliveryError(f"Run release setup from a clean {branch} checkout.")
+    git("fetch", "--no-tags", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}")
+    base_sha = git("rev-parse", f"refs/remotes/origin/{branch}")
     head_sha = git("rev-parse", "HEAD")
     if head_sha != base_sha:
-        raise DeliveryError("The trusted harness must be at the current origin/staging SHA.")
+        raise DeliveryError(f"The trusted harness must be at the current origin/{branch} SHA.")
     return head_sha, git("rev-parse", "--show-toplevel")
+
+
+def assert_clean_staging_harness(config: dict) -> tuple[str, str]:
+    return assert_clean_branch_harness(config, config["stagingBranch"])
 
 
 def fetch_pr_head(head_ref: str, pr_number: int) -> str:
@@ -348,7 +352,7 @@ def remove_candidate(path: Path) -> None:
 
 
 def set_release_file(root: Path, sha: str, environment: str) -> None:
-    if environment not in ("preview", "staging") or not SHA_RE.fullmatch(sha):
+    if environment not in ("preview", "staging", "production") or not SHA_RE.fullmatch(sha):
         raise DeliveryError("Release metadata requires an exact SHA and a supported environment.")
     target = root / "public" / "release.json"
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -498,7 +502,7 @@ def wait_neon_operations(config: dict, state: dict, journal: Path, response: dic
     # Schema-only creation can start the configured parent compute to read its schema.
     allowed_branches = {None, branch_id}
     if phase == "branch":
-        allowed_branches.add(config["neonParentBranchId"])
+        allowed_branches.add(config["neonStagingBranchId"])
     for item in operations:
         if not isinstance(item, dict):
             raise DeliveryError(f"Neon returned an invalid operation after {phase} creation.")
@@ -833,19 +837,26 @@ def deployment_url(deployment: dict) -> str:
     return "https://" + host
 
 
-def http_json(url: str) -> tuple[int, dict | None]:
+def http_bytes(url: str) -> tuple[int, bytes | None]:
     request = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "parkdex-kip-delivery/1"})
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            payload = response.read()
-            try:
-                return response.status, json.loads(payload.decode("utf-8"))
-            except (ValueError, UnicodeDecodeError):
-                return response.status, None
+            return response.status, response.read()
     except urllib.error.HTTPError as exc:
         return exc.code, None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise DeliveryError(f"HTTP check could not reach {urllib.parse.urlsplit(url).hostname}.") from exc
+
+
+def http_json(url: str) -> tuple[int, dict | None]:
+    status, payload = http_bytes(url)
+    if payload is None:
+        return status, None
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return status, None
+    return status, value
 
 
 def verify_release_url(config: dict, url: str, sha: str, environment: str, *, api_present: bool) -> None:
@@ -869,6 +880,71 @@ def parse_database_url(value: str, expected_database: str | None = None) -> tupl
     if expected_database and database != expected_database:
         raise DeliveryError("Database connection points to an unexpected database.")
     return uri, urllib.parse.unquote(uri.username), urllib.parse.unquote(uri.password)
+
+
+def normalize_neon_endpoint_host(host: str) -> str:
+    parsed = urllib.parse.urlsplit("//" + host)
+    if not parsed.hostname or parsed.port or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
+        raise DeliveryError("Neon returned an invalid database endpoint host.")
+    labels = parsed.hostname.lower().split(".")
+    if labels[0].endswith("-pooler"):
+        labels[0] = labels[0][:-7]
+    return ".".join(labels)
+
+
+def verify_neon_branch_database_urls(config: dict, expected_branch: str, environment: str, *database_urls: str) -> None:
+    project_id = os.environ.get("NEON_PROJECT_ID", config["neonProjectId"])
+    if project_id != config["neonProjectId"]:
+        raise DeliveryError("NEON_PROJECT_ID does not match deployment.json.")
+    if not isinstance(expected_branch, str) or not re.fullmatch(r"br-[a-z0-9-]+", expected_branch):
+        raise DeliveryError("The configured Neon branch ID is invalid.")
+    payload = neon_request(config, f"/projects/{project_id}/branches/{expected_branch}/endpoints")
+    endpoints = payload.get("endpoints") if isinstance(payload, dict) else None
+    if not isinstance(endpoints, list):
+        raise DeliveryError("Neon did not return the configured branch endpoint inventory.")
+    hosts = {
+        normalize_neon_endpoint_host(endpoint["host"])
+        for endpoint in endpoints
+        if isinstance(endpoint, dict)
+        and endpoint.get("branch_id") == expected_branch
+        and endpoint.get("type") == "read_write"
+        and isinstance(endpoint.get("host"), str)
+    }
+    if not hosts:
+        raise DeliveryError("The configured Neon branch has no verified read-write endpoint.")
+    for database_url in database_urls:
+        uri, _, _ = parse_database_url(database_url, config["neonDatabaseName"])
+        if normalize_neon_endpoint_host(uri.hostname or "") not in hosts:
+            branch_name = "main" if environment == "production" else "staging"
+            raise DeliveryError(f"Database connection does not target the configured Neon {branch_name} branch.")
+
+
+def verify_production_database_urls(config: dict, *database_urls: str) -> None:
+    expected_branch = config.get("neonProductionBranchId")
+    if not isinstance(expected_branch, str):
+        raise DeliveryError("The configured Neon production branch ID is invalid.")
+    verify_neon_branch_database_urls(config, expected_branch, "production", *database_urls)
+
+
+def verify_staging_database_urls(config: dict, *database_urls: str) -> None:
+    expected_branch = config.get("neonStagingBranchId")
+    if not isinstance(expected_branch, str):
+        raise DeliveryError("The configured Neon staging branch ID is invalid.")
+    verify_neon_branch_database_urls(config, expected_branch, "staging", *database_urls)
+
+
+def verify_production_runtime_branch(config: dict, bundle: dict) -> None:
+    urls = [bundle["DATABASE_URL"]]
+    if bundle.get("MIGRATION_DATABASE_URL"):
+        urls.append(bundle["MIGRATION_DATABASE_URL"])
+    verify_production_database_urls(config, *urls)
+
+
+def verify_staging_runtime_branch(config: dict, bundle: dict) -> None:
+    urls = [bundle["DATABASE_URL"]]
+    if bundle.get("MIGRATION_DATABASE_URL"):
+        urls.append(bundle["MIGRATION_DATABASE_URL"])
+    verify_staging_database_urls(config, *urls)
 
 
 def psql_executable() -> str:
@@ -973,13 +1049,14 @@ def verify_preview_database_empty(database_url: str, *, migration_applied: bool,
     """)
 
 
-def read_runtime_bundle(config: dict, *, optional: bool = False) -> dict | None:
-    env_name = config["runtimeSecretBundleEnvironment"]
+def read_runtime_bundle(config: dict, *, environment: str = "staging", optional: bool = False) -> dict | None:
+    env_key = "productionRuntimeSecretBundleEnvironment" if environment == "production" else "runtimeSecretBundleEnvironment"
+    env_name = config[env_key]
     raw = os.environ.get(env_name, "")
     if not raw and optional:
         return None
     if not raw:
-        raise DeliveryError(f"{env_name} is required for a staging API deployment.")
+        raise DeliveryError(f"{env_name} is required for a {environment} API deployment.")
     register_secret(raw)
     try:
         bundle = json.loads(raw)
@@ -998,7 +1075,7 @@ def read_runtime_bundle(config: dict, *, optional: bool = False) -> dict | None:
     return bundle
 
 
-def verify_runtime_bundle(bundle: dict, config: dict) -> None:
+def verify_runtime_bundle(bundle: dict, config: dict, *, environment: str = "staging") -> None:
     parse_database_url(bundle["DATABASE_URL"], config["neonDatabaseName"])
     if not re.fullmatch(r"(?:[0-9a-fA-F]{2}){16,64}:[0-9a-fA-F]{64}", bundle["OPERATOR_PASSWORD_HASH"]):
         raise DeliveryError("OPERATOR_PASSWORD_HASH must use the documented hexadecimal salt:digest format.")
@@ -1232,7 +1309,7 @@ def accounts_present(config: dict, candidate_root: Path) -> bool:
     return bool(account_names) and all(candidate_root / name in paths for name in account_names)
 
 
-def require_account_runtime(config: dict, bundle: dict, candidate_root: Path) -> None:
+def require_account_runtime(config: dict, bundle: dict, candidate_root: Path, *, environment: str = "staging") -> None:
     if not accounts_present(config, candidate_root):
         return
     for key in ("AUTH_SESSION_SECRET", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"):
@@ -1241,13 +1318,13 @@ def require_account_runtime(config: dict, bundle: dict, candidate_root: Path) ->
     if len({bundle["SESSION_SECRET"], bundle["AUTH_SESSION_SECRET"], bundle["KIP_PHOTO_SERVICE_TOKEN"], bundle["KIP_RETENTION_SECRET"]}) != 4:
         raise DeliveryError("Operator, account, photo, and retention secrets must be distinct.")
     url = urllib.parse.urlsplit(bundle.get("KIP_PHOTO_SERVICE_URL", ""))
-    expected_host = config["privatePhotos"]["stagingWorkerName"] + "."
+    expected_host = config["privatePhotos"][f"{environment}WorkerName"] + "."
     if url.scheme != "https" or not url.hostname or not url.hostname.startswith(expected_host) or not url.hostname.endswith(".workers.dev") or url.path not in ("", "/") or url.query or url.fragment or url.username or url.port:
-        raise DeliveryError("KIP_PHOTO_SERVICE_URL must be the dedicated HTTPS Worker origin.")
+        raise DeliveryError(f"KIP_PHOTO_SERVICE_URL must be the dedicated HTTPS {environment} Worker origin.")
     if not re.fullmatch(r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com", bundle.get("GOOGLE_WEB_CLIENT_ID", "")):
-        raise DeliveryError("Staging accounts require a configured Google Web OAuth client.")
+        raise DeliveryError(f"{environment.capitalize()} accounts require a configured Google Web OAuth client.")
     if not bundle.get("AUTH_EMAIL_FROM") and not bundle.get("EMAIL_FROM"):
-        raise DeliveryError("Staging accounts require an authentication email sender.")
+        raise DeliveryError(f"{environment.capitalize()} accounts require an authentication email sender.")
 
 
 def runtime_env_for_preview(config: dict, state: dict, database_url: str | None,
@@ -1470,7 +1547,7 @@ def preview_apply(pr: int) -> None:
                 photo_executor = ThreadPoolExecutor(max_workers=1)
                 photo_future = photo_executor.submit(photo_provider().create_preview, sys.modules[__name__], config, photo_state, photo_path, candidate_root, credential_file)
             branches = neon_branches(config)
-            parent_id = config["neonParentBranchId"]
+            parent_id = config["neonStagingBranchId"]
             parent = [branch for branch in branches if branch.get("id") == parent_id]
             if len(parent) != 1:
                 raise DeliveryError("The configured persistent Neon staging parent was not found exactly once.")
@@ -1819,7 +1896,13 @@ def teardown_apply(pr: int) -> None:
     print(f"journal={path}")
 
 
-def verify_git_sha(expected: str, *, staging_only: bool = False, clean: bool = True) -> None:
+def verify_git_sha(
+    expected: str,
+    *,
+    staging_only: bool = False,
+    production_only: bool = False,
+    clean: bool = True,
+) -> None:
     if not SHA_RE.fullmatch(expected or ""):
         raise DeliveryError("Expected SHA must be a full 40-character lowercase Git SHA.")
     actual = git("rev-parse", "HEAD")
@@ -1827,12 +1910,16 @@ def verify_git_sha(expected: str, *, staging_only: bool = False, clean: bool = T
         raise DeliveryError(f"Checkout HEAD {actual} does not match requested SHA {expected}.")
     if clean and git("status", "--porcelain"):
         raise DeliveryError("Run release operations from a clean checkout.")
-    if staging_only and os.environ.get("GITHUB_REF") and os.environ["GITHUB_REF"] != "refs/heads/staging":
-        raise DeliveryError("This release operation is restricted to the staging branch.")
+    if staging_only and production_only:
+        raise DeliveryError("A release operation cannot target both staging and production.")
+    expected_branch = "staging" if staging_only else "main" if production_only else None
+    github_ref = os.environ.get("GITHUB_REF")
+    if expected_branch and github_ref and github_ref != f"refs/heads/{expected_branch}":
+        raise DeliveryError(f"This release operation is restricted to the {expected_branch} branch.")
 
 
 def prepare_release(args) -> None:
-    verify_git_sha(args.sha, staging_only=args.environment == "staging")
+    verify_git_sha(args.sha, staging_only=args.environment == "staging", production_only=args.environment == "production")
     set_release_file(ROOT, args.sha, args.environment)
     print(f"release-file=public/release.json environment={args.environment} sha={args.sha}")
 
@@ -1841,9 +1928,66 @@ def staging_api_state(config: dict) -> tuple[bool, bool]:
     return migration_presence(ROOT)
 
 
-def migration_staging(args) -> None:
+def verify_main_content_channel(config: dict | None = None) -> None:
+    config = config or load_config()
+    origin = "https://kip-assets.parkdex.app"
+    pinned_path = ROOT / "database" / "content-manifest.json"
+    try:
+        pinned_bytes = pinned_path.read_bytes()
+        pinned_manifest = json.loads(pinned_bytes.decode("utf-8"))
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        raise DeliveryError("The checked-in public content baseline cannot be read.") from exc
+    if not isinstance(pinned_manifest, dict) or not isinstance(pinned_manifest.get("version"), str):
+        raise DeliveryError("The checked-in public content baseline is invalid.")
+    pinned_version = pinned_manifest["version"]
+    pinned_manifest_sha = hashlib.sha256(pinned_bytes).hexdigest()
+    status, pointer = http_json(origin + "/channels/main/current.json")
+    expected_keys = {
+        "schema", "environment", "generation", "releaseId", "manifestUrl",
+        "manifestSha256", "minimumReaderVersion",
+    }
+    if (
+        status != 200
+        or not isinstance(pointer, dict)
+        or set(pointer) != expected_keys
+        or pointer.get("schema") != "parkdex.content-channel/v1"
+        or pointer.get("environment") != "main"
+        or not isinstance(pointer.get("generation"), int)
+        or pointer["generation"] < 1
+        or not isinstance(pointer.get("releaseId"), str)
+        or not re.fullmatch(r"[a-f0-9]{64}", pointer["releaseId"])
+        or not isinstance(pointer.get("manifestSha256"), str)
+        or not re.fullmatch(r"[a-f0-9]{64}", pointer["manifestSha256"])
+        or not isinstance(pointer.get("minimumReaderVersion"), int)
+        or pointer["minimumReaderVersion"] < 1
+        or pointer.get("manifestUrl") != f"{origin}/releases/{pointer.get('releaseId')}/manifest.json"
+    ):
+        raise DeliveryError("The public main content channel is missing or invalid; publish it before production release.")
+    if pointer["releaseId"] != pinned_version or pointer["manifestSha256"] != pinned_manifest_sha:
+        raise DeliveryError("The public main content channel does not match the checked-in content baseline.")
+    status, manifest_bytes = http_bytes(pointer["manifestUrl"])
+    if status != 200 or manifest_bytes is None or hashlib.sha256(manifest_bytes).hexdigest() != pointer["manifestSha256"]:
+        raise DeliveryError("The public main content manifest is unavailable or does not match its channel pointer hash.")
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        manifest = None
+    if (
+        status != 200
+        or not isinstance(manifest, dict)
+        or manifest.get("version") != pointer["releaseId"]
+        or manifest.get("cdnOrigin") != origin
+        or not isinstance(manifest.get("files"), list)
+    ):
+        raise DeliveryError("The public main content manifest is unavailable or does not match its channel pointer.")
+    print(f"main-content-channel=verified generation={pointer['generation']} release={pointer['releaseId']}")
+
+
+def migration_release(args, environment: str) -> None:
     config = load_config()
-    verify_git_sha(args.sha, staging_only=True, clean=False)
+    verify_git_sha(args.sha, staging_only=environment == "staging", production_only=environment == "production", clean=False)
+    if environment == "production":
+        verify_main_content_channel(config)
     has_api, has_migration = staging_api_state(config)
     migrations = migration_paths(config, ROOT)
     has_content_sync = content_sync_present(config, ROOT)
@@ -1852,84 +1996,156 @@ def migration_staging(args) -> None:
         return
     if not args.apply:
         for migration in migrations:
-            print(f"plan=apply {migration.relative_to(ROOT).as_posix()} to the dedicated Parkdex Kip staging database")
-        if has_content_sync:
+            target = "Neon main" if environment == "production" else "the dedicated Parkdex Kip staging database"
+            print(f"plan=apply {migration.relative_to(ROOT).as_posix()} to {target}")
+        if has_content_sync and environment == "staging":
             print("plan=run the all-or-nothing verified public content bootstrap after the additive migrations")
+        elif has_content_sync and environment == "production":
+            print("plan=preserve the curated Neon main catalogue without replaying the historical public content bootstrap")
         return
-    bundle = read_runtime_bundle(config)
-    verify_runtime_bundle(bundle, config)
+    bundle = read_runtime_bundle(config, environment=environment)
+    verify_runtime_bundle(bundle, config, environment=environment)
+    if environment == "production":
+        verify_production_runtime_branch(config, bundle)
+    else:
+        verify_staging_runtime_branch(config, bundle)
     database_url = bundle.get("MIGRATION_DATABASE_URL") or bundle["DATABASE_URL"]
     parse_database_url(database_url, config["neonDatabaseName"])
-    require_account_runtime(config, bundle, ROOT)
+    require_account_runtime(config, bundle, ROOT, environment=environment)
     for migration in migrations:
         run_migration(database_url, migration)
         print(f"migration-applied={migration.relative_to(ROOT).as_posix()}")
-    if has_content_sync:
+    if has_content_sync and environment == "staging":
         bootstrap_content(config, ROOT, database_url, "staging")
         print("content-bootstrap=verified public content inserted missing-only in one staging transaction")
+    elif has_content_sync and environment == "production":
+        print("main-content-bootstrap=skipped; production preserves the curated Neon main catalogue")
 
 
-def ensure_previous_staging_resolved(config: dict, project_id: str) -> None:
-    deployments = list_vercel_deployments(config, project_id, int((time.time() - 90 * 86400) * 1000), target="preview")
-    staging = [item for item in deployments if deployment_meta(item).get("kipEnvironment") == "staging"]
-    if not staging:
+def migration_staging(args) -> None:
+    migration_release(args, "staging")
+
+
+def migration_main(args) -> None:
+    migration_release(args, "production")
+
+
+def release_project_id(config: dict, environment: str) -> str:
+    env_key = config["productionVercelProjectIdEnvironment"] if environment == "production" else config["vercelProjectIdEnvironment"]
+    project_id = os.environ.get(env_key, "")
+    if not project_id or not re.fullmatch(r"prj_[A-Za-z0-9]+", project_id):
+        raise DeliveryError(f"{env_key} is required.")
+    return project_id
+
+
+def ensure_previous_release_resolved(config: dict, project_id: str, environment: str) -> None:
+    # Vercel reports Kip CLI Preview releases with `target: null` in its list and
+    # detail APIs, even though the deploy command explicitly requested Preview.
+    # Inventory the full project and use signed Kip metadata to find our releases.
+    deployments = list_vercel_deployments(config, project_id, int((time.time() - 90 * 86400) * 1000))
+    expected_target = "production" if environment == "production" else None
+    previous = [
+        item for item in deployments
+        if deployment_meta(item).get("kipEnvironment") == environment
+        and (
+            item.get("target") == expected_target
+            if environment == "production"
+            else item.get("target") in (None, "preview")
+        )
+    ]
+    if not previous:
         return
-    latest = max(staging, key=lambda item: int(item.get("createdAt") or item.get("created") or 0))
+    latest = max(previous, key=lambda item: int(item.get("createdAt") or item.get("created") or 0))
     status = latest.get("readyState") or latest.get("state")
     previous_sha = deployment_meta(latest).get("githubCommitSha")
     if status != "READY" or not SHA_RE.fullmatch(previous_sha or ""):
-        raise DeliveryError("A previous staging deployment is unresolved. Verify or recover it before starting another release.")
-    status, release = http_json(config["stagingUrl"].rstrip("/") + config["releasePath"])
-    if status != 200 or not isinstance(release, dict) or release.get("sha") != previous_sha:
-        raise DeliveryError("The prior staging SHA has not passed its stable URL verification and alias step.")
+        raise DeliveryError(f"A previous {environment} deployment is unresolved. Verify or recover it before starting another release.")
+    base_url = config["productionUrl"] if environment == "production" else config["stagingUrl"]
+    status, release = http_json(base_url.rstrip("/") + config["releasePath"])
+    expected_release = {"sha": previous_sha, "environment": environment}
+    if status == 200 and release == expected_release:
+        return
+    if (
+        environment == "staging"
+        and previous_sha == config.get("legacyStagingCutoverSha")
+        and config.get("legacyStagingAlias")
+    ):
+        legacy_url = "https://" + config["legacyStagingAlias"]
+        legacy_status, legacy_release = http_json(legacy_url + config["releasePath"])
+        if legacy_status == 200 and legacy_release == expected_release:
+            print("prior-staging-release=verified on legacy alias for the configured first stable-host cutover SHA")
+            return
+    raise DeliveryError(f"The prior {environment} SHA has not passed stable URL verification.")
 
 
-def staging_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_present: bool) -> dict:
+def release_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_present: bool, environment: str) -> dict:
     if not api_present:
         return {}
     if bundle is None:
-        raise DeliveryError("The staging runtime secret bundle is required for the API deployment.")
-    verify_runtime_bundle(bundle, config)
-    require_account_runtime(config, bundle, ROOT)
+        raise DeliveryError(f"The {environment} runtime secret bundle is required for the API deployment.")
+    verify_runtime_bundle(bundle, config, environment=environment)
+    require_account_runtime(config, bundle, ROOT, environment=environment)
+    is_production = environment == "production"
+    app_url = config["productionUrl"] if is_production else config["stagingUrl"]
+    allowed_origins = ["http://localhost", "https://localhost", "capacitor://localhost", app_url]
+    if not is_production and config.get("legacyStagingAlias"):
+        allowed_origins.append("https://" + config["legacyStagingAlias"])
     return {
         **{key: bundle[key] for key in config["runtimeSecretBundleKeys"]},
         **{key: bundle[key] for key in config.get("runtimeOptionalKeys", []) if key in bundle},
         "AUTH_EMAIL_FROM": bundle.get("AUTH_EMAIL_FROM", bundle["EMAIL_FROM"]),
-        "EMAIL_MODE": config["stagingEmailMode"],
-        "PUBLIC_APP_URL": config["stagingUrl"],
-        "ALLOWED_ORIGINS": ",".join([
-            "http://localhost",
-            "https://localhost",
-            "capacitor://localhost",
-            config["stagingUrl"],
-        ]),
+        "EMAIL_MODE": config["productionEmailMode"] if is_production else config["stagingEmailMode"],
+        "PUBLIC_APP_URL": app_url,
+        "CONTENT_CHANNEL": "main" if is_production else "staging",
+        "VITE_CONTENT_ENV": "main" if is_production else "staging",
+        "VITE_APP_URL": app_url,
+        "ALLOWED_ORIGINS": ",".join(allowed_origins),
         "RELEASE_SHA": sha,
     }
 
 
-def dispatch_staging(args) -> None:
+def staging_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_present: bool) -> dict:
+    return release_runtime_env(config, bundle, sha, api_present=api_present, environment="staging")
+
+
+def production_runtime_env(config: dict, bundle: dict | None, sha: str, *, api_present: bool) -> dict:
+    return release_runtime_env(config, bundle, sha, api_present=api_present, environment="production")
+
+
+def vercel_release_target_args(environment: str) -> list[str]:
+    if environment == "production":
+        return ["--prod", "--skip-domain"]
+    if environment == "staging":
+        return ["--target", "preview"]
+    raise DeliveryError("Vercel release target must be staging or production.")
+
+
+def dispatch_release(args, environment: str) -> None:
     config = load_config()
-    verify_git_sha(args.sha, staging_only=True, clean=False)
+    verify_git_sha(args.sha, staging_only=environment == "staging", production_only=environment == "production", clean=False)
     if os.environ.get("GITHUB_RUN_ATTEMPT", "1") != "1":
-        raise DeliveryError("Staging release dispatch is first-attempt only.")
+        raise DeliveryError(f"{environment.capitalize()} release dispatch is first-attempt only.")
     has_api, has_migration = staging_api_state(config)
     if has_api != has_migration:
-        raise DeliveryError("Staging API and migration must be released together.")
+        raise DeliveryError(f"{environment.capitalize()} API and migration must be released together.")
     if not args.apply:
-        print(f"plan=queue the exact {args.sha} Vercel Preview deployment for staging")
-        print("plan=use the runtime secret bundle only when the feedback API is present")
-        print("plan=wait for provider readiness and assign the stable alias outside GitHub Actions")
+        target = "Production" if environment == "production" else "Preview"
+        print(f"plan=queue the exact {args.sha} Vercel {target} deployment for {environment}")
+        print("plan=use the environment runtime bundle only when the API is present")
+        print("plan=verify provider readiness and assign the stable alias outside GitHub Actions")
         return
-    project_id = os.environ.get(config["vercelProjectIdEnvironment"], "")
-    if not project_id or not re.fullmatch(r"prj_[A-Za-z0-9]+", project_id):
-        raise DeliveryError(f"{config['vercelProjectIdEnvironment']} is required.")
+    project_id = release_project_id(config, environment)
     token = vercel_token(config)
     if has_api:
-        bundle = read_runtime_bundle(config)
+        bundle = read_runtime_bundle(config, environment=environment)
     else:
         bundle = None
-    ensure_previous_staging_resolved(config, project_id)
-    auth_dir = Path(tempfile.mkdtemp(prefix="parkdex-kip-staging-auth-")).resolve()
+    if environment == "production" and bundle is not None:
+        verify_production_runtime_branch(config, bundle)
+    elif environment == "staging" and bundle is not None:
+        verify_staging_runtime_branch(config, bundle)
+    ensure_previous_release_resolved(config, project_id, environment)
+    auth_dir = Path(tempfile.mkdtemp(prefix=f"parkdex-kip-{environment}-auth-")).resolve()
     runtime_dir = None
     try:
         os.chmod(auth_dir, 0o700)
@@ -1937,7 +2153,7 @@ def dispatch_staging(args) -> None:
         pass
     save_json(auth_dir / "auth.json", {"token": token})
     try:
-        runtime_env = staging_runtime_env(config, bundle, args.sha, api_present=has_api)
+        runtime_env = release_runtime_env(config, bundle, args.sha, api_present=has_api, environment=environment)
         local_config = {}
         config_file = ROOT / "vercel.json"
         if config_file.is_file():
@@ -1946,53 +2162,65 @@ def dispatch_staging(args) -> None:
             except ValueError as exc:
                 raise DeliveryError("vercel.json is invalid.") from exc
         local_config["env"] = {**(local_config.get("env") or {}), **runtime_env}
-        runtime_dir = Path(tempfile.mkdtemp(prefix="parkdex-kip-staging-config-")).resolve()
+        runtime_dir = Path(tempfile.mkdtemp(prefix=f"parkdex-kip-{environment}-config-")).resolve()
         try:
             os.chmod(runtime_dir, 0o700)
         except OSError:
             pass
         local_config_path = runtime_dir / "vercel.json"
         save_json(local_config_path, local_config)
-        release_id = f"staging-{args.sha}"
+        release_id = f"{environment}-{args.sha}"
         output = run_vercel(config, [
-            "deploy", "--cwd", str(ROOT), "--yes", "--target", "preview", "--no-wait",
+            "deploy", "--cwd", str(ROOT), "--yes", *vercel_release_target_args(environment), "--no-wait",
             "--local-config", str(local_config_path),
             "--meta", f"githubCommitSha={args.sha}",
             "--meta", f"kipReleaseId={release_id}",
-            "--meta", "kipEnvironment=staging",
+            "--meta", f"kipEnvironment={environment}",
         ], auth_dir, cwd=ROOT)
         urls = re.findall(r"https://[A-Za-z0-9.-]+\.vercel\.app", output)
         if urls:
             print(f"deployment-url={urls[-1]}")
         print(f"release-sha={args.sha}")
         print(f"release-id={release_id}")
-        print("dispatch=accepted; Vercel readiness and staging alias are verified outside this workflow")
+        print(f"dispatch=accepted; Vercel readiness and {environment} alias are verified outside this workflow")
     finally:
         shutil.rmtree(auth_dir, ignore_errors=True)
         if runtime_dir:
             shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
-def dispatch_staging_services(args) -> None:
+def dispatch_staging(args) -> None:
+    dispatch_release(args, "staging")
+
+
+def dispatch_main(args) -> None:
+    dispatch_release(args, "production")
+
+
+def dispatch_release_services(args, environment: str) -> None:
     """Queue independent services together; convergence is checked outside Actions."""
     config = load_config()
-    verify_git_sha(args.sha, staging_only=True, clean=False)
+    verify_git_sha(args.sha, staging_only=environment == "staging", production_only=environment == "production", clean=False)
     if not accounts_present(config, ROOT):
-        dispatch_staging(args)
+        dispatch_release(args, environment)
         return
     if os.environ.get("GITHUB_RUN_ATTEMPT", "1") != "1":
-        raise DeliveryError("Staging release dispatch is first-attempt only.")
+        raise DeliveryError(f"{environment.capitalize()} release dispatch is first-attempt only.")
     if not args.apply:
-        print("plan=queue the private photo Worker and Vercel concurrently after ordered migrations")
+        print(f"plan=queue the {environment} private photo Worker and Vercel concurrently after ordered migrations")
         return
-    bundle = read_runtime_bundle(config)
-    verify_runtime_bundle(bundle, config)
-    require_account_runtime(config, bundle, ROOT)
+    bundle = read_runtime_bundle(config, environment=environment)
+    verify_runtime_bundle(bundle, config, environment=environment)
+    require_account_runtime(config, bundle, ROOT, environment=environment)
+    if environment == "production":
+        verify_production_runtime_branch(config, bundle)
+    elif environment == "staging":
+        verify_staging_runtime_branch(config, bundle)
     failures = []
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [
-            ("Vercel", executor.submit(dispatch_staging, args)),
-            ("Cloudflare", executor.submit(photo_provider().dispatch_staging, sys.modules[__name__], config, ROOT, args.sha, bundle)),
+            ("Vercel", executor.submit(dispatch_release, args, environment)),
+            ("Cloudflare", executor.submit(photo_provider().dispatch_environment, sys.modules[__name__], config, ROOT, args.sha, bundle, environment)),
         ]
         for name, future in futures:
             try:
@@ -2002,7 +2230,15 @@ def dispatch_staging_services(args) -> None:
             except Exception as exc:
                 failures.append(f"{name}: {redact(str(exc))}")
     if failures:
-        raise DeliveryError("Staging dispatch needs manual recovery: " + "; ".join(failures))
+        raise DeliveryError(f"{environment.capitalize()} dispatch needs manual recovery: " + "; ".join(failures))
+
+
+def dispatch_staging_services(args) -> None:
+    dispatch_release_services(args, "staging")
+
+
+def dispatch_main_services(args) -> None:
+    dispatch_release_services(args, "production")
 
 
 def provision_staging_photos(args) -> None:
@@ -2044,6 +2280,16 @@ def provision_staging_photos(args) -> None:
             key: state[key] for key in ("pullRequest", "releaseId", "headSha", "baseSha", "candidateSha")
         }
         save_json(path, persistent)
+
+
+def provision_main_photos(args) -> None:
+    config = load_config()
+    staging_sha, _ = assert_clean_staging_harness(config)
+    path = state_root() / "persistent" / "private-photos-production.json"
+    photo_provider().provision_production(
+        sys.modules[__name__], config, path, apply=args.apply,
+        candidate_root=ROOT, release_sha=staging_sha,
+    )
 
 
 def attest_preview_browser(args) -> None:
@@ -2114,38 +2360,50 @@ def verified_photo_source(config: dict, pr: int, base_sha: str, *, require_attes
     return state
 
 
-def assign_staging(args) -> None:
+def assign_release(args, environment: str) -> None:
     config = load_config()
     if not re.fullmatch(r"dpl_[A-Za-z0-9]+", args.deployment_id):
         raise DeliveryError("Deployment ID must be a full Vercel dpl_ identifier.")
     if not SHA_RE.fullmatch(args.sha or ""):
-        raise DeliveryError("Staging alias assignment requires the full merge SHA.")
+        raise DeliveryError(f"{environment.capitalize()} alias assignment requires the full merge SHA.")
+    project_env_key = config["productionVercelProjectIdEnvironment"] if environment == "production" else config["vercelProjectIdEnvironment"]
+    aliases = [config["productionAlias"]] if environment == "production" else [config["stagingAlias"]]
+    if environment == "staging" and config.get("legacyStagingAlias"):
+        aliases.append(config["legacyStagingAlias"])
     if not args.apply:
-        print(f"plan=assign {args.deployment_id} to https://{config['stagingAlias']} after READY and SHA verification")
+        print(f"plan=assign {args.deployment_id} to " + ", ".join("https://" + alias for alias in aliases) + " after READY and SHA verification")
         print(f"plan=expected githubCommitSha={args.sha}")
         return
     deployment = vercel_request(config, f"/v13/deployments/{args.deployment_id}")
     meta = deployment_meta(deployment)
+    expected_target = "production" if environment == "production" else "preview"
     if (
         deployment.get("id") != args.deployment_id
-        or deployment.get("projectId") != os.environ.get(config["vercelProjectIdEnvironment"])
-        or deployment.get("target") not in (None, "preview")
+        or deployment.get("projectId") != os.environ.get(project_env_key)
+        or (deployment.get("target") != expected_target if environment == "production" else deployment.get("target") not in (None, expected_target))
         or (deployment.get("readyState") or deployment.get("state")) != "READY"
         or meta.get("githubCommitSha") != args.sha
-        or meta.get("kipEnvironment") != "staging"
+        or meta.get("kipEnvironment") != environment
     ):
-        raise DeliveryError("The deployment is not the READY staging candidate for the requested merge SHA.")
+        raise DeliveryError(f"The deployment is not the READY {environment} candidate for the requested merge SHA.")
     auth_dir = _vercel_auth_dir(config)
     try:
         assert_vercel_cli_version(config)
-        run_vercel(config, [
-            "alias", "set", deployment_url(deployment), config["stagingAlias"],
-        ], auth_dir, cwd=ROOT)
+        for alias in aliases:
+            run_vercel(config, ["alias", "set", deployment_url(deployment), alias], auth_dir, cwd=ROOT)
     finally:
         shutil.rmtree(auth_dir, ignore_errors=True)
-    print(f"staging-alias=https://{config['stagingAlias']}")
+    print(f"{environment}-aliases=" + ",".join("https://" + alias for alias in aliases))
     print(f"deployment-id={args.deployment_id}")
     print(f"release-sha={args.sha}")
+
+
+def assign_staging(args) -> None:
+    assign_release(args, "staging")
+
+
+def assign_main(args) -> None:
+    assign_release(args, "production")
 
 
 def verify_staging(args) -> None:
@@ -2155,8 +2413,23 @@ def verify_staging(args) -> None:
     if accounts_present(config, ROOT):
         photo_provider().verify_staging(sys.modules[__name__], config, args.sha)
     print(f"staging-url={config['stagingUrl']}")
+    if config.get("legacyStagingAlias"):
+        verify_release_url(config, "https://" + config["legacyStagingAlias"], args.sha, "staging", api_present=has_api)
+        print(f"legacy-staging-url=https://{config['legacyStagingAlias']}")
     print(f"release-sha={args.sha}")
     print("staging-verification=passed")
+
+
+def verify_main(args) -> None:
+    config = load_config()
+    has_api, _ = staging_api_state(config)
+    verify_release_url(config, config["productionUrl"], args.sha, "production", api_present=has_api)
+    verify_main_content_channel(config)
+    if accounts_present(config, ROOT):
+        photo_provider().verify_environment(sys.modules[__name__], config, args.sha, "production")
+    print(f"production-url={config['productionUrl']}")
+    print(f"release-sha={args.sha}")
+    print("production-verification=passed")
 
 
 def teardown(pr: int, apply: bool) -> None:
@@ -2183,11 +2456,15 @@ def build_parser() -> argparse.ArgumentParser:
         item.add_argument("--pr", required=True, type=int)
         item.add_argument("--apply", action="store_true")
     item = sub.add_parser("write-release")
-    item.add_argument("--environment", choices=("preview", "staging"), required=True)
+    item.add_argument("--environment", choices=("preview", "staging", "production"), required=True)
     item.add_argument("--sha", required=True)
     item = sub.add_parser("migrate-staging")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("migrate-main")
+    item.add_argument("--sha", required=True)
+    item.add_argument("--apply", action="store_true")
+    sub.add_parser("verify-main-content")
     sub.add_parser("qa-content-sync")
     sub.add_parser("qa-legacy-import")
     item = sub.add_parser("deploy-staging")
@@ -2196,14 +2473,25 @@ def build_parser() -> argparse.ArgumentParser:
     item = sub.add_parser("deploy-staging-services")
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("deploy-main-services")
+    item.add_argument("--sha", required=True)
+    item.add_argument("--apply", action="store_true")
     item = sub.add_parser("assign-staging")
     item.add_argument("--deployment-id", required=True)
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
     item = sub.add_parser("verify-staging")
     item.add_argument("--sha", required=True)
+    item = sub.add_parser("assign-main")
+    item.add_argument("--deployment-id", required=True)
+    item.add_argument("--sha", required=True)
+    item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("verify-main")
+    item.add_argument("--sha", required=True)
     item = sub.add_parser("provision-staging-photos")
     item.add_argument("--from-preview-pr", type=int)
+    item.add_argument("--apply", action="store_true")
+    item = sub.add_parser("provision-production-photos")
     item.add_argument("--apply", action="store_true")
     item = sub.add_parser("attest-preview-browser")
     item.add_argument("--pr", required=True, type=int)
@@ -2227,6 +2515,10 @@ def main() -> int:
             prepare_release(args)
         elif args.command == "migrate-staging":
             migration_staging(args)
+        elif args.command == "migrate-main":
+            migration_main(args)
+        elif args.command == "verify-main-content":
+            verify_main_content_channel()
         elif args.command == "qa-content-sync":
             qa_content_sync()
         elif args.command == "qa-legacy-import":
@@ -2235,12 +2527,20 @@ def main() -> int:
             dispatch_staging(args)
         elif args.command == "deploy-staging-services":
             dispatch_staging_services(args)
+        elif args.command == "deploy-main-services":
+            dispatch_main_services(args)
         elif args.command == "assign-staging":
             assign_staging(args)
         elif args.command == "verify-staging":
             verify_staging(args)
+        elif args.command == "assign-main":
+            assign_main(args)
+        elif args.command == "verify-main":
+            verify_main(args)
         elif args.command == "provision-staging-photos":
             provision_staging_photos(args)
+        elif args.command == "provision-production-photos":
+            provision_main_photos(args)
         elif args.command == "attest-preview-browser":
             attest_preview_browser(args)
     except (DeliveryError, OSError, ValueError) as exc:
