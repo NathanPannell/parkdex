@@ -16,6 +16,7 @@ import { useAuth } from "../lib/accounts/AuthProvider";
 import { createPersonalClaim } from "../lib/accounts/personalStore";
 import { claimEventContext } from "../lib/accounts/progressSync";
 import { recordParkClaimed } from "../lib/interactions";
+import { isNative } from "../lib/native";
 
 const HOLD_MS = 1500;
 const CHEERS = ["KLEEP! Beauty!", "Into the Dex!", "Look at that shine!", "Another one!"];
@@ -95,6 +96,9 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
   const [firstClaim] = useState(() => !state.claims[park.id]);
   const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const [rankUp, setRankUp] = useState<Rank | null>(null);
+  const badge = (state: "earned" | "preview") => (
+    <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} animated={state === "earned"} state={state} />
+  );
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
@@ -109,7 +113,8 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
 
   const progress = useMotionValue(0);
   const ring = useTransform(progress, (p) => 289 * (1 - p));
-  const filter = useTransform(progress, (p) => `grayscale(${1 - p}) brightness(${0.55 + p * 0.45}) contrast(${0.9 + p * 0.1})`);
+  // Fading a pre-dimmed copy is compositor-only; animating filter repainted the badge every frame.
+  const dim = useTransform(progress, (p) => 1 - p);
   const glow = useTransform(progress, (p) => p * 0.9);
   const shakeX = useMotionValue(0);
   const shakeR = useMotionValue(0);
@@ -230,8 +235,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
     <motion.div
       className="screen claim"
       style={{ ["--spot" as string]: pal.skyTop }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      // No fade-in: the camera is fading out underneath, and a transparent claim screen let the map show through.
       exit={{ opacity: 0, transition: { duration: 0.3 } }}
     >
       <motion.div className="claim__spot" style={{ opacity: phase === "done" ? 1 : undefined }} />
@@ -292,7 +296,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
           initial={{ scale: 0.2, y: 120, opacity: 0 }}
           animate={
             phase === "done"
-              ? { scale: [0.8, 1.28, 1], rotateY: [0, 360], y: 0, opacity: 1 }
+              ? { scale: [0.8, 1.28, 1], rotate: [0, -10, 7, 0], y: 0, opacity: 1 }
               : { scale: holding ? 1.08 : 1, y: 0, opacity: 1 }
           }
           transition={
@@ -301,11 +305,15 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
               : { type: "spring", stiffness: 240, damping: 18 }
           }
         >
-          <motion.div style={{ filter: phase === "done" ? "none" : filter }}>
-            <Tilt idle={phase === "done"} max={phase === "done" ? 22 : 0}>
-              <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} animated state={phase === "done" ? "earned" : "preview"} />
-            </Tilt>
-          </motion.div>
+          {phase === "done" ? (
+            // Android WebView mispaints SVG badge text under Tilt's 3D transform.
+            isNative ? badge("earned") : <Tilt idle max={22}>{badge("earned")}</Tilt>
+          ) : (
+            <div className="claim__badge-art">
+              {badge("preview")}
+              <motion.div className="claim__badge-dim" style={{ opacity: dim }} aria-hidden="true">{badge("preview")}</motion.div>
+            </div>
+          )}
         </motion.div>
         {phase === "done" && <motion.div className="claim__flash" initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 0.7 }} />}
       </div>
@@ -358,7 +366,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}>
               {/* Kip sits in the layout flow so he never covers the badge or the buttons. */}
               <motion.div className="claim__kip" variants={pop}>
-                <Bubble side="to-right" style={{ position: "relative" }}>
+                <Bubble side="to-right" style={{ position: "relative", marginBottom: 22 }}>
                   {number === 1 ? "Your first badge! KLEEP!" : CHEERS[number % CHEERS.length]}
                 </Bubble>
                 <Kip pose="celebrate" size={84} flip />

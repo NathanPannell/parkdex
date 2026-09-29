@@ -911,6 +911,8 @@
 }
 
 .rays {
+  /* Its own layer, so spinning the masked gradient composites instead of repainting. */
+  will-change: transform;
   border-radius: 50%;
   mask-image: radial-gradient(circle, #000 5%, transparent 64%);
   -webkit-mask-image: radial-gradient(circle, #000 5%, transparent 64%);
@@ -1829,6 +1831,18 @@
   filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.45));
 }
 
+.claim__badge-art {
+  position: relative;
+}
+
+.claim__badge-dim {
+  position: absolute;
+  inset: 0;
+  filter: grayscale(1) brightness(0.55) contrast(0.9);
+  will-change: opacity;
+  pointer-events: none;
+}
+
 .claim__flash {
   position: absolute;
   inset: -200px;
@@ -1977,7 +1991,6 @@
 }
 
 .claim__kip .bubble {
-  margin-bottom: 44px;
   white-space: nowrap;
 }
 
