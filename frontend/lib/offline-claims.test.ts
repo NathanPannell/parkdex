@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import type { BoundaryFeature } from "./boundaries";
 import type { KeyValueStore } from "./platform-storage";
 import type { PhotoRetryStore } from "./photo-retry";
@@ -144,6 +145,64 @@ describe("offline claims service", () => {
     const holeService = createOfflineClaimsService({ apiBaseUrl: API, store, placeCache: holeCache, now: () => now });
     expect(await holeService.recommendLocal(OWNER_A, { location: locationAt(now, 2, 2) })).toEqual({ status: "none" });
     expect(await service.recommendLocal(OWNER_A, { location: locationAt(now, 20, 20) })).toEqual({ status: "none" });
+  });
+
+  it("recommends and saves claims in the three valid CRD registry bundles", async () => {
+    const catalogue = JSON.parse(readFileSync(new URL("../../data/boundaries.geojson", import.meta.url), "utf8")) as {
+      features: BoundaryFeature[];
+    };
+    const places = JSON.parse(readFileSync(new URL("../../data/places.json", import.meta.url), "utf8")) as Array<{
+      id: string;
+      latitude: number;
+      longitude: number;
+    }>;
+    const ids = [
+      "community-southern-gulf-islands-electoral-area-south-pender-island-1259",
+      "municipal-city-of-victoria-855",
+      "municipal-district-of-saanich-1920",
+    ];
+    const now = Date.parse("2026-09-24T12:00:00.000Z");
+
+    for (const id of ids) {
+      const boundary = catalogue.features.find((entry) => entry.properties.id === id);
+      const registryPlace = places.find((entry) => entry.id === id);
+      expect(boundary, `missing canonical boundary ${id}`).toBeDefined();
+      expect(registryPlace, `missing canonical place ${id}`).toBeDefined();
+      const store = new MemoryStore();
+      const cacheBundle = {
+        ...bundle(id, boundary!),
+        place: { ...place(id), latitude: registryPlace!.latitude, longitude: registryPlace!.longitude },
+      };
+      const freshCacheBundle = () => ({ ...cacheBundle, boundary: structuredClone(boundary!) });
+      const cache: RecentPlaceCacheForClaims = {
+        async get(placeId) { return placeId === id ? freshCacheBundle() : null; },
+        async list() { return [freshCacheBundle()]; },
+        async listForClaims() { return [freshCacheBundle()]; },
+      };
+      const service = createOfflineClaimsService({
+        apiBaseUrl: API,
+        store,
+        placeCache: cache,
+        now: () => now,
+      });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(grant())));
+      await service.provisionGrant(OWNER_A);
+
+      const recommendation = await service.recommendLocal(OWNER_A, {
+        location: locationAt(now, registryPlace!.longitude, registryPlace!.latitude),
+      });
+      expect(recommendation, `${id} recommendation`).toMatchObject({
+        status: "recommended",
+        candidate: { placeId: id, matchKind: "exact", distanceMeters: 0 },
+      });
+      if (recommendation.status !== "recommended") throw new Error(`Expected a recommendation for ${id}.`);
+
+      const confirmation = await service.createLocal(OWNER_A, {
+        recommendationToken: recommendation.recommendationToken,
+        expectedPlaceId: id,
+      });
+      expect(confirmation).toMatchObject({ placeId: id, pendingSync: true, claim: { matchKind: "exact" } });
+    }
   });
 
   it("excludes externally visited and queued places before choosing a local recommendation, including after restart", async () => {

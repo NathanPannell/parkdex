@@ -20,7 +20,7 @@ export const OFFLINE_LOCATION_MAX_AGE_MS = 20_000;
 export const OFFLINE_LOCATION_MAX_ACCURACY_METERS = 50;
 
 const COORDINATE_EPSILON = 1e-10;
-const CROSS_PRODUCT_EPSILON = 1e-12;
+const CROSS_PRODUCT_EPSILON = 1e-15;
 const geometryValidity = new WeakMap<object, boolean>();
 
 type Position = readonly number[];
