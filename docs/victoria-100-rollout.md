@@ -1,5 +1,13 @@
 # Victoria 100-park authoring rollout
 
+## Current staging branch handoff, 2026-09-29
+
+The live staging app now uses Neon child `br-odd-paper-aktgtidp` at `ep-shiny-cherry-akobwdis.c-3.us-west-2.aws.neon.tech`. The immutable authoring rollout receipt was copied from the former staging database, which is now production main, so its original database host remains `ep-rapid-voice-ak0plhpb.c-3.us-west-2.aws.neon.tech`. The queue accepts that exact inherited receipt only when the runtime uses the new staging endpoint. It rejects the old main endpoint for staging authoring. Do not rewrite the rollout receipt.
+
+The child was created at content revision 25 with 17 published authoring jobs. Rank 18, Matheson Lake, was subsequently rendered and published on the former staging database at revision 26. Its five render records, research, reviewed selected WebP, and gallery archive are preserved. `queue adopt-transferred-rank18` checks the exact reviewed source export, local artifacts, live staging park values, idle queue, and content revision. Review its dry-run plan hash, then apply that exact plan once to carry the audit into the child as a ready job. It does not publish content. Claim rank 18 once and publish its existing selected art through the normal queue command, then independently verify the public snapshot, scene descriptor, CDN bytes, and change feed. Do not generate Matheson Lake again.
+
+The scheduled authoring automation is paused during this handoff. The active style anchor is the deployed Beacon Hill v2 selection. The six `current_reference_ids` in the live gallery index and its `deployed-six-case-study.md` are the complete positive style and composition reference set; older gallery entries are historical. The later operator decisions in the authoring prompt supersede the earlier reference descriptions below.
+
 This rollout replaces the active public catalogue with the curated 100 parks near Victoria, preserving personal collections and immutable earned artwork. Staging content revision 2 applied the 100 skeleton parks. Revision 3 manually published the completed `flat-cartoon-v2` Beacon Hill badge. All 100 authoring jobs remain queued. Hourly authoring is off pending the operator's later setup and the queue reconciliation described below.
 
 The existing Changes API delivers public catalogue edits. Badge images remain immutable R2 objects. A normal publication verifies the uploaded badge before updating the park and its asset descriptor in one Neon transaction. This workflow does not republish complete catalogue files or map data for each park.
