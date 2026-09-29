@@ -25,6 +25,11 @@ export const scenePath = (scene: string) => `art/badges/scenes/${scene}.webp`;
 // Kept as a path helper for callers that also have to resolve the active release URL.
 export const sceneUrl = (scene: string) => `/${scenePath(scene)}`;
 
+// The map shows only parks with a badge to earn, plus any park already in the Dex.
+export function mapParks<T extends Pick<Park, "id" | "scene">>(parks: readonly T[], claimed: Readonly<Record<string, unknown>>): T[] {
+  return parks.filter((park) => park.scene !== null || Object.hasOwn(claimed, park.id));
+}
+
 // Keep earned retired badges in the visitor's lifetime collection denominator.
 export function badgeTotal(liveParks: readonly Pick<Park, "id">[], claimedParkIds: Iterable<string>) {
   return new Set([...liveParks.map((park) => park.id), ...claimedParkIds]).size;

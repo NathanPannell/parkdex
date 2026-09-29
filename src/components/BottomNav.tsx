@@ -4,6 +4,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { getParkRarityEligibility, getRarityProgress } from "../lib/progression";
 import { rarityLockMessage } from "../lib/rarityUi";
 import { useStore } from "../lib/store";
+import { mapParks } from "../lib/parks";
 import { useContent } from "../lib/content/provider";
 import { isUsableGpsAccuracy } from "../lib/geo";
 import { Icon } from "./Icon";
@@ -13,7 +14,7 @@ export function BottomNav() {
   const content = useContent();
   const bounds = useBoundaries();
   const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? state.accuracy : 0;
-  const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
+  const here = parkContaining(state.user, mapParks(content?.parks ?? [], state.claims), bounds?.byId, accuracy);
   const progress = getRarityProgress(state.claims, content?.parkById);
   const eligibility = here && state.progressReady ? getParkRarityEligibility(here, progress, !!state.claims[here.id]) : null;
   const canClaim = !!here && !state.claims[here.id] && !!eligibility?.eligible && eligibility.reason !== "already-earned";
