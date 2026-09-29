@@ -27,12 +27,131 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://parks.canada.ca/pn-np/bc/pacificrim"
   },
+  "provincial-adams-lake-marine-park-poplar-point-site": {
+    "url": "https://bcparks.ca/adams-lake-marine-park/poplar-point-site/",
+    "title": "Adams Lake Marine Park: Poplar Point Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-adams-lake-marine-park-refuge-bay-site": {
+    "url": "https://bcparks.ca/adams-lake-marine-park/refuge-bay-site/",
+    "title": "Adams Lake Marine Park: Refuge Bay Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-adams-lake-park-bush-creek-site": {
+    "url": "https://bcparks.ca/adams-lake-park-bush-creek-site/",
+    "title": "Adams Lake Park – Bush Creek Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-akamina-kishinena-park": {
+    "url": "https://bcparks.ca/akamina-kishinena-park/",
+    "title": "Akamina-Kishinena Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-alexandra-bridge-park": {
+    "url": "https://bcparks.ca/alexandra-bridge-park/",
+    "title": "Alexandra Bridge Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-alice-lake-park": {
+    "url": "https://bcparks.ca/alice-lake-park/",
+    "title": "Alice Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-allison-harbour-marine-park": {
+    "url": "https://bcparks.ca/allison-harbour-marine-park/",
+    "title": "Allison Harbour Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-allison-lake-park": {
+    "url": "https://bcparks.ca/allison-lake-park/",
+    "title": "Allison Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ancient-forest-chun-t-oh-whudujut-park": {
+    "url": "https://bcparks.ca/ancient-forest-chun-toh-whudujut-park/",
+    "title": "Ancient Forest/Chun T'oh Whudujut Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-anderson-bay-park": {
+    "url": "https://bcparks.ca/anderson-bay-park/",
+    "title": "Anderson Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-anderson-flats-park": {
+    "url": "https://bcparks.ca/anderson-flats-park/",
+    "title": "Anderson Flats Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-anstey-hunakwa-park": {
+    "url": "https://bcparks.ca/anstey-hunakwa-park/",
+    "title": "Anstey Hunakwa Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-apodaca-park": {
+    "url": "https://bcparks.ca/apodaca-park/",
+    "title": "Apodaca Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-arbutus-grove-park": {
     "url": "https://bcparks.ca/arbutus-grove-park/",
     "title": "Arbutus Grove Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-arctic-pacific-lakes-park": {
+    "url": "https://bcparks.ca/arctic-pacific-lakes-park/",
+    "title": "Arctic Pacific Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-arrow-lakes-park-burton-site": {
+    "url": "https://bcparks.ca/arrow-lakes-park/",
+    "title": "Arrow Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-arrow-lakes-park-shelter-bay-site": {
+    "url": "https://bcparks.ca/arrow-lakes-park/",
+    "title": "Arrow Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-arrowstone-park": {
+    "url": "https://bcparks.ca/arrowstone-park/",
+    "title": "Arrowstone Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-artlish-caves-park": {
     "url": "https://bcparks.ca/artlish-caves-park/",
@@ -41,12 +160,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-atna-river-park": {
+    "url": "https://bcparks.ca/atna-river-park/",
+    "title": "Atna River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-au-welnew-john-dean-park": {
     "url": "https://bcparks.ca/lau-welnew-john-dean-park/",
     "title": "ȽÁU,WELṈEW̱/John Dean Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-babine-lake-marine-park-pendleton-bay-site": {
+    "url": "https://bcparks.ca/babine-lake-marine-park/pendleton-bay-site/",
+    "title": "Babine Lake Marine Park: Pendleton Bay Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-lake-marine-park-pierre-creek-site": {
+    "url": "https://bcparks.ca/babine-lake-marine-park/",
+    "title": "Babine Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-lake-marine-park-pinkut-creek-site": {
+    "url": "https://bcparks.ca/babine-lake-marine-park/pinkut-creek-site/",
+    "title": "Babine Lake Marine Park: Pinkut Creek Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-lake-marine-park-sandpoint-site": {
+    "url": "https://bcparks.ca/babine-lake-marine-park/",
+    "title": "Babine Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-lake-marine-park-smithers-landing-site": {
+    "url": "https://bcparks.ca/babine-lake-marine-park/smithers-landing-site/",
+    "title": "Babine Lake Marine Park: Smithers Landing Site | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-mountains-park": {
+    "url": "https://bcparks.ca/babine-mountains-park/",
+    "title": "Babine Mountains Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-babine-river-corridor-park": {
+    "url": "https://bcparks.ca/babine-river-corridor-park/",
+    "title": "Babine River Corridor Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-bamberton-park": {
     "url": "https://bcparks.ca/bamberton-park/",
@@ -55,12 +230,89 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-banana-island-park": {
+    "url": "https://bcparks.ca/banana-island-park/",
+    "title": "Banana Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bear-creek-park": {
+    "url": "https://bcparks.ca/bear-creek-park/",
+    "title": "Bear Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bear-glacier-park": {
+    "url": "https://bcparks.ca/bear-glacier-park/",
+    "title": "Bear Glacier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bearhole-lake-park": {
+    "url": "https://bcparks.ca/bearhole-lake-park/",
+    "title": "Bearhole Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-beatton-park": {
+    "url": "https://bcparks.ca/beatton-park/",
+    "title": "Beatton Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-beatton-river-park": {
+    "url": "https://bcparks.ca/beatton-river-park/",
+    "title": "Beatton River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-beaumont-park": {
+    "url": "https://bcparks.ca/beaumont-park/",
+    "title": "Beaumont Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-beaver-creek-park": {
+    "url": "https://bcparks.ca/beaver-creek-park/",
+    "title": "Beaver Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-beaver-point-park": {
     "url": "https://bcparks.ca/beaver-point-park/",
     "title": "Beaver Point Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-beaver-valley-park": {
+    "url": "https://bcparks.ca/beaver-valley-park/",
+    "title": "Beaver Valley Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-becher-s-prairie-park": {
+    "url": "https://bcparks.ca/bechers-prairie-park/",
+    "title": "Becher's Prairie Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bedard-aspen-park": {
+    "url": "https://bcparks.ca/bedard-aspen-park/",
+    "title": "Bedard Aspen Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-bellhouse-park": {
     "url": "https://bcparks.ca/bellhouse-park/",
@@ -69,12 +321,110 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-big-bar-lake-park": {
+    "url": "https://bcparks.ca/big-bar-lake-park/",
+    "title": "Big Bar Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-big-basin-park": {
+    "url": "https://bcparks.ca/big-basin-park/",
+    "title": "Big Basin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-big-bunsby-marine-park": {
     "url": "https://bcparks.ca/big-bunsby-marine-park/",
     "title": "Big Bunsby Marine Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-big-creek-park": {
+    "url": "https://bcparks.ca/big-creek-park/",
+    "title": "Big Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bijoux-falls-park": {
+    "url": "https://bcparks.ca/bijoux-falls-park/",
+    "title": "Bijoux Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-birkenhead-lake-park": {
+    "url": "https://bcparks.ca/birkenhead-lake-park/",
+    "title": "Birkenhead Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bishop-river-park": {
+    "url": "https://bcparks.ca/bishop-river-park/",
+    "title": "Bishop River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-blackcomb-glacier-park": {
+    "url": "https://bcparks.ca/blackcomb-glacier-park/",
+    "title": "Blackcomb Glacier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-blanket-creek-park": {
+    "url": "https://bcparks.ca/blanket-creek-park/",
+    "title": "Blanket Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bligh-island-marine-park": {
+    "url": "https://bcparks.ca/bligh-island-marine-park/",
+    "title": "Bligh Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-blue-earth-lake-park": {
+    "url": "https://bcparks.ca/blue-earth-lake-park/",
+    "title": "Blue Earth Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-blue-river-black-spruce-park": {
+    "url": "https://bcparks.ca/blue-river-black-spruce-park/",
+    "title": "Blue River Black Spruce Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-blue-river-pine-park": {
+    "url": "https://bcparks.ca/blue-river-pine-park/",
+    "title": "Blue River Pine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bobtail-mountain-park": {
+    "url": "https://bcparks.ca/bobtail-mountain-park/",
+    "title": "Bobtail Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bocock-peak-park": {
+    "url": "https://bcparks.ca/bocock-peak-park/",
+    "title": "Bocock Peak Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-bodega-ridge-park": {
     "url": "https://bcparks.ca/bodega-ridge-park/",
@@ -83,12 +433,152 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-bonaparte-park": {
+    "url": "https://bcparks.ca/bonaparte-park/",
+    "title": "Bonaparte Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-boothman-s-oxbow-park": {
+    "url": "https://bcparks.ca/boothmans-oxbow-park/",
+    "title": "Boothman's Oxbow Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-border-lake-park": {
+    "url": "https://bcparks.ca/border-lake-park/",
+    "title": "Border Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-boulder-creek-park": {
+    "url": "https://bcparks.ca/boulder-creek-park/",
+    "title": "Boulder Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-boundary-creek-park": {
+    "url": "https://bcparks.ca/boundary-creek-park/",
+    "title": "Boundary Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bowron-lake-park": {
+    "url": "https://bcparks.ca/bowron-lake-park/",
+    "title": "Bowron Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-boyle-point-park": {
     "url": "https://bcparks.ca/boyle-point-park/",
     "title": "Boyle Point Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-brackendale-eagles-park": {
+    "url": "https://bcparks.ca/brackendale-eagles-park/",
+    "title": "Brackendale Eagles Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-brandywine-falls-park": {
+    "url": "https://bcparks.ca/brandywine-falls-park/",
+    "title": "Brandywine Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bridal-veil-falls-park": {
+    "url": "https://bcparks.ca/bridal-veil-falls-park/",
+    "title": "Bridal Veil Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bridge-lake-park": {
+    "url": "https://bcparks.ca/bridge-lake-park/",
+    "title": "Bridge Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bridge-river-delta-park": {
+    "url": "https://bcparks.ca/bridge-river-delta-park/",
+    "title": "Bridge River Delta Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bromley-rock-park": {
+    "url": "https://bcparks.ca/bromley-rock-park/",
+    "title": "Bromley Rock Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-broughton-archipelago-park": {
+    "url": "https://bcparks.ca/broughton-archipelago-park/",
+    "title": "Broughton Archipelago Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-browne-lake-park": {
+    "url": "https://bcparks.ca/browne-lake-park/",
+    "title": "Browne Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-buccaneer-bay-park": {
+    "url": "https://bcparks.ca/buccaneer-bay-park/",
+    "title": "Buccaneer Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-buckinghorse-river-wayside-park": {
+    "url": "https://bcparks.ca/buckinghorse-river-wayside-park/",
+    "title": "Buckinghorse River Wayside Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bugaboo-park": {
+    "url": "https://bcparks.ca/bugaboo-park/",
+    "title": "Bugaboo Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bulkley-junction-park": {
+    "url": "https://bcparks.ca/bulkley-junction-park/",
+    "title": "Bulkley Junction Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-bull-canyon-park": {
+    "url": "https://bcparks.ca/bull-canyon-park/",
+    "title": "Bull Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-burges-james-gadsden-park": {
+    "url": "https://bcparks.ca/burges-james-gadsden-park/",
+    "title": "Burges James Gadsden Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-burgoyne-bay-park": {
     "url": "https://bcparks.ca/burgoyne-bay-park/",
@@ -97,12 +587,82 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-burnie-shea-park": {
+    "url": "https://bcparks.ca/burnie-shea-park/",
+    "title": "Burnie-Shea Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-burns-lake-park": {
+    "url": "https://bcparks.ca/burns-lake-park/",
+    "title": "Burns Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-butler-ridge-park": {
+    "url": "https://bcparks.ca/butler-ridge-park/",
+    "title": "Butler Ridge Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-caligata-lake-park": {
+    "url": "https://bcparks.ca/caligata-lake-park/",
+    "title": "Caligata Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-call-lake-park": {
+    "url": "https://bcparks.ca/call-lake-park/",
+    "title": "Call Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-callaghan-lake-park": {
+    "url": "https://bcparks.ca/callaghan-lake-park/",
+    "title": "Callaghan Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-canim-beach-park": {
+    "url": "https://bcparks.ca/canim-beach-park/",
+    "title": "Canim Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-cape-scott-park": {
     "url": "https://bcparks.ca/cape-scott-park/",
     "title": "Cape Scott Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-cariboo-mountains-park": {
+    "url": "https://bcparks.ca/cariboo-mountains-park/",
+    "title": "Cariboo Mountains Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cariboo-nature-park": {
+    "url": "https://bcparks.ca/cariboo-nature-park/",
+    "title": "Cariboo Nature Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cariboo-river-park": {
+    "url": "https://bcparks.ca/cariboo-river-park/",
+    "title": "Cariboo River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-carmanah-walbran-park": {
     "url": "https://bcparks.ca/carmanah-walbran-park/",
@@ -111,12 +671,110 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-carp-lake-park": {
+    "url": "https://bcparks.ca/carp-lake-park/",
+    "title": "Carp Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-castle-rock-hoodoos-park": {
+    "url": "https://bcparks.ca/castle-rock-hoodoos-park/",
+    "title": "Castle Rock Hoodoos Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-catala-island-marine-park": {
+    "url": "https://bcparks.ca/catala-island-marine-park/",
+    "title": "Catala Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cathedral-park": {
+    "url": "https://bcparks.ca/cathedral-park/",
+    "title": "Cathedral Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cedar-point-park": {
+    "url": "https://bcparks.ca/cedar-point-park/",
+    "title": "Cedar Point Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-champion-lakes-park": {
+    "url": "https://bcparks.ca/champion-lakes-park/",
+    "title": "Champion Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-charlie-lake-park": {
+    "url": "https://bcparks.ca/charlie-lake-park/",
+    "title": "Charlie Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-chase-park": {
+    "url": "https://bcparks.ca/chase-park/",
+    "title": "Chase Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-chasm-park": {
+    "url": "https://bcparks.ca/chasm-park/",
+    "title": "Chasm Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-chemainus-river-park": {
     "url": "https://bcparks.ca/chemainus-river-park/",
     "title": "Chemainus River Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-chilliwack-river-park": {
+    "url": "https://bcparks.ca/chilliwack-river-park/",
+    "title": "Chilliwack River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-choquette-hot-springs-park": {
+    "url": "https://bcparks.ca/choquette-hot-springs-park/",
+    "title": "Choquette Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-christina-lake-park": {
+    "url": "https://bcparks.ca/christina-lake-park/",
+    "title": "Christina Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-chu-chua-cottonwood-park": {
+    "url": "https://bcparks.ca/chu-chua-cottonwood-park/",
+    "title": "Chu Chua Cottonwood Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cinnemousun-narrows-park": {
+    "url": "https://bcparks.ca/cinnemousun-narrows-park/",
+    "title": "Cinnemousun Narrows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-claud-elliott-lake-park": {
     "url": "https://bcparks.ca/claud-elliott-lake-park/",
@@ -139,12 +797,117 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-clendinning-park": {
+    "url": "https://bcparks.ca/clendinning-park/",
+    "title": "Clendinning Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-close-to-the-edge-park": {
+    "url": "https://bcparks.ca/close-to-the-edge-park/",
+    "title": "Close-To-The-Edge Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-codville-lagoon-marine-park": {
+    "url": "https://bcparks.ca/codville-lagoon-marine-park/",
+    "title": "Codville Lagoon Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cody-caves-park": {
+    "url": "https://bcparks.ca/cody-caves-park/",
+    "title": "Cody Caves Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-coldwater-river-park": {
+    "url": "https://bcparks.ca/coldwater-river-park/",
+    "title": "Coldwater River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-collinson-point-park": {
     "url": "https://bcparks.ca/collinson-point-park/",
     "title": "Collinson Point Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-columbia-lake-park": {
+    "url": "https://bcparks.ca/columbia-lake-park/",
+    "title": "Columbia Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-conkle-lake-park": {
+    "url": "https://bcparks.ca/conkle-lake-park/",
+    "title": "Conkle Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-copeland-islands-marine-park": {
+    "url": "https://bcparks.ca/copeland-islands-marine-park/",
+    "title": "Copeland Islands Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-copper-johnny-park": {
+    "url": "https://bcparks.ca/copper-johnny-park/",
+    "title": "Copper Johnny Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-coquihalla-canyon-park": {
+    "url": "https://bcparks.ca/coquihalla-canyon-park/",
+    "title": "Coquihalla Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-coquihalla-river-park": {
+    "url": "https://bcparks.ca/coquihalla-river-park/",
+    "title": "Coquihalla River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cormorant-channel-marine-park": {
+    "url": "https://bcparks.ca/cormorant-channel-marine-park/",
+    "title": "Cormorant Channel Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cornwall-hills-park": {
+    "url": "https://bcparks.ca/cornwall-hills-park/",
+    "title": "Cornwall Hills Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-coste-rocks-park": {
+    "url": "https://bcparks.ca/coste-rocks-park/",
+    "title": "Coste Rocks Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cottonwood-river-park": {
+    "url": "https://bcparks.ca/cottonwood-river-park/",
+    "title": "Cottonwood River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-cowichan-river-park": {
     "url": "https://bcparks.ca/cowichan-river-park/",
@@ -153,12 +916,117 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-crater-lake-park": {
+    "url": "https://bcparks.ca/crater-lake-park/",
+    "title": "Crater Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-crooked-river-park": {
+    "url": "https://bcparks.ca/crooked-river-park/",
+    "title": "Crooked River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-crowsnest-park": {
+    "url": "https://bcparks.ca/crowsnest-park/",
+    "title": "Crowsnest Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cultus-lake-park": {
+    "url": "https://bcparks.ca/cultus-lake-park/",
+    "title": "Cultus Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cummins-lakes-park": {
+    "url": "https://bcparks.ca/cummins-lakes-park/",
+    "title": "Cummins Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-cypress-park": {
+    "url": "https://bcparks.ca/cypress-park/",
+    "title": "Cypress Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dahl-lake-park": {
+    "url": "https://bcparks.ca/dahl-lake-park/",
+    "title": "Dahl Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dala-kildala-rivers-estuaries-park": {
+    "url": "https://bcparks.ca/dala-kildala-rivers-estuaries-park/",
+    "title": "Dala-Kildala Rivers Estuaries Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dall-river-old-growth-park": {
+    "url": "https://bcparks.ca/dall-river-old-growth-park/",
+    "title": "Dall River Old Growth Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dante-s-inferno-park": {
+    "url": "https://bcparks.ca/dantes-inferno-park/",
+    "title": "Dante's Inferno Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-darke-lake-park": {
+    "url": "https://bcparks.ca/darke-lake-park/",
+    "title": "Darke Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-davis-lake-park": {
+    "url": "https://bcparks.ca/davis-lake-park/",
+    "title": "Davis Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-dawley-passage-park": {
     "url": "https://bcparks.ca/dawley-passage-park/",
     "title": "Dawley Passage Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-dead-man-s-island-park": {
+    "url": "https://bcparks.ca/dead-mans-island-park/",
+    "title": "Dead Man's Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-denetiah-park": {
+    "url": "https://bcparks.ca/denetiah-park/",
+    "title": "Denetiah Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-denison-bonneau-park": {
+    "url": "https://bcparks.ca/denison-bonneau-park/",
+    "title": "Denison-Bonneau Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-denman-island-park": {
     "url": "https://bcparks.ca/denman-island-park/",
@@ -167,12 +1035,75 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-desolation-sound-marine-park": {
+    "url": "https://bcparks.ca/desolation-sound-marine-park/",
+    "title": "Desolation Sound Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-diana-lake-park": {
+    "url": "https://bcparks.ca/diana-lake-park/",
+    "title": "Diana Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-dionisio-point-park": {
     "url": "https://bcparks.ca/dionisio-point-park/",
     "title": "Dionisio Point Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-discovery-island-marine-park": {
+    "url": "https://bcparks.ca/discovery-island-marine-park/",
+    "title": "Discovery Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dixie-cove-marine-park": {
+    "url": "https://bcparks.ca/dixie-cove-marine-park/",
+    "title": "Dixie Cove Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-donnely-lake-park": {
+    "url": "https://bcparks.ca/donnely-lake-park/",
+    "title": "Donnely Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-downing-park": {
+    "url": "https://bcparks.ca/downing-park/",
+    "title": "Downing Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dragon-mountain-park": {
+    "url": "https://bcparks.ca/dragon-mountain-park/",
+    "title": "Dragon Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-drewry-point-park": {
+    "url": "https://bcparks.ca/drewry-point-park/",
+    "title": "Drewry Point Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-driftwood-canyon-park": {
+    "url": "https://bcparks.ca/driftwood-canyon-park/",
+    "title": "Driftwood Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-drumbeg-park": {
     "url": "https://bcparks.ca/drumbeg-park/",
@@ -181,12 +1112,173 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-dry-gulch-park": {
+    "url": "https://bcparks.ca/dry-gulch-park/",
+    "title": "Dry Gulch Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-duffey-lake-park": {
+    "url": "https://bcparks.ca/duffey-lake-park/",
+    "title": "Duffey Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-dune-za-keyih-park-a-k-a-frog-gataga-park": {
+    "url": "https://bcparks.ca/dune-za-keyih-park-aka-frog-gataga-park/",
+    "title": "Dune Za Keyih Park [a.k.a. Frog-Gataga Park] | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-e-c-manning-park": {
+    "url": "https://bcparks.ca/ec-manning-park/",
+    "title": "E.C. Manning Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eagle-bay-park": {
+    "url": "https://bcparks.ca/eagle-bay-park/",
+    "title": "Eagle Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eagle-river-park": {
+    "url": "https://bcparks.ca/eagle-river-park/",
+    "title": "Eagle River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eakin-creek-canyon-park": {
+    "url": "https://bcparks.ca/eakin-creek-canyon-park/",
+    "title": "Eakin Creek Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eakin-creek-floodplain-park": {
+    "url": "https://bcparks.ca/eakin-creek-floodplain-park/",
+    "title": "Eakin Creek Floodplain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-east-pine-park": {
+    "url": "https://bcparks.ca/east-pine-park/",
+    "title": "East Pine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-echo-bay-marine-park": {
+    "url": "https://bcparks.ca/echo-bay-marine-park/",
+    "title": "Echo Bay Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-echo-lake-park": {
+    "url": "https://bcparks.ca/echo-lake-park/",
+    "title": "Echo Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ed-bird-estella-lakes-park": {
+    "url": "https://bcparks.ca/ed-bird-estella-lakes-park/",
+    "title": "Ed Bird-Estella Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-edge-hills-park": {
+    "url": "https://bcparks.ca/edge-hills-park/",
+    "title": "Edge Hills Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-elephant-hill-park": {
+    "url": "https://bcparks.ca/elephant-hill-park/",
+    "title": "Elephant Hill Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eleven-sisters-park": {
+    "url": "https://bcparks.ca/eleven-sisters-park/",
+    "title": "Eleven Sisters Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-elk-falls-park": {
     "url": "https://bcparks.ca/elk-falls-park/",
     "title": "Elk Falls Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-elk-lakes-park": {
+    "url": "https://bcparks.ca/elk-lakes-park/",
+    "title": "Elk Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-elk-valley-park": {
+    "url": "https://bcparks.ca/elk-valley-park/",
+    "title": "Elk Valley Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-elko-park": {
+    "url": "https://bcparks.ca/elko-park/",
+    "title": "Elko Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ellison-park": {
+    "url": "https://bcparks.ca/ellison-park/",
+    "title": "Ellison Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-emar-lakes-park": {
+    "url": "https://bcparks.ca/emar-lakes-park/",
+    "title": "Emar Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-emory-creek-park": {
+    "url": "https://bcparks.ca/emory-creek-park/",
+    "title": "Emory Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eneas-lakes-park": {
+    "url": "https://bcparks.ca/eneas-lakes-park/",
+    "title": "Eneas Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-english-lake-park": {
+    "url": "https://bcparks.ca/english-lake-park/",
+    "title": "English Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-englishman-river-falls-park": {
     "url": "https://bcparks.ca/englishman-river-falls-park/",
@@ -195,12 +1287,89 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-entiako-park": {
+    "url": "https://bcparks.ca/entiako-park/",
+    "title": "Entiako Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-epper-passage-park": {
+    "url": "https://bcparks.ca/epper-passage-park/",
+    "title": "Epper Passage Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-epsom-park": {
+    "url": "https://bcparks.ca/epsom-park/",
+    "title": "Epsom Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-erg-mountain-park": {
+    "url": "https://bcparks.ca/erg-mountain-park/",
+    "title": "Erg Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-erie-creek-park": {
+    "url": "https://bcparks.ca/erie-creek-park/",
+    "title": "Erie Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-eskers-park": {
+    "url": "https://bcparks.ca/eskers-park/",
+    "title": "Eskers Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ethel-f-wilson-memorial-park": {
+    "url": "https://bcparks.ca/ethel-f-wilson-memorial-park/",
+    "title": "Ethel F. Wilson Memorial Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-evanoff-park": {
+    "url": "https://bcparks.ca/evanoff-park/",
+    "title": "Evanoff Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-eves-park": {
     "url": "https://bcparks.ca/eves-park/",
     "title": "Eves Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-exchamsiks-river-park": {
+    "url": "https://bcparks.ca/exchamsiks-river-park/",
+    "title": "Exchamsiks River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-f-h-barber-park": {
+    "url": "https://bcparks.ca/fh-barber-park/",
+    "title": "F.H. Barber Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ferry-island-park": {
+    "url": "https://bcparks.ca/ferry-island-park/",
+    "title": "Ferry Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-fillongley-park": {
     "url": "https://bcparks.ca/fillongley-park/",
@@ -209,6 +1378,41 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-finger-tatuk-park": {
+    "url": "https://bcparks.ca/finger-tatuk-park/",
+    "title": "Finger-Tatuk Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-finlay-russel-park": {
+    "url": "https://bcparks.ca/finlay-russel-park/",
+    "title": "Finlay Russel Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-finn-creek-park": {
+    "url": "https://bcparks.ca/finn-creek-park/",
+    "title": "Finn Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-fintry-park": {
+    "url": "https://bcparks.ca/fintry-park/",
+    "title": "Fintry Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-flat-lake-park": {
+    "url": "https://bcparks.ca/flat-lake-park/",
+    "title": "Flat Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-flores-island-park": {
     "url": "https://bcparks.ca/flores-island-park/",
     "title": "Flores Island Park | BC Parks",
@@ -216,12 +1420,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-foch-gilttoyees-park": {
+    "url": "https://bcparks.ca/foch-gilttoyees-park/",
+    "title": "Foch-Gilttoyees Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-fort-george-canyon-park": {
+    "url": "https://bcparks.ca/fort-george-canyon-park/",
+    "title": "Fort George Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-fossli-park": {
     "url": "https://bcparks.ca/fossli-park/",
     "title": "Fossli Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-francis-point-park": {
+    "url": "https://bcparks.ca/francis-point-park/",
+    "title": "Francis Point Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-francois-lake-park": {
+    "url": "https://bcparks.ca/francois-lake-park/",
+    "title": "Francois Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-fraser-river-breaks-park": {
+    "url": "https://bcparks.ca/fraser-river-breaks-park/",
+    "title": "Fraser River Breaks Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-fraser-river-park": {
+    "url": "https://bcparks.ca/fraser-river-park/",
+    "title": "Fraser River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-fred-antoine-park": {
+    "url": "https://bcparks.ca/fred-antoine-park/",
+    "title": "Fred Antoine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-french-bar-creek-park": {
+    "url": "https://bcparks.ca/french-bar-creek-park/",
+    "title": "French Bar Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-french-beach-park": {
     "url": "https://bcparks.ca/french-beach-park/",
@@ -237,6 +1497,27 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-garden-bay-marine-park": {
+    "url": "https://bcparks.ca/garden-bay-marine-park/",
+    "title": "Garden Bay Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-garibaldi-park": {
+    "url": "https://bcparks.ca/garibaldi-park/",
+    "title": "Garibaldi Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gerald-island-park": {
+    "url": "https://bcparks.ca/gerald-island-park/",
+    "title": "Gerald Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-gibson-marine-park": {
     "url": "https://bcparks.ca/gibson-marine-park/",
     "title": "Gibson Marine Park | BC Parks",
@@ -244,12 +1525,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-gilnockie-park": {
+    "url": "https://bcparks.ca/gilnockie-park/",
+    "title": "Gilnockie Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gilpin-grasslands-park": {
+    "url": "https://bcparks.ca/gilpin-grasslands-park/",
+    "title": "Gilpin Grasslands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gitnadoiks-river-park": {
+    "url": "https://bcparks.ca/gitnadoiks-river-park/",
+    "title": "Gitnadoiks River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gladstone-park": {
+    "url": "https://bcparks.ca/gladstone-park/",
+    "title": "Gladstone Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-goat-range-park": {
+    "url": "https://bcparks.ca/goat-range-park/",
+    "title": "Goat Range Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-god-s-pocket-marine-park": {
+    "url": "https://bcparks.ca/gods-pocket-marine-park/",
+    "title": "God's Pocket Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-gold-muchalat-park": {
     "url": "https://bcparks.ca/gold-muchalat-park/",
     "title": "Gold Muchalat Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-golden-ears-park": {
+    "url": "https://bcparks.ca/golden-ears-park/",
+    "title": "Golden Ears Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-goldpan-park": {
+    "url": "https://bcparks.ca/goldpan-park/",
+    "title": "Goldpan Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-goldstream-park": {
     "url": "https://bcparks.ca/goldstream-park/",
@@ -272,12 +1609,194 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-graham-laurier-park": {
+    "url": "https://bcparks.ca/graham-laurier-park/",
+    "title": "Graham-Laurier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-granby-park": {
+    "url": "https://bcparks.ca/granby-park/",
+    "title": "Granby Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-graystokes-park": {
+    "url": "https://bcparks.ca/graystokes-park/",
+    "title": "Graystokes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-great-glacier-park": {
+    "url": "https://bcparks.ca/great-glacier-park/",
+    "title": "Great Glacier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-inlet-marine-park": {
+    "url": "https://bcparks.ca/green-inlet-marine-park/",
+    "title": "Green Inlet Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-arrowhead-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-black-bear-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-blue-spring-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-boyd-bay-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-buckside-hill-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-emerald-bay-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-green-lake-islands-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-green-lake-park-sunset-view-site": {
+    "url": "https://bcparks.ca/green-lake-park/",
+    "title": "Green Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-greenstone-mountain-park": {
+    "url": "https://bcparks.ca/greenstone-mountain-park/",
+    "title": "Greenstone Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-grohman-narrows-park": {
+    "url": "https://bcparks.ca/grohman-narrows-park/",
+    "title": "Grohman Narrows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gwillim-lake-park": {
+    "url": "https://bcparks.ca/gwillim-lake-park/",
+    "title": "Gwillim Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-gwyneth-lake-park": {
+    "url": "https://bcparks.ca/gwyneth-lake-park/",
+    "title": "Gwyneth Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-hai-lake-mount-herman-park": {
+    "url": "https://bcparks.ca/hai-lake-mount-herman-park/",
+    "title": "Hai Lake – Mount Herman Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-halkett-bay-marine-park": {
+    "url": "https://bcparks.ca/halkett-bay-marine-park/",
+    "title": "Halkett Bay Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-hamber-park": {
+    "url": "https://bcparks.ca/hamber-park/",
+    "title": "Hamber Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-harbour-dudgeon-lakes-park": {
+    "url": "https://bcparks.ca/harbour-dudgeon-lakes-park/",
+    "title": "Harbour-Dudgeon Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-hardy-island-marine-park": {
+    "url": "https://bcparks.ca/hardy-island-marine-park/",
+    "title": "Hardy Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-harmony-islands-marine-park": {
+    "url": "https://bcparks.ca/harmony-islands-marine-park/",
+    "title": "Harmony Islands Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-harry-lake-aspen-park": {
+    "url": "https://bcparks.ca/harry-lake-aspen-park/",
+    "title": "Harry Lake Aspen Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park": {
     "url": "https://bcparks.ca/hathayim-marine-park-aka-von-donop-marine-park/",
     "title": "Háthayim Marine Park [a.k.a. Von Donop Marine Park] | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-heather-dina-lakes-park": {
+    "url": "https://bcparks.ca/heather-dina-lakes-park/",
+    "title": "Heather-Dina Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-height-of-the-rockies-park": {
+    "url": "https://bcparks.ca/height-of-the-rockies-park/",
+    "title": "Height of the Rockies Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-helliwell-park": {
     "url": "https://bcparks.ca/helliwell-park/",
@@ -293,6 +1812,13 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-herald-park": {
+    "url": "https://bcparks.ca/herald-park/",
+    "title": "Herald Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-hesquiat-lake-park": {
     "url": "https://bcparks.ca/hesquiat-lake-park/",
     "title": "Hesquiat Lake Park | BC Parks",
@@ -307,12 +1833,33 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-high-lakes-basin-park": {
+    "url": "https://bcparks.ca/high-lakes-basin-park/",
+    "title": "High Lakes Basin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-hitchie-creek-park": {
     "url": "https://bcparks.ca/hitchie-creek-park/",
     "title": "Hitchie Creek Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-hole-in-the-wall-park": {
+    "url": "https://bcparks.ca/hole-in-the-wall-park/",
+    "title": "Hole-in-the-Wall Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-homathko-estuary-park": {
+    "url": "https://bcparks.ca/homathko-estuary-park/",
+    "title": "Homathko Estuary Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-horne-lake-caves-park": {
     "url": "https://bcparks.ca/horne-lake-caves-park/",
@@ -321,6 +1868,20 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-horneline-creek-park": {
+    "url": "https://bcparks.ca/horneline-creek-park/",
+    "title": "Horneline Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-horsefly-lake-park": {
+    "url": "https://bcparks.ca/horsefly-lake-park/",
+    "title": "Horsefly Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-hwsalu-utsum-park": {
     "url": "https://bcparks.ca/hwsalu-utsum-park/",
     "title": "Hwsalu-utsum Park | BC Parks",
@@ -328,12 +1889,145 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-hyland-river-park": {
+    "url": "https://bcparks.ca/hyland-river-park/",
+    "title": "Hyland River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-inkaneep-park": {
+    "url": "https://bcparks.ca/inkaneep-park/",
+    "title": "Inkaneep Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-inland-lake-park": {
+    "url": "https://bcparks.ca/inland-lake-park/",
+    "title": "Inland Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-inonoaklin-park": {
+    "url": "https://bcparks.ca/inonoaklin-park/",
+    "title": "Inonoaklin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-iskut-river-hot-springs-park": {
+    "url": "https://bcparks.ca/iskut-river-hot-springs-park/",
+    "title": "Iskut River Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-itcha-ilgachuz-park": {
+    "url": "https://bcparks.ca/itcha-ilgachuz-park/",
+    "title": "Itcha Ilgachuz Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-jackman-flats-park": {
+    "url": "https://bcparks.ca/jackman-flats-park/",
+    "title": "Jackman Flats Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-jackson-narrows-marine-park": {
+    "url": "https://bcparks.ca/jackson-narrows-marine-park/",
+    "title": "Jackson Narrows Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-james-chabot-park": {
+    "url": "https://bcparks.ca/james-chabot-park/",
+    "title": "James Chabot Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-jedediah-island-marine-park": {
+    "url": "https://bcparks.ca/jedediah-island-marine-park/",
+    "title": "Jedediah Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-jewel-lake-park": {
+    "url": "https://bcparks.ca/jewel-lake-park/",
+    "title": "Jewel Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-jimsmith-lake-park": {
+    "url": "https://bcparks.ca/jimsmith-lake-park/",
+    "title": "Jimsmith Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-joffre-lakes-park": {
+    "url": "https://bcparks.ca/joffre-lakes-park/",
+    "title": "Joffre Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-johnstone-creek-park": {
+    "url": "https://bcparks.ca/johnstone-creek-park/",
+    "title": "Johnstone Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-juan-de-fuca-park": {
     "url": "https://bcparks.ca/juan-de-fuca-park/",
     "title": "Juan de Fuca Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-junction-sheep-range-park": {
+    "url": "https://bcparks.ca/junction-sheep-range-park/",
+    "title": "Junction Sheep Range Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-juniper-beach-park": {
+    "url": "https://bcparks.ca/juniper-beach-park/",
+    "title": "Juniper Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kakwa-park": {
+    "url": "https://bcparks.ca/kakwa-park/",
+    "title": "Kakwa Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kalamalka-lake-park": {
+    "url": "https://bcparks.ca/kalamalka-lake-park/",
+    "title": "Kalamalka Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kekuli-bay-park": {
+    "url": "https://bcparks.ca/kekuli-bay-park/",
+    "title": "Kekuli Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-kennedy-lake-park": {
     "url": "https://bcparks.ca/kennedy-lake-park/",
@@ -349,12 +2043,103 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-kentucky-alleyne-park": {
+    "url": "https://bcparks.ca/kentucky-alleyne-park/",
+    "title": "Kentucky-Alleyne Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-keremeos-columns-park": {
+    "url": "https://bcparks.ca/keremeos-columns-park/",
+    "title": "Keremeos Columns Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kianuko-park": {
+    "url": "https://bcparks.ca/kianuko-park/",
+    "title": "Kianuko Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kickininee-park": {
+    "url": "https://bcparks.ca/kickininee-park/",
+    "title": "Kickininee Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kikomun-creek-park": {
+    "url": "https://bcparks.ca/kikomun-creek-park/",
+    "title": "Kikomun Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-kin-beach-park": {
     "url": "https://bcparks.ca/kin-beach-park/",
     "title": "Kin Beach Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-kinaskan-lake-park": {
+    "url": "https://bcparks.ca/kinaskan-lake-park/",
+    "title": "Kinaskan Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-king-george-vi-park": {
+    "url": "https://bcparks.ca/king-george-vi-park/",
+    "title": "King George VI Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kingfisher-creek-park": {
+    "url": "https://bcparks.ca/kingfisher-creek-park/",
+    "title": "Kingfisher Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kiskatinaw-park": {
+    "url": "https://bcparks.ca/kiskatinaw-park/",
+    "title": "Kiskatinaw Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kiskatinaw-river-park": {
+    "url": "https://bcparks.ca/kiskatinaw-river-park/",
+    "title": "Kiskatinaw River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kitimat-river-park": {
+    "url": "https://bcparks.ca/kitimat-river-park/",
+    "title": "Kitimat River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kitson-island-marine-park": {
+    "url": "https://bcparks.ca/kitson-island-marine-park/",
+    "title": "Kitson Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kitsumkalum-park": {
+    "url": "https://bcparks.ca/kitsumkalum-park/",
+    "title": "Kitsumkalum Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-kitty-coleman-beach-park": {
     "url": "https://bcparks.ca/kitty-coleman-beach-park/",
@@ -363,12 +2148,152 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-kitwanga-mountain-park": {
+    "url": "https://bcparks.ca/kitwanga-mountain-park/",
+    "title": "Kitwanga Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kleanza-creek-park": {
+    "url": "https://bcparks.ca/kleanza-creek-park/",
+    "title": "Kleanza Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-klewnuggit-inlet-marine-park": {
+    "url": "https://bcparks.ca/klewnuggit-inlet-marine-park/",
+    "title": "Klewnuggit Inlet Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-klin-se-za-park": {
+    "url": "https://bcparks.ca/klin-se-za-park/",
+    "title": "Klin-se-za Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-klinse-za-twin-sisters-park": {
+    "url": "https://bcparks.ca/klinse-za-twin-sisters-park/",
+    "title": "Klinse-za / Twin Sisters Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kluskoil-lake-park": {
+    "url": "https://bcparks.ca/kluskoil-lake-park/",
+    "title": "Kluskoil Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kokanee-creek-park": {
+    "url": "https://bcparks.ca/kokanee-creek-park/",
+    "title": "Kokanee Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kokanee-glacier-park": {
+    "url": "https://bcparks.ca/kokanee-glacier-park/",
+    "title": "Kokanee Glacier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-koksilah-river-park": {
     "url": "https://bcparks.ca/koksilah-river-park/",
     "title": "Koksilah River Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-kootenay-lake-park-campbell-bay-site": {
+    "url": "https://bcparks.ca/kootenay-lake-park/",
+    "title": "Kootenay Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kootenay-lake-park-davis-creek-site": {
+    "url": "https://bcparks.ca/kootenay-lake-park/",
+    "title": "Kootenay Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kootenay-lake-park-lost-ledge-site": {
+    "url": "https://bcparks.ca/kootenay-lake-park/",
+    "title": "Kootenay Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kootenay-lake-park-midge-creek-site": {
+    "url": "https://bcparks.ca/kootenay-lake-park/",
+    "title": "Kootenay Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kotcho-lake-village-site-park": {
+    "url": "https://bcparks.ca/kotcho-lake-village-site-park/",
+    "title": "Kotcho Lake Village Site Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-kwadacha-wilderness-park": {
+    "url": "https://bcparks.ca/kwadacha-wilderness-park/",
+    "title": "Kwadacha Wilderness Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lac-la-hache-park": {
+    "url": "https://bcparks.ca/lac-la-hache-park/",
+    "title": "Lac La Hache Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lac-le-jeune-park": {
+    "url": "https://bcparks.ca/lac-le-jeune-park/",
+    "title": "Lac Le Jeune Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lakelse-lake-park": {
+    "url": "https://bcparks.ca/lakelse-lake-park/",
+    "title": "Lakelse Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lakelse-lake-wetlands-park": {
+    "url": "https://bcparks.ca/lakelse-lake-wetlands-park/",
+    "title": "Lakelse Lake Wetlands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lanz-and-cox-islands-park": {
+    "url": "https://bcparks.ca/lanz-and-cox-islands-park/",
+    "title": "Lanz and Cox Islands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lava-forks-park": {
+    "url": "https://bcparks.ca/lava-forks-park/",
+    "title": "Lava Forks Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-lawn-point-park": {
     "url": "https://bcparks.ca/lawn-point-park/",
@@ -377,12 +2302,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-liard-river-corridor-park": {
+    "url": "https://bcparks.ca/liard-river-corridor-park/",
+    "title": "Liard River Corridor Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-liard-river-hot-springs-park": {
+    "url": "https://bcparks.ca/liard-river-hot-springs-park/",
+    "title": "Liard River Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-liard-river-west-corridor-park": {
+    "url": "https://bcparks.ca/liard-river-west-corridor-park/",
+    "title": "Liard River West Corridor Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-little-andrews-bay-marine-park": {
+    "url": "https://bcparks.ca/little-andrews-bay-marine-park/",
+    "title": "Little Andrews Bay Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-little-qualicum-falls-park": {
     "url": "https://bcparks.ca/little-qualicum-falls-park/",
     "title": "Little Qualicum Falls Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-lockhart-beach-park": {
+    "url": "https://bcparks.ca/lockhart-beach-park/",
+    "title": "Lockhart Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-lockhart-creek-park": {
+    "url": "https://bcparks.ca/lockhart-creek-park/",
+    "title": "Lockhart Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-long-creek-park": {
+    "url": "https://bcparks.ca/long-creek-park/",
+    "title": "Long Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-loon-lake-park": {
+    "url": "https://bcparks.ca/loon-lake-park/",
+    "title": "Loon Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-loveland-bay-park": {
     "url": "https://bcparks.ca/loveland-bay-park/",
@@ -391,6 +2372,13 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-lowe-inlet-marine-park": {
+    "url": "https://bcparks.ca/lowe-inlet-marine-park/",
+    "title": "Lowe Inlet Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-lower-nimpkish-park": {
     "url": "https://bcparks.ca/lower-nimpkish-park/",
     "title": "Lower Nimpkish Park | BC Parks",
@@ -398,12 +2386,26 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-lower-skeena-river-park": {
+    "url": "https://bcparks.ca/lower-skeena-river-park/",
+    "title": "Lower Skeena River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-lower-tsitika-river-park": {
     "url": "https://bcparks.ca/lower-tsitika-river-park/",
     "title": "Lower Tsitika River Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-mabel-lake-park": {
+    "url": "https://bcparks.ca/mabel-lake-park/",
+    "title": "Mabel Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-macmillan-park": {
     "url": "https://bcparks.ca/macmillan-park/",
@@ -419,12 +2421,47 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-malaspina-park": {
+    "url": "https://bcparks.ca/malaspina-park/",
+    "title": "Malaspina Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-mansons-landing-park": {
     "url": "https://bcparks.ca/mansons-landing-park/",
     "title": "Mansons Landing Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-mara-meadows-park": {
+    "url": "https://bcparks.ca/mara-meadows-park/",
+    "title": "Mara Meadows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mara-park": {
+    "url": "https://bcparks.ca/mara-park/",
+    "title": "Mara Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-marble-canyon-park": {
+    "url": "https://bcparks.ca/marble-canyon-park/",
+    "title": "Marble Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-marble-range-park": {
+    "url": "https://bcparks.ca/marble-range-park/",
+    "title": "Marble Range Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-marble-river-park": {
     "url": "https://bcparks.ca/marble-river-park/",
@@ -433,12 +2470,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-marl-creek-park": {
+    "url": "https://bcparks.ca/marl-creek-park/",
+    "title": "Marl Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-martha-creek-park": {
+    "url": "https://bcparks.ca/martha-creek-park/",
+    "title": "Martha Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-maxhamish-lake-park": {
+    "url": "https://bcparks.ca/maxhamish-lake-park/",
+    "title": "Maxhamish Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mcconnell-lake-park": {
+    "url": "https://bcparks.ca/mcconnell-lake-park/",
+    "title": "McConnell Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mcdonald-creek-park": {
+    "url": "https://bcparks.ca/mcdonald-creek-park/",
+    "title": "McDonald Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mehatl-creek-park": {
+    "url": "https://bcparks.ca/mehatl-creek-park/",
+    "title": "Mehatl Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-memory-island-park": {
     "url": "https://bcparks.ca/memory-island-park/",
     "title": "Memory Island Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-meziadin-lake-park": {
+    "url": "https://bcparks.ca/meziadin-lake-park/",
+    "title": "Meziadin Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-milligan-hills-park": {
+    "url": "https://bcparks.ca/milligan-hills-park/",
+    "title": "Milligan Hills Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-miracle-beach-park": {
     "url": "https://bcparks.ca/miracle-beach-park/",
@@ -454,12 +2547,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-moberly-lake-park": {
+    "url": "https://bcparks.ca/moberly-lake-park/",
+    "title": "Moberly Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-momich-lakes-park": {
+    "url": "https://bcparks.ca/momich-lakes-park/",
+    "title": "Momich Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-monashee-park": {
+    "url": "https://bcparks.ca/monashee-park/",
+    "title": "Monashee Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-monck-park": {
+    "url": "https://bcparks.ca/monck-park/",
+    "title": "Monck Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-monkman-park": {
+    "url": "https://bcparks.ca/monkman-park/",
+    "title": "Monkman Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-montague-harbour-marine-park": {
     "url": "https://bcparks.ca/montague-harbour-marine-park/",
     "title": "Montague Harbour Marine Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-monte-creek-park": {
+    "url": "https://bcparks.ca/monte-creek-park/",
+    "title": "Monte Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-monte-lake-park": {
+    "url": "https://bcparks.ca/monte-lake-park/",
+    "title": "Monte Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-moose-valley-park": {
+    "url": "https://bcparks.ca/moose-valley-park/",
+    "title": "Moose Valley Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-morden-colliery-historic-park": {
     "url": "https://bcparks.ca/morden-colliery-historic-park/",
@@ -468,12 +2617,54 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-morice-lake-park": {
+    "url": "https://bcparks.ca/morice-lake-park/",
+    "title": "Morice Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-morrissey-park": {
+    "url": "https://bcparks.ca/morrissey-park/",
+    "title": "Morrissey Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-morton-lake-park": {
     "url": "https://bcparks.ca/morton-lake-park/",
     "title": "Morton Lake Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-mount-assiniboine-park": {
+    "url": "https://bcparks.ca/mount-assiniboine-park/",
+    "title": "Mount Assiniboine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-blanchet-park": {
+    "url": "https://bcparks.ca/mount-blanchet-park/",
+    "title": "Mount Blanchet Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-edziza-park": {
+    "url": "https://bcparks.ca/mount-edziza-park/",
+    "title": "Mount Edziza Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-elphinstone-park": {
+    "url": "https://bcparks.ca/mount-elphinstone-park/",
+    "title": "Mount Elphinstone Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-mount-erskine-park": {
     "url": "https://bcparks.ca/mount-erskine-park/",
@@ -482,12 +2673,26 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-mount-fernie-park": {
+    "url": "https://bcparks.ca/mount-fernie-park/",
+    "title": "Mount Fernie Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-mount-geoffrey-escarpment-park": {
     "url": "https://bcparks.ca/mount-geoffrey-escarpment-park/",
     "title": "Mount Geoffery Escarpment Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/mount-geoffrey-escarpment-park/"
+  },
+  "provincial-mount-griffin-park": {
+    "url": "https://bcparks.ca/mount-griffin-park/",
+    "title": "Mount Griffin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-mount-maxwell-park": {
     "url": "https://bcparks.ca/mount-maxwell-park/",
@@ -496,6 +2701,76 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-mount-pope-park": {
+    "url": "https://bcparks.ca/mount-pope-park/",
+    "title": "Mount Pope Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-richardson-park": {
+    "url": "https://bcparks.ca/mount-richardson-park/",
+    "title": "Mount Richardson Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-robson-park": {
+    "url": "https://bcparks.ca/mount-robson-park/",
+    "title": "Mount Robson Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-savona-park": {
+    "url": "https://bcparks.ca/mount-savona-park/",
+    "title": "Mount Savona Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-seymour-park": {
+    "url": "https://bcparks.ca/mount-seymour-park/",
+    "title": "Mount Seymour Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mount-terry-fox-park": {
+    "url": "https://bcparks.ca/mount-terry-fox-park/",
+    "title": "Mount Terry Fox Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-moyie-lake-park": {
+    "url": "https://bcparks.ca/moyie-lake-park/",
+    "title": "Moyie Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mud-lake-delta-park": {
+    "url": "https://bcparks.ca/mud-lake-delta-park/",
+    "title": "Mud Lake Delta Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-mudzenchoot-park": {
+    "url": "https://bcparks.ca/mudzenchoot-park/",
+    "title": "Mudzenchoot Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-muncho-lake-park": {
+    "url": "https://bcparks.ca/muncho-lake-park/",
+    "title": "Muncho Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-muqqiwn-brooks-peninsula-park": {
     "url": "https://bcparks.ca/muqqiwn-brooks-peninsula-park/",
     "title": "Mᑫuqʷin/Brooks Peninsula Park | BC Parks",
@@ -503,12 +2778,131 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-murrin-park": {
+    "url": "https://bcparks.ca/murrin-park/",
+    "title": "Murrin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-muscovite-lakes-park": {
+    "url": "https://bcparks.ca/muscovite-lakes-park/",
+    "title": "Muscovite Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-myra-bellevue-park": {
+    "url": "https://bcparks.ca/myra-bellevue-park/",
+    "title": "Myra-Bellevue Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nadina-mountain-park": {
+    "url": "https://bcparks.ca/nadina-mountain-park/",
+    "title": "Nadina Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nahatlatch-park": {
+    "url": "https://bcparks.ca/nahatlatch-park/",
+    "title": "Nahatlatch Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-naikoon-park": {
+    "url": "https://bcparks.ca/naikoon-park/",
+    "title": "Naikoon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nairn-falls-park": {
+    "url": "https://bcparks.ca/nairn-falls-park/",
+    "title": "Nairn Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nalbeelah-creek-wetlands-park": {
+    "url": "https://bcparks.ca/nalbeelah-creek-wetlands-park/",
+    "title": "Nalbeelah Creek Wetlands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nancy-greene-park": {
+    "url": "https://bcparks.ca/nancy-greene-park/",
+    "title": "Nancy Greene Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nation-lakes-park": {
+    "url": "https://bcparks.ca/nation-lakes-park/",
+    "title": "Nation Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nazko-lake-park": {
+    "url": "https://bcparks.ca/nazko-lake-park/",
+    "title": "Nazko Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-netalzul-meadows-park": {
+    "url": "https://bcparks.ca/netalzul-meadows-park/",
+    "title": "Netalzul Meadows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nickel-plate-park": {
+    "url": "https://bcparks.ca/nickel-plate-park/",
+    "title": "Nickel Plate Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nicolum-river-park": {
+    "url": "https://bcparks.ca/nicolum-river-park/",
+    "title": "Nicolum River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-nilkitkwa-lake-park": {
+    "url": "https://bcparks.ca/nilkitkwa-lake-park/",
+    "title": "Nilkitkwa Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-nimpkish-lake-park": {
     "url": "https://bcparks.ca/nimpkish-lake-park/",
     "title": "Nimpkish Lake Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-ningunsaw-park": {
+    "url": "https://bcparks.ca/ningunsaw-park/",
+    "title": "Ningunsaw Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-niskonlith-lake-park": {
+    "url": "https://bcparks.ca/niskonlith-lake-park/",
+    "title": "Niskonlith Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-nismaakqin-park": {
     "url": "https://bcparks.ca/nismaakqin-park/",
@@ -524,12 +2918,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-norbury-lake-park": {
+    "url": "https://bcparks.ca/norbury-lake-park/",
+    "title": "Norbury Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-north-thompson-islands-park": {
+    "url": "https://bcparks.ca/north-thompson-islands-park/",
+    "title": "North Thompson Islands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-north-thompson-oxbows-east-park": {
+    "url": "https://bcparks.ca/north-thompson-oxbows-east-park/",
+    "title": "North Thompson Oxbows East Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-north-thompson-oxbows-jensen-island-park": {
+    "url": "https://bcparks.ca/north-thompson-oxbows-jensen-island-park/",
+    "title": "North Thompson Oxbows Jensen Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-north-thompson-oxbows-manteau-park": {
+    "url": "https://bcparks.ca/north-thompson-oxbows-manteau-park/",
+    "title": "North Thompson Oxbows Manteau Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-north-thompson-river-park": {
+    "url": "https://bcparks.ca/north-thompson-river-park/",
+    "title": "North Thompson River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-northern-rocky-mountains-park": {
+    "url": "https://bcparks.ca/northern-rocky-mountains-park/",
+    "title": "Northern Rocky Mountains Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-nuchatlitz-park": {
     "url": "https://bcparks.ca/nuchatlitz-park/",
     "title": "Nuchatlitz Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-nuntsi-park": {
+    "url": "https://bcparks.ca/nuntsi-park/",
+    "title": "Nuntsi Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-octopus-islands-marine-park": {
     "url": "https://bcparks.ca/octopus-islands-marine-park/",
@@ -538,12 +2988,201 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-okanagan-lake-park": {
+    "url": "https://bcparks.ca/okanagan-lake-park/",
+    "title": "Okanagan Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-okanagan-mountain-park": {
+    "url": "https://bcparks.ca/okanagan-mountain-park/",
+    "title": "Okanagan Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-okeover-arm-park": {
+    "url": "https://bcparks.ca/okeover-arm-park/",
+    "title": "Okeover Arm Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-old-man-lake-park": {
+    "url": "https://bcparks.ca/old-man-lake-park/",
+    "title": "Old Man Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-oliver-cove-marine-park": {
+    "url": "https://bcparks.ca/oliver-cove-marine-park/",
+    "title": "Oliver Cove Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-omineca-park": {
+    "url": "https://bcparks.ca/omineca-park/",
+    "title": "Omineca Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-one-island-lake-park": {
+    "url": "https://bcparks.ca/one-island-lake-park/",
+    "title": "One Island Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-oregana-creek-park": {
+    "url": "https://bcparks.ca/oregana-creek-park/",
+    "title": "Oregana Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-oregon-jack-park": {
+    "url": "https://bcparks.ca/oregon-jack-park/",
+    "title": "Oregon Jack Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-otter-lake-park": {
+    "url": "https://bcparks.ca/otter-lake-park/",
+    "title": "Otter Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-owyacumish-river-park": {
+    "url": "https://bcparks.ca/owyacumish-river-park/",
+    "title": "Owyacumish River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-paarens-beach-park": {
+    "url": "https://bcparks.ca/paarens-beach-park/",
+    "title": "Paarens Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-painted-bluffs-park": {
+    "url": "https://bcparks.ca/painted-bluffs-park/",
+    "title": "Painted Bluffs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-patterson-lake-park": {
+    "url": "https://bcparks.ca/patterson-lake-park/",
+    "title": "Patterson Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-paul-lake-park": {
+    "url": "https://bcparks.ca/paul-lake-park/",
+    "title": "Paul Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-peace-arch-park": {
+    "url": "https://bcparks.ca/peace-arch-park/",
+    "title": "Peace Arch Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-peace-river-corridor-park": {
+    "url": "https://bcparks.ca/peace-river-corridor-park/",
+    "title": "Peace River Corridor Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pennask-creek-park": {
+    "url": "https://bcparks.ca/pennask-creek-park/",
+    "title": "Pennask Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pennask-lake-park": {
+    "url": "https://bcparks.ca/pennask-lake-park/",
+    "title": "Pennask Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-penrose-island-marine-park": {
+    "url": "https://bcparks.ca/penrose-island-marine-park/",
+    "title": "Penrose Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-petroglyph-park": {
     "url": "https://bcparks.ca/petroglyph-park/",
     "title": "Petroglyph Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-pillar-park": {
+    "url": "https://bcparks.ca/pillar-park/",
+    "title": "Pillar Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pilot-bay-park": {
+    "url": "https://bcparks.ca/pilot-bay-park/",
+    "title": "Pilot Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pine-le-moray-park": {
+    "url": "https://bcparks.ca/pine-le-moray-park/",
+    "title": "Pine Le Moray Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pine-river-breaks-park": {
+    "url": "https://bcparks.ca/pine-river-breaks-park/",
+    "title": "Pine River Breaks Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pinecone-burke-park": {
+    "url": "https://bcparks.ca/pinecone-burke-park/",
+    "title": "Pinecone Burke Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pink-mountain-park": {
+    "url": "https://bcparks.ca/pink-mountain-park/",
+    "title": "Pink Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pinnacles-park": {
+    "url": "https://bcparks.ca/pinnacles-park/",
+    "title": "Pinnacles Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-pirates-cove-marine-park": {
     "url": "https://bcparks.ca/pirates-cove-marine-park/",
@@ -552,6 +3191,132 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-plumper-cove-marine-park": {
+    "url": "https://bcparks.ca/plumper-cove-marine-park/",
+    "title": "Plumper Cove Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-porcupine-meadows-park": {
+    "url": "https://bcparks.ca/porcupine-meadows-park/",
+    "title": "Porcupine Meadows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-porpoise-bay-park": {
+    "url": "https://bcparks.ca/porpoise-bay-park/",
+    "title": "Porpoise Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-porteau-cove-park": {
+    "url": "https://bcparks.ca/porteau-cove-park/",
+    "title": "Porteau Cove Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-premier-lake-park": {
+    "url": "https://bcparks.ca/premier-lake-park/",
+    "title": "Premier Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-princess-louisa-marine-park": {
+    "url": "https://bcparks.ca/princess-louisa-marine-park/",
+    "title": "Princess Louisa Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pritchard-park": {
+    "url": "https://bcparks.ca/pritchard-park/",
+    "title": "Pritchard Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-prophet-river-hot-springs-park": {
+    "url": "https://bcparks.ca/prophet-river-hot-springs-park/",
+    "title": "Prophet River Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-prophet-river-wayside-park": {
+    "url": "https://bcparks.ca/prophet-river-wayside-park/",
+    "title": "Prophet River Wayside Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-prudhomme-lake-park": {
+    "url": "https://bcparks.ca/prudhomme-lake-park/",
+    "title": "Prudhomme Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ptarmigan-creek-park": {
+    "url": "https://bcparks.ca/ptarmigan-creek-park/",
+    "title": "Ptarmigan Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pukeashun-park": {
+    "url": "https://bcparks.ca/pukeashun-park/",
+    "title": "Pukeashun Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-puntchesakut-lake-park": {
+    "url": "https://bcparks.ca/puntchesakut-lake-park/",
+    "title": "Puntchesakut Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-punti-island-park": {
+    "url": "https://bcparks.ca/punti-island-park/",
+    "title": "Punti Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-purcell-wilderness-conservancy-park": {
+    "url": "https://bcparks.ca/purcell-wilderness-conservancy-park/",
+    "title": "Purcell Wilderness Conservancy Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-purden-lake-park": {
+    "url": "https://bcparks.ca/purden-lake-park/",
+    "title": "Purden Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pure-lake-park": {
+    "url": "https://bcparks.ca/pure-lake-park/",
+    "title": "Pure Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-pyramid-creek-falls-park": {
+    "url": "https://bcparks.ca/pyramid-creek-falls-park/",
+    "title": "Pyramid Creek Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-quatsino-park": {
     "url": "https://bcparks.ca/quatsino-park/",
     "title": "Quatsino Park | BC Parks",
@@ -559,12 +3324,33 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-quesnel-lake-park": {
+    "url": "https://bcparks.ca/quesnel-lake-park/",
+    "title": "Quesnel Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-raft-cove-park": {
     "url": "https://bcparks.ca/raft-cove-park/",
     "title": "Raft Cove Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-rainbow-alley-park": {
+    "url": "https://bcparks.ca/rainbow-alley-park/",
+    "title": "Rainbow Alley Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-rainbow-q-iwentem-park": {
+    "url": "https://bcparks.ca/rainbow-qiwentem-park/",
+    "title": "Rainbow/Q'iwentem Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-rathtrevor-beach-park": {
     "url": "https://bcparks.ca/rathtrevor-beach-park/",
@@ -580,12 +3366,54 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-rearguard-falls-park": {
+    "url": "https://bcparks.ca/rearguard-falls-park/",
+    "title": "Rearguard Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-rebecca-spit-marine-park": {
     "url": "https://bcparks.ca/rebecca-spit-marine-park/",
     "title": "Rebecca Spit Marine Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-red-bluff-park": {
+    "url": "https://bcparks.ca/red-bluff-park/",
+    "title": "Red Bluff Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-redbrush-park": {
+    "url": "https://bcparks.ca/redbrush-park/",
+    "title": "Redbrush Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-redfern-keily-park": {
+    "url": "https://bcparks.ca/redfern-keily-park/",
+    "title": "Redfern-Keily Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-rendezvous-island-south-park": {
+    "url": "https://bcparks.ca/rendezvous-island-south-park/",
+    "title": "Rendezvous Island South Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-roberts-creek-park": {
+    "url": "https://bcparks.ca/roberts-creek-park/",
+    "title": "Roberts Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-roberts-memorial-park": {
     "url": "https://bcparks.ca/roberts-memorial-park/",
@@ -594,6 +3422,13 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-roche-lake-park": {
+    "url": "https://bcparks.ca/roche-lake-park/",
+    "title": "Roche Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-rock-bay-marine-park": {
     "url": "https://bcparks.ca/rock-bay-marine-park/",
     "title": "Rock Bay Marine Park | BC Parks",
@@ -601,12 +3436,54 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-rock-creek-park": {
+    "url": "https://bcparks.ca/rock-creek-park/",
+    "title": "Rock Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-rolley-lake-park": {
+    "url": "https://bcparks.ca/rolley-lake-park/",
+    "title": "Rolley Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-roscoe-bay-park": {
+    "url": "https://bcparks.ca/roscoe-bay-park/",
+    "title": "Roscoe Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-rosebery-park": {
+    "url": "https://bcparks.ca/rosebery-park/",
+    "title": "Rosebery Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-rosewall-creek-park": {
     "url": "https://bcparks.ca/rosewall-creek-park/",
     "title": "Rosewall Creek Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-ross-lake-park": {
+    "url": "https://bcparks.ca/ross-lake-park/",
+    "title": "Ross Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-rubyrock-lake-park": {
+    "url": "https://bcparks.ca/rubyrock-lake-park/",
+    "title": "Rubyrock Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-ruckle-park": {
     "url": "https://bcparks.ca/ruckle-park/",
@@ -622,6 +3499,34 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-ruth-lake-park": {
+    "url": "https://bcparks.ca/ruth-lake-park/",
+    "title": "Ruth Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ryan-park": {
+    "url": "https://bcparks.ca/ryan-park/",
+    "title": "Ryan Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sabine-channel-marine-park": {
+    "url": "https://bcparks.ca/sabine-channel-marine-park/",
+    "title": "Sabine Channel Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-saltery-bay-park": {
+    "url": "https://bcparks.ca/saltery-bay-park/",
+    "title": "Saltery Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-sandwell-park": {
     "url": "https://bcparks.ca/sandwell-park/",
     "title": "Sandwell Park | BC Parks",
@@ -636,12 +3541,40 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-sargeant-bay-park": {
+    "url": "https://bcparks.ca/sargeant-bay-park/",
+    "title": "Sargeant Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sasquatch-park": {
+    "url": "https://bcparks.ca/sasquatch-park/",
+    "title": "Sasquatch Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-say-nuth-khaw-yum-park-a-k-a-indian-arm-park": {
+    "url": "https://bcparks.ca/say-nuth-khaw-yum-park-aka-indian-arm-park/",
+    "title": "Say Nuth Khaw Yum Park [a.k.a. Indian Arm Park] | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-saysutshun-newcastle-island-marine-park": {
     "url": "https://bcparks.ca/saysutshun-newcastle-island-marine-park/",
     "title": "Saysutshun (Newcastle Island Marine) Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-scatter-river-old-growth-park": {
+    "url": "https://bcparks.ca/scatter-river-old-growth-park/",
+    "title": "Scatter River Old Growth Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-schoen-lake-park": {
     "url": "https://bcparks.ca/schoen-lake-park/",
@@ -650,6 +3583,244 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-schoolhouse-lake-park": {
+    "url": "https://bcparks.ca/schoolhouse-lake-park/",
+    "title": "Schoolhouse Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sechelt-inlets-marine-park-piper-point-site": {
+    "url": "https://bcparks.ca/sechelt-inlets-marine-park/",
+    "title": "Sechelt Inlets Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sechelt-inlets-marine-park-skaiakos-point-site": {
+    "url": "https://bcparks.ca/sechelt-inlets-marine-park/",
+    "title": "Sechelt Inlets Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sechelt-inlets-marine-park-thornhill-site": {
+    "url": "https://bcparks.ca/sechelt-inlets-marine-park/",
+    "title": "Sechelt Inlets Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sechelt-inlets-marine-park-tzoonie-narrows-site": {
+    "url": "https://bcparks.ca/sechelt-inlets-marine-park/",
+    "title": "Sechelt Inlets Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-seeley-lake-park": {
+    "url": "https://bcparks.ca/seeley-lake-park/",
+    "title": "Seeley Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-seton-portage-historic-park": {
+    "url": "https://bcparks.ca/seton-portage-historic-park/",
+    "title": "Seton Portage Historic Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-seven-sisters-park": {
+    "url": "https://bcparks.ca/seven-sisters-park/",
+    "title": "Seven Sisters Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shannon-falls-park": {
+    "url": "https://bcparks.ca/shannon-falls-park/",
+    "title": "Shannon Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-albas-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-anstey-view-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-beach-bay-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-encounter-point-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-fowler-point-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-hermit-bay-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-horseshoe-bay-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-swall-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-marine-park-woods-landing-site": {
+    "url": "https://bcparks.ca/shuswap-lake-marine-park/",
+    "title": "Shuswap Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-lake-park": {
+    "url": "https://bcparks.ca/shuswap-lake-park/",
+    "title": "Shuswap Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-shuswap-river-islands-park": {
+    "url": "https://bcparks.ca/shuswap-river-islands-park/",
+    "title": "Shuswap River Islands Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sikanni-chief-canyon-park": {
+    "url": "https://bcparks.ca/sikanni-chief-canyon-park/",
+    "title": "Sikanni Chief Canyon Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sikanni-old-growth-park": {
+    "url": "https://bcparks.ca/sikanni-old-growth-park/",
+    "title": "Sikanni Old Growth Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-silver-beach-park": {
+    "url": "https://bcparks.ca/silver-beach-park/",
+    "title": "Silver Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-silver-lake-park": {
+    "url": "https://bcparks.ca/silver-lake-park/",
+    "title": "Silver Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-silver-star-park": {
+    "url": "https://bcparks.ca/silver-star-park/",
+    "title": "Silver Star Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-simson-park": {
+    "url": "https://bcparks.ca/simson-park/",
+    "title": "Simson Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sir-alexander-mackenzie-park": {
+    "url": "https://bcparks.ca/sir-alexander-mackenzie-park/",
+    "title": "Sir Alexander Mackenzie Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-skagit-valley-park": {
+    "url": "https://bcparks.ca/skagit-valley-park/",
+    "title": "Skagit Valley Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-skaha-bluffs-park": {
+    "url": "https://bcparks.ca/skaha-bluffs-park/",
+    "title": "Skaha Bluffs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-skihist-park": {
+    "url": "https://bcparks.ca/skihist-park/",
+    "title": "Skihist Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-skookumchuck-narrows-park": {
+    "url": "https://bcparks.ca/skookumchuck-narrows-park/",
+    "title": "Skookumchuck Narrows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-skookumchuck-rapids-park": {
+    "url": "https://bcparks.ca/skookumchuck-rapids-park/",
+    "title": "Skookumchuck Rapids Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sleeping-beauty-mountain-park": {
+    "url": "https://bcparks.ca/sleeping-beauty-mountain-park/",
+    "title": "Sleeping Beauty Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-slim-creek-park": {
+    "url": "https://bcparks.ca/slim-creek-park/",
+    "title": "Slim Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-small-inlet-marine-park": {
     "url": "https://bcparks.ca/small-inlet-marine-park/",
     "title": "Small Inlet Marine Park | BC Parks",
@@ -657,12 +3828,33 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-small-river-caves-park": {
+    "url": "https://bcparks.ca/small-river-caves-park/",
+    "title": "Small River Caves Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-smelt-bay-park": {
     "url": "https://bcparks.ca/smelt-bay-park/",
     "title": "Smelt Bay Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-smith-river-falls-fort-halkett-park": {
+    "url": "https://bcparks.ca/smith-river-falls-fort-halkett-park/",
+    "title": "Smith River Falls – Fort Halkett Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-smuggler-cove-marine-park": {
+    "url": "https://bcparks.ca/smuggler-cove-marine-park/",
+    "title": "Smuggler Cove Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-sooke-mountain-park": {
     "url": "https://bcparks.ca/sooke-mountain-park/",
@@ -678,6 +3870,41 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-south-chilcotin-mountains-park": {
+    "url": "https://bcparks.ca/south-chilcotin-mountains-park/",
+    "title": "South Chilcotin Mountains Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-south-texada-island-park": {
+    "url": "https://bcparks.ca/south-texada-island-park/",
+    "title": "South Texada Island Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sowchea-bay-park": {
+    "url": "https://bcparks.ca/sowchea-bay-park/",
+    "title": "Sowchea Bay Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-spatsizi-headwaters-park": {
+    "url": "https://bcparks.ca/spatsizi-headwaters-park/",
+    "title": "Spatsizi Headwaters Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-spatsizi-plateau-wilderness-park": {
+    "url": "https://bcparks.ca/spatsizi-plateau-wilderness-park/",
+    "title": "Spatsizi Plateau Wilderness Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-spectacle-lake-park": {
     "url": "https://bcparks.ca/spectacle-lake-park/",
     "title": "Spectacle Lake Park | BC Parks",
@@ -691,6 +3918,13 @@
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-spipiyus-park": {
+    "url": "https://bcparks.ca/spipiyus-park/",
+    "title": "Spipiyus Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-sproat-lake-park": {
     "url": "https://bcparks.ca/sproat-lake-park/",
@@ -706,12 +3940,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-st-mary-s-alpine-park": {
+    "url": "https://bcparks.ca/st-marys-alpine-park/",
+    "title": "St. Mary's Alpine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stagleap-park": {
+    "url": "https://bcparks.ca/stagleap-park/",
+    "title": "Stagleap Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-stamp-river-park": {
     "url": "https://bcparks.ca/stamp-river-park/",
     "title": "Stamp River Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-stawamus-chief-park": {
+    "url": "https://bcparks.ca/stawamus-chief-park/",
+    "title": "Stawamus Chief Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-steelhead-park": {
+    "url": "https://bcparks.ca/steelhead-park/",
+    "title": "Steelhead Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stein-valley-nlaka-pamux-heritage-park": {
+    "url": "https://bcparks.ca/stein-valley-nlakapamux-heritage-park/",
+    "title": "Stein Valley Nlaka'pamux Heritage Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stemwinder-park": {
+    "url": "https://bcparks.ca/stemwinder-park/",
+    "title": "Stemwinder Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stikine-river-park": {
+    "url": "https://bcparks.ca/stikine-river-park/",
+    "title": "Stikine River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stone-mountain-park": {
+    "url": "https://bcparks.ca/stone-mountain-park/",
+    "title": "Stone Mountain Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-strathcona-park": {
     "url": "https://bcparks.ca/strathcona-park/",
@@ -727,12 +4017,61 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-stuart-lake-marine-park": {
+    "url": "https://bcparks.ca/stuart-lake-marine-park/",
+    "title": "Stuart Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-stuart-lake-park": {
+    "url": "https://bcparks.ca/stuart-lake-park/",
+    "title": "Stuart Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sue-channel-park": {
+    "url": "https://bcparks.ca/sue-channel-park/",
+    "title": "Sue Channel Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sugarbowl-grizzly-den-park": {
+    "url": "https://bcparks.ca/sugarbowl-grizzly-den-park/",
+    "title": "Sugarbowl-Grizzly Den Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sukunka-falls-park": {
+    "url": "https://bcparks.ca/sukunka-falls-park/",
+    "title": "Sukunka Falls Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-sulphur-passage-park": {
     "url": "https://bcparks.ca/sulphur-passage-park/",
     "title": "Sulphur Passage Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-summit-lake-park": {
+    "url": "https://bcparks.ca/summit-lake-park/",
+    "title": "Summit Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sun-oka-beach-park": {
+    "url": "https://bcparks.ca/sun-oka-beach-park/",
+    "title": "Sun-Oka Beach Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-surge-narrows-park": {
     "url": "https://bcparks.ca/surge-narrows-park/",
@@ -741,12 +4080,75 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-sustut-park": {
+    "url": "https://bcparks.ca/sustut-park/",
+    "title": "Sustut Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sutherland-river-park": {
+    "url": "https://bcparks.ca/sutherland-river-park/",
+    "title": "Sutherland River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-swan-lake-kispiox-river-park": {
+    "url": "https://bcparks.ca/swan-lake-kispiox-river-park/",
+    "title": "Swan Lake Kispiox River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-swan-lake-park": {
+    "url": "https://bcparks.ca/swan-lake-park/",
+    "title": "Swan Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-swiws-park": {
+    "url": "https://bcparks.ca/swiws-park/",
+    "title": "sẁiẁs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sxotsaqel-chilliwack-lake-park": {
+    "url": "https://bcparks.ca/sxotsaqel-chilliwack-lake-park/",
+    "title": "Sx̱ótsaqel/Chilliwack Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-sxwexwnitkw-park": {
+    "url": "https://bcparks.ca/sxwexwnitkw-park/",
+    "title": "sx̌ʷəx̌ʷnitkʷ Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-sydney-inlet-park": {
     "url": "https://bcparks.ca/sydney-inlet-park/",
     "title": "Sydney Inlet Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-syringa-park": {
+    "url": "https://bcparks.ca/syringa-park/",
+    "title": "Syringa Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ta-ch-ila-park-a-k-a-boya-lake-park": {
+    "url": "https://bcparks.ca/ta-chila-park-aka-boya-lake-park/",
+    "title": "Tā Ch'ilā Park [a.k.a. Boya Lake Park] | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-tahsish-kwois-park": {
     "url": "https://bcparks.ca/tahsish-kwois-park/",
@@ -755,12 +4157,89 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-takla-lake-marine-park": {
+    "url": "https://bcparks.ca/takla-lake-marine-park/",
+    "title": "Takla Lake Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tantalus-park": {
+    "url": "https://bcparks.ca/tantalus-park/",
+    "title": "Tantalus Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tarahne-park": {
+    "url": "https://bcparks.ca/tarahne-park/",
+    "title": "Tarahne Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tatlatui-park": {
+    "url": "https://bcparks.ca/tatlatui-park/",
+    "title": "Tatlatui Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tatshenshini-alsek-park": {
+    "url": "https://bcparks.ca/tatshenshini-alsek-park/",
+    "title": "Tatshenshini-Alsek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-taweel-park": {
+    "url": "https://bcparks.ca/taweel-park/",
+    "title": "Taweel Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-taylor-arm-park": {
     "url": "https://bcparks.ca/taylor-arm-park/",
     "title": "Taylor Arm Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-teakerne-arm-park": {
+    "url": "https://bcparks.ca/teakerne-arm-park/",
+    "title": "Teakerne Arm Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-ten-mile-lake-park": {
+    "url": "https://bcparks.ca/ten-mile-lake-park/",
+    "title": "Ten Mile Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tetrahedron-park": {
+    "url": "https://bcparks.ca/tetrahedron-park/",
+    "title": "Tetrahedron Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-three-sisters-lakes-park": {
+    "url": "https://bcparks.ca/three-sisters-lakes-park/",
+    "title": "Three Sisters Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-thunder-hill-park": {
+    "url": "https://bcparks.ca/thunder-hill-park/",
+    "title": "Thunder Hill Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-thurston-bay-marine-park": {
     "url": "https://bcparks.ca/thurston-bay-marine-park/",
@@ -769,12 +4248,68 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-titetown-park": {
+    "url": "https://bcparks.ca/titetown-park/",
+    "title": "Titetown Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-toad-river-hot-springs-park": {
+    "url": "https://bcparks.ca/toad-river-hot-springs-park/",
+    "title": "Toad River Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-todagin-south-slope-park": {
+    "url": "https://bcparks.ca/todagin-south-slope-park/",
+    "title": "Todagin South Slope Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-top-of-the-world-park": {
+    "url": "https://bcparks.ca/top-of-the-world-park/",
+    "title": "Top of the World Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-topley-landing-park": {
+    "url": "https://bcparks.ca/topley-landing-park/",
+    "title": "Topley Landing Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tplaqin-enderby-cliffs-park": {
+    "url": "https://bcparks.ca/tplaqin-enderby-cliffs-park/",
+    "title": "Tplaqín / Enderby Cliffs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-tranquil-creek-park": {
     "url": "https://bcparks.ca/tranquil-creek-park/",
     "title": "Tranquil Creek Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-trembleur-lake-park": {
+    "url": "https://bcparks.ca/trembleur-lake-park/",
+    "title": "Trembleur Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-trepanier-park": {
+    "url": "https://bcparks.ca/trepanier-park/",
+    "title": "Trepanier Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-tribune-bay-park": {
     "url": "https://bcparks.ca/tribune-bay-park/",
@@ -783,12 +4318,131 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-ts-il-os-park": {
+    "url": "https://bcparks.ca/tsilos-park/",
+    "title": "Ts'ilɂos Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tsintsunko-lakes-park": {
+    "url": "https://bcparks.ca/tsintsunko-lakes-park/",
+    "title": "Tsintsunko Lakes Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tsutswecw-park": {
+    "url": "https://bcparks.ca/tsutswecw-park/",
+    "title": "Tsútswecw Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tudyah-lake-park": {
+    "url": "https://bcparks.ca/tudyah-lake-park/",
+    "title": "Tudyah Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tunkwa-park": {
+    "url": "https://bcparks.ca/tunkwa-park/",
+    "title": "Tunkwa Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tuya-mountains-park": {
+    "url": "https://bcparks.ca/tuya-mountains-park/",
+    "title": "Tuya Mountains Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tweedsmuir-park": {
+    "url": "https://bcparks.ca/tweedsmuir-park/",
+    "title": "Tweedsmuir Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-tyhee-lake-park": {
+    "url": "https://bcparks.ca/tyhee-lake-park/",
+    "title": "Tyhee Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-uncha-mountain-red-hills-park": {
+    "url": "https://bcparks.ca/uncha-mountain-red-hills-park/",
+    "title": "Uncha Mountain Red Hills Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-union-passage-marine-park": {
+    "url": "https://bcparks.ca/union-passage-marine-park/",
+    "title": "Union Passage Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-upper-adams-river-park": {
+    "url": "https://bcparks.ca/upper-adams-river-park/",
+    "title": "Upper Adams River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-upper-lillooet-park": {
+    "url": "https://bcparks.ca/upper-lillooet-park/",
+    "title": "Upper Lillooet Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-upper-seymour-river-park": {
+    "url": "https://bcparks.ca/upper-seymour-river-park/",
+    "title": "Upper Seymour River Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-upper-violet-creek-park": {
+    "url": "https://bcparks.ca/upper-violet-creek-park/",
+    "title": "Upper Violet Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-valhalla-park": {
+    "url": "https://bcparks.ca/valhalla-park/",
+    "title": "Valhalla Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-vargas-island-park": {
     "url": "https://bcparks.ca/vargas-island-park/",
     "title": "Vargas Island Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-vaseux-lake-park": {
+    "url": "https://bcparks.ca/vaseux-lake-park/",
+    "title": "Vaseux Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-victor-lake-park": {
+    "url": "https://bcparks.ca/victor-lake-park/",
+    "title": "Victor Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-wakes-cove-park": {
     "url": "https://bcparks.ca/wakes-cove-park/",
@@ -797,12 +4451,96 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-walhachin-oxbows-park": {
+    "url": "https://bcparks.ca/walhachin-oxbows-park/",
+    "title": "Walhachin Oxbows Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-wallace-island-marine-park": {
     "url": "https://bcparks.ca/wallace-island-marine-park/",
     "title": "Wallace Island Marine Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-walloper-lake-park": {
+    "url": "https://bcparks.ca/walloper-lake-park/",
+    "title": "Walloper Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-walsh-cove-park": {
+    "url": "https://bcparks.ca/walsh-cove-park/",
+    "title": "Walsh Cove Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wap-creek-park": {
+    "url": "https://bcparks.ca/wap-creek-park/",
+    "title": "Wap Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wapiti-lake-park": {
+    "url": "https://bcparks.ca/wapiti-lake-park/",
+    "title": "Wapiti Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wardner-park": {
+    "url": "https://bcparks.ca/wardner-park/",
+    "title": "Wardner Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wasa-lake-park": {
+    "url": "https://bcparks.ca/wasa-lake-park/",
+    "title": "Wasa Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-weewanie-hot-springs-park": {
+    "url": "https://bcparks.ca/weewanie-hot-springs-park/",
+    "title": "Weewanie Hot Springs Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wells-gray-park": {
+    "url": "https://bcparks.ca/wells-gray-park/",
+    "title": "Wells Gray Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wendle-park": {
+    "url": "https://bcparks.ca/wendle-park/",
+    "title": "Wendle Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-west-arm-park": {
+    "url": "https://bcparks.ca/west-arm-park/",
+    "title": "West Arm Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-west-lake-park": {
+    "url": "https://bcparks.ca/west-lake-park/",
+    "title": "West Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-west-shawnigan-lake-park": {
     "url": "https://bcparks.ca/west-shawnigan-lake-park/",
@@ -811,12 +4549,47 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-west-twin-park": {
+    "url": "https://bcparks.ca/west-twin-park/",
+    "title": "West Twin Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-weymer-creek-park": {
     "url": "https://bcparks.ca/weymer-creek-park/",
     "title": "Weymer Creek Park | BC Parks",
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-whaleboat-island-marine-park": {
+    "url": "https://bcparks.ca/whaleboat-island-marine-park/",
+    "title": "Whaleboat Island Marine Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-whiskers-point-park": {
+    "url": "https://bcparks.ca/whiskers-point-park/",
+    "title": "Whiskers Point Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-white-lake-park": {
+    "url": "https://bcparks.ca/white-lake-park/",
+    "title": "White Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-white-pelican-park": {
+    "url": "https://bcparks.ca/white-pelican-park/",
+    "title": "White Pelican Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "provincial-white-ridge-park": {
     "url": "https://bcparks.ca/white-ridge-park/",
@@ -832,6 +4605,34 @@
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
   },
+  "provincial-whiteswan-lake-park": {
+    "url": "https://bcparks.ca/whiteswan-lake-park/",
+    "title": "Whiteswan Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-windermere-lake-park": {
+    "url": "https://bcparks.ca/windermere-lake-park/",
+    "title": "Windermere Lake Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wire-cache-park": {
+    "url": "https://bcparks.ca/wire-cache-park/",
+    "title": "Wire Cache Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-wistaria-park": {
+    "url": "https://bcparks.ca/wistaria-park/",
+    "title": "Wistaria Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
   "provincial-wood-mountain-ski-park": {
     "url": "https://bcparks.ca/wood-mountain-ski-park/",
     "title": "Wood Mountain Ski Park | BC Parks",
@@ -845,6 +4646,34 @@
     "authority": "BC Parks",
     "verifiedAt": "2026-09-12",
     "evidenceUrl": "https://bcparks.ca/find-a-park/a-z-list/"
+  },
+  "provincial-wrinkly-face-park": {
+    "url": "https://bcparks.ca/wrinkly-face-park/",
+    "title": "Wrinkly Face Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-yahk-park": {
+    "url": "https://bcparks.ca/yahk-park/",
+    "title": "Yahk Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-yalakom-park": {
+    "url": "https://bcparks.ca/yalakom-park/",
+    "title": "Yalakom Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
+  },
+  "provincial-yard-creek-park": {
+    "url": "https://bcparks.ca/yard-creek-park/",
+    "title": "Yard Creek Park | BC Parks",
+    "authority": "BC Parks",
+    "verifiedAt": "2026-09-23",
+    "evidenceUrl": "https://bcparks.api.gov.bc.ca/graphql"
   },
   "regional-albert-head-lagoon-regional-park": {
     "url": "https://www.crd.ca/parks-recreation/find-park-or-trail/albert-head-lagoon-regional-park",

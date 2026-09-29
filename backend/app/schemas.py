@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-PlaceCategory = Literal["national", "provincial", "regional", "island"]
+from backend.app.place_categories import PlaceCategory
+from backend.app.visitor_details import PlaceVisitorDetails
 
 
 def normalize_address(value: EmailStr) -> str:
@@ -26,11 +27,17 @@ class Place(BaseModel):
     source_url: str = Field(serialization_alias="sourceUrl")
     source_name: str = Field(serialization_alias="sourceName")
     source_id: str | None = Field(default=None, serialization_alias="sourceId")
+    visitor_details: PlaceVisitorDetails | None = Field(
+        default=None,
+        serialization_alias="visitorDetails",
+        exclude_if=lambda value: value is None,
+    )
 
 
 class VisitClaimCapability(BaseModel):
     supported: bool = True
     enforcement: Literal["compatible", "required"]
+    offline_supported: bool = Field(default=False, serialization_alias="offlineSupported")
 
 
 class PlaceCollection(BaseModel):
@@ -52,6 +59,84 @@ class PlaceSearchResult(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class CatalogueSearchPlace(SearchPlace):
+    priority_tier: int = Field(serialization_alias="priorityTier")
+    priority_key: str = Field(serialization_alias="priorityKey")
+    authority: str
+    list_region: str = Field(serialization_alias="listRegion")
+
+
+class CatalogueSearchResult(BaseModel):
+    places: list[CatalogueSearchPlace]
+    total: int
+    limit: int
+    offset: int
+
+
+class MapPlaceSummary(BaseModel):
+    id: str
+    name: str
+    category: PlaceCategory
+    latitude: float
+    longitude: float
+    region: str
+    source_url: str = Field(serialization_alias="sourceUrl")
+    source_name: str = Field(serialization_alias="sourceName")
+    source_id: str | None = Field(default=None, serialization_alias="sourceId")
+    authority: str
+    list_region: str = Field(serialization_alias="listRegion")
+    visited: bool
+    priority_tier: int = Field(serialization_alias="priorityTier")
+    priority_key: str = Field(serialization_alias="priorityKey")
+
+
+class MapPlacesResult(BaseModel):
+    places: list[MapPlaceSummary]
+    total: int
+    limit: int
+
+
+class Achievement(BaseModel):
+    id: str
+    name: str
+    species: str
+    description: str
+    required_place_ids: list[str] | None = Field(
+        default=None,
+        serialization_alias="requiredPlaceIds",
+        exclude_if=lambda value: value is None,
+    )
+    required_places: list[dict[str, str]] | None = Field(
+        default=None,
+        serialization_alias="requiredPlaces",
+        exclude_if=lambda value: value is None,
+    )
+    current: int
+    target: int
+    earned: bool
+    earned_at: datetime | None = Field(
+        default=None,
+        serialization_alias="earnedAt",
+        exclude_if=lambda value: value is None,
+    )
+
+
+class CatalogueState(BaseModel):
+    total: int
+    category_totals: dict[str, int] = Field(serialization_alias="categoryTotals")
+    visited_category_totals: dict[str, int] = Field(
+        serialization_alias="visitedCategoryTotals"
+    )
+    visited_ids: list[str] = Field(serialization_alias="visitedIds")
+    visits: list["Visit"]
+    completed_trail_ids: list[str] = Field(
+        default_factory=list, serialization_alias="completedTrailIds"
+    )
+    coverage_note: str = Field(serialization_alias="coverageNote")
+    visit_claims: "VisitClaimCapability" = Field(serialization_alias="visitClaims")
+    badges: list[Achievement]
 
 
 class GroupCreate(BaseModel):
@@ -159,6 +244,27 @@ class CreateClaimResponse(BaseModel):
     visited_count: int = Field(serialization_alias="visitedCount")
     visited_at: datetime = Field(serialization_alias="visitedAt")
     claim: VisitClaim
+
+
+class OfflineClaimGrantResponse(BaseModel):
+    grant_token: str = Field(serialization_alias="grantToken")
+    issued_at: datetime = Field(serialization_alias="issuedAt")
+    expires_at: datetime = Field(serialization_alias="expiresAt")
+    boundary_version: str = Field(serialization_alias="boundaryVersion")
+
+
+class OfflineClaimRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    requestId: UUID
+    grantToken: str = Field(min_length=43, max_length=43)
+    expectedPlaceId: str = Field(min_length=1, max_length=200)
+    location: ClaimLocation
+
+
+class OfflinePlaceBundle(BaseModel):
+    place: Place
+    boundary: dict[str, Any] | None
+    boundary_version: str = Field(serialization_alias="boundaryVersion")
 
 
 class VisitPhoto(BaseModel):

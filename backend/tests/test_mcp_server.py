@@ -4,6 +4,7 @@ import httpx
 from mcp import Client
 
 import backend.app.mcp_server as mcp_server
+from backend.app.place_categories import PLACE_CATEGORIES
 from backend.app.mcp_server import ParkdexClient, keyring_user, logout_session, mcp, normalize_origin, session_token
 from backend.app.schemas import GroupCreate, GroupPlaceMutation
 
@@ -81,12 +82,31 @@ def test_mcp_tool_schemas_publish_filters_and_bounds() -> None:
 
     tools = asyncio.run(schemas())
     search = tools["search_places"]["properties"]
-    assert search["type"]["anyOf"][0]["enum"] == ["national", "provincial", "regional", "island"]
+    assert search["type"]["anyOf"][0]["enum"] == list(PLACE_CATEGORIES)
     assert search["latitude"]["anyOf"][0] == {"maximum": 90.0, "minimum": -90.0, "type": "number"}
     assert search["radius_km"]["anyOf"][0]["exclusiveMinimum"] == 0.0
     assert search["limit"]["minimum"] == 1
     assert search["limit"]["maximum"] == 100
     assert tools["add_places_to_group"]["properties"]["place_ids"]["maxItems"] == 100
+
+
+@pytest.mark.parametrize("category", ["municipal", "community"])
+def test_mcp_place_response_parses_local_park_categories(category: str) -> None:
+    place = mcp_server._place_output(
+        {
+            "id": f"{category}-fixture",
+            "name": f"{category.title()} Fixture",
+            "category": category,
+            "latitude": 49.0,
+            "longitude": -124.0,
+            "region": "Test Region",
+            "description": "",
+            "source_url": "https://example.test/place",
+            "source_name": "Test fixture",
+            "source_id": None,
+        }
+    )
+    assert place["category"] == category
 
 
 def test_logout_removes_scoped_keyring_entry_when_server_revocation_fails(monkeypatch) -> None:

@@ -1,0 +1,206 @@
+.visitInfo > h3 {
+  margin-bottom: 9px;
+}
+
+.sourceLine {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 0 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sourceLine > span {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.sourceLink,
+.contentLink,
+.paragraphs a {
+  color: var(--water);
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.disclosures {
+  margin-top: 12px;
+}
+
+.disclosure,
+.overviewDisclosure {
+  border-top: 1px solid #e3e9dd;
+}
+
+.disclosure:last-child {
+  border-bottom: 1px solid #e3e9dd;
+}
+
+.disclosure > summary,
+.overviewDisclosure > summary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 2px;
+  color: var(--forest);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 850;
+  list-style: none;
+}
+
+.disclosure > summary::-webkit-details-marker,
+.overviewDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure > summary svg,
+.overviewDisclosure > summary svg {
+  flex: 0 0 auto;
+  color: var(--water);
+  transition: transform 150ms ease-out;
+}
+
+.disclosure[open] > summary svg,
+.overviewDisclosure[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.disclosure > summary:focus-visible,
+.overviewDisclosure > summary:focus-visible {
+  border-radius: 5px;
+  outline: 3px solid var(--water);
+  outline-offset: 2px;
+}
+
+.sectionBody {
+  padding: 0 2px 15px;
+  color: var(--forest-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.fields {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.field dt {
+  margin: 0 0 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.paragraphs p,
+.field dd > p,
+.nameList p {
+  margin: 0 0 7px;
+}
+
+.paragraphs p:last-child,
+.nameList p:last-child {
+  margin-bottom: 0;
+}
+
+.nameList,
+.entryPoints {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nameList > li,
+.entryPoints > li {
+  display: grid;
+  gap: 3px;
+}
+
+.nameList > li + li,
+.entryPoints > li + li {
+  padding-top: 11px;
+  border-top: 1px solid #e3e9dd;
+}
+
+.nameList strong,
+.entryPoints strong {
+  color: var(--forest);
+  font-weight: 850;
+}
+
+.availability {
+  margin: 1px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.entryPoints span,
+.secondaryText {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.inlineFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 7px 0;
+}
+
+.inlineFacts .field {
+  min-width: max-content;
+}
+
+.inlineFacts .field dt {
+  margin-bottom: 0;
+}
+
+.inlineFacts .field dd {
+  color: var(--forest);
+  font-weight: 750;
+}
+
+.overviewDisclosure {
+  margin-top: 4px;
+}
+
+.overviewDisclosure > summary {
+  min-height: 48px;
+  color: var(--water);
+  font-size: 12px;
+}
+
+.overviewDisclosure > .paragraphs {
+  padding: 0 2px 15px;
+  color: var(--forest-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.overviewDisclosure .paragraphs p + p {
+  margin-top: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosure > summary svg,
+  .overviewDisclosure > summary svg {
+    transition: none;
+  }
+}

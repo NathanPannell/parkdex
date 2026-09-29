@@ -22,7 +22,7 @@ This link expires in 1 hour and can be used once. Requesting another verificatio
 Didn't create a Parkdex account? You can safely ignore this email.
 
 — Parkdex
-A completionist map of Vancouver Island
+A completionist map of British Columbia
 """
     assert "\n\n\n" not in email.text
     assert f'href="{url}"' in email.html
@@ -30,6 +30,7 @@ A completionist map of Vancouver Island
     assert "Button not working?" in email.html
     assert "ACCOUNT SETUP" in email.html
     assert 'aria-hidden="true"' in email.html
+    assert "A completionist map of British Columbia" in email.html
 
 
 def test_password_reset_email_is_clear_about_ignored_requests() -> None:
@@ -56,12 +57,13 @@ Choosing a new password signs out active sessions on this account.
 Didn't request a password reset? You can ignore this email. Your password will not change unless you use the link and choose a new one.
 
 — Parkdex
-A completionist map of Vancouver Island
+A completionist map of British Columbia
 """
     assert f'href="{url}"' in email.html
     assert ">Reset password</a>" in email.html
     assert "ACCOUNT SECURITY" in email.html
     assert "v:roundrect" in email.html
+    assert "A completionist map of British Columbia" in email.html
 
 
 def test_auth_email_escapes_action_url_in_html() -> None:

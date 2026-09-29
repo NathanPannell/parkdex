@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Parkdex photo review</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h1>Parkdex photo review</h1>
+      </div>
+      <div class="header-progress" aria-live="polite">
+        <p id="progress-label">Loading shortlist...</p>
+        <div class="progress-track"><div id="progress-fill"></div></div>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="place-rail" aria-label="Park queue">
+        <div class="rail-top">
+          <label class="field-label" for="place-search">Find a park</label>
+          <input id="place-search" type="search" placeholder="Search 134 parks" autocomplete="off">
+          <div class="filter-row" role="group" aria-label="Filter parks">
+            <button class="filter-button is-active" type="button" data-filter="all" aria-pressed="true">All</button>
+            <button class="filter-button" type="button" data-filter="pending" aria-pressed="false">To review</button>
+            <button class="filter-button" type="button" data-filter="approved" aria-pressed="false">Approved</button>
+            <button class="filter-button" type="button" data-filter="rejected" aria-pressed="false">Rejected</button>
+          </div>
+          <p id="rail-count" class="rail-count"></p>
+        </div>
+        <nav id="place-list" class="place-list" aria-label="Parks"></nav>
+      </aside>
+
+      <main class="review-main" id="main-content">
+        <div id="loading-state" class="loading-state">Loading the shortlist and saved decisions...</div>
+        <div id="error-state" class="error-state" role="alert" hidden>
+          <h2>The review could not load</h2>
+          <p id="error-message"></p>
+          <button id="retry-button" class="outline-button" type="button">Try again</button>
+        </div>
+
+        <div id="review-content" hidden>
+          <div class="review-toolbar">
+            <label class="mobile-picker-label" for="mobile-place-picker">Park</label>
+            <select id="mobile-place-picker" aria-label="Choose a park"></select>
+            <div class="park-navigation">
+              <button id="previous-park" class="outline-button" type="button" aria-label="Previous park">Previous</button>
+              <span id="park-position" aria-live="polite"></span>
+              <button id="next-park" class="outline-button" type="button" aria-label="Next park">Next</button>
+            </div>
+          </div>
+
+          <section class="place-heading" aria-labelledby="place-name">
+            <div>
+              <h2 id="place-name"></h2>
+              <p id="place-summary"></p>
+            </div>
+            <span id="place-status" class="place-status"></span>
+          </section>
+
+          <div class="guidance">
+            <strong>Choose what is worth keeping.</strong>
+            <span>Approvals are saved locally for a later source, location, and license check. Nothing is published from this page.</span>
+          </div>
+
+          <div id="candidate-grid" class="candidate-grid"></div>
+
+          <footer class="review-footer">
+            <div>
+              <h2>Your review is saved locally</h2>
+              <p id="save-path"></p>
+            </div>
+            <div class="export-actions">
+              <a class="outline-button" href="/api/export?status=approved" download="photo-review-approved.csv">Approved CSV</a>
+              <a class="outline-button" href="/api/export?status=rejected" download="photo-review-rejected.csv">Rejected CSV</a>
+              <a class="outline-button" href="/api/export?status=all" download="photo-review-decisions.json">All decisions</a>
+            </div>
+          </footer>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

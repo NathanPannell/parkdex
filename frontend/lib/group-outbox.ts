@@ -121,6 +121,10 @@ export class GroupOutbox {
   async clearAndWait(): Promise<void> {
     this.entries = {};
     this.latestIntent = {};
+    await this.waitForActive();
+  }
+
+  async waitForActive(): Promise<void> {
     await Promise.allSettled([...this.active.values()]);
   }
 

@@ -1,8 +1,13 @@
 from pathlib import Path
+import os
+from uuid import uuid4
+
+import psycopg
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_DIR = ROOT / "database" / "migrations"
+LOCAL_CATEGORIES_MIGRATION = MIGRATION_DIR / "0028_expand_local_park_categories.sql"
 
 
 def test_claim_migrations_follow_current_schema_and_are_additive():
@@ -89,3 +94,91 @@ def test_claim_migrations_do_not_rewrite_or_remove_existing_schema_objects():
         sql = (MIGRATION_DIR / name).read_text(encoding="utf-8").upper()
         assert "DROP TABLE" not in sql
         assert "DROP COLUMN" not in sql
+
+
+def test_offline_claim_migration_is_additive_and_account_scoped():
+    sql = (MIGRATION_DIR / "0025_add_offline_claims.sql").read_text(
+        encoding="utf-8"
+    )
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_grants" in sql
+    assert "token_hash CHAR(64) PRIMARY KEY" in sql
+    assert "REFERENCES accounts(id) ON DELETE CASCADE" in sql
+    assert "boundary_version CHAR(64) NOT NULL" in sql
+    assert "INTERVAL '30 days'" in sql
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_requests" in sql
+    assert "PRIMARY KEY (account_id, request_id)" in sql
+    assert "request_fingerprint CHAR(64) NOT NULL" in sql
+    assert "confirmation JSONB NOT NULL" in sql
+    assert "invalidated_at TIMESTAMPTZ" in sql
+    assert "CREATE TABLE IF NOT EXISTS offline_claim_undo_tombstones" in sql
+    assert "PRIMARY KEY (account_id, place_id)" in sql
+    assert "REFERENCES accounts(id) ON DELETE CASCADE" in sql
+    assert "place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE" in sql
+    assert "undone_at TIMESTAMPTZ NOT NULL DEFAULT NOW()" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "DROP COLUMN" not in sql.upper()
+
+
+def test_local_category_migration_preserves_visits_and_accepts_both_categories():
+    sql = LOCAL_CATEGORIES_MIGRATION.read_text(encoding="utf-8")
+    assert "DROP CONSTRAINT IF EXISTS places_category_check" in sql
+    assert "ADD CONSTRAINT places_category_check" in sql
+    for category in ("national", "provincial", "regional", "island", "municipal", "community"):
+        assert f"'{category}'" in sql
+    assert "visits" not in sql.lower()
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        return
+
+    place_id = f"category-migration-{uuid4().hex}"
+    owner_hash = uuid4().hex * 2
+    try:
+        with psycopg.connect(database_url) as conn:
+            conn.execute(
+                """INSERT INTO places (
+                    id, name, category, latitude, longitude, region, description,
+                    source_url, source_name
+                ) VALUES (%s, 'Pre-migration fixture', 'regional', 49, -124,
+                          'Test Region', '', 'https://example.test/place',
+                          'Test fixture')""",
+                (place_id,),
+            )
+            conn.execute(
+                "INSERT INTO visits (owner_hash, place_id) VALUES (%s, %s)",
+                (owner_hash, place_id),
+            )
+            conn.execute(sql)
+
+            assert conn.execute(
+                "SELECT id, category FROM places WHERE id = %s", (place_id,)
+            ).fetchone() == (place_id, "regional")
+            assert conn.execute(
+                "SELECT owner_hash, place_id FROM visits WHERE owner_hash = %s",
+                (owner_hash,),
+            ).fetchone() == (owner_hash, place_id)
+            conn.cursor().executemany(
+                """INSERT INTO places (
+                    id, name, category, latitude, longitude, region, description,
+                    source_url, source_name
+                ) VALUES (%s, %s, %s, 49, -124, 'Test Region', '',
+                          'https://example.test/place', 'Test fixture')""",
+                [
+                    (f"{category}-{place_id}", f"{category.title()} Fixture", category)
+                    for category in ("municipal", "community")
+                ],
+            )
+            assert conn.execute(
+                "SELECT category FROM places WHERE id = ANY(%s) ORDER BY category",
+                ([f"municipal-{place_id}", f"community-{place_id}"],),
+            ).fetchall() == [("community",), ("municipal",)]
+            conn.rollback()
+    finally:
+        with psycopg.connect(database_url) as conn:
+            conn.execute("DELETE FROM places WHERE id = %s", (place_id,))
+            conn.execute(
+                "DELETE FROM places WHERE id = ANY(%s)",
+                ([f"municipal-{place_id}", f"community-{place_id}"],),
+            )
+            conn.execute("DELETE FROM visits WHERE owner_hash = %s", (owner_hash,))
+            conn.commit()

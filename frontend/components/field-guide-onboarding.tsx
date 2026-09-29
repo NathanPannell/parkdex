@@ -35,7 +35,7 @@ const STEPS: readonly OnboardingStep[] = [
   {
     id: "field-guide",
     title: "Find your next park.",
-    body: "Explore the Field Guide in a map or list. Search Vancouver Island parks and islands, then open a place to learn more.",
+    body: "Explore the Field Guide in a map or list. Search BC parks and islands, then open a place to learn more.",
     accent: "lime",
   },
   {
@@ -196,7 +196,7 @@ function FieldGuideVisual({ place }: { place?: Place }) {
         <div className="field-guide-onboarding__place-preview">
           {place ? <PlaceImage place={place} variant="thumbnail" sizes="68px" preload /> : <span className="field-guide-onboarding__place-fallback"><Trees size={22} /></span>}
           <span>
-            <small>{place?.region ?? "Vancouver Island"}</small>
+            <small>{place?.region ?? "British Columbia"}</small>
             <strong>{place?.name ?? "A park to find"}</strong>
           </span>
         </div>
@@ -241,7 +241,7 @@ const placeholderPlace: Place = {
   category: "provincial",
   latitude: 49,
   longitude: -124,
-  region: "Vancouver Island",
+  region: "British Columbia",
   description: "",
   sourceUrl: "https://web.parkdex.app/",
   sourceName: "Parkdex",

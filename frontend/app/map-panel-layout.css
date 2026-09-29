@@ -7,6 +7,17 @@
 .sheet-pull-handle { display: none; }
 .place-sheet-hero .place-image--card { display: block; width: 100%; height: 100%; margin: 0; border-radius: 0; }
 .place-sheet-hero .place-image__photo { display: block; width: 100%; height: 210px; object-fit: cover; }
+.place-image__gallery { position: absolute; z-index: 3; right: 12px; bottom: 12px; left: 12px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.place-image__gallery > button { display: grid; width: 44px; height: 44px; padding: 0; place-items: center; border: 0; border-radius: 50%; background: rgba(23, 61, 50, .88); color: var(--paper-bright); box-shadow: 0 3px 12px rgba(14, 38, 32, .25); cursor: pointer; pointer-events: auto; }
+.place-image__gallery > button:hover { background: var(--forest); }
+.place-image__gallery > button:active { transform: translateY(1px); }
+.place-image__gallery > button:focus-visible,
+.place-image__gallery-position button:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+.place-image__gallery-position { display: grid; min-height: 40px; padding: 5px 10px 6px; place-items: center; gap: 4px; border-radius: 12px; background: rgba(23, 61, 50, .9); color: var(--paper-bright); box-shadow: 0 3px 12px rgba(14, 38, 32, .25); font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; pointer-events: auto; }
+.place-image__gallery-position > div { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.place-image__gallery-position button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.place-image__gallery-position button::after { display: block; width: 6px; height: 6px; border-radius: 50%; background: rgba(246, 240, 220, .55); content: ""; }
+.place-image__gallery-position button.is-selected::after { background: var(--lime); }
 .place-sheet-hero .place-image--fallback { display: grid; height: 148px; place-content: center; justify-items: center; gap: 7px; color: var(--muted); }
 .place-sheet-hero .place-image--fallback { display: block; width: 100%; overflow: hidden; margin: 0; padding: 0; }
 .field-guide-shell .place-sheet-hero .place-image--fallback .place-image__photo,

@@ -1,0 +1,30 @@
+{
+  "places": {
+    "national-mount-revelstoke-national-park": {
+      "acquired": [
+        "2025-09-23T19:10:14.621000Z"
+      ],
+      "assetBytes": {
+        "national-mount-revelstoke-national-park-terrain.glb": 4756860,
+        "relief.avif": 71901,
+        "satellite.avif": 219007
+      },
+      "assetSha256": {
+        "national-mount-revelstoke-national-park-terrain.glb": "b3079d8ac0e454d09d72a4e1a39f6813e834469d0787ebc0456601bbe0e2909c",
+        "relief.avif": "338a08affa930165eee2d19bedcba373b1e9a04d17f5a9bfd9628ca7d01f371a",
+        "satellite.avif": "dc4deb8beb90ceb2f41353b6e69f75d3cf3caa31d521af2e9e8c292de786c533"
+      },
+      "attribution": [
+        "Contains modified Copernicus Sentinel data 2025",
+        "Elevation: Natural Resources Canada CDEM, Open Government Licence, Canada",
+        "Boundary: Natural Resources Canada — Canada Lands Survey System; see https://open.canada.ca/data/en/dataset/9e1507cd-f25c-4c64-995b-6563bf9d65bd for source terms"
+      ],
+      "model": "national-mount-revelstoke-national-park/national-mount-revelstoke-national-park-terrain.glb",
+      "needsReview": false,
+      "relief": "national-mount-revelstoke-national-park/relief.avif",
+      "reviewFlags": [],
+      "satellite": "national-mount-revelstoke-national-park/satellite.avif"
+    }
+  },
+  "version": 1
+}

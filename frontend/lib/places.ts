@@ -1,4 +1,11 @@
-export type PlaceCategory = "national" | "provincial" | "regional" | "island";
+import type { PlaceVisitorDetails } from "./visitor-details";
+
+export const PLACE_CATEGORIES = ["national", "provincial", "regional", "municipal", "community", "island"] as const;
+export type PlaceCategory = typeof PLACE_CATEGORIES[number];
+
+export function isPlaceCategory(value: unknown): value is PlaceCategory {
+  return typeof value === "string" && PLACE_CATEGORIES.includes(value as PlaceCategory);
+}
 
 export type Place = {
   id: string;
@@ -11,12 +18,27 @@ export type Place = {
   sourceUrl: string;
   sourceName: string;
   sourceId?: string | null;
+  /** Server-derived list metadata; older detail responses may omit it. */
+  authority?: string;
+  listRegion?: string;
+  visitorDetails?: PlaceVisitorDetails | null;
 };
+
+/** Lightweight public place data used outside the bounded full-detail cache. */
+export type PlaceCatalogueSummary = Omit<Place, "visitorDetails">;
+
+export function toPlaceCatalogueSummary(place: Place): PlaceCatalogueSummary {
+  const summary = { ...place };
+  delete summary.visitorDetails;
+  return summary;
+}
 
 export const categoryLabels: Record<PlaceCategory, string> = {
   national: "National",
   provincial: "Provincial",
   regional: "Regional",
+  municipal: "Municipal",
+  community: "Community",
   island: "Major islands",
 };
 

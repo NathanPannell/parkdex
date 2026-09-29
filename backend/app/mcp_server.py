@@ -5,7 +5,7 @@ import argparse, getpass, os
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Annotated, Literal
+from typing import Annotated
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx, keyring
@@ -22,13 +22,14 @@ from starlette.routing import Route
 from backend.app.auth import reserve_rate_limit
 from backend.app.db import connection
 from backend.app.mcp_oauth import MAX_CONSENT_BODY_BYTES, MCP_SCOPE, ParkdexOAuthProvider, consent_get, consent_post
+from backend.app.place_categories import PlaceCategory
 from backend.app.groups import add_group_places, create_group_row, delete_group_row, ensure_wishlist, group_row, list_group_rows, lock_account_group_mutations, place_detail_row, remove_group_places, rename_group_row, search_place_rows
 from backend.app.schemas import Group, PlaceSearchResult, SearchPlace
 from backend.app.settings import get_settings
 
 KEYRING_SERVICE, SESSION_ENV, EMAIL_ENV, ORIGIN_ENV = "parkdex-mcp-session", "PARKDEX_SESSION_TOKEN", "PARKDEX_ACCOUNT_EMAIL", "PARKDEX_API_ORIGIN"
 MAX_TIMEOUT_SECONDS = 20.0
-PlaceType = Literal["national", "provincial", "regional", "island"]
+PlaceType = PlaceCategory
 GroupName = Annotated[str, Field(min_length=1, max_length=200)]
 GroupId = Annotated[str, Field(pattern=r"^[0-9a-fA-F-]{36}$")]
 PlaceIds = Annotated[list[str], Field(min_length=1, max_length=100)]

@@ -6,10 +6,11 @@ from pathlib import Path
 
 from psycopg import Connection
 
+from backend.app.place_categories import ALLOWED_CATEGORIES
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STAGING_FIELD_PLACES_PATH = PROJECT_ROOT / "data" / "staging-field-places.json"
-ALLOWED_CATEGORIES = frozenset({"national", "provincial", "regional", "island"})
 PLACE_ALIASES = frozenset({"places", "p"})
 
 

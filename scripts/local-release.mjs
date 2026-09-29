@@ -287,6 +287,8 @@ function createRailwayApiService(cwd, state, journalPath, token) {
       return run("railway", command.args, { cwd, input: command.input, env: railwayEnv(token), label: "Railway preview API create" });
     },
     readConfig: () => parseJson(run("railway", ["environment", "config", "--environment", state.railwayEnvironmentId, "--json"], { cwd, env: railwayEnv(token), label: "Railway preview API inventory" }), "Railway preview API inventory"),
+    maxReadAttempts: 20,
+    waitForRead: () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1500),
   });
   updateJournal(journalPath, state, { status: "railway-api-created" });
 }
@@ -677,7 +679,7 @@ async function deploy(root, mode, sha, journalPath, releaseId, pullRequest, harn
     try {
       updateJournal(journalPath, state, { resourceIntent: { ...(state.resourceIntent || {}), vercel: { projectId: process.env.VERCEL_PROJECT_ID, commitSha: sha, releaseId, environment: railwayEnvironment } }, status: "vercel-creating" });
       const targetArgs = preview ? ["--target", "preview"] : ["--prod"];
-      const deployOutput = run("vercel", ["deploy", "--yes", ...targetArgs, "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_APP_URL=${preview ? "https://web.parkdex.app" : STAGING_FRONTEND_ORIGIN}`, "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
+      const deployOutput = run("vercel", ["deploy", "--yes", ...targetArgs, "--skip-domain", "--cwd", "frontend", "--build-env", `NEXT_PUBLIC_API_BASE_URL=${state.apiUrl}`, "--build-env", `NEXT_PUBLIC_APP_URL=${preview ? "https://web.parkdex.app" : STAGING_FRONTEND_ORIGIN}`, "--build-env", "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=1", "--env", "NEXT_PUBLIC_MANUAL_CLAIM_ENABLED=1", "--build-env", `NEXT_PUBLIC_RELEASE_VERSION=${metadata.version}`, "--build-env", `NEXT_PUBLIC_COMMIT_SHA=${sha}`, "--build-env", `NEXT_PUBLIC_COMMIT_DATE=${metadata.commit_date}`, "--meta", `githubCommitSha=${sha}`, "--meta", `parkdexReleaseId=${releaseId}`, "--meta", `parkdexEnvironment=${railwayEnvironment}`, ...vercelScopeArgs()], { cwd: sourceRoot, env: vercelEnv(process.env.VERCEL_TOKEN), label: "Vercel deploy" });
       deploymentUrl = deployOutput.split(/\r?\n/).findLast((line) => /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(line.trim()))?.trim();
     } catch {
       deploymentUrl = await findVercelRelease(sha, releaseId, railwayEnvironment);

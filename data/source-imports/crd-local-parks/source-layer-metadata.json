@@ -1,0 +1,1082 @@
+{
+  "currentVersion": 11.5,
+  "cimVersion": "3.5.0",
+  "id": 3,
+  "name": "Park",
+  "type": "Feature Layer",
+  "description": "Regional, Federal, Provincial, Municipal, Provincial Ecoreserve, Community Parks and Protected Area in the CRD. Parks and protected areas are defined as: (a) A property explicitly zoned as such in information supplied by the municipality (b) In the case that explicit zoning does not exist, information as provided and/or verified by the municipality or other administrative body. Due to differences in definitions parks and protected areas between different adminstrative areas, this layer is not guranteed to be fully comprehensive or consistant. Layer is updated on a regular basis, but not all areas are guranteed to be up to date.",
+  "geometryType": "esriGeometryPolygon",
+  "sourceSpatialReference": {
+    "wkid": 26910,
+    "latestWkid": 26910,
+    "xyTolerance": 0.001,
+    "zTolerance": 0.001,
+    "mTolerance": 0.001,
+    "falseX": -5120900,
+    "falseY": -9998100,
+    "xyUnits": 10000,
+    "falseZ": 0,
+    "zUnits": 1,
+    "falseM": 0,
+    "mUnits": 1
+  },
+  "spatialReference": {
+    "wkid": 26910,
+    "latestWkid": 26910,
+    "xyTolerance": 0.001,
+    "zTolerance": 2,
+    "mTolerance": 0.001,
+    "falseX": -5120900,
+    "falseY": -9998100,
+    "xyUnits": 450445547.3910538,
+    "falseZ": 0,
+    "zUnits": 1,
+    "falseM": -100000,
+    "mUnits": 10000
+  },
+  "copyrightText": "",
+  "parentLayer": null,
+  "subLayers": [],
+  "minScale": 100000,
+  "maxScale": 1,
+  "drawingInfo": {
+    "renderer": {
+      "type": "uniqueValue",
+      "field1": "Comments",
+      "defaultSymbol": {
+        "type": "esriSFS",
+        "style": "esriSFSSolid",
+        "color": [
+          165,
+          179,
+          136,
+          255
+        ],
+        "outline": null
+      },
+      "defaultLabel": "Park",
+      "uniqueValueGroups": [
+        {
+          "heading": "",
+          "classes": [
+            {
+              "label": "Park Water Extension",
+              "description": "Park Water Extension",
+              "symbol": {
+                "type": "esriSFS",
+                "style": "esriSFSSolid",
+                "color": [
+                  0,
+                  0,
+                  0,
+                  0
+                ],
+                "outline": {
+                  "type": "esriSLS",
+                  "style": "esriSLSSolid",
+                  "color": [
+                    209,
+                    230,
+                    177,
+                    255
+                  ],
+                  "width": 0.5
+                }
+              },
+              "values": [
+                [
+                  "Water Extension"
+                ],
+                [
+                  "Water extension"
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueValueInfos": [
+        {
+          "symbol": {
+            "type": "esriSFS",
+            "style": "esriSFSSolid",
+            "color": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "outline": {
+              "type": "esriSLS",
+              "style": "esriSLSSolid",
+              "color": [
+                209,
+                230,
+                177,
+                255
+              ],
+              "width": 0.5
+            }
+          },
+          "value": "Water Extension",
+          "label": "Park Water Extension"
+        },
+        {
+          "symbol": {
+            "type": "esriSFS",
+            "style": "esriSFSSolid",
+            "color": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "outline": {
+              "type": "esriSLS",
+              "style": "esriSLSSolid",
+              "color": [
+                209,
+                230,
+                177,
+                255
+              ],
+              "width": 0.5
+            }
+          },
+          "value": "Water extension",
+          "label": "Park Water Extension"
+        }
+      ],
+      "fieldDelimiter": ",",
+      "authoringInfo": {
+        "colorRamp": {
+          "type": "multipart",
+          "colorRamps": [
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                204,
+                137,
+                182,
+                255
+              ],
+              "toColor": [
+                204,
+                137,
+                182,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                180,
+                212,
+                121,
+                255
+              ],
+              "toColor": [
+                180,
+                212,
+                121,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                227,
+                169,
+                136,
+                255
+              ],
+              "toColor": [
+                227,
+                169,
+                136,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                222,
+                124,
+                132,
+                255
+              ],
+              "toColor": [
+                222,
+                124,
+                132,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                222,
+                209,
+                153,
+                255
+              ],
+              "toColor": [
+                222,
+                209,
+                153,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                219,
+                125,
+                210,
+                255
+              ],
+              "toColor": [
+                219,
+                125,
+                210,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                227,
+                159,
+                169,
+                255
+              ],
+              "toColor": [
+                227,
+                159,
+                169,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                222,
+                219,
+                129,
+                255
+              ],
+              "toColor": [
+                222,
+                219,
+                129,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                204,
+                114,
+                149,
+                255
+              ],
+              "toColor": [
+                204,
+                114,
+                149,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                227,
+                150,
+                136,
+                255
+              ],
+              "toColor": [
+                227,
+                150,
+                136,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                212,
+                190,
+                119,
+                255
+              ],
+              "toColor": [
+                212,
+                190,
+                119,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                204,
+                150,
+                139,
+                255
+              ],
+              "toColor": [
+                204,
+                150,
+                139,
+                255
+              ]
+            },
+            {
+              "type": "algorithmic",
+              "algorithm": "esriCIELabAlgorithm",
+              "fromColor": [
+                209,
+                179,
+                142,
+                255
+              ],
+              "toColor": [
+                209,
+                179,
+                142,
+                255
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "scaleSymbols": false,
+    "transparency": 0,
+    "labelingInfo": null
+  },
+  "defaultVisibility": true,
+  "extent": {
+    "xmin": 389071.233,
+    "ymin": 5348490.983999999,
+    "xmax": 497839.33299999963,
+    "ymax": 5429193.0009,
+    "spatialReference": {
+      "wkid": 26910,
+      "latestWkid": 26910,
+      "xyTolerance": 0.001,
+      "zTolerance": 2,
+      "mTolerance": 0.001,
+      "falseX": -5120900,
+      "falseY": -9998100,
+      "xyUnits": 450445547.3910538,
+      "falseZ": 0,
+      "zUnits": 1,
+      "falseM": -100000,
+      "mUnits": 10000
+    }
+  },
+  "hasAttachments": false,
+  "htmlPopupType": "esriServerHTMLPopupTypeNone",
+  "displayField": "Name",
+  "typeIdField": null,
+  "subtypeFieldName": null,
+  "subtypeField": null,
+  "defaultSubtypeCode": null,
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID",
+      "alias": "OBJECTID",
+      "domain": null
+    },
+    {
+      "name": "Name",
+      "type": "esriFieldTypeString",
+      "alias": "Park Name",
+      "length": 100,
+      "domain": null
+    },
+    {
+      "name": "Jurisdic",
+      "type": "esriFieldTypeString",
+      "alias": "Local Government Jusrisdiction",
+      "length": 100,
+      "domain": null
+    },
+    {
+      "name": "Comments",
+      "type": "esriFieldTypeString",
+      "alias": "Comments",
+      "length": 255,
+      "domain": null
+    },
+    {
+      "name": "Type",
+      "type": "esriFieldTypeString",
+      "alias": "Park Type",
+      "length": 100,
+      "domain": {
+        "type": "codedValue",
+        "name": "pkDomainParkType",
+        "description": "Park Type",
+        "codedValues": [
+          {
+            "name": "Federal Park",
+            "code": "Federal Park"
+          },
+          {
+            "name": "Provincial Park",
+            "code": "Provincial Park"
+          },
+          {
+            "name": "Provincial Ecoreserve",
+            "code": "Provincial Ecoreserve"
+          },
+          {
+            "name": "Regional Park",
+            "code": "Regional Park"
+          },
+          {
+            "name": "Municipal Park",
+            "code": "Municipal Park"
+          },
+          {
+            "name": "Protected Area",
+            "code": "Protected Area"
+          },
+          {
+            "name": "Community Park",
+            "code": "Community Park"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "DataSource",
+      "type": "esriFieldTypeString",
+      "alias": "DataSource",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "aaDomainDataSource",
+        "description": "Method of data collection",
+        "codedValues": [
+          {
+            "name": "As Built",
+            "code": "ASB"
+          },
+          {
+            "name": "COGO",
+            "code": "COG"
+          },
+          {
+            "name": "Digitised From LiDAR Surface",
+            "code": "LID"
+          },
+          {
+            "name": "Digitized From Hard Copy",
+            "code": "HDC"
+          },
+          {
+            "name": "Digitized From Orthophoto",
+            "code": "ORT"
+          },
+          {
+            "name": "External Source",
+            "code": "EXS"
+          },
+          {
+            "name": "GPS",
+            "code": "GPS"
+          },
+          {
+            "name": "GPS and Orthophoto",
+            "code": "GAO"
+          },
+          {
+            "name": "Geocoded to Digital Road Atlas - Ranged Address Data",
+            "code": "DRA"
+          },
+          {
+            "name": "Geocoded to Digital Road Atlas - Single Address Data",
+            "code": "DR1"
+          },
+          {
+            "name": "ICI Legal Base",
+            "code": "ICI"
+          },
+          {
+            "name": "Jurol Matched to Integrated Cadastre",
+            "code": "JUR"
+          },
+          {
+            "name": "Location Approximated",
+            "code": "APX"
+          },
+          {
+            "name": "Mini Parcel Placeholder",
+            "code": "MPL"
+          },
+          {
+            "name": "Neighbourhood Matched Based On Placed BCAA Records",
+            "code": "JNH"
+          },
+          {
+            "name": "Orienteering",
+            "code": "ORI"
+          },
+          {
+            "name": "Plan Matched to Integrated Cadastre - Single Lot Plans Only",
+            "code": "PLN"
+          },
+          {
+            "name": "Plan Matched to Integrated Cadastre - Strata Plans Only",
+            "code": "PLD"
+          },
+          {
+            "name": "Projected RoadEng Traverse",
+            "code": "RDE"
+          },
+          {
+            "name": "Schematic",
+            "code": "SCH"
+          },
+          {
+            "name": "Survey",
+            "code": "SUR"
+          },
+          {
+            "name": "TRIM",
+            "code": "TRM"
+          },
+          {
+            "name": "Unknown",
+            "code": "UNK"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "DataProject",
+      "type": "esriFieldTypeString",
+      "alias": "DataProject",
+      "length": 100,
+      "domain": null
+    },
+    {
+      "name": "DataDate",
+      "type": "esriFieldTypeDate",
+      "alias": "DataDate",
+      "length": 8,
+      "domain": null
+    },
+    {
+      "name": "DataSupplier",
+      "type": "esriFieldTypeString",
+      "alias": "DataSupplier",
+      "length": 50,
+      "domain": null
+    },
+    {
+      "name": "DataAccuracy",
+      "type": "esriFieldTypeString",
+      "alias": "DataAccuracy",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "aaDomainDataAccuracy",
+        "description": "Horizontal accuracy assessment of the feature",
+        "codedValues": [
+          {
+            "name": "Extremely High (<0.5m)",
+            "code": "EH"
+          },
+          {
+            "name": "Extremely Low",
+            "code": "EL"
+          },
+          {
+            "name": "High (<2.5m)",
+            "code": "H"
+          },
+          {
+            "name": "Low (<10m)",
+            "code": "L"
+          },
+          {
+            "name": "Medium (<5m)",
+            "code": "M"
+          },
+          {
+            "name": "Survey Grade A (<0.05m)",
+            "code": "SGA"
+          },
+          {
+            "name": "Survey Grade B (<0.1m)",
+            "code": "SGB"
+          },
+          {
+            "name": "Survey Grade C (<0.25m)",
+            "code": "SGC"
+          },
+          {
+            "name": "Unknown",
+            "code": "UNK"
+          },
+          {
+            "name": "Very High (<1m)",
+            "code": "VH"
+          },
+          {
+            "name": "Very Low (>10m)",
+            "code": "VL"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "InsideGMPA",
+      "type": "esriFieldTypeString",
+      "alias": "Inside Growth Management Planning Area",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "pkDomainInsideOutside",
+        "description": "Inside Outside Unknown",
+        "codedValues": [
+          {
+            "name": "Inside",
+            "code": "IN"
+          },
+          {
+            "name": "Outside",
+            "code": "OUT"
+          },
+          {
+            "name": "Unknown",
+            "code": "UNK"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "InsideSSGBB",
+      "type": "esriFieldTypeString",
+      "alias": "Inside Sea to Sea Green Blue Belt",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "pkDomainInsideOutside",
+        "description": "Inside Outside Unknown",
+        "codedValues": [
+          {
+            "name": "Inside",
+            "code": "IN"
+          },
+          {
+            "name": "Outside",
+            "code": "OUT"
+          },
+          {
+            "name": "Unknown",
+            "code": "UNK"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "DateEstablished",
+      "type": "esriFieldTypeDate",
+      "alias": "DateEstablished",
+      "length": 8,
+      "domain": null
+    },
+    {
+      "name": "AdministrativeArea",
+      "type": "esriFieldTypeString",
+      "alias": "AdministrativeArea",
+      "length": 50,
+      "domain": null
+    },
+    {
+      "name": "Date_Changed",
+      "type": "esriFieldTypeDate",
+      "alias": "Date_Changed",
+      "length": 8,
+      "domain": null
+    },
+    {
+      "name": "LifeCycleStatus",
+      "type": "esriFieldTypeString",
+      "alias": "LifeCycleStatus",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "aaDomainLifeCycleStatus",
+        "description": "Indicates the current status of the in the life cycle for the feature",
+        "codedValues": [
+          {
+            "name": "Abandoned",
+            "code": "ABD"
+          },
+          {
+            "name": "Active",
+            "code": "ACT"
+          },
+          {
+            "name": "Decommissioned",
+            "code": "DCM"
+          },
+          {
+            "name": "Inactive",
+            "code": "INA"
+          },
+          {
+            "name": "Insufficient Data",
+            "code": "IDT"
+          },
+          {
+            "name": "Proposed",
+            "code": "PRP"
+          },
+          {
+            "name": "Proposed (Existing Structure)",
+            "code": "PEX"
+          },
+          {
+            "name": "Removed",
+            "code": "RMV"
+          },
+          {
+            "name": "Reserved",
+            "code": "RSV"
+          },
+          {
+            "name": "Transferred",
+            "code": "TNS"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "ParkNameShort",
+      "type": "esriFieldTypeString",
+      "alias": "Short Name",
+      "length": 50,
+      "domain": null
+    },
+    {
+      "name": "Shape",
+      "type": "esriFieldTypeGeometry",
+      "alias": "Shape",
+      "domain": null
+    },
+    {
+      "name": "Shape.STArea()",
+      "type": "esriFieldTypeDouble",
+      "alias": "Shape.STArea()",
+      "domain": null
+    },
+    {
+      "name": "Shape.STLength()",
+      "type": "esriFieldTypeDouble",
+      "alias": "Shape.STLength()",
+      "domain": null
+    },
+    {
+      "name": "UseForAreaCalc",
+      "type": "esriFieldTypeSmallInteger",
+      "alias": "Use For Area Calculations",
+      "domain": {
+        "type": "codedValue",
+        "name": "aaDomainBoolean",
+        "description": "True/False",
+        "codedValues": [
+          {
+            "name": "False",
+            "code": 0
+          },
+          {
+            "name": "True",
+            "code": 1
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "InsideUCB",
+      "type": "esriFieldTypeString",
+      "alias": "Inside Urban Containment Boundary",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "pkDomainInsideOutside",
+        "description": "Inside Outside Unknown",
+        "codedValues": [
+          {
+            "name": "Inside",
+            "code": "IN"
+          },
+          {
+            "name": "Outside",
+            "code": "OUT"
+          },
+          {
+            "name": "Unknown",
+            "code": "UNK"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "AcquisitionDetails",
+      "type": "esriFieldTypeString",
+      "alias": "Acquisition Details",
+      "length": 100,
+      "domain": null
+    },
+    {
+      "name": "RegParkClassification",
+      "type": "esriFieldTypeString",
+      "alias": "Regional Park Classification",
+      "length": 75,
+      "domain": null
+    },
+    {
+      "name": "MgmtPlanStatus",
+      "type": "esriFieldTypeString",
+      "alias": "Management Plan Status",
+      "length": 3,
+      "domain": {
+        "type": "codedValue",
+        "name": "pkDomainRegParkMgmtPlanStatus",
+        "description": "Indicates the state of the management plan for a regional park",
+        "codedValues": [
+          {
+            "name": "None",
+            "code": "NON"
+          },
+          {
+            "name": "IMG - Interim Management Guidelines",
+            "code": "IMG"
+          },
+          {
+            "name": "Full Management Plan",
+            "code": "FMP"
+          },
+          {
+            "name": "Not Applicable",
+            "code": "NA"
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDefaultValue"
+      }
+    },
+    {
+      "name": "MgmtPlanYearApproval",
+      "type": "esriFieldTypeString",
+      "alias": "Management Plan Year Approval",
+      "length": 10,
+      "domain": null
+    },
+    {
+      "name": "MgmtPlanDetails",
+      "type": "esriFieldTypeString",
+      "alias": "Management Plan Details",
+      "length": 150,
+      "domain": null
+    },
+    {
+      "name": "AdaptMgmtDetails",
+      "type": "esriFieldTypeString",
+      "alias": "Adaptive-Management Details",
+      "length": 150,
+      "domain": null
+    },
+    {
+      "name": "CartographicRepresentation",
+      "type": "esriFieldTypeSmallInteger",
+      "alias": "Cartographic Representation",
+      "domain": {
+        "type": "codedValue",
+        "name": "aaDomainBoolean",
+        "description": "True/False",
+        "codedValues": [
+          {
+            "name": "False",
+            "code": 0
+          },
+          {
+            "name": "True",
+            "code": 1
+          }
+        ],
+        "mergePolicy": "esriMPTDefaultValue",
+        "splitPolicy": "esriSPTDuplicate"
+      }
+    },
+    {
+      "name": "CartographicDetails",
+      "type": "esriFieldTypeString",
+      "alias": "Cartographic Details",
+      "length": 100,
+      "domain": null
+    },
+    {
+      "name": "created_user",
+      "type": "esriFieldTypeString",
+      "alias": "created_user",
+      "length": 255,
+      "domain": null
+    },
+    {
+      "name": "created_date",
+      "type": "esriFieldTypeDate",
+      "alias": "created_date",
+      "length": 8,
+      "domain": null
+    },
+    {
+      "name": "last_edited_user",
+      "type": "esriFieldTypeString",
+      "alias": "last_edited_user",
+      "length": 255,
+      "domain": null
+    },
+    {
+      "name": "last_edited_date",
+      "type": "esriFieldTypeDate",
+      "alias": "last_edited_date",
+      "length": 8,
+      "domain": null
+    }
+  ],
+  "geometryField": {
+    "name": "Shape",
+    "type": "esriFieldTypeGeometry",
+    "alias": "Shape"
+  },
+  "indexes": [
+    {
+      "name": "R1883_pk",
+      "fields": "OBJECTID",
+      "isAscending": true,
+      "isUnique": true,
+      "description": ""
+    },
+    {
+      "name": "S1345_idx",
+      "fields": "Shape",
+      "isAscending": true,
+      "isUnique": true,
+      "description": ""
+    }
+  ],
+  "subtypes": [],
+  "relationships": [],
+  "canModifyLayer": false,
+  "canScaleSymbols": false,
+  "hasLabels": true,
+  "capabilities": "Map,Query,Data",
+  "maxRecordCount": 1000,
+  "maxSelectionCount": 2000,
+  "supportsStatistics": true,
+  "supportsExceedsLimitStatistics": true,
+  "supportsAdvancedQueries": true,
+  "supportedQueryFormats": "JSON, geoJSON, PBF",
+  "isDataVersioned": true,
+  "ownershipBasedAccessControlForFeatures": {
+    "allowOthersToQuery": true
+  },
+  "supportedSpatialRelationships": [
+    "esriSpatialRelIntersects",
+    "esriSpatialRelContains",
+    "esriSpatialRelCrosses",
+    "esriSpatialRelEnvelopeIntersects",
+    "esriSpatialRelIndexIntersects",
+    "esriSpatialRelOverlaps",
+    "esriSpatialRelTouches",
+    "esriSpatialRelWithin",
+    "esriSpatialRelRelation"
+  ],
+  "advancedQueryCapabilities": {
+    "useStandardizedQueries": false,
+    "supportsStatistics": true,
+    "supportsPercentileStatistics": true,
+    "supportsHavingClause": true,
+    "supportsOrderBy": true,
+    "supportsDistinct": true,
+    "supportsCountDistinct": true,
+    "supportsAdvancedQueryRelated": true,
+    "supportsQueryRelatedPagination": true,
+    "supportsPagination": true,
+    "supportsLod": false,
+    "supportsQueryWithLodSR": false,
+    "supportsTrueCurve": true,
+    "supportsQueryWithDatumTransformation": true,
+    "supportsReturningQueryExtent": true,
+    "supportsQueryWithDistance": true,
+    "supportsSqlExpression": true,
+    "supportsTimeRelation": true,
+    "supportsSqlFormat": true,
+    "supportsQueryAnalytic": true,
+    "supportsCurrentUserQueries": true
+  },
+  "supportsDatumTransformation": true,
+  "advancedQueryAnalyticCapabilities": {
+    "supportsLinearRegression": true,
+    "supportsAsync": false,
+    "supportsPercentileAnalytic": true
+  },
+  "dateFieldsTimeReference": null,
+  "preferredTimeReference": null,
+  "datesInUnknownTimezone": false,
+  "hasGeometryProperties": true,
+  "geometryProperties": {
+    "shapeAreaFieldName": "SHAPE.STArea()",
+    "shapeLengthFieldName": "SHAPE.STLength()",
+    "units": "esriMeters",
+    "mapUnits": {
+      "uwkid": 9001
+    }
+  },
+  "hasMetadata": true,
+  "isDataArchived": false,
+  "archivingInfo": {
+    "supportsQueryWithHistoricMoment": false,
+    "startArchivingMoment": -1
+  },
+  "supportsCoordinatesQuantization": true,
+  "supportsDynamicLegends": true
+}

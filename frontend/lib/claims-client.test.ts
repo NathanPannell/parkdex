@@ -1,19 +1,98 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createClaimRequest,
+  createOfflineClaimRequest,
+  issueOfflineClaimGrantRequest,
+  loadOfflinePlaceBundleRequest,
   loadVisitPhotoRequest,
   recommendClaimRequest,
   removeVisitPhotoRequest,
   uploadVisitPhotoRequest,
   PhotoUploadTimeoutError,
+  ClaimRequestTimeoutError,
+  CLAIM_REQUEST_TIMEOUT_MS,
+  CLAIM_RECOMMENDATION_TIMEOUT_MS,
 } from "./claims-client";
 
 const API = "https://api.example.test";
 const account = { kind: "account" as const, token: "account-owner" };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("claims client", () => {
+  it("bounds a stalled recommendation before the captured fix becomes stale", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = recommendClaimRequest(API, account, { location: { latitude: 49, longitude: -125, accuracyMeters: 5, capturedAtEpochMs: Date.now() } });
+    const failure = expect(pending).rejects.toBeInstanceOf(ClaimRequestTimeoutError);
+    await vi.advanceTimersByTimeAsync(CLAIM_RECOMMENDATION_TIMEOUT_MS);
+    await failure;
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(CLAIM_RECOMMENDATION_TIMEOUT_MS).toBeLessThan(20_000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("bounds stalled response bodies as well as stalled connections", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers({ "Content-Type": "application/json" }), json: () => new Promise(() => undefined) }));
+    const failure = expect(issueOfflineClaimGrantRequest(API, account)).rejects.toBeInstanceOf(ClaimRequestTimeoutError);
+    await vi.advanceTimersByTimeAsync(CLAIM_REQUEST_TIMEOUT_MS);
+    await failure;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("releases a queue request immediately when its owner cancels it", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+    const ownerCancellation = new AbortController();
+    const failure = expect(issueOfflineClaimGrantRequest(API, account, ownerCancellation.signal)).rejects.toMatchObject({ name: "AbortError" });
+    ownerCancellation.abort();
+    await failure;
+    expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("issues an account-bound offline claim grant without sending a client key", async () => {
+    const grant = { grantToken: "grant-secret", issuedAt: "2026-09-09T00:00:00Z", expiresAt: "2026-09-10T00:00:00Z", boundaryVersion: "boundary-17" };
+    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify(grant), { headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(issueOfflineClaimGrantRequest(API, account)).resolves.toEqual(grant);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API}/api/offline-claim-grants`);
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer account-owner");
+    expect(init.body).toBeUndefined();
+  });
+
+  it("loads a public canonical offline bundle without account credentials", async () => {
+    const bundle = { place: { id: "park/id", name: "Park", category: "regional", latitude: 49, longitude: -125, region: "Coast", description: "", sourceUrl: "", sourceName: "" }, boundary: null, boundaryVersion: "boundary-17" };
+    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify(bundle), { headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadOfflinePlaceBundleRequest(API, "park/id")).resolves.toEqual(bundle);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API}/api/places/park%2Fid/offline-bundle`);
+    expect(init.cache).toBe("no-store");
+    expect(new Headers(init.headers).get("Authorization")).toBeNull();
+  });
+
+  it("creates a queued claim with its stable request ID, grant, location, and account bearer", async () => {
+    const response = { placeId: "park", visited: true, visitedCount: 2, visitedAt: "2026-09-09T00:00:00Z", claim: { claimedAt: "2026-09-09T00:00:00Z", capturedAt: "2026-09-08T23:59:55Z", coordinates: { latitude: 49, longitude: -125 }, accuracyMeters: 8, boundaryVersion: "boundary-17", matchKind: "exact", distanceMeters: 0, hasPhoto: false } };
+    const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+    const location = { latitude: 49, longitude: -125, accuracyMeters: 8, capturedAtEpochMs: Date.parse("2026-09-08T23:59:55Z") };
+
+    await expect(createOfflineClaimRequest(API, account, { requestId: "request-uuid", grantToken: "grant-secret", expectedPlaceId: "park", location })).resolves.toEqual(response);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API}/api/offline-claims`);
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer account-owner");
+    expect(JSON.parse(String(init.body))).toEqual({ requestId: "request-uuid", grantToken: "grant-secret", expectedPlaceId: "park", location });
+  });
+
   it("sends a fresh location sample with account authentication", async () => {
     const response = { status: "recommended", recommendationToken: "signed", expiresAt: "2026-09-09T00:01:00Z", candidate: { placeId: "park", matchKind: "exact", distanceMeters: 0 } };
     const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } })));

@@ -23,13 +23,14 @@ beforeEach(() => {
   vi.mocked(normalizeVisitPhoto).mockClear();
   vi.mocked(normalizeVisitPhoto).mockImplementation(async (photo) => photo);
 });
-afterEach(() => { cleanup(); restore(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); window.localStorage.clear(); restore(); vi.restoreAllMocks(); });
 
 function setup(
   photo: File | null,
   uploadPhoto = vi.fn().mockResolvedValue(undefined),
   retryOverrides: Partial<{ save: ReturnType<typeof vi.fn>; load: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn>; clearOwner: ReturnType<typeof vi.fn> }> = {},
   reconcileClaim = vi.fn().mockResolvedValue(null),
+  manualClaim?: { location: () => typeof location; photo: () => Promise<{ file: File; mimeType: string; processingState: "prepared" }> },
 ) {
   const retry = { save: vi.fn().mockResolvedValue(undefined), load: vi.fn().mockResolvedValue(null), remove: vi.fn().mockResolvedValue(undefined), clearOwner: vi.fn().mockResolvedValue(undefined), ...retryOverrides };
   const getPhoto = vi.fn().mockResolvedValue(photo ? { file: photo, mimeType: photo.type } : null);
@@ -43,11 +44,11 @@ function setup(
   const onViewAccount = vi.fn();
   const onFlowActiveChange = vi.fn();
   const onClearRecommendation = vi.fn();
-  const props = { place, recommendation, ownerKey: "account:user-1", recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation };
+  const props = { place, recommendation, ownerKey: "account:user-1", recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation, manualClaim };
   const rendered = render(<ClaimFlowBanner {...props} busy={false} />);
   const rerenderBusy = (busy: boolean) => rendered.rerender(<ClaimFlowBanner {...props} busy={busy} />);
   const rerenderReset = (resetSignal: number) => rendered.rerender(<ClaimFlowBanner {...props} busy={false} resetSignal={resetSignal} />);
-  return { retry, getPhoto, getCurrentLocation, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation, rerenderBusy, rerenderReset };
+  return { retry, getPhoto, getCurrentLocation, recommendClaim, createClaim, reconcileClaim, uploadPhoto, onClaimed, onCompleted, onDismiss, onViewAccount, onFlowActiveChange, onClearRecommendation, rerenderBusy, rerenderReset, unmount: rendered.unmount };
 }
 
 async function openPhotoReview() {
@@ -60,6 +61,34 @@ async function savePhotoReview() {
 }
 
 describe("ClaimFlowBanner", () => {
+  it("uses a generated test photo and simulated location through the normal claim and upload steps", async () => {
+    const testPhoto = new File(["test jpeg"], "staging-test.jpg", { type: "image/jpeg" });
+    const getTestPhoto = vi.fn().mockResolvedValue({ file: testPhoto, mimeType: "image/jpeg", processingState: "prepared" });
+    const getTestLocation = vi.fn(() => ({ ...location, capturedAtEpochMs: Date.now() }));
+    const handlers = setup(null, undefined, {}, undefined, { location: getTestLocation, photo: getTestPhoto });
+    expect(await screen.findByText(/simulated park location and a generated photo/i)).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Use generated photo" }));
+    expect(await screen.findByRole("button", { name: "Save my visit" })).toBeTruthy();
+    expect(screen.getByText("Generated test photo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
+    await waitFor(() => expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, testPhoto));
+    expect(handlers.getPhoto).not.toHaveBeenCalled();
+    expect(handlers.getCurrentLocation).not.toHaveBeenCalled();
+    expect(getTestPhoto).toHaveBeenCalledTimes(1);
+    expect(getTestLocation).toHaveBeenCalledTimes(1);
+    expect(handlers.recommendClaim).toHaveBeenCalledWith({ location: expect.objectContaining({ latitude: place.latitude, longitude: place.longitude }) });
+    expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "fresh", expectedPlaceId: place.id, photoExpected: true });
+    expect(await screen.findByRole("heading", { name: "Test visit saved." })).toBeTruthy();
+  });
+
+  it("credits the original photo, license, and display changes on arrival", () => {
+    setup(null);
+    const credit = document.querySelector<HTMLElement>(".impression-arrival-credit")!;
+    expect(credit.textContent).toContain("Changes: Resized without upscaling, converted to WebP");
+    expect(credit.querySelector('a[href*="upload.wikimedia.org"]')).toBeTruthy();
+    expect(credit.querySelector('a[href*="creativecommons.org"]')).toBeTruthy();
+  });
+
   it("keeps the recommendation untouched when the camera is cancelled", async () => {
     const handlers = setup(null);
     fireEvent.click(await screen.findByRole("button", { name: "Log visit + photo" }));
@@ -87,17 +116,29 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.onClearRecommendation).toHaveBeenCalledTimes(1);
   });
 
-  it("reconciles a failed no-photo retry before requesting another location", async () => {
+  it("keeps a locally queued visit pending without reporting it or offering a duplicate retry", async () => {
+    const handlers = setup(null);
+    handlers.createClaim.mockResolvedValueOnce({ ...confirmation, pendingSync: true });
+    fireEvent.click(await screen.findByRole("button", { name: "Log without photo" }));
+
+    expect(await screen.findByText("Saved on this device. Syncs when online.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry saved visit" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "You were here." })).toBeNull();
+    expect(handlers.onClaimed).not.toHaveBeenCalled();
+    expect(handlers.onCompleted).not.toHaveBeenCalled();
+    expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+  });
+
+  it("rechecks location after a failed pre-submit no-photo check", async () => {
     const handlers = setup(null);
     handlers.getCurrentLocation.mockRejectedValueOnce(new Error("gps offline"));
-    handlers.reconcileClaim.mockResolvedValueOnce(confirmation);
     fireEvent.click(await screen.findByRole("button", { name: "Log without photo" }));
     expect(await screen.findByRole("button", { name: "Retry saved visit" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry saved visit" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(confirmation));
-    expect(handlers.reconcileClaim).toHaveBeenCalledWith(place.id);
-    expect(handlers.getCurrentLocation).toHaveBeenCalledTimes(1);
-    expect(handlers.createClaim).not.toHaveBeenCalled();
+    expect(handlers.reconcileClaim).not.toHaveBeenCalled();
+    expect(handlers.getCurrentLocation).toHaveBeenCalledTimes(2);
+    expect(handlers.createClaim).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the durable photo when retake is cancelled", async () => {
@@ -154,7 +195,7 @@ describe("ClaimFlowBanner", () => {
     expect(handlers.retry.save).toHaveBeenNthCalledWith(2, "account:user-1", place.id, { file: photo, mimeType: photo.type });
     expect(handlers.getCurrentLocation).toHaveBeenCalledWith(expect.objectContaining({ requirePrecise: true }));
     expect(handlers.recommendClaim).toHaveBeenCalledWith({ location });
-    expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "fresh", expectedPlaceId: place.id });
+    expect(handlers.createClaim).toHaveBeenCalledWith({ recommendationToken: "fresh", expectedPlaceId: place.id, photoExpected: true });
     expect(handlers.uploadPhoto).toHaveBeenCalledWith(place.id, photo);
     expect(handlers.retry.remove).toHaveBeenCalledWith("account:user-1", place.id);
     expect(handlers.retry.save.mock.invocationCallOrder[0]).toBeLessThan(handlers.createClaim.mock.invocationCallOrder[0]);
@@ -186,7 +227,7 @@ describe("ClaimFlowBanner", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry photo" }));
     await waitFor(() => expect(handlers.onClaimed).toHaveBeenCalledWith(expect.objectContaining({ claim: expect.objectContaining({ hasPhoto: true }) })));
     expect(handlers.reconcileClaim).toHaveBeenCalledWith(place.id);
-    expect(uploadPhoto).toHaveBeenCalledTimes(2);
+    expect(uploadPhoto).toHaveBeenCalledTimes(1);
   });
 
   it("keeps an accepted photo and retries a failed pre-claim check without reopening the camera", async () => {
@@ -327,7 +368,7 @@ describe("ClaimFlowBanner", () => {
     const handlers = setup(photo, undefined, { save: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("storage full")) });
     await openPhotoReview();
     fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
-    expect(await screen.findByText(/storage full/)).toBeTruthy();
+    expect(await screen.findByText(/could not be saved for retry/i)).toBeTruthy();
     expect(handlers.retry.remove).not.toHaveBeenCalled();
   });
 
@@ -375,6 +416,40 @@ describe("ClaimFlowBanner", () => {
     expect(reconcileClaim).toHaveBeenCalledWith(place.id);
     expect(handlers.uploadPhoto).toHaveBeenCalledTimes(1);
     expect(handlers.retry.remove).toHaveBeenCalledWith("account:user-1", place.id);
+  });
+
+  it("keeps an ambiguous online create behind reconciliation across reload", async () => {
+    const photo = new File(["private photo bytes"], "visit.jpg", { type: "image/jpeg" });
+    const handlers = setup(photo);
+    handlers.createClaim.mockRejectedValue(new Error("connection closed"));
+    handlers.reconcileClaim.mockRejectedValue(new Error("offline"));
+
+    await savePhotoReview();
+    expect(await screen.findByRole("button", { name: "Retry saved visit" })).toBeTruthy();
+    expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+    expect(handlers.reconcileClaim).toHaveBeenCalledTimes(1);
+    expect(handlers.retry.remove).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry saved visit" }));
+    expect((await screen.findAllByText(/Reconnect before retrying/)).length).toBeGreaterThan(0);
+    expect(handlers.createClaim).toHaveBeenCalledTimes(1);
+    expect(handlers.recommendClaim).toHaveBeenCalledTimes(1);
+    expect(handlers.retry.remove).not.toHaveBeenCalled();
+
+    handlers.unmount();
+    const restoredReconcile = vi.fn().mockRejectedValue(new Error("offline"));
+    const restored = setup(null, undefined, {
+      load: vi.fn().mockResolvedValue({ file: photo, mimeType: photo.type, processingState: "prepared" }),
+    }, restoredReconcile);
+    expect(await screen.findByRole("button", { name: "Save my visit" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save my visit" }));
+    expect((await screen.findAllByText(/Reconnect before retrying/)).length).toBeGreaterThan(0);
+    expect(restored.reconcileClaim).toHaveBeenCalledWith(place.id);
+    expect(restored.getCurrentLocation).not.toHaveBeenCalled();
+    expect(restored.recommendClaim).not.toHaveBeenCalled();
+    expect(restored.createClaim).not.toHaveBeenCalled();
+    expect(restored.retry.remove).not.toHaveBeenCalled();
   });
 
   it("retries only private-copy cleanup after the photo upload has succeeded", async () => {

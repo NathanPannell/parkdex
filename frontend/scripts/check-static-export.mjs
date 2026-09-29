@@ -20,7 +20,7 @@ const requiredFiles = [
   "data/boundaries.v1.geojson",
   "data/boundaries-display.v1.geojson",
   "data/exploration-territories.v1.geojson",
-  "data/vancouver-island-focus-mask.v1.geojson",
+  "data/bc-focus-mask.v1.geojson",
   "places/place-placeholder.png",
   "_headers",
   "_routes.json",

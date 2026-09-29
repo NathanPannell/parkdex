@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager, contextmanager
+import gzip
 import hashlib
+import json
 import logging
 import re
 import secrets
 from datetime import timedelta
+from functools import lru_cache
 from uuid import UUID
 from datetime import datetime, timezone
 from threading import Lock
@@ -14,6 +17,7 @@ from google.auth.exceptions import GoogleAuthError
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
 from psycopg.errors import UniqueViolation
+from shapely.geometry import mapping, shape
 
 from backend.app.auth import (
     DUMMY_PASSWORD_HASH,
@@ -40,17 +44,38 @@ from backend.app.account_deletion import (
     purge_expired_account_deletion_receipts,
     update_account_deletion_receipt,
 )
+from backend.app.achievements import achievements
+from backend.app.catalogue import (
+    MAP_PLACE_LIMIT,
+    PLACE_CATEGORIES as CATALOGUE_PLACE_CATEGORIES,
+    catalogue_counts,
+    catalogue_place_rows,
+    map_place_rows,
+    normalize_authorities,
+    normalize_categories,
+    normalize_visit_filter,
+    visited_place_rows,
+    active_badge_places,
+)
 from backend.app.auth_emails import AuthEmail, password_reset_email, verification_email
 from backend.app.db import close_pool, connection, open_pool
 from backend.app.email_delivery import email_delivery_configured, ensure_email_delivery, send_auth_email
 from backend.app.claim_photos import MAX_UPLOAD_BYTES, PhotoInputError, normalize_photo
 from backend.app.claims import (
+    BoundaryRegistry,
     ClaimInputError,
     LocationSample,
     create_recommendation_token,
     get_boundary_registry,
     recommendation_token_hash,
     validate_location_sample,
+)
+from backend.app.offline_claims import (
+    OFFLINE_GRANT_VALIDITY,
+    create_offline_grant_token,
+    offline_request_fingerprint,
+    offline_grant_token_hash,
+    validate_offline_location_sample,
 )
 from backend.app.object_storage import (
     ObjectStorage,
@@ -84,8 +109,13 @@ from backend.app.schemas import (
     GroupPlaceMutation,
     GroupRename,
     GuestImportResult,
+    OfflineClaimGrantResponse,
+    OfflineClaimRequest,
+    OfflinePlaceBundle,
     PlaceCollection,
-    PlaceSearchResult,
+    CatalogueSearchResult,
+    CatalogueState,
+    MapPlacesResult,
     SearchPlace,
     PasswordResetConfirmation,
     TrailResult,
@@ -106,21 +136,24 @@ from backend.app.groups import (
     create_group_row,
     rename_group_row,
     place_detail_row,
-    search_place_rows,
 )
 
 COLLECTION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 TRAIL_IDS = frozenset({"west_coast_trail", "juan_de_fuca_trail"})
+DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES = 0.0001
 COVERAGE_NOTE = (
-    "Official-source v0: two whole national park reserves, designated provincial parks, "
-    "and named regional parks from CRD, RDN, CVRD, and Bere Point. Regional coverage is "
-    "strongest in those districts; parks without a clean authoritative point, including "
-    "China Creek and Kwaksistah, are not guessed. The 24 nearby islands are a curated "
-    "collection; Vancouver Island frames the map rather than acting as a collectible. "
+    "Official-source British Columbia collection: Parks Canada destinations, designated "
+    "provincial parks, selected regional parks, and curated major islands. Regional coverage "
+    "varies by authority. Municipal and community coverage includes selected named parks from "
+    "CRD Park GIS, not a complete inventory. First Nations park coverage is also limited. "
     "Pins are representative centres, not entrances or trailheads."
 )
 CLAIM_RECOMMENDATION_ACCOUNT_LIMIT = 60
 CLAIM_RECOMMENDATION_GLOBAL_LIMIT = 5_000
+OFFLINE_CLAIM_GRANT_ACCOUNT_LIMIT = 10
+OFFLINE_CLAIM_GRANT_GLOBAL_LIMIT = 5_000
+OFFLINE_CLAIM_ACCOUNT_LIMIT = 60
+OFFLINE_CLAIM_GLOBAL_LIMIT = 5_000
 PHOTO_UPLOAD_ACCOUNT_LIMIT = 30
 PHOTO_UPLOAD_GLOBAL_LIMIT = 2_000
 CLAIM_ABUSE_WINDOW = timedelta(minutes=15)
@@ -615,13 +648,20 @@ def list_places(
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
     x_collection_key: str | None = Header(default=None),
+    summary: bool = False,
 ):
     identity = resolve_identity(conn, authorization, x_collection_key)
     include_staging_field_places = settings.staging_field_places_enabled
+    summary_columns = (
+        "''::text AS description, ''::text AS source_url"
+        if summary
+        else "description, source_url"
+    )
     places = conn.execute(
         f"""
-        SELECT id, name, category, latitude, longitude, region, description,
-               source_url, source_name, source_id
+        SELECT id, name, category, latitude, longitude, region,
+               {summary_columns},
+               source_name, source_id
         FROM places WHERE {place_visibility_clause()} ORDER BY name
         """,
         place_visibility_params(include_staging_field_places),
@@ -651,11 +691,385 @@ def list_places(
         "visit_claims": {
             "supported": True,
             "enforcement": settings.visit_claim_enforcement,
+            "offline_supported": True,
         },
     }
 
 
-PLACE_CATEGORIES = frozenset({"national", "provincial", "regional", "island"})
+PLACE_CATEGORIES = frozenset(CATALOGUE_PLACE_CATEGORIES)
+
+
+def _catalogue_identity_parts(
+    identity: AccountIdentity | str | None,
+) -> tuple[str | None, str | None]:
+    if isinstance(identity, AccountIdentity):
+        return identity.account_id, None
+    if isinstance(identity, str):
+        return None, identity
+    return None, None
+
+
+def _selected_categories(
+    *,
+    categories: list[str] | None,
+    plural_categories: list[str] | None,
+    place_type: str | None = None,
+) -> list[str] | None:
+    requested = list(categories or []) + list(plural_categories or [])
+    if place_type:
+        if requested and any(category != place_type for category in requested):
+            raise HTTPException(
+                status_code=400,
+                detail="type and category must match when both are provided",
+            )
+        requested.append(place_type)
+    try:
+        return normalize_categories(requested)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _catalogue_filters(
+    *,
+    categories: list[str] | None,
+    authorities: list[str] | None,
+    visited: str | bool | None,
+) -> tuple[list[str] | None, list[str] | None, bool | None]:
+    normalized_categories = _selected_categories(
+        categories=categories,
+        plural_categories=None,
+    )
+    try:
+        normalized_authorities = normalize_authorities(authorities)
+        visit_filter = normalize_visit_filter(visited)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return normalized_categories, normalized_authorities, visit_filter
+
+
+@app.get("/api/catalogue/state", response_model=CatalogueState)
+def get_catalogue_state(
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    include_staging = settings.staging_field_places_enabled
+    total, category_totals = catalogue_counts(
+        conn, include_staging_field_places=include_staging
+    )
+    active_places = active_badge_places(
+        conn, include_staging_field_places=include_staging
+    )
+    if account_id:
+        visits = visits_for_account(
+            conn, account_id, include_staging_field_places=include_staging
+        )
+        completed = completed_trails_for_account(conn, account_id)
+    elif owner_hash:
+        visits = visits_for_guest(
+            conn, owner_hash, include_staging_field_places=include_staging
+        )
+        completed = [
+            row["trail_id"]
+            for row in conn.execute(
+                "SELECT trail_id FROM guest_trail_completions "
+                "WHERE owner_hash = %s ORDER BY trail_id",
+                (owner_hash,),
+            ).fetchall()
+        ]
+    else:
+        visits = []
+        completed = []
+    active_by_id = {place["id"]: place for place in active_places}
+    visited_set = set(visited_ids(visits))
+    visited_category_totals = {category: 0 for category in PLACE_CATEGORIES}
+    for place_id in visited_set:
+        place = active_by_id.get(place_id)
+        if place is not None:
+            visited_category_totals[place["category"]] += 1
+    return {
+        "total": total,
+        "category_totals": category_totals,
+        "visited_category_totals": visited_category_totals,
+        "visited_ids": visited_ids(visits),
+        "visits": visits,
+        "completed_trail_ids": completed,
+        "coverage_note": COVERAGE_NOTE,
+        "visit_claims": {
+            "supported": True,
+            "enforcement": settings.visit_claim_enforcement,
+            "offline_supported": True,
+        },
+        "badges": achievements(places=active_places, visits=visits),
+    }
+
+
+@app.get("/api/catalogue/visited", response_model=CatalogueSearchResult)
+def list_visited_places(
+    response: Response,
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
+    query: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10000),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    normalized_categories = _selected_categories(
+        categories=category, plural_categories=categories
+    )
+    try:
+        normalized_authorities = normalize_authorities(authority)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rows, total = visited_place_rows(
+        conn,
+        account_id=account_id,
+        owner_hash=owner_hash,
+        categories=normalized_categories,
+        authorities=normalized_authorities,
+        query=query,
+        limit=limit,
+        offset=offset,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
+    return {"places": rows, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/map/places", response_model=MapPlacesResult)
+def get_map_places(
+    response: Response,
+    west: float = Query(ge=-180, le=180),
+    south: float = Query(ge=-90, le=90),
+    east: float = Query(ge=-180, le=180),
+    north: float = Query(ge=-90, le=90),
+    limit: int = Query(default=MAP_PLACE_LIMIT, ge=1, le=MAP_PLACE_LIMIT),
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
+    visited: str = Query(default="all"),
+    query: str | None = Query(default=None, max_length=200),
+    selected_id: str | None = Query(default=None, max_length=200),
+    selected_id_camel: str | None = Query(default=None, alias="selectedId", max_length=200),
+    group_id: str | None = Query(default=None, max_length=200),
+    group_id_camel: str | None = Query(default=None, alias="groupId", max_length=200),
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    if south > north:
+        raise HTTPException(status_code=400, detail="south must not be greater than north")
+    if selected_id is not None and selected_id_camel is not None and selected_id != selected_id_camel:
+        raise HTTPException(status_code=400, detail="selected_id values must match")
+    if group_id is not None and group_id_camel is not None and group_id != group_id_camel:
+        raise HTTPException(status_code=400, detail="group_id values must match")
+    normalized_categories = _selected_categories(
+        categories=category, plural_categories=categories
+    )
+    normalized_categories, normalized_authorities, visit_filter = _catalogue_filters(
+        categories=normalized_categories,
+        authorities=authority,
+        visited=visited,
+    )
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    selected_group_id = group_id or group_id_camel
+    if selected_group_id is not None:
+        if account_id is None:
+            raise HTTPException(status_code=401, detail="Account required for group map")
+        group = conn.execute(
+            "SELECT 1 FROM account_groups WHERE id::text = %s AND account_id = %s",
+            (selected_group_id, account_id),
+        ).fetchone()
+        if group is None:
+            raise HTTPException(status_code=404, detail="Group not found")
+    rows, total = map_place_rows(
+        conn,
+        west=west,
+        south=south,
+        east=east,
+        north=north,
+        categories=normalized_categories,
+        authorities=normalized_authorities,
+        query=query,
+        visited=visit_filter,
+        selected_id=selected_id or selected_id_camel,
+        group_id=selected_group_id,
+        account_id=account_id,
+        owner_hash=owner_hash,
+        limit=limit,
+        include_staging_field_places=settings.staging_field_places_enabled,
+    )
+    return {"places": rows, "total": total, "limit": limit}
+
+
+@lru_cache(maxsize=4)
+def _serialized_viewport_boundaries(
+    registry: BoundaryRegistry,
+    registry_version: str,
+    feature_ids: tuple[str, ...],
+) -> tuple[bytes, bytes, str]:
+    """Reuse viewport response bodies for boundary sets shared by nearby views."""
+
+    if registry.version != registry_version:
+        raise ValueError("Boundary registry version changed during serialization")
+    features = [
+        feature
+        for place_id in feature_ids
+        if (
+            feature := registry.display_feature(
+                place_id,
+                DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
+            )
+        )
+        is not None
+    ]
+    payload = {
+        "type": "FeatureCollection",
+        "features": features,
+        "count": len(features),
+    }
+    body = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    compressed_body = gzip.compress(body, compresslevel=6, mtime=0)
+    etag = f'W/"{hashlib.sha256(body).hexdigest()}"'
+    return body, compressed_body, etag
+
+
+@app.get("/api/map/boundaries", response_model=dict)
+def get_map_boundaries(
+    response: Response,
+    place_id: list[str] | None = Query(default=None),
+    place_id_camel: list[str] | None = Query(default=None, alias="placeId"),
+    west: float | None = Query(default=None, ge=-180, le=180),
+    south: float | None = Query(default=None, ge=-90, le=90),
+    east: float | None = Query(default=None, ge=-180, le=180),
+    north: float | None = Query(default=None, ge=-90, le=90),
+    accept_encoding: str = Header(default="", alias="Accept-Encoding"),
+    if_none_match: str = Header(default="", alias="If-None-Match"),
+    conn: Connection = Depends(connection),
+) -> dict | Response:
+    response.headers["Cache-Control"] = "public, max-age=300"
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    viewport_values = (west, south, east, north)
+    if any(value is not None for value in viewport_values):
+        if place_id or place_id_camel:
+            raise HTTPException(
+                status_code=400,
+                detail="Use either viewport bounds or place IDs, not both",
+            )
+        if any(value is None for value in viewport_values):
+            raise HTTPException(
+                status_code=400,
+                detail="west, south, east, and north must be provided together",
+            )
+        assert west is not None and south is not None
+        assert east is not None and north is not None
+        if south > north:
+            raise HTTPException(
+                status_code=400,
+                detail="south must be less than or equal to north",
+            )
+        visible_ids = {
+            row["id"]
+            for row in conn.execute(
+                f"SELECT p.id FROM places p WHERE {place_visibility_clause('p')}",
+                place_visibility_params(settings.staging_field_places_enabled),
+            ).fetchall()
+        }
+        feature_ids = tuple(
+            viewport_place_id
+            for viewport_place_id in registry.features_intersecting_bounds(
+                west, south, east, north
+            )
+            if viewport_place_id in visible_ids
+        )
+        body, compressed_body, etag = _serialized_viewport_boundaries(
+            registry,
+            registry.version,
+            feature_ids,
+        )
+        response_headers = {
+            "Cache-Control": "public, max-age=300",
+            "ETag": etag,
+            "Vary": "Accept-Encoding",
+        }
+        if if_none_match and any(
+            candidate.strip() in {"*", etag}
+            for candidate in if_none_match.split(",")
+        ):
+            return Response(status_code=304, headers=response_headers)
+        if _accepts_gzip(accept_encoding):
+            return Response(
+                content=compressed_body,
+                media_type="application/json",
+                headers={**response_headers, "Content-Encoding": "gzip"},
+            )
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers=response_headers,
+        )
+
+    requested_ids = list(place_id or []) + list(place_id_camel or [])
+    if len(requested_ids) > MAP_PLACE_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MAP_PLACE_LIMIT} place IDs can be requested",
+        )
+    if any(not value or len(value) > 200 for value in requested_ids):
+        raise HTTPException(status_code=400, detail="Invalid place ID")
+    unique_ids = list(dict.fromkeys(requested_ids))
+    if not unique_ids:
+        return {"type": "FeatureCollection", "features": []}
+    visible_ids = {
+        row["id"]
+        for row in conn.execute(
+            f"SELECT p.id FROM places p WHERE p.id = ANY(%s) AND {place_visibility_clause('p')}",
+            (unique_ids, *place_visibility_params(settings.staging_field_places_enabled)),
+        ).fetchall()
+    }
+    features = []
+    for requested_id in unique_ids:
+        if requested_id not in visible_ids:
+            continue
+        feature = registry.display_feature(
+            requested_id,
+            DISPLAY_BOUNDARY_SIMPLIFY_TOLERANCE_DEGREES,
+        )
+        if feature is None:
+            continue
+        features.append(feature)
+    return {"type": "FeatureCollection", "features": features}
+
+
+def _accepts_gzip(accept_encoding: str) -> bool:
+    for coding in accept_encoding.split(","):
+        name, *parameters = coding.strip().casefold().split(";")
+        if name != "gzip":
+            continue
+        for parameter in parameters:
+            key, separator, value = parameter.strip().partition("=")
+            if key == "q" and separator:
+                try:
+                    return float(value) > 0
+                except ValueError:
+                    return False
+        return True
+    return False
 
 
 def _record_id(value: str, label: str) -> str:
@@ -678,11 +1092,14 @@ def _group_name(value: str, label: str = "Collection") -> str:
     return name
 
 
-@app.get("/api/places/search", response_model=PlaceSearchResult)
+@app.get("/api/places/search", response_model=CatalogueSearchResult)
 def search_places(
-    visited: bool | None = Query(default=None),
+    response: Response,
+    visited: str = Query(default="all"),
     place_type: str | None = Query(default=None, alias="type"),
-    category: str | None = Query(default=None),
+    category: list[str] | None = Query(default=None),
+    categories: list[str] | None = Query(default=None),
+    authority: list[str] | None = Query(default=None),
     query: str | None = Query(default=None, max_length=200),
     latitude: float | None = Query(default=None, ge=-90, le=90),
     longitude: float | None = Query(default=None, ge=-180, le=180),
@@ -691,30 +1108,43 @@ def search_places(
     offset: int = Query(default=0, ge=0, le=10000),
     conn: Connection = Depends(connection),
     authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
 ):
-    identity = require_bearer(conn, authorization)
-    if place_type and category and place_type != category:
-        raise HTTPException(status_code=400, detail="type and category must match when both are provided")
-    selected_category = place_type or category
-    if selected_category and selected_category not in PLACE_CATEGORIES:
-        raise HTTPException(status_code=400, detail="Invalid place type")
+    response.headers["Cache-Control"] = "no-store"
+    selected_categories = _selected_categories(
+        categories=category,
+        plural_categories=categories,
+        place_type=place_type,
+    )
+    selected_categories, selected_authorities, visit_filter = _catalogue_filters(
+        categories=selected_categories,
+        authorities=authority,
+        visited=visited,
+    )
     if (latitude is None) != (longitude is None):
         raise HTTPException(status_code=400, detail="latitude and longitude must be provided together")
     if radius_km is not None and latitude is None:
         raise HTTPException(status_code=400, detail="radius_km requires latitude and longitude")
-    rows, total = search_place_rows(
-        conn,
-        identity.account_id,
-        visited=visited,
-        category=selected_category,
-        query=query,
-        latitude=latitude,
-        longitude=longitude,
-        radius_km=radius_km,
-        limit=limit,
-        offset=offset,
-        include_staging_field_places=settings.staging_field_places_enabled,
-    )
+    identity = resolve_identity(conn, authorization, x_collection_key)
+    account_id, owner_hash = _catalogue_identity_parts(identity)
+    try:
+        rows, total = catalogue_place_rows(
+            conn,
+            categories=selected_categories,
+            authorities=selected_authorities,
+            visited=visit_filter,
+            query=query,
+            account_id=account_id,
+            owner_hash=owner_hash,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km,
+            limit=limit,
+            offset=offset,
+            include_staging_field_places=settings.staging_field_places_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"places": rows, "total": total, "limit": limit, "offset": offset}
 
 
@@ -734,6 +1164,37 @@ def get_place_details(
     if row is None:
         raise HTTPException(status_code=404, detail="Place not found")
     return row
+
+
+@app.get("/api/places/{place_id}/offline-bundle", response_model=OfflinePlaceBundle)
+def get_offline_place_bundle(
+    place_id: str,
+    response: Response,
+    conn: Connection = Depends(connection),
+):
+    response.headers["Cache-Control"] = "public, max-age=300"
+    row = conn.execute(
+        f"""
+        SELECT id, name, category, latitude, longitude, region, description,
+               source_url, source_name, source_id,
+               vd.visitor_details AS visitor_details
+        FROM places p
+        LEFT JOIN place_visitor_details vd ON vd.place_id = p.id
+        WHERE p.id = %s AND {place_visibility_clause("p")}
+        """,
+        (
+            place_id,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    return {
+        "place": row,
+        "boundary": registry.feature(place_id),
+        "boundary_version": registry.offline_version,
+    }
 
 
 @app.get("/api/groups", response_model=list[Group])
@@ -1199,6 +1660,13 @@ def recommend_claim(
     identity = revalidate_locked_claim_identity(
         conn, identity, authorization, x_collection_key
     )
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        candidate.place_id,
+        sample.captured_at,
+        error_code="claim_location_precedes_place_undo",
+    )
     token, token_hash = create_recommendation_token()
     expires_at = sample.captured_at + timedelta(seconds=60)
     conn.execute(
@@ -1237,6 +1705,108 @@ def recommend_claim(
             "distance_meters": round(candidate.distance_meters, 3),
         },
     }
+
+
+@app.post(
+    "/api/offline-claim-grants",
+    response_model=OfflineClaimGrantResponse,
+    status_code=201,
+)
+def create_offline_claim_grant(
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = require_bearer(conn, authorization)
+    identity = revalidate_locked_account_identity(conn, identity, authorization)
+    reserve_rate_limit(
+        conn,
+        "offline_claim_grant_global",
+        "global",
+        OFFLINE_CLAIM_GRANT_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "offline_claim_grant",
+        identity.account_id,
+        OFFLINE_CLAIM_GRANT_ACCOUNT_LIMIT,
+        timedelta(days=1),
+    )
+    conn.execute(
+        "DELETE FROM offline_claim_grants "
+        "WHERE account_id = %s AND (expires_at <= NOW() OR revoked_at IS NOT NULL)",
+        (identity.account_id,),
+    )
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    issued_at = datetime.now(timezone.utc)
+    expires_at = issued_at + OFFLINE_GRANT_VALIDITY
+    grant_token, token_hash = create_offline_grant_token()
+    conn.execute(
+        """
+        INSERT INTO offline_claim_grants (
+            token_hash, account_id, boundary_version, issued_at, expires_at
+        ) VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            token_hash,
+            identity.account_id,
+            registry.offline_version,
+            issued_at,
+            expires_at,
+        ),
+    )
+    conn.commit()
+    return {
+        "grant_token": grant_token,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+        "boundary_version": registry.offline_version,
+    }
+
+
+def reserve_offline_claim_capacity(conn: Connection, account_id: str) -> None:
+    reserve_rate_limit(
+        conn,
+        "offline_claim_global",
+        "global",
+        OFFLINE_CLAIM_GLOBAL_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    reserve_rate_limit(
+        conn,
+        "offline_claim",
+        account_id,
+        OFFLINE_CLAIM_ACCOUNT_LIMIT,
+        CLAIM_ABUSE_WINDOW,
+    )
+    # Persist this reservation before the exact-geometry and claim writes.
+    # The handler re-locks and revalidates account/session state afterward.
+    conn.commit()
+
+
+def reject_location_before_place_undo(
+    conn: Connection,
+    account_id: str,
+    place_id: str,
+    captured_at: datetime,
+    *,
+    error_code: str,
+) -> None:
+    tombstone = conn.execute(
+        """
+        SELECT undone_at FROM offline_claim_undo_tombstones
+        WHERE account_id = %s AND place_id = %s
+        """,
+        (account_id, place_id),
+    ).fetchone()
+    if tombstone is not None and captured_at <= tombstone["undone_at"]:
+        raise claim_error(
+            410,
+            error_code,
+            "This saved location was captured before the place was removed",
+        )
 
 
 @app.post("/api/claims", response_model=CreateClaimResponse)
@@ -1319,6 +1889,272 @@ def create_claim(
     )
 
 
+@app.post("/api/offline-claims", response_model=CreateClaimResponse)
+def create_offline_claim(
+    payload: OfflineClaimRequest,
+    response: Response,
+    conn: Connection = Depends(connection),
+    authorization: str | None = Header(default=None),
+    x_collection_key: str | None = Header(default=None),
+):
+    response.headers["Cache-Control"] = "no-store"
+    identity = authenticated_claim_identity(conn, authorization, x_collection_key)
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    fingerprint = offline_request_fingerprint(
+        grant_token=payload.grantToken,
+        expected_place_id=payload.expectedPlaceId,
+        latitude=payload.location.latitude,
+        longitude=payload.location.longitude,
+        accuracy_meters=payload.location.accuracy_meters,
+        captured_at_epoch_ms=payload.location.captured_at_epoch_ms,
+    )
+    prior = conn.execute(
+        """
+        SELECT request_fingerprint, confirmation, invalidated_at
+        FROM offline_claim_requests
+        WHERE account_id = %s AND request_id = %s
+        """,
+        (identity.account_id, payload.requestId),
+    ).fetchone()
+    if prior is not None:
+        if prior["request_fingerprint"] != fingerprint:
+            raise claim_error(
+                409,
+                "offline_claim_request_id_conflict",
+                "This request ID was already used for a different offline claim",
+            )
+        if prior["invalidated_at"] is not None:
+            raise claim_error(
+                410,
+                "offline_claim_receipt_invalidated",
+                "This offline claim receipt was invalidated after the visit was removed or account progress was reset",
+            )
+        return prior["confirmation"]
+
+    token_hash = offline_grant_token_hash(payload.grantToken)
+    if token_hash is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    grant = conn.execute(
+        """
+        SELECT account_id, boundary_version, issued_at, expires_at, revoked_at
+        FROM offline_claim_grants
+        WHERE token_hash = %s AND account_id = %s
+        FOR UPDATE
+        """,
+        (token_hash, identity.account_id),
+    ).fetchone()
+    if grant is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    now = datetime.now(timezone.utc)
+    if grant["revoked_at"] is not None:
+        raise claim_error(
+            410,
+            "offline_claim_grant_revoked",
+            "Offline claim grant has been revoked",
+        )
+    if now > grant["expires_at"]:
+        raise claim_error(
+            410,
+            "offline_claim_grant_expired",
+            "Offline claim grant has expired",
+        )
+
+    # The grant version scopes client-side offline recommendations. Deferred
+    # claims remain eligible across registry updates, but must fit the current
+    # canonical boundary below and are recorded against this current version.
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    try:
+        sample = validate_offline_location_sample(
+            payload.location.latitude,
+            payload.location.longitude,
+            payload.location.accuracy_meters,
+            payload.location.captured_at_epoch_ms,
+            grant_issued_at=grant["issued_at"],
+            grant_expires_at=grant["expires_at"],
+            now=now,
+        )
+    except ClaimInputError as exc:
+        raise claim_error(422, exc.code, str(exc)) from exc
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        payload.expectedPlaceId,
+        sample.captured_at,
+        error_code="offline_claim_precedes_place_undo",
+    )
+
+    reserve_offline_claim_capacity(conn, identity.account_id)
+    identity = revalidate_locked_claim_identity(
+        conn, identity, authorization, x_collection_key
+    )
+    prior = conn.execute(
+        """
+        SELECT request_fingerprint, confirmation, invalidated_at
+        FROM offline_claim_requests
+        WHERE account_id = %s AND request_id = %s
+        """,
+        (identity.account_id, payload.requestId),
+    ).fetchone()
+    if prior is not None:
+        if prior["request_fingerprint"] != fingerprint:
+            raise claim_error(
+                409,
+                "offline_claim_request_id_conflict",
+                "This request ID was already used for a different offline claim",
+            )
+        if prior["invalidated_at"] is not None:
+            raise claim_error(
+                410,
+                "offline_claim_receipt_invalidated",
+                "This offline claim receipt was invalidated after the visit was removed or account progress was reset",
+            )
+        return prior["confirmation"]
+
+    grant = conn.execute(
+        """
+        SELECT account_id, boundary_version, issued_at, expires_at, revoked_at
+        FROM offline_claim_grants
+        WHERE token_hash = %s AND account_id = %s
+        FOR UPDATE
+        """,
+        (token_hash, identity.account_id),
+    ).fetchone()
+    if grant is None:
+        raise claim_error(
+            404,
+            "offline_claim_grant_not_found",
+            "Offline claim grant was not found",
+        )
+    now = datetime.now(timezone.utc)
+    if grant["revoked_at"] is not None:
+        raise claim_error(
+            410,
+            "offline_claim_grant_revoked",
+            "Offline claim grant has been revoked",
+        )
+    if now > grant["expires_at"]:
+        raise claim_error(
+            410,
+            "offline_claim_grant_expired",
+            "Offline claim grant has expired",
+        )
+    registry = get_boundary_registry(settings.staging_field_places_enabled)
+    try:
+        sample = validate_offline_location_sample(
+            payload.location.latitude,
+            payload.location.longitude,
+            payload.location.accuracy_meters,
+            payload.location.captured_at_epoch_ms,
+            grant_issued_at=grant["issued_at"],
+            grant_expires_at=grant["expires_at"],
+            now=now,
+        )
+    except ClaimInputError as exc:
+        raise claim_error(422, exc.code, str(exc)) from exc
+    reject_location_before_place_undo(
+        conn,
+        identity.account_id,
+        payload.expectedPlaceId,
+        sample.captured_at,
+        error_code="offline_claim_precedes_place_undo",
+    )
+
+    if not conn.execute(
+        f"SELECT 1 FROM places WHERE id = %s AND {place_visibility_clause()}",
+        (
+            payload.expectedPlaceId,
+            *place_visibility_params(settings.staging_field_places_enabled),
+        ),
+    ).fetchone():
+        raise claim_error(
+            409,
+            "claim_place_unavailable",
+            "The requested place is no longer available",
+        )
+    if not registry.contains_exact(
+        payload.expectedPlaceId, sample.latitude, sample.longitude
+    ):
+        raise claim_error(
+            422,
+            "offline_location_outside_boundary",
+            "The saved location is outside the requested place boundary",
+        )
+    existing_claim = conn.execute(
+        "SELECT 1 FROM account_visit_claims WHERE account_id = %s AND place_id = %s",
+        (identity.account_id, payload.expectedPlaceId),
+    ).fetchone()
+    if existing_claim:
+        raise claim_error(
+            409,
+            "claim_place_already_claimed",
+            "This place already has a location claim",
+        )
+
+    claim_key = hashlib.sha256(
+        f"parkdex-offline-claim:{identity.account_id}:{payload.requestId}".encode(
+            "ascii"
+        )
+    ).hexdigest()
+    conn.execute(
+        "INSERT INTO account_visits (account_id, place_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        (identity.account_id, payload.expectedPlaceId),
+    )
+    conn.execute(
+        """
+        INSERT INTO account_visit_claims (
+            account_id, place_id, recommendation_hash, captured_at, latitude,
+            longitude, accuracy_m, boundary_version, match_kind, distance_m
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'exact', 0)
+        """,
+        (
+            identity.account_id,
+            payload.expectedPlaceId,
+            claim_key,
+            sample.captured_at,
+            sample.latitude,
+            sample.longitude,
+            sample.accuracy_meters,
+            registry.offline_version,
+        ),
+    )
+    created = fetch_claim(conn, identity.account_id, payload.expectedPlaceId)
+    confirmation = CreateClaimResponse.model_validate(
+        claim_response_from_row(
+            created,
+            owner_visit_count(
+                conn,
+                identity.account_id,
+                include_staging_field_places=settings.staging_field_places_enabled,
+            ),
+        )
+    ).model_dump(mode="json")
+    conn.execute(
+        """
+        INSERT INTO offline_claim_requests (
+            account_id, request_id, request_fingerprint, confirmation
+        ) VALUES (%s, %s, %s, %s::jsonb)
+        """,
+        (
+            identity.account_id,
+            payload.requestId,
+            fingerprint,
+            json.dumps(confirmation, separators=(",", ":")),
+        ),
+    )
+    conn.commit()
+    return confirmation
+
+
 @app.put("/api/visits/{place_id}", response_model=VisitResult)
 def update_visit(
     place_id: str,
@@ -1374,6 +2210,34 @@ def update_visit(
             enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
             conn.execute(
                 "DELETE FROM account_visits WHERE account_id = %s AND place_id = %s",
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                "DELETE FROM claim_recommendations "
+                "WHERE account_id = %s AND place_id = %s AND consumed_at IS NULL",
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                """
+                UPDATE offline_claim_requests SET invalidated_at = NOW()
+                WHERE account_id = %s AND invalidated_at IS NULL
+                  AND COALESCE(
+                      confirmation->>'placeId', confirmation->>'place_id'
+                  ) = %s
+                """,
+                (identity.account_id, place_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO offline_claim_undo_tombstones (
+                    account_id, place_id, undone_at
+                ) VALUES (%s, %s, clock_timestamp())
+                ON CONFLICT (account_id, place_id) DO UPDATE
+                SET undone_at = GREATEST(
+                    offline_claim_undo_tombstones.undone_at,
+                    EXCLUDED.undone_at
+                )
+                """,
                 (identity.account_id, place_id),
             )
         count = conn.execute(
@@ -1800,6 +2664,7 @@ def confirm_password_reset(payload: PasswordResetConfirmation) -> Response:
             raise HTTPException(status_code=400, detail="Invalid or expired password reset token")
         conn.execute("UPDATE accounts SET password_hash = %s, email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = %s", (password_hash, row["account_id"]))
         conn.execute("UPDATE account_sessions SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
+        conn.execute("UPDATE offline_claim_grants SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         conn.execute("UPDATE mcp_oauth_authorization_codes SET used_at = NOW() WHERE account_id = %s AND used_at IS NULL", (row["account_id"],))
         conn.execute("UPDATE mcp_oauth_tokens SET revoked_at = NOW() WHERE account_id = %s AND revoked_at IS NULL", (row["account_id"],))
         record_security_event(conn, "password_reset_completed", str(row["account_id"]), "success")
@@ -2074,6 +2939,16 @@ def reset_account_progress(
     enqueue_photo_object_deletions(conn, identity.account_id, photo_keys)
     conn.execute(
         "DELETE FROM claim_recommendations WHERE account_id = %s",
+        (identity.account_id,),
+    )
+    conn.execute(
+        "UPDATE offline_claim_grants SET revoked_at = NOW() "
+        "WHERE account_id = %s AND revoked_at IS NULL",
+        (identity.account_id,),
+    )
+    conn.execute(
+        "UPDATE offline_claim_requests SET invalidated_at = NOW() "
+        "WHERE account_id = %s AND invalidated_at IS NULL",
         (identity.account_id,),
     )
     conn.execute(

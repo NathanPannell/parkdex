@@ -11,9 +11,20 @@ import secrets
 from typing import Iterable
 
 from pyproj import Transformer
-from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon, shape
+from shapely.geometry import (
+    GeometryCollection,
+    MultiPolygon,
+    Point,
+    Polygon,
+    box,
+    mapping,
+    shape,
+)
 from shapely.ops import transform, unary_union
+from shapely.strtree import STRtree
 from shapely.validation import make_valid
+
+from backend.app.place_categories import ALLOWED_CATEGORIES
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -71,6 +82,8 @@ class BoundaryRegistry:
             payloads.append(overlay_path.read_bytes())
         project = Transformer.from_crs("EPSG:4326", "EPSG:3005", always_xy=True).transform
         boundaries: list[_Boundary] = []
+        features: dict[str, dict] = {}
+        exact_geometries: dict[str, object] = {}
         seen: set[str] = set()
         for payload in payloads:
             document = json.loads(payload)
@@ -84,16 +97,32 @@ class BoundaryRegistry:
                     raise RuntimeError(
                         "Boundary data has a missing or duplicate place id"
                     )
-                if category not in {
-                    "national",
-                    "provincial",
-                    "regional",
-                    "island",
-                }:
+                if category not in ALLOWED_CATEGORIES:
                     raise RuntimeError(
                         f"Boundary {place_id} has an invalid category"
                     )
-                projected = transform(project, shape(feature.get("geometry")))
+                source_geometry = shape(feature.get("geometry"))
+                canonical_geometry = source_geometry
+                if not canonical_geometry.is_valid:
+                    canonical_geometry = make_valid(canonical_geometry)
+                    canonical_polygonal = [
+                        item
+                        for item in getattr(canonical_geometry, "geoms", [canonical_geometry])
+                        if isinstance(item, (Polygon, MultiPolygon))
+                    ]
+                    canonical_geometry = (
+                        unary_union(canonical_polygonal)
+                        if canonical_polygonal
+                        else GeometryCollection()
+                    )
+                if (
+                    canonical_geometry.is_empty
+                    or not canonical_geometry.is_valid
+                    or canonical_geometry.area <= 0
+                    or not isinstance(canonical_geometry, (Polygon, MultiPolygon))
+                ):
+                    raise RuntimeError(f"Boundary {place_id} has no valid WGS84 polygon")
+                projected = transform(project, source_geometry)
                 if not projected.is_valid:
                     repaired = make_valid(projected)
                     polygonal = [
@@ -107,6 +136,12 @@ class BoundaryRegistry:
                 if projected.is_empty or not projected.is_valid or projected.area <= 0:
                     raise RuntimeError(f"Boundary {place_id} is invalid")
                 seen.add(place_id)
+                canonical_feature = dict(feature)
+                canonical_feature["geometry"] = json.loads(
+                    json.dumps(mapping(canonical_geometry))
+                )
+                features[place_id] = canonical_feature
+                exact_geometries[place_id] = canonical_geometry
                 boundaries.append(
                     _Boundary(
                         place_id,
@@ -119,6 +154,28 @@ class BoundaryRegistry:
             raise RuntimeError("Boundary data is empty")
         self.boundaries = tuple(boundaries)
         self.place_ids = frozenset(seen)
+        self.features = features
+        self._exact_geometries = exact_geometries
+        self._viewport_feature_ids = tuple(features)
+        self._viewport_geometries = tuple(
+            exact_geometries[place_id] for place_id in self._viewport_feature_ids
+        )
+        self._viewport_tree = STRtree(self._viewport_geometries)
+        self._display_features: dict[tuple[str, float], dict] = {}
+        offline_digest = hashlib.sha256(b"parkdex-offline-boundary-v1\0")
+        for payload in payloads:
+            offline_digest.update(len(payload).to_bytes(8, "big"))
+            offline_digest.update(payload)
+        for place_id in sorted(features):
+            canonical_feature_payload = json.dumps(
+                features[place_id],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            offline_digest.update(len(canonical_feature_payload).to_bytes(8, "big"))
+            offline_digest.update(canonical_feature_payload)
+        self.offline_version = offline_digest.hexdigest()
         if len(payloads) == 1:
             # Preserve the deployed canonical version when the overlay is off.
             self.version = hashlib.sha256(payloads[0]).hexdigest()
@@ -129,6 +186,85 @@ class BoundaryRegistry:
                 digest.update(payload)
             self.version = digest.hexdigest()
         self._project = Transformer.from_crs("EPSG:4326", "EPSG:3005", always_xy=True)
+
+    def feature(self, place_id: str) -> dict | None:
+        """Return the unsimplified canonical WGS84 feature for a place."""
+
+        return self.features.get(place_id)
+
+    def display_feature(self, place_id: str, tolerance: float) -> dict | None:
+        """Return a cached, simplified feature for repeated map responses."""
+
+        feature = self.feature(place_id)
+        if feature is None:
+            return None
+        cache_key = (place_id, tolerance)
+        if cache_key not in self._display_features:
+            source_geometry = shape(feature["geometry"])
+            display_geometry = source_geometry.simplify(
+                tolerance,
+                preserve_topology=True,
+            )
+            if display_geometry.is_empty or not display_geometry.is_valid:
+                display_geometry = source_geometry
+            self._display_features[cache_key] = {
+                **feature,
+                "geometry": mapping(display_geometry),
+            }
+        return self._display_features[cache_key]
+
+    def features_intersecting_bounds(
+        self, west: float, south: float, east: float, north: float
+    ) -> tuple[str, ...]:
+        """Return every boundary polygon intersecting a WGS84 viewport.
+
+        A west value greater than east represents a viewport crossing the
+        antimeridian. Results stay in source catalogue order for stable API
+        responses.
+        """
+
+        viewport_parts = (
+            (box(west, south, east, north),)
+            if west <= east
+            else (
+                box(west, south, 180, north),
+                box(-180, south, east, north),
+            )
+        )
+        candidate_indices: set[int] = set()
+        for viewport in viewport_parts:
+            candidate_indices.update(
+                int(index) for index in self._viewport_tree.query(viewport)
+            )
+        return tuple(
+            self._viewport_feature_ids[index]
+            for index in sorted(candidate_indices)
+            if any(
+                self._viewport_geometries[index].intersects(viewport)
+                for viewport in viewport_parts
+            )
+        )
+
+    def contains_exact(self, place_id: str, latitude: float, longitude: float) -> bool:
+        """Test the captured point against the canonical polygon without a buffer."""
+
+        geometry = self._exact_geometries.get(place_id)
+        if (
+            not isinstance(geometry, (Polygon, MultiPolygon))
+            or geometry.is_empty
+            or not geometry.is_valid
+        ):
+            return False
+        point = Point(longitude, latitude)
+        polygons = [geometry] if isinstance(geometry, Polygon) else list(geometry.geoms)
+        for polygon in polygons:
+            if polygon.contains(point):
+                return True
+            if polygon.exterior.covers(point) and not any(
+                interior.covers(point) for interior in polygon.interiors
+            ):
+                return True
+        return False
 
     def recommend(self, sample: LocationSample, excluded_place_ids: Iterable[str] = ()) -> Candidate | None:
         excluded = frozenset(excluded_place_ids)

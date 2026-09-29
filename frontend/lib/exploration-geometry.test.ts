@@ -73,14 +73,18 @@ function geometryContains(location: readonly [number, number], geometry: GeoJSON
 }
 
 describe("weighted exploration territory", () => {
-  it("uses the explicit national, island, provincial, regional influence order", () => {
-    expect(EXPLORATION_CATEGORY_WEIGHTS).toEqual({ national: 4, island: 3, provincial: 2, regional: 1 });
+  it("gives municipal and community places the same territory weight as regional places", () => {
+    expect(EXPLORATION_CATEGORY_WEIGHTS).toEqual({
+      national: 4, island: 3, provincial: 2, regional: 1, municipal: 1, community: 1,
+    });
     const location = point("query", -124);
-    const sameLocation = (["national", "island", "provincial", "regional"] as const)
+    const sameLocation = (["national", "island", "provincial", "regional", "municipal", "community"] as const)
       .map((category) => point(category, -123.9, 49, category));
     expect(sameLocation.map((place) => weightedDistanceScore(location, place)))
       .toEqual([...sameLocation.map((place) => weightedDistanceScore(location, place))].sort((a, b) => a - b));
     expect(nearestWeightedExplorationPoint(location, sameLocation)?.id).toBe("national");
+    expect(weightedDistanceScore(location, sameLocation[3])).toBe(weightedDistanceScore(location, sameLocation[4]));
+    expect(weightedDistanceScore(location, sameLocation[3])).toBe(weightedDistanceScore(location, sameLocation[5]));
   });
 
   it("lets weight expand an accomplishment without defeating a substantially nearer gap", () => {
@@ -114,7 +118,7 @@ describe("weighted exploration territory", () => {
 
   it("gives every active catalogue representative its own deterministic nearest score", () => {
     const places = catalogue();
-    expect(places).toHaveLength(198);
+    expect(places.length).toBeGreaterThan(700);
     places.forEach((place) => expect(nearestWeightedExplorationPoint(place, places)?.id).toBe(place.id));
   });
 
@@ -128,12 +132,12 @@ describe("weighted exploration territory", () => {
       feature.properties.kind === "estimated-territory" && feature.geometry.type === "MultiPolygon"
     ));
     expect(scope).toBeDefined();
-    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(3_000_000);
+    expect(statSync(resolve(process.cwd(), "public/data/exploration-territories.v1.geojson")).size).toBeLessThan(6_000_000);
     expect(asset.metadata).toMatchObject({
-      activePlaceCount: 198,
-      territoryCount: 198,
+      activePlaceCount: places.length,
+      territoryCount: places.length,
       categoryWeights: EXPLORATION_CATEGORY_WEIGHTS,
-      landSource: "canonical-boundaries-independent-padded",
+      landSource: "bc-cartographic-boundary-plus-canonical-boundaries-independent-padded",
       explorationPaddingMeters: { park: 180, island: 220 },
     });
     expect(new Set(territories.map((feature) => feature.properties.id)))
@@ -143,16 +147,16 @@ describe("weighted exploration territory", () => {
     // A deterministic land sample catches both offshore fill and gaps/overlaps
     // without running an unstable 195-way polygon boolean in the test process.
     let landSamples = 0;
-    for (let latitude = 48.31; latitude <= 50.88; latitude += 0.04) {
-      for (let longitude = -128.44; longitude <= -123.04; longitude += 0.04) {
+    for (let latitude = 48.31; latitude <= 59.95; latitude += 0.3) {
+      for (let longitude = -138.95; longitude <= -114.05; longitude += 0.3) {
         const location = [longitude + 0.013, latitude + 0.017] as const;
         if (!geometryContains(location, scope!.geometry)) continue;
         landSamples += 1;
         expect(territories.filter((feature) => geometryContains(location, feature.geometry))).toHaveLength(1);
       }
     }
-    expect(landSamples).toBeGreaterThan(1_500);
-  }, 20_000);
+    expect(landSamples).toBeGreaterThan(1_000);
+  }, 60_000);
 
   it("ships a rounded display-edge topology with no shared seam between visited neighbors", () => {
     const places = catalogue();

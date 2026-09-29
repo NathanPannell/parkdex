@@ -41,7 +41,9 @@ def _wait_for_api(origin: str) -> None:
     raise RuntimeError("Local Parkdex API did not become ready")
 
 
-async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]:
+async def _exercise_mcp(
+    origin: str, token: str, places: list[tuple[dict, bool]]
+) -> tuple[str, str]:
     environment = {
         **os.environ,
         "PARKDEX_API_ORIGIN": origin,
@@ -64,26 +66,39 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
             "list_groups",
         } <= names
 
-        found = await client.call_tool(
-            "search_places",
-            {
-                "visited": False,
-                "type": place["category"],
-                "latitude": place["latitude"],
-                "longitude": place["longitude"],
-                "radius_km": 1,
-                "limit": 1,
-                "offset": 0,
-            },
-        )
-        assert not found.is_error
-        found_payload = _payload(found)
-        assert found_payload["places"][0]["id"] == place["id"]
-        assert found_payload["places"][0]["distanceKm"] == 0
+        for place, has_visitor_details in places:
+            found = await client.call_tool(
+                "search_places",
+                {
+                    "visited": False,
+                    "type": place["category"],
+                    "query": place["name"],
+                    "latitude": place["latitude"],
+                    "longitude": place["longitude"],
+                    "radius_km": 1,
+                    "limit": 1,
+                    "offset": 0,
+                },
+            )
+            assert not found.is_error
+            found_payload = _payload(found)
+            assert found_payload["places"][0]["id"] == place["id"]
+            assert found_payload["places"][0]["distanceKm"] == 0
+            assert "visitorDetails" not in found_payload["places"][0]
 
-        details = await client.call_tool("get_place_details", {"place_id": place["id"]})
-        assert not details.is_error
-        assert _payload(details)["id"] == place["id"]
+            details = await client.call_tool(
+                "get_place_details", {"place_id": place["id"]}
+            )
+            assert not details.is_error
+            detail_payload = _payload(details)
+            assert detail_payload["id"] == place["id"]
+            if has_visitor_details:
+                assert detail_payload["visitorDetails"]["schemaVersion"] == "1.0.0"
+                assert "archiveIds" not in detail_payload["visitorDetails"]["source"]
+            else:
+                assert "visitorDetails" not in detail_payload
+
+        place = places[0][0]
 
         wishlist = await client.call_tool("get_wishlist", {})
         assert not wishlist.is_error
@@ -95,6 +110,7 @@ async def _exercise_mcp(origin: str, token: str, place: dict) -> tuple[str, str]
         assert not wishlist.is_error
         wishlist_payload = _payload(wishlist)
         assert wishlist_payload["placeIds"] == [place["id"]]
+        assert all("visitorDetails" not in item for item in wishlist_payload["places"])
 
         created = await client.call_tool(
             "create_group",
@@ -148,27 +164,53 @@ def test_stdio_mcp_round_trip_matches_rest_and_enforces_account_ownership() -> N
             assert second.status_code == 201
             first_headers = {"Authorization": f"Bearer {first.json()['token']}"}
             second_headers = {"Authorization": f"Bearer {second.json()['token']}"}
-            catalogue = api.get("/api/places", headers=first_headers)
-            assert catalogue.status_code == 200
-            place = catalogue.json()["places"][0]
+            with psycopg.connect(database_url) as conn:
+                rich_place = conn.execute(
+                    """
+                    SELECT p.id, p.name, p.category, p.latitude, p.longitude
+                    FROM places p
+                    JOIN place_visitor_details vd ON vd.place_id = p.id
+                    WHERE p.active
+                    ORDER BY p.id
+                    LIMIT 1
+                    """
+                ).fetchone()
+                basic_local_place = conn.execute(
+                    """
+                    SELECT p.id, p.name, p.category, p.latitude, p.longitude
+                    FROM places p
+                    LEFT JOIN place_visitor_details vd ON vd.place_id = p.id
+                    WHERE p.active AND p.category IN ('municipal', 'community')
+                      AND vd.place_id IS NULL
+                    ORDER BY p.id
+                    LIMIT 1
+                    """
+                ).fetchone()
+            assert rich_place is not None
+            assert basic_local_place is not None
+            column_names = ("id", "name", "category", "latitude", "longitude")
+            mcp_places = [
+                (dict(zip(column_names, rich_place)), True),
+                (dict(zip(column_names, basic_local_place)), False),
+            ]
 
             group_id, wishlist_id = asyncio.run(
-                _exercise_mcp(origin, first.json()["token"], place)
+                _exercise_mcp(origin, first.json()["token"], mcp_places)
             )
 
             groups = api.get("/api/groups", headers=first_headers)
             assert groups.status_code == 200
             by_id = {group["id"]: group for group in groups.json()}
             assert by_id[group_id]["name"] == "MCP island weekend"
-            assert by_id[group_id]["placeIds"] == [place["id"]]
+            assert by_id[group_id]["placeIds"] == [mcp_places[0][0]["id"]]
             assert by_id[wishlist_id]["isWishlist"] is True
-            assert by_id[wishlist_id]["placeIds"] == [place["id"]]
+            assert by_id[wishlist_id]["placeIds"] == [mcp_places[0][0]["id"]]
 
             assert api.get(f"/api/groups/{group_id}", headers=second_headers).status_code == 404
             assert api.post(
                 f"/api/groups/{group_id}/places",
                 headers=second_headers,
-                json={"placeIds": [place["id"]]},
+                json={"placeIds": [mcp_places[0][0]["id"]]},
             ).status_code == 404
     finally:
         server.terminate()

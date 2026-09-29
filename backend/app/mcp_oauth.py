@@ -213,7 +213,7 @@ def _oauth_document(*, title: str, content: str) -> str:
         <span class="brand-name">PARKDEX</span>
       </header>
       {content}
-      <footer class="brand-footer"><strong>Parkdex</strong>A completionist map of Vancouver Island</footer>
+      <footer class="brand-footer"><strong>Parkdex</strong>A completionist map of British Columbia</footer>
     </main>
   </body>
 </html>"""

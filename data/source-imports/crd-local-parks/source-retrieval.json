@@ -1,0 +1,21 @@
+{
+  "sourceLayer": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+  "retrievedAtUtc": "2026-09-27T22:43:13+00:00",
+  "where": "Type IN ('Municipal Park','Community Park')",
+  "outFields": "*",
+  "returnGeometry": true,
+  "outSR": 4326,
+  "pageSize": 1000,
+  "offsets": [
+    0,
+    1000
+  ],
+  "expectedCount": 1273,
+  "retrievedCount": 1273,
+  "objectIdRange": [
+    13,
+    1968
+  ],
+  "snapshot": "crd-municipal-community-source.geojson",
+  "layerMetadata": "source-layer-metadata.json"
+}

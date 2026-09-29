@@ -318,8 +318,10 @@ def place_detail_row(
     row = conn.execute(
         f"""
         SELECT {PLACE_COLUMNS},
+               vd.visitor_details AS visitor_details,
                EXISTS (SELECT 1 FROM account_visits av WHERE av.account_id = %s AND av.place_id = p.id) AS visited
         FROM places p
+        LEFT JOIN place_visitor_details vd ON vd.place_id = p.id
         WHERE p.id = %s AND {place_visibility_clause("p")}
         """,
         (

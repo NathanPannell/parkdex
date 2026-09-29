@@ -21,6 +21,12 @@ OTHER_EMAIL = "hosted-mcp-other@example.com"
 PASSWORD = "hosted mcp password"
 
 
+def test_oauth_document_uses_bc_brand_footer() -> None:
+    document = oauth._oauth_document(title="Connect to Parkdex", content="<p>Connect</p>")
+
+    assert "A completionist map of British Columbia" in document
+
+
 def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
     with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
         conn.execute("DELETE FROM accounts WHERE email = ANY(%s)", ([EMAIL, OTHER_EMAIL],))
@@ -169,6 +175,24 @@ def test_public_oauth_pkce_streamable_http_and_revocation(monkeypatch) -> None:
         groups_payload = json.loads(groups.json()["result"]["content"][0]["text"])
         assert groups_payload["isWishlist"] is True
         assert "is_wishlist" not in groups_payload
+
+        hosted_detail = client.post("/mcp", headers=headers, json={
+            "jsonrpc": "2.0", "id": 21, "method": "tools/call",
+            "params": {"name": "get_place_details", "arguments": {"place_id": "provincial-goldstream-park"}},
+        })
+        assert hosted_detail.status_code == 200
+        hosted_detail_payload = json.loads(hosted_detail.json()["result"]["content"][0]["text"])
+        assert hosted_detail_payload["visitorDetails"]["schemaVersion"] == "1.0.0"
+        assert "archiveIds" not in hosted_detail_payload["visitorDetails"]["source"]
+
+        hosted_search = client.post("/mcp", headers=headers, json={
+            "jsonrpc": "2.0", "id": 22, "method": "tools/call",
+            "params": {"name": "search_places", "arguments": {"query": "Goldstream", "limit": 1}},
+        })
+        assert hosted_search.status_code == 200
+        hosted_search_payload = json.loads(hosted_search.json()["result"]["content"][0]["text"])
+        assert hosted_search_payload["places"]
+        assert "visitorDetails" not in hosted_search_payload["places"][0]
 
         created_group = client.post("/mcp", headers=headers, json={"jsonrpc": "2.0", "id": 31, "method": "tools/call", "params": {"name": "create_group", "arguments": {"name": "Private MCP group"}}})
         created_payload = json.loads(created_group.json()["result"]["content"][0]["text"])

@@ -30,7 +30,7 @@ describe("park detail facts", () => {
   });
 
   it("keeps the static area catalogue aligned with every canonical boundary", () => {
-    expect(boundaries.features).toHaveLength(198);
+    expect(boundaries.features).toHaveLength(places.length);
     expect(Object.keys(areas).sort()).toEqual(boundaries.features.map((feature) => feature.properties.id).sort());
 
     for (const feature of boundaries.features) {
@@ -42,6 +42,8 @@ describe("park detail facts", () => {
 
   it("formats area compactly and omits unknown or inherited IDs", () => {
     expect(formatPlaceArea("regional-mount-work-regional-park")).toBe("Approx. 7.54 km²");
+    expect(formatPlaceArea("national-glacier-national-park")).toBe("Approx. 1,349 km²");
+    expect(formatPlaceArea("regional-greenspaces-sunshine-coast-anavets-7018")).toBe("Approx. <0.01 km²");
     expect(formatPlaceArea("unknown-place")).toBeNull();
     expect(formatPlaceArea("toString")).toBeNull();
   });
@@ -66,5 +68,27 @@ describe("park detail facts", () => {
 
     expect(shortOriginForPlace({ id: "future-regional-place", category: "regional", region: "North Island", sourceName: "Unknown publisher" })).toBe("North Island");
     expect(shortOriginForPlace({ id: "future-regional-place", category: "regional", region: "  ", sourceName: "Unknown publisher" })).toBeNull();
+  });
+
+  it("uses municipal and community authorities as origins instead of their shared region", () => {
+    expect(shortOriginForPlace({
+      id: "municipal-beacon-hill-park",
+      category: "municipal",
+      region: "Southern Vancouver Island",
+      sourceName: "City of Victoria (CRD Park GIS)",
+    })).toBe("City of Victoria");
+    expect(shortOriginForPlace({
+      id: "community-juan-de-fuca-park",
+      category: "community",
+      region: "Southern Vancouver Island",
+      sourceName: "Juan de Fuca Electoral Area (CRD Park GIS)",
+    })).toBe("Juan de Fuca Electoral Area");
+    expect(shortOriginForPlace({
+      id: "municipal-beacon-hill-park",
+      category: "municipal",
+      region: "Southern Vancouver Island",
+      sourceName: "City of Victoria (CRD Park GIS)",
+      authority: "City of Victoria parks",
+    })).toBe("City of Victoria parks");
   });
 });

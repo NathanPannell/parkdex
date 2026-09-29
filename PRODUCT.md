@@ -12,7 +12,7 @@ Delegated by the user: Next.js mobile web client, FastAPI service, and Neon Post
 
 ## Users
 
-People exploring Vancouver Island, often outdoors on a phone, who want a satisfying record of parks and major islands they have visited.
+People exploring British Columbia, often outdoors on a phone, who want a satisfying record of parks and selected major islands they have visited.
 
 ## Product Purpose
 
@@ -28,11 +28,14 @@ The primary session is one-handed mobile use while planning or travelling. Conne
 
 ## Capabilities and Constraints
 
-- Cover national, provincial, and regional parks on Vancouver Island plus major nearby islands represented in the verified dataset.
-- Provide a clustered interactive map, searchable and filterable collection list, place details, source links, checkoff and undo, and total/category progress.
+- Cover British Columbia's national and provincial park inventories, regional parks with verified public sources, and selected major islands with reviewed identities and outlines.
+- Group dozens of local park authorities into a small set of understandable collection regions while retaining the managing authority on each place.
+- Provide an interactive map with individual pins, searchable and filterable collection list, place details, source links, checkoff and undo, and total/category progress.
+- Keep complete details, a full photo, and precise boundaries for the 20 most recently viewed places. Preserve pending visits and private photos separately until synchronization finishes.
+- Application services own search, account transitions, map data, claim validation, and durable retries. Views render state and dispatch actions.
 - Anonymous progress must be isolated by an unpredictable client identity and persist across reloads.
 - The map must work without a paid or secret tile API key.
-- Dataset coverage and limitations must be stated honestly; descriptions and attributions must come from sourced data.
+- Dataset coverage and limitations must be stated honestly; descriptions, photos, and attributions must come from sourced data with reviewed reuse terms.
 
 ## Brand Commitments
 
@@ -45,7 +48,7 @@ Canonical records are stored in `data/places.json`; methodology and coverage lim
 ## Product Principles
 
 - Make every checkoff feel earned and immediately legible.
-- Keep the map readable at phone scale through clustering and progressive detail.
+- Keep every park individually selectable. Reveal names when space permits and prioritize the largest visible park in crowded views.
 - Let provenance travel with every place.
 - Preserve progress through unreliable connections and explain sync state plainly.
 - Make exploration rewarding without obscuring the core task.

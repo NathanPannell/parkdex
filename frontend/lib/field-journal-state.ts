@@ -15,6 +15,8 @@ export const JOURNAL_STORAGE = {
   guestTrailPending: "every-park:trail-pending:v1",
   guestRevision: "every-park:guest-revision:v1",
   accountSnapshot: "every-park:account-snapshot:v1",
+  accountProgressResetCleanup: "parkdex:account-progress-reset-cleanup:v1",
+  accountLogoutCleanup: "parkdex:account-logout-cleanup:v1",
   accountDeletion: "every-park:account-deletion:v1",
 } as const;
 

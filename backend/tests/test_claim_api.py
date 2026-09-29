@@ -3,8 +3,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 from io import BytesIO
+import json
 import os
 from threading import Event, Lock
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -15,6 +17,7 @@ from psycopg_pool import ConnectionPool
 
 import backend.app.db as db
 import backend.app.main as api
+from backend.app.claims import BoundaryRegistry
 from backend.app.object_storage import (
     MemoryObjectStorage,
     ObjectStorageError,
@@ -85,6 +88,115 @@ def fixture_claim(client: TestClient, headers: dict[str, str]):
     return recommendation.json(), claim.json()
 
 
+def test_municipal_and_community_places_accept_boundary_claims(
+    tmp_path, monkeypatch
+):
+    if not os.environ.get("DATABASE_URL"):
+        pytest.skip("DATABASE_URL is required for claim API integration coverage")
+    cleanup()
+    run_id = uuid4().hex
+    fixtures = [
+        {
+            "id": f"{category}-claim-{run_id}",
+            "name": f"{category.title()} Claim Fixture {run_id}",
+            "category": category,
+            "latitude": latitude,
+            "longitude": longitude,
+        }
+        for category, latitude, longitude in (
+            ("municipal", 49.0, -124.0),
+            ("community", 49.2, -124.2),
+        )
+    ]
+    boundary_features = []
+    for place in fixtures:
+        latitude = place["latitude"]
+        longitude = place["longitude"]
+        ring = [
+            [longitude - 0.01, latitude - 0.01],
+            [longitude + 0.01, latitude - 0.01],
+            [longitude + 0.01, latitude + 0.01],
+            [longitude - 0.01, latitude + 0.01],
+            [longitude - 0.01, latitude - 0.01],
+        ]
+        boundary_features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": place["id"],
+                    "category": place["category"],
+                },
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+            }
+        )
+    boundary_path = tmp_path / "local-category-boundaries.geojson"
+    boundary_path.write_text(
+        json.dumps({"type": "FeatureCollection", "features": boundary_features}),
+        encoding="utf-8",
+    )
+    registry = BoundaryRegistry(boundary_path)
+    place_ids = [place["id"] for place in fixtures]
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.cursor().executemany(
+            """INSERT INTO places (
+                id, name, category, latitude, longitude, region, description,
+                source_url, source_name
+            ) VALUES (%(id)s, %(name)s, %(category)s, %(latitude)s, %(longitude)s,
+                      'Test Region', '', 'https://example.test/local-park',
+                      'Test fixture')""",
+            fixtures,
+        )
+        conn.commit()
+
+    monkeypatch.setattr(api, "get_boundary_registry", lambda _enabled: registry)
+    try:
+        with TestClient(api.app) as client:
+            account = client.post(
+                "/api/auth/register",
+                json={"email": EMAILS[0], "password": "claims backend password"},
+            )
+            assert account.status_code == 201, account.text
+            headers = bearer(account.json()["token"])
+
+            for place in fixtures:
+                recommendation = client.post(
+                    "/api/claim-recommendations",
+                    headers=headers,
+                    json={
+                        "location": {
+                            "latitude": place["latitude"],
+                            "longitude": place["longitude"],
+                            "accuracyMeters": 5,
+                            "capturedAtEpochMs": int(
+                                datetime.now(timezone.utc).timestamp() * 1000
+                            ),
+                        }
+                    },
+                )
+                assert recommendation.status_code == 200, recommendation.text
+                recommendation_payload = recommendation.json()
+                assert recommendation_payload["candidate"]["placeId"] == place["id"]
+
+                claim = client.post(
+                    "/api/claims",
+                    headers=headers,
+                    json={
+                        "recommendationToken": recommendation_payload[
+                            "recommendationToken"
+                        ],
+                        "expectedPlaceId": place["id"],
+                    },
+                )
+                assert claim.status_code == 200, claim.text
+                assert claim.json()["placeId"] == place["id"]
+    finally:
+        with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+            conn.execute("DELETE FROM places WHERE id = ANY(%s)", (place_ids,))
+            conn.commit()
+        cleanup()
+
+
 def photo_bytes() -> bytes:
     output = BytesIO()
     Image.new("RGB", (80, 60), "forestgreen").save(output, format="PNG")
@@ -108,7 +220,11 @@ def test_claim_capability_bridges_old_account_clients_before_enforcement(
 
             monkeypatch.setattr(api.settings, "visit_claim_enforcement", "compatible")
             capability = client.get("/api/places", headers=headers).json()["visitClaims"]
-            assert capability == {"supported": True, "enforcement": "compatible"}
+            assert capability == {
+                "supported": True,
+                "enforcement": "compatible",
+                "offlineSupported": True,
+            }
 
             # The immediately previous authenticated client can still create
             # progress while the claim-aware frontend rolls out.
@@ -133,6 +249,7 @@ def test_claim_capability_bridges_old_account_clients_before_enforcement(
             assert client.get("/api/places", headers=headers).json()["visitClaims"] == {
                 "supported": True,
                 "enforcement": "required",
+                "offlineSupported": True,
             }
             enforced = client.put(
                 f"/api/visits/{place_id}", headers=headers, json={"visited": True}
