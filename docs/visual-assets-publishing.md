@@ -132,8 +132,8 @@ Cloudflare Wrangler expects its own `rules` object and lowercase field names. Th
     {
       "allowed": {
         "origins": [
-          "https://staging.web.parkdex.app",
-          "https://web.parkdex.app"
+          "https://staging.map.parkdex.app",
+          "https://map.parkdex.app"
         ],
         "methods": ["GET", "HEAD"]
       },
@@ -159,8 +159,8 @@ AWS S3 uses an array of CORS rules with capitalized field names. Use this format
 [
   {
     "AllowedOrigins": [
-      "https://staging.web.parkdex.app",
-      "https://web.parkdex.app"
+      "https://staging.map.parkdex.app",
+      "https://map.parkdex.app"
     ],
     "AllowedMethods": ["GET", "HEAD"],
     "ExposeHeaders": ["ETag", "Content-Length", "Content-Type", "Cache-Control"],

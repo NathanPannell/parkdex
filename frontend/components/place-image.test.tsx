@@ -111,7 +111,7 @@ describe("PlaceImage", () => {
   });
 
   it("uses the remote Android public asset URL for each gallery photo", () => {
-    vi.stubEnv("NEXT_PUBLIC_ASSET_BASE_URL", "https://staging.web.parkdex.app/");
+    vi.stubEnv("NEXT_PUBLIC_ASSET_BASE_URL", "https://staging.map.parkdex.app/");
     try {
       const { rerender } = render(
         <PlaceImage
@@ -123,7 +123,7 @@ describe("PlaceImage", () => {
       );
 
       expect(screen.getByRole("img").getAttribute("src")).toBe(
-        "https://staging.web.parkdex.app/places/provincial-bear-creek-park.webp",
+        "https://staging.map.parkdex.app/places/provincial-bear-creek-park.webp",
       );
       rerender(
         <PlaceImage
@@ -134,7 +134,7 @@ describe("PlaceImage", () => {
         />,
       );
       expect(screen.getByRole("img").getAttribute("src")).toBe(
-        "https://staging.web.parkdex.app/places/provincial-bear-creek-park-2.webp",
+        "https://staging.map.parkdex.app/places/provincial-bear-creek-park-2.webp",
       );
     } finally {
       vi.unstubAllEnvs();

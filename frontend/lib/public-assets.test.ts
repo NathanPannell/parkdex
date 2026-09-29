@@ -7,7 +7,7 @@ it("keeps web assets on the current origin", () => {
   expect(publicAssetUrl("/places/park.webp")).toBe("/places/park.webp");
 });
 it("streams Android assets from the configured environment without rewriting external sources", () => {
-  vi.stubEnv("NEXT_PUBLIC_ASSET_BASE_URL", "https://staging.web.parkdex.app/");
-  expect(publicAssetUrl("/places/park.webp")).toBe("https://staging.web.parkdex.app/places/park.webp");
+  vi.stubEnv("NEXT_PUBLIC_ASSET_BASE_URL", "https://staging.map.parkdex.app/");
+  expect(publicAssetUrl("/places/park.webp")).toBe("https://staging.map.parkdex.app/places/park.webp");
   expect(publicAssetUrl("https://example.org/source")).toBe("https://example.org/source");
 });

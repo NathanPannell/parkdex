@@ -39,7 +39,7 @@ export function hasAccountCallback(url: URL): boolean {
 }
 
 export function readNavigation(href: string): PublicNavigation {
-  const url = new URL(href, "https://web.parkdex.app"), params = url.searchParams;
+  const url = new URL(href, "https://map.parkdex.app"), params = url.searchParams;
   const route = readRoute(url);
   const requestedView = params.get("view");
   const legacyView: View = requestedView === "settings"
@@ -72,7 +72,7 @@ const publicKeys = ["view", "place", "detail", "settings", "from", "mode", "quer
 
 /** Only public catalogue navigation belongs in the address. Private group context stays in memory. */
 export function navigationUrl(currentHref: string, state: PublicNavigation): string {
-  const url = new URL(currentHref, "https://web.parkdex.app");
+  const url = new URL(currentHref, "https://map.parkdex.app");
   publicKeys.forEach((key) => url.searchParams.delete(key));
 
   if (state.settingsOpen) url.pathname = "/settings";

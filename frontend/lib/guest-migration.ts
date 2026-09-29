@@ -12,8 +12,8 @@ export const GUEST_MIGRATION_KEYS = [
 export const GUEST_MIGRATION_MAX_BYTES = 256 * 1024;
 
 export const GUEST_MIGRATION_ORIGIN_PAIRS = [
-  { sourceOrigin: "https://parkdex.app", targetOrigin: "https://web.parkdex.app" },
-  { sourceOrigin: "https://staging.parkdex.app", targetOrigin: "https://staging.web.parkdex.app" },
+  { sourceOrigin: "https://parkdex.app", targetOrigin: "https://map.parkdex.app" },
+  { sourceOrigin: "https://staging.parkdex.app", targetOrigin: "https://staging.map.parkdex.app" },
 ] as const;
 
 export const GUEST_MIGRATION_READY_TYPE = "parkdex-guest-migration-ready";
