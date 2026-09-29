@@ -5,6 +5,8 @@ import test from "node:test";
 const staging = readFileSync(".github/workflows/deploy-staging.yml", "utf8");
 const production = readFileSync(".github/workflows/deploy-production.yml", "utf8");
 const release = readFileSync(".github/workflows/deploy-release.yml", "utf8");
+const deploymentDocs = readFileSync("docs/deployments.md", "utf8");
+const mcpDocs = readFileSync("docs/mcp.md", "utf8");
 const railwayConfig = readFileSync(".railway/railway.ts", "utf8");
 const migrator = readFileSync("backend/app/migrate.py", "utf8");
 const cloudflarePages = JSON.parse(readFileSync("deploy/cloudflare-pages.json", "utf8"));
@@ -122,10 +124,18 @@ test("credentials remain secret references and exact-domain assignment is explic
   assert.match(release, /VERCEL_TOKEN: \$\{\{ secrets\.VERCEL_TOKEN \}\}/);
   assert.doesNotMatch(staging, /secrets: inherit/);
   assert.doesNotMatch(production, /secrets: inherit/);
-  assert.match(release, /assign staging\.web\.parkdex\.app/);
-  assert.match(release, /assign only web\.parkdex\.app and confirm the staging alias is unchanged/);
+  assert.match(release, /assign staging\.map\.parkdex\.app/);
+  assert.match(release, /assign only map\.parkdex\.app and confirm the staging alias is unchanged/);
   assert.doesNotMatch(release, /promote it to production domains/);
   assert.doesNotMatch(release, /echo .*RAILWAY_API_TOKEN|echo .*VERCEL_TOKEN/);
+});
+
+test("legacy app host migration preserves the apex OAuth and MCP identities", () => {
+  assert.match(release, /FRONTEND_URL:.*https:\/\/staging\.map\.parkdex\.app.*https:\/\/map\.parkdex\.app/);
+  assert.match(deploymentDocs, /\| staging \| `https:\/\/staging\.map\.parkdex\.app` \| `https:\/\/staging\.parkdex\.app` \| `https:\/\/staging\.parkdex\.app\/mcp`/);
+  assert.match(deploymentDocs, /\| production \| `https:\/\/map\.parkdex\.app` \| `https:\/\/parkdex\.app` \| `https:\/\/parkdex\.app\/mcp`/);
+  assert.match(mcpDocs, /Production uses `https:\/\/parkdex\.app\/mcp`; staging uses `https:\/\/staging\.parkdex\.app\/mcp`/);
+  assert.doesNotMatch(release, /web\.parkdex\.app/);
 });
 
 test("Cloudflare Pages projects are isolated and Git-integrated", () => {
@@ -151,8 +161,8 @@ test("Cloudflare Pages projects are isolated and Git-integrated", () => {
   assert.equal(frontendPackage.scripts["deploy:cloudflare:production"], undefined);
   assert.match(cloudflareBuild, /PARKDEX_CATALOGUE_SCOPE: process\.env\.CF_PAGES_BRANCH\?\.trim\(\) === "staging" \? "staging" : "canonical"/);
   assert.match(cloudflareBuild, /NEXT_PUBLIC_APP_URL: appOrigin/);
-  assert.match(cloudflareBuild, /https:\/\/staging\.web\.parkdex\.app/);
-  assert.match(cloudflareBuild, /https:\/\/web\.parkdex\.app/);
+  assert.match(cloudflareBuild, /https:\/\/staging\.map\.parkdex\.app/);
+  assert.match(cloudflareBuild, /https:\/\/map\.parkdex\.app/);
   assert.match(frontendPackage.scripts.start, /wrangler pages dev out/);
   assert.match(frontendPackage.scripts.start, /API_BASE_URL=http:\/\/localhost:8000/);
 });

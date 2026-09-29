@@ -12,10 +12,10 @@ Routine releases reuse these resources and never recreate them:
 
 | Target | App origin | OAuth issuer | Public MCP resource | Railway API | Neon branch |
 | --- | --- | --- | --- | --- | --- |
-| staging | `https://staging.web.parkdex.app` | `https://staging.parkdex.app` | `https://staging.parkdex.app/mcp` | `https://api-staging-882c.up.railway.app` | `staging` |
-| production | `https://web.parkdex.app` | `https://parkdex.app` | `https://parkdex.app/mcp` | `https://api-production-e72df.up.railway.app` | `main` |
+| staging | `https://staging.map.parkdex.app` | `https://staging.parkdex.app` | `https://staging.parkdex.app/mcp` | `https://api-staging-882c.up.railway.app` | `staging` |
+| production | `https://map.parkdex.app` | `https://parkdex.app` | `https://parkdex.app/mcp` | `https://api-production-e72df.up.railway.app` | `main` |
 
-The apex `parkdex.app` and `staging.parkdex.app` belong to the landing site. The app runs at `web.parkdex.app` and `staging.web.parkdex.app`. Keep the legacy OAuth issuers and MCP resource identities on the apex origins so existing clients retain their issuer, authorization endpoint, and protected-resource identity.
+The apex `parkdex.app` and `staging.parkdex.app` belong to the landing site. The app runs at `map.parkdex.app` and `staging.map.parkdex.app`. Keep the legacy OAuth issuers and MCP resource identities on the apex origins so existing clients retain their issuer, authorization endpoint, and protected-resource identity.
 
 The Railway environments retain their pooled and direct Neon URLs and application secrets. Set `FRONTEND_ORIGINS` to the matching app origin plus `https://localhost` for Android WebViews. Set `APP_PUBLIC_URL` to the app origin and `GOOGLE_REDIRECT_URI` to that origin plus `/auth/google/callback`. Set `API_PUBLIC_URL` to the matching landing origin, which supplies the existing OAuth issuer and authorization endpoints, and set `MCP_PUBLIC_URL` to that origin plus `/mcp`, which supplies the protected-resource identity and token resource.
 
@@ -23,11 +23,22 @@ The landing deployment must serve environment-specific metadata at `/.well-known
 
 The deploy workflow sets the matching `NEXT_PUBLIC_APP_URL` during each frontend build and updates only `APP_COMMIT_SHA` and `APP_RELEASE_ID` in Railway. Neon receives migrations through the Railway API pre-deploy command; it does not receive an application-code deployment.
 
+### One-time app-domain reassignment
+
+The new Parkdex web app owns `web.parkdex.app` and `staging.web.parkdex.app`. This legacy map app owns `map.parkdex.app` and `staging.map.parkdex.app`. Before assigning the domains, update the existing Railway API environment values to match the legacy map app:
+
+| Railway environment | `FRONTEND_ORIGINS` | `APP_PUBLIC_URL` | `GOOGLE_REDIRECT_URI` |
+| --- | --- | --- | --- |
+| staging | `https://staging.map.parkdex.app,https://localhost` | `https://staging.map.parkdex.app` | `https://staging.map.parkdex.app/auth/google/callback` |
+| production | `https://map.parkdex.app,https://localhost` | `https://map.parkdex.app` | `https://map.parkdex.app/auth/google/callback` |
+
+Keep `API_PUBLIC_URL` and `MCP_PUBLIC_URL` on `https://staging.parkdex.app` and `https://staging.parkdex.app/mcp` in staging, and `https://parkdex.app` and `https://parkdex.app/mcp` in production. Update the Google OAuth client with the two map callback URLs and update the public visual-assets bucket CORS allowlist to the two map app origins. Then attach `map.parkdex.app` and `staging.map.parkdex.app` to the legacy Vercel project and assign them to the verified production and staging deployments. Assign `web.parkdex.app` and `staging.web.parkdex.app` to the verified deployments of the new web app. Leave both apex issuer and MCP resource identities unchanged.
+
 The landing site must preserve legacy reset and verification fragments when sending old links to the corresponding app origin, and provide the explicit guest-progress handoff documented in the app migration route. Browser storage does not move across origins. The receiver transfers only guest state from eight allowlisted localStorage keys, up to 256 KiB, and never transfers account tokens or account snapshots. It recognizes the app's auto-created collection key and canonical empty snapshots as locally unused, then checks the key against the read-only `GET /api/guest/progress-state` endpoint before replacing it. Any remote visits or trail completions, nonempty or malformed local snapshots, a nonzero guest revision, or an unavailable progress check stop the transfer and preserve the destination. Account holders sign in again; their server-backed progress reloads after sign-in. The landing site clears only guest keys acknowledged by the matching new app origin.
 
-Keep the app aliases attached to the verified Vercel Production builds: `web.parkdex.app` for production and `staging.web.parkdex.app` for staging. Redirect `www.parkdex.app` to the apex landing site, never the reverse, because the apex is the production OAuth issuer. Do not bind the staging app alias to the `staging` Git branch, because Hobby deployment protection would replace public app responses on a branch domain with a Vercel sign-in page.
+Keep the app aliases attached to the verified Vercel Production builds: `map.parkdex.app` for production and `staging.map.parkdex.app` for staging. Redirect `www.parkdex.app` to the apex landing site, never the reverse, because the apex is the production OAuth issuer. Do not bind the staging app alias to the `staging` Git branch, because Hobby deployment protection would replace public app responses on a branch domain with a Vercel sign-in page.
 
-Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. The release agent assigns only the environment's exact app domain: `staging.web.parkdex.app` for staging and `web.parkdex.app` for production. Because both are production-domain aliases in one Hobby project, never use project-wide Promote, Instant Rollback, `vercel promote`, `vercel rollback`, a promote/rollback API, or `vercel deploy --prod` without `--skip-domain`; those operations can move both environments together. Keep the Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
+Vercel and Railway Git auto-deployments remain disabled so a push cannot create a second, competing release. Both staging and production use the same shared workflow and queue a staged Vercel Production build with `--prod --skip-domain --no-wait`. The release agent assigns only the environment's exact app domain: `staging.map.parkdex.app` for staging and `map.parkdex.app` for production. Because both are production-domain aliases in one Hobby project, never use project-wide Promote, Instant Rollback, `vercel promote`, `vercel rollback`, a promote/rollback API, or `vercel deploy --prod` without `--skip-domain`; those operations can move both environments together. Keep the Production build environment free of secrets that reviewed staging code must not receive; split staging into a separate project before adding such a secret.
 
 The API runs the checksummed, advisory-locked migration command before starting. The lock wait is capped at five minutes. Both Railway environments must therefore give the API `DATABASE_URL_UNPOOLED`. Photo objects are deleted immediately after their database tombstone commits. A failed object deletion remains recorded for manual retry with `python -m backend.app.photo_cleanup`; there is no recurring cleanup service. Migrations must be additive and compatible with the old and new frontend and API while the providers converge.
 
@@ -84,7 +95,7 @@ Opening a draft PR, pushing another commit to it, creating a local preview, brow
    ```
 
    The teardown takes an exclusive per-PR lifecycle lock, binds the active record to the exact journal, verifies ownership before deletion, attempts all three providers, and waits through a grace window for three consecutive empty inventories. It reports `status=cleaned` only after the Vercel deployment, Railway environment, and Neon branch are stably absent. If it exits nonzero, retry the exact command and do not merge. Journal-only recovery without the active record does not open the merge gate. Neon expiry is a backstop, not a substitute for teardown; Railway and Vercel have no automatic cleanup backstop.
-7. Reconfirm the draft PR head is the browser-tested SHA, mark it ready, complete review, and merge it into `staging`. The merge push is the first GitHub Actions event: it queues the normal persistent staging release. The release agent then verifies provider convergence and browser-smoke-tests `https://staging.web.parkdex.app` for the merge SHA.
+7. Reconfirm the draft PR head is the browser-tested SHA, mark it ready, complete review, and merge it into `staging`. The merge push is the first GitHub Actions event: it queues the normal persistent staging release. The release agent then verifies provider convergence and browser-smoke-tests `https://staging.map.parkdex.app` for the merge SHA.
 
 Required local configuration is `RAILWAY_PROJECT_ID`, `RAILWAY_BASE_ENVIRONMENT_ID`, `RAILWAY_API_SERVICE_ID`, `NEON_ORG_ID`, `NEON_PROJECT_ID`, `NEON_PARENT_BRANCH=staging`, `VERCEL_SCOPE`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_NAME`, and `VERCEL_PROJECT_ID`, plus authenticated Railway, Neon, Vercel, and GitHub CLIs. Provider tokens may be supplied as local environment variables but are never written to GitHub, candidate evidence, the repository, or the preview environment.
 
@@ -96,10 +107,10 @@ The one-time rollout that first adds these wrappers cannot execute `scripts/prev
 2. Record the current production revision and merge the pull request.
 3. The `main` push starts `deploy-production.yml`. It invokes the same queue-only workflow used by staging and exits after the providers accept the exact merged SHA.
 4. The release agent waits locally for the Railway API, migrations, and staged Vercel deployment to report the expected SHA and release ID. Test the immutable Vercel deployment before changing public domains when practical.
-5. Record the deployment currently assigned to `staging.web.parkdex.app`, assign only `web.parkdex.app` to the exact verified production deployment, and confirm the staging deployment did not change. Keep `www.parkdex.app` configured as a redirect to the landing apex. Then smoke-test the stable production app URL in a real browser:
+5. Record the deployment currently assigned to `staging.map.parkdex.app`, assign only `map.parkdex.app` to the exact verified production deployment, and confirm the staging deployment did not change. Keep `www.parkdex.app` configured as a redirect to the landing apex. Then smoke-test the stable production app URL in a real browser:
 
    ```powershell
-   vercel alias set <vercel-deployment-url> web.parkdex.app --cwd frontend --scope <scope> --token $env:VERCEL_TOKEN
+   vercel alias set <vercel-deployment-url> map.parkdex.app --cwd frontend --scope <scope> --token $env:VERCEL_TOKEN
    ```
 
 6. Verify frontend-to-API traffic, console and network output, and `/ready`. Record the evidence and stop once every check passes.

@@ -60,7 +60,7 @@ const result = await runNextBuild({
   ...process.env,
   NEXT_PUBLIC_API_BASE_URL: apiBaseUrl.origin,
   NEXT_PUBLIC_ASSET_BASE_URL: apiBaseUrl.origin === productionApiUrl
-    ? "https://web.parkdex.app" : "https://staging.web.parkdex.app",
+    ? "https://map.parkdex.app" : "https://staging.map.parkdex.app",
   NEXT_PUBLIC_FIELD_DIAGNOSTICS: releaseBuild
     ? "0"
     : requestedDiagnostics || (requestedScope === "canonical" ? "0" : "1"),

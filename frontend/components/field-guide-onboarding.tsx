@@ -243,7 +243,7 @@ const placeholderPlace: Place = {
   longitude: -124,
   region: "British Columbia",
   description: "",
-  sourceUrl: "https://web.parkdex.app/",
+  sourceUrl: "https://map.parkdex.app/",
   sourceName: "Parkdex",
 };
 
