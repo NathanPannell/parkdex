@@ -160,9 +160,13 @@ function Screens() {
     <>
       {showMap && (
         <div
-          style={{ position: "absolute", inset: 0 }}
-          inert={screen === "splash"}
-          aria-hidden={screen === "splash"}
+          style={{
+            position: "absolute",
+            inset: 0,
+            visibility: screen === "claim" ? "hidden" : "visible",
+          }}
+          inert={screen === "splash" || screen === "claim"}
+          aria-hidden={screen === "splash" || screen === "claim"}
         >
           <MapScreen />
         </div>
