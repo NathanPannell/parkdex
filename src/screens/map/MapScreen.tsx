@@ -216,6 +216,7 @@ export function MapScreen() {
         arrivedId={arrivedId}
         route={route}
         onSelect={select}
+        visible={state.screen === "map"}
       />
 
       <div className="map-top">

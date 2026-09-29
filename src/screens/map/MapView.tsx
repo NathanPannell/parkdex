@@ -1,6 +1,6 @@
 import { AttributionControl, Map as MLMap, Marker, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 import { motion } from "motion/react";
-import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Badge } from "../../components/Badge";
 import { EarnedBadge } from "../../components/EarnedBadge";
@@ -33,6 +33,8 @@ type Props = {
   arrivedId: string | null;
   route: LngLat[] | null;
   onSelect: (id: string | null) => void;
+  /** False while a full-screen view covers the map, so map animations pause. */
+  visible: boolean;
 };
 
 const BIOME_FILL = [
@@ -49,7 +51,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect }: Props) {
+export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -69,6 +71,12 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  // Stable marker props let memoized pins skip re-rendering when unrelated app state changes.
+  const selectMarker = useCallback((id: string) => selectRef.current(id), []);
+  const eligibilityById = useMemo(() => new Map(parks.map((park) => [
+    park.id,
+    progressReady ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id]) : UNAVAILABLE_ELIGIBILITY,
+  ])), [parks, progressReady, rarityProgress, claims]);
   const releaseId = content?.releaseId;
   const hasReadyMapContent = !!content && !!releaseId;
   const loaded = releaseId !== undefined && loadedRelease === releaseId;
@@ -283,7 +291,8 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   // Gently breathe the arrival glow so the boundary feels alive.
   useEffect(() => {
     const map = mapRef.current;
-    if (!arrivedId || !map) return;
+    // Each paint-property change redraws the whole WebGL map, so only breathe while it is on screen.
+    if (!arrivedId || !map || !visible) return;
     let raf = 0;
     const tick = (t: number) => {
       if (map.getLayer("park-glow")) map.setPaintProperty("park-glow", "line-width", 12 + Math.sin(t / 260) * 7);
@@ -291,7 +300,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [arrivedId]);
+  }, [arrivedId, visible]);
 
   useEffect(() => {
     const src = mapRef.current?.getSource("route") as GeoJSONSource | undefined;
@@ -312,11 +321,9 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
             tier={tier}
             rank={rank}
             claim={claims[park.id]}
-            eligibility={progressReady
-              ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id])
-              : UNAVAILABLE_ELIGIBILITY}
+            eligibility={eligibilityById.get(park.id) ?? UNAVAILABLE_ELIGIBILITY}
             focused={park.id === (tripId ?? selectedId)}
-            onSelect={onSelect}
+            onSelect={selectMarker}
           />,
           el,
           park.id,
