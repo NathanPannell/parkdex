@@ -239,7 +239,15 @@ function awsSigningKey(secret, dateStamp) {
   return hmac(serviceKey, "aws4_request");
 }
 
-export function signR2Put({ url, body, accessKeyId, secretAccessKey, condition, now = new Date() }) {
+export function signR2Put({
+  url,
+  body,
+  accessKeyId,
+  secretAccessKey,
+  sessionToken,
+  condition,
+  now = new Date(),
+}) {
   if (!condition || (condition.type !== "if-match" && condition.type !== "if-none-match")) {
     throw new Error("R2 pointer write requires an If-Match or If-None-Match condition");
   }
@@ -265,6 +273,7 @@ export function signR2Put({ url, body, accessKeyId, secretAccessKey, condition, 
     "x-amz-content-sha256": payloadHash,
     "x-amz-date": amzDate,
   };
+  if (sessionToken) canonicalHeaders["x-amz-security-token"] = sessionToken;
   const signedHeaders = Object.keys(canonicalHeaders).sort().join(";");
   const canonicalHeaderText = Object.keys(canonicalHeaders)
     .sort()
@@ -305,6 +314,7 @@ export function signR2Put({ url, body, accessKeyId, secretAccessKey, condition, 
     "x-amz-date": amzDate,
     Authorization: authorization,
   };
+  if (sessionToken) headers["x-amz-security-token"] = sessionToken;
   return headers;
 }
 
@@ -396,6 +406,7 @@ export async function publishContentChannel(options) {
     body: pointerBytes,
     accessKeyId,
     secretAccessKey,
+    sessionToken: options.sessionToken,
     condition,
     now: options.now ?? new Date(),
   });
@@ -521,6 +532,7 @@ async function main() {
     bucket: process.env.R2_BUCKET,
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    sessionToken: process.env.R2_SESSION_TOKEN,
   });
   process.stdout.write(
     JSON.stringify({
