@@ -125,8 +125,117 @@ class ImportPlanTests(unittest.TestCase):
             {"position": 1, "name": "Two", "lng": -123.4, "lat": 48.5},
         ]
 
-        with self.assertRaisesRegex(importer.ParkImportError, "at least one verified route"):
+        with self.assertRaisesRegex(importer.ParkImportError, "all-null drive requires explicit accessUnknown"):
             importer.validate_new_park("park-new", "park-new", place, {"presentation": review_item()["presentation"], "walkM": 0, "drive": [None, None]}, hubs)
+
+    def test_unknown_access_requires_and_records_the_composite_sentinel(self):
+        place = {
+            "id": "park-new",
+            "name": "New Park",
+            "category": "regional",
+            "region": "Island",
+            "latitude": 48.4,
+            "longitude": -123.3,
+        }
+        hubs = [
+            {"position": 0, "name": "One", "lng": -123.3, "lat": 48.4},
+            {"position": 1, "name": "Two", "lng": -123.4, "lat": 48.5},
+        ]
+        review = {"presentation": review_item()["presentation"], "walkM": 0, "drive": [None, None], "accessUnknown": True}
+
+        _, drive = importer.validate_new_park("park-new", "park-new", place, review, hubs)
+
+        self.assertEqual(drive, {"walkM": 0, "drive": [None, None], "hubs": hubs})
+        self.assertNotIn("accessUnknown", drive)
+        features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("park-new")]})
+        plan = importer.build_plan(
+            features,
+            {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64},
+            ["park-new"],
+            {},
+            {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"},
+            {},
+            {},
+            {"park-new": place},
+            {"kind": "file", "locator": "places.json", "sha256": "1" * 64},
+            {"park-new": review},
+            {"kind": "file", "locator": "review.json", "sha256": "2" * 64},
+            hubs,
+        )
+        self.assertTrue(plan["changes"][0]["accessUnknown"])
+        self.assertNotIn("accessUnknown", plan["changes"][0]["desiredDrive"])
+
+    def test_unknown_access_rejects_nullable_negative_and_mixed_values(self):
+        place = {
+            "id": "park-new",
+            "name": "New Park",
+            "category": "regional",
+            "region": "Island",
+            "latitude": 48.4,
+            "longitude": -123.3,
+        }
+        hubs = [
+            {"position": 0, "name": "One", "lng": -123.3, "lat": 48.4},
+            {"position": 1, "name": "Two", "lng": -123.4, "lat": 48.5},
+        ]
+        base = {"presentation": review_item()["presentation"], "walkM": 0, "drive": [None, None]}
+        invalid = [
+            ({**base, "walkM": None}, "walkM must be a finite non-negative number"),
+            ({**base, "walkM": -1}, "walkM must be a finite non-negative number"),
+            ({**base, "accessUnknown": True, "walkM": 4}, "accessUnknown requires walkM 0"),
+            ({**base, "accessUnknown": True, "drive": [[1, 2], None]}, "accessUnknown requires walkM 0 and null for every drive hub"),
+            ({**base, "accessUnknown": False}, "accessUnknown must be true"),
+        ]
+        for candidate, message in invalid:
+            with self.subTest(candidate=candidate), self.assertRaisesRegex(importer.ParkImportError, message):
+                importer.validate_new_park("park-new", "park-new", place, candidate, hubs)
+
+    def test_existing_park_rarity_review_pins_expected_and_desired_values(self):
+        features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("park-one")]})
+        current_feature = importer._public_feature("park-one", "coast", square(-2))
+        rarity_source = {"kind": "file", "locator": "rarity-review.json", "sha256": "1" * 64}
+        rarity_review = importer.parse_rarity_review({"parks": {"park-one": {"rarity": "uncommon", "rationale": "Matches the reviewed regional scale."}}})
+        plan = importer.build_plan(
+            features,
+            {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64},
+            ["park-one"],
+            {},
+            {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 4, "declaredHost": "127.0.0.1"},
+            {"park-one": {"biome": "coast", "rarity": "rare"}},
+            {"park-one": current_feature},
+            rarity_review=rarity_review,
+            rarity_review_source=rarity_source,
+        )
+
+        change = plan["changes"][0]
+        self.assertEqual(change["expectedRarity"], "rare")
+        self.assertEqual(change["desiredRarity"], "uncommon")
+        self.assertEqual(change["rarityReviewRationale"], "Matches the reviewed regional scale.")
+        self.assertEqual(plan["sources"]["rarityReview"], rarity_source)
+        self.assertEqual(plan["planSha256"], importer.plan_digest(plan))
+        boundary_only = importer.build_plan(
+            features,
+            {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64},
+            ["park-one"],
+            {},
+            {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 4, "declaredHost": "127.0.0.1"},
+            {"park-one": {"biome": "coast", "rarity": "rare"}},
+            {"park-one": current_feature},
+        )
+        self.assertNotIn("expectedRarity", boundary_only["changes"][0])
+        self.assertNotIn("desiredRarity", boundary_only["changes"][0])
+
+    def test_rarity_review_source_hash_is_rechecked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory) / "rarity-review.json"
+            source_path.write_text('{"parks":{"park-one":"uncommon"}}', encoding="utf-8")
+            _, source = importer.read_source(str(source_path), "rarity review")
+            plan = {"sources": {"rarityReview": source}}
+
+            importer.verify_plan_sources(plan)
+            source_path.write_text('{"parks":{"park-one":"common"}}', encoding="utf-8")
+            with self.assertRaisesRegex(importer.ParkImportError, "rarityReview source changed after plan review"):
+                importer.verify_plan_sources(plan)
 
     def test_new_park_matches_account_snapshot_limits(self):
         place = {
@@ -200,31 +309,85 @@ class PostgreSQLImportTests(unittest.TestCase):
         cls.root = Path(__file__).resolve().parents[1]
         with psycopg.connect(cls.dsn) as conn:
             with conn.cursor() as cursor:
-                for migration in (cls.root / "database/001_cloud_content.sql", cls.root / "database/migrations/content_001_sync.sql"):
+                for migration in (
+                    cls.root / "database/001_cloud_content.sql",
+                    cls.root / "database/migrations/content_001_sync.sql",
+                    cls.root / "database/migrations/content_002_authoring.sql",
+                ):
                     cursor.execute(migration.read_text(encoding="utf-8"), prepare=False)
                 cursor.execute("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (0, 'One', -123.3, 48.4), (1, 'Two', -123.4, 48.5)")
                 cursor.execute(
-                    "INSERT INTO public.parks (id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb) "
-                    "VALUES ('regional-existing-1', 'Existing Park', 'Existing', 'regional', 'Island', 48.4, -123.3, 'coast', 'circle', 'rare', NULL, 12, 'Keep this metadata.')"
+                    "INSERT INTO public.r2_objects (logical_path, object_key, url, sha256, byte_size, content_type) "
+                    "VALUES ('art/badges/scenes/existing-scene.webp', %s, %s, %s, 1, 'image/webp')",
+                    (
+                        f"releases/{'a' * 64}/art/badges/scenes/existing-scene.webp",
+                        f"https://kip-assets.parkdex.app/releases/{'a' * 64}/art/badges/scenes/existing-scene.webp",
+                        "a" * 64,
+                    ),
                 )
                 cursor.execute(
-                    "INSERT INTO public.boundaries (park_id, feature) VALUES ('regional-existing-1', %s::jsonb)",
-                    (json.dumps(importer._public_feature("regional-existing-1", "coast", square(-2))),),
+                    "INSERT INTO public.parks (id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb) "
+                    "VALUES ('regional-existing-1', 'Existing Park', 'Existing', 'regional', 'Island', 48.4, -123.3, 'coast', 'circle', 'rare', 'existing-scene', 12, 'Keep this metadata.'), "
+                    "('regional-existing-2', 'Queued Park', 'Queued', 'regional', 'Island', 48.41, -123.31, 'coast', 'circle', 'rare', NULL, 13, 'Keep queued metadata.')"
                 )
-                cursor.execute("INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES ('regional-existing-1', 11)")
-                cursor.execute("INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) VALUES ('regional-existing-1', 0, 1, 2), ('regional-existing-1', 1, 3, 4)")
+                cursor.execute(
+                    "INSERT INTO public.boundaries (park_id, feature) VALUES "
+                    "('regional-existing-1', %s::jsonb), ('regional-existing-2', %s::jsonb)",
+                    (
+                        json.dumps(importer._public_feature("regional-existing-1", "coast", square(-2))),
+                        json.dumps(importer._public_feature("regional-existing-2", "coast", square(-4))),
+                    ),
+                )
+                cursor.execute("INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES ('regional-existing-1', 11), ('regional-existing-2', 12)")
+                cursor.execute(
+                    "INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) VALUES "
+                    "('regional-existing-1', 0, 1, 2), ('regional-existing-1', 1, 3, 4), "
+                    "('regional-existing-2', 0, 5, 6), ('regional-existing-2', 1, 7, 8)"
+                )
+                cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
+                revision = cursor.fetchone()[0]
+                cursor.execute(
+                    "INSERT INTO public.park_enrichment_rollout "
+                    "(singleton, source_bundle_sha256, ranked_list_sha256, expected_count, target_environment, target_id, database_host, applied_content_revision) "
+                    "VALUES (true, %s, %s, 100, 'staging', NULL, %s, %s)",
+                    ("b" * 64, "c" * 64, conn.info.host or "127.0.0.1", revision),
+                )
+                frozen_research = {
+                    "google_image_refs": [f"https://images.example.test/{index}" for index in range(5)],
+                    "fact_urls": ["https://facts.example.test/park"],
+                    "dossier_path": "dossier.md",
+                    "dossier_sha256": "d" * 64,
+                    "prompts": {},
+                }
+                selected_art = {
+                    "local_path": "C:/qa/queue-scene.webp",
+                    "sha256": "e" * 64,
+                    "byte_size": 1,
+                    "scene_slug": "queue-scene",
+                    "expected": {"blurb": "Keep queued metadata.", "rarity": "rare", "scene": None},
+                    "desired": {"blurb": "Keep queued metadata.", "rarity": "uncommon", "scene": "queue-scene"},
+                }
+                cursor.execute(
+                    "INSERT INTO public.park_enrichment_jobs "
+                    "(rank, park_id, state, frozen_research, selected_art) VALUES (2, 'regional-existing-2', 'needs_attention', %s::jsonb, %s::jsonb)",
+                    (json.dumps(frozen_research), json.dumps(selected_art)),
+                )
 
-    def _plan(self, temp: Path, features: list[dict], ids: list[str], catalogue: dict | None = None, review: dict | None = None) -> tuple[dict, Path]:
+    def _plan(self, temp: Path, features: list[dict], ids: list[str], catalogue: dict | None = None, review: dict | None = None, rarity: dict | None = None) -> tuple[dict, Path]:
         boundary_file = temp / "legacy.geojson"
         boundary_file.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
         catalogue_file = None
         review_file = None
+        rarity_file = None
         if catalogue is not None:
             catalogue_file = temp / "places.json"
             catalogue_file.write_text(json.dumps(catalogue), encoding="utf-8")
         if review is not None:
             review_file = temp / "review.json"
             review_file.write_text(json.dumps(review), encoding="utf-8")
+        if rarity is not None:
+            rarity_file = temp / "rarity.json"
+            rarity_file.write_text(json.dumps(rarity), encoding="utf-8")
         output_file = temp / "plan.json"
         import psycopg
         with psycopg.connect(self.dsn) as conn:
@@ -235,6 +398,7 @@ class PostgreSQLImportTests(unittest.TestCase):
             "id_map": [],
             "catalogue_source": str(catalogue_file) if catalogue_file else None,
             "new_park_review": review_file,
+            "rarity_review": rarity_file,
             "target_host": host,
             "target_environment": "local-qa",
             "out": output_file,
@@ -252,6 +416,88 @@ class PostgreSQLImportTests(unittest.TestCase):
         })()
         with patch.dict(os.environ, {"DATABASE_URL": self.dsn}):
             return importer.run_apply(args)
+
+    def test_rarity_change_is_atomic_preserves_other_fields_and_guards_frozen_art(self):
+        import psycopg
+
+        park_id = "regional-existing-1"
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s", (park_id,))
+                    before_park = list(cursor.fetchone())
+                    cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s", ("art/badges/scenes/existing-scene.webp",))
+                    before_asset = cursor.fetchone()
+                    cursor.execute("SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,))
+                    before_drive = cursor.fetchall()
+                    cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
+                    before_revision = cursor.fetchone()[0]
+
+            plan, path = self._plan(
+                temp,
+                [source_feature(park_id, square(4))],
+                [park_id],
+                rarity={"parks": {park_id: {"rarity": "uncommon", "rationale": "Reviewed to match the regional scale."}}},
+            )
+            result = self._apply(plan, path)
+            self.assertEqual(result["result"], "applied")
+            self.assertEqual(result["revision"], before_revision + 1)
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s", (park_id,))
+                    after_park = list(cursor.fetchone())
+                    cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s", ("art/badges/scenes/existing-scene.webp",))
+                    self.assertEqual(cursor.fetchone(), before_asset)
+                    cursor.execute("SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,))
+                    self.assertEqual(cursor.fetchall(), before_drive)
+                    cursor.execute("SELECT entity, entity_id FROM public.content_changes WHERE revision = %s ORDER BY entity, entity_id", (result["revision"],))
+                    self.assertEqual(
+                        cursor.fetchall(),
+                        [("asset", "art/badges/scenes/existing-scene.webp"), ("boundary", park_id), ("park", park_id)],
+                    )
+            before_park[9] = "uncommon"
+            self.assertEqual(after_park, before_park)
+
+            replay = self._apply(plan, path)
+            self.assertEqual(replay["result"], "already-current")
+            self.assertEqual(replay["revision"], result["revision"])
+
+            stale_plan, stale_path = self._plan(
+                temp,
+                [source_feature(park_id, square(7))],
+                [park_id],
+                rarity={"parks": {park_id: "common"}},
+            )
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("UPDATE public.parks SET rarity = 'epic' WHERE id = %s", (park_id,))
+            with self.assertRaisesRegex(importer.ParkImportError, "rarity changed after planning"):
+                self._apply(stale_plan, stale_path)
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("UPDATE public.parks SET rarity = 'uncommon' WHERE id = %s", (park_id,))
+
+            queued_id = "regional-existing-2"
+            queued_plan, queued_path = self._plan(
+                temp,
+                [source_feature(queued_id, square(9))],
+                [queued_id],
+                rarity={"parks": {queued_id: "uncommon"}},
+            )
+            with self.assertRaisesRegex(importer.ParkImportError, "Unpublished frozen authoring art exists"):
+                self._apply(queued_plan, queued_path)
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT rarity FROM public.parks WHERE id = %s", (queued_id,))
+                    self.assertEqual(cursor.fetchone()[0], "rare")
+                    cursor.execute("SELECT feature FROM public.boundaries WHERE park_id = %s", (queued_id,))
+                    self.assertEqual(importer._jsonb(cursor.fetchone()[0]), importer._public_feature(queued_id, "coast", square(-4)))
+                    cursor.execute("UPDATE public.parks SET rarity = 'rare' WHERE id = %s", (park_id,))
+                    cursor.execute(
+                        "UPDATE public.boundaries SET feature = %s::jsonb WHERE park_id = %s",
+                        (json.dumps(importer._public_feature(park_id, "coast", square(-2))), park_id),
+                    )
 
     def test_real_update_insert_replay_drift_and_rollback(self):
         import psycopg

@@ -29,7 +29,18 @@ test("content sync snapshot validates 13 fields, community categories, and a sep
     const body = JSON.parse(res.body);
     assert.equal(Object.keys(body.parks[0]).length, 13);
     assert.equal(body.parks[0].category, "community");
+    assert.deepEqual(body.drive.parks[park.id], snapshot.drive.parks[park.id]);
     assert.deepEqual(body.map, map);
+});
+
+test("content sync preserves the numeric all-null route sentinel for older client readers", async () => {
+    const sentinel = { drive: [null], walkM: 0 };
+    const legacy = { ...snapshot, drive: { hubs: snapshot.drive.hubs, parks: { [park.id]: sentinel } } };
+    const res = response();
+    await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => legacy } })(req(), res);
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(JSON.parse(res.body).drive.parks[park.id], sentinel);
 });
 
 test("content sync withholds a snapshot with a non-release-scoped badge descriptor", async () => {

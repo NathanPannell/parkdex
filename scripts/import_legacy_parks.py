@@ -236,6 +236,31 @@ def parse_review(value: Any) -> dict[str, Any]:
     return value["parks"]
 
 
+def parse_rarity_review(value: Any) -> dict[str, dict[str, str | None]]:
+    if not isinstance(value, dict) or set(value) != {"parks"} or not isinstance(value["parks"], dict):
+        raise ParkImportError("Rarity review JSON must contain exactly a parks object")
+    if not value["parks"]:
+        raise ParkImportError("Rarity review JSON must include one or more parks")
+    reviews: dict[str, dict[str, str | None]] = {}
+    for park_id, item in value["parks"].items():
+        if not isinstance(park_id, str) or not ID_RE.fullmatch(park_id):
+            raise ParkImportError("Rarity review park keys must be valid stable park IDs")
+        if isinstance(item, str):
+            rarity, rationale = item, None
+        elif isinstance(item, dict) and set(item) == {"rarity", "rationale"}:
+            rarity, rationale = item["rarity"], item["rationale"]
+        else:
+            raise ParkImportError(f"Rarity review for {park_id} must be a rarity string or an object with rarity and rationale")
+        if not isinstance(rarity, str) or rarity not in RARITIES:
+            raise ParkImportError(f"Rarity review for {park_id} must use a supported rarity")
+        if rationale is not None:
+            rationale = account_text(rationale, f"Rarity review for {park_id} rationale", 1000)
+        elif isinstance(item, dict):
+            raise ParkImportError(f"Rarity review for {park_id} requires a non-empty rationale when using an object")
+        reviews[park_id] = {"rarity": rarity, "rationale": rationale}
+    return reviews
+
+
 def account_text(value: Any, label: str, maximum: int) -> str:
     if not isinstance(value, str):
         raise ParkImportError(f"{label} must be text")
@@ -247,8 +272,8 @@ def account_text(value: Any, label: str, maximum: int) -> str:
 
 
 def validate_new_park(source_id: str, target_id: str, place: dict[str, Any], review: Any, hubs: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
-    if not isinstance(review, dict) or set(review) != {"presentation", "walkM", "drive"}:
-        raise ParkImportError(f"New park {source_id} review must contain presentation, walkM, and drive")
+    if not isinstance(review, dict) or set(review) not in ({"presentation", "walkM", "drive"}, {"presentation", "walkM", "drive", "accessUnknown"}):
+        raise ParkImportError(f"New park {source_id} review must contain presentation, walkM, and drive; accessUnknown is optional")
     presentation = review["presentation"]
     required = {"short", "biome", "shape", "rarity", "seed", "blurb"}
     if not isinstance(presentation, dict) or set(presentation) - (required | {"scene"}) or not required <= set(presentation):
@@ -289,10 +314,13 @@ def validate_new_park(source_id: str, target_id: str, place: dict[str, Any], rev
         raise ParkImportError(f"New park {source_id} scene must be null or a lowercase hyphenated slug")
     walk_m = review["walkM"]
     if isinstance(walk_m, bool) or not isinstance(walk_m, (int, float)) or not math.isfinite(walk_m) or not 0 <= walk_m <= 9007199254740991:
-        raise ParkImportError(f"New park {source_id} walkM must be an explicitly reviewed finite non-negative number")
+        raise ParkImportError(f"New park {source_id} walkM must be a finite non-negative number; use 0 with accessUnknown for unverified access")
     drive = review["drive"]
     if not isinstance(drive, list) or len(drive) != len(hubs) or not drive:
         raise ParkImportError(f"New park {source_id} drive must provide one entry for every current drive hub")
+    access_unknown = review.get("accessUnknown")
+    if "accessUnknown" in review and access_unknown is not True:
+        raise ParkImportError(f"New park {source_id} accessUnknown must be true when supplied")
     normalized_drive: list[list[float] | None] = []
     has_route = False
     for position, route in enumerate(drive):
@@ -306,8 +334,11 @@ def validate_new_park(source_id: str, target_id: str, place: dict[str, Any], rev
             raise ParkImportError(f"New park {source_id} drive[{position}] has invalid route values")
         has_route = True
         normalized_drive.append([distance, duration])
-    if not has_route:
-        raise ParkImportError(f"New park {source_id} drive must include at least one verified route")
+    if access_unknown is True:
+        if walk_m != 0 or has_route:
+            raise ParkImportError(f"New park {source_id} accessUnknown requires walkM 0 and null for every drive hub")
+    elif not has_route:
+        raise ParkImportError(f"New park {source_id} all-null drive requires explicit accessUnknown true, walkM 0, and no verified routes")
     drive_record = {"walkM": walk_m, "drive": normalized_drive, "hubs": hubs}
     return park, drive_record
 
@@ -345,6 +376,8 @@ def build_plan(
     review: dict[str, Any] | None = None,
     review_source: dict[str, str] | None = None,
     hubs: list[dict[str, Any]] | None = None,
+    rarity_review: dict[str, dict[str, str | None]] | None = None,
+    rarity_review_source: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if not selected_source_ids or len(selected_source_ids) != len(set(selected_source_ids)):
         raise ParkImportError("Select one or more unique source park IDs with --park-id")
@@ -358,6 +391,12 @@ def build_plan(
         raise ParkImportError("Selected source park IDs map to duplicate target IDs")
     if any(not ID_RE.fullmatch(item) for item in target_ids):
         raise ParkImportError("A target park ID is invalid")
+    if (rarity_review is None) != (rarity_review_source is None):
+        raise ParkImportError("Rarity review values and their source hash must be provided together")
+    if rarity_review is not None:
+        unselected = set(rarity_review) - set(selected_source_ids)
+        if unselected:
+            raise ParkImportError("Rarity review includes unselected source park IDs: " + ", ".join(sorted(unselected)))
 
     change_set: list[dict[str, Any]] = []
     blockers: list[str] = []
@@ -367,6 +406,8 @@ def build_plan(
         current_park = parks.get(target_id)
         current_feature = boundaries.get(target_id)
         if current_park is None:
+            if rarity_review is not None and source_id in rarity_review:
+                raise ParkImportError(f"Rarity review for {source_id} can only change an existing park")
             change: dict[str, Any] = {
                 "sourceId": source_id,
                 "targetId": target_id,
@@ -399,6 +440,8 @@ def build_plan(
                 desired = _public_feature(target_id, park["biome"], record["geometry"])
                 cloud_content._validate_boundaries({"type": "FeatureCollection", "features": [desired]}, [target_id])
                 change.update({"desiredPark": park, "desiredDrive": drive_record, "desiredFeature": desired})
+                if review[source_id].get("accessUnknown") is True:
+                    change["accessUnknown"] = True
         else:
             biome = current_park.get("biome")
             if not isinstance(biome, str) or biome not in BIOMES:
@@ -416,6 +459,15 @@ def build_plan(
                 "targetGeometryBefore": _feature_summary(current_feature),
                 "desiredFeature": desired,
             }
+            rarity_item = rarity_review.get(source_id) if rarity_review is not None else None
+            if rarity_item is not None:
+                expected_rarity = current_park.get("rarity")
+                if expected_rarity not in RARITIES:
+                    raise ParkImportError(f"Target park {target_id} has a rarity outside the content contract")
+                change["expectedRarity"] = expected_rarity
+                change["desiredRarity"] = rarity_item["rarity"]
+                if rarity_item["rationale"] is not None:
+                    change["rarityReviewRationale"] = rarity_item["rationale"]
         change_set.append(change)
 
     plan: dict[str, Any] = {
@@ -425,6 +477,7 @@ def build_plan(
             "boundary": boundary_source,
             **({"catalogue": catalogue_source} if catalogue_source else {}),
             **({"newParkReview": review_source} if review_source else {}),
+            **({"rarityReview": rarity_review_source} if rarity_review_source else {}),
         },
         "selectedSourceIds": selected_source_ids,
         "idMapping": id_mapping,
@@ -575,8 +628,12 @@ def _matches_all(cursor, plan: dict[str, Any], parks: dict[str, dict[str, Any]],
             desired_hubs = change["desiredDrive"]["hubs"]
             if hubs != desired_hubs or not _drive_matches(cursor, park_id, change["desiredDrive"]):
                 return False
-        elif park_id not in parks or parks[park_id]["biome"] != change["expectedBiome"]:
-            return False
+        else:
+            current_park = parks.get(park_id)
+            if current_park is None or current_park["biome"] != change["expectedBiome"]:
+                return False
+            if "desiredRarity" in change and current_park["rarity"] != change["desiredRarity"]:
+                return False
     return True
 
 
@@ -593,10 +650,42 @@ def _guard_target(plan: dict[str, Any], revision: int, parks: dict[str, dict[str
                 raise ParkImportError(f"Target park {park_id} was removed after planning")
             if current_park["biome"] != change["expectedBiome"]:
                 raise ParkImportError(f"Target park {park_id} biome changed after planning")
+            if "expectedRarity" in change and current_park["rarity"] != change["expectedRarity"]:
+                raise ParkImportError(f"Target park {park_id} rarity changed after planning")
             if geometry_hash(current_feature) != change["targetBeforeHash"]:
                 raise ParkImportError(f"Target boundary {park_id} changed after planning")
     if revision != plan["target"]["revision"]:
         raise ParkImportError("Target content revision changed after planning")
+
+
+def _rarity_changes(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        change for change in plan["changes"]
+        if "desiredRarity" in change and change["desiredRarity"] != change["expectedRarity"]
+    ]
+
+
+def _lock_authoring_rollout(cursor: Any) -> None:
+    cursor.execute("SELECT to_regclass('public.park_enrichment_rollout')")
+    if cursor.fetchone()[0] is None:
+        raise ParkImportError("Rarity changes require the park authoring migration so frozen art can be checked safely")
+    cursor.execute("SELECT singleton FROM public.park_enrichment_rollout WHERE singleton = true FOR UPDATE")
+    if cursor.fetchone() is None:
+        raise ParkImportError("Rarity changes require an authoring rollout row to coordinate frozen job authoring")
+
+
+def _guard_unpublished_selected_art(cursor: Any, changes: list[dict[str, Any]]) -> None:
+    park_ids = [change["targetId"] for change in changes]
+    cursor.execute(
+        "SELECT park_id FROM public.park_enrichment_jobs "
+        "WHERE park_id = ANY(%s) AND selected_art IS NOT NULL AND state <> 'published' ORDER BY park_id",
+        (park_ids,),
+    )
+    selected = [row[0] for row in cursor.fetchall()]
+    if selected:
+        raise ParkImportError(
+            "Unpublished frozen authoring art exists for affected rarity changes: " + ", ".join(selected)
+        )
 
 
 def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_environment: str) -> dict[str, Any]:
@@ -607,13 +696,21 @@ def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_env
     if expected_host != declared_target["declaredHost"] or identity != {key: declared_target[key] for key in ("host", "port", "database")}:
         raise ParkImportError("Connected target identity does not match the reviewed host, port, and database")
     ids = [change["targetId"] for change in plan["changes"]]
+    rarity_changes = _rarity_changes(plan)
     try:
         with conn.transaction():
             with conn.cursor() as cursor:
+                if rarity_changes:
+                    # The authoring queue takes this lock before job changes. Hold it
+                    # before locking the content clock so rarity checks cannot race a
+                    # newly frozen selection.
+                    _lock_authoring_rollout(cursor)
                 revision, parks, boundaries, hubs = _current_state(cursor, ids)
                 if _matches_all(cursor, plan, parks, boundaries, hubs):
                     return {"result": "already-current", "revision": revision, "changed": []}
                 _guard_target(plan, revision, parks, boundaries)
+                if rarity_changes:
+                    _guard_unpublished_selected_art(cursor, rarity_changes)
                 changed: list[dict[str, str]] = []
                 for change in plan["changes"]:
                     park_id = change["targetId"]
@@ -633,6 +730,13 @@ def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_env
                                 "INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) VALUES (%s, %s, %s, %s)",
                                 (park_id, position, distance, duration),
                             )
+                    elif change.get("desiredRarity") != change.get("expectedRarity"):
+                        cursor.execute(
+                            "UPDATE public.parks SET rarity = %s WHERE id = %s AND rarity = %s",
+                            (change["desiredRarity"], park_id, change["expectedRarity"]),
+                        )
+                        if cursor.rowcount != 1:
+                            raise ParkImportError(f"Target park {park_id} rarity changed during import")
                     feature_json = canonical_bytes(change["desiredFeature"]).decode("utf-8")
                     cursor.execute(
                         "INSERT INTO public.boundaries (park_id, feature) VALUES (%s, %s::jsonb) "
@@ -693,19 +797,29 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     catalogue_source = None
     review = None
     review_source = None
+    rarity_review = None
+    rarity_review_source = None
     if args.catalogue_source:
         catalogue_raw, catalogue_source = read_source(args.catalogue_source, "catalogue")
         catalogue = parse_catalogue(parse_json(catalogue_raw, "legacy catalogue"))
     if args.new_park_review:
         review_raw, review_source = read_source(str(args.new_park_review), "new park review")
         review = parse_review(parse_json(review_raw, "new park review"))
+    rarity_review_path = getattr(args, "rarity_review", None)
+    if rarity_review_path:
+        rarity_review_raw, rarity_review_source = read_source(str(rarity_review_path), "rarity review")
+        rarity_review = parse_rarity_review(parse_json(rarity_review_raw, "rarity review"))
     target_ids = [mapping.get(item, item) for item in source_ids]
     with _connect() as conn:
         target, parks, boundaries, hubs = capture_target(conn, args.target_host, args.target_environment, target_ids)
     for target_id in target_ids:
         if target_id not in parks and target_id in boundaries:
             raise ParkImportError(f"Target boundary {target_id} has no matching park row")
-    plan = build_plan(features, boundary_source, source_ids, mapping, target, parks, boundaries, catalogue, catalogue_source, review, review_source, hubs)
+    plan = build_plan(
+        features, boundary_source, source_ids, mapping, target, parks, boundaries,
+        catalogue, catalogue_source, review, review_source, hubs,
+        rarity_review, rarity_review_source,
+    )
     _write_plan(args.out, plan)
     return {"planSha256": plan["planSha256"], "status": plan["status"], "target": plan["target"], "changeCount": len(plan["changes"]), "blockers": plan["blockers"], "planPath": str(args.out.expanduser().resolve())}
 
@@ -731,6 +845,7 @@ def build_parser() -> argparse.ArgumentParser:
     planning.add_argument("--id-map", action="append", default=[], help="explicit old-id:new-id rename; repeat as needed")
     planning.add_argument("--catalogue-source", default=None, help="legacy places JSON file or HTTPS URL, required when adding a park")
     planning.add_argument("--new-park-review", type=Path, help="review JSON with presentation, walkM, and drive for new parks")
+    planning.add_argument("--rarity-review", type=Path, help="hash-pinned review JSON for rarity changes to existing parks")
     planning.add_argument("--target-host", required=True, help="host expected from DATABASE_URL")
     planning.add_argument("--target-environment", required=True, help="explicit label recorded in the plan")
     planning.add_argument("--out", required=True, type=Path, help="path for the frozen JSON review plan")
