@@ -13,6 +13,7 @@ import sys
 import tempfile
 from io import BytesIO
 from urllib.parse import unquote, urlsplit
+from urllib.request import urlopen
 from uuid import uuid4
 from typing import Any
 
@@ -415,8 +416,18 @@ def parse_database_identity(database_url: str, target: str, target_id: str | Non
     return {"host": host, "database": database, "username": username}
 
 
+CLONED_STAGING_SOURCE_HOST = "ep-rapid-voice-ak0plhpb.c-3.us-west-2.aws.neon.tech"
+CLONED_STAGING_HOST = "ep-shiny-cherry-akobwdis.c-3.us-west-2.aws.neon.tech"
+CLONED_STAGING_SOURCE_EXPORT_SHA256 = "f15b42ef118e3a59f3f44cbc6b3bebbfbc2827dec91f33e8ef3171a18fe45a7a"
+CLONED_STAGING_RANK18_WEBP_SHA256 = "6940fd290266e88d9a6430534ebcf9b478db9861a566f6d113bd978dea177e98"
+CLONED_STAGING_RANK18_PARK_ID = "regional-matheson-lake-regional-park"
+CLONED_STAGING_SNAPSHOT_URL = "https://staging.web.parkdex.app/api/content/snapshot"
+
+
 def verify_target(conn: Any, target: str, target_id: str | None, expected_host: str, database_url: str) -> None:
     identity = parse_database_identity(database_url, target, target_id, expected_host)
+    if target == "staging" and identity["host"] != CLONED_STAGING_HOST:
+        raise QueueError("staging authoring is bound to the current Neon staging endpoint")
     with conn.cursor() as cursor:
         cursor.execute(
             "SELECT target_environment, target_id, database_host FROM public.park_enrichment_rollout WHERE singleton = true"
@@ -427,7 +438,13 @@ def verify_target(conn: Any, target: str, target_id: str | None, expected_host: 
     actual_target, actual_target_id, marker_host = row
     if actual_target != target or actual_target_id != target_id:
         raise QueueError("requested target does not match the immutable rollout receipt")
-    if str(marker_host).lower().rstrip(".") != identity["host"]:
+    marker_host = str(marker_host).lower().rstrip(".")
+    inherited_staging_receipt = (
+        target == "staging" and target_id is None
+        and marker_host == CLONED_STAGING_SOURCE_HOST
+        and identity["host"] == CLONED_STAGING_HOST
+    )
+    if marker_host != identity["host"] and not inherited_staging_receipt:
         raise QueueError("DATABASE_URL host does not match the immutable rollout receipt")
 
 
@@ -479,6 +496,135 @@ def _lock_rollout(cursor: Any) -> None:
     cursor.execute("SELECT singleton FROM public.park_enrichment_rollout WHERE singleton = true FOR UPDATE")
     if cursor.fetchone() is None:
         raise QueueError("park enrichment rollout receipt is missing")
+
+
+def _transferred_rank18(source_export: Path) -> dict[str, Any]:
+    path, _ = _file_digest(str(source_export), CLONED_STAGING_SOURCE_EXPORT_SHA256, "parent branch export")
+    try:
+        source = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise QueueError("Could not read the exact reviewed parent branch export") from None
+    if (source.get("schema") != "parkdex.kip-public-content-backup/v1"
+            or source.get("revision") != 26
+            or source.get("database", {}).get("host") != CLONED_STAGING_SOURCE_HOST
+            or source.get("target") != {"environment": "staging", "targetId": None}):
+        raise QueueError("Parent branch export does not match the reviewed pre-cutover state")
+    jobs = [row for row in source.get("tables", {}).get("park_enrichment_jobs", []) if row.get("rank") == 18]
+    if len(jobs) != 1:
+        raise QueueError("Parent branch export has no unique rank 18 job")
+    job = jobs[0]
+    art = job.get("selected_art")
+    if (job.get("park_id") != CLONED_STAGING_RANK18_PARK_ID or job.get("state") != "published"
+            or job.get("attempt_count") != 1 or job.get("render_calls_started") != 5
+            or not isinstance(job.get("frozen_research"), dict)
+            or not isinstance(job.get("render_call_log"), list) or len(job["render_call_log"]) != 5
+            or not isinstance(art, dict) or art.get("sha256") != CLONED_STAGING_RANK18_WEBP_SHA256):
+        raise QueueError("Parent branch rank 18 history does not match the reviewed publication")
+    selected = validate_selected_art(art)
+    if selected["expected"] != {"blurb": "A new park to explore. Badge and park story coming soon.",
+                                 "rarity": "common", "scene": None}:
+        raise QueueError("Parent branch selected art has unexpected pre-publication park values")
+    for record in job["render_call_log"]:
+        _file_digest(record.get("manifest_path"), record.get("manifest_sha256"), "recorded render manifest")
+    if (job.get("run_manifest_path") != job["render_call_log"][-1].get("manifest_path")
+            or job.get("run_manifest_sha256") != job["render_call_log"][-1].get("manifest_sha256")):
+        raise QueueError("Parent branch final render manifest does not match the call history")
+    research = job["frozen_research"]
+    _file_digest(research.get("research_json_path"), research.get("research_json_sha256"), "frozen research")
+    _file_digest(art.get("selection_json_path"), art.get("selection_json_sha256"), "selected art record")
+    gallery_root = Path.home() / ".codex" / "skills" / "park-badges" / "selected-badges"
+    try:
+        gallery = json.loads((gallery_root / "index.json").read_text(encoding="utf-8"))
+        selection = next(entry for entry in gallery["selections"]
+                         if entry["id"] == "matheson-lake-regional-park/2026-09-29-e-r1")
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, StopIteration):
+        raise QueueError("The reviewed rank 18 gallery selection is unavailable") from None
+    if selection["image_hashes"].get("final-flat-cartoon.webp") != art["sha256"]:
+        raise QueueError("The reviewed rank 18 gallery hash differs from selected art")
+    _file_digest(str(gallery_root / selection["path"] / "final-flat-cartoon.webp"),
+                 art["sha256"], "archived selected WebP")
+    return job
+
+
+def _live_rank18_expected() -> tuple[dict[str, Any], int]:
+    try:
+        with urlopen(CLONED_STAGING_SNAPSHOT_URL, timeout=25) as response:
+            snapshot = json.load(response)
+    except Exception as exc:
+        raise QueueError(f"Could not verify live staging content ({type(exc).__name__})") from None
+    revision = snapshot.get("revision")
+    if not isinstance(revision, int) or revision < 25:
+        raise QueueError("Live staging revision precedes the reviewed branch split")
+    rows = [row for row in snapshot.get("parks", []) if row.get("id") == CLONED_STAGING_RANK18_PARK_ID]
+    if len(rows) != 1:
+        raise QueueError("Live staging snapshot has no unique rank 18 park")
+    return {key: rows[0].get(key) for key in ("blurb", "rarity", "scene")}, revision
+
+
+def adopt_transferred_rank18(conn: Any, source_export: Path, *, apply: bool = False,
+                             reviewed_plan_sha256: str | None = None) -> dict[str, Any]:
+    """Carry a reviewed parent-branch art audit into the cloned staging child."""
+    source = _transferred_rank18(source_export)
+    expected = source["selected_art"]["expected"]
+    live_expected, live_revision = _live_rank18_expected()
+    if live_expected != expected:
+        raise QueueError("Live staging rank 18 values differ from the reviewed art expectation")
+    with conn.transaction():
+        with conn.cursor() as cursor:
+            _lock_rollout(cursor)
+            cursor.execute("SELECT database_host FROM public.park_enrichment_rollout WHERE singleton = true")
+            if cursor.fetchone() != (CLONED_STAGING_SOURCE_HOST,):
+                raise QueueError("The staging branch is not the reviewed clone")
+            cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
+            if cursor.fetchone() != (live_revision,):
+                raise QueueError("Staging database revision differs from the live public snapshot")
+            cursor.execute("SELECT count(*) FROM public.park_enrichment_jobs WHERE state = 'published'")
+            if cursor.fetchone() != (17,):
+                raise QueueError("Staging published-job count changed")
+            cursor.execute("SELECT count(*) FROM public.park_enrichment_jobs WHERE lease_token IS NOT NULL")
+            if cursor.fetchone() != (0,):
+                raise QueueError("Staging queue has an active lease")
+            cursor.execute("SELECT blurb, rarity, scene FROM public.parks WHERE id = %s",
+                           (CLONED_STAGING_RANK18_PARK_ID,))
+            if cursor.fetchone() != (expected["blurb"], expected["rarity"], expected["scene"]):
+                raise QueueError("Staging rank 18 park values changed")
+            cursor.execute("SELECT count(*) FROM public.r2_objects WHERE logical_path = %s",
+                           ("art/badges/scenes/matheson-lake-sandy-beach.webp",))
+            if cursor.fetchone() != (0,):
+                raise QueueError("Staging rank 18 scene asset already exists")
+            current = _select_job(cursor, 18, lock=True)
+            if (current is None or current["park_id"] != CLONED_STAGING_RANK18_PARK_ID
+                    or current["state"] != "queued" or current["attempt_count"] != 0
+                    or current["lease_token"] is not None or current["frozen_research"] is not None
+                    or current["render_calls_started"] != 0 or current["selected_art"] is not None):
+                raise QueueError("Staging rank 18 queue state changed")
+            plan = {"command": "adopt-transferred-rank18",
+                    "source_export_sha256": CLONED_STAGING_SOURCE_EXPORT_SHA256,
+                    "selected_webp_sha256": CLONED_STAGING_RANK18_WEBP_SHA256,
+                    "render_calls_preserved": 5, "staging_revision": live_revision,
+                    "resulting_state": "ready"}
+            plan_sha256 = hashlib.sha256(_json_text(plan).encode("utf-8")).hexdigest()
+            if not apply:
+                return {**plan, "mode": "dry-run", "planSha256": plan_sha256}
+            if reviewed_plan_sha256 != plan_sha256:
+                raise QueueError("Apply requires the hash from the exact reviewed rank 18 adoption plan")
+            cursor.execute("DELETE FROM public.park_enrichment_jobs WHERE rank = 18 AND state = 'queued' AND attempt_count = 0 AND lease_token IS NULL")
+            if cursor.rowcount != 1:
+                raise QueueError("Staging rank 18 changed during adoption")
+            cursor.execute("""INSERT INTO public.park_enrichment_jobs
+                (rank, park_id, state, lease_token, lease_expires_at, attempt_count,
+                 frozen_research, render_calls_started, run_manifest_path, run_manifest_sha256,
+                 render_call_log, selected_art, publication_result, published_at, last_error,
+                 created_at, updated_at)
+                VALUES (18, %s, 'ready', NULL, NULL, %s, %s::jsonb, 5, %s, %s,
+                        %s::jsonb, %s::jsonb, NULL, NULL, NULL, %s, clock_timestamp())""",
+                (CLONED_STAGING_RANK18_PARK_ID, source["attempt_count"],
+                 _json_text(source["frozen_research"]), source["run_manifest_path"],
+                 source["run_manifest_sha256"], _json_text(source["render_call_log"]),
+                 _json_text(source["selected_art"]), source["created_at"]))
+            if cursor.rowcount != 1:
+                raise QueueError("Staging rank 18 adoption did not insert exactly one job")
+            return {**plan, "mode": "applied", "planSha256": plan_sha256}
 
 
 def _job_progress(job: dict[str, Any], *, include_token: bool = False) -> dict[str, Any]:
@@ -1411,6 +1557,12 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.add_argument("--research-json", type=Path, required=True)
     adopt.add_argument("--selected-art-json", type=Path, required=True)
 
+    transfer = subparsers.add_parser("adopt-transferred-rank18",
+                                     help="carry the reviewed rank 18 art into the cloned staging queue")
+    transfer.add_argument("--source-export", type=Path, required=True)
+    transfer.add_argument("--apply", action="store_true")
+    transfer.add_argument("--reviewed-plan-sha256")
+
     render = subparsers.add_parser("start-render", help="record the next render call before invoking image generation")
     render.add_argument("--rank", type=int, required=True)
     render.add_argument("--lease-token", required=True)
@@ -1495,6 +1647,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         with _connect(database_url) as conn:
             verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)
             return adopt_prepared(conn, args.rank, args.lease_token, args.generation_record, research, art)
+    if args.command == "adopt-transferred-rank18":
+        if args.target != "staging" or args.target_id is not None:
+            raise QueueError("transferred rank 18 adoption is limited to staging")
+        if not args.apply and args.reviewed_plan_sha256 is not None:
+            raise QueueError("The reviewed adoption plan hash is valid only with --apply")
+        with _connect(database_url) as conn:
+            verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)
+            return adopt_transferred_rank18(conn, args.source_export, apply=args.apply,
+                                           reviewed_plan_sha256=args.reviewed_plan_sha256)
     if args.command == "select-art":
         with _connect(database_url) as conn:
             verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)

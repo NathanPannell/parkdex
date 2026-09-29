@@ -52,6 +52,32 @@ def _research_fixture(directory: Path, park_id: str = "test-park") -> dict:
 
 
 class AuthoringQueueUnitTests(unittest.TestCase):
+    def test_cloned_staging_receipt_allows_only_current_staging_endpoint(self) -> None:
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, _sql):
+                pass
+
+            def fetchone(self):
+                return ("staging", None, queue.CLONED_STAGING_SOURCE_HOST)
+
+        class Connection:
+            def cursor(self):
+                return Cursor()
+
+        staging_url = (f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_HOST}/"
+                       "parkdex_kip?sslmode=require")
+        queue.verify_target(Connection(), "staging", None, queue.CLONED_STAGING_HOST, staging_url)
+        old_main_url = (f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_SOURCE_HOST}/"
+                        "parkdex_kip?sslmode=require")
+        with self.assertRaisesRegex(queue.QueueError, "current Neon staging endpoint"):
+            queue.verify_target(Connection(), "staging", None, queue.CLONED_STAGING_SOURCE_HOST, old_main_url)
+
     def test_database_identity_requires_expected_target_host_and_role(self) -> None:
         identity = queue.parse_database_identity(
             "postgresql://parkdex_kip_owner:secret@db.example.test/parkdex_kip",
