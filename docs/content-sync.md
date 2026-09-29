@@ -20,6 +20,8 @@ On Android, catalogue records live in SQLite and downloaded files live in the ap
 
 The app includes a compact overview map of Vancouver Island. It appears with the first park pins while detailed map files download, remains available offline, and stays in place as downloaded detail becomes usable.
 
+The app prepares its local overview archive and map worker during the splash and onboarding screens. Park markers are added after the overview has rendered, so creating the badge illustrations does not compete with the first basemap frame. This step does not wait for detailed tiles or labels. Preparing the archive and rendering it share the same local bytes.
+
 ## Opening an app with saved parks
 
 During the short orange splash, the app opens its saved catalogue and cached map inventory. It validates the catalogue's source and structure before publishing the saved parks to the map. Reading and checking every image or detailed map chunk happens afterward, alongside the normal update check. The opening map does not wait for either operation.

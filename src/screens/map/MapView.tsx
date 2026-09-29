@@ -1,6 +1,4 @@
-import { AttributionControl, Map as MLMap, Marker, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
-
-setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
+import { AttributionControl, Map as MLMap, Marker, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 import { motion } from "motion/react";
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -10,6 +8,7 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
+import { configureMapLibreWorker, watchBundledOverviewReadiness } from "../../lib/mapStartup";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
@@ -65,6 +64,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
+  const [overviewReadyMap, setOverviewReadyMap] = useState<MLMap | null>(null);
   const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
   const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
   const selectRef = useRef(onSelect);
@@ -78,6 +78,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     setLoadedRelease(null);
     setInitialStyleLoaded(false);
     styleReady.current = false;
+    setOverviewReadyMap(null);
     setHosts([]);
     setUserHost(null);
     const unregisterProtocols = registerContentMapProtocols(runtime, content);
@@ -85,6 +86,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     styleRelease.current = releaseId;
     const savedCamera = camera.current;
     const zoom = savedCamera?.zoom ?? 10.7;
+    configureMapLibreWorker();
     const map = new MLMap({
       container: container.current!,
       style: mapStyle(releaseId),
@@ -106,6 +108,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
     setTier(tierOf(zoom));
+    const stopOverviewReadiness = watchBundledOverviewReadiness(map, () => setOverviewReadyMap(map));
 
     const uEl = document.createElement("div");
     uEl.className = "user-host";
@@ -136,6 +139,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
         bearing: map.getBearing(),
         pitch: map.getPitch(),
       };
+      stopOverviewReadiness();
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
       for (const cleanup of protocolCleanups.current.values()) cleanup();
@@ -177,6 +181,10 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     if (!content || !releaseId) return;
     const map = mapRef.current;
     if (!map) return;
+    if (overviewReadyMap !== map) {
+      setHosts([]);
+      return;
+    }
     const ranked = [...parks].sort(
       (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
     );
@@ -200,7 +208,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
       parkMarkers.current.set(park.id, { park, el, marker, rank });
       return { park, el, rank };
     }));
-  }, [parks, hasReadyMapContent]);
+  }, [parks, hasReadyMapContent, overviewReadyMap]);
 
   useEffect(() => {
     if (!releaseId) return;
