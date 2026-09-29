@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
-import { getCollectionRankProgress, getRarityProgress } from "../lib/progression";
-import { progressOwnerKey, useStore } from "../lib/store";
-import { useContent } from "../lib/content/provider";
-import { RankProgressSummary } from "../components/RankProgressSummary";
+import { useStore } from "../lib/store";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -130,7 +127,6 @@ function GoogleSignInButton({
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const { state } = useStore();
-  const content = useContent();
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -154,29 +150,6 @@ export function Account({ onBack }: { onBack: () => void }) {
   const signedIn = auth.phase === "authenticated" && !!account;
   const offlineAccount = auth.phase === "offline-account";
   const accountId = account?.id;
-  const accountOwnerKey = auth.ownerAccountId
-    ? progressOwnerKey({ kind: "account", accountId: auth.ownerAccountId })
-    : null;
-  const accountRarityProgress = useMemo(
-    () => getRarityProgress(
-      state.claims,
-      (signedIn || offlineAccount)
-        && state.progressReady
-        && accountOwnerKey
-        && state.progressOwnerKey === accountOwnerKey
-        && content
-        ? content.parkById
-        : undefined,
-    ),
-    [state.claims, state.progressReady, state.progressOwnerKey, accountOwnerKey, content, signedIn, offlineAccount],
-  );
-  const accountRankProgress = getCollectionRankProgress(accountRarityProgress);
-  const accountRankCard = (signedIn || offlineAccount) && deleteStep === "closed" ? (
-    <section className="account-card card account-rank" aria-labelledby="account-rank-title">
-      <h2 id="account-rank-title">Parkdex rank</h2>
-      <RankProgressSummary progress={accountRankProgress} />
-    </section>
-  ) : null;
   const nativeClientId = auth.config?.googleWebClientId ?? null;
   const nativeGoogleAvailable = !!auth.config?.googleNativeEnabled && isAndroidNativeIdentityAvailable() && isValidGoogleWebClientId(nativeClientId);
   const webGoogleAvailable = !!auth.googleWebClientId;
@@ -398,7 +371,6 @@ export function Account({ onBack }: { onBack: () => void }) {
               <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
               {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
             </section>
-            {accountRankCard}
           </>
         )}
 
@@ -414,65 +386,74 @@ export function Account({ onBack }: { onBack: () => void }) {
         {signedIn && account && deleteStep === "closed" && (
           <>
             <section className="account-card card account-profile">
+              <span className="account-profile__avatar" aria-hidden="true">{(account.displayName || account.email || "P").trim().charAt(0).toUpperCase()}</span>
               <div className="account-profile__main">
-                <span className="eyebrow">Signed in</span>
                 <h2>{account.displayName || "Your Parkdex account"}</h2>
                 <p>{account.email}</p>
+                <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
+                  <Icon name={account.emailVerified ? "check" : "image"} size={14} />
+                  {account.emailVerified ? "Email verified" : "Email not verified"}
+                </span>
               </div>
-              <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
-                <Icon name={account.emailVerified ? "check" : "image"} size={16} />
-                {account.emailVerified ? "Email verified" : "Email not verified"}
-              </span>
-              <div className="account-profile__backup" aria-live="polite">
-                <p className="account-profile__backup-time">
-                  {lastSyncedTimestamp
-                    ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
-                    : backupTimestamp
-                      ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
-                      : "Not synced yet"}
-                </p>
-                {backupStatus && (
-                  <p className={`account-profile__backup-status is-${auth.backup.phase}`} role="status">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.08a6 6 0 0 1 6.94 0M12 20h.01" />
-                    </svg>
-                    <span>{backupStatus}</span>
-                  </p>
-                )}
-              </div>
-              {!account.emailVerified && (
-                <div className="account-profile__verify">
-                  <p>{canRequestEmail ? "Use the link we sent to verify this address and help protect account recovery." : "Email delivery is not enabled in this environment."}</p>
-                  {canRequestEmail && <button className="btn btn--paper btn--sm" disabled={busy} onClick={() => void run(auth.sendVerification, "Verification link sent if this address can receive email.")}>Send verification link</button>}
-                </div>
-              )}
-              {signedIn && hasPassword && !hasGoogle && googleAvailable && (
-                <div className="account-google-link">
-                  {googleLinkStep === "closed" ? (
-                    <button className="btn btn--paper btn--sm" disabled={busy} onClick={() => { setFormError(null); setGoogleLinkStep("verify"); }}>Link Google</button>
-                  ) : googleLinkStep === "verify" ? (
-                    <form className="account-form" onSubmit={(event) => void submitGoogleLinkReauth(event)}>
-                      <p>Verify your password before linking Google to this account.</p>
-                      <label className="fb-field"><span className="fb-label">Current password</span><input className="fb-input" type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={googleLinkPassword} onChange={(event) => setGoogleLinkPassword(event.target.value)} /></label>
-                      <div className="account-delete-panel__actions"><button className="btn btn--paper btn--sm" type="button" onClick={() => setGoogleLinkStep("closed")}>Cancel</button><button className="btn btn--sun btn--sm" disabled={busy}>{busy ? "Checking…" : "Verify and continue"}</button></div>
-                    </form>
-                  ) : (
-                    <div>
-                      <p>Continue with Google to link it to this account.</p>
-                      {renderGoogleButton("link", googleResetKey, busy, onLinkGoogleCredential, onGoogleError)}
-                      <button className="account-text-button" onClick={() => setGoogleLinkStep("closed")}>Cancel linking</button>
-                    </div>
-                  )}
-                </div>
-              )}
             </section>
 
-            {accountRankCard}
+            <section className="account-card card account-section" aria-labelledby="account-backup-title" aria-live="polite">
+              <span className="eyebrow" id="account-backup-title">Backup</span>
+              <div className={`account-backup-row is-${auth.backup.phase}`}>
+                <span className="account-backup-row__dot" aria-hidden="true" />
+                <div>
+                  <strong>{backupHeadline(auth.backup.phase, !!(lastSyncedTimestamp ?? backupTimestamp))}</strong>
+                  <p>
+                    {lastSyncedTimestamp
+                      ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
+                      : backupTimestamp
+                        ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
+                        : "Not synced yet"}
+                  </p>
+                  {backupStatus && <p className="account-backup-row__status" role="status">{backupStatus}</p>}
+                </div>
+              </div>
+              <p className="account-help">Your badges and photos back up to this account so you can restore them on another phone.</p>
+            </section>
 
-            <section className="account-card card account-privacy-card">
-              <span className="eyebrow">Privacy</span>
-              <p>Signing out hides this account’s saved Dex on this device. Sign in again to open it.</p>
+            {(!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
+              <section className="account-card card account-section" aria-labelledby="account-signin-title">
+                <span className="eyebrow" id="account-signin-title">Sign-in &amp; security</span>
+                {!account.emailVerified && (
+                  <div className="account-profile__verify">
+                    <p>{canRequestEmail ? "Verify your email to help protect account recovery." : "Email delivery is not enabled in this environment."}</p>
+                    {canRequestEmail && <button className="btn btn--paper btn--sm" disabled={busy} onClick={() => void run(auth.sendVerification, "Verification link sent if this address can receive email.")}>Send verification link</button>}
+                  </div>
+                )}
+                {hasPassword && !hasGoogle && googleAvailable && (
+                  <div className="account-google-link">
+                    {googleLinkStep === "closed" ? (
+                      <div className="account-profile__verify">
+                        <p>Add Google as a second way to sign in.</p>
+                        <button className="btn btn--paper btn--sm" disabled={busy} onClick={() => { setFormError(null); setGoogleLinkStep("verify"); }}>Link Google</button>
+                      </div>
+                    ) : googleLinkStep === "verify" ? (
+                      <form className="account-form" onSubmit={(event) => void submitGoogleLinkReauth(event)}>
+                        <p>Verify your password before linking Google to this account.</p>
+                        <label className="fb-field"><span className="fb-label">Current password</span><input className="fb-input" type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={googleLinkPassword} onChange={(event) => setGoogleLinkPassword(event.target.value)} /></label>
+                        <div className="account-delete-panel__actions"><button className="btn btn--paper btn--sm" type="button" onClick={() => setGoogleLinkStep("closed")}>Cancel</button><button className="btn btn--sun btn--sm" disabled={busy}>{busy ? "Checking…" : "Verify and continue"}</button></div>
+                      </form>
+                    ) : (
+                      <div>
+                        <p>Continue with Google to link it to this account.</p>
+                        {renderGoogleButton("link", googleResetKey, busy, onLinkGoogleCredential, onGoogleError)}
+                        <button className="account-text-button" onClick={() => setGoogleLinkStep("closed")}>Cancel linking</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+
+
+            <section className="account-signout">
               <button className="btn btn--paper btn--block" disabled={busy} onClick={() => void run(auth.signOut)}>Sign out on this device</button>
+              <p>Signing out hides this account’s Dex on this phone until you sign in again.</p>
             </section>
 
             <section className="account-delete">
@@ -616,6 +597,13 @@ function formatBackupTimestamp(timestamp: number | null) {
     dateTime: date.toISOString(),
     label: new Intl.DateTimeFormat(undefined, options).format(date),
   };
+}
+
+function backupHeadline(phase: BackupPhase, synced: boolean) {
+  if (phase === "syncing") return "Backing up now";
+  if (phase === "offline" || phase === "pending") return "Waiting to back up";
+  if (phase === "error") return "Backup needs attention";
+  return synced ? "Backed up" : "Not backed up yet";
 }
 
 function backupStatusText(phase: BackupPhase, message: string | null) {

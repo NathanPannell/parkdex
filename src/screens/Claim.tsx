@@ -8,7 +8,8 @@ import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
-import { assertParkClaimEligible, ParkAlreadyClaimedError, ParkClaimEligibilityError, type ProgressionRarity } from "../lib/progression";
+import { assertParkClaimEligible, getRarityProgress, ParkAlreadyClaimedError, ParkClaimEligibilityError, rankUpAfter, type Rank } from "../lib/progression";
+import { RankUp } from "../components/Rank";
 import { progressOwnerKey, useStore } from "../lib/store";
 import { useContent, useContentRuntime } from "../lib/content/provider";
 import { useAuth } from "../lib/accounts/AuthProvider";
@@ -92,7 +93,8 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
     }
   };
   const [firstClaim] = useState(() => !state.claims[park.id]);
-  const totalBadges = badgeTotal(content?.parks ?? [], Object.keys(state.claims));
+  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
+  const [rankUp, setRankUp] = useState<Rank | null>(null);
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
@@ -191,9 +193,17 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
         lastTick.current = 0;
         return;
       }
+      const catalogue = contentRef.current?.parkById;
+      const claimsBefore = stateRef.current.claims;
+      const reached = rankUpAfter(
+        getRarityProgress(claimsBefore, catalogue),
+        getRarityProgress({ ...claimsBefore, [parkSnapshot.id]: { parkSnapshot } }, catalogue),
+      );
       dispatch({ type: "claim", ownerKey, id: parkSnapshot.id, claimId: saved.claimId, at: saved.claimedAt, photo, parkSnapshot, contentReleaseId });
       if (authRef.current.phase === "authenticated" && authRef.current.ownerAccountId?.toLowerCase() === ownerKey.slice("account:".length)) void authRef.current.syncBackup({ retryAfterFlight: true });
       celebrate();
+      // Let the badge moment land before the rank-up takes the stage.
+      if (reached) setTimeout(() => { setRankUp(reached); sfx.claim(); burst({ x: 0.5, y: 0.3 }, 1.1); }, 2600);
     } catch {
       setSaveError(true);
       progress.set(0);
@@ -346,6 +356,13 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
             </motion.div>
           ) : (
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}>
+              {/* Kip sits in the layout flow so he never covers the badge or the buttons. */}
+              <motion.div className="claim__kip" variants={pop}>
+                <Bubble side="right" style={{ position: "relative" }}>
+                  {number === 1 ? "Your first badge! KLEEP!" : CHEERS[number % CHEERS.length]}
+                </Bubble>
+                <Kip pose="celebrate" size={84} flip />
+              </motion.div>
               <motion.div className="claim__rarity" variants={pop}>
                 <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
                   {"★".repeat(rarity.stars)} {rarity.label}
@@ -377,13 +394,16 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
       </div>
 
       <AnimatePresence>
-        {phase === "done" && (
-          <motion.div className="claim__kip" initial={{ y: 200, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.9, stiffness: 220, damping: 14 }}>
-            <Bubble side="right" style={{ right: 70, top: -40, whiteSpace: "nowrap" }}>
-              {number === 1 ? "Your first badge! KLEEP!" : CHEERS[number % CHEERS.length]}
-            </Bubble>
-            <Kip pose="celebrate" size={112} flip />
-          </motion.div>
+        {rankUp && (
+          <RankUp
+            key="rankup"
+            rank={rankUp}
+            onExplore={() => {
+              dispatch({ type: "trip", id: null });
+              dispatch({ type: "go", screen: "map" });
+            }}
+            onDone={() => setRankUp(null)}
+          />
         )}
       </AnimatePresence>
     </motion.div>
@@ -394,13 +414,8 @@ function describeClaimEligibilityFailure(error: unknown): string {
   if (error instanceof ParkAlreadyClaimedError) return "This badge is already in your Dex. Your photo is still here. Return to the park list.";
   if (!(error instanceof ParkClaimEligibilityError)) return "Your claim is not ready yet. Your photo is still here. Return to the map and try again.";
   if (error.eligibility.reason === "locked") {
-    const remaining = Object.entries(error.eligibility.remaining).flatMap(([rarity, count]) => {
-      if (!count) return [];
-      const label = RARITY[rarity as ProgressionRarity].label.toLowerCase();
-      return [`${count} more ${label} ${count === 1 ? "park" : "parks"}`];
-    });
-    const requirement = remaining.length > 0 ? remaining.join(" and ") : "the tier requirements";
-    return `This rarity is locked. Earn ${requirement} to unlock it. Your photo is still here.`;
+    const { remaining } = error.eligibility;
+    return `This rarity is locked. Visit ${remaining} more ${remaining === 1 ? "park" : "parks"} to unlock it. Your photo is still here.`;
   }
   if (error.eligibility.reason === "unsupported-rarity") return "New Epic parks are not open for claims yet. Your photo is still here.";
   if (error.eligibility.reason === "unavailable") return "The park catalogue is still loading. Your photo is still here. Return to the map and try again.";

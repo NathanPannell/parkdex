@@ -101,10 +101,10 @@ export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onSho
         <Rays color="#FFC93C" size={520} opacity={0.55} speed={18} />
       </div>
       <motion.div className="arrival__kip" initial={{ scale: 0, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", delay: 0.25, stiffness: 400, damping: 14 }}>
-        <Kip pose="cheer" size={112} />
-        <Bubble side="right" style={{ right: 84, top: -6, whiteSpace: "nowrap" }}>
+        <Bubble side="right" style={{ position: "relative", marginBottom: 34, whiteSpace: "nowrap" }}>
           KLEEP! You made it!
         </Bubble>
+        <Kip pose="cheer" size={92} />
       </motion.div>
       <div className="arrival__card card">
         <motion.span className="arrival__tag" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.15, stiffness: 600, damping: 14 }}>
@@ -129,7 +129,7 @@ export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onSho
             </motion.button>
           ) : (
             <motion.button className="btn btn--block btn--paper" onClick={onShowRequirements} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-              <Icon name="book" /> See rarity requirements
+              <Icon name="book" /> How to unlock it
             </motion.button>
           )}
         </AnimatePresence>
