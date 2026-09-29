@@ -1,0 +1,108 @@
+{
+  "parks": {
+    "regional-albert-head-lagoon-regional-park": {
+      "rarity": "common",
+      "rationale": "A compact lagoon and shoreline path make an easy local coastal stop."
+    },
+    "provincial-bamberton-park": {
+      "rarity": "common",
+      "rationale": "A simple inlet-side picnic and beach stop is best folded into nearby travel."
+    },
+    "regional-bear-hill-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "A short forest climb opens to broad views over the Saanich Peninsula."
+    },
+    "regional-coles-bay-regional-park": {
+      "rarity": "common",
+      "rationale": "A small sheltered cove and shoreline trails suit a local coastal outing."
+    },
+    "regional-devonian-regional-park": {
+      "rarity": "common",
+      "rationale": "A short shoreline visit is best included in a local Sidney itinerary."
+    },
+    "regional-east-sooke-regional-park": {
+      "rarity": "rare",
+      "rationale": "The rugged 10 km Coast Trail and sweeping Strait of Juan de Fuca views make this an exceptional dedicated hiking trip."
+    },
+    "regional-elk-beaver-lake-regional-park": {
+      "rarity": "common",
+      "rationale": "A popular urban lake and recreation area mainly serves Greater Victoria residents."
+    },
+    "regional-francis-king-regional-park": {
+      "rarity": "common",
+      "rationale": "Accessible forest loops and ancient Douglas-firs make a useful local nature walk."
+    },
+    "provincial-goldstream-park": {
+      "rarity": "uncommon",
+      "rationale": "Salmon runs, Niagara Falls and old-growth trails combine into an unusually rich Victoria-area park."
+    },
+    "regional-gonzales-hill-regional-park": {
+      "rarity": "common",
+      "rationale": "This small urban hill park is best as a brief local viewpoint stop."
+    },
+    "provincial-gowlland-tod-park": {
+      "rarity": "uncommon",
+      "rationale": "Rugged ridge trails and Saanich Inlet views reward a half-day outing from Victoria."
+    },
+    "regional-horth-hill-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "Forest trails lead to viewpoints over the Saanich Peninsula and Gulf Islands."
+    },
+    "regional-island-view-beach-regional-park": {
+      "rarity": "common",
+      "rationale": "A long local beach and estuary are a pleasant coastal outing near Victoria."
+    },
+    "regional-lone-tree-hill-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "A short, steep hike reaches an exposed hilltop with wide views over the Saanich Peninsula."
+    },
+    "regional-matheson-lake-regional-park": {
+      "rarity": "common",
+      "rationale": "A forest loop and swimming lake make an easy local Metchosin outing."
+    },
+    "regional-mill-hill-regional-park": {
+      "rarity": "common",
+      "rationale": "Short hill trails and a historic viewpoint make this a useful local stop."
+    },
+    "regional-mount-wells-regional-park": {
+      "rarity": "common",
+      "rationale": "A short rugged summit trail is a good local outing near Langford."
+    },
+    "regional-mount-work-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "Three lakes, summit trails and broad forest recreation make this a strong day outing near Victoria."
+    },
+    "regional-roche-cove-regional-park": {
+      "rarity": "common",
+      "rationale": "The small cove and Galloping Goose access make an easy local stop."
+    },
+    "regional-sea-to-sea-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "The large protected forest and connected trail network reward a planned Sooke-area hiking day."
+    },
+    "regional-sooke-hills-wilderness-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "A long wilderness trail across the hills offers an unusually substantial hike near Greater Victoria."
+    },
+    "regional-sooke-potholes-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "Glacially carved rock pools, swimming and river viewpoints make a standout Sooke-area stop."
+    },
+    "provincial-spectacle-lake-park": {
+      "rarity": "common",
+      "rationale": "A small swimming lake and campground mainly serve local visitors."
+    },
+    "regional-thetis-lake-regional-park": {
+      "rarity": "common",
+      "rationale": "The popular urban swimming lake and trail network mainly serves local residents."
+    },
+    "regional-witty-s-lagoon-regional-park": {
+      "rarity": "uncommon",
+      "rationale": "A sandy beach, creek waterfall and rich birdlife make this a distinctive Metchosin outing."
+    },
+    "provincial-au-welnew-john-dean-park": {
+      "rarity": "uncommon",
+      "rationale": "Short forest trails and an island panorama make a worthwhile detour on the Saanich Peninsula."
+    }
+  }
+}
