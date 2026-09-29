@@ -78,7 +78,7 @@ function releaseCleanup(releaseId: string, entry: ReleaseRegistration): () => vo
 
 function ensureProtocols(): void {
   if (!tileProtocol) tileProtocol = new Protocol();
-  if (!bundledOverview) bundledOverview = new PMTiles(new BundledOverviewSource());
+  if (!bundledOverview) bundledOverview = new PMTiles(bundledOverviewSource);
   if (!tileProtocol.tiles.has(ISLAND_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
   if (!tileProtocolInstalled) {
     addProtocol(TILE_SCHEME, tileProtocol.tile);
@@ -241,6 +241,13 @@ export class BundledOverviewSource implements Source {
     }
     return this.archive;
   }
+}
+
+const bundledOverviewSource = new BundledOverviewSource();
+
+/** Start the bundled overview archive read before the first map requests it. */
+export function prewarmBundledOverview(): Promise<void> {
+  return bundledOverviewSource.getBytes(0, 127).then(() => undefined);
 }
 
 export function mapChunkPath(index: number): string {
