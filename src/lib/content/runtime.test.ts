@@ -29,6 +29,10 @@ const mapMock = vi.hoisted(() => ({
   pauseNext: false,
   onPause: null as null | (() => void),
   releasePause: null as null | (() => void),
+  pauseNearby: false,
+  nearbySignals: [] as Array<AbortSignal | undefined>,
+  onNearbyPause: null as null | (() => void),
+  releaseNearby: null as null | (() => void),
 }));
 
 vi.mock("./map-downloads", () => ({
@@ -41,6 +45,7 @@ vi.mock("./map-downloads", () => ({
     snapshotOverride?: ContentSnapshot,
   ) => {
     mapMock.calls.push({ releaseId, detail });
+    if (detail === "nearby") mapMock.nearbySignals.push(signal);
     if (!snapshotOverride || snapshotOverride.releaseId !== releaseId) throw new Error("candidate prefetch requires a private matching snapshot");
     if (!releaseId.startsWith("sync-") && runtime.getStatus().snapshot?.releaseId === releaseId) throw new Error("candidate snapshot was published before map verification");
     mapMock.onCall?.(detail);
@@ -49,6 +54,13 @@ vi.mock("./map-downloads", () => ({
       await new Promise<void>((resolve) => {
         mapMock.releasePause = resolve;
         mapMock.onPause?.();
+      });
+    }
+    if (detail === "nearby" && mapMock.pauseNearby) {
+      mapMock.pauseNearby = false;
+      await new Promise<void>((resolve) => {
+        mapMock.releaseNearby = resolve;
+        mapMock.onNearbyPause?.();
       });
     }
     await runtime.ensureFile(releaseId, "map/island/000.bin", "nearby", signal);
@@ -410,6 +422,10 @@ beforeEach(() => {
   mapMock.pauseNext = false;
   mapMock.onPause = null;
   mapMock.releasePause = null;
+  mapMock.pauseNearby = false;
+  mapMock.nearbySignals.length = 0;
+  mapMock.onNearbyPause = null;
+  mapMock.releaseNearby = null;
   resetAllowedMapChunks("a".repeat(64));
   resetAllowedMapChunks("b".repeat(64));
   resetAllowedMapChunks("c".repeat(64));
@@ -419,6 +435,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   mapMock.releasePause?.();
+  mapMock.releaseNearby?.();
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
   vi.restoreAllMocks();
 });
@@ -1024,11 +1041,29 @@ describe("incremental content sync", () => {
     expect(events).toContain("art-1-failed");
     expect(events).not.toContain("inventory");
 
+    mapMock.pauseNearby = true;
+    let signalNearbyPaused!: () => void;
+    const nearbyPaused = new Promise<void>((resolve) => { signalNearbyPaused = resolve; });
+    mapMock.onNearbyPause = signalNearbyPaused;
     await runtime.retry();
     await vi.waitFor(() => expect(mapMock.calls.some((call) => call.detail === "starter")).toBe(true));
-    await vi.waitFor(() => expect(mapMock.calls.some((call) => call.detail === "nearby")).toBe(true));
-    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    await nearbyPaused;
+    const initialNearbyCalls = mapMock.calls.filter((call) => call.detail === "nearby").length;
+    expect(initialNearbyCalls).toBe(1);
+    const initialNearbySignal = mapMock.nearbySignals[0];
+    expect(initialNearbySignal?.aborted).toBe(false);
+    runtime.setLocation([-123.4, 48.4]);
+    runtime.setLocation([-123.395, 48.402]);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(initialNearbyCalls);
+    expect(initialNearbySignal?.aborted).toBe(false);
+    mapMock.releaseNearby?.();
+    mapMock.releaseNearby = null;
     await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true));
+    runtime.setLocation([-123.4, 48.4]);
+    runtime.setLocation([-123.33, 48.43]);
+    await vi.waitFor(() => expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(initialNearbyCalls + 1), { timeout: 2_000 });
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
     expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(true);
     const artVerifiedIndex = events.indexOf("art-verified");
     const inventoryIndex = events.indexOf("inventory");
@@ -1040,6 +1075,70 @@ describe("incremental content sync", () => {
     expect(glyphIndex).toBeGreaterThan(inventoryIndex);
     expect(starterIndex).toBeGreaterThan(glyphIndex);
     expect(nearbyIndex).toBeGreaterThan(starterIndex);
+  });
+
+  it("starts nearby coverage again when the map release changes at the same location", async () => {
+    const firstRelease = await makeRelease("1".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-a");
+    const secondRelease = await makeRelease("2".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-b");
+    const makeMapPointer = async (release: Awaited<ReturnType<typeof makeRelease>>) => {
+      const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+      const inventory: ContentMapInventory = {
+        schema: "parkdex.content-map/v1",
+        version: release.channel.releaseId,
+        mapManifest: release.rawManifest.mapManifest,
+        files: mapFiles,
+      };
+      const bytes = toBytes(inventory);
+      const pointer: ContentMapPointer = {
+        version: release.channel.releaseId,
+        manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+        manifestSha256: await sha256Hex(bytes),
+      };
+      return { pointer, bytes, mapFiles, content: release.content };
+    };
+    const firstMap = await makeMapPointer(firstRelease);
+    const secondMap = await makeMapPointer(secondRelease);
+    const files = new Map<string, ArrayBuffer>([
+      [firstMap.pointer.manifestUrl, firstMap.bytes],
+      [secondMap.pointer.manifestUrl, secondMap.bytes],
+    ]);
+    for (const entry of [firstMap, secondMap]) {
+      for (const file of entry.mapFiles) files.set(file.url, entry.content.get(file.url)!.slice(0));
+    }
+    const park = { ...firstRelease.park, scene: null };
+    const delta = {
+      schema: "parkdex.content-sync/v1",
+      fromRevision: 1,
+      throughRevision: 2,
+      headRevision: 2,
+      hasMore: false,
+      batches: [{
+        revision: 2,
+        changes: [{ entity: "map", op: "upsert", id: "default", value: secondMap.pointer }],
+      }],
+    };
+    const deltas = new Map<number, unknown>();
+    const server = contentSyncServer(
+      { ...contentSyncSnapshot(1, park, []), map: firstMap.pointer },
+      deltas,
+      new Map(),
+      files,
+    );
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    const point: [number, number] = [-123.4, 48.4];
+    runtime.setLocation(point);
+
+    await runtime.start();
+    const firstReleaseId = `sync-staging-1-${firstMap.pointer.version}`;
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: firstReleaseId, detail: "nearby" }));
+    expect(mapMock.calls.filter((call) => call.releaseId === firstReleaseId && call.detail === "nearby")).toHaveLength(1);
+
+    deltas.set(1, delta);
+    await runtime.retry();
+    const nextReleaseId = `sync-staging-2-${secondMap.pointer.version}`;
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId));
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: nextReleaseId, detail: "nearby" }));
+    expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(2);
   });
 
   it("clears retained parks synchronously when the account claim projection changes", async () => {

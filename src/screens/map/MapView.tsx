@@ -8,7 +8,7 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { configureMapLibreWorker, watchBundledOverviewReadiness } from "../../lib/mapStartup";
+import { configureMapLibreWorker } from "../../lib/mapStartup";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
@@ -67,7 +67,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
-  const [overviewReadyMap, setOverviewReadyMap] = useState<MLMap | null>(null);
   const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
   const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
   const [styleIsReady, setStyleIsReady] = useState(false);
@@ -87,7 +86,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   useEffect(() => {
     styleReady.current = false;
     setStyleIsReady(false);
-    setOverviewReadyMap(null);
     setHosts([]);
     setUserHost(null);
     styleRelease.current = null;
@@ -115,7 +113,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
     setTier(tierOf(zoom));
-    const stopOverviewReadiness = watchBundledOverviewReadiness(map, () => setOverviewReadyMap(map));
 
     const uEl = document.createElement("div");
     uEl.className = "user-host";
@@ -149,7 +146,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
         bearing: map.getBearing(),
         pitch: map.getPitch(),
       };
-      stopOverviewReadiness();
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
       for (const cleanup of protocolCleanups.current.values()) cleanup();
@@ -189,13 +185,9 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   }, [releaseId, mapDetailReady, initialStyleLoaded]);
 
   useEffect(() => {
-    if (!content || !releaseId) return;
+    if (!hasReadyMapContent) return;
     const map = mapRef.current;
     if (!map) return;
-    if (overviewReadyMap !== map) {
-      setHosts([]);
-      return;
-    }
     const ranked = [...parks].sort(
       (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
     );
@@ -219,7 +211,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
       parkMarkers.current.set(park.id, { park, el, marker, rank });
       return { park, el, rank };
     }));
-  }, [parks, hasReadyMapContent, overviewReadyMap]);
+  }, [parks, hasReadyMapContent]);
 
   useEffect(() => {
     if (!releaseId || !mapDetailReady) return;

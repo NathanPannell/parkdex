@@ -203,7 +203,8 @@ class ContentRuntimeController implements ContentRuntime {
   private discoveryEtag: string | null = null;
   private latestChannel: ContentChannel | null = null;
   private currentLocation: MapPoint | null = null;
-  private nearbyAnchor: MapPoint | null = null;
+  private nearbyAnchor: { releaseId: string; point: MapPoint } | null = null;
+  private nearbyRequest: { releaseId: string; point: MapPoint; controller: AbortController } | null = null;
   private nearbyTimer: ReturnType<typeof setTimeout> | undefined;
   private nearbyAbort: AbortController | null = null;
   private nearbyPromise: Promise<unknown> | null = null;
@@ -1723,27 +1724,45 @@ class ContentRuntimeController implements ContentRuntime {
 
   private scheduleNearbyPrefetch(force: boolean): void {
     if (!this.foreground || !this.connectivity().connected || !this.status.snapshot || !this.currentLocation || this.stopped) return;
-    if (!this.artworkReadyReleases.has(this.status.snapshot.releaseId)) return;
+    const snapshot = this.status.snapshot;
+    if (!this.artworkReadyReleases.has(snapshot.releaseId)) return;
     if (this.hasSyncApi() && !this.status.mapDetailReady) return;
     const point = this.currentLocation;
     if (!isPointInsideContentBounds(point)) return;
-    if (!force && this.nearbyAnchor && distanceKm(this.nearbyAnchor, point) < LOCATION_MOVE_THRESHOLD_KM) return;
+    if (!force && this.nearbyAnchor?.releaseId === snapshot.releaseId && distanceKm(this.nearbyAnchor.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
+    const activeRequest = this.nearbyRequest;
+    if (!force && activeRequest?.releaseId === snapshot.releaseId && !activeRequest.controller.signal.aborted &&
+      distanceKm(activeRequest.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
     if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
     this.nearbyAbort?.abort();
-    this.nearbyAbort = new AbortController();
-    const signal = this.nearbyAbort.signal;
+    const controller = new AbortController();
+    const request = { releaseId: snapshot.releaseId, point, controller };
+    this.nearbyAbort = controller;
+    this.nearbyRequest = request;
+    const signal = controller.signal;
     this.nearbyTimer = globalThis.setTimeout(() => {
       this.nearbyTimer = undefined;
-      const snapshot = this.status.snapshot;
-      if (!snapshot || !this.artworkReadyReleases.has(snapshot.releaseId) || (this.hasSyncApi() && !this.status.mapDetailReady) || this.stopped || !this.foreground || !this.connectivity().connected) return;
-      const work = prefetchMapArea(this, snapshot.releaseId, point, "nearby", signal, snapshot).then(() => {
-        this.nearbyAnchor = point;
+      const currentSnapshot = this.status.snapshot;
+      if (this.nearbyRequest !== request || signal.aborted || !currentSnapshot || currentSnapshot.releaseId !== request.releaseId ||
+        !this.artworkReadyReleases.has(currentSnapshot.releaseId) || (this.hasSyncApi() && !this.status.mapDetailReady) ||
+        this.stopped || !this.foreground || !this.connectivity().connected) {
+        if (this.nearbyRequest === request) this.nearbyRequest = null;
+        return;
+      }
+      const work = prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot).then(() => {
+        if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
+          this.nearbyAnchor = { releaseId: request.releaseId, point };
+        }
       }).catch((error) => {
         if (!this.stopped && (error as Error)?.name !== "AbortError") this.updateWaitingStatus();
       });
       this.nearbyPromise = work;
       void work.finally(() => {
-        if (this.nearbyPromise === work) this.nearbyPromise = null;
+        if (this.nearbyRequest === request) {
+          this.nearbyRequest = null;
+          this.nearbyAbort = null;
+          if (this.nearbyPromise === work) this.nearbyPromise = null;
+        }
       });
     }, LOCATION_DEBOUNCE_MS);
   }
