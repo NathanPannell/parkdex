@@ -1151,24 +1151,27 @@ class ContentRuntimeController implements ContentRuntime {
           await this.ensureFile(releaseId, file.path, "update");
           if (!(await this.hasVerifiedLocalFile(file))) return null;
         }
-        return await this.localFileUrl(file);
+        const url = await this.localFileUrl(file);
+        this.publishCachedSceneAssetUrl(state, releaseId, file, url);
+        return url;
       } catch {
         return null;
       }
     });
     if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
-    const snapshot = this.status.snapshot;
-    if (!snapshot) return;
-    const assetUrls = new Map(snapshot.assetUrls);
-    for (let index = 0; index < files.length; index += 1) {
-      const url = results[index];
-      if (url) assetUrls.set(files[index]!.path, url);
-    }
-    if (assetUrls.size !== snapshot.assetUrls.size) this.setStatus({ snapshot: { ...snapshot, assetUrls } });
     if (!results.every(Boolean)) return;
     await this.publishSyncState(state, this.status.phase, this.status.error);
     const currentReleaseId = this.status.snapshot?.releaseId;
     if (currentReleaseId && this.artworkReadyReleases.has(currentReleaseId)) this.completeArtworkStage(currentReleaseId);
+  }
+
+  private publishCachedSceneAssetUrl(state: ContentSyncState, releaseId: string, file: ContentFile, url: string): void {
+    if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
+    const snapshot = this.status.snapshot;
+    if (!snapshot || snapshot.assetUrls.get(file.path) === url) return;
+    const assetUrls = new Map(snapshot.assetUrls);
+    assetUrls.set(file.path, url);
+    this.setStatus({ snapshot: { ...snapshot, assetUrls } });
   }
 
   private async hydrateCachedRetainedParks(state: ContentSyncState, releaseId: string, projectionRevision: number): Promise<void> {

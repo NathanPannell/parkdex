@@ -969,6 +969,87 @@ describe("incremental content sync", () => {
     expect(runtime.getStatus().fullMapReady).toBe(true);
   });
 
+  it("publishes each verified cached badge before other files finish and discards stale completion", async () => {
+    const slowPark = { id: "municipal-slow-cached-art-park", name: "Slow art park", short: "Slow Art", ...PARK_FIELDS, scene: "slow-cached-scene" };
+    const fastPark = { id: "municipal-fast-cached-art-park", name: "Fast art park", short: "Fast Art", ...PARK_FIELDS, scene: "fast-cached-scene" };
+    const slowAsset = await makeSceneAsset("a".repeat(64), slowPark.scene, "slow cached scene art");
+    const fastAsset = await makeSceneAsset("b".repeat(64), fastPark.scene, "fast cached scene art");
+    const firstParkSnapshot = contentSyncSnapshot(1, slowPark, [slowAsset.file, fastAsset.file]);
+    const secondParkSnapshot = contentSyncSnapshot(1, fastPark, []);
+    const cachedState = parseContentSnapshot({
+      ...firstParkSnapshot,
+      parks: [slowPark, fastPark],
+      boundaries: {
+        type: "FeatureCollection",
+        features: [...firstParkSnapshot.boundaries.features, ...secondParkSnapshot.boundaries.features],
+      },
+      drive: {
+        hubs: firstParkSnapshot.drive.hubs,
+        parks: { ...firstParkSnapshot.drive.parks, ...secondParkSnapshot.drive.parks },
+      },
+    });
+    const delta = {
+      schema: "parkdex.content-sync/v1",
+      fromRevision: 1,
+      throughRevision: 2,
+      headRevision: 2,
+      hasMore: false,
+      batches: [{
+        revision: 2,
+        changes: [
+          { entity: "park", op: "upsert", id: slowPark.id, value: { ...slowPark, scene: null } },
+          { entity: "asset", op: "delete", id: slowAsset.file.path },
+        ],
+      }],
+    };
+    const deltas = new Map<number, unknown>();
+    const server = contentSyncServer(firstParkSnapshot, deltas);
+    const store = new MemoryContentStore();
+    store.sync.set("staging", { ...cachedState, sourceId: "staging|https://parkdex.example.test/api/content" });
+    store.files.set(slowAsset.file.sha256, slowAsset.bytes.slice(0));
+    store.files.set(fastAsset.file.sha256, fastAsset.bytes.slice(0));
+    const originalHasFile = store.hasFile.bind(store);
+    let releaseSlowVerification!: () => void;
+    let signalSlowVerification!: () => void;
+    const slowVerificationGate = new Promise<void>((resolve) => { releaseSlowVerification = resolve; });
+    const slowVerificationStarted = new Promise<void>((resolve) => { signalSlowVerification = resolve; });
+    store.hasFile = async (hash, size) => {
+      if (hash === slowAsset.file.sha256) {
+        signalSlowVerification();
+        await slowVerificationGate;
+      }
+      return originalHasFile(hash, size);
+    };
+    const originalFileUrl = store.fileUrl.bind(store);
+    let signalSlowUrlCreated!: () => void;
+    const slowUrlCreated = new Promise<void>((resolve) => { signalSlowUrlCreated = resolve; });
+    store.fileUrl = async (hash) => {
+      const url = await originalFileUrl(hash);
+      if (hash === slowAsset.file.sha256) signalSlowUrlCreated();
+      return url;
+    };
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: false, wifi: false }));
+
+    await runtime.start();
+    await slowVerificationStarted;
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(fastAsset.file.path)).toBe(`content-store://${fastAsset.file.sha256}`));
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+    expect(server.fetcher).not.toHaveBeenCalled();
+
+    deltas.set(1, delta);
+    runtime.setConnectivity({ connected: true, wifi: true });
+    const nextReleaseId = "sync-staging-2-pending";
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId));
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+
+    releaseSlowVerification();
+    await slowUrlCreated;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId);
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+    expect(runtime.getStatus().snapshot?.assetUrls.get(fastAsset.file.path)).toBe(`content-store://${fastAsset.file.sha256}`);
+  });
+
   it("publishes metadata before badge art and retries map startup only after art verifies", async () => {
     const release = await makeRelease("7".repeat(64), 1, "municipal-startup-order-park", "scene-startup-order");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-startup-order.webp")!;

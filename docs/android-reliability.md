@@ -6,7 +6,7 @@ This change keeps the existing Parkdex app, API, persistence and visual design. 
 
 1. The installed overview map can render without opening a content database or completing a network request. A returning visitor reaches Explore without a mandatory repeat splash.
 2. A validated catalogue supplies park metadata and coordinates before badge artwork downloads complete. Only released parks and appropriate retained claims become markers. Missing artwork uses the existing placeholder presentation.
-3. Badge artwork is downloaded and verified before optional detailed-map downloads begin. Failed artwork must not discard an already valid catalogue or hide the overview.
+3. Badge artwork is downloaded and verified before optional detailed-map downloads begin. Failed artwork must not discard an already valid catalogue or hide the overview. On cached startup, each verified scene becomes visible as it is ready, without waiting for the slowest scene; completing all artwork still gates new detailed-map downloads.
 4. Detailed map coverage improves the existing map instance without resetting its camera or removing the overview. Missing location permission must not prevent geographic orientation.
 5. Arrival and claiming remain unavailable until complete validated boundaries, eligibility and the current owner's personal progress are ready. Informational map readiness is not claim authorization.
 6. Personal claim metadata becomes available independently of expensive photo projection. Background hydration must preserve a current claim's visible photo and ignore stale owner results.
