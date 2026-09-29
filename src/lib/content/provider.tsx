@@ -127,17 +127,19 @@ export function useContentStatus(): ContentStatus {
   return useSyncExternalStore((listener) => runtime.subscribe(listener), () => runtime.getStatus(), () => runtime.getStatus());
 }
 
+// Select the snapshot inside the store read: status is replaced on every download
+// progress tick, and returning it would re-render every catalogue reader each time.
 export function useContent() {
-  return useContentStatus().snapshot;
+  const runtime = useContentRuntime();
+  return useSyncExternalStore((listener) => runtime.subscribe(listener), () => runtime.getStatus().snapshot, () => runtime.getStatus().snapshot);
 }
 
 // Presentation helpers such as Badge can still render in storybook-style isolated tests.
 export function useOptionalContent() {
   const runtime = useContext(ContentContext);
-  const status = useSyncExternalStore(
+  return useSyncExternalStore(
     (listener) => (runtime ? runtime.subscribe(listener) : NO_SUBSCRIBE()),
-    () => runtime?.getStatus() ?? EMPTY_STATUS,
-    () => runtime?.getStatus() ?? EMPTY_STATUS,
+    () => (runtime?.getStatus() ?? EMPTY_STATUS).snapshot,
+    () => (runtime?.getStatus() ?? EMPTY_STATUS).snapshot,
   );
-  return status.snapshot;
 }
