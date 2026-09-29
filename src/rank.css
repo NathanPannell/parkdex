@@ -404,6 +404,8 @@
 
 .rankup__actions {
   position: relative;
+  /* Stays at the bottom even when Kip steps aside on short frames. */
+  margin-top: auto;
   display: grid;
   gap: 12px;
   width: 100%;
@@ -425,7 +427,7 @@
   }
 }
 
-@container rankup (max-height: 680px) {
+@container rankup (max-height: 600px) {
   .rankup__kip {
     display: none;
   }
