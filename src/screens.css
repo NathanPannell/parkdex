@@ -297,6 +297,11 @@
   position: absolute;
   bottom: 8px;
   left: 14px;
+  /* Long park names stay on one line instead of spilling under the stamp. */
+  right: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--display);
   font-weight: 700;
   font-size: 14px;
