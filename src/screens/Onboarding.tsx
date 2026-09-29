@@ -95,7 +95,7 @@ function BadgeFan({ parks }: { parks: readonly Park[] }) {
       {/* Kip stands below the fan with his bubble beside him, clear of every badge ribbon. */}
       <motion.div className="ob-fan__kip" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.6, stiffness: 200, damping: 14 }}>
         <Kip pose="wave" size={92} />
-        <Bubble side="left" style={{ position: "relative", marginBottom: 46, whiteSpace: "nowrap" }}>
+        <Bubble side="to-left" style={{ position: "relative", marginBottom: 46, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
         </Bubble>
       </motion.div>

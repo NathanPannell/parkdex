@@ -101,7 +101,7 @@ export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onSho
         <Rays color="#FFC93C" size={520} opacity={0.55} speed={18} />
       </div>
       <motion.div className="arrival__kip" initial={{ scale: 0, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", delay: 0.25, stiffness: 400, damping: 14 }}>
-        <Bubble side="right" style={{ position: "relative", marginBottom: 34, whiteSpace: "nowrap" }}>
+        <Bubble side="to-right" style={{ position: "relative", marginBottom: 50, whiteSpace: "nowrap" }}>
           KLEEP! You made it!
         </Bubble>
         <Kip pose="cheer" size={92} />

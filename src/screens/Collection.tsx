@@ -90,11 +90,11 @@ export function Collection() {
           </div>
         ) : count === 0 ? (
           <div className="case__first">
-            <Bubble side="left" style={{ position: "relative" }}>
+            <Bubble side="down" style={{ position: "relative" }}>
               Nothing here yet. Your first badge goes right on this shelf!
             </Bubble>
             <motion.div className="case__first-kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-              <Kip size={96} pose="sleep" />
+              <Kip size={96} pose="idle" />
             </motion.div>
             <button className="btn btn--sun btn--sm" onClick={findPark}>
               <Icon name="map" size={18} /> Find a park near me

@@ -179,7 +179,7 @@ export function RankUp({ rank, onExplore, onDone }: { rank: Rank; onExplore: () 
         <p>{next ? `Visit ${parksLabel(next.parks)} to become ${next.name}.` : "You've opened every rarity on the Island."}</p>
       </motion.div>
       <motion.div className="rankup__kip" initial={{ x: 120 }} animate={{ x: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 220, damping: 16 }}>
-        <Bubble side="right">KLEEP! Look at you!</Bubble>
+        <Bubble side="to-right">KLEEP! Look at you!</Bubble>
         <Kip pose="cheer" size={92} flip />
       </motion.div>
       <motion.div className="rankup__actions" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1, type: "spring", stiffness: 320, damping: 26 }}>

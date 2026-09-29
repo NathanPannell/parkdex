@@ -358,7 +358,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}>
               {/* Kip sits in the layout flow so he never covers the badge or the buttons. */}
               <motion.div className="claim__kip" variants={pop}>
-                <Bubble side="right" style={{ position: "relative" }}>
+                <Bubble side="to-right" style={{ position: "relative" }}>
                   {number === 1 ? "Your first badge! KLEEP!" : CHEERS[number % CHEERS.length]}
                 </Bubble>
                 <Kip pose="celebrate" size={84} flip />
