@@ -2,6 +2,7 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { InteractionOutbox } from "./outbox";
+import { resolveUserDataApiOrigin } from "../userDataDestination";
 import type {
   InteractionBase,
   InteractionEntryPoint,
@@ -71,8 +72,10 @@ function environmentValue(): InteractionEnvironment {
 }
 
 function defaultApiBaseUrl(): string {
-  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim() || (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim();
-  return configured.replace(/\/+$/, "");
+  return (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
+    || (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim()
+    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim()
+    || (Capacitor.isNativePlatform() ? (import.meta.env.VITE_APP_URL ?? "").trim() : "");
 }
 
 function isBaseInputValid(parkId: string, contentReleaseId: string): boolean {
@@ -87,7 +90,7 @@ export class InteractionClient {
   private readonly outbox: InteractionOutbox;
   private readonly fetcher: typeof fetch;
   private readonly now: () => number;
-  private readonly apiBaseUrl: string;
+  private readonly apiBaseUrl: string | null;
   private readonly appVersion: string;
   private readonly appBuild: string;
   private readonly environment: InteractionEnvironment;
@@ -103,7 +106,20 @@ export class InteractionClient {
     this.outbox = options.outbox ?? new InteractionOutbox();
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? Date.now;
-    this.apiBaseUrl = options.apiBaseUrl ?? defaultApiBaseUrl();
+    try {
+      const configuredApiBaseUrl = options.apiBaseUrl ?? defaultApiBaseUrl();
+      this.apiBaseUrl = Capacitor.isNativePlatform() && !configuredApiBaseUrl
+        ? null
+        : resolveUserDataApiOrigin(configuredApiBaseUrl, {
+          native: Capacitor.isNativePlatform(),
+          webOrigin: typeof location === "undefined" ? undefined : location.origin,
+          allowLoopbackHttp: import.meta.env.DEV,
+          environment: import.meta.env.VITE_CONTENT_ENV,
+          previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+        });
+    } catch {
+      this.apiBaseUrl = null;
+    }
     this.appVersion = options.appVersion ?? (typeof __APP_VERSION__ === "undefined" ? "unknown" : __APP_VERSION__);
     this.appBuild = options.appBuild ?? (typeof __APP_BUILD__ === "undefined" ? "unknown" : __APP_BUILD__);
     this.environment = options.environment ?? environmentValue();
@@ -189,6 +205,7 @@ export class InteractionClient {
   }
 
   private async sendBatch(events: InteractionEvent[]): Promise<DeliveryResult> {
+    if (!this.apiBaseUrl) return "retry";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
@@ -196,6 +213,8 @@ export class InteractionClient {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "omit",
+        cache: "no-store",
+        redirect: "error",
         body: JSON.stringify({ events }),
         signal: controller.signal,
       });

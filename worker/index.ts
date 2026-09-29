@@ -262,6 +262,7 @@ async function sendEmail(
   try {
     const response = await (dependencies.fetch ?? fetch)(RESEND_URL, {
       method: "POST",
+      redirect: "error",
       headers: {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
         "content-type": "application/json",

@@ -130,6 +130,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("durable personal progress storage", () => {
@@ -332,6 +333,71 @@ describe("durable personal progress storage", () => {
     await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", photo: png });
     await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-04T12:34:56.000Z" });
     expect(await personal.loadPersonalPhotos({ kind: "guest" })).toEqual({});
+  });
+
+  it("publishes guest claim metadata before delayed photo conversion finishes", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "guest" as const };
+    const saved = await personal.createPersonalClaim(owner, { park: park(), photo: pngPhoto() });
+    let releaseConversion!: () => void;
+    let markConversionStarted!: () => void;
+    let conversionStarted = false;
+    const conversionGate = new Promise<void>((resolve) => { releaseConversion = resolve; });
+    const started = new Promise<void>((resolve) => { markConversionStarted = resolve; });
+    vi.stubGlobal("FileReader", class {
+      result: string | null = null;
+      error: Error | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      readAsDataURL(blob: Blob) {
+        conversionStarted = true;
+        markConversionStarted();
+        void conversionGate.then(async () => {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          let binary = "";
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          this.result = `data:${blob.type};base64,${btoa(binary)}`;
+          this.onload?.();
+        });
+      }
+    });
+
+    let metadata: import("./personalStore").PersonalClaim[] = [];
+    let markMetadataReady!: () => void;
+    const metadataReady = new Promise<void>((resolve) => { markMetadataReady = resolve; });
+    let settled = false;
+    const hydration = personal.loadPersonalProgress(owner, (claims) => {
+      metadata = claims;
+      markMetadataReady();
+    });
+    void hydration.then(() => { settled = true; });
+
+    await metadataReady;
+    await started;
+    expect(conversionStarted).toBe(true);
+    expect(metadata.map((claim) => claim.claimId)).toEqual([saved.claimId]);
+    expect(settled).toBe(false);
+
+    releaseConversion();
+    await expect(hydration).resolves.toMatchObject({ photos: expect.objectContaining({ "cedar-point": expect.stringMatching(/^data:image\/png;base64,/) }) });
+  });
+
+  it("publishes claim metadata even when photo conversion fails", async () => {
+    const personal = await import("./personalStore");
+    const owner = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const saved = await personal.createPersonalClaim(owner, { park: park(), photo: pngPhoto() });
+    let metadata: import("./personalStore").PersonalClaim[] = [];
+    vi.stubGlobal("FileReader", class {
+      result: string | null = null;
+      error: Error | null = new Error("Saved photo could not be read.");
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() { queueMicrotask(() => this.onerror?.()); }
+    });
+
+    await expect(personal.loadPersonalProgress(owner, (claims) => { metadata = claims; })).rejects.toThrow("Saved photo could not be read.");
+    expect(metadata.map((claim) => claim.claimId)).toEqual([saved.claimId]);
   });
 
   it("lets only the first concurrent account reserve a guest claim and hides its guest projections", async () => {

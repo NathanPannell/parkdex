@@ -3,11 +3,10 @@ import { accountBackupFetch, assertAccountBackupRequest, isAccountBackupPath } f
 import {
   nativeAuthFetch,
   persistNativeSession,
-  isApprovedKipOrigin,
-  KIP_STAGING_ORIGIN,
   type NativeAccountSession,
   type ServerAccountSession,
 } from "./nativeIdentity";
+import { hasUrlCredentials, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
 
 export type AccountProfile = {
   id: string;
@@ -50,18 +49,21 @@ export class AuthHttpError extends Error {
 
 const isNative = Capacitor.isNativePlatform();
 
+function accountApiOrigin(): string {
+  const configured = [import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
+    .map((value) => (value ?? "").trim())
+    .find(Boolean) ?? "";
+  return resolveUserDataApiOrigin(configured, {
+    native: isNative,
+    webOrigin: isNative ? undefined : (typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin),
+    allowLoopbackHttp: import.meta.env.DEV,
+    environment: import.meta.env.VITE_CONTENT_ENV,
+    previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+  }) || KIP_STAGING_ORIGIN;
+}
+
 function apiUrl(path: string) {
-  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? import.meta.env.VITE_APP_URL ?? "").trim();
-  let origin = isNative || typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin;
-  if (configured) {
-    try {
-      const candidate = new URL(configured);
-      if (candidate.protocol === "https:" && (!isNative || isApprovedKipOrigin(candidate.origin))) origin = candidate.origin;
-    } catch {
-      // An invalid optional override falls back to the environment's known origin.
-    }
-  }
-  return new URL(path, origin).href;
+  return new URL(path, `${accountApiOrigin()}/`).href;
 }
 
 function csrfToken() {
@@ -85,8 +87,10 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
 /** Credentials and session headers may only go to the configured TLS account API. */
 export function assertSecureAccountRequest(url: URL, accountOrigin: string): void {
   const origin = new URL(accountOrigin);
-  if (origin.protocol !== "https:" || url.protocol !== "https:" || url.origin !== origin.origin ||
-      url.username || url.password || url.hash || (url.port && url.port !== "443")) {
+  if (origin.protocol !== "https:" || hasUrlCredentials(origin) || origin.search || origin.hash ||
+      !["", "/"].includes(origin.pathname) || (origin.port && origin.port !== "443") ||
+      url.protocol !== "https:" || url.origin !== origin.origin ||
+      hasUrlCredentials(url) || url.hash || (url.port && url.port !== "443")) {
     throw new Error("Account requests require the configured HTTPS account API.");
   }
 }

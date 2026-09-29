@@ -65,11 +65,13 @@ const FLAVOR: Flavor = {
   pois: undefined,
 };
 
-export function mapStyle(releaseId: string): StyleSpecification {
-  if (!releaseId) throw new Error("A content release is required to build the map style");
+export function mapStyle(releaseId?: string | null): StyleSpecification {
+  if (releaseId === "") throw new Error("A content release ID cannot be empty");
+  const hasRelease = typeof releaseId === "string";
   // No sprite ships offline, so drop icon-only layers and icons on labels.
   const base = (layers("protomaps", FLAVOR, { lang: "en" }) as LayerSpecification[])
     .filter((l) => l.id !== "roads_oneway" && l.id !== "roads_shields")
+    .filter((l) => hasRelease || l.type === "background")
     .map((l) => {
       if (l.type !== "symbol" || !l.layout?.["icon-image"]) return l;
       const { ["icon-image"]: _icon, ...layout } = l.layout;
@@ -82,7 +84,7 @@ export function mapStyle(releaseId: string): StyleSpecification {
   const withOverview = backgroundIndex < 0
     ? [...overview, ...base]
     : [...base.slice(0, backgroundIndex + 1), ...overview, ...base.slice(backgroundIndex + 1)];
-  const waterIndex = withOverview.findIndex((l) => l.id === "water");
+  const waterIndex = hasRelease ? withOverview.findIndex((l) => l.id === "water") : -1;
   // An offset copy of the water under itself gives coastlines a soft sticker edge.
   const shadow: LayerSpecification = {
     id: "water-shadow",
@@ -96,16 +98,18 @@ export function mapStyle(releaseId: string): StyleSpecification {
     : withOverview;
   return {
     version: 8,
-    glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf`,
+    ...(hasRelease ? { glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf` } : {}),
     sources: {
-      protomaps: {
-        type: "vector",
-        tiles: [`pmtiles://${encodeURIComponent(releaseId)}/{z}/{x}/{y}`],
-        minzoom: 0,
-        maxzoom: 14,
-        bounds: ISLAND_BOUNDS,
-        attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      },
+      ...(hasRelease ? {
+        protomaps: {
+          type: "vector" as const,
+          tiles: [`pmtiles://${encodeURIComponent(releaseId!)}/{z}/{x}/{y}`],
+          minzoom: 0,
+          maxzoom: 14,
+          bounds: ISLAND_BOUNDS,
+          attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        },
+      } : {}),
       islandOverview: {
         type: "vector",
         tiles: [`pmtiles://${ISLAND_OVERVIEW_KEY}/{z}/{x}/{y}`],

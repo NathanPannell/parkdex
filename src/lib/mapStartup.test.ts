@@ -3,6 +3,15 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 import { prewarmBundledOverview } from "./offlineTiles";
 import { watchBundledOverviewReadiness } from "./mapStartup";
 
+const mapLibreMock = vi.hoisted(() => ({
+  addProtocol: vi.fn(),
+  removeProtocol: vi.fn(),
+  prewarm: vi.fn(),
+  setWorkerUrl: vi.fn(),
+}));
+
+vi.mock("maplibre-gl", () => mapLibreMock);
+
 type MapEvent = "render" | "error";
 type Listener = (event?: unknown) => void;
 
@@ -50,6 +59,8 @@ describe("bundled overview startup", () => {
     const first = prewarmBundledOverview();
     const concurrent = prewarmBundledOverview();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mapLibreMock.addProtocol).toHaveBeenCalledWith("pmtiles", expect.any(Function));
+    expect(mapLibreMock.addProtocol).toHaveBeenCalledWith("contentglyph", expect.any(Function));
     await expect(first).rejects.toThrow("temporary local read failure");
     await expect(concurrent).rejects.toThrow("temporary local read failure");
 

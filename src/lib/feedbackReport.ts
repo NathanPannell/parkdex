@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import type { Park } from "./parks";
 import type { FeedbackOrigin, Screen } from "./store";
 import { createFeedbackDraftGeneration, getFeedbackSubmissionAttempt } from "./feedbackDraft";
+import { resolveUserDataApiOrigin } from "./userDataDestination";
 
 export type FeedbackKind = "bug" | "idea" | "general";
 
@@ -105,8 +106,20 @@ export function clearDraft(nextGeneration: string) {
   }
 }
 
-function apiUrl() {
-  return (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim().replace(/\/+$/, "");
+function apiUrl(): string {
+  const native = Capacitor.isNativePlatform();
+  const configured = import.meta.env.VITE_FEEDBACK_API_URL;
+  const previewOrigin = import.meta.env.VITE_PREVIEW_API_ORIGIN;
+  if (native && !configured?.trim() && !(import.meta.env.VITE_CONTENT_ENV === "preview" && previewOrigin?.trim())) {
+    throw new Error("Feedback is unavailable in this app build because its feedback service URL is not configured.");
+  }
+  return resolveUserDataApiOrigin(configured || previewOrigin, {
+    native,
+    webOrigin: typeof location === "undefined" ? undefined : location.origin,
+    allowLoopbackHttp: import.meta.env.DEV,
+    environment: import.meta.env.VITE_CONTENT_ENV,
+    previewOrigin,
+  });
 }
 
 async function responseError(response: Response): Promise<Error> {
@@ -147,9 +160,12 @@ function parseSavedResult(value: unknown): FeedbackSubmitResult | null {
 
 // POSTs the exact saved draft. A stable ID makes retries idempotent after a lost response.
 export async function submitFeedback(report: FeedbackReport, generation: string): Promise<FeedbackSubmitResult> {
-  const baseUrl = apiUrl();
-  if (Capacitor.isNativePlatform() && !baseUrl) {
-    throw new Error("Feedback is unavailable in this app build because its feedback service URL is not configured.");
+  let baseUrl: string;
+  try {
+    baseUrl = apiUrl();
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Feedback is unavailable")) throw error;
+    throw new Error("Feedback is unavailable because this app build has an invalid service destination.");
   }
 
   let attempt: Awaited<ReturnType<typeof getFeedbackSubmissionAttempt>>;
@@ -168,6 +184,9 @@ export async function submitFeedback(report: FeedbackReport, generation: string)
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...attempt.report, submissionId: attempt.id }),
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "error",
         signal: controller.signal,
       });
     } catch {

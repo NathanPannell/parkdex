@@ -1,5 +1,6 @@
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { assertUserDataApiBuildConfiguration } from "./src/lib/userDataDestination";
 import pkg from "./package.json" with { type: "json" };
 import { readdir, readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
@@ -85,18 +86,23 @@ function sourceRevision() {
   catch { return 'local'; }
 }
 
-export default defineConfig({
-  // Source artwork, catalogs, scenes, glyphs, boundaries, and map chunks stay in
-  // public/ for the content publisher, but are never copied into app builds.
-  publicDir: false,
-  plugins: [react(), allowlistedPublicAssets()],
-  // Feedback reports carry the app version so testers never have to look it up.
-  define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
-    __APP_BUILD__: JSON.stringify(sourceRevision()),
-  },
-  // 59k offline tile files: watching them makes dev startup crawl.
-  server: { host: true, watch: { ignored: ["**/public/map/**"] } },
-  // MapLibre loads ./maplibre-gl-worker.mjs next to itself; pre-bundling would move it away.
-  optimizeDeps: { exclude: ["maplibre-gl"] },
+export default defineConfig(({ mode }) => {
+  const environment = loadEnv(mode, process.cwd(), "VITE_");
+  assertUserDataApiBuildConfiguration(environment, { mode, vercelUrl: process.env.VERCEL_URL });
+
+  return {
+    // Source artwork, catalogs, scenes, glyphs, boundaries, and map chunks stay in
+    // public/ for the content publisher, but are never copied into app builds.
+    publicDir: false,
+    plugins: [react(), allowlistedPublicAssets()],
+    // Feedback reports carry the app version so testers never have to look it up.
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_BUILD__: JSON.stringify(sourceRevision()),
+    },
+    // 59k offline tile files: watching them makes dev startup crawl.
+    server: { host: true, watch: { ignored: ["**/public/map/**"] } },
+    // MapLibre loads ./maplibre-gl-worker.mjs next to itself; pre-bundling would move it away.
+    optimizeDeps: { exclude: ["maplibre-gl"] },
+  };
 });

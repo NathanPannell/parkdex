@@ -541,6 +541,7 @@ async function sendResendEmail(
   if (!env.RESEND_API_KEY || !env.AUTH_EMAIL_FROM) throw new Error("email provider unavailable");
   const response = await (dependencies.fetch ?? fetch)("https://api.resend.com/emails", {
     method: "POST",
+    redirect: "error",
     headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({ from: env.AUTH_EMAIL_FROM, to: [message.to], subject: message.subject, html: message.html, text: message.text }),
     signal: AbortSignal.timeout(8_000),

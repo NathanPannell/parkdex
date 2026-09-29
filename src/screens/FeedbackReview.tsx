@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
+import { fetchOperatorApi } from "../lib/operatorApiTransport";
 import "../feedback-review.css";
 
 type ReportStatus = "new" | "reviewing" | "planned" | "closed";
@@ -101,7 +102,10 @@ async function timedFetch(path: string, init: RequestInit = {}): Promise<Respons
     40_000,
   );
   try {
-    return await fetch(path, { ...init, credentials: "same-origin", signal: controller.signal });
+    return await fetchOperatorApi(path, { ...init, signal: controller.signal }, globalThis.fetch, {
+      pageOrigin: window.location.origin,
+      allowLoopbackHttp: import.meta.env.DEV,
+    });
   } finally {
     window.clearTimeout(timeout);
     parentSignal?.removeEventListener("abort", abortFromParent);

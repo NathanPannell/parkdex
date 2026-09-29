@@ -23,6 +23,10 @@ Evidence must use sequentially decoded video frames with actual encoded presenta
 
 Feedback text, optional email, screenshots, interaction identifiers, account credentials and private photos must use approved destinations with HTTPS in deployed builds. Redirects must not silently forward private request bodies or credentials. Valid same-origin web routes and explicit native staging/production configuration must continue to work. Isolated preview identities and credentials must stay separate from persistent environments.
 
+Native bearer sessions are bound to the API origin that issued them. An older unbound session requires sign-in again, while the saved account's local parks and photos remain accessible. A session from another environment must never be sent to the current environment. The reauthentication state must survive process restarts.
+
+An Android preview package is built only after the isolated deployment exists. Set `VITE_CONTENT_ENV=preview`, bind `VITE_PREVIEW_API_ORIGIN` and `VERCEL_URL` to the exact journaled deployment origin, and point the app, account, feedback and content URLs at that same deployment. Broad preview-host wildcards are not an approval boundary.
+
 ## Verification before release
 
 - Fresh offline installation: useful geographic overview before downloaded content.

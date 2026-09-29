@@ -1713,6 +1713,9 @@
 
 .claim {
   z-index: 60;
+  isolation: isolate;
+  /* Keep the opaque claim surface and its animated children in one stable WebView layer. */
+  transform: translate3d(0, 0, 0);
   background: radial-gradient(120% 70% at 50% 42%, #2d4a3d 0%, var(--ink) 60%, #0b1511 100%);
   color: var(--paper);
   display: flex;

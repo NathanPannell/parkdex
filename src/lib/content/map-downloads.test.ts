@@ -63,6 +63,19 @@ describe("map download coverage", () => {
     expect(ids).toContain("water_waterway_label");
   });
 
+  it("builds a useful bundled-only style before a content release is available", () => {
+    const style = mapStyle();
+    const overview = style.sources?.islandOverview as { maxzoom: number; tiles: string[] };
+
+    expect(style.sources?.protomaps).toBeUndefined();
+    expect(style.glyphs).toBeUndefined();
+    expect(overview.maxzoom).toBe(ISLAND_OVERVIEW_MAX_ZOOM);
+    expect(overview.tiles[0]).toContain("pmtiles://bundled-island-overview-v1/");
+    expect(style.layers.some((layer) => layer.type === "background")).toBe(true);
+    expect(style.layers.every((layer) => layer.type === "background" || layer.source === "islandOverview")).toBe(true);
+    expect(style.layers.some((layer) => layer.type === "symbol")).toBe(false);
+  });
+
   it("blocks renderer reads outside prefetched chunks and forwards cancellation", async () => {
     const ensureFile = vi.fn(async () => undefined);
     const runtime = {

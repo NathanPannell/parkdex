@@ -40,7 +40,12 @@ import {
   type DeletionResponse,
   type GooglePurpose,
 } from "./authClient";
-import { listenForNativeAuthLinks, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
+import {
+  listenForNativeAuthLinks,
+  NativeSessionOriginMismatchError,
+  parseNativeAuthLink,
+  resolveGoogleWebClientId,
+} from "./nativeIdentity";
 import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 
 const LAST_ACCOUNT_KEY = "kip-account-last-id";
@@ -248,11 +253,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let localSession: Awaited<ReturnType<typeof readLocalNativeSession>> = null;
       if (isNative) {
         try { localSession = await readLocalNativeSession(); }
-        catch {
+        catch (error) {
           if (!current()) return;
           abortProgressRequests(syncAbortControllers.current);
           syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
+          if (error instanceof NativeSessionOriginMismatchError) {
+            const cachedId = expectedAccountId ?? lastAccountId();
+            setState((value) => ({
+              ...value,
+              phase: cachedId ? "offline-account" : "guest",
+              account: null,
+              offlineAccountId: cachedId,
+              backup: cachedId ? { ...value.backup, phase: "offline", message: error.message } : EMPTY_BACKUP,
+              startupError: error.message,
+            }));
+            return;
+          }
           setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null }));
           rememberAccount(null);
           return;

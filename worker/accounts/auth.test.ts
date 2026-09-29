@@ -549,6 +549,36 @@ test("email verification token is one use and marks the account verified", async
   assert.equal((await r.store.findAccountByEmail("verify@example.test"))?.emailVerified, true);
 });
 
+test("verification and reset Resend requests configure redirect rejection", async () => {
+  const r = rig();
+  const requests: Array<{ url: string; redirect: string | undefined; payload: Record<string, any> }> = [];
+  const deliveries: Promise<unknown>[] = [];
+  r.dependencies.sendEmail = undefined;
+  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.dependencies.fetch = async (input, init) => {
+    requests.push({
+      url: String(input),
+      redirect: init?.redirect,
+      payload: JSON.parse(String(init?.body)),
+    });
+    return new Response(null, { status: 200 });
+  };
+
+  const registered = await call(r, "/api/auth/register", { email: "redirect@example.test", password: "a long enough password" });
+  assert.equal(registered.status, 201);
+  const resetRequested = await call(r, "/api/auth/password-reset/request", { email: "redirect@example.test" });
+  assert.equal(resetRequested.status, 202);
+  await Promise.all(deliveries);
+
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.equal(request.url, "https://api.resend.com/emails");
+    assert.equal(request.redirect, "error");
+  }
+  assert.match(requests.find((request) => request.payload.subject.includes("Verify"))?.payload.text ?? "", /#verificationToken=[A-Za-z0-9_-]{43}/u);
+  assert.match(requests.find((request) => request.payload.subject.includes("password"))?.payload.text ?? "", /#resetToken=[A-Za-z0-9_-]{43}/u);
+});
+
 test("Google-only accounts cannot acquire password access through password reset", async () => {
   const r = rig();
   r.store.addGoogleOnlyAccount("google-only@example.test", "stable-google-subject");

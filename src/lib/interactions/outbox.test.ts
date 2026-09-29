@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InteractionClient } from "./client";
 import { InteractionOutbox, INTERACTION_BATCH_SIZE, MAX_OUTBOX_AGE_MS, MAX_OUTBOX_EVENTS } from "./outbox";
 import type { InteractionEvent } from "./types";
@@ -78,15 +78,23 @@ describe("InteractionOutbox", () => {
 });
 
 describe("InteractionClient", () => {
-  beforeEach(async () => { await deleteDatabase(); });
-  afterEach(async () => { await deleteDatabase(); });
+  beforeEach(async () => {
+    vi.stubGlobal("location", { origin: "https://staging.web.parkdex.app" });
+    await deleteDatabase();
+  });
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await deleteDatabase();
+  });
 
   it("calls the default fetcher with the global receiver", async () => {
     const outbox = new InteractionOutbox();
     const originalFetch = globalThis.fetch;
     let receiver: unknown;
-    globalThis.fetch = function (this: unknown) {
+    let requestInit: RequestInit | undefined;
+    globalThis.fetch = function (this: unknown, _input: RequestInfo | URL, init?: RequestInit) {
       receiver = this;
+      requestInit = init;
       return Promise.resolve(successfulResponse(1));
     } as typeof fetch;
 
@@ -94,7 +102,7 @@ describe("InteractionClient", () => {
       const client = new InteractionClient({
         outbox,
         now: () => NOW,
-        apiBaseUrl: "https://kip.example.test",
+        apiBaseUrl: "https://staging.web.parkdex.app",
         appVersion: "0.1.0",
         appBuild: "abcdef1234567",
         environment: "staging",
@@ -105,6 +113,9 @@ describe("InteractionClient", () => {
       await client.flush(true);
 
       expect(receiver).toBe(globalThis);
+      expect(requestInit?.redirect).toBe("error");
+      expect(requestInit?.credentials).toBe("omit");
+      expect(requestInit?.cache).toBe("no-store");
       expect(await outbox.count()).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
@@ -125,7 +136,7 @@ describe("InteractionClient", () => {
       outbox,
       fetcher,
       now: () => NOW,
-      apiBaseUrl: "https://kip.example.test",
+      apiBaseUrl: "https://staging.web.parkdex.app",
       appVersion: "0.1.0",
       appBuild: "abcdef1234567",
       environment: "staging",
@@ -163,7 +174,7 @@ describe("InteractionClient", () => {
         return new Response("unavailable", { status: 503 });
       },
       now: () => NOW,
-      apiBaseUrl: "https://kip.example.test",
+      apiBaseUrl: "https://staging.web.parkdex.app",
       appVersion: "0.1.0",
       appBuild: "abcdef1234567",
       environment: "staging",
@@ -194,5 +205,27 @@ describe("InteractionClient", () => {
       expect(item).not.toHaveProperty("message");
     }
     expect(await outbox.count()).toBe(3);
+  });
+
+  it("keeps queued identifiers local when the configured destination is not approved", async () => {
+    const outbox = new InteractionOutbox();
+    const fetcher = vi.fn(async () => successfulResponse(1));
+    const client = new InteractionClient({
+      outbox,
+      fetcher,
+      now: () => NOW,
+      apiBaseUrl: "https://attacker.example.test",
+      appVersion: "0.1.0",
+      appBuild: "abcdef1234567",
+      environment: "staging",
+      lifecycleHooks: false,
+      automaticDelivery: false,
+    });
+
+    await client.recordParkViewed({ parkId: "provincial-goldstream-park", entryPoint: "map", contentReleaseId: RELEASE_ID });
+    await client.flush(true);
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await outbox.count()).toBe(1);
   });
 });
