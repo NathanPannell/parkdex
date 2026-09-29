@@ -1,17 +1,27 @@
-import type { Park, Rarity } from "./parks";
+import type { Park } from "./parks";
 
 export type ProgressionRarity = "common" | "uncommon" | "rare" | "legendary";
-export type RarityCounts = { common: number; uncommon: number; rare: number };
-export type RarityRequirement = Partial<RarityCounts>;
 
 export const RARITY_TIERS: readonly ProgressionRarity[] = ["common", "uncommon", "rare", "legendary"];
 
-export const RARITY_REQUIREMENTS: Readonly<Record<ProgressionRarity, Readonly<RarityRequirement>>> = Object.freeze({
-  common: Object.freeze({}),
-  uncommon: Object.freeze({ common: 4 }),
-  rare: Object.freeze({ common: 10, uncommon: 3 }),
-  legendary: Object.freeze({ common: 20, uncommon: 6, rare: 2 }),
-});
+// Each rank opens one rarity tier. Any park counts toward the next rank, once.
+export const RANKS = Object.freeze([
+  Object.freeze({ rarity: "common", name: "Fledgling", parks: 0 }),
+  Object.freeze({ rarity: "uncommon", name: "Trailblazer", parks: 2 }),
+  Object.freeze({ rarity: "rare", name: "Wayfinder", parks: 5 }),
+  Object.freeze({ rarity: "legendary", name: "Island Legend", parks: 10 }),
+] as const);
+
+export type Rank = (typeof RANKS)[number];
+export type CollectionRank = Rank["name"];
+
+export const RARITY_UNLOCK_PARKS: Readonly<Record<ProgressionRarity, number>> = Object.freeze(
+  Object.fromEntries(RANKS.map((rank) => [rank.rarity, rank.parks])) as Record<ProgressionRarity, number>,
+);
+
+export function rankFor(rarity: ProgressionRarity): Rank {
+  return RANKS.find((rank) => rank.rarity === rarity)!;
+}
 
 export type RarityClaim = {
   parkSnapshot: Pick<Park, "id" | "rarity"> | null;
@@ -24,47 +34,35 @@ export type RarityCatalogue =
 export type RarityTierProgress = {
   rarity: ProgressionRarity;
   unlocked: boolean;
-  requirements: RarityRequirement;
-  current: RarityRequirement;
-  remaining: RarityRequirement;
+  /** Unique parks needed to open this tier. */
+  required: number;
+  remaining: number;
 };
 
 export type RarityProgress = {
   /** False until the current content catalogue is available. */
   available: boolean;
-  counts: RarityCounts;
+  /** Unique parks in the Dex. */
+  visited: number;
   highestUnlocked: ProgressionRarity;
   tiers: Record<ProgressionRarity, RarityTierProgress>;
 };
 
-export const COLLECTION_RANKS = Object.freeze({
-  common: "Scout",
-  uncommon: "Explorer",
-  rare: "Adventurer",
-  legendary: "Legend",
-} as const satisfies Record<ProgressionRarity, string>);
-
-export type CollectionRank = (typeof COLLECTION_RANKS)[ProgressionRarity];
-
 export type CollectionRankProgress = {
   available: boolean;
-  rank: CollectionRank | null;
+  rank: Rank | null;
+  visited: number;
   openTiers: ProgressionRarity[];
-  next: {
-    rank: CollectionRank;
-    rarity: ProgressionRarity;
-    requirements: RarityRequirement;
-    current: RarityRequirement;
-    remaining: RarityRequirement;
-  } | null;
+  next: (Rank & { remaining: number }) | null;
 };
 
 export type ParkRarityEligibility = {
   eligible: boolean;
   reason: "already-earned" | "unlocked" | "locked" | "unsupported-rarity" | "unavailable";
-  requirements: RarityRequirement;
-  current: RarityRequirement;
-  remaining: RarityRequirement;
+  /** Unique parks needed to open this park's tier; 0 when not applicable. */
+  required: number;
+  visited: number;
+  remaining: number;
 };
 
 export class ParkClaimEligibilityError extends Error {
@@ -73,7 +71,7 @@ export class ParkClaimEligibilityError extends Error {
       ? "The current park catalogue is not ready yet."
       : eligibility.reason === "unsupported-rarity"
         ? "This park rarity is not available for new claims yet."
-        : "Unlock this park's rarity tier before claiming it.");
+        : "Visit more parks to unlock this park's rarity before claiming it.");
     this.name = "ParkClaimEligibilityError";
   }
 }
@@ -85,85 +83,58 @@ export class ParkAlreadyClaimedError extends Error {
   }
 }
 
-const ZERO_COUNTS: RarityCounts = { common: 0, uncommon: 0, rare: 0 };
+const NO_REQUIREMENT = { required: 0, visited: 0, remaining: 0 };
 
-function catalogueMap(catalogue: RarityCatalogue): ReadonlyMap<string, Pick<Park, "id" | "rarity">> {
-  return Array.isArray(catalogue)
-    ? new Map(catalogue.map((park) => [park.id, park]))
-    : catalogue as ReadonlyMap<string, Pick<Park, "id" | "rarity">>;
-}
-
-function countForRarity(counts: RarityCounts, rarity: Rarity | undefined): void {
-  if (rarity === "common" || rarity === "uncommon" || rarity === "rare") counts[rarity] += 1;
-}
-
-function requirementState(requirements: RarityRequirement, counts: RarityCounts) {
-  const current: RarityRequirement = {};
-  const remaining: RarityRequirement = {};
-  let unlocked = true;
-  for (const rarity of ["common", "uncommon", "rare"] as const) {
-    const required = requirements[rarity];
-    if (required === undefined) continue;
-    current[rarity] = counts[rarity];
-    remaining[rarity] = Math.max(0, required - counts[rarity]);
-    if (counts[rarity] < required) unlocked = false;
-  }
-  return { unlocked, current, remaining };
-}
+/** Eligibility while saved claims or the catalogue are still loading. */
+export const UNAVAILABLE_ELIGIBILITY: ParkRarityEligibility = Object.freeze({ eligible: false, reason: "unavailable", ...NO_REQUIREMENT });
 
 export function getRarityProgress(
   claims: Readonly<Record<string, RarityClaim>>,
   catalogue?: RarityCatalogue,
 ): RarityProgress {
   const available = catalogue !== undefined;
-  const counts = { ...ZERO_COUNTS };
-
-  if (catalogue !== undefined) {
-    const parks = catalogueMap(catalogue);
-    const counted = new Set<string>();
-    for (const [claimKey, claim] of Object.entries(claims)) {
-      // Snapshot identity is stable for archived claims. The map key covers old
-      // rows whose snapshot is absent and matches the store's park-ID projection.
-      const parkId = claim.parkSnapshot?.id ?? claimKey;
-      if (counted.has(parkId)) continue;
-      counted.add(parkId);
-      const rarity = parks.get(parkId)?.rarity ?? claim.parkSnapshot?.rarity;
-      countForRarity(counts, rarity);
-    }
+  const parks = new Set<string>();
+  if (available) {
+    // Snapshot identity is stable for archived claims. The map key covers old
+    // rows whose snapshot is absent and matches the store's park-ID projection.
+    for (const [claimKey, claim] of Object.entries(claims)) parks.add(claim.parkSnapshot?.id ?? claimKey);
   }
+  const visited = parks.size;
 
   const tiers = {} as Record<ProgressionRarity, RarityTierProgress>;
-  for (const rarity of RARITY_TIERS) {
-    const requirements = RARITY_REQUIREMENTS[rarity];
-    const state = requirementState(requirements, counts);
-    tiers[rarity] = { rarity, requirements: { ...requirements }, ...state };
+  for (const rank of RANKS) {
+    tiers[rank.rarity] = {
+      rarity: rank.rarity,
+      unlocked: visited >= rank.parks,
+      required: rank.parks,
+      remaining: Math.max(0, rank.parks - visited),
+    };
   }
 
   const highestUnlocked = [...RARITY_TIERS].reverse().find((rarity) => tiers[rarity].unlocked) ?? "common";
-  return { available, counts, highestUnlocked, tiers };
+  return { available, visited, highestUnlocked, tiers };
 }
 
 export function getCollectionRankProgress(progress: RarityProgress): CollectionRankProgress {
-  if (!progress.available) return { available: false, rank: null, openTiers: [], next: null };
+  if (!progress.available) return { available: false, rank: null, visited: 0, openTiers: [], next: null };
 
-  const currentTierIndex = RARITY_TIERS.indexOf(progress.highestUnlocked);
-  const nextRarity = RARITY_TIERS[currentTierIndex + 1];
-  const nextTier = nextRarity ? progress.tiers[nextRarity] : null;
-
+  const index = RARITY_TIERS.indexOf(progress.highestUnlocked);
+  const next = RANKS[index + 1];
   return {
     available: true,
-    rank: COLLECTION_RANKS[progress.highestUnlocked],
-    openTiers: RARITY_TIERS.slice(0, currentTierIndex + 1),
-    next: nextRarity && nextTier
-      ? {
-        rank: COLLECTION_RANKS[nextRarity],
-        rarity: nextRarity,
-        requirements: { ...nextTier.requirements },
-        current: { ...nextTier.current },
-        remaining: { ...nextTier.remaining },
-      }
-      : null,
+    rank: RANKS[index],
+    visited: progress.visited,
+    openTiers: RARITY_TIERS.slice(0, index + 1),
+    next: next ? { ...next, remaining: progress.tiers[next.rarity].remaining } : null,
   };
+}
+
+/** The rank reached by adding one claim, or null when the claim does not rank up. */
+export function rankUpAfter(before: RarityProgress, after: RarityProgress): Rank | null {
+  if (!before.available || !after.available) return null;
+  const from = RARITY_TIERS.indexOf(before.highestUnlocked);
+  const to = RARITY_TIERS.indexOf(after.highestUnlocked);
+  return to > from ? RANKS[to] : null;
 }
 
 export function getParkRarityEligibility(
@@ -171,34 +142,12 @@ export function getParkRarityEligibility(
   progress: RarityProgress,
   alreadyClaimed = false,
 ): ParkRarityEligibility {
-  if (alreadyClaimed) {
-    if (progress.available && park.rarity !== "epic") {
-      const tier = progress.tiers[park.rarity];
-      return {
-        eligible: true,
-        reason: "already-earned",
-        requirements: { ...tier.requirements },
-        current: { ...tier.current },
-        remaining: { ...tier.remaining },
-      };
-    }
-    return { eligible: true, reason: "already-earned", requirements: {}, current: {}, remaining: {} };
-  }
-  if (!progress.available) {
-    return { eligible: false, reason: "unavailable", requirements: {}, current: {}, remaining: {} };
-  }
-  if (park.rarity === "epic") {
-    return { eligible: false, reason: "unsupported-rarity", requirements: {}, current: {}, remaining: {} };
-  }
-
-  const tier = progress.tiers[park.rarity];
-  return {
-    eligible: tier.unlocked,
-    reason: tier.unlocked ? "unlocked" : "locked",
-    requirements: { ...tier.requirements },
-    current: { ...tier.current },
-    remaining: { ...tier.remaining },
-  };
+  const tier = progress.available && park.rarity !== "epic" ? progress.tiers[park.rarity] : null;
+  const requirement = tier ? { required: tier.required, visited: progress.visited, remaining: tier.remaining } : NO_REQUIREMENT;
+  if (alreadyClaimed) return { eligible: true, reason: "already-earned", ...requirement };
+  if (!progress.available) return { eligible: false, reason: "unavailable", ...NO_REQUIREMENT };
+  if (!tier) return { eligible: false, reason: "unsupported-rarity", ...NO_REQUIREMENT };
+  return { eligible: tier.unlocked, reason: tier.unlocked ? "unlocked" : "locked", ...requirement };
 }
 
 export function assertParkClaimEligible(

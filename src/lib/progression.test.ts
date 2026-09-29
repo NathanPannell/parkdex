@@ -6,7 +6,9 @@ import {
   getRarityProgress,
   ParkAlreadyClaimedError,
   ParkClaimEligibilityError,
-  RARITY_REQUIREMENTS,
+  RANKS,
+  rankUpAfter,
+  RARITY_UNLOCK_PARKS,
   type RarityClaim,
   type RarityCatalogue,
 } from "./progression";
@@ -30,112 +32,50 @@ function catalogueFor(claims: Record<string, RarityClaim>, overrides: Record<str
   }));
 }
 
+function progressFor(counts: Partial<Record<Rarity, number>>) {
+  const claims = claimsWith(counts);
+  return getRarityProgress(claims, catalogueFor(claims));
+}
+
 describe("rarity progression", () => {
-  it("exposes the tier thresholds as shared domain data", () => {
-    expect(RARITY_REQUIREMENTS).toEqual({
-      common: {},
-      uncommon: { common: 4 },
-      rare: { common: 10, uncommon: 3 },
-      legendary: { common: 20, uncommon: 6, rare: 2 },
-    });
+  it("opens each tier after 0, 2, 5 and 10 unique parks", () => {
+    expect(RARITY_UNLOCK_PARKS).toEqual({ common: 0, uncommon: 2, rare: 5, legendary: 10 });
+    expect(RANKS.map((rank) => rank.name)).toEqual(["Fledgling", "Trailblazer", "Wayfinder", "Island Legend"]);
   });
 
   it.each([
-    { name: "starts at Scout with four Common needed", counts: {}, rank: "Scout", nextRank: "Explorer", remaining: { common: 4 } },
-    { name: "stays Scout one Common short of Explorer", counts: { common: 3 }, rank: "Scout", nextRank: "Explorer", remaining: { common: 1 } },
-    { name: "reaches Explorer at four Common", counts: { common: 4 }, rank: "Explorer", nextRank: "Adventurer", remaining: { common: 6, uncommon: 3 } },
-    { name: "stays Explorer one Uncommon short of Adventurer", counts: { common: 10, uncommon: 2 }, rank: "Explorer", nextRank: "Adventurer", remaining: { common: 0, uncommon: 1 } },
-    { name: "reaches Adventurer at ten Common and three Uncommon", counts: { common: 10, uncommon: 3 }, rank: "Adventurer", nextRank: "Legend", remaining: { common: 10, uncommon: 3, rare: 2 } },
-    { name: "stays Adventurer one Rare short of Legend", counts: { common: 20, uncommon: 6, rare: 1 }, rank: "Adventurer", nextRank: "Legend", remaining: { common: 0, uncommon: 0, rare: 1 } },
-    { name: "reaches Legend at the Legendary threshold", counts: { common: 20, uncommon: 6, rare: 2 }, rank: "Legend", nextRank: null, remaining: null },
-  ] as const)("$name", ({ counts, rank, nextRank, remaining }) => {
-    const claims = claimsWith(counts);
-    const rankProgress = getCollectionRankProgress(getRarityProgress(claims, catalogueFor(claims)));
+    { visited: 0, rank: "Fledgling", next: "Trailblazer", remaining: 2 },
+    { visited: 1, rank: "Fledgling", next: "Trailblazer", remaining: 1 },
+    { visited: 2, rank: "Trailblazer", next: "Wayfinder", remaining: 3 },
+    { visited: 4, rank: "Trailblazer", next: "Wayfinder", remaining: 1 },
+    { visited: 5, rank: "Wayfinder", next: "Island Legend", remaining: 5 },
+    { visited: 9, rank: "Wayfinder", next: "Island Legend", remaining: 1 },
+    { visited: 10, rank: "Island Legend", next: null, remaining: 0 },
+    { visited: 14, rank: "Island Legend", next: null, remaining: 0 },
+  ])("is $rank after $visited parks", ({ visited, rank, next, remaining }) => {
+    const rankProgress = getCollectionRankProgress(progressFor({ common: visited }));
 
-    expect(rankProgress.available).toBe(true);
-    expect(rankProgress.rank).toBe(rank);
-    if (nextRank) {
-      expect(rankProgress.next).toMatchObject({ rank: nextRank, remaining });
-    } else {
-      expect(rankProgress.next).toBeNull();
-    }
+    expect(rankProgress).toMatchObject({ available: true, visited, rank: { name: rank } });
+    if (next) expect(rankProgress.next).toMatchObject({ name: next, remaining });
+    else expect(rankProgress.next).toBeNull();
   });
 
-  it("does not show Scout while the current owner catalogue is unavailable", () => {
-    const claims = claimsWith({ common: 20, uncommon: 6, rare: 2 });
+  it("counts parks of any rarity toward the next rank", () => {
+    const progress = progressFor({ common: 1, uncommon: 2, rare: 1, legendary: 1 });
+
+    expect(progress.visited).toBe(5);
+    expect(progress.highestUnlocked).toBe("rare");
+  });
+
+  it("does not show a rank while the current owner catalogue is unavailable", () => {
+    const claims = claimsWith({ common: 12 });
 
     expect(getCollectionRankProgress(getRarityProgress(claims))).toEqual({
       available: false,
       rank: null,
+      visited: 0,
       openTiers: [],
       next: null,
-    });
-  });
-
-  it("does not let duplicate claim rows advance the rank", () => {
-    const claims = claimsWith({ common: 3 });
-    claims.duplicate = { parkSnapshot: { id: "common-0", rarity: "common" } };
-    const rankProgress = getCollectionRankProgress(getRarityProgress(claims, catalogueFor(claims)));
-
-    expect(rankProgress).toMatchObject({ rank: "Scout", next: { rank: "Explorer", remaining: { common: 1 } } });
-  });
-
-  it("recomputes rank from current catalogue rarity after reclassification", () => {
-    const claims = claimsWith({ common: 10, uncommon: 3 });
-    const currentCatalogue = catalogueFor(claims, { "common-0": "uncommon" });
-    const progress = getRarityProgress(claims, currentCatalogue);
-
-    expect(progress.counts).toEqual({ common: 9, uncommon: 4, rare: 0 });
-    expect(getCollectionRankProgress(progress)).toMatchObject({
-      rank: "Explorer",
-      next: { rank: "Adventurer", remaining: { common: 1, uncommon: 0 } },
-    });
-  });
-
-  it("unlocks each tier only when every threshold is met", () => {
-    const uncommonClaims = claimsWith({ common: 3 });
-    const uncommonBefore = getRarityProgress(uncommonClaims, catalogueFor(uncommonClaims));
-    expect(uncommonBefore.tiers.uncommon).toMatchObject({
-      unlocked: false,
-      current: { common: 3 },
-      remaining: { common: 1 },
-    });
-
-    const rareClaims = claimsWith({ common: 10, uncommon: 2 });
-    const rareBefore = getRarityProgress(rareClaims, catalogueFor(rareClaims));
-    expect(rareBefore.tiers.rare).toMatchObject({
-      unlocked: false,
-      current: { common: 10, uncommon: 2 },
-      remaining: { common: 0, uncommon: 1 },
-    });
-
-    const legendaryClaims = claimsWith({ common: 20, uncommon: 6, rare: 1 });
-    const legendaryBefore = getRarityProgress(legendaryClaims, catalogueFor(legendaryClaims));
-    expect(legendaryBefore.tiers.legendary).toMatchObject({
-      unlocked: false,
-      current: { common: 20, uncommon: 6, rare: 1 },
-      remaining: { common: 0, uncommon: 0, rare: 1 },
-    });
-
-    const completeClaims = claimsWith({ common: 20, uncommon: 6, rare: 2 });
-    const complete = getRarityProgress(completeClaims, catalogueFor(completeClaims));
-    expect(complete.counts).toEqual({ common: 20, uncommon: 6, rare: 2 });
-    expect(complete.highestUnlocked).toBe("legendary");
-    expect(complete.tiers.legendary.unlocked).toBe(true);
-  });
-
-  it.each([
-    { name: "rare stays locked at 9 Common and 3 Uncommon", counts: { common: 9, uncommon: 3 }, rarity: "rare", reason: "locked" },
-    { name: "rare opens at 10 Common and 3 Uncommon", counts: { common: 10, uncommon: 3 }, rarity: "rare", reason: "unlocked" },
-    { name: "Legendary stays locked at 19 Common, 6 Uncommon, and 2 Rare", counts: { common: 19, uncommon: 6, rare: 2 }, rarity: "legendary", reason: "locked" },
-    { name: "Legendary stays locked at 20 Common, 5 Uncommon, and 2 Rare", counts: { common: 20, uncommon: 5, rare: 2 }, rarity: "legendary", reason: "locked" },
-    { name: "Legendary opens at 20 Common, 6 Uncommon, and 2 Rare", counts: { common: 20, uncommon: 6, rare: 2 }, rarity: "legendary", reason: "unlocked" },
-  ] as const)("$name", ({ counts, rarity, reason }) => {
-    const claims = claimsWith(counts);
-    const progress = getRarityProgress(claims, catalogueFor(claims));
-    expect(getParkRarityEligibility({ id: "next-tier-park", rarity }, progress)).toMatchObject({
-      eligible: reason === "unlocked",
-      reason,
     });
   });
 
@@ -144,101 +84,105 @@ describe("rarity progression", () => {
       first: { parkSnapshot: { id: "same-park", rarity: "common" as const } },
       duplicate: { parkSnapshot: { id: "same-park", rarity: "common" as const } },
     };
-    const progress = getRarityProgress(claims, [{ id: "same-park", rarity: "common" }]);
-    expect(progress.counts.common).toBe(1);
+
+    expect(getRarityProgress(claims, [{ id: "same-park", rarity: "common" }]).visited).toBe(1);
   });
 
-  it("uses current catalogue rarity for known parks and snapshot rarity for removed parks", () => {
-    const claims: Record<string, RarityClaim> = {
-      reclassified: { parkSnapshot: { id: "reclassified", rarity: "rare" } },
-      archived: { parkSnapshot: { id: "archived", rarity: "uncommon" } },
-      missingSnapshot: { parkSnapshot: null },
-    };
-    const catalogue: RarityCatalogue = [
-      { id: "reclassified", rarity: "common" },
-      { id: "missingSnapshot", rarity: "rare" },
-    ];
-
-    expect(getRarityProgress(claims, catalogue).counts).toEqual({ common: 1, uncommon: 1, rare: 1 });
-  });
-
-  it("does not count archived claims without a rarity snapshot but preserves their earned access", () => {
-    const claims = { archived: { parkSnapshot: null } };
+  it("counts archived claims without a snapshot by their saved park ID", () => {
+    const claims = { archived: { parkSnapshot: null }, removed: { parkSnapshot: { id: "removed", rarity: "epic" as const } } };
     const progress = getRarityProgress(claims, []);
 
-    expect(progress.counts).toEqual({ common: 0, uncommon: 0, rare: 0 });
-    expect(getParkRarityEligibility({ id: "archived", rarity: "epic" }, progress, true))
-      .toMatchObject({ eligible: true, reason: "already-earned" });
+    expect(progress.visited).toBe(2);
+    expect(progress.highestUnlocked).toBe("uncommon");
+  });
+
+  it.each([
+    { name: "Uncommon stays locked at 1 park", visited: 1, rarity: "uncommon", reason: "locked", remaining: 1 },
+    { name: "Uncommon opens at 2 parks", visited: 2, rarity: "uncommon", reason: "unlocked", remaining: 0 },
+    { name: "Rare stays locked at 4 parks", visited: 4, rarity: "rare", reason: "locked", remaining: 1 },
+    { name: "Rare opens at 5 parks", visited: 5, rarity: "rare", reason: "unlocked", remaining: 0 },
+    { name: "Legendary stays locked at 9 parks", visited: 9, rarity: "legendary", reason: "locked", remaining: 1 },
+    { name: "Legendary opens at 10 parks", visited: 10, rarity: "legendary", reason: "unlocked", remaining: 0 },
+  ] as const)("$name", ({ visited, rarity, reason, remaining }) => {
+    expect(getParkRarityEligibility({ id: "next-tier-park", rarity }, progressFor({ common: visited }))).toMatchObject({
+      eligible: reason === "unlocked",
+      reason,
+      visited,
+      remaining,
+    });
+  });
+
+  it("keeps Common open from the first visit", () => {
+    expect(getParkRarityEligibility({ id: "first", rarity: "common" }, progressFor({}))).toMatchObject({ eligible: true, reason: "unlocked", required: 0 });
   });
 
   it("fails closed for new claims until a catalogue is available, but keeps earned parks accessible", () => {
     const claims = claimsWith({ common: 4 });
-    const common = { id: "new-common", rarity: "common" as const };
     const unavailable = getRarityProgress(claims);
 
     expect(unavailable.available).toBe(false);
-    expect(getParkRarityEligibility(common, unavailable)).toMatchObject({ eligible: false, reason: "unavailable" });
+    expect(getParkRarityEligibility({ id: "new-common", rarity: "common" }, unavailable)).toMatchObject({ eligible: false, reason: "unavailable" });
     expect(getParkRarityEligibility({ id: "common-0", rarity: "epic" }, unavailable, true))
       .toMatchObject({ eligible: true, reason: "already-earned" });
   });
 
-  it("keeps earned parks accessible after rarity changes and rejects new epic claims", () => {
+  it("keeps earned parks accessible after reclassification and rejects new epic claims", () => {
     const claims: Record<string, RarityClaim> = {
       earned: { parkSnapshot: { id: "earned", rarity: "common" } },
-      ...claimsWith({ common: 3 }),
+      ...claimsWith({ common: 2 }),
     };
-    const catalogue = catalogueFor(claims, { earned: "legendary" });
-    const progress = getRarityProgress(claims, catalogue);
+    const progress = getRarityProgress(claims, catalogueFor(claims, { earned: "legendary" }));
 
     expect(getParkRarityEligibility({ id: "earned", rarity: "legendary" }, progress, true))
-      .toMatchObject({
-        eligible: true,
-        reason: "already-earned",
-        requirements: { common: 20, uncommon: 6, rare: 2 },
-        remaining: { common: 17, uncommon: 6, rare: 2 },
-      });
+      .toMatchObject({ eligible: true, reason: "already-earned", required: 10, remaining: 7 });
     expect(getParkRarityEligibility({ id: "new-epic", rarity: "epic" }, progress))
       .toMatchObject({ eligible: false, reason: "unsupported-rarity" });
   });
 
-  it("blocks creation when backup hydrates the same park after claiming began, while earned viewing stays open", () => {
+  it("blocks creation when backup hydrates the same park after claiming began", () => {
     const park = { id: "hydrated-during-check-in", rarity: "common" as const };
-    const claimsBeforeHydration = claimsWith({ common: 4 });
-    const catalogue = [...catalogueFor(claimsBeforeHydration), park];
-    const beforeProgress = getRarityProgress(claimsBeforeHydration, catalogue);
-    expect(getParkRarityEligibility(park, beforeProgress)).toMatchObject({ eligible: true, reason: "unlocked" });
+    const before = claimsWith({ common: 2 });
+    const catalogue = [...catalogueFor(before), park];
+    expect(getParkRarityEligibility(park, getRarityProgress(before, catalogue))).toMatchObject({ eligible: true, reason: "unlocked" });
 
-    const claimsAfterHydration = {
-      ...claimsBeforeHydration,
-      [park.id]: { parkSnapshot: park },
-    };
-    const afterProgress = getRarityProgress(claimsAfterHydration, catalogue);
-    expect(getParkRarityEligibility(park, afterProgress, true)).toMatchObject({ eligible: true, reason: "already-earned" });
-    expect(() => assertParkClaimEligible(park, claimsAfterHydration, catalogue)).toThrowError(ParkAlreadyClaimedError);
+    const after = { ...before, [park.id]: { parkSnapshot: park } };
+    expect(getParkRarityEligibility(park, getRarityProgress(after, catalogue), true)).toMatchObject({ eligible: true, reason: "already-earned" });
+    expect(() => assertParkClaimEligible(park, after, catalogue)).toThrowError(ParkAlreadyClaimedError);
   });
 
-  it("allows scene-null skeleton parks once their tier is unlocked", () => {
-    const claims = claimsWith({ common: 4 });
-    const progress = getRarityProgress(claims, catalogueFor(claims));
-    const skeletonPark = { id: "new-uncommon", rarity: "uncommon" as const, scene: null };
-
-    expect(getParkRarityEligibility(skeletonPark, progress)).toMatchObject({ eligible: true, reason: "unlocked" });
-  });
-
-  it("asserts the final claim guard with actionable reason data", () => {
-    const claims = claimsWith({ common: 3 });
+  it("asserts the final claim guard with the parks still needed", () => {
+    const claims = claimsWith({ common: 1 });
     const catalogue = catalogueFor(claims);
     expect(() => assertParkClaimEligible({ id: "locked", rarity: "uncommon" }, claims, catalogue))
       .toThrowError(ParkClaimEligibilityError);
     try {
       assertParkClaimEligible({ id: "locked", rarity: "uncommon" }, claims, catalogue);
     } catch (error) {
-      expect((error as ParkClaimEligibilityError).eligibility).toMatchObject({
-        reason: "locked",
-        remaining: { common: 1 },
-      });
+      expect((error as ParkClaimEligibilityError).eligibility).toMatchObject({ reason: "locked", remaining: 1 });
     }
     expect(() => assertParkClaimEligible({ id: "new-common", rarity: "common" }, claims))
       .toThrowError(expect.objectContaining({ eligibility: expect.objectContaining({ reason: "unavailable" }) }));
+  });
+});
+
+describe("rankUpAfter", () => {
+  const catalogue: RarityCatalogue = [];
+
+  it("reports the new rank when a claim crosses a threshold", () => {
+    const before = getRarityProgress(claimsWith({ common: 1 }), catalogue);
+    const after = getRarityProgress(claimsWith({ common: 2 }), catalogue);
+
+    expect(rankUpAfter(before, after)).toMatchObject({ name: "Trailblazer", rarity: "uncommon" });
+  });
+
+  it("stays quiet for claims between thresholds", () => {
+    const before = getRarityProgress(claimsWith({ common: 2 }), catalogue);
+    const after = getRarityProgress(claimsWith({ common: 3 }), catalogue);
+
+    expect(rankUpAfter(before, after)).toBeNull();
+  });
+
+  it("stays quiet while progress is still loading", () => {
+    expect(rankUpAfter(getRarityProgress(claimsWith({ common: 1 })), getRarityProgress(claimsWith({ common: 2 }), catalogue))).toBeNull();
   });
 });

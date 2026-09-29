@@ -48,9 +48,9 @@ test("rarity assignment covers the immutable 100-park seed exactly", async () =>
 test("rarity assignment declares the agreed unlock thresholds", async () => {
   const manifest = JSON.parse(await readFile(MANIFEST, "utf8"));
   assert.deepEqual(manifest.unlock_requirements, {
-    common: {},
-    uncommon: { common: 4 },
-    rare: { common: 10, uncommon: 3 },
-    legendary: { common: 20, uncommon: 6, rare: 2 },
+    common: { parks: 0 },
+    uncommon: { parks: 2 },
+    rare: { parks: 5 },
+    legendary: { parks: 10 },
   });
 });

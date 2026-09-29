@@ -1,29 +1,18 @@
 import { RARITY, type Rarity } from "./parks";
-import type { ParkRarityEligibility, RarityRequirement } from "./progression";
+import { rankFor, type ParkRarityEligibility, type ProgressionRarity } from "./progression";
 
-const REQUIREMENT_ORDER = ["common", "uncommon", "rare"] as const;
+export const parksLabel = (count: number) => `${count} ${count === 1 ? "park" : "parks"}`;
 
-export function formatRarityRequirements(requirements: RarityRequirement) {
-  return REQUIREMENT_ORDER
-    .filter((rarity) => (requirements[rarity] ?? 0) > 0)
-    .map((rarity) => `${requirements[rarity]} ${RARITY[rarity].label} ${requirements[rarity] === 1 ? "badge" : "badges"}`)
-    .join(" + ");
-}
-
-export function formatRarityRemaining(eligibility: ParkRarityEligibility) {
-  return REQUIREMENT_ORDER
-    .filter((rarity) => (eligibility.remaining[rarity] ?? 0) > 0)
-    .map((rarity) => `${eligibility.remaining[rarity]} ${RARITY[rarity].label}`)
-    .join(" + ");
+/** "Opens at Wayfinder · 5 parks" for a locked tier. */
+export function tierUnlockLabel(rarity: ProgressionRarity) {
+  const rank = rankFor(rarity);
+  return rank.parks === 0 ? "Open from the start" : `Opens at ${rank.name} · ${parksLabel(rank.parks)}`;
 }
 
 export function rarityLockMessage(eligibility: ParkRarityEligibility) {
   if (eligibility.reason === "unsupported-rarity") return "New Epic claims are unavailable";
   if (eligibility.reason === "unavailable") return "Checking saved progress";
-  if (eligibility.reason === "locked") {
-    const remaining = formatRarityRemaining(eligibility);
-    return remaining ? `Needs ${remaining}` : "Rarity locked";
-  }
+  if (eligibility.reason === "locked") return `Visit ${eligibility.remaining} more ${eligibility.remaining === 1 ? "park" : "parks"} to unlock`;
   return "Available to claim";
 }
 
