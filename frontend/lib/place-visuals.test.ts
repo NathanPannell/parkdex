@@ -76,9 +76,9 @@ describe("place visual index", () => {
   });
 
   it("resolves relative and CDN paths without allowing path overrides", () => {
-    expect(placeVisualIndexUrl("/park-visuals-fixture", "https://staging.web.parkdex.app"))
-      .toBe("https://staging.web.parkdex.app/park-visuals-fixture/index.json");
-    expect(placeVisualAssetUrls(entry, "https://assets.example.test/parkdex/v7", "https://staging.web.parkdex.app")).toEqual({
+    expect(placeVisualIndexUrl("/park-visuals-fixture", "https://staging.map.parkdex.app"))
+      .toBe("https://staging.map.parkdex.app/park-visuals-fixture/index.json");
+    expect(placeVisualAssetUrls(entry, "https://assets.example.test/parkdex/v7", "https://staging.map.parkdex.app")).toEqual({
       satellite: `https://assets.example.test/parkdex/v7/${placeId}/satellite.avif`,
       relief: `https://assets.example.test/parkdex/v7/${placeId}/relief.avif`,
       model: `https://assets.example.test/parkdex/v7/${placeId}/${placeId}-terrain.glb`,

@@ -4,7 +4,7 @@ Keep track of your BC park adventures.
 
 Parkdex is a field guide and collection game for parks across British Columbia. Find your next stop on the map, mark the places you've visited, and see how much of the province you've explored.
 
-[Open Parkdex](https://web.parkdex.app)
+[Open Parkdex](https://map.parkdex.app)
 
 Parkdex uses short, independent provider dispatches followed by agent-owned convergence checks and browser smoke tests. See [deployment operations](docs/deployments.md) for staging and overnight production releases.
 

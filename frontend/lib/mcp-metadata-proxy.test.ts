@@ -17,7 +17,7 @@ describe("MCP metadata proxy", () => {
       "https://staging.parkdex.app/mcp",
     ],
     [
-      "https://staging.web.parkdex.app",
+      "https://staging.map.parkdex.app",
       "https://api-staging.example.test",
       "https://staging.parkdex.app/mcp",
     ],

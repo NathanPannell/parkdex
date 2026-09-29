@@ -2,7 +2,7 @@ from backend.app.auth_emails import password_reset_email, verification_email
 
 
 def test_verification_email_is_branded_multipart_content() -> None:
-    url = "https://web.parkdex.app/account#verificationToken=test-token"
+    url = "https://map.parkdex.app/account#verificationToken=test-token"
 
     email = verification_email(url)
 
@@ -34,7 +34,7 @@ A completionist map of British Columbia
 
 
 def test_password_reset_email_is_clear_about_ignored_requests() -> None:
-    url = "https://web.parkdex.app/account#resetToken=test-token"
+    url = "https://map.parkdex.app/account#resetToken=test-token"
 
     email = password_reset_email(url)
 
@@ -67,10 +67,10 @@ A completionist map of British Columbia
 
 
 def test_auth_email_escapes_action_url_in_html() -> None:
-    url = 'https://web.parkdex.app/account#resetToken=test&next="unsafe"'
+    url = 'https://map.parkdex.app/account#resetToken=test&next="unsafe"'
 
     email = password_reset_email(url)
 
     assert url in email.text
-    assert 'href="https://web.parkdex.app/account#resetToken=test&amp;next=&quot;unsafe&quot;"' in email.html
-    assert 'href="https://web.parkdex.app/account#resetToken=test&next="unsafe""' not in email.html
+    assert 'href="https://map.parkdex.app/account#resetToken=test&amp;next=&quot;unsafe&quot;"' in email.html
+    assert 'href="https://map.parkdex.app/account#resetToken=test&next="unsafe""' not in email.html

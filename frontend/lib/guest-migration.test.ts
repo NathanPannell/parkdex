@@ -22,7 +22,7 @@ function makeStorage(initial: Record<string, string> = {}) {
 
 const opener = {};
 const sourceOrigin = "https://parkdex.app";
-const appOrigin = "https://web.parkdex.app";
+const appOrigin = "https://map.parkdex.app";
 
 function transfer(values: Record<string, string>) {
   return { type: GUEST_MIGRATION_TRANSFER_TYPE, version: 1, values };
@@ -43,8 +43,8 @@ function receive(payload: unknown, storage = makeStorage(), options: { origin?: 
 describe("guest progress migration receiver", () => {
   it("pairs the production and staging app origins with their exact legacy origins", () => {
     expect(GUEST_MIGRATION_ORIGIN_PAIRS).toEqual([
-      { sourceOrigin: "https://parkdex.app", targetOrigin: "https://web.parkdex.app" },
-      { sourceOrigin: "https://staging.parkdex.app", targetOrigin: "https://staging.web.parkdex.app" },
+      { sourceOrigin: "https://parkdex.app", targetOrigin: "https://map.parkdex.app" },
+      { sourceOrigin: "https://staging.parkdex.app", targetOrigin: "https://staging.map.parkdex.app" },
     ]);
     expect(guestMigrationPairForAppOrigin(appOrigin)?.sourceOrigin).toBe(sourceOrigin);
     expect(guestMigrationPairForAppOrigin("https://web.evil.example")).toBeNull();
@@ -170,7 +170,7 @@ describe("guest progress migration receiver", () => {
   it("uses the static app's same-origin API route and rejects unavailable or malformed API responses", async () => {
     const key = "d".repeat(43);
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
-      expect(new URL(String(input)).href).toBe("https://web.parkdex.app/api/guest/progress-state");
+      expect(new URL(String(input)).href).toBe("https://map.parkdex.app/api/guest/progress-state");
       return new Response(JSON.stringify({ hasProgress: false }));
     });
 

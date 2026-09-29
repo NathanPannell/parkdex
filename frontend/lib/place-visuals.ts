@@ -72,7 +72,7 @@ export function parsePlaceVisualIndex(value: unknown): ReadonlyMap<string, Place
 
 export function placeVisualIndexUrl(
   baseUrl = process.env.NEXT_PUBLIC_PARK_VISUALS_BASE_URL || DEFAULT_PLACE_VISUALS_BASE_URL,
-  origin = typeof window === "undefined" ? "https://web.parkdex.app" : window.location.origin,
+  origin = typeof window === "undefined" ? "https://map.parkdex.app" : window.location.origin,
 ): string {
   const base = baseUrl.trim();
   if (!base || base.includes("?") || base.includes("#")) {
@@ -109,7 +109,7 @@ export async function loadPlaceVisualIndex(
 export function placeVisualAssetUrls(
   entry: PlaceVisualEntry,
   baseUrl = process.env.NEXT_PUBLIC_PARK_VISUALS_BASE_URL || DEFAULT_PLACE_VISUALS_BASE_URL,
-  origin = typeof window === "undefined" ? "https://web.parkdex.app" : window.location.origin,
+  origin = typeof window === "undefined" ? "https://map.parkdex.app" : window.location.origin,
 ): PlaceVisualAssetUrls {
   const validEntry = parseEntry(entry.placeId, entry);
   if (!validEntry) throw new Error("The place visuals entry is invalid.");
