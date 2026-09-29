@@ -4,8 +4,10 @@ A standalone, fully offline Android app for the core Parkdex loop on Vancouver I
 pick a park on the map, go there, check in inside the park boundary, take a photo, claim
 the badge, and share it. No accounts and no network sync: everything stays on the phone.
 
-- 122 parks on Vancouver Island itself. 20 have live badges (0/20 to start); the rest
-  show "badge coming soon".
+- Parks on Vancouver Island come from the downloaded content catalogue. Only parks with
+  published badge art appear on the map, and the Dex starts empty.
+- Collector ranks: visiting 2, 5 and 10 unique parks opens Uncommon, Rare and Legendary
+  parks. See `docs/rarity-progression.md`.
 - Offline basemap: a bundled Protomaps archive for the island (zoom 0 to 14) plus fonts.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 

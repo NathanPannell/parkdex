@@ -308,6 +308,26 @@ p {
   right: 22px;
 }
 
+.bubble--down::after {
+  left: calc(50% - 8px);
+}
+
+/* Sideways tails point at Kip standing beside the bubble, level with his head. */
+.bubble--to-left::after,
+.bubble--to-right::after {
+  bottom: 12px;
+}
+
+.bubble--to-left::after {
+  left: -9px;
+  rotate: 135deg;
+}
+
+.bubble--to-right::after {
+  right: -9px;
+  rotate: -45deg;
+}
+
 /* ---------- Badge effects ---------- */
 
 .badge {

@@ -11,7 +11,7 @@ import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
 import { configureMapLibreWorker, watchBundledOverviewReadiness } from "../../lib/mapStartup";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
-import { getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
+import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
 import { rarityAccessibleStatus } from "../../lib/rarityUi";
 import type { Claim } from "../../lib/store";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
@@ -23,6 +23,8 @@ type Props = {
   mapRef: RefObject<MLMap | null>;
   user: LngLat;
   fc: BoundaryCollection | undefined;
+  /** Parks to pin: those with a badge to earn, plus any already in the Dex. */
+  parks: readonly Park[];
   claims: Readonly<Record<string, Claim>>;
   rarityProgress: RarityProgress;
   progressReady: boolean;
@@ -47,7 +49,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, fc, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect }: Props) {
+export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -183,7 +185,7 @@ export function MapView({ mapRef, user, fc, claims, rarityProgress, progressRead
       setHosts([]);
       return;
     }
-    const ranked = [...content.parks].sort(
+    const ranked = [...parks].sort(
       (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
     );
     const wanted = new Set(ranked.map((park) => park.id));
@@ -206,7 +208,7 @@ export function MapView({ mapRef, user, fc, claims, rarityProgress, progressRead
       parkMarkers.current.set(park.id, { park, el, marker, rank });
       return { park, el, rank };
     }));
-  }, [content?.parks, hasReadyMapContent, overviewReadyMap]);
+  }, [parks, hasReadyMapContent, overviewReadyMap]);
 
   useEffect(() => {
     if (!releaseId) return;
@@ -312,7 +314,7 @@ export function MapView({ mapRef, user, fc, claims, rarityProgress, progressRead
             claim={claims[park.id]}
             eligibility={progressReady
               ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id])
-              : { eligible: false, reason: "unavailable", requirements: {}, current: {}, remaining: {} }}
+              : UNAVAILABLE_ELIGIBILITY}
             focused={park.id === (tripId ?? selectedId)}
             onSelect={onSelect}
           />,

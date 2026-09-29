@@ -126,69 +126,6 @@
   max-width: 330px;
 }
 
-.ob-roadmap {
-  width: min(320px, calc(100vw - 48px));
-  padding: 14px;
-  background: #fff9ef;
-  border: 2.5px solid var(--ink);
-  border-radius: 22px;
-  box-shadow: 0 6px 0 var(--ink);
-}
-
-.ob-roadmap__heading {
-  margin-bottom: 10px;
-  font-family: var(--display);
-  font-size: 17px;
-  line-height: 1.1;
-  font-weight: 800;
-  text-align: center;
-}
-
-.ob-roadmap__rows {
-  display: grid;
-  gap: 7px;
-}
-
-.ob-roadmap__row {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.ob-roadmap__tier {
-  display: inline-grid;
-  justify-content: center;
-  justify-items: center;
-  gap: 2px;
-  padding: 5px 7px;
-  border: 1.5px solid var(--ink);
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1;
-  font-weight: 800;
-}
-
-.ob-roadmap__tier strong {
-  font-size: 10px;
-  line-height: 1;
-}
-
-.ob-roadmap__need {
-  font-size: 13px;
-  line-height: 1.2;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-
-.ob-roadmap__foot {
-  margin-top: 9px;
-  color: var(--ink-soft);
-  text-align: center;
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
 .onboarding__foot {
   display: flex;
   justify-content: space-between;
@@ -211,7 +148,7 @@
 .ob-fan {
   position: relative;
   width: 320px;
-  height: 300px;
+  height: 340px;
   display: grid;
   place-items: center;
 }
@@ -232,9 +169,12 @@
 
 .ob-fan__kip {
   position: absolute;
-  left: -10px;
-  bottom: -26px;
+  left: 4px;
+  bottom: 0;
   z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
 }
 
 .ob-go {
@@ -247,15 +187,92 @@
   overflow: visible;
 }
 
-.ob-go svg {
+.ob-go__map {
   display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   border-radius: 28px;
+  user-select: none;
 }
 
+.ob-go__route {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.ob-go__in {
+  position: absolute;
+  left: 150px;
+  top: 64px;
+  padding: 6px 12px;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 99px;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* The real badge pops in the top-right corner, over map labels rather than the park or route. */
+.ob-go__badge {
+  position: absolute;
+  right: -18px;
+  top: -30px;
+  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.25));
+}
+
+/* Kip stands in the open water at bottom-left, clear of the route and the park. */
 .ob-go__kip {
   position: absolute;
-  left: -34px;
-  bottom: -44px;
+  left: -26px;
+  bottom: -40px;
+}
+
+.ob-ranks {
+  display: grid;
+  gap: 10px;
+  width: 310px;
+}
+
+.ob-ranks__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px 9px 9px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.ob-ranks__text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-ranks__text strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.ob-ranks__text span {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ob-ranks__opens {
+  padding: 3px 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .ob-snap {
@@ -638,6 +655,8 @@
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ink-soft);
+  text-align: left;
+  white-space: nowrap;
 }
 
 .map-top__tools {
@@ -953,122 +972,6 @@
   color: var(--ink-2);
 }
 
-.rarity-guide {
-  margin: 10px 0 16px;
-  padding: 12px;
-  background: #fffaf0;
-  border: 2px solid var(--ink);
-  border-radius: 16px;
-  box-shadow: 0 3px 0 rgba(20, 35, 28, 0.18);
-}
-
-.rarity-guide--locked {
-  background: #fff3d4;
-}
-
-.rarity-guide__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.rarity-guide__head .eyebrow {
-  font-size: 11px;
-}
-
-.rarity-guide__status {
-  padding: 3px 8px;
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 800;
-}
-
-.rarity-guide__status--locked {
-  color: #775000;
-  background: #ffe49b;
-}
-
-.rarity-guide__status--unlocked {
-  color: #1c5b43;
-  background: #ddefe3;
-}
-
-.rarity-guide__status--earned {
-  color: #0e6e86;
-  background: #cdefff;
-}
-
-.rarity-guide__status--loading {
-  color: var(--ink-soft);
-  background: var(--paper-2);
-}
-
-.rarity-guide__requirements {
-  display: grid;
-  gap: 5px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rarity-guide__requirements li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-}
-
-.rarity-guide__requirements li span {
-  color: var(--ink-soft);
-  font-weight: 700;
-}
-
-.rarity-guide__requirements li strong {
-  font-family: var(--display);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.rarity-guide__requirements li em {
-  color: #775000;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.rarity-guide__requirements li em:last-child {
-  color: var(--moss);
-}
-
-.rarity-guide__loading,
-.rarity-guide__explanation {
-  margin: 9px 0 0;
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 650;
-  color: var(--ink-2);
-}
-
-.rarity-guide__toggle {
-  margin-top: 9px;
-  padding: 4px 0;
-  color: var(--moss);
-  font-size: 12.5px;
-  font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.rarity-guide__toggle:focus-visible {
-  outline: 3px solid var(--kip);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
 .park-sheet__name {
   font-size: 30px;
   font-weight: 800;
@@ -1315,11 +1218,14 @@
   pointer-events: none;
 }
 
+/* Kip and his bubble share one short row on the card's top edge, so they cover as little map as possible. */
 .arrival__kip {
   position: absolute;
-  right: 12px;
-  top: -86px;
+  right: 8px;
+  bottom: calc(100% - 12px);
   z-index: 2;
+  display: flex;
+  align-items: flex-end;
 }
 
 .arrival__card {
@@ -1683,15 +1589,20 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
-.camera__kip {
-  position: absolute;
-  right: 0;
-  bottom: 200px;
-  z-index: 3;
+.camera__controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
 }
 
-.camera__kip .bubble {
-  color: var(--ink);
+.camera__controls .shutter {
+  grid-column: 2;
+}
+
+.camera__kip {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .camera__bottom {
@@ -1887,8 +1798,23 @@
 .claim__stage {
   position: relative;
   flex: 1;
+  min-height: 0;
   display: grid;
   place-items: center;
+  container-type: size;
+}
+
+/* The badge art is a fixed size; shrink it on short screens so it never slides under the foot. */
+@container (max-height: 300px) {
+  .claim__badge {
+    scale: 0.82;
+  }
+}
+
+@container (max-height: 240px) {
+  .claim__badge {
+    scale: 0.66;
+  }
 }
 
 .claim__rays {
@@ -2043,14 +1969,16 @@
 }
 
 .claim__kip {
-  position: absolute;
-  right: -4px;
-  bottom: 212px;
-  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin: 0 -10px -6px 0;
+  color: var(--ink);
 }
 
 .claim__kip .bubble {
-  color: var(--ink);
+  margin-bottom: 44px;
+  white-space: nowrap;
 }
 
 .confetti-canvas {
@@ -2328,207 +2256,6 @@
   margin-left: 4px;
 }
 
-.col-progress {
-  height: 14px;
-  margin: 12px 0 10px;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.col-progress__fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--kip), var(--sun));
-  border-right: 2px solid var(--ink);
-}
-
-.col-rarity {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -18px 16px;
-  padding: 0 18px;
-}
-
-.col-rarity-label {
-  display: block;
-  margin: 0 0 6px;
-  font-size: 11px;
-}
-
-.col-rarity__chip {
-  flex: none;
-  padding: 5px 10px;
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.col-rarity__chip.is-empty {
-  opacity: 0.45;
-}
-
-.collection-rarity-progress {
-  margin: 0 0 20px;
-  padding: 12px 14px;
-  background: #fff9ef;
-  border: 2px solid var(--ink);
-  border-radius: 18px;
-  box-shadow: 0 4px 0 rgba(20, 35, 28, 0.2);
-}
-
-.collection-rarity-progress__head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--display);
-}
-
-.collection-rarity-progress__head strong {
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.collection-rarity-progress__head span {
-  padding: 4px 8px;
-  color: var(--moss);
-  background: #ddefe3;
-  border: 1.5px solid var(--ink);
-  border-radius: 999px;
-  font-size: 10.5px;
-  line-height: 1.1;
-  font-weight: 800;
-  text-align: center;
-}
-
-.collection-rarity-progress__requirements {
-  display: grid;
-  gap: 6px;
-  margin-top: 9px;
-}
-
-.collection-rarity-progress__row {
-  display: grid;
-  grid-template-columns: 84px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(20, 35, 28, 0.12);
-}
-
-.collection-rarity-progress__row > span:first-child {
-  display: inline-flex;
-  justify-content: center;
-  padding: 4px 6px;
-  border: 1.5px solid var(--ink);
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 800;
-}
-
-.collection-rarity-progress__row > span:nth-child(2) {
-  min-width: 0;
-  color: var(--ink-soft);
-  font-size: 11.5px;
-  font-weight: 700;
-}
-
-.collection-rarity-progress__row strong {
-  color: #775000;
-  font-size: 10.5px;
-  font-weight: 800;
-  text-align: right;
-}
-
-.collection-rarity-progress__row[data-state="unlocked"] strong {
-  color: var(--moss);
-}
-
-.collection-rarity-progress > p {
-  margin: 8px 0 0;
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.collection-rarity-progress .rank-progress-summary {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(20, 35, 28, 0.12);
-}
-
-.rank-progress-summary {
-  display: grid;
-  grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-
-.rank-progress-summary__current,
-.rank-progress-summary__next {
-  display: grid;
-  justify-items: start;
-  gap: 3px;
-  min-width: 0;
-}
-
-.rank-progress-summary__current > span,
-.rank-progress-summary__next > span {
-  color: var(--ink-soft);
-  font-size: 10px;
-  line-height: 1.15;
-  font-weight: 750;
-  text-transform: uppercase;
-  letter-spacing: 0.035em;
-}
-
-.rank-progress-summary__current > strong {
-  display: inline-flex;
-  max-width: 100%;
-  padding: 5px 9px;
-  color: var(--moss);
-  background: #ddefe3;
-  border: 1.5px solid var(--ink);
-  border-radius: 999px;
-  font-family: var(--display);
-  font-size: 15px;
-  line-height: 1.1;
-  font-weight: 800;
-}
-
-.rank-progress-summary__next > strong {
-  color: var(--ink);
-  font-size: 13px;
-  line-height: 1.15;
-  font-weight: 800;
-}
-
-.rank-progress-summary__next > p {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 11px;
-  line-height: 1.3;
-  font-weight: 700;
-}
-
-.rank-progress-summary__open {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 11px;
-  line-height: 1.3;
-  font-weight: 700;
-}
-
-.account-rank .rank-progress-summary {
-  padding-top: 10px;
-  border-top: 1px solid rgba(20, 35, 28, 0.12);
-}
-
 .case {
   position: relative;
   padding: 16px 12px 14px;
@@ -2558,6 +2285,27 @@
   max-width: 260px;
 }
 
+/* An empty Dex is one inviting shelf, not a wall of locked slots. */
+.case__first {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 12px;
+}
+
+.case__first .bubble {
+  max-width: 250px;
+  text-align: center;
+}
+
+.case__first-kip {
+  margin: 4px 0 8px;
+  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.35));
+}
+
 .case__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2581,22 +2329,6 @@
   filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.35));
 }
 
-.slot .badge--silhouette {
-  filter: brightness(10);
-  opacity: 0.1;
-}
-
-.slot__q {
-  position: absolute;
-  top: 38px;
-  left: 50%;
-  translate: -50% 0;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 28px;
-  color: rgba(255, 248, 236, 0.4);
-}
-
 .slot__plate {
   max-width: 94%;
   padding: 2px 7px;
@@ -2609,12 +2341,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.slot__plate--ghost {
-  background: rgba(255, 248, 236, 0.1);
-  color: rgba(255, 248, 236, 0.45);
-  box-shadow: none;
 }
 
 .col-foot {

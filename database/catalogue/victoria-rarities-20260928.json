@@ -9,21 +9,12 @@
   },
   "rationale": "Keep a broad nearby common starter pool, use varied regional destinations for uncommon, reserve rare for distinctive major landscapes or landmarks, and assign the operator-selected Sooke Potholes as the sole legendary.",
   "unlock_requirements": {
-    "common": {},
-    "uncommon": {
-      "common": 4
-    },
-    "rare": {
-      "common": 10,
-      "uncommon": 3
-    },
-    "legendary": {
-      "common": 20,
-      "uncommon": 6,
-      "rare": 2
-    }
+    "common": { "parks": 0 },
+    "uncommon": { "parks": 2 },
+    "rare": { "parks": 5 },
+    "legendary": { "parks": 10 }
   },
-  "counting": "Distinct visited park IDs, never repeat visits. Existing earned badges remain accessible.",
+  "counting": "Distinct visited park IDs of any rarity, never repeat visits. Existing earned badges remain accessible.",
   "parks": [
     {
       "rank": 1,

@@ -21,7 +21,6 @@ type Props = {
   inside: boolean;
   eligibility: ParkRarityEligibility;
   progressReady: boolean;
-  progressOwnerKey: string | null;
   onClose: () => void;
   onGo: () => void;
   onCheckIn: () => void;
@@ -42,7 +41,7 @@ export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, progressOwnerKey, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
+export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
   const walk = finalWalk(park, content?.drive);
@@ -110,7 +109,7 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
         <motion.p variants={item} className="park-sheet__meta">
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
-        <RarityGuide rarity={park.rarity} eligibility={eligibility} progressReady={progressReady} ownerKey={progressOwnerKey} />
+        <RarityGuide rarity={park.rarity} eligibility={eligibility} />
 
         <motion.div variants={item} className="stats">
           <div className="stat">

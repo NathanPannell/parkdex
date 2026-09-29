@@ -1,18 +1,16 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Badge } from "../components/Badge";
 import { EarnedBadge } from "../components/EarnedBadge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Tilt } from "../components/Motion";
+import { RankCard, RankTrail } from "../components/Rank";
 import { sfx } from "../lib/feedback";
-import { distanceKm } from "../lib/geo";
-import { badgeTotal, CATEGORY_LABEL, RARITY, type Park, type Rarity } from "../lib/parks";
-import { getCollectionRankProgress, getRarityProgress, RARITY_TIERS, type ProgressionRarity, type RarityCounts, type RarityProgress, type RarityTierProgress } from "../lib/progression";
+import { badgeTotal, CATEGORY_LABEL, type Park } from "../lib/parks";
+import { getCollectionRankProgress, getRarityProgress } from "../lib/progression";
 import { useStore, type Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
-import { RankProgressSummary } from "../components/RankProgressSummary";
 
 export function Collection() {
   const { state, dispatch } = useStore();
@@ -20,6 +18,7 @@ export function Collection() {
   const status = useContentStatus();
   const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
+  const [trailOpen, setTrailOpen] = useState(false);
   const claimedIds = Object.keys(state.claims);
   const claimed = claimedIds.map((id) => content?.parkById.get(id) ?? state.claims[id]?.parkSnapshot ?? undefined).filter((park): park is Park => !!park);
   const count = claimedIds.length;
@@ -31,7 +30,7 @@ export function Collection() {
       : status.error
         ? "I couldn't download the park guides."
         : "Loading your park guides…";
-  const totalBadges = content ? badgeTotal(content.parks, claimedIds) : undefined;
+  const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
   const rarityProgress = useMemo(
     () => getRarityProgress(
       state.claims,
@@ -40,23 +39,12 @@ export function Collection() {
     [state.claims, state.progressReady, state.progressOwnerKey, content],
   );
   const rankProgress = getCollectionRankProgress(rarityProgress);
-
-  const next = useMemo(
-    () => (content?.parks ?? []).filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
-    [content?.parks, state.claims, state.user],
-  );
-  // The case shows the current catalogue, including parks without published art.
-  const ghosts = next;
-
-  // Known park IDs follow the current catalogue. Removed parks retain their saved label.
-  const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const rarityChips: Rarity[] = [];
-  for (const rarity of RARITY_TIERS) {
-    if (rarity === "legendary" && (tally.epic ?? 0) > 0) rarityChips.push("epic");
-    rarityChips.push(rarity);
-  }
   const openPark = state.progressReady && open ? content?.parkById.get(open) ?? state.claims[open]?.parkSnapshot ?? undefined : undefined;
   const openClaim = open ? state.claims[open] : undefined;
+  const findPark = () => {
+    setTrailOpen(false);
+    dispatch({ type: "go", screen: "map" });
+  };
 
   return (
     <motion.div
@@ -71,54 +59,17 @@ export function Collection() {
           <span className="eyebrow">Your Dex</span>
           <h1>
             <RollingNumber value={count} />
-            <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"}</small>
+            <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"} badges</small>
           </h1>
         </div>
-        <div className="col-head__tools">
-          <motion.div className="col-head__kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-            <Kip size={82} pose={count ? "idle" : "sleep"} />
-          </motion.div>
-          <button className="btn btn--paper btn--sm collection-account" onClick={() => dispatch({ type: "go", screen: "account" })}>
-            <Icon name="link" size={17} /> Account
-          </button>
-        </div>
+        <button className="btn btn--paper btn--sm collection-account" onClick={() => dispatch({ type: "go", screen: "account" })}>
+          <Icon name="link" size={17} /> Account
+        </button>
       </header>
 
-      <div className="col-progress">
-        <motion.div
-          className="col-progress__fill"
-          initial={{ width: 0 }}
-          animate={{ width: `${totalBadges ? Math.max(1.5, Math.min(100, (count / totalBadges) * 100)) : 1.5}%` }}
-          transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }}
-        />
-      </div>
-      <div className="col-rarity-label eyebrow">Earned parks by current rarity</div>
-      <div className="col-rarity" aria-label="Earned parks by current rarity; removed parks use saved rarity">
-        {rarityChips.map((r) => (
-          <span key={r} className={`col-rarity__chip ${tally[r] ? "" : "is-empty"}`} style={{ background: RARITY[r].color, color: RARITY[r].ink }}>
-            <b>{tally[r] ?? 0}</b> {RARITY[r].label}
-          </span>
-        ))}
-      </div>
+      <RankCard progress={rankProgress} onOpen={() => { sfx.pop(); setTrailOpen(true); }} />
 
-      <section className="collection-rarity-progress" aria-label="Current rarity progression">
-        <div className="collection-rarity-progress__head">
-          <strong>Rarity progression</strong>
-          <span>{rarityProgress.available ? `${RARITY[rarityProgress.highestUnlocked].label} tier open` : "Checking progress"}</span>
-        </div>
-        <RankProgressSummary progress={rankProgress} />
-        {rarityProgress.available ? (
-          <div className="collection-rarity-progress__requirements">
-            {RARITY_TIERS.map((rarity) => (
-              <RarityProgressRow key={rarity} rarity={rarity} progress={rarityProgress} />
-            ))}
-          </div>
-        ) : (
-          <p>Saved visits and the current park list are loading.</p>
-        )}
-      </section>
-
-      <div className="case">
+      <div className={`case ${count === 0 ? "case--empty" : ""}`}>
         <div className="case__glass" />
         {!state.progressReady ? (
           <div className="case__empty">
@@ -137,49 +88,40 @@ export function Collection() {
             )}
             {showContentRetry && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
           </div>
-        ) : count === 0 && (
-          <div className="case__empty">
-            <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              Your Dex is empty. I’m saving this spot for badge #1.
+        ) : count === 0 ? (
+          <div className="case__first">
+            <Bubble side="down" style={{ position: "relative" }}>
+              Nothing here yet. Your first badge goes right on this shelf!
             </Bubble>
+            <motion.div className="case__first-kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+              <Kip size={96} pose="idle" />
+            </motion.div>
+            <button className="btn btn--sun btn--sm" onClick={findPark}>
+              <Icon name="map" size={18} /> Find a park near me
+            </button>
+          </div>
+        ) : null}
+        {claimed.length > 0 && (
+          <div className="case__grid">
+            {claimed.map((p, i) => (
+              <motion.button
+                key={p.id}
+                className="slot slot--filled"
+                onClick={() => {
+                  sfx.pop();
+                  setOpen(p.id);
+                }}
+                initial={{ y: -60, opacity: 0, rotate: -12 }}
+                animate={{ y: 0, opacity: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 16, delay: 0.2 + i * 0.07 }}
+                whileTap={{ scale: 0.92 }}
+              >
+                <EarnedBadge park={p} claim={state.claims[p.id]} size={88} state="earned" showName={false} />
+                <span className="slot__plate">{p.short}</span>
+              </motion.button>
+            ))}
           </div>
         )}
-        <div className="case__grid">
-          {claimed.map((p, i) => (
-            <motion.button
-              key={p.id}
-              className="slot slot--filled"
-              onClick={() => {
-                sfx.pop();
-                setOpen(p.id);
-              }}
-              initial={{ y: -60, opacity: 0, rotate: -12 }}
-              animate={{ y: 0, opacity: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 16, delay: 0.2 + i * 0.07 }}
-              whileTap={{ scale: 0.92 }}
-            >
-              <EarnedBadge park={p} claim={state.claims[p.id]} size={88} state="earned" showName={false} />
-              <span className="slot__plate">{p.short}</span>
-            </motion.button>
-          ))}
-          {ghosts.map((p, i) => (
-            <motion.button
-              key={p.id}
-              className="slot"
-              onClick={() => {
-                dispatch({ type: "focus", id: p.id });
-                dispatch({ type: "go", screen: "map" });
-              }}
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 + (count + i) * 0.04 }}
-            >
-              <Badge park={p} size={88} state="silhouette" showName={false} />
-              <span className="slot__q">?</span>
-              <span className="slot__plate slot__plate--ghost">{p.short}</span>
-            </motion.button>
-          ))}
-        </div>
         {state.progressReady && content && claimedIds.some((id) => !content.parkById.has(id)) && (
           <div className="case__empty account-case-note">
             <Bubble side="left" style={{ position: "relative" }}>
@@ -202,6 +144,10 @@ export function Collection() {
 
       <div className="col-foot" />
 
+      <AnimatePresence>
+        {trailOpen && <RankTrail key="trail" progress={rankProgress} onClose={() => setTrailOpen(false)} onExplore={findPark} />}
+      </AnimatePresence>
+
       {/* Portalled to the device so the detail covers the bottom nav too. */}
       {createPortal(
         <AnimatePresence>
@@ -220,32 +166,6 @@ export function Collection() {
         document.querySelector(".device") ?? document.body,
       )}
     </motion.div>
-  );
-}
-
-function requirementProgress(tier: RarityTierProgress) {
-  return Object.entries(tier.requirements).flatMap(([rarity, required]) => {
-    if (required === undefined) return [];
-    const key = rarity as keyof RarityCounts;
-    const label = RARITY[key].label;
-    return [`${label} ${tier.current[key] ?? 0}/${required}`];
-  }).join(" · ");
-}
-
-function RarityProgressRow({ rarity, progress }: { rarity: ProgressionRarity; progress: RarityProgress }) {
-  const tier = progress.tiers[rarity];
-  const open = rarity === "common" || tier.unlocked;
-  const detail = rarity === "common"
-    ? `${progress.counts.common} Common parks in Dex`
-    : requirementProgress(tier);
-  const status = rarity === "common" ? "Open" : open ? "Unlocked" : "Locked";
-
-  return (
-    <div className="collection-rarity-progress__row" data-state={open ? "unlocked" : "locked"} aria-label={`${RARITY[rarity].label}: ${detail}. ${status}`}>
-      <span style={{ background: RARITY[rarity].color, color: RARITY[rarity].ink }}>{RARITY[rarity].label}</span>
-      <span>{detail}</span>
-      <strong>{status}</strong>
-    </div>
   );
 }
 

@@ -12,8 +12,8 @@ import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
-import { badgeTotal, isLive, RARITY } from "../../lib/parks";
-import { getParkRarityEligibility, getRarityProgress, type ParkRarityEligibility } from "../../lib/progression";
+import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
+import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, type ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
@@ -42,12 +42,17 @@ export function MapScreen() {
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
   const { user, claims, selectedId, tripId } = state;
-  const parks = content?.parks ?? [];
+  const parks = useMemo(() => mapParks(content?.parks ?? [], claims), [content?.parks, claims]);
+  const visibleFc = useMemo(() => {
+    if (!bounds) return undefined;
+    const ids = new Set(parks.map((park) => park.id));
+    return { ...bounds.fc, features: bounds.fc.features.filter((feature) => ids.has(feature.properties.id)) };
+  }, [bounds, parks]);
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
   const rarityProgress = useMemo(() => getRarityProgress(claims, content?.parkById), [claims, content?.parkById]);
   const eligibilityFor = useCallback((park: (typeof parks)[number]): ParkRarityEligibility => {
-    if (!state.progressReady) return { eligible: false, reason: "unavailable", requirements: {}, current: {}, remaining: {} };
+    if (!state.progressReady) return UNAVAILABLE_ELIGIBILITY;
     return getParkRarityEligibility(park, rarityProgress, !!claims[park.id]);
   }, [claims, rarityProgress, state.progressReady]);
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
@@ -55,7 +60,9 @@ export function MapScreen() {
   const arrivedId = here && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
-  const totalBadges = content ? badgeTotal(content.parks, Object.keys(claims)) : 0;
+  const rank = state.progressReady ? getCollectionRankProgress(rarityProgress) : null;
+  const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
+  const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
 
   const nearby = useMemo(
     () =>
@@ -75,7 +82,9 @@ export function MapScreen() {
       buzz([30, 60, 30]);
       burst({ x: 0.5, y: 0.55 }, 0.7);
       const b = bounds?.byId.get(arrivedId);
-      if (b) mapRef.current?.fitBounds(ringBounds(b), { padding: { top: 120, bottom: 420, left: 50, right: 50 }, maxZoom: 15, duration: 1400 });
+      // Keep the boundary above the arrival card and Kip, which take more of a short screen.
+      const height = mapRef.current?.getContainer().clientHeight ?? 844;
+      if (b) mapRef.current?.fitBounds(ringBounds(b), { padding: { top: 110, bottom: Math.min(500, height * 0.6), left: 50, right: 50 }, maxZoom: 15, duration: 1400 });
       setRoute(null);
     }
     lastArrived.current = arrivedId;
@@ -197,7 +206,8 @@ export function MapScreen() {
       <MapView
         mapRef={mapRef}
         user={user}
-        fc={bounds?.fc}
+        fc={visibleFc}
+        parks={parks}
         claims={claims}
         rarityProgress={rarityProgress}
         progressReady={state.progressReady}
@@ -225,7 +235,7 @@ export function MapScreen() {
               <RollingNumber value={claimedCount} />
               <em> / {totalBadges.toLocaleString("en-CA")}</em>
             </strong>
-            <span>badges collected</span>
+            <span>{rankLine}</span>
           </span>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
@@ -371,7 +381,6 @@ export function MapScreen() {
               inside={here?.id === selected.id}
               eligibility={eligibilityFor(selected)}
               progressReady={state.progressReady}
-              progressOwnerKey={state.progressOwnerKey}
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}

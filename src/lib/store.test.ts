@@ -57,7 +57,7 @@ describe("claim progress hydration", () => {
   it("derives the same rank after owner claims are restored", () => {
     const restoredClaims: Record<string, Claim> = {};
     const catalogue: Pick<Park, "id" | "rarity">[] = [];
-    for (const [rarity, count] of [["common", 10], ["uncommon", 3]] as const) {
+    for (const [rarity, count] of [["common", 3], ["uncommon", 3]] as const) {
       for (let index = 0; index < count; index += 1) {
         const id = `${rarity}-${index}`;
         restoredClaims[id] = restoredClaim(id, rarity);
@@ -73,7 +73,7 @@ describe("claim progress hydration", () => {
     const rank = getCollectionRankProgress(getRarityProgress(restored.claims, catalogue));
 
     expect(restored.progressReady).toBe(true);
-    expect(rank).toMatchObject({ available: true, rank: "Adventurer" });
+    expect(rank).toMatchObject({ available: true, visited: 6, rank: { name: "Wayfinder" } });
   });
 
   it("keeps a ready owner's claim screen mounted during background refresh", () => {

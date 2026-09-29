@@ -2,7 +2,7 @@ import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacit
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
-import { Bubble, Kip } from "../components/Kip";
+import { Kip } from "../components/Kip";
 import { ContentGate } from "../components/ContentGate";
 import { buzz, sfx } from "../lib/feedback";
 import type { Park } from "../lib/parks";
@@ -198,18 +198,17 @@ function CameraReady({ park }: { park: Park }) {
         </motion.div>
       )}
 
-      <motion.div className="camera__kip" initial={{ x: 120 }} animate={{ x: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 200, damping: 16 }}>
-        <Bubble side="right" style={{ right: 50, top: -44, whiteSpace: "nowrap" }}>
-          Say "cheese"!
-        </Bubble>
-        <Kip pose="camera" size={96} flip />
-      </motion.div>
-
       <div className="camera__bottom">
         <div className="camera__hint" role={syntheticError ? "alert" : undefined}>{syntheticError ?? (syntheticBusy ? "Preparing your demo photo…" : "Get the park in the shot. This photo goes on your badge.")}</div>
-        <motion.button className="shutter" onClick={shoot} disabled={syntheticBusy} whileTap={{ scale: 0.86 }} aria-label="Take photo">
-          <span />
-        </motion.button>
+        {/* Kip waits beside the shutter, outside the viewfinder, so he never covers the shot. */}
+        <div className="camera__controls">
+          <motion.button className="shutter" onClick={shoot} disabled={syntheticBusy} whileTap={{ scale: 0.86 }} aria-label="Take photo">
+            <span />
+          </motion.button>
+          <motion.div className="camera__kip" initial={{ x: 120 }} animate={{ x: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 200, damping: 16 }}>
+            <Kip pose="camera" size={78} flip />
+          </motion.div>
+        </div>
       </div>
 
       <AnimatePresence>

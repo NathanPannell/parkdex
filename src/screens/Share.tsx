@@ -88,7 +88,7 @@ function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number:
   const { state, dispatch } = useStore();
   const toast = useToast();
   const content = useContent();
-  const totalBadges = badgeTotal(content?.parks ?? [], Object.keys(state.claims));
+  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const [look, setLook] = useState<Look>("polaroid");
   const card = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
