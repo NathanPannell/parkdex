@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseNativeAuthLink } from "./nativeIdentity";
 
-const STAGING_ORIGIN = "https://parkdex-kip-staging.vercel.app";
+const STAGING_ORIGIN = "https://staging.web.parkdex.app";
 
 describe("parseNativeAuthLink", () => {
   it("parses verification and password-reset tokens from the account fragment", () => {
@@ -17,9 +17,17 @@ describe("parseNativeAuthLink", () => {
   });
 
   it("rejects a different environment, non-HTTPS links, and paths outside the account screen", () => {
-    expect(parseNativeAuthLink("https://staging.web.parkdex.app/account#resetToken=x", STAGING_ORIGIN)).toBeNull();
+    expect(parseNativeAuthLink("https://web.parkdex.app/account#resetToken=x", STAGING_ORIGIN)).toBeNull();
     expect(parseNativeAuthLink("http://parkdex-kip-staging.vercel.app/account#resetToken=x", STAGING_ORIGIN)).toBeNull();
     expect(parseNativeAuthLink(`${STAGING_ORIGIN}/accounting#resetToken=x`, STAGING_ORIGIN)).toBeNull();
+  });
+
+  it("keeps the prior staging origin usable for already installed Android builds", () => {
+    const priorStagingOrigin = "https://parkdex-kip-staging.vercel.app";
+    expect(parseNativeAuthLink(
+      `${priorStagingOrigin}/account#resetToken=existing_install`,
+      priorStagingOrigin,
+    )).toEqual({ kind: "password_reset", token: "existing_install" });
   });
 
   it("accepts action tokens only in a single fragment field", () => {

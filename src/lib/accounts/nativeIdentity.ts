@@ -29,8 +29,14 @@ type AuthLinkHandler = (url: string) => void | Promise<void>;
 
 const NativeIdentity = registerPlugin<NativeIdentityPlugin>("NativeIdentity");
 const recentAuthLinkDigests = new Set<string>();
-const LEGACY_ACCOUNT_HOSTS = new Set(["staging.web.parkdex.app", "web.parkdex.app"]);
-const KIP_STAGING_ORIGIN = "https://parkdex-kip-staging.vercel.app";
+export const KIP_STAGING_ORIGIN = "https://staging.web.parkdex.app";
+export const KIP_PRODUCTION_ORIGIN = "https://web.parkdex.app";
+const APPROVED_KIP_ORIGINS = new Set([
+  KIP_STAGING_ORIGIN,
+  KIP_PRODUCTION_ORIGIN,
+  "https://parkdex-kip-staging.vercel.app",
+  "https://parkdex-kip.vercel.app",
+]);
 
 export function isAndroidNativeIdentityAvailable(): boolean {
   return Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("NativeIdentity");
@@ -230,10 +236,25 @@ function configuredKipOrigin(value: string | undefined): string | null {
   if (!configured) return null;
   try {
     const url = new URL(configured);
-    if (url.protocol !== "https:" || LEGACY_ACCOUNT_HOSTS.has(url.hostname.toLowerCase())) return null;
+    if (url.protocol !== "https:" || !isApprovedKipOrigin(url.origin)) return null;
     return url.origin;
   } catch {
     return null;
+  }
+}
+
+export function isApprovedKipOrigin(origin: string): boolean {
+  if (APPROVED_KIP_ORIGINS.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash
+        || (url.port && url.port !== "443") || !["", "/"].includes(url.pathname)) return false;
+    const hostname = url.hostname.toLowerCase();
+    if (url.origin !== origin) return false;
+    return /^parkdex-kip-[a-z0-9]+(?:-[a-z0-9]+)*\.vercel\.app$/.test(hostname)
+      || /^parkdex-[a-z0-9]+-nathanpannells-projects\.vercel\.app$/.test(hostname);
+  } catch {
+    return false;
   }
 }
 

@@ -274,6 +274,10 @@ class BootstrapContentTests(unittest.TestCase):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "receipt does not match"):
                 bootstrap.run("staging", True)
 
+    def test_main_cannot_replay_the_historical_public_catalogue(self) -> None:
+        with self.assertRaisesRegex(bootstrap.BootstrapError, "preview or staging"):
+            bootstrap.run("main", True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,10 +46,13 @@ def _account_id(delivery, config: dict) -> str:
 
 def _settings(delivery, config: dict) -> dict:
     settings = config.get("privatePhotos", {})
-    required = ("sourcePath", "stagingWorkerName", "stagingBucketName", "wranglerVersion", "compatibilityDate", "retentionCron")
+    required = (
+        "sourcePath", "stagingWorkerName", "stagingBucketName", "productionWorkerName",
+        "productionBucketName", "wranglerVersion", "compatibilityDate", "retentionCron",
+    )
     if any(not isinstance(settings.get(key), str) or not settings[key] for key in required):
         _error(delivery, "Private-photo deployment settings are incomplete.")
-    for key in ("stagingWorkerName", "stagingBucketName"):
+    for key in ("stagingWorkerName", "stagingBucketName", "productionWorkerName", "productionBucketName"):
         if not NAME_RE.fullmatch(settings[key]):
             _error(delivery, f"Private-photo {key} is invalid.")
     if not re.fullmatch(r"\d+\.\d+\.\d+", settings["wranglerVersion"]):
@@ -343,15 +346,17 @@ def _check_worker_settings(
     if release_sha is not None:
         expected["KIP_RELEASE_SHA"] = release_sha
         expected["RELEASE_SHA"] = release_sha
-        if identity["environment"] == "staging":
+        if identity["environment"] in ("staging", "production"):
             expected["KIP_CANDIDATE_SHA"] = release_sha
+    if identity["environment"] in ("staging", "production"):
+        expected["RETENTION_URL"] = identity["retentionUrl"]
     for name, value in expected.items():
         binding = bindings.get(name)
         if not binding or _binding_value(binding) != value:
             _error(delivery, f"Private-photo Worker ownership metadata mismatch for {name}.")
     if release_sha is None:
         provenance_names = ("KIP_RELEASE_SHA", "RELEASE_SHA")
-        if identity["environment"] == "staging":
+        if identity["environment"] in ("staging", "production"):
             provenance_names += ("KIP_CANDIDATE_SHA",)
         release_values = [_binding_value(bindings.get(name, {})) for name in provenance_names]
         if any(not isinstance(value, str) or not SHA_RE.fullmatch(value) for value in release_values) or len(set(release_values)) != 1:
@@ -359,7 +364,7 @@ def _check_worker_settings(
         if identity["environment"] == "preview" and release_values[0] != identity["headSha"]:
             _error(delivery, "Private-photo preview Worker release provenance does not match its exact PR head.")
     secret_names = ["PHOTO_SERVICE_TOKEN"]
-    if identity["environment"] == "staging":
+    if identity["environment"] in ("staging", "production"):
         secret_names.append("KIP_RETENTION_SECRET")
     for name in secret_names:
         secret = bindings.get(name)
@@ -580,7 +585,7 @@ def _source_file(delivery, config: dict, source_root: Path) -> Path:
     return path
 
 
-def validate_candidate(delivery, config: dict, candidate_root: Path) -> None:
+def validate_candidate(delivery, config: dict, candidate_root: Path, *, environment: str = "staging") -> None:
     """Compile the Worker with the pinned Wrangler while isolating all credentials."""
     path = _source_file(delivery, config, candidate_root)
     try:
@@ -601,7 +606,7 @@ def validate_candidate(delivery, config: dict, candidate_root: Path) -> None:
         _error(delivery, "Private-photo Worker source is missing a required storage or retention contract.")
     if "aws4fetch" in source or "@aws-sdk" in source or "S3_ACCESS_KEY" in source:
         _error(delivery, "Private-photo Worker must use its scoped Cloudflare R2 binding, not management or S3 credentials.")
-    identity = _staging_identity(config)
+    identity = _persistent_identity(config, environment)
     with tempfile.TemporaryDirectory(prefix="parkdex-kip-photos-dry-run-") as temp:
         directory = Path(temp)
         config_path = _write_worker_project(delivery, config, path, identity["workerName"], identity["bucketName"], "0" * 40, identity, directory)
@@ -634,10 +639,12 @@ def _worker_vars(identity: dict, release_sha: str) -> dict[str, str]:
         })
     else:
         variables["KIP_CANDIDATE_SHA"] = release_sha
+    if identity["environment"] in ("staging", "production"):
+        variables["RETENTION_URL"] = identity["retentionUrl"]
     return variables
 
 
-def _worker_config(config: dict, identity: dict, release_sha: str) -> dict:
+def _worker_config(config: dict, identity: dict, release_sha: str, *, enable_retention: bool = True) -> dict:
     settings = config["privatePhotos"]
     result = {
         "name": identity["workerName"],
@@ -650,17 +657,16 @@ def _worker_config(config: dict, identity: dict, release_sha: str) -> dict:
         "durable_objects": {"bindings": [{"name": "ACCOUNT_PHOTOS", "class_name": "AccountPhotos"}]},
         "migrations": [{"tag": "v1", "new_sqlite_classes": ["AccountPhotos"]}],
     }
-    if identity["environment"] == "staging":
-        result["vars"]["RETENTION_URL"] = "https://parkdex-kip-staging.vercel.app/api/retention/interactions/purge"
+    if identity["environment"] in ("staging", "production") and enable_retention:
         result["triggers"] = {"crons": [settings["retentionCron"]]}
     return result
 
 
 def _write_worker_project(delivery, config: dict, source_path: Path, worker_name: str, bucket_name: str, release_sha: str,
-                          identity: dict, directory: Path) -> Path:
+                          identity: dict, directory: Path, *, enable_retention: bool = True) -> Path:
     _settings(delivery, config)
     shutil.copyfile(source_path, directory / "private-photos.mjs")
-    worker_config = _worker_config(config, identity, release_sha)
+    worker_config = _worker_config(config, identity, release_sha, enable_retention=enable_retention)
     config_path = directory / "wrangler.jsonc"
     config_path.write_text(json.dumps(worker_config, indent=2) + "\n", encoding="utf-8")
     return config_path
@@ -696,7 +702,7 @@ def _wrangler(
 
 
 def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, release_sha: str,
-                   secrets: dict[str, str], journal: Path | None, state: dict) -> dict:
+                   secrets: dict[str, str], journal: Path | None, state: dict, *, enable_retention: bool = True) -> dict:
     for key, value in secrets.items():
         if not isinstance(value, str) or len(value) < 32:
             _error(delivery, f"{key} must be configured with at least 32 random characters.")
@@ -715,7 +721,10 @@ def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, re
     temp = tempfile.TemporaryDirectory(prefix="parkdex-kip-photos-worker-")
     directory = Path(temp.name)
     try:
-        config_path = _write_worker_project(delivery, config, source_path, identity["workerName"], identity["bucketName"], release_sha, identity, directory)
+        config_path = _write_worker_project(
+            delivery, config, source_path, identity["workerName"], identity["bucketName"],
+            release_sha, identity, directory, enable_retention=enable_retention,
+        )
         message = f"Parkdex Kip {identity['environment']} {identity['resourceId']} {release_sha}"
         tag = identity["resourceId"] if identity["environment"] == "preview" else release_sha
         _set_step(delivery, journal, state, "workerDeploy", {
@@ -1001,42 +1010,63 @@ def absence(delivery, config: dict, state: dict) -> bool:
     return identity["bucketName"] not in _bucket_names(delivery, config)
 
 
-def _staging_identity(config: dict, release_sha: str | None = None) -> dict:
+def _persistent_identity(config: dict, environment: str, release_sha: str | None = None) -> dict:
+    if environment not in ("staging", "production"):
+        raise ValueError("persistent private-photo environment must be staging or production")
     settings = config["privatePhotos"]
+    prefix = "production" if environment == "production" else "staging"
+    app_url = config["productionUrl"] if environment == "production" else config["stagingUrl"]
     result = {
-        "environment": "staging",
-        "resourceId": "staging",
-        "bucketName": settings["stagingBucketName"],
-        "workerName": settings["stagingWorkerName"],
+        "environment": environment,
+        "resourceId": environment,
+        "bucketName": settings[f"{prefix}BucketName"],
+        "workerName": settings[f"{prefix}WorkerName"],
+        "retentionUrl": app_url.rstrip("/") + "/api/retention/interactions/purge",
     }
     if release_sha:
         result["releaseSha"] = release_sha
     return result
 
 
+def _staging_identity(config: dict, release_sha: str | None = None) -> dict:
+    return _persistent_identity(config, "staging", release_sha)
+
+
+def _production_identity(config: dict, release_sha: str | None = None) -> dict:
+    return _persistent_identity(config, "production", release_sha)
+
+
 def _staging_marker(config: dict) -> dict:
     return _marker(_staging_identity(config))
 
 
-def _verify_staging_resources(delivery, config: dict, expected_sha: str | None = None) -> dict:
-    identity = _staging_identity(config)
+def _verify_persistent_resources(delivery, config: dict, environment: str, expected_sha: str | None = None) -> dict:
+    identity = _persistent_identity(config, environment)
     if not _check_bucket_owned(delivery, config, identity):
-        _error(delivery, "The owned private-photo staging bucket is missing; run explicit staging-photo provisioning.")
+        _error(delivery, f"The owned private-photo {environment} bucket is missing; run explicit {environment} photo provisioning.")
     settings = _worker_settings(delivery, config, identity["workerName"])
     if settings is None:
-        _error(delivery, "The owned private-photo staging Worker is missing; run explicit staging-photo provisioning.")
+        _error(delivery, f"The owned private-photo {environment} Worker is missing; run explicit {environment} photo provisioning.")
     binding_info = _check_worker_settings(delivery, settings, identity, expected_sha)
     namespace = _verify_namespace(delivery, config, identity["workerName"], binding_info)
     url = _worker_url(delivery, config, identity["workerName"])
     if expected_sha:
         health = _health(url)
         if health.get("status") != "ok" or health.get("releaseSha") != expected_sha:
-            _error(delivery, "Private-photo staging health did not report the exact merged SHA.")
+            _error(delivery, f"Private-photo {environment} health did not report the exact release SHA.")
     return {"identity": identity, "settings": settings, "namespace": namespace, "url": url}
 
 
-def _runtime_photo_secrets(delivery, bundle: dict, *, staging: bool) -> dict[str, str]:
-    names = ["KIP_PHOTO_SERVICE_TOKEN"] + (["KIP_RETENTION_SECRET"] if staging else [])
+def _verify_staging_resources(delivery, config: dict, expected_sha: str | None = None) -> dict:
+    return _verify_persistent_resources(delivery, config, "staging", expected_sha)
+
+
+def _verify_production_resources(delivery, config: dict, expected_sha: str | None = None) -> dict:
+    return _verify_persistent_resources(delivery, config, "production", expected_sha)
+
+
+def _runtime_photo_secrets(delivery, bundle: dict, *, environment: str) -> dict[str, str]:
+    names = ["KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"] if environment in ("staging", "production") else ["KIP_PHOTO_SERVICE_TOKEN"]
     secrets = {}
     for name in names:
         value = bundle.get(name)
@@ -1050,14 +1080,15 @@ def _runtime_photo_secrets(delivery, bundle: dict, *, staging: bool) -> dict[str
     return secrets
 
 
-def _journal_load(delivery, journal: Path, config: dict) -> dict:
+def _journal_load(delivery, journal: Path, config: dict, environment: str = "staging") -> dict:
+    identity = _persistent_identity(config, environment)
     expected = {
         "schema": JOURNAL_SCHEMA,
         "repository": REPOSITORY,
-        "environment": "staging",
+        "environment": environment,
         "accountId": _account_id(delivery, config),
-        "workerName": config["privatePhotos"]["stagingWorkerName"],
-        "bucketName": config["privatePhotos"]["stagingBucketName"],
+        "workerName": identity["workerName"],
+        "bucketName": identity["bucketName"],
     }
     if Path(journal).exists():
         try:
@@ -1070,49 +1101,55 @@ def _journal_load(delivery, journal: Path, config: dict) -> dict:
     return {**expected, "resources": {}, "intent": {}, "status": "new"}
 
 
-def provision_staging(
+def provision_environment(
     delivery,
     config: dict,
     journal: Path,
+    environment: str,
     *,
     apply: bool = False,
     candidate_root: Path | None = None,
     release_sha: str | None = None,
 ) -> dict:
-    """Explicit one-time staging setup. The default call only records and prints a plan."""
+    """Explicit one-time persistent setup. The default call only records and prints a plan."""
+    if environment not in ("staging", "production"):
+        _error(delivery, "Persistent private-photo provisioning requires staging or production.")
     settings = _settings(delivery, config)
     journal = Path(journal)
-    state = _journal_load(delivery, journal, config)
-    identity = _staging_identity(config)
+    state = _journal_load(delivery, journal, config, environment)
+    identity = _persistent_identity(config, environment)
     if release_sha is not None and candidate_root is None:
         _error(delivery, "A source release SHA requires its trusted candidate source root.")
     if apply and candidate_root is not None and release_sha is None:
         _error(delivery, "Candidate staging provisioning requires the exact source release SHA.")
     source_root = Path(candidate_root) if candidate_root is not None else Path(delivery.ROOT)
     source = _source_file(delivery, config, source_root)
-    validate_candidate(delivery, config, source_root)
+    validate_candidate(delivery, config, source_root, environment=environment)
     if not apply:
         state["status"] = "planned"
-        state["plannedResources"] = {"workerName": identity["workerName"], "bucketName": identity["bucketName"], "environment": "staging"}
+        state["plannedResources"] = {"workerName": identity["workerName"], "bucketName": identity["bucketName"], "environment": environment}
         _save(delivery, journal, state)
-        print(f"plan=provision private staging R2 bucket {identity['bucketName']} and Worker {identity['workerName']}")
+        print(f"plan=provision private {environment} R2 bucket {identity['bucketName']} and Worker {identity['workerName']}")
         print(f"plan=configure private R2 access, PHOTO_SERVICE_TOKEN, KIP_RETENTION_SECRET, and cron {settings['retentionCron']}")
         return {"status": "planned", "workerName": identity["workerName"], "bucketName": identity["bucketName"]}
 
-    bundle = delivery.read_runtime_bundle(config)
-    secrets = _runtime_photo_secrets(delivery, bundle, staging=True)
+    bundle = delivery.read_runtime_bundle(config, environment=environment)
+    secrets = _runtime_photo_secrets(delivery, bundle, environment=environment)
     if release_sha is None:
         release_sha = delivery.git("rev-parse", "HEAD", cwd=source_root)
     if not SHA_RE.fullmatch(release_sha):
-        _error(delivery, "Staging provisioning requires a full source release SHA.")
+        _error(delivery, f"{environment.capitalize()} provisioning requires a full source release SHA.")
     state["status"] = "provisioning"
     state["releaseSha"] = release_sha
     _save(delivery, journal, state)
     _ensure_bucket(delivery, config, identity, journal, state)
-    deployment = _deploy_worker(delivery, config, source, identity, release_sha, secrets, journal, state)
+    deployment = _deploy_worker(
+        delivery, config, source, identity, release_sha, secrets, journal, state,
+        enable_retention=False,
+    )
     health = _health(deployment["photoServiceUrl"])
     if health.get("status") != "ok" or health.get("releaseSha") != release_sha:
-        _error(delivery, "Private-photo staging provisioning health did not report its exact source SHA.")
+        _error(delivery, f"Private-photo {environment} provisioning health did not report its exact source SHA.")
     state.setdefault("resources", {}).update({
         "workerName": identity["workerName"],
         "bucketName": identity["bucketName"],
@@ -1129,19 +1166,29 @@ def provision_staging(
     return {"status": "provisioned", **deployment}
 
 
-def dispatch_staging(delivery, config: dict, root: Path, sha: str, bundle: dict) -> dict:
+def provision_staging(delivery, config: dict, journal: Path, **kwargs) -> dict:
+    return provision_environment(delivery, config, journal, "staging", **kwargs)
+
+
+def provision_production(delivery, config: dict, journal: Path, **kwargs) -> dict:
+    return provision_environment(delivery, config, journal, "production", **kwargs)
+
+
+def dispatch_environment(delivery, config: dict, root: Path, sha: str, bundle: dict, environment: str) -> dict:
     if not SHA_RE.fullmatch(sha or ""):
-        _error(delivery, "Staging private-photo dispatch requires a full merged SHA.")
+        _error(delivery, f"{environment.capitalize()} private-photo dispatch requires a full merged SHA.")
+    if environment not in ("staging", "production"):
+        _error(delivery, "Private-photo dispatch requires staging or production.")
     _settings(delivery, config)
     source = _source_file(delivery, config, root)
-    identity = _staging_identity(config)
-    journal = Path(delivery.state_root()) / "persistent" / "private-photos-staging.json"
-    state = _journal_load(delivery, journal, config)
-    existing = _verify_staging_resources(delivery, config)
+    identity = _persistent_identity(config, environment)
+    journal = Path(delivery.state_root()) / "persistent" / f"private-photos-{environment}.json"
+    state = _journal_load(delivery, journal, config, environment)
+    existing = _verify_persistent_resources(delivery, config, environment)
     if bundle.get("KIP_PHOTO_SERVICE_URL") != existing["url"]:
-        _error(delivery, "Staging runtime photo-service URL does not match the owned Cloudflare Worker.")
-    # A staging dispatch is never a bootstrap path. It must use a previously owned bucket.
-    secrets = _runtime_photo_secrets(delivery, bundle, staging=True)
+        _error(delivery, f"{environment.capitalize()} runtime photo-service URL does not match the owned Cloudflare Worker.")
+    # A persistent dispatch is never a bootstrap path. It must use a previously owned bucket.
+    secrets = _runtime_photo_secrets(delivery, bundle, environment=environment)
     deployment = _deploy_worker(delivery, config, source, identity, sha, secrets, journal, state)
     state.setdefault("resources", {}).update({
         "workerName": identity["workerName"], "bucketName": identity["bucketName"],
@@ -1153,7 +1200,23 @@ def dispatch_staging(delivery, config: dict, root: Path, sha: str, bundle: dict)
     return {"worker": identity["workerName"], "bucket": identity["bucketName"], "sha": sha, "url": deployment["photoServiceUrl"]}
 
 
-def verify_staging(delivery, config: dict, sha: str) -> None:
+def dispatch_staging(delivery, config: dict, root: Path, sha: str, bundle: dict) -> dict:
+    return dispatch_environment(delivery, config, root, sha, bundle, "staging")
+
+
+def dispatch_production(delivery, config: dict, root: Path, sha: str, bundle: dict) -> dict:
+    return dispatch_environment(delivery, config, root, sha, bundle, "production")
+
+
+def verify_environment(delivery, config: dict, sha: str, environment: str) -> None:
     if not SHA_RE.fullmatch(sha or ""):
-        _error(delivery, "Staging private-photo verification requires a full merged SHA.")
-    _verify_staging_resources(delivery, config, sha)
+        _error(delivery, f"{environment.capitalize()} private-photo verification requires a full merged SHA.")
+    _verify_persistent_resources(delivery, config, environment, sha)
+
+
+def verify_staging(delivery, config: dict, sha: str) -> None:
+    verify_environment(delivery, config, sha, "staging")
+
+
+def verify_production(delivery, config: dict, sha: str) -> None:
+    verify_environment(delivery, config, sha, "production")

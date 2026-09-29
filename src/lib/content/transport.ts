@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { canDownloadContent, CONTENT_CDN_ORIGIN, type Connectivity } from "./contracts";
 
-const DEFAULT_API_URL = "https://parkdex-kip-staging.vercel.app/api/content/current";
+const DEFAULT_API_URL = "https://staging.web.parkdex.app/api/content/current";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_BRIDGED_BASE64_CHARS = Math.ceil((MAX_RESPONSE_BYTES * 4) / 3) + 4;
 

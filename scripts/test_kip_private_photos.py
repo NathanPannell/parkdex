@@ -66,12 +66,15 @@ class FakeDelivery:
 def config():
     return {
         "repository": "NathanPannell/parkdex-kip",
-        "stagingUrl": "https://parkdex-kip-staging.vercel.app",
+        "stagingUrl": "https://staging.web.parkdex.app",
+        "productionUrl": "https://web.parkdex.app",
         "privatePhotos": {
             "accountId": ACCOUNT_ID,
             "sourcePath": "cloudflare/private-photos.mjs",
             "stagingWorkerName": "parkdex-kip-photos-staging",
             "stagingBucketName": "parkdex-kip-photos-staging",
+            "productionWorkerName": "parkdex-kip-photos-production",
+            "productionBucketName": "parkdex-kip-photos-production",
             "wranglerVersion": "4.132.0",
             "compatibilityDate": "2026-09-27",
             "retentionCron": "23 9 * * *",
@@ -97,6 +100,7 @@ def worker_bindings(identity, release_sha=SHA):
         {"name": "KIP_REPOSITORY", "type": "plain_text", "text": "NathanPannell/parkdex-kip"},
         {"name": "KIP_RESOURCE_ID", "type": "plain_text", "text": identity["resourceId"]},
         {"name": "KIP_PHOTO_BUCKET", "type": "plain_text", "text": identity["bucketName"]},
+        *([{"name": "RETENTION_URL", "type": "plain_text", "text": identity["retentionUrl"]}] if identity["environment"] in ("staging", "production") else []),
         {"name": "KIP_RELEASE_SHA", "type": "plain_text", "text": release_sha},
         {"name": "RELEASE_SHA", "type": "plain_text", "text": release_sha},
         {"name": "PHOTO_SERVICE_TOKEN", "type": "secret_text"},
@@ -154,7 +158,7 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
                 photos.validate_candidate(self.delivery, self.cfg, self.root)
         self.assertEqual(self.delivery.api_calls, [])
 
-    def test_wranger_config_has_isolated_r2_do_and_staging_only_cron(self):
+    def test_wranger_config_has_isolated_preview_staging_and_production_resources(self):
         preview = photos._validate_identity(self.delivery, self.cfg, preview_state())
         preview_cfg = photos._worker_config(self.cfg, preview, SHA)
         self.assertEqual(preview_cfg["r2_buckets"], [{"binding": "PHOTOS", "bucket_name": BUCKET}])
@@ -165,8 +169,16 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         staging = photos._staging_identity(self.cfg)
         staging_cfg = photos._worker_config(self.cfg, staging, SHA)
         self.assertEqual(staging_cfg["triggers"]["crons"], ["23 9 * * *"])
-        self.assertEqual(staging_cfg["vars"]["RETENTION_URL"], "https://parkdex-kip-staging.vercel.app/api/retention/interactions/purge")
+        self.assertEqual(staging_cfg["vars"]["RETENTION_URL"], "https://staging.web.parkdex.app/api/retention/interactions/purge")
         self.assertNotIn("KIP_RETENTION_SECRET", json.dumps(staging_cfg))
+
+        production = photos._production_identity(self.cfg)
+        production_cfg = photos._worker_config(self.cfg, production, SHA)
+        self.assertEqual(production["workerName"], "parkdex-kip-photos-production")
+        self.assertEqual(production["bucketName"], "parkdex-kip-photos-production")
+        self.assertEqual(production_cfg["r2_buckets"], [{"binding": "PHOTOS", "bucket_name": "parkdex-kip-photos-production"}])
+        self.assertEqual(production_cfg["triggers"]["crons"], ["23 9 * * *"])
+        self.assertEqual(production_cfg["vars"]["RETENTION_URL"], "https://web.parkdex.app/api/retention/interactions/purge")
 
     def test_worker_verification_requires_exact_provenance_bindings_and_secret_types(self):
         identity = photos._validate_identity(self.delivery, self.cfg, preview_state())
@@ -275,13 +287,13 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         worker_source.parent.mkdir(parents=True)
         worker_source.write_text("candidate worker", encoding="utf-8")
         journal = self.root / "state" / "private-photos-staging.json"
-        self.delivery.read_runtime_bundle = lambda _config: {
+        self.delivery.read_runtime_bundle = lambda _config, **_kwargs: {
             "KIP_PHOTO_SERVICE_TOKEN": "p" * 64,
             "KIP_RETENTION_SECRET": "r" * 64,
         }
         deploy_args = []
 
-        def deploy(_delivery, _config, source, identity, sha, _secrets, _journal, _state):
+        def deploy(_delivery, _config, source, identity, sha, _secrets, _journal, _state, **_kwargs):
             deploy_args.append((source, identity, sha))
             return {
                 "workerName": identity["workerName"],
@@ -514,6 +526,17 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
              patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": OTHER_SHA}):
             with self.assertRaisesRegex(DeliveryError, "ownership metadata mismatch for KIP_RELEASE_SHA"):
                 photos._verify_staging_resources(self.delivery, self.cfg, SHA)
+
+    def test_production_health_gate_uses_only_production_bucket_worker_and_sha(self):
+        identity = photos._production_identity(self.cfg)
+        with patch.object(photos, "_check_bucket_owned", return_value=True), \
+             patch.object(photos, "_worker_settings", return_value={"bindings": worker_bindings(identity, SHA)}), \
+             patch.object(photos, "_verify_namespace", return_value={"id": "ns-prod", "use_sqlite": True}), \
+             patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"), \
+             patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": SHA}):
+            verified = photos._verify_production_resources(self.delivery, self.cfg, SHA)
+        self.assertEqual(verified["identity"]["workerName"], "parkdex-kip-photos-production")
+        self.assertEqual(verified["identity"]["bucketName"], "parkdex-kip-photos-production")
 
 
 if __name__ == "__main__":

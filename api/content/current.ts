@@ -32,6 +32,7 @@ const ALLOWED_ORIGINS = new Set([
   "https://localhost",
   "https://staging.web.parkdex.app",
   "https://web.parkdex.app",
+  "https://parkdex-kip-staging.vercel.app",
 ]);
 const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=60";
 const NO_STORE_CACHE_CONTROL = "no-store";

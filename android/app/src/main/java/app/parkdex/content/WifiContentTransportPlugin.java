@@ -592,7 +592,9 @@ public class WifiContentTransportPlugin extends Plugin {
     }
 
     private static boolean isApprovedApiHost(String host) {
-        return "parkdex-kip-staging.vercel.app".equals(host)
+        return "staging.web.parkdex.app".equals(host)
+                || "web.parkdex.app".equals(host)
+                || "parkdex-kip-staging.vercel.app".equals(host)
                 || "parkdex-kip.vercel.app".equals(host)
                 || (!BuildConfig.CONTENT_API_HOST.isEmpty()
                 && BuildConfig.CONTENT_API_HOST.equalsIgnoreCase(host));

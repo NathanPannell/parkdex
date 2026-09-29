@@ -33,12 +33,12 @@ There are 114 original files totaling 99,527,167 bytes. R2 contains those files 
 | Region | `aws-us-west-2` |
 | PostgreSQL | 18 |
 | Root / default branch | `main` / `br-shy-hat-akg1paip` |
-| Staging branch | `staging` / `br-orange-lake-akrxmy23`, child of `main` |
+| Staging branch | `staging` / `br-odd-paper-aktgtidp`, child of `main` |
 | Database | `parkdex_kip` |
 | Owner role | `parkdex_kip_owner` |
 | Compute | 0.25 CU, suspend after 300 idle seconds |
 
-The original populated branch was renamed from `staging` to `main`, then a new `staging` branch was created from it. Both branches contain identical schemas and baseline data. Each has its own compute and connection endpoint, with the settings above. Both reference the same immutable R2 content. Full row equality and the branch relationship are recorded in `docs/evidence/cloud-content/neon-branches.json`.
+The Neon main branch currently serves the curated Victoria 100 catalogue at content revision 25. Its 100-park snapshot has SHA-256 `ffa55c3a…`; it intentionally differs from the historical 122-park bootstrap below. The historical bootstrap receipt is retained as an initialization marker. Do not replay `scripts/bootstrap-content.py` against Neon main, because that would add unrelated parks and conflict with authored edits. Staging is a separate child branch of main and has its own compute and connection endpoint. Both environments can read the immutable R2 asset release pinned below; database catalogue state is managed separately from that static asset package.
 
 The migration creates exactly four application tables:
 
@@ -66,15 +66,21 @@ This account has no Cloudflare-managed DNS zones. A Pages custom subdomain suppo
 
 The app discovers its release through https://kip-assets.parkdex.app/channels/staging/current.json or channels/main/current.json. These two public objects contain the small parkdex.content-channel/v1 pointer. The Worker accepts only GET and HEAD for these exact paths and gives them a 60-second cache lifetime. Release manifests and assets stay under their immutable releases/<content-version>/ keys.
 
-Staging generation 1 is bootstrapped and points at the verified baseline release. The `main` Neon branch exists with the same baseline database, but the `main` content pointer has not been published and production has not been released. A production release must publish and verify its own pointer before production clients use it.
+Staging generation 1 is bootstrapped and points at the verified baseline release. Main generation 1 points at the same immutable asset package, release `5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744` with manifest SHA-256 `d84ecf3f…`. That 122-park package is an asset release pin; it does not imply the live Neon main catalogue has the same parks. The app production host is `web.parkdex.app` and staging is `staging.web.parkdex.app`. The production workflow checks the pinned main pointer and manifest before it applies additive migrations or queues deployments, and never replays the historical catalogue bootstrap against Neon main.
 
-The web API route `/api/content/current` reads the configured public channel directly from the CDN. It does not query Neon. Set `CONTENT_CHANNEL=staging` on staging and preview deployments. Preview app builds use `VITE_CONTENT_ENV=staging` for read-only public content while keeping their app release environment set to preview. Local development defaults to staging. Native builds default to staging discovery unless `VITE_CONTENT_API_URL` points to a different discovery endpoint. A production native build requires `VITE_CONTENT_ENV=main` and `VITE_CONTENT_API_URL=<confirmed-Kip-production-origin>/api/content/current`; that API deployment must set `CONTENT_CHANNEL=main`, and the `main` pointer must be published first. Confirm the Kip production host before configuring this; the legacy web app host is not a Kip deployment. The current delivery slice is staging-only, so it does not enable a production release. The client cannot override the server-selected channel.
+The web API route `/api/content/current` reads the configured public channel directly from the CDN. It does not query Neon. Set `CONTENT_CHANNEL=staging` on staging and preview deployments, and `CONTENT_CHANNEL=main` in production. Preview app builds use `VITE_CONTENT_ENV=staging` for read-only public content while keeping their app release environment set to preview. Local development defaults to staging. Native builds default to staging discovery unless `VITE_CONTENT_API_URL` points to a different discovery endpoint. A production native build requires `VITE_CONTENT_ENV=main` and `VITE_CONTENT_API_URL=https://web.parkdex.app/api/content/current`; publish the `main` pointer first. The client cannot override the server selected channel.
 
-The API allows exact origins https://localhost, https://staging.web.parkdex.app, and https://web.parkdex.app. The localhost origin supports the Capacitor web view. The API validates the pointer schema, selected channel, release ID, manifest URL, generation, and manifest hash before returning it. It uses a 10-second upstream timeout and a 60-second response cache lifetime.
+The API allows exact origins https://localhost, https://staging.web.parkdex.app, https://web.parkdex.app, and the former staging alias for installed Android builds. The localhost origin supports the Capacitor web view. The API validates the pointer schema, selected channel, release ID, manifest URL, generation, and manifest hash before returning it. It uses a 10-second upstream timeout and a 60-second response cache lifetime.
 
 Prepare a channel pointer only after checking that the public release manifest has the exact snapshot SHA-256 and every referenced public asset has the expected length and SHA-256. The helper also checks that the current pointer is the generation you expect. For the next staging update, generation 1 is the expected current pointer and generation 2 is the candidate:
 
     node scripts/publish-content-channel.mjs --prepare-only --environment staging --snapshot .codex/cloud-snapshot --expected-generation 1 --generation 2 --output .codex/channel-staging-current.json
+
+For first production activation, prepare generation 1 from the already published immutable release. Review the output and apply the conditional write to `channels/main/current.json` with the R2 credentials for `parkdex-kip-content`:
+
+    node scripts/publish-content-channel.mjs --prepare-only --environment main --snapshot .codex/cloud-snapshot --expected-generation 0 --generation 1 --output .codex/channel-main-current.json
+
+If the main pointer already exists, use its verified generation and ETag, then increment the generation by one. Do not use an unconditional object upload. The delivery helper command `python scripts/kip-delivery.py verify-main-content` checks the public main pointer and matching manifest before production migration.
 
 The helper prints the required atomic write condition. For initial creation it is `If-None-Match: *`. For an update it is `If-Match` with the exact current pointer ETag. The output file contains only the validated pointer JSON, so it can be reviewed before uploading. Publish with the S3-compatible R2 `PutObject` API, which enforces these preconditions atomically. The helper does not upload assets, regenerate maps, or change the release manifest.
 
