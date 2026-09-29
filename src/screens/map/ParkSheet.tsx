@@ -41,16 +41,21 @@ export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
+export function parkLocationUrl(park: Park) {
+  return `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
+}
+
 export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
+  const accessUnknown = trip.mode === "unknown";
   const walk = finalWalk(park, content?.drive);
   const live = isLive(park);
   const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
-    if (content) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
+    if (content && !accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
   const badge = claim
     ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
@@ -114,18 +119,18 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
         <motion.div variants={item} className="stats">
           <div className="stat">
             <Icon name="pin" size={18} />
-            <strong>{inside ? "Here!" : trip.mode === "boat" ? "Island" : formatDistance(trip.km)}</strong>
-            <span>{inside ? "you made it" : trip.mode === "walk" ? "on foot" : "by road"}</span>
+            <strong>{inside ? "Here!" : accessUnknown ? "Unknown" : trip.mode === "boat" ? "Island" : formatDistance(trip.km)}</strong>
+            <span>{inside ? "you made it" : accessUnknown ? "access details unavailable" : trip.mode === "walk" ? "on foot" : trip.mode === "boat" ? "island access" : "by road"}</span>
           </div>
           <div className="stat">
-            <Icon name={trip.mode === "walk" ? "walk" : "car"} size={18} />
-            <strong>{inside ? "0 min" : trip.mode === "boat" ? "Boat" : minutes(trip.minutes)}</strong>
-            <span>{trip.mode === "walk" ? "walk there" : trip.mode === "boat" ? "or ferry access" : "drive there"}</span>
+            <Icon name={trip.mode === "walk" ? "walk" : accessUnknown ? "pin" : "car"} size={18} />
+            <strong>{inside ? "0 min" : accessUnknown ? "Unknown" : trip.mode === "boat" ? "Boat" : minutes(trip.minutes)}</strong>
+            <span>{inside ? "at the park" : accessUnknown ? "check local access" : trip.mode === "walk" ? "walk there" : trip.mode === "boat" ? "or ferry access" : "drive there"}</span>
           </div>
           <div className="stat">
             <Icon name="walk" size={18} />
             <strong>{walk.label}</strong>
-            <span>{walk.minutes ? "road to boundary" : "park by the road"}</span>
+            <span>{walk.minutes === null ? "final walk not mapped" : walk.minutes ? "road to boundary" : "park by the road"}</span>
           </div>
         </motion.div>
 
@@ -163,10 +168,10 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
           ) : (
             <>
               <button className="btn btn--block" onClick={onGo}>
-                <Icon name="route" /> Preview route
+                <Icon name={accessUnknown ? "pin" : "route"} /> {accessUnknown ? "View park location" : "Preview route"}
               </button>
-              <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
-                <Icon name="car" />
+              <a className="btn btn--paper btn--icon" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" aria-label={accessUnknown ? "Park location in Google Maps" : "Directions in Google Maps"} onClick={openDirections}>
+                <Icon name={accessUnknown ? "pin" : "car"} />
               </a>
             </>
           )
@@ -177,10 +182,10 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
         ) : (
           <>
             <button className="btn btn--block" onClick={onGo}>
-              <Icon name="route" /> Let's go
+              <Icon name={accessUnknown ? "pin" : "route"} /> {accessUnknown ? "View park location" : "Let's go"}
             </button>
-            <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
-              <Icon name="car" />
+            <a className="btn btn--paper btn--icon" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" aria-label={accessUnknown ? "Park location in Google Maps" : "Directions in Google Maps"} onClick={openDirections}>
+              <Icon name={accessUnknown ? "pin" : "car"} />
             </a>
           </>
         )}

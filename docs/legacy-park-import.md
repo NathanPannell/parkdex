@@ -27,7 +27,7 @@ The plan output reports its SHA, target identity, selected count, readiness, and
 
 Review every selected park's stable ID, grouped source feature IDs, polygon count, hole count, position count, source and prior target bounding boxes, and the embedded desired coordinates. If a target park does not exist, planning records the missing inputs and returns a blocked plan until both the legacy places catalogue and new park review JSON are provided.
 
-For a new park, the review file has this shape. `presentation` must provide `short`, `biome`, `shape`, `rarity`, `seed`, and `blurb`; `scene` defaults to null. `walkM` and `drive` are required. Drive entries follow the current ordered target hubs. A route is `[distanceKm, durationMin]` or `null`. The importer requires at least one route, rejects an all-null route set, and never supplies a walk or route default. New park snapshots also satisfy the account backup contract: bounded text fields, no disallowed control characters, a safe integer seed from 0 to 1,000,000, and supported catalogue enum values.
+For a new park, the review file has this shape. `presentation` must provide `short`, `biome`, `shape`, `rarity`, `seed`, and `blurb`; `scene` defaults to null. `walkM` and `drive` are required. Drive entries follow the current ordered target hubs. A route is `[distanceKm, durationMin]` or `null`. At least one route must be reviewed unless access is explicitly unknown. For unknown access, set `accessUnknown` to `true`, `walkM` to `0`, and every drive entry to `null`. This paired value is the existing database and client sentinel for unknown access. The importer rejects a nullable or negative walk distance, rejects all-null drive values without the explicit review key, and rejects mixed values when `accessUnknown` is true. It never supplies an access default. `accessUnknown` is review metadata and is not stored in the drive row or sync payload. New park snapshots also satisfy the account backup contract: bounded text fields, no disallowed control characters, a safe integer seed from 0 to 1,000,000, and supported catalogue enum values.
 
 ```json
 {
@@ -48,6 +48,43 @@ For a new park, the review file has this shape. `presentation` must provide `sho
 }
 ```
 
+Use the explicit sentinel when the walk and driving routes have not been verified:
+
+```json
+{
+  "parks": {
+    "legacy-stable-id": {
+      "presentation": {
+        "short": "Reviewed short name",
+        "biome": "coast",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 812,
+        "blurb": "Reviewed park description."
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [null, null, null]
+    }
+  }
+}
+```
+
+For existing parks, rarity changes require a separate reviewed input so boundary-only plans keep their existing behavior. The JSON file keys each selected source park ID and supplies its desired rarity. An optional rationale is recorded in the plan. The input file hash is pinned and rechecked during apply.
+
+```json
+{
+  "parks": {
+    "legacy-stable-id": {
+      "rarity": "uncommon",
+      "rationale": "Reviewed against the regional rarity scale."
+    }
+  }
+}
+```
+
+Pass it to planning with `--rarity-review .codex\legacy-park-import\rarity-review.json`. A string value such as `"uncommon"` is also accepted when no rationale is needed. Object values must include both rarity and a non-empty rationale. Each existing-park plan records its expected current rarity and reviewed desired rarity. Apply changes only that rarity field, preserving name, text, scene, drive rows, and art. If the rarity is already current, exact replay remains a no-op. A stale rarity fails the plan guard. Before a real rarity update, the importer locks the authoring rollout row and rejects affected parks that have selected art which is not yet published.
+
 Apply only after review. Copy the `planSha256` value printed by planning into `--reviewed-plan-sha`, and repeat the same expected host and environment. The importer verifies the plan digest and re-reads every source to confirm its hash. It then locks and checks target identity, content revision, and each prior boundary hash before making changes in one transaction.
 
 ```powershell
@@ -58,9 +95,9 @@ python scripts/import_legacy_parks.py apply `
   --target-environment local-qa
 ```
 
-Existing park imports update only the boundary row. They preserve park metadata, badge art, drive data, and private tables. New park imports insert the reviewed catalogue identity, presentation fields, boundary, walk distance, and all hub positions in the same transaction. PostgreSQL's content triggers validate the resulting catalogue and emit one synchronized revision.
+Boundary-only existing-park imports update only the boundary row. Existing-park imports with reviewed rarity changes update the boundary and rarity rows while preserving all other park metadata, badge art, drive data, and private tables. New park imports insert the reviewed catalogue identity, presentation fields, boundary, walk distance, and all hub positions in the same transaction. PostgreSQL's content triggers validate the resulting catalogue and emit one synchronized revision.
 
-Exact replay is a no-op, including when the database has a newer content revision, if every selected desired boundary and any new park and drive rows already match. Any partial drift, changed source, changed old boundary, revision mismatch, or target identity mismatch requires a new plan. Invalid topology, malformed positions, missing or duplicate selected IDs, and non-2D coordinates fail before the database write.
+Exact replay is a no-op, including when the database has a newer content revision, if every selected desired boundary, reviewed rarity, and any new park and drive rows already match. Any partial drift, changed source, changed old boundary or rarity, revision mismatch, or target identity mismatch requires a new plan. Invalid topology, malformed positions, missing or duplicate selected IDs, and non-2D coordinates fail before the database write.
 
 The importer uses Shapely only to validate topology. It wraps Polygon coordinates as a one-part MultiPolygon and preserves source polygon order, every ring, and every XY position without simplification or repair.
 
@@ -70,4 +107,4 @@ Run the unit tests with:
 python scripts/test_import_legacy_parks.py
 ```
 
-The PostgreSQL integration test runs only when `LEGACY_IMPORT_TEST_DATABASE_URL` (or the compatibility alias `PARKDEX_LEGACY_IMPORT_TEST_DATABASE_URL`) points to a disposable database named `kip_qa_issue20_*` or `kip_qa_legacy_import_*` on loopback. It applies its own schema, seeds its own rows, and exercises a real boundary update, new park insertion, replay after a newer revision, target drift rejection, and transaction rollback.
+The PostgreSQL integration test runs only when `LEGACY_IMPORT_TEST_DATABASE_URL` (or the compatibility alias `PARKDEX_LEGACY_IMPORT_TEST_DATABASE_URL`) points to a disposable database named `kip_qa_issue20_*` or `kip_qa_legacy_import_*` on loopback. It applies its own schema, seeds its own rows, and exercises boundary updates, new park insertion, rarity preservation and replay, stale rarity rejection, frozen-art rejection, replay after a newer revision, target drift rejection, and transaction rollback.

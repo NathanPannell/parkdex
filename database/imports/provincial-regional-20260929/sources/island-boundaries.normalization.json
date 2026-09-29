@@ -1,0 +1,572 @@
+{
+  "method": "planar-face-even-odd-ring-union",
+  "sourcePath": "island-boundaries.geojson",
+  "sourceFileSha256": "e17e5a62e3b31ec46bbf0a4f0603c13f6eaca12822ad00bf760a96f9f0f3574c",
+  "outputPath": "island-boundaries.normalized.geojson",
+  "outputFileSha256": "d17d3d2cf9a758552022d87deb8dc38b135c28ebf1b8e7920219b38355070725",
+  "outputGeometrySha256": "f55c49bb411fdf9930cbcba2ea8f29740c9e9819cffca24b62891afa7fd29e16",
+  "shapelyVersion": "2.1.1",
+  "parkCount": 271,
+  "changedParkCount": 7,
+  "changes": [
+    {
+      "parkId": "provincial-cape-scott-park",
+      "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+      "sourceObjectIds": [
+        "549"
+      ],
+      "sourceGeometrySha256": "e962c4b33c4bf9acfeb8dd19939988743e348de1af9c6f2b4d7eee0d39c127c4",
+      "normalizedGeometrySha256": "77a105b0c0f7feeee75ed4d6c13d490f65eef0dd8b72507860241e2b99a9165b",
+      "sourceCounts": {
+        "polygons": 1,
+        "holes": 10,
+        "rings": 11,
+        "positions": 1216
+      },
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 10,
+        "rings": 11,
+        "positions": 1215
+      },
+      "sourceAreaAsParsed": 0.028427669449997455,
+      "normalizedArea": 0.028427669449997493,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": false,
+      "sourceComponentUnionSymmetricDifferenceArea": null,
+      "independentMakeValidSymmetricDifferenceArea": 0.0,
+      "planarFaces": [
+        {
+          "probe": [
+            -128.37841482844038,
+            50.761275
+          ],
+          "included": true,
+          "area": 0.028427669449997493,
+          "faceSha256": "b751305bb1ecfcd2cdc3dbb031404cc9751fd504e3f815a8b59048e780200d98"
+        },
+        {
+          "probe": [
+            -128.40249212184875,
+            50.769999999999996
+          ],
+          "included": false,
+          "area": 1.308500000034153e-07,
+          "faceSha256": "90bade8e50cf85895bc6db447cd2974e86be9786858305d86792afbd835b99b4"
+        },
+        {
+          "probe": [
+            -128.37520070175438,
+            50.741365
+          ],
+          "included": false,
+          "area": 1.1640000000089984e-06,
+          "faceSha256": "b80aafb2b1ec96e7a8ba451b145f806b1065298c399aafe6fda1555a02af7030"
+        },
+        {
+          "probe": [
+            -128.34327230662984,
+            50.672365
+          ],
+          "included": false,
+          "area": 3.3740500000019972e-06,
+          "faceSha256": "c8cb3ec2986c5acc891fcd4ce1deb28ef2554ea188e890e92b9ac26f2b4e7215"
+        },
+        {
+          "probe": [
+            -128.41696000000002,
+            50.769040000000004
+          ],
+          "included": false,
+          "area": 4.823799999983357e-06,
+          "faceSha256": "62dff1d1278cfcf083e94c5317f0332e665702d4d4faa92460fc2054beaa927f"
+        },
+        {
+          "probe": [
+            -128.143775,
+            50.836205
+          ],
+          "included": false,
+          "area": 7.618500000009253e-06,
+          "faceSha256": "f84598ebc846e7d5a9d442ba85c560f9011d0b2c83182e5539f4de3d2c414fe3"
+        },
+        {
+          "probe": [
+            -128.2540608995327,
+            50.681020000000004
+          ],
+          "included": false,
+          "area": 1.0010799999971649e-05,
+          "faceSha256": "ab11dd8c4059079bfb3e6fc0abce18c3ee5feaaa002b4f3199ec0069ac8d3476"
+        },
+        {
+          "probe": [
+            -128.324062654516,
+            50.761275
+          ],
+          "included": false,
+          "area": 2.0226649999956087e-05,
+          "faceSha256": "6904c9cbdc6a81e723f64abc41599b439f048d78fbfa2c0e9dab432b474176a4"
+        },
+        {
+          "probe": [
+            -128.3884203660221,
+            50.750295
+          ],
+          "included": false,
+          "area": 7.985654999999083e-05,
+          "faceSha256": "3a0ed65aee5be9bbf96be3c9f90e8c7190c97e44f14b0123bec7280471357e32"
+        },
+        {
+          "probe": [
+            -128.42559166666666,
+            50.78177
+          ],
+          "included": false,
+          "area": 8.888494999995107e-05,
+          "faceSha256": "8b1e70b9f445e84da12bf14571ae5e68657840e35fa2ac4c8e3ea5e8097281a6"
+        },
+        {
+          "probe": [
+            -128.39618837617223,
+            50.771985
+          ],
+          "included": false,
+          "area": 0.00013186799999994884,
+          "faceSha256": "aad7d6327bafed06611e6bfdb0a5b75bb974baa199daf4eb255083457e588999"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "provincial-sooke-potholes-park",
+      "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+      "sourceObjectIds": [
+        "1104"
+      ],
+      "sourceGeometrySha256": "cb10884d0cdb7271b5d57186b35c16399d57474466f25c167e23b5922168a555",
+      "normalizedGeometrySha256": "838dc2e38ab612abf031ea8bdd7650309008666108d74f77dd3070d085bea083",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 51
+      },
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 54
+      },
+      "sourceAreaAsParsed": 6.579299999991409e-06,
+      "normalizedArea": 6.579417926554276e-06,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": false,
+      "sourceComponentUnionSymmetricDifferenceArea": null,
+      "independentMakeValidSymmetricDifferenceArea": 0.0,
+      "planarFaces": [
+        {
+          "probe": [
+            -123.71304849999999,
+            48.425375
+          ],
+          "included": true,
+          "area": 5.896328287304925e-11,
+          "faceSha256": "0b0004988316f8d1828a096f79ce71b6db082d756e7567c6d9c39a2cc477ab50"
+        },
+        {
+          "probe": [
+            -123.71143306818182,
+            48.428205000000005
+          ],
+          "included": true,
+          "area": 5.002508963282544e-06,
+          "faceSha256": "960f51d904914964e4e8fb282e19394f401f4fb5458628e3df58ede07768830f"
+        },
+        {
+          "probe": [
+            -123.71313421717171,
+            48.42864
+          ],
+          "included": true,
+          "area": 1.4368999999945173e-06,
+          "faceSha256": "6364e7e60644d77a0c860ca4ced05c4a43f2eabcc3b7b3fecc691c9187ab0fe2"
+        },
+        {
+          "probe": [
+            -123.7125125,
+            48.43012
+          ],
+          "included": true,
+          "area": 1.3994999999434193e-07,
+          "faceSha256": "9aaea5e51a46a3f83e286e1220469f36a7307532fcfdf2d4c80f5ecf383e84a1"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "provincial-wakes-cove-park",
+      "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+      "sourceObjectIds": [
+        "5003"
+      ],
+      "sourceGeometrySha256": "fbb87339ec0076c453cefd5910903833316543d9379bc6a39ae7c8b606e9dbaf",
+      "normalizedGeometrySha256": "568e77c9845a84468c46ad50281d01186264430834db7f07dc9a72cc79a2c829",
+      "sourceCounts": {
+        "polygons": 1,
+        "holes": 4,
+        "rings": 5,
+        "positions": 107
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 4,
+        "rings": 6,
+        "positions": 110
+      },
+      "sourceAreaAsParsed": 0.0002516637000000156,
+      "normalizedArea": 0.00025166398258576867,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": false,
+      "sourceComponentUnionSymmetricDifferenceArea": null,
+      "independentMakeValidSymmetricDifferenceArea": 0.0,
+      "planarFaces": [
+        {
+          "probe": [
+            -123.70644734513735,
+            49.123324999999994
+          ],
+          "included": true,
+          "area": 0.0002516638412928928,
+          "faceSha256": "94d15dc9cfb2ac94558002233655108a44bd65a814248dde41e984fbde50bfd2"
+        },
+        {
+          "probe": [
+            -123.70245178909953,
+            49.12674
+          ],
+          "included": false,
+          "area": 2.951799999987356e-06,
+          "faceSha256": "541c891a9257063611f97467c6831fe229bdda0a8d326b103002de14ec0610fc"
+        },
+        {
+          "probe": [
+            -123.7063056902985,
+            49.125575
+          ],
+          "included": false,
+          "area": 3.2164999999993237e-06,
+          "faceSha256": "da2b77e1d7be4e869a23fcdc1175564f9510f1351352de735242d01040548485"
+        },
+        {
+          "probe": [
+            -123.71318605882352,
+            49.126065
+          ],
+          "included": false,
+          "area": 8.49666741425343e-06,
+          "faceSha256": "eac4e3df4572924fe519a0a0b590ac665274dbdb961efb7a6030f816d54470b7"
+        },
+        {
+          "probe": [
+            -123.7133115,
+            49.127030000000005
+          ],
+          "included": true,
+          "area": 1.4129287595484438e-10,
+          "faceSha256": "96aaa8f8120e0a1b1a220ce6ff28f0f92a9644e67008b564b3febe9c3cb9278d"
+        },
+        {
+          "probe": [
+            -123.69289903301888,
+            49.123155
+          ],
+          "included": false,
+          "area": 1.3894199999984428e-05,
+          "faceSha256": "eb6dbb7e258471278f7872cec9a49aa6f64ef5bd3cff091dae6b04cbd28db847"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "regional-greenspaces-comox-valley-driftwood-marine-park-4853",
+      "sourceName": "Comox Valley Regional District via BC Local and Regional Greenspaces",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "sourceObjectIds": [
+        "4853"
+      ],
+      "sourceGeometrySha256": "ecf1cd3a75992aa012accd9a817b681271bd4f2f160b89e845f14bbc5d9aaf4c",
+      "normalizedGeometrySha256": "104702ee6f423af7afb413df9888dff39a08da7aadcfe97829bbe9761bbf9f65",
+      "sourceCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 68
+      },
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 0,
+        "rings": 1,
+        "positions": 34
+      },
+      "sourceAreaAsParsed": 1.2624499999992208e-05,
+      "normalizedArea": 6.312249999996106e-06,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": true,
+      "sourceComponentUnionSymmetricDifferenceArea": 0.0,
+      "independentMakeValidSymmetricDifferenceArea": null,
+      "planarFaces": [
+        {
+          "probe": [
+            -125.10562339552239,
+            49.855779999999996
+          ],
+          "included": true,
+          "area": 6.312249999996106e-06,
+          "faceSha256": "eeb9673258e7d1f358ed868050aa9a577da9bc5be5b1c13c025153c1e8822a1c"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "regional-greenspaces-comox-valley-seal-bay-nature-park-4840",
+      "sourceName": "Comox Valley Regional District via BC Local and Regional Greenspaces",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "sourceObjectIds": [
+        "4840"
+      ],
+      "sourceGeometrySha256": "6d5927bdf40d9cc132e19e39f6c4eaf0c1e4d53e3912a612d71e14bc63774f21",
+      "normalizedGeometrySha256": "c9a444b8159e7f6b2c91963271ad8dd1647c229c1047cdaca1b903916ff4099c",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 80
+      },
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 0,
+        "rings": 5,
+        "positions": 74
+      },
+      "sourceAreaAsParsed": 0.0008480923000000654,
+      "normalizedArea": 0.0008480838489445506,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": true,
+      "sourceComponentUnionSymmetricDifferenceArea": 0.0,
+      "independentMakeValidSymmetricDifferenceArea": null,
+      "planarFaces": [
+        {
+          "probe": [
+            -124.97972703782796,
+            49.75113
+          ],
+          "included": true,
+          "area": 0.00038183659894455046,
+          "faceSha256": "6bab4c9d9013c2fd7ec6ae0f93791ac77f16c112a70ead264eb46c9819c31dba"
+        },
+        {
+          "probe": [
+            -124.97195541957635,
+            49.75387
+          ],
+          "included": true,
+          "area": 0.00011871484894447169,
+          "faceSha256": "41877dfd95ce73d84695dda835594a6c6a6cc88b892cf1a55a24f6a404ab50b3"
+        },
+        {
+          "probe": [
+            -124.97160615870823,
+            49.74994082537093
+          ],
+          "included": true,
+          "area": 8.451055518030119e-09,
+          "faceSha256": "a016d64581fafabbfa49514be1e55bb24137d0283d4db3be58af9a88ccc4fd3c"
+        },
+        {
+          "probe": [
+            -124.99233318559953,
+            49.769155
+          ],
+          "included": true,
+          "area": 4.6467999999999624e-05,
+          "faceSha256": "314f51f0e2ce1eb3f151f459a7eaa497d46186612e93c69e98e8e8705c806459"
+        },
+        {
+          "probe": [
+            -124.99337999330358,
+            49.758894999999995
+          ],
+          "included": true,
+          "area": 6.728029999997052e-05,
+          "faceSha256": "c2a2437b193b2f0e6786b1043fa810cf35efbf197300386d07ecb4029b61a4d5"
+        },
+        {
+          "probe": [
+            -124.9882256504065,
+            49.746095
+          ],
+          "included": true,
+          "area": 0.0001636656500000143,
+          "faceSha256": "5fe035361452ce528606e5821d2d024355dcaa2046968bab64a85b4c284ed8e8"
+        },
+        {
+          "probe": [
+            -124.96844547720798,
+            49.762285000000006
+          ],
+          "included": true,
+          "area": 7.011000000002552e-05,
+          "faceSha256": "f994f3c2a7ad83ace6b572bf881c2178657ff6ad2592f817d698b04293311e25"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "regional-greenspaces-strathcona-siskin-forest-park-5255",
+      "sourceName": "Strathcona Regional District via BC Local and Regional Greenspaces",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "sourceObjectIds": [
+        "5255"
+      ],
+      "sourceGeometrySha256": "8938139a0dd33fa0612fe9ebb0a565621101f134239f7fa76475c95bf91bd1a3",
+      "normalizedGeometrySha256": "9954346d14207a42b6277f60b309d0d68e01b16ab3cf8db6e87b55c48794da20",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 1,
+        "rings": 4,
+        "positions": 174
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 172
+      },
+      "sourceAreaAsParsed": 1.8987649999970033e-05,
+      "normalizedArea": 1.8987644808279697e-05,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": true,
+      "sourceComponentUnionSymmetricDifferenceArea": 0.0,
+      "independentMakeValidSymmetricDifferenceArea": null,
+      "planarFaces": [
+        {
+          "probe": [
+            -124.986585,
+            50.042705
+          ],
+          "included": true,
+          "area": 2.83929999995332e-06,
+          "faceSha256": "44fbca41a9abd931eb2282c17ca17ef5ffdb36ac246f735c46109950fff41532"
+        },
+        {
+          "probe": [
+            -124.98473897058824,
+            50.040595
+          ],
+          "included": false,
+          "area": 5.860900000004237e-06,
+          "faceSha256": "266a6f2fcde7f89821b99c6d6a31ceb92716f4088d3db4bfe87d07dd0d7fa4a4"
+        },
+        {
+          "probe": [
+            -124.98119266129032,
+            50.048905
+          ],
+          "included": true,
+          "area": 1.5584480831078192e-07,
+          "faceSha256": "2506359820d0c331c7eb4d25e4b63cf0567ce1dc8216f9116199d43069742d04"
+        },
+        {
+          "probe": [
+            -124.98037922413792,
+            50.05094
+          ],
+          "included": true,
+          "area": 1.5992494808322268e-05,
+          "faceSha256": "c378557e0be812f96b680e16c22aaa71b3d81d6ccda82984ee5789c38ebe595c"
+        },
+        {
+          "probe": [
+            -124.98129987179486,
+            50.04979
+          ],
+          "included": true,
+          "area": 5.191693332821065e-12,
+          "faceSha256": "c6ac7a5ae4d459ad6d1175e714e9eeb7bc7d37e41225fb7c5e5a79970669933d"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    },
+    {
+      "parkId": "regional-greenspaces-strathcona-whaletown-commons-park-5296",
+      "sourceName": "Strathcona Regional District via BC Local and Regional Greenspaces",
+      "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+      "sourceObjectIds": [
+        "5296"
+      ],
+      "sourceGeometrySha256": "2efe13baf3075211d0a65c1815b687961852996eefc4978469dcf705787cc79d",
+      "normalizedGeometrySha256": "456a35c8132853f95d8131224afc1c4cc84fd6b8398943ba588dfb717187990e",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 19
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 18
+      },
+      "sourceAreaAsParsed": 4.015734999999988e-05,
+      "normalizedArea": 4.014629694992498e-05,
+      "normalization": "planar-face-even-odd-ring-union",
+      "allSourceComponentsValid": true,
+      "sourceComponentUnionSymmetricDifferenceArea": 0.0,
+      "independentMakeValidSymmetricDifferenceArea": null,
+      "planarFaces": [
+        {
+          "probe": [
+            -125.03549945166154,
+            50.106004999999996
+          ],
+          "included": true,
+          "area": 3.526784694990333e-05,
+          "faceSha256": "b693b07cf316a50b94e5b69f38cc224356bfb8ecd5aeabc2f9cc9ca6a432a5c5"
+        },
+        {
+          "probe": [
+            -125.03882965645695,
+            50.108695
+          ],
+          "included": true,
+          "area": 4.854746949929147e-06,
+          "faceSha256": "338d39c6eafaf1d74317a1463c7c88d87fc15705eafe64982e6d12ea2507cbd2"
+        },
+        {
+          "probe": [
+            -125.03811160182119,
+            50.108785
+          ],
+          "included": true,
+          "area": 1.1053050092277793e-08,
+          "faceSha256": "be76126548cd2dd42470b6c1345c1e92a3a545bd9606cbb8026c673a48d4029b"
+        },
+        {
+          "probe": [
+            -125.03932527777778,
+            50.11058
+          ],
+          "included": true,
+          "area": 1.2650000000214595e-08,
+          "faceSha256": "9e5d754ae00a8c793b406ffcf4d34cf3fafaa9d0944815465c936159b4dc4587"
+        }
+      ],
+      "zeroAreaLineworkNote": "Source line segments with no interior are not represented in the valid polygon output."
+    }
+  ]
+}

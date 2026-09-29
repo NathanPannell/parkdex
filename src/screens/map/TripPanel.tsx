@@ -9,7 +9,7 @@ import { RARITY, type Park } from "../../lib/parks";
 import type { ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
 import { FIELD } from "../../lib/native";
-import { directionsUrl } from "./ParkSheet";
+import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
 
 type TripProps = {
@@ -25,6 +25,7 @@ type TripProps = {
 };
 
 export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
+  const accessUnknown = remaining.mode === "unknown";
   const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
   return (
@@ -42,7 +43,7 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
           </motion.div>
         </button>
         <div className="trip__text">
-          <span className="eyebrow">Heading to</span>
+          <span className="eyebrow">{accessUnknown ? "Park location" : "Heading to"}</span>
           <strong>{park.short}</strong>
         </div>
         <button className="trip__end" onClick={onEnd} aria-label="End trip">
@@ -50,27 +51,38 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
         </button>
       </div>
       <div className="trip__meter">
-        <div className="trip__big">
-          <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
-            {formatDistance(remainingKm)}
-          </motion.span>
-          <small>by road · about {formatTrip(remaining)}</small>
-        </div>
-        <div className="trip__bar">
-          <motion.div className="trip__fill" animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
-          <motion.div className="trip__car" animate={{ left: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-            <Icon name="car" size={16} stroke={2.6} />
-          </motion.div>
-          <div className="trip__flag">
-            <Icon name="pin" size={16} stroke={2.6} />
+        {accessUnknown ? (
+          <div className="trip__big">
+            <span>Access unknown</span>
+            <small>Check local access before you go</small>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="trip__big">
+              <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
+                {formatDistance(remainingKm)}
+              </motion.span>
+              <small>by road · about {formatTrip(remaining)}</small>
+            </div>
+            <div className="trip__bar">
+              <motion.div className="trip__fill" animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+              <motion.div className="trip__car" animate={{ left: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
+                <Icon name="car" size={16} stroke={2.6} />
+              </motion.div>
+              <div className="trip__flag">
+                <Icon name="pin" size={16} stroke={2.6} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
       <div className="trip__actions">
-        <a className="btn btn--paper btn--sm" href={directionsUrl(park)} target="_blank" rel="noreferrer" onClick={() => void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId }).catch(() => {})}>
-          <Icon name="car" size={18} /> Open in Maps
+        <a className="btn btn--paper btn--sm" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" onClick={() => {
+          if (!accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId }).catch(() => {});
+        }}>
+          <Icon name={accessUnknown ? "pin" : "car"} size={18} /> {accessUnknown ? "View park location" : "Open in Maps"}
         </a>
-        {!FIELD && (
+        {!FIELD && !accessUnknown && (
           <button className="btn btn--sun btn--sm trip__sim" onClick={onSimulate} disabled={simulating}>
             <Icon name="play" size={14} /> {simulating ? "Travelling…" : "Demo: simulate trip"}
           </button>

@@ -1,0 +1,8537 @@
+{
+  "parks": {
+    "provincial-arbutus-grove-park": {
+      "presentation": {
+        "short": "Arbutus Grove",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 992,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 15,
+      "drive": [
+        [
+          131.4,
+          124
+        ],
+        [
+          128.5,
+          119
+        ],
+        [
+          135.2,
+          131
+        ],
+        [
+          118.6,
+          111
+        ],
+        [
+          149.7,
+          140
+        ],
+        [
+          139.2,
+          138
+        ],
+        [
+          71,
+          66
+        ],
+        [
+          20.9,
+          23
+        ]
+      ]
+    },
+    "provincial-artlish-caves-park": {
+      "presentation": {
+        "short": "Artlish Caves",
+        "biome": "cave",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 582,
+        "blurb": "Something wild waits underground. Bring a headlamp.",
+        "scene": null
+      },
+      "walkM": 133,
+      "drive": [
+        [
+          449.3,
+          395
+        ],
+        [
+          446.4,
+          390
+        ],
+        [
+          453.1,
+          402
+        ],
+        [
+          436.5,
+          382
+        ],
+        [
+          467.6,
+          412
+        ],
+        [
+          457.1,
+          409
+        ],
+        [
+          388.9,
+          337
+        ],
+        [
+          338.8,
+          294
+        ]
+      ]
+    },
+    "regional-ayum-creek-regional-park": {
+      "presentation": {
+        "short": "Ayum Creek",
+        "biome": "river",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 771,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 13,
+      "drive": [
+        [
+          33.2,
+          39
+        ],
+        [
+          30.3,
+          35
+        ],
+        [
+          37,
+          46
+        ],
+        [
+          17.5,
+          22
+        ],
+        [
+          51.5,
+          56
+        ],
+        [
+          6.8,
+          10
+        ],
+        [
+          62,
+          64
+        ],
+        [
+          111.8,
+          111
+        ]
+      ]
+    },
+    "regional-beachcomber-regional-park": {
+      "presentation": {
+        "short": "Beachcomber",
+        "biome": "forest",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 693,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 11,
+      "drive": [
+        [
+          142.2,
+          135
+        ],
+        [
+          139.2,
+          130
+        ],
+        [
+          145.9,
+          142
+        ],
+        [
+          129.3,
+          122
+        ],
+        [
+          160.4,
+          152
+        ],
+        [
+          150,
+          149
+        ],
+        [
+          81.7,
+          77
+        ],
+        [
+          31.7,
+          34
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-bear-creek-nature-park-4816": {
+      "presentation": {
+        "short": "Bear Creek",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 117713,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-beaver-point-park": {
+      "presentation": {
+        "short": "Beaver Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 342970,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          48.7,
+          85
+        ],
+        [
+          46.0,
+          81
+        ],
+        [
+          52.1,
+          91
+        ],
+        [
+          87.0,
+          116
+        ],
+        [
+          23.6,
+          59
+        ],
+        [
+          107.7,
+          143
+        ],
+        [
+          40.4,
+          72
+        ],
+        [
+          71.6,
+          98
+        ]
+      ]
+    },
+    "provincial-bellhouse-park": {
+      "presentation": {
+        "short": "Bellhouse",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 456116,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          61.2,
+          114
+        ],
+        [
+          58.4,
+          110
+        ],
+        [
+          64.5,
+          120
+        ],
+        [
+          64.9,
+          119
+        ],
+        [
+          36.0,
+          88
+        ],
+        [
+          118.4,
+          197
+        ],
+        [
+          51.2,
+          126
+        ],
+        [
+          82.4,
+          153
+        ]
+      ]
+    },
+    "regional-benson-creek-falls-regional-park": {
+      "presentation": {
+        "short": "Benson Creek Falls",
+        "biome": "waterfall",
+        "shape": "hex",
+        "rarity": "uncommon",
+        "seed": 311,
+        "blurb": "Follow the sound of rushing water to a cascade worth the walk.",
+        "scene": null
+      },
+      "walkM": 44,
+      "drive": [
+        [
+          122.4,
+          128
+        ],
+        [
+          119.5,
+          124
+        ],
+        [
+          126.2,
+          136
+        ],
+        [
+          109.6,
+          115
+        ],
+        [
+          140.7,
+          145
+        ],
+        [
+          130.2,
+          143
+        ],
+        [
+          62,
+          71
+        ],
+        [
+          12,
+          27
+        ]
+      ]
+    },
+    "regional-bere-point-regional-park": {
+      "presentation": {
+        "short": "Bere Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 712552,
+        "blurb": "A regional park in Northern Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          474.8,
+          421
+        ],
+        [
+          471.9,
+          416
+        ],
+        [
+          478.5,
+          428
+        ],
+        [
+          461.9,
+          408
+        ],
+        [
+          493.1,
+          438
+        ],
+        [
+          482.6,
+          435
+        ],
+        [
+          414.3,
+          363
+        ],
+        [
+          364.3,
+          320
+        ]
+      ]
+    },
+    "provincial-big-bunsby-marine-park": {
+      "presentation": {
+        "short": "Big Bunsby",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 202916,
+        "blurb": "A provincial park in North Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-bill-mee-park-4847": {
+      "presentation": {
+        "short": "Bill Mee",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 792857,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-bishop-park-8903": {
+      "presentation": {
+        "short": "Bishop",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 682442,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-blenkin-park-5262": {
+      "presentation": {
+        "short": "Blenkin",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 434924,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-bligh-island-marine-park": {
+      "presentation": {
+        "short": "Bligh Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 908485,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-bodega-ridge-park": {
+      "presentation": {
+        "short": "Bodega Ridge",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 538807,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 9,
+      "drive": [
+        [
+          78.3,
+          139
+        ],
+        [
+          75.5,
+          135
+        ],
+        [
+          81.7,
+          146
+        ],
+        [
+          82.1,
+          144
+        ],
+        [
+          53.1,
+          114
+        ],
+        [
+          135.6,
+          223
+        ],
+        [
+          68.3,
+          152
+        ],
+        [
+          99.5,
+          178
+        ]
+      ]
+    },
+    "provincial-boyle-point-park": {
+      "presentation": {
+        "short": "Boyle Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 760585,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 57,
+      "drive": [
+        [
+          212.5,
+          200
+        ],
+        [
+          209.6,
+          196
+        ],
+        [
+          216.2,
+          208
+        ],
+        [
+          199.6,
+          188
+        ],
+        [
+          230.7,
+          217
+        ],
+        [
+          220.3,
+          215
+        ],
+        [
+          152.0,
+          143
+        ],
+        [
+          102.0,
+          99
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-bracken-park-4848": {
+      "presentation": {
+        "short": "Bracken",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 599006,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-briardale-park-4849": {
+      "presentation": {
+        "short": "Briardale",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 105640,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-brooks-point-regional-park": {
+      "presentation": {
+        "short": "Brooks Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 803557,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 12,
+      "drive": [
+        [
+          67.7,
+          111
+        ],
+        [
+          65.0,
+          107
+        ],
+        [
+          71.1,
+          117
+        ],
+        [
+          71.5,
+          116
+        ],
+        [
+          42.6,
+          85
+        ],
+        [
+          95.9,
+          147
+        ],
+        [
+          62.3,
+          128
+        ],
+        [
+          93.5,
+          154
+        ]
+      ]
+    },
+    "provincial-broughton-archipelago-park": {
+      "presentation": {
+        "short": "Broughton Archipelago",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "rare",
+        "seed": 934707,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-burgoyne-bay-park": {
+      "presentation": {
+        "short": "Burgoyne Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 329562,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          97.4,
+          122
+        ],
+        [
+          94.4,
+          117
+        ],
+        [
+          101.1,
+          129
+        ],
+        [
+          84.5,
+          109
+        ],
+        [
+          23.4,
+          57
+        ],
+        [
+          105.2,
+          136
+        ],
+        [
+          37.9,
+          65
+        ],
+        [
+          69.1,
+          92
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-burlo-view-park-8898": {
+      "presentation": {
+        "short": "Burlo View",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 965707,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-cape-scott-park": {
+      "presentation": {
+        "short": "Cape Scott",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "rare",
+        "seed": 793,
+        "blurb": "The wild northwest tip. Nels Bight's white sand takes a real trek to earn.",
+        "scene": null
+      },
+      "walkM": 994,
+      "drive": [
+        [
+          567.8,
+          592
+        ],
+        [
+          564.9,
+          588
+        ],
+        [
+          571.6,
+          599
+        ],
+        [
+          554.9,
+          579
+        ],
+        [
+          586.1,
+          609
+        ],
+        [
+          575.6,
+          607
+        ],
+        [
+          507.3,
+          534
+        ],
+        [
+          457.3,
+          491
+        ]
+      ]
+    },
+    "provincial-carmanah-walbran-park": {
+      "presentation": {
+        "short": "Carmanah Walbran",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "rare",
+        "seed": 201,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 787,
+      "drive": [
+        [
+          166,
+          209
+        ],
+        [
+          163,
+          205
+        ],
+        [
+          169.7,
+          217
+        ],
+        [
+          153.1,
+          196
+        ],
+        [
+          184.2,
+          226
+        ],
+        [
+          173.8,
+          224
+        ],
+        [
+          104.2,
+          150
+        ],
+        [
+          148.6,
+          189
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-carrington-bay-park-5270": {
+      "presentation": {
+        "short": "Carrington Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 591438,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-catala-island-marine-park": {
+      "presentation": {
+        "short": "Catala Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 922910,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-chase-park-8909": {
+      "presentation": {
+        "short": "Chase",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 60600,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-chemainus-river-park": {
+      "presentation": {
+        "short": "Chemainus River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 136,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          76.7,
+          89
+        ],
+        [
+          73.7,
+          85
+        ],
+        [
+          80.4,
+          97
+        ],
+        [
+          63.8,
+          77
+        ],
+        [
+          94.9,
+          106
+        ],
+        [
+          84.5,
+          104
+        ],
+        [
+          14.9,
+          30
+        ],
+        [
+          59.3,
+          69
+        ]
+      ]
+    },
+    "provincial-claud-elliott-lake-park": {
+      "presentation": {
+        "short": "Claud Elliott Lake",
+        "biome": "lake",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 823,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 17,
+      "drive": [
+        [
+          402.3,
+          350
+        ],
+        [
+          399.4,
+          345
+        ],
+        [
+          406.1,
+          357
+        ],
+        [
+          389.5,
+          337
+        ],
+        [
+          420.6,
+          367
+        ],
+        [
+          410.1,
+          364
+        ],
+        [
+          341.9,
+          292
+        ],
+        [
+          291.8,
+          249
+        ]
+      ]
+    },
+    "provincial-clayoquot-arm-park": {
+      "presentation": {
+        "short": "Clayoquot Arm",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 660,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 1995,
+      "drive": [
+        [
+          314.7,
+          335
+        ],
+        [
+          311.7,
+          331
+        ],
+        [
+          318.4,
+          343
+        ],
+        [
+          301.8,
+          322
+        ],
+        [
+          332.9,
+          352
+        ],
+        [
+          322.5,
+          350
+        ],
+        [
+          254.2,
+          278
+        ],
+        [
+          204.2,
+          234
+        ]
+      ]
+    },
+    "provincial-clayoquot-plateau-park": {
+      "presentation": {
+        "short": "Clayoquot Plateau",
+        "biome": "mountain",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 720,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 104,
+      "drive": [
+        [
+          248,
+          240
+        ],
+        [
+          245.1,
+          235
+        ],
+        [
+          251.8,
+          247
+        ],
+        [
+          235.2,
+          227
+        ],
+        [
+          266.3,
+          256
+        ],
+        [
+          255.8,
+          254
+        ],
+        [
+          187.5,
+          182
+        ],
+        [
+          137.5,
+          139
+        ]
+      ]
+    },
+    "regional-coats-marsh-regional-park": {
+      "presentation": {
+        "short": "Coats Marsh",
+        "biome": "marsh",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 86035,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          123.5,
+          141
+        ],
+        [
+          120.6,
+          136
+        ],
+        [
+          127.2,
+          148
+        ],
+        [
+          110.6,
+          128
+        ],
+        [
+          141.8,
+          158
+        ],
+        [
+          131.3,
+          155
+        ],
+        [
+          63.0,
+          83
+        ],
+        [
+          13.8,
+          37
+        ]
+      ]
+    },
+    "provincial-collinson-point-park": {
+      "presentation": {
+        "short": "Collinson Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 225904,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 169,
+      "drive": [
+        [
+          65.7,
+          121
+        ],
+        [
+          62.9,
+          117
+        ],
+        [
+          69.1,
+          127
+        ],
+        [
+          69.5,
+          126
+        ],
+        [
+          40.6,
+          95
+        ],
+        [
+          123.0,
+          204
+        ],
+        [
+          55.7,
+          133
+        ],
+        [
+          86.9,
+          160
+        ]
+      ]
+    },
+    "provincial-cormorant-channel-marine-park": {
+      "presentation": {
+        "short": "Cormorant Channel",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 377794,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-cougar-smith-park-8900": {
+      "presentation": {
+        "short": "Cougar Smith",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 69759,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-cowichan-river-park": {
+      "presentation": {
+        "short": "Cowichan River",
+        "biome": "river",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 573,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          88.4,
+          94
+        ],
+        [
+          85.5,
+          89
+        ],
+        [
+          92.1,
+          101
+        ],
+        [
+          75.5,
+          81
+        ],
+        [
+          106.7,
+          110
+        ],
+        [
+          96.2,
+          108
+        ],
+        [
+          26.7,
+          35
+        ],
+        [
+          71,
+          73
+        ]
+      ]
+    },
+    "provincial-dawley-passage-park": {
+      "presentation": {
+        "short": "Dawley Passage",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 419,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 3380,
+      "drive": [
+        [
+          307.6,
+          289
+        ],
+        [
+          304.6,
+          284
+        ],
+        [
+          311.3,
+          296
+        ],
+        [
+          294.7,
+          276
+        ],
+        [
+          325.8,
+          306
+        ],
+        [
+          315.4,
+          303
+        ],
+        [
+          247.1,
+          231
+        ],
+        [
+          197.1,
+          188
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-debeaux-park-8911": {
+      "presentation": {
+        "short": "Debeaux",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 404036,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-denman-island-park": {
+      "presentation": {
+        "short": "Denman Island",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 364652,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 132,
+      "drive": [
+        [
+          203.8,
+          189
+        ],
+        [
+          200.9,
+          184
+        ],
+        [
+          207.5,
+          196
+        ],
+        [
+          190.9,
+          176
+        ],
+        [
+          222.1,
+          206
+        ],
+        [
+          211.6,
+          203
+        ],
+        [
+          143.3,
+          131
+        ],
+        [
+          93.3,
+          88
+        ]
+      ]
+    },
+    "regional-descanso-bay-regional-park": {
+      "presentation": {
+        "short": "Descanso Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 890647,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          117.7,
+          126
+        ],
+        [
+          114.8,
+          121
+        ],
+        [
+          121.5,
+          133
+        ],
+        [
+          104.9,
+          113
+        ],
+        [
+          136.0,
+          143
+        ],
+        [
+          125.5,
+          140
+        ],
+        [
+          57.2,
+          68
+        ],
+        [
+          8.0,
+          22
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-dickson-park-8901": {
+      "presentation": {
+        "short": "Dickson",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 980758,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-dionisio-point-park": {
+      "presentation": {
+        "short": "Dionisio Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 848029,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 68,
+      "drive": [
+        [
+          85.5,
+          151
+        ],
+        [
+          82.7,
+          147
+        ],
+        [
+          88.9,
+          157
+        ],
+        [
+          89.3,
+          156
+        ],
+        [
+          60.3,
+          125
+        ],
+        [
+          142.8,
+          234
+        ],
+        [
+          75.5,
+          163
+        ],
+        [
+          106.7,
+          189
+        ]
+      ]
+    },
+    "provincial-discovery-island-marine-park": {
+      "presentation": {
+        "short": "Discovery Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 347957,
+        "blurb": "A provincial park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-dixie-cove-marine-park": {
+      "presentation": {
+        "short": "Dixie Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 10164,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-driftwood-marine-park-4853": {
+      "presentation": {
+        "short": "Driftwood",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 289436,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-drumbeg-park": {
+      "presentation": {
+        "short": "Drumbeg",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 534485,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          131.3,
+          146
+        ],
+        [
+          128.3,
+          141
+        ],
+        [
+          135.0,
+          153
+        ],
+        [
+          118.4,
+          133
+        ],
+        [
+          149.5,
+          162
+        ],
+        [
+          139.1,
+          160
+        ],
+        [
+          70.8,
+          88
+        ],
+        [
+          21.5,
+          42
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-dyke-road-park-4843": {
+      "presentation": {
+        "short": "Dyke Road",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 605880,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-eagle-bay-park-8896": {
+      "presentation": {
+        "short": "Eagle Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 5154,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-east-point-regional-park": {
+      "presentation": {
+        "short": "East Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 18728,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 13,
+      "drive": [
+        [
+          75.4,
+          135
+        ],
+        [
+          72.6,
+          131
+        ],
+        [
+          78.7,
+          141
+        ],
+        [
+          79.1,
+          140
+        ],
+        [
+          50.2,
+          110
+        ],
+        [
+          103.6,
+          172
+        ],
+        [
+          69.3,
+          158
+        ],
+        [
+          100.5,
+          184
+        ]
+      ]
+    },
+    "provincial-echo-bay-marine-park": {
+      "presentation": {
+        "short": "Echo Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 290553,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-eileen-scott-park-8894": {
+      "presentation": {
+        "short": "Eileen Scott",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 393383,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-elk-falls-park": {
+      "presentation": {
+        "short": "Elk Falls",
+        "biome": "waterfall",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 143,
+        "blurb": "A suspension bridge swinging over a 25 m waterfall. The Island's most photogenic wobble.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          270.5,
+          225
+        ],
+        [
+          267.5,
+          220
+        ],
+        [
+          274.2,
+          232
+        ],
+        [
+          257.6,
+          212
+        ],
+        [
+          288.7,
+          242
+        ],
+        [
+          278.3,
+          239
+        ],
+        [
+          210,
+          167
+        ],
+        [
+          160,
+          124
+        ]
+      ]
+    },
+    "provincial-englishman-river-falls-park": {
+      "presentation": {
+        "short": "Englishman River Falls",
+        "biome": "waterfall",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 690,
+        "blurb": "Follow the sound of rushing water to a cascade worth the walk.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          158.8,
+          158
+        ],
+        [
+          155.9,
+          153
+        ],
+        [
+          162.6,
+          165
+        ],
+        [
+          146,
+          145
+        ],
+        [
+          177.1,
+          175
+        ],
+        [
+          166.6,
+          172
+        ],
+        [
+          98.4,
+          100
+        ],
+        [
+          48.3,
+          57
+        ]
+      ]
+    },
+    "regional-englishman-river-regional-park": {
+      "presentation": {
+        "short": "Englishman River",
+        "biome": "river",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 337,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 122,
+      "drive": [
+        [
+          144.7,
+          139
+        ],
+        [
+          141.8,
+          134
+        ],
+        [
+          148.5,
+          146
+        ],
+        [
+          131.9,
+          126
+        ],
+        [
+          163,
+          156
+        ],
+        [
+          152.5,
+          153
+        ],
+        [
+          84.3,
+          81
+        ],
+        [
+          34.3,
+          38
+        ]
+      ]
+    },
+    "provincial-epper-passage-park": {
+      "presentation": {
+        "short": "Epper Passage",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 381946,
+        "blurb": "A provincial park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-esplanade-park-and-trails-5293": {
+      "presentation": {
+        "short": "Esplanade Park and Trails",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 344131,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-evergreen-park-8912": {
+      "presentation": {
+        "short": "Evergreen",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 593852,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-eves-park": {
+      "presentation": {
+        "short": "Eves",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 171,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          74.1,
+          76
+        ],
+        [
+          71.1,
+          71
+        ],
+        [
+          77.8,
+          83
+        ],
+        [
+          61.2,
+          63
+        ],
+        [
+          92.3,
+          92
+        ],
+        [
+          81.9,
+          90
+        ],
+        [
+          13.6,
+          18
+        ],
+        [
+          41,
+          43
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-fanny-bay-community-park-4858": {
+      "presentation": {
+        "short": "Fanny Bay Community",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 373093,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-fillongley-park": {
+      "presentation": {
+        "short": "Fillongley",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 403473,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          204.8,
+          189
+        ],
+        [
+          201.9,
+          185
+        ],
+        [
+          208.5,
+          197
+        ],
+        [
+          191.9,
+          176
+        ],
+        [
+          223.1,
+          206
+        ],
+        [
+          212.6,
+          204
+        ],
+        [
+          144.3,
+          132
+        ],
+        [
+          94.3,
+          88
+        ]
+      ]
+    },
+    "provincial-flores-island-park": {
+      "presentation": {
+        "short": "Flores Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "rare",
+        "seed": 527842,
+        "blurb": "A provincial park in West Coast Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-foden-park-4859": {
+      "presentation": {
+        "short": "Foden",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 568732,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-fossli-park": {
+      "presentation": {
+        "short": "Fossli",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 984,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 60,
+      "drive": [
+        [
+          210.3,
+          257
+        ],
+        [
+          207.3,
+          252
+        ],
+        [
+          214,
+          264
+        ],
+        [
+          197.4,
+          244
+        ],
+        [
+          228.5,
+          274
+        ],
+        [
+          218.1,
+          271
+        ],
+        [
+          149.8,
+          199
+        ],
+        [
+          99.8,
+          156
+        ]
+      ]
+    },
+    "provincial-french-beach-park": {
+      "presentation": {
+        "short": "French Beach",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 284,
+        "blurb": "Grey whales cruise past in spring. Pebble beach, big logs, bigger ocean.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          60.2,
+          71
+        ],
+        [
+          57.3,
+          66
+        ],
+        [
+          64,
+          78
+        ],
+        [
+          44.5,
+          54
+        ],
+        [
+          78.5,
+          88
+        ],
+        [
+          20,
+          24
+        ],
+        [
+          89,
+          96
+        ],
+        [
+          138.8,
+          143
+        ]
+      ]
+    },
+    "provincial-gabriola-sands-park": {
+      "presentation": {
+        "short": "Gabriola Sands",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 991312,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          119.2,
+          128
+        ],
+        [
+          116.3,
+          123
+        ],
+        [
+          123.0,
+          135
+        ],
+        [
+          106.4,
+          115
+        ],
+        [
+          137.5,
+          145
+        ],
+        [
+          127.0,
+          142
+        ],
+        [
+          58.7,
+          70
+        ],
+        [
+          9.5,
+          24
+        ]
+      ]
+    },
+    "regional-george-hill-regional-park": {
+      "presentation": {
+        "short": "George Hill",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 511457,
+        "blurb": "A regional park in Capital Region. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          51.7,
+          86
+        ],
+        [
+          48.9,
+          82
+        ],
+        [
+          55.1,
+          92
+        ],
+        [
+          55.5,
+          91
+        ],
+        [
+          26.5,
+          60
+        ],
+        [
+          79.9,
+          122
+        ],
+        [
+          46.3,
+          103
+        ],
+        [
+          77.4,
+          129
+        ]
+      ]
+    },
+    "provincial-gerald-island-park": {
+      "presentation": {
+        "short": "Gerald Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 289365,
+        "blurb": "A provincial park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-gibson-marine-park": {
+      "presentation": {
+        "short": "Gibson",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 342241,
+        "blurb": "A provincial park in Central Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-glover-community-nature-park-4860": {
+      "presentation": {
+        "short": "Glover Community",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 362551,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-gnat-park-5285": {
+      "presentation": {
+        "short": "Gnat",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 423656,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-god-s-pocket-marine-park": {
+      "presentation": {
+        "short": "God's Pocket",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "rare",
+        "seed": 313682,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-gold-muchalat-park": {
+      "presentation": {
+        "short": "Gold Muchalat",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 836,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          364,
+          321
+        ],
+        [
+          361.1,
+          316
+        ],
+        [
+          367.8,
+          328
+        ],
+        [
+          351.2,
+          308
+        ],
+        [
+          382.3,
+          338
+        ],
+        [
+          371.8,
+          335
+        ],
+        [
+          303.6,
+          263
+        ],
+        [
+          253.5,
+          220
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-goose-spit-park-4861": {
+      "presentation": {
+        "short": "Goose Spit",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 675805,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-gordon-bay-park": {
+      "presentation": {
+        "short": "Gordon Bay",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 358,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          104.8,
+          109
+        ],
+        [
+          101.8,
+          105
+        ],
+        [
+          108.5,
+          117
+        ],
+        [
+          91.9,
+          97
+        ],
+        [
+          123,
+          126
+        ],
+        [
+          112.6,
+          124
+        ],
+        [
+          43.1,
+          50
+        ],
+        [
+          87.4,
+          89
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-grassy-point-park-4862": {
+      "presentation": {
+        "short": "Grassy Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 450104,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-hamilton-marsh-regional-park-and-conservation-area": {
+      "presentation": {
+        "short": "Hamilton Marsh",
+        "biome": "marsh",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 760,
+        "blurb": "Reeds, birdsong and boardwalks. Herons are the locals here.",
+        "scene": null
+      },
+      "walkM": 5,
+      "drive": [
+        [
+          159.5,
+          148
+        ],
+        [
+          156.5,
+          143
+        ],
+        [
+          163.2,
+          155
+        ],
+        [
+          146.6,
+          135
+        ],
+        [
+          177.7,
+          164
+        ],
+        [
+          167.3,
+          162
+        ],
+        [
+          99,
+          90
+        ],
+        [
+          49,
+          47
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-hank-s-beach-forest-conservation-park-5290": {
+      "presentation": {
+        "short": "Hank's Beach Forest Conservation",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 118334,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-hatchery-park-8907": {
+      "presentation": {
+        "short": "Hatchery",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 717822,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-hayes-park-5286": {
+      "presentation": {
+        "short": "Hayes",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 961224,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-headquarters-townsite-park-4865": {
+      "presentation": {
+        "short": "Headquarters Townsite",
+        "biome": "heritage",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 125874,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-helliwell-park": {
+      "presentation": {
+        "short": "Helliwell",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "rare",
+        "seed": 58064,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 256,
+      "drive": [
+        [
+          226.1,
+          239
+        ],
+        [
+          223.1,
+          234
+        ],
+        [
+          229.8,
+          246
+        ],
+        [
+          213.2,
+          226
+        ],
+        [
+          244.3,
+          255
+        ],
+        [
+          233.9,
+          253
+        ],
+        [
+          165.6,
+          181
+        ],
+        [
+          115.6,
+          138
+        ]
+      ]
+    },
+    "provincial-hemer-park": {
+      "presentation": {
+        "short": "Hemer",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 283,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 188,
+      "drive": [
+        [
+          109.7,
+          109
+        ],
+        [
+          106.7,
+          105
+        ],
+        [
+          113.4,
+          117
+        ],
+        [
+          96.8,
+          96
+        ],
+        [
+          127.9,
+          126
+        ],
+        [
+          117.5,
+          124
+        ],
+        [
+          49.2,
+          52
+        ],
+        [
+          15.1,
+          21
+        ]
+      ]
+    },
+    "provincial-hesquiat-lake-park": {
+      "presentation": {
+        "short": "Hesquiat Lake",
+        "biome": "lake",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 412,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 16355,
+      "drive": [
+        [
+          391.4,
+          402
+        ],
+        [
+          388.5,
+          397
+        ],
+        [
+          395.2,
+          409
+        ],
+        [
+          378.6,
+          389
+        ],
+        [
+          409.7,
+          419
+        ],
+        [
+          399.2,
+          416
+        ],
+        [
+          331,
+          344
+        ],
+        [
+          281,
+          301
+        ]
+      ]
+    },
+    "provincial-hesquiat-peninsula-park": {
+      "presentation": {
+        "short": "Hesquiat Peninsula",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 496,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-hidden-beach-park-4866": {
+      "presentation": {
+        "short": "Hidden Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 333464,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-highland-park-8908": {
+      "presentation": {
+        "short": "Highland",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 362949,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-hitchie-creek-park": {
+      "presentation": {
+        "short": "Hitchie Creek",
+        "biome": "river",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 851,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 172,
+      "drive": [
+        [
+          174.2,
+          224
+        ],
+        [
+          171.2,
+          219
+        ],
+        [
+          177.9,
+          231
+        ],
+        [
+          161.3,
+          211
+        ],
+        [
+          192.4,
+          240
+        ],
+        [
+          182,
+          238
+        ],
+        [
+          112.5,
+          165
+        ],
+        [
+          156.8,
+          203
+        ]
+      ]
+    },
+    "provincial-horne-lake-caves-park": {
+      "presentation": {
+        "short": "Horne Lake Caves",
+        "biome": "cave",
+        "shape": "arch",
+        "rarity": "rare",
+        "seed": 383,
+        "blurb": "Crawl, climb and squeeze through limestone caves. Headlamp required, grin guaranteed.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          183.9,
+          180
+        ],
+        [
+          181,
+          175
+        ],
+        [
+          187.6,
+          187
+        ],
+        [
+          171,
+          167
+        ],
+        [
+          202.1,
+          197
+        ],
+        [
+          191.7,
+          194
+        ],
+        [
+          123.4,
+          122
+        ],
+        [
+          73.4,
+          79
+        ]
+      ]
+    },
+    "regional-horne-lake-regional-park": {
+      "presentation": {
+        "short": "Horne Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 6,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          184.1,
+          180
+        ],
+        [
+          181.2,
+          176
+        ],
+        [
+          187.9,
+          188
+        ],
+        [
+          171.3,
+          168
+        ],
+        [
+          202.4,
+          197
+        ],
+        [
+          191.9,
+          195
+        ],
+        [
+          123.7,
+          123
+        ],
+        [
+          73.6,
+          79
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-huband-park-4867": {
+      "presentation": {
+        "short": "Huband",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 274290,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-hwsalu-utsum-park": {
+      "presentation": {
+        "short": "Hwsalu-Utsum",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 563,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 258,
+      "drive": [
+        [
+          50.4,
+          66
+        ],
+        [
+          47.5,
+          61
+        ],
+        [
+          54.2,
+          73
+        ],
+        [
+          37.5,
+          53
+        ],
+        [
+          68.7,
+          83
+        ],
+        [
+          58.2,
+          80
+        ],
+        [
+          29.5,
+          43
+        ],
+        [
+          79.4,
+          90
+        ]
+      ]
+    },
+    "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park": {
+      "presentation": {
+        "short": "Háthayim",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 484903,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-jack-shark-park-4869": {
+      "presentation": {
+        "short": "Jack Shark",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 233902,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-joe-walker-park-4870": {
+      "presentation": {
+        "short": "Joe Walker",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 594527,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-john-kim-nature-sanctuary-5294": {
+      "presentation": {
+        "short": "John Kim Nature Sanctuary",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 544682,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-jordan-river-regional-park": {
+      "presentation": {
+        "short": "Jordan River",
+        "biome": "river",
+        "shape": "hex",
+        "rarity": "uncommon",
+        "seed": 255,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 22,
+      "drive": [
+        [
+          67.8,
+          77
+        ],
+        [
+          64.8,
+          72
+        ],
+        [
+          71.5,
+          84
+        ],
+        [
+          52.1,
+          60
+        ],
+        [
+          86,
+          94
+        ],
+        [
+          27.5,
+          29
+        ],
+        [
+          96.5,
+          102
+        ],
+        [
+          146.4,
+          149
+        ]
+      ]
+    },
+    "provincial-juan-de-fuca-park": {
+      "presentation": {
+        "short": "Juan De Fuca",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "rare",
+        "seed": 434,
+        "blurb": "Tide pools, sea stacks and the start of a legendary marine trail. China Beach sunsets are unreal.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          74.8,
+          87
+        ],
+        [
+          71.9,
+          82
+        ],
+        [
+          78.6,
+          94
+        ],
+        [
+          59.1,
+          70
+        ],
+        [
+          93.1,
+          103
+        ],
+        [
+          34.6,
+          39
+        ],
+        [
+          103.6,
+          112
+        ],
+        [
+          153.4,
+          159
+        ]
+      ]
+    },
+    "provincial-jaji7em-and-kw-ulh-marine-park": {
+      "presentation": {
+        "short": "Jáji7em and Kw'ulh",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 314623,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-kapoor-regional-park": {
+      "presentation": {
+        "short": "Kapoor",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 890,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 43,
+      "drive": [
+        [
+          53.6,
+          82
+        ],
+        [
+          50.7,
+          77
+        ],
+        [
+          57.4,
+          89
+        ],
+        [
+          40.9,
+          68
+        ],
+        [
+          71.9,
+          98
+        ],
+        [
+          18.8,
+          42
+        ],
+        [
+          46.3,
+          79
+        ],
+        [
+          96.1,
+          126
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-karen-place-park-8913": {
+      "presentation": {
+        "short": "Karen Place",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 291366,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-kennedy-lake-park": {
+      "presentation": {
+        "short": "Kennedy Lake",
+        "biome": "lake",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 618,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          289.8,
+          276
+        ],
+        [
+          286.9,
+          271
+        ],
+        [
+          293.6,
+          283
+        ],
+        [
+          277,
+          263
+        ],
+        [
+          308.1,
+          292
+        ],
+        [
+          297.6,
+          290
+        ],
+        [
+          229.4,
+          218
+        ],
+        [
+          179.4,
+          175
+        ]
+      ]
+    },
+    "provincial-kennedy-river-bog-park": {
+      "presentation": {
+        "short": "Kennedy River Bog",
+        "biome": "marsh",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 906,
+        "blurb": "Reeds, birdsong and boardwalks. Herons are the locals here.",
+        "scene": null
+      },
+      "walkM": 35,
+      "drive": [
+        [
+          297.2,
+          293
+        ],
+        [
+          294.2,
+          289
+        ],
+        [
+          300.9,
+          301
+        ],
+        [
+          284.3,
+          280
+        ],
+        [
+          315.4,
+          310
+        ],
+        [
+          305,
+          308
+        ],
+        [
+          236.7,
+          236
+        ],
+        [
+          186.7,
+          192
+        ]
+      ]
+    },
+    "provincial-kin-beach-park": {
+      "presentation": {
+        "short": "Kin Beach",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 520,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          230.1,
+          204
+        ],
+        [
+          227.2,
+          200
+        ],
+        [
+          233.9,
+          212
+        ],
+        [
+          217.3,
+          191
+        ],
+        [
+          248.4,
+          221
+        ],
+        [
+          237.9,
+          219
+        ],
+        [
+          169.7,
+          147
+        ],
+        [
+          119.6,
+          103
+        ]
+      ]
+    },
+    "provincial-kitty-coleman-beach-park": {
+      "presentation": {
+        "short": "Kitty Coleman Beach",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 841,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          235.5,
+          210
+        ],
+        [
+          232.5,
+          205
+        ],
+        [
+          239.2,
+          217
+        ],
+        [
+          222.6,
+          197
+        ],
+        [
+          253.7,
+          227
+        ],
+        [
+          243.3,
+          224
+        ],
+        [
+          175,
+          152
+        ],
+        [
+          125,
+          109
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-klista-park-8902": {
+      "presentation": {
+        "short": "Klista",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 549560,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-koksilah-river-park": {
+      "presentation": {
+        "short": "Koksilah River",
+        "biome": "river",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 539,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          49.8,
+          63
+        ],
+        [
+          46.9,
+          58
+        ],
+        [
+          53.5,
+          70
+        ],
+        [
+          36.9,
+          50
+        ],
+        [
+          68.1,
+          79
+        ],
+        [
+          57.6,
+          77
+        ],
+        [
+          28.9,
+          40
+        ],
+        [
+          78.8,
+          86
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-kw-as-park-5261": {
+      "presentation": {
+        "short": "Kw'as",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 965894,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-kwaksistah-regional-park": {
+      "presentation": {
+        "short": "Kwaksistah",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 994,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          566.8,
+          539
+        ],
+        [
+          563.8,
+          535
+        ],
+        [
+          570.5,
+          546
+        ],
+        [
+          553.9,
+          526
+        ],
+        [
+          585,
+          556
+        ],
+        [
+          574.5,
+          554
+        ],
+        [
+          506.3,
+          481
+        ],
+        [
+          456.3,
+          438
+        ]
+      ]
+    },
+    "provincial-lanz-and-cox-islands-park": {
+      "presentation": {
+        "short": "Lanz And Cox Islands",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 278248,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-lawn-point-park": {
+      "presentation": {
+        "short": "Lawn Point",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 373,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 267,
+      "drive": [
+        [
+          595.4,
+          575
+        ],
+        [
+          592.4,
+          571
+        ],
+        [
+          599.1,
+          582
+        ],
+        [
+          582.5,
+          562
+        ],
+        [
+          613.6,
+          592
+        ],
+        [
+          603.2,
+          590
+        ],
+        [
+          534.9,
+          518
+        ],
+        [
+          484.9,
+          474
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-lazo-wildlife-park-4871": {
+      "presentation": {
+        "short": "Lazo Wildlife",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 849838,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-little-huson-cave-regional-park": {
+      "presentation": {
+        "short": "Little Huson Cave",
+        "biome": "cave",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 610,
+        "blurb": "Limestone arches and caves carved by the Atluck River. A North Island adventure.",
+        "scene": null
+      },
+      "walkM": 21,
+      "drive": [
+        [
+          426,
+          362
+        ],
+        [
+          423,
+          357
+        ],
+        [
+          429.7,
+          369
+        ],
+        [
+          413.1,
+          349
+        ],
+        [
+          444.2,
+          378
+        ],
+        [
+          433.8,
+          376
+        ],
+        [
+          365.5,
+          304
+        ],
+        [
+          315.5,
+          261
+        ]
+      ]
+    },
+    "provincial-little-qualicum-falls-park": {
+      "presentation": {
+        "short": "Little Qualicum Falls",
+        "biome": "waterfall",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 243,
+        "blurb": "Tumbling falls in a deep canyon, and a lake for cooling off afterwards.",
+        "scene": null
+      },
+      "walkM": 16,
+      "drive": [
+        [
+          172.9,
+          158
+        ],
+        [
+          169.9,
+          154
+        ],
+        [
+          176.6,
+          166
+        ],
+        [
+          160,
+          146
+        ],
+        [
+          191.1,
+          175
+        ],
+        [
+          180.7,
+          173
+        ],
+        [
+          112.4,
+          101
+        ],
+        [
+          62.4,
+          57
+        ]
+      ]
+    },
+    "regional-little-qualicum-river-estuary-regional-conservation-area": {
+      "presentation": {
+        "short": "Little Qualicum River Estuary",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 40,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 39,
+      "drive": [
+        [
+          163.7,
+          152
+        ],
+        [
+          160.8,
+          148
+        ],
+        [
+          167.5,
+          160
+        ],
+        [
+          150.9,
+          139
+        ],
+        [
+          182,
+          169
+        ],
+        [
+          171.5,
+          167
+        ],
+        [
+          103.3,
+          95
+        ],
+        [
+          53.3,
+          51
+        ]
+      ]
+    },
+    "regional-little-qualicum-river-regional-park": {
+      "presentation": {
+        "short": "Little Qualicum River",
+        "biome": "river",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 253,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          168.5,
+          161
+        ],
+        [
+          165.6,
+          157
+        ],
+        [
+          172.2,
+          169
+        ],
+        [
+          155.6,
+          148
+        ],
+        [
+          186.8,
+          178
+        ],
+        [
+          176.3,
+          176
+        ],
+        [
+          108,
+          104
+        ],
+        [
+          58,
+          60
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-little-river-nature-park-4872": {
+      "presentation": {
+        "short": "Little River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 687650,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-loveland-bay-park": {
+      "presentation": {
+        "short": "Loveland Bay",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 902,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          284.2,
+          264
+        ],
+        [
+          281.2,
+          259
+        ],
+        [
+          287.9,
+          271
+        ],
+        [
+          271.3,
+          251
+        ],
+        [
+          302.4,
+          281
+        ],
+        [
+          292,
+          278
+        ],
+        [
+          223.7,
+          206
+        ],
+        [
+          173.7,
+          163
+        ]
+      ]
+    },
+    "provincial-lower-nimpkish-park": {
+      "presentation": {
+        "short": "Lower Nimpkish",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 75,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 372,
+      "drive": [
+        [
+          448,
+          368
+        ],
+        [
+          445.1,
+          363
+        ],
+        [
+          451.8,
+          375
+        ],
+        [
+          435.2,
+          355
+        ],
+        [
+          466.3,
+          384
+        ],
+        [
+          455.8,
+          382
+        ],
+        [
+          387.6,
+          310
+        ],
+        [
+          337.6,
+          267
+        ]
+      ]
+    },
+    "provincial-lower-tsitika-river-park": {
+      "presentation": {
+        "short": "Lower Tsitika River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 748,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          394.4,
+          376
+        ],
+        [
+          391.5,
+          371
+        ],
+        [
+          398.2,
+          383
+        ],
+        [
+          381.6,
+          363
+        ],
+        [
+          412.7,
+          392
+        ],
+        [
+          402.2,
+          390
+        ],
+        [
+          334,
+          318
+        ],
+        [
+          284,
+          275
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-loxley-park-4873": {
+      "presentation": {
+        "short": "Loxley",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 103037,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-macmillan-park": {
+      "presentation": {
+        "short": "Macmillan",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 886,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 9,
+      "drive": [
+        [
+          177.8,
+          164
+        ],
+        [
+          174.9,
+          159
+        ],
+        [
+          181.5,
+          171
+        ],
+        [
+          164.9,
+          151
+        ],
+        [
+          196.1,
+          180
+        ],
+        [
+          185.6,
+          178
+        ],
+        [
+          117.3,
+          106
+        ],
+        [
+          67.3,
+          63
+        ]
+      ]
+    },
+    "provincial-main-lake-park": {
+      "presentation": {
+        "short": "Main Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 406448,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 24,
+      "drive": [
+        [
+          296.6,
+          289
+        ],
+        [
+          293.7,
+          284
+        ],
+        [
+          300.3,
+          296
+        ],
+        [
+          283.7,
+          276
+        ],
+        [
+          314.9,
+          306
+        ],
+        [
+          304.4,
+          303
+        ],
+        [
+          236.1,
+          231
+        ],
+        [
+          186.1,
+          188
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-mallard-creek-nature-park-4874": {
+      "presentation": {
+        "short": "Mallard Creek",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 93587,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-mansons-landing-park": {
+      "presentation": {
+        "short": "Mansons Landing",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 663154,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          307.5,
+          321
+        ],
+        [
+          304.6,
+          316
+        ],
+        [
+          311.2,
+          328
+        ],
+        [
+          294.6,
+          308
+        ],
+        [
+          325.8,
+          338
+        ],
+        [
+          315.3,
+          335
+        ],
+        [
+          247.0,
+          263
+        ],
+        [
+          197.0,
+          220
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-maple-park-5281": {
+      "presentation": {
+        "short": "Maple",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 708442,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-maple-park-4825": {
+      "presentation": {
+        "short": "Maple",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 826712,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-maplehurst-park-8914": {
+      "presentation": {
+        "short": "Maplehurst",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 857695,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-marble-river-park": {
+      "presentation": {
+        "short": "Marble River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 88,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 122,
+      "drive": [
+        [
+          504.5,
+          445
+        ],
+        [
+          501.6,
+          441
+        ],
+        [
+          508.3,
+          453
+        ],
+        [
+          491.7,
+          433
+        ],
+        [
+          522.8,
+          462
+        ],
+        [
+          512.3,
+          460
+        ],
+        [
+          444.1,
+          388
+        ],
+        [
+          394,
+          345
+        ]
+      ]
+    },
+    "regional-matthews-point-regional-park": {
+      "presentation": {
+        "short": "Matthews Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 319353,
+        "blurb": "A regional park in Capital Region. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          62.6,
+          116
+        ],
+        [
+          59.8,
+          112
+        ],
+        [
+          66.0,
+          123
+        ],
+        [
+          66.4,
+          121
+        ],
+        [
+          37.4,
+          91
+        ],
+        [
+          119.9,
+          200
+        ],
+        [
+          52.6,
+          129
+        ],
+        [
+          83.8,
+          155
+        ]
+      ]
+    },
+    "provincial-memory-island-park": {
+      "presentation": {
+        "short": "Memory Island",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 193,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 328,
+      "drive": [
+        [
+          37.3,
+          41
+        ],
+        [
+          34.3,
+          36
+        ],
+        [
+          41,
+          48
+        ],
+        [
+          24.4,
+          28
+        ],
+        [
+          55.5,
+          58
+        ],
+        [
+          45.1,
+          55
+        ],
+        [
+          24.6,
+          30
+        ],
+        [
+          74.4,
+          77
+        ]
+      ]
+    },
+    "regional-mill-farm-regional-park": {
+      "presentation": {
+        "short": "Mill Farm",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 216544,
+        "blurb": "A regional park in Capital Region. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 63,
+      "drive": [
+        [
+          52.2,
+          94
+        ],
+        [
+          49.4,
+          89
+        ],
+        [
+          55.5,
+          100
+        ],
+        [
+          94.8,
+          127
+        ],
+        [
+          27.0,
+          68
+        ],
+        [
+          115.4,
+          154
+        ],
+        [
+          48.2,
+          83
+        ],
+        [
+          79.4,
+          109
+        ]
+      ]
+    },
+    "provincial-miracle-beach-park": {
+      "presentation": {
+        "short": "Miracle Beach",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 663,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          247.6,
+          210
+        ],
+        [
+          244.7,
+          205
+        ],
+        [
+          251.3,
+          217
+        ],
+        [
+          234.7,
+          197
+        ],
+        [
+          265.9,
+          227
+        ],
+        [
+          255.4,
+          224
+        ],
+        [
+          187.1,
+          152
+        ],
+        [
+          137.1,
+          109
+        ]
+      ]
+    },
+    "provincial-mitlenatch-island-nature-park": {
+      "presentation": {
+        "short": "Mitlenatch Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 260907,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-mitlenatch-park-5276": {
+      "presentation": {
+        "short": "Mitlenatch",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 623555,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-montague-harbour-marine-park": {
+      "presentation": {
+        "short": "Montague Harbour",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 470928,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          68.0,
+          126
+        ],
+        [
+          65.2,
+          122
+        ],
+        [
+          71.4,
+          132
+        ],
+        [
+          71.8,
+          131
+        ],
+        [
+          42.8,
+          100
+        ],
+        [
+          125.3,
+          209
+        ],
+        [
+          58.0,
+          138
+        ],
+        [
+          89.2,
+          165
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-montrose-park-4875": {
+      "presentation": {
+        "short": "Montrose",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 182732,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-moon-park-5288": {
+      "presentation": {
+        "short": "Moon",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 622441,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-moorecroft-regional-park": {
+      "presentation": {
+        "short": "Moorecroft",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 30,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          140.9,
+          134
+        ],
+        [
+          138,
+          130
+        ],
+        [
+          144.6,
+          141
+        ],
+        [
+          128,
+          121
+        ],
+        [
+          159.2,
+          151
+        ],
+        [
+          148.7,
+          149
+        ],
+        [
+          80.4,
+          77
+        ],
+        [
+          30.4,
+          33
+        ]
+      ]
+    },
+    "provincial-morden-colliery-historic-park": {
+      "presentation": {
+        "short": "Morden Colliery",
+        "biome": "heritage",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 173,
+        "blurb": "A place with deep history. Walk slowly and look closely.",
+        "scene": null
+      },
+      "walkM": 8,
+      "drive": [
+        [
+          102.5,
+          98
+        ],
+        [
+          99.6,
+          93
+        ],
+        [
+          106.2,
+          105
+        ],
+        [
+          89.6,
+          85
+        ],
+        [
+          120.8,
+          115
+        ],
+        [
+          110.3,
+          112
+        ],
+        [
+          42,
+          40
+        ],
+        [
+          10.3,
+          13
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-morning-beach-park-4876": {
+      "presentation": {
+        "short": "Morning Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 372341,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-morton-lake-park": {
+      "presentation": {
+        "short": "Morton Lake",
+        "biome": "lake",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 891,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          290.3,
+          253
+        ],
+        [
+          287.4,
+          249
+        ],
+        [
+          294,
+          261
+        ],
+        [
+          277.4,
+          241
+        ],
+        [
+          308.6,
+          270
+        ],
+        [
+          298.1,
+          268
+        ],
+        [
+          229.8,
+          196
+        ],
+        [
+          179.8,
+          152
+        ]
+      ]
+    },
+    "regional-mount-arrowsmith-massif-regional-park": {
+      "presentation": {
+        "short": "Mount Arrowsmith Massif",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 856,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 840,
+      "drive": [
+        [
+          169.3,
+          246
+        ],
+        [
+          166.3,
+          241
+        ],
+        [
+          173,
+          253
+        ],
+        [
+          156.4,
+          233
+        ],
+        [
+          187.5,
+          262
+        ],
+        [
+          177.1,
+          260
+        ],
+        [
+          108.8,
+          188
+        ],
+        [
+          64.6,
+          146
+        ]
+      ]
+    },
+    "regional-mount-arrowsmith-regional-park-acrd": {
+      "presentation": {
+        "short": "Mount Arrowsmith",
+        "biome": "mountain",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 679,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          228.9,
+          259
+        ],
+        [
+          225.9,
+          254
+        ],
+        [
+          232.6,
+          266
+        ],
+        [
+          216,
+          246
+        ],
+        [
+          247.1,
+          275
+        ],
+        [
+          236.7,
+          273
+        ],
+        [
+          168.4,
+          201
+        ],
+        [
+          118.4,
+          158
+        ]
+      ]
+    },
+    "regional-mount-benson-regional-park": {
+      "presentation": {
+        "short": "Mount Benson",
+        "biome": "mountain",
+        "shape": "hex",
+        "rarity": "uncommon",
+        "seed": 101,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          124,
+          152
+        ],
+        [
+          121.1,
+          147
+        ],
+        [
+          127.8,
+          159
+        ],
+        [
+          111.1,
+          139
+        ],
+        [
+          142.3,
+          169
+        ],
+        [
+          131.8,
+          166
+        ],
+        [
+          63.5,
+          94
+        ],
+        [
+          14,
+          50
+        ]
+      ]
+    },
+    "regional-mount-cain-alpine-park": {
+      "presentation": {
+        "short": "Mount Cain Alpine",
+        "biome": "mountain",
+        "shape": "hex",
+        "rarity": "uncommon",
+        "seed": 211,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          400.7,
+          353
+        ],
+        [
+          397.7,
+          349
+        ],
+        [
+          404.4,
+          361
+        ],
+        [
+          387.8,
+          340
+        ],
+        [
+          418.9,
+          370
+        ],
+        [
+          408.5,
+          368
+        ],
+        [
+          340.2,
+          296
+        ],
+        [
+          290.2,
+          252
+        ]
+      ]
+    },
+    "provincial-mount-erskine-park": {
+      "presentation": {
+        "short": "Mount Erskine",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 497184,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 92,
+      "drive": [
+        [
+          88.0,
+          112
+        ],
+        [
+          85.1,
+          108
+        ],
+        [
+          91.7,
+          120
+        ],
+        [
+          75.1,
+          100
+        ],
+        [
+          37.2,
+          74
+        ],
+        [
+          95.8,
+          127
+        ],
+        [
+          28.5,
+          56
+        ],
+        [
+          59.7,
+          82
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-mount-geoffrey-bench-park-4922": {
+      "presentation": {
+        "short": "Mount Geoffrey Bench",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 18954,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-mount-geoffrey-escarpment-park": {
+      "presentation": {
+        "short": "Mount Geoffrey Escarpment",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 856029,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 411,
+      "drive": [
+        [
+          226.4,
+          239
+        ],
+        [
+          223.4,
+          234
+        ],
+        [
+          230.1,
+          246
+        ],
+        [
+          213.5,
+          226
+        ],
+        [
+          244.6,
+          256
+        ],
+        [
+          234.2,
+          253
+        ],
+        [
+          165.9,
+          181
+        ],
+        [
+          115.9,
+          138
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-mount-geoffrey-nature-park-4822": {
+      "presentation": {
+        "short": "Mount Geoffrey",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 960605,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-mount-maxwell-park": {
+      "presentation": {
+        "short": "Mount Maxwell",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 889829,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          96.9,
+          174
+        ],
+        [
+          94.0,
+          170
+        ],
+        [
+          100.6,
+          182
+        ],
+        [
+          84.0,
+          161
+        ],
+        [
+          36.6,
+          123
+        ],
+        [
+          104.7,
+          189
+        ],
+        [
+          37.4,
+          118
+        ],
+        [
+          68.6,
+          144
+        ]
+      ]
+    },
+    "regional-mount-parke-regional-park": {
+      "presentation": {
+        "short": "Mount Parke",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 528392,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 16,
+      "drive": [
+        [
+          106.4,
+          164
+        ],
+        [
+          103.4,
+          159
+        ],
+        [
+          110.1,
+          171
+        ],
+        [
+          93.5,
+          151
+        ],
+        [
+          34.1,
+          74
+        ],
+        [
+          114.2,
+          178
+        ],
+        [
+          46.9,
+          107
+        ],
+        [
+          78.1,
+          133
+        ]
+      ]
+    },
+    "regional-mountain-forest-regional-park": {
+      "presentation": {
+        "short": "Mountain Forest",
+        "biome": "mountain",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 491,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 6,
+      "drive": [
+        [
+          13.3,
+          20
+        ],
+        [
+          10.5,
+          16
+        ],
+        [
+          16.7,
+          27
+        ],
+        [
+          14.5,
+          21
+        ],
+        [
+          22.5,
+          27
+        ],
+        [
+          38.9,
+          53
+        ],
+        [
+          61.4,
+          64
+        ],
+        [
+          111.2,
+          111
+        ]
+      ]
+    },
+    "provincial-muqqiwn-brooks-peninsula-park": {
+      "presentation": {
+        "short": "Muqqiwn/Brooks Peninsula",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 415,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 626,
+      "drive": [
+        [
+          582.7,
+          643
+        ],
+        [
+          579.8,
+          638
+        ],
+        [
+          586.5,
+          650
+        ],
+        [
+          569.9,
+          630
+        ],
+        [
+          601,
+          660
+        ],
+        [
+          590.5,
+          657
+        ],
+        [
+          522.3,
+          585
+        ],
+        [
+          472.3,
+          542
+        ]
+      ]
+    },
+    "regional-nanaimo-river-regional-park": {
+      "presentation": {
+        "short": "Nanaimo River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 448,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 77,
+      "drive": [
+        [
+          103.6,
+          101
+        ],
+        [
+          100.6,
+          97
+        ],
+        [
+          107.3,
+          109
+        ],
+        [
+          90.7,
+          88
+        ],
+        [
+          121.8,
+          118
+        ],
+        [
+          111.4,
+          116
+        ],
+        [
+          43.1,
+          44
+        ],
+        [
+          11.4,
+          16
+        ]
+      ]
+    },
+    "provincial-nimpkish-lake-park": {
+      "presentation": {
+        "short": "Nimpkish Lake",
+        "biome": "lake",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 203,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 328,
+      "drive": [
+        [
+          430.7,
+          391
+        ],
+        [
+          427.8,
+          386
+        ],
+        [
+          434.4,
+          398
+        ],
+        [
+          417.8,
+          378
+        ],
+        [
+          448.9,
+          407
+        ],
+        [
+          438.5,
+          405
+        ],
+        [
+          370.2,
+          333
+        ],
+        [
+          320.2,
+          290
+        ]
+      ]
+    },
+    "provincial-nismaakqin-park": {
+      "presentation": {
+        "short": "Nism̓aakqin",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "rare",
+        "seed": 310,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 21787,
+      "drive": [
+        [
+          391.4,
+          402
+        ],
+        [
+          388.5,
+          397
+        ],
+        [
+          395.2,
+          409
+        ],
+        [
+          378.6,
+          389
+        ],
+        [
+          409.7,
+          419
+        ],
+        [
+          399.2,
+          416
+        ],
+        [
+          331,
+          344
+        ],
+        [
+          281,
+          301
+        ]
+      ]
+    },
+    "provincial-nitinat-river-park": {
+      "presentation": {
+        "short": "Nitinat River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 938,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 11,
+      "drive": [
+        [
+          134.6,
+          139
+        ],
+        [
+          131.7,
+          135
+        ],
+        [
+          138.3,
+          147
+        ],
+        [
+          121.7,
+          126
+        ],
+        [
+          152.9,
+          156
+        ],
+        [
+          142.4,
+          154
+        ],
+        [
+          72.9,
+          80
+        ],
+        [
+          117.2,
+          119
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-nobel-road-park-5264": {
+      "presentation": {
+        "short": "Nobel Road",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 238792,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-nordstrom-park-8910": {
+      "presentation": {
+        "short": "Nordstrom",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 999704,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-nuchatlitz-park": {
+      "presentation": {
+        "short": "Nuchatlitz",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 789687,
+        "blurb": "A provincial park in North Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-nymph-falls-nature-park-4879": {
+      "presentation": {
+        "short": "Nymph Falls",
+        "biome": "waterfall",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 417537,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-octopus-islands-marine-park": {
+      "presentation": {
+        "short": "Octopus Islands",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 96348,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-osborne-bay-regional-park": {
+      "presentation": {
+        "short": "Osborne Bay",
+        "biome": "coast",
+        "shape": "hex",
+        "rarity": "common",
+        "seed": 157,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          74.3,
+          79
+        ],
+        [
+          71.4,
+          74
+        ],
+        [
+          78,
+          86
+        ],
+        [
+          61.4,
+          66
+        ],
+        [
+          92.6,
+          95
+        ],
+        [
+          82.1,
+          93
+        ],
+        [
+          14.8,
+          22
+        ],
+        [
+          47.4,
+          50
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-oyster-bay-shoreline-park-5274": {
+      "presentation": {
+        "short": "Oyster Bay Shoreline",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 441849,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-oyster-river-nature-park-5278": {
+      "presentation": {
+        "short": "Oyster River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 474381,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-periwinkle-park-4884": {
+      "presentation": {
+        "short": "Periwinkle",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 686117,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-petroglyph-park": {
+      "presentation": {
+        "short": "Petroglyph",
+        "biome": "heritage",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 202,
+        "blurb": "Ancient carvings in sandstone left by the Snuneymuxw people. Look closely and respectfully.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          108.3,
+          104
+        ],
+        [
+          105.3,
+          99
+        ],
+        [
+          112,
+          111
+        ],
+        [
+          95.4,
+          91
+        ],
+        [
+          126.5,
+          121
+        ],
+        [
+          116.1,
+          118
+        ],
+        [
+          47.8,
+          46
+        ],
+        [
+          3.4,
+          7
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-pine-park-8906": {
+      "presentation": {
+        "short": "Pine",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 256677,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-pinecrest-park-4827": {
+      "presentation": {
+        "short": "Pinecrest",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 199906,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-pirates-cove-marine-park": {
+      "presentation": {
+        "short": "Pirates Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 780866,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-quadra-school-garden-park-5300": {
+      "presentation": {
+        "short": "Quadra School Garden",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 182344,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-quatsino-park": {
+      "presentation": {
+        "short": "Quatsino",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 746,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 142,
+      "drive": [
+        [
+          575.6,
+          560
+        ],
+        [
+          572.7,
+          556
+        ],
+        [
+          579.3,
+          568
+        ],
+        [
+          562.7,
+          547
+        ],
+        [
+          593.9,
+          577
+        ],
+        [
+          583.4,
+          575
+        ],
+        [
+          515.1,
+          503
+        ],
+        [
+          465.1,
+          459
+        ]
+      ]
+    },
+    "provincial-raft-cove-park": {
+      "presentation": {
+        "short": "Raft Cove",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 279,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 268,
+      "drive": [
+        [
+          585.8,
+          588
+        ],
+        [
+          582.9,
+          583
+        ],
+        [
+          589.6,
+          595
+        ],
+        [
+          573,
+          575
+        ],
+        [
+          604.1,
+          605
+        ],
+        [
+          593.6,
+          602
+        ],
+        [
+          525.4,
+          530
+        ],
+        [
+          475.3,
+          487
+        ]
+      ]
+    },
+    "provincial-rathtrevor-beach-park": {
+      "presentation": {
+        "short": "Rathtrevor Beach",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "rare",
+        "seed": 555,
+        "blurb": "At low tide the beach goes on for a kilometre. Sandcastle territory.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          145.1,
+          138
+        ],
+        [
+          142.2,
+          133
+        ],
+        [
+          148.8,
+          145
+        ],
+        [
+          132.2,
+          125
+        ],
+        [
+          163.4,
+          154
+        ],
+        [
+          152.9,
+          152
+        ],
+        [
+          84.6,
+          80
+        ],
+        [
+          34.6,
+          37
+        ]
+      ]
+    },
+    "provincial-read-island-park": {
+      "presentation": {
+        "short": "Read Island",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 324471,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-rebecca-spit-marine-park": {
+      "presentation": {
+        "short": "Rebecca Spit",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 76736,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          282.7,
+          258
+        ],
+        [
+          279.7,
+          253
+        ],
+        [
+          286.4,
+          265
+        ],
+        [
+          269.8,
+          245
+        ],
+        [
+          300.9,
+          274
+        ],
+        [
+          290.5,
+          272
+        ],
+        [
+          222.2,
+          200
+        ],
+        [
+          172.2,
+          157
+        ]
+      ]
+    },
+    "provincial-rendezvous-island-south-park": {
+      "presentation": {
+        "short": "Rendezvous Island South",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 650171,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-roberts-memorial-park": {
+      "presentation": {
+        "short": "Roberts Memorial",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 32,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          106.1,
+          105
+        ],
+        [
+          103.1,
+          100
+        ],
+        [
+          109.8,
+          112
+        ],
+        [
+          93.2,
+          92
+        ],
+        [
+          124.3,
+          121
+        ],
+        [
+          113.9,
+          119
+        ],
+        [
+          45.6,
+          47
+        ],
+        [
+          18.2,
+          25
+        ]
+      ]
+    },
+    "provincial-rock-bay-marine-park": {
+      "presentation": {
+        "short": "Rock Bay",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 591,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 259,
+      "drive": [
+        [
+          324.5,
+          305
+        ],
+        [
+          321.6,
+          301
+        ],
+        [
+          328.2,
+          313
+        ],
+        [
+          311.6,
+          292
+        ],
+        [
+          342.8,
+          322
+        ],
+        [
+          332.3,
+          320
+        ],
+        [
+          264,
+          248
+        ],
+        [
+          214,
+          204
+        ]
+      ]
+    },
+    "provincial-roscoe-bay-park": {
+      "presentation": {
+        "short": "Roscoe Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 518967,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-rosewall-creek-park": {
+      "presentation": {
+        "short": "Rosewall Creek",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 208,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 142,
+      "drive": [
+        [
+          195.8,
+          192
+        ],
+        [
+          192.8,
+          187
+        ],
+        [
+          199.5,
+          199
+        ],
+        [
+          182.9,
+          179
+        ],
+        [
+          214,
+          208
+        ],
+        [
+          203.6,
+          206
+        ],
+        [
+          135.3,
+          134
+        ],
+        [
+          85.3,
+          91
+        ]
+      ]
+    },
+    "provincial-ruckle-park": {
+      "presentation": {
+        "short": "Ruckle",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 960465,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 78,
+      "drive": [
+        [
+          48.1,
+          84
+        ],
+        [
+          45.3,
+          80
+        ],
+        [
+          51.5,
+          90
+        ],
+        [
+          86.3,
+          115
+        ],
+        [
+          22.9,
+          58
+        ],
+        [
+          107.0,
+          142
+        ],
+        [
+          39.7,
+          71
+        ],
+        [
+          70.9,
+          97
+        ]
+      ]
+    },
+    "provincial-rugged-point-marine-park": {
+      "presentation": {
+        "short": "Rugged Point",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 86,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 8717,
+      "drive": [
+        [
+          491.9,
+          495
+        ],
+        [
+          488.9,
+          491
+        ],
+        [
+          495.6,
+          502
+        ],
+        [
+          479,
+          482
+        ],
+        [
+          510.1,
+          512
+        ],
+        [
+          499.7,
+          510
+        ],
+        [
+          431.4,
+          437
+        ],
+        [
+          381.4,
+          394
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-sander-park-8904": {
+      "presentation": {
+        "short": "Sander",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 674350,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-sandpiper-beach-park-4890": {
+      "presentation": {
+        "short": "Sandpiper Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 120829,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-sandwell-park": {
+      "presentation": {
+        "short": "Sandwell",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 652438,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          122.7,
+          136
+        ],
+        [
+          119.8,
+          131
+        ],
+        [
+          126.4,
+          143
+        ],
+        [
+          109.8,
+          123
+        ],
+        [
+          141.0,
+          152
+        ],
+        [
+          130.5,
+          150
+        ],
+        [
+          62.2,
+          78
+        ],
+        [
+          13.0,
+          31
+        ]
+      ]
+    },
+    "regional-sandy-pool-regional-park": {
+      "presentation": {
+        "short": "Sandy Pool",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 328,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          72,
+          78
+        ],
+        [
+          69,
+          74
+        ],
+        [
+          75.7,
+          86
+        ],
+        [
+          59.1,
+          65
+        ],
+        [
+          90.2,
+          95
+        ],
+        [
+          79.8,
+          93
+        ],
+        [
+          11,
+          18
+        ],
+        [
+          58.6,
+          59
+        ]
+      ]
+    },
+    "provincial-santa-gertrudis-boca-del-infierno-park": {
+      "presentation": {
+        "short": "Santa Gertrudis-Boca Del Infierno",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 22964,
+        "blurb": "A provincial park in Central Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-saysutshun-newcastle-island-marine-park": {
+      "presentation": {
+        "short": "Saysutshun (Newcastle Island Marine)",
+        "biome": "heritage",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 585437,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-schoen-lake-park": {
+      "presentation": {
+        "short": "Schoen Lake",
+        "biome": "lake",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 352,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          401.9,
+          352
+        ],
+        [
+          398.9,
+          348
+        ],
+        [
+          405.6,
+          360
+        ],
+        [
+          389,
+          340
+        ],
+        [
+          420.1,
+          369
+        ],
+        [
+          409.7,
+          367
+        ],
+        [
+          341.4,
+          295
+        ],
+        [
+          291.4,
+          252
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-sea-terrace-park-4891": {
+      "presentation": {
+        "short": "Sea Terrace",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 322049,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-seacliff-park-4892": {
+      "presentation": {
+        "short": "Seacliff",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 733993,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-seal-bay-nature-park-4840": {
+      "presentation": {
+        "short": "Seal Bay",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 993768,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-seascape-park-5287": {
+      "presentation": {
+        "short": "Seascape",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 776665,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-seaton-park-8916": {
+      "presentation": {
+        "short": "Seaton",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 671171,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-seawave-park-5272": {
+      "presentation": {
+        "short": "Seawave",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 253157,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-ship-peninsula-park-4837": {
+      "presentation": {
+        "short": "Ship Peninsula",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 944980,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-ships-point-park-4894": {
+      "presentation": {
+        "short": "Ships Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 756275,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-siskin-forest-park-5255": {
+      "presentation": {
+        "short": "Siskin Forest",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 944725,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-small-inlet-marine-park": {
+      "presentation": {
+        "short": "Small Inlet",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 328875,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-smelt-bay-park": {
+      "presentation": {
+        "short": "Smelt Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 458418,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          311.9,
+          330
+        ],
+        [
+          308.9,
+          326
+        ],
+        [
+          315.6,
+          337
+        ],
+        [
+          299.0,
+          317
+        ],
+        [
+          330.1,
+          347
+        ],
+        [
+          319.7,
+          345
+        ],
+        [
+          251.4,
+          272
+        ],
+        [
+          201.4,
+          229
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-somass-park-8915": {
+      "presentation": {
+        "short": "Somass",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 366384,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-sooke-mountain-park": {
+      "presentation": {
+        "short": "Sooke Mountain",
+        "biome": "mountain",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 525,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 223,
+      "drive": [
+        [
+          39.1,
+          97
+        ],
+        [
+          36.2,
+          93
+        ],
+        [
+          42.9,
+          105
+        ],
+        [
+          23.4,
+          80
+        ],
+        [
+          57.4,
+          114
+        ],
+        [
+          11.8,
+          67
+        ],
+        [
+          67.9,
+          123
+        ],
+        [
+          117.7,
+          169
+        ]
+      ]
+    },
+    "provincial-sooke-potholes-park": {
+      "presentation": {
+        "short": "Sooke Potholes",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 426,
+        "blurb": "Emerald pools carved in rock. The river does the sculpting, you do the swimming.",
+        "scene": null
+      },
+      "walkM": 15,
+      "drive": [
+        [
+          41.4,
+          56
+        ],
+        [
+          38.5,
+          51
+        ],
+        [
+          45.1,
+          63
+        ],
+        [
+          25.7,
+          39
+        ],
+        [
+          59.6,
+          73
+        ],
+        [
+          8.8,
+          19
+        ],
+        [
+          70.1,
+          81
+        ],
+        [
+          120,
+          128
+        ]
+      ]
+    },
+    "regional-sooke-river-regional-park": {
+      "presentation": {
+        "short": "Sooke River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 392,
+        "blurb": "Riverside trails, deep swimming holes and big leaf maples along the Sooke River.",
+        "scene": null
+      },
+      "walkM": 9,
+      "drive": [
+        [
+          36.6,
+          44
+        ],
+        [
+          33.6,
+          39
+        ],
+        [
+          40.3,
+          51
+        ],
+        [
+          20.9,
+          27
+        ],
+        [
+          54.8,
+          60
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          65.3,
+          69
+        ],
+        [
+          115.2,
+          116
+        ]
+      ]
+    },
+    "regional-greenspaces-alberni-clayoquot-south-bamfield-park-8899": {
+      "presentation": {
+        "short": "South Bamfield",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 104201,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-spider-lake-park": {
+      "presentation": {
+        "short": "Spider Lake",
+        "biome": "lake",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 73,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 5,
+      "drive": [
+        [
+          176.6,
+          162
+        ],
+        [
+          173.7,
+          158
+        ],
+        [
+          180.3,
+          170
+        ],
+        [
+          163.7,
+          149
+        ],
+        [
+          194.9,
+          179
+        ],
+        [
+          184.4,
+          177
+        ],
+        [
+          116.1,
+          105
+        ],
+        [
+          66.1,
+          61
+        ]
+      ]
+    },
+    "provincial-sproat-lake-park": {
+      "presentation": {
+        "short": "Sproat Lake",
+        "biome": "lake",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 417,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          206,
+          193
+        ],
+        [
+          203.1,
+          189
+        ],
+        [
+          209.8,
+          200
+        ],
+        [
+          193.2,
+          180
+        ],
+        [
+          224.3,
+          210
+        ],
+        [
+          213.8,
+          208
+        ],
+        [
+          145.6,
+          136
+        ],
+        [
+          95.6,
+          92
+        ]
+      ]
+    },
+    "provincial-squitty-bay-park": {
+      "presentation": {
+        "short": "Squitty Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 571277,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-st-john-point-regional-park": {
+      "presentation": {
+        "short": "St. John Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 764742,
+        "blurb": "A regional park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          109.1,
+          174
+        ],
+        [
+          106.2,
+          169
+        ],
+        [
+          112.8,
+          181
+        ],
+        [
+          96.2,
+          161
+        ],
+        [
+          36.8,
+          84
+        ],
+        [
+          116.9,
+          188
+        ],
+        [
+          49.6,
+          117
+        ],
+        [
+          80.8,
+          143
+        ]
+      ]
+    },
+    "provincial-stamp-river-park": {
+      "presentation": {
+        "short": "Stamp River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 332,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 5,
+      "drive": [
+        [
+          208.5,
+          196
+        ],
+        [
+          205.5,
+          191
+        ],
+        [
+          212.2,
+          203
+        ],
+        [
+          195.6,
+          183
+        ],
+        [
+          226.7,
+          212
+        ],
+        [
+          216.3,
+          210
+        ],
+        [
+          148,
+          138
+        ],
+        [
+          98,
+          95
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-stanehill-park-4821": {
+      "presentation": {
+        "short": "Stanehill",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 10632,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-stoney-hill-regional-park": {
+      "presentation": {
+        "short": "Stoney Hill",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 176,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 117,
+      "drive": [
+        [
+          72.2,
+          79
+        ],
+        [
+          69.3,
+          75
+        ],
+        [
+          76,
+          86
+        ],
+        [
+          59.4,
+          66
+        ],
+        [
+          90.5,
+          96
+        ],
+        [
+          80,
+          94
+        ],
+        [
+          14.7,
+          24
+        ],
+        [
+          60.3,
+          65
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-storie-creek-park-5277": {
+      "presentation": {
+        "short": "Storie Creek",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 137000,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-strathcona-westmin-park": {
+      "presentation": {
+        "short": "Strathcona - Westmin",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 549,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          351.2,
+          303
+        ],
+        [
+          348.2,
+          298
+        ],
+        [
+          354.9,
+          310
+        ],
+        [
+          338.3,
+          290
+        ],
+        [
+          369.4,
+          320
+        ],
+        [
+          359,
+          317
+        ],
+        [
+          290.7,
+          245
+        ],
+        [
+          240.7,
+          202
+        ]
+      ]
+    },
+    "provincial-strathcona-park": {
+      "presentation": {
+        "short": "Strathcona",
+        "biome": "forest",
+        "shape": "arch",
+        "rarity": "rare",
+        "seed": 309,
+        "blurb": "BC's oldest provincial park: glaciers, alpine lakes and Della Falls. A lifetime badge.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          353.1,
+          304
+        ],
+        [
+          350.2,
+          299
+        ],
+        [
+          356.9,
+          311
+        ],
+        [
+          340.3,
+          291
+        ],
+        [
+          371.4,
+          320
+        ],
+        [
+          360.9,
+          318
+        ],
+        [
+          292.7,
+          246
+        ],
+        [
+          242.7,
+          203
+        ]
+      ]
+    },
+    "provincial-sulphur-passage-park": {
+      "presentation": {
+        "short": "Sulphur Passage",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 554,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 25278,
+      "drive": [
+        [
+          375.4,
+          382
+        ],
+        [
+          372.5,
+          377
+        ],
+        [
+          379.2,
+          389
+        ],
+        [
+          362.6,
+          369
+        ],
+        [
+          393.7,
+          398
+        ],
+        [
+          383.2,
+          396
+        ],
+        [
+          314.9,
+          324
+        ],
+        [
+          264.9,
+          281
+        ]
+      ]
+    },
+    "provincial-surge-narrows-park": {
+      "presentation": {
+        "short": "Surge Narrows",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 911145,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-sydney-inlet-park": {
+      "presentation": {
+        "short": "Sydney Inlet",
+        "biome": "coast",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 813,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 13567,
+      "drive": [
+        [
+          391.2,
+          401
+        ],
+        [
+          388.3,
+          396
+        ],
+        [
+          395,
+          408
+        ],
+        [
+          378.4,
+          388
+        ],
+        [
+          409.5,
+          417
+        ],
+        [
+          399,
+          415
+        ],
+        [
+          330.8,
+          343
+        ],
+        [
+          280.8,
+          300
+        ]
+      ]
+    },
+    "provincial-tahsish-kwois-park": {
+      "presentation": {
+        "short": "Tahsish-Kwois",
+        "biome": "forest",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 152,
+        "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge.",
+        "scene": null
+      },
+      "walkM": 713,
+      "drive": [
+        [
+          444.7,
+          400
+        ],
+        [
+          441.8,
+          395
+        ],
+        [
+          448.5,
+          407
+        ],
+        [
+          431.9,
+          387
+        ],
+        [
+          463,
+          417
+        ],
+        [
+          452.5,
+          414
+        ],
+        [
+          384.3,
+          342
+        ],
+        [
+          334.2,
+          299
+        ]
+      ]
+    },
+    "provincial-taylor-arm-park": {
+      "presentation": {
+        "short": "Taylor Arm",
+        "biome": "coast",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 286,
+        "blurb": "Salt air, driftwood and tide pools. Bring a jacket and look for seals.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          214.6,
+          210
+        ],
+        [
+          211.7,
+          206
+        ],
+        [
+          218.4,
+          218
+        ],
+        [
+          201.8,
+          198
+        ],
+        [
+          232.9,
+          227
+        ],
+        [
+          222.4,
+          225
+        ],
+        [
+          154.2,
+          153
+        ],
+        [
+          104.2,
+          109
+        ]
+      ]
+    },
+    "provincial-teakerne-arm-park": {
+      "presentation": {
+        "short": "Teakerne Arm",
+        "biome": "waterfall",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 16086,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-thurston-bay-marine-park": {
+      "presentation": {
+        "short": "Thurston Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 614311,
+        "blurb": "A provincial park in Discovery Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-tranquil-creek-park": {
+      "presentation": {
+        "short": "Tranquil Creek",
+        "biome": "river",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 171,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 5285,
+      "drive": [
+        [
+          327.1,
+          407
+        ],
+        [
+          324.2,
+          403
+        ],
+        [
+          330.9,
+          415
+        ],
+        [
+          314.3,
+          394
+        ],
+        [
+          345.4,
+          424
+        ],
+        [
+          334.9,
+          422
+        ],
+        [
+          266.7,
+          350
+        ],
+        [
+          216.7,
+          306
+        ]
+      ]
+    },
+    "provincial-tribune-bay-park": {
+      "presentation": {
+        "short": "Tribune Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "rare",
+        "seed": 43272,
+        "blurb": "A provincial park in Northern Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          222.5,
+          230
+        ],
+        [
+          219.6,
+          225
+        ],
+        [
+          226.3,
+          237
+        ],
+        [
+          209.6,
+          217
+        ],
+        [
+          240.8,
+          247
+        ],
+        [
+          230.3,
+          244
+        ],
+        [
+          162.0,
+          172
+        ],
+        [
+          112.0,
+          129
+        ]
+      ]
+    },
+    "regional-greenspaces-comox-valley-tsolum-river-commons-4903": {
+      "presentation": {
+        "short": "Tsolum River Commons",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 920145,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-tsolum-spirit-park-4904": {
+      "presentation": {
+        "short": "Tsolum Spirit",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 960944,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-comox-valley-union-bay-nature-park-4910": {
+      "presentation": {
+        "short": "Union Bay",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 363444,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-vargas-island-park": {
+      "presentation": {
+        "short": "Vargas Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 153534,
+        "blurb": "A provincial park in West Coast Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-wakes-cove-park": {
+      "presentation": {
+        "short": "Wakes Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 830870,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-wallace-island-marine-park": {
+      "presentation": {
+        "short": "Wallace Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 976292,
+        "blurb": "A provincial park in Gulf Islands. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-walsh-cove-park": {
+      "presentation": {
+        "short": "Walsh Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "uncommon",
+        "seed": 886084,
+        "blurb": "A provincial park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-west-coast-magic-park-8897": {
+      "presentation": {
+        "short": "West Coast Magic",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 659394,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-alberni-clayoquot-west-park-8895": {
+      "presentation": {
+        "short": "West",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 388084,
+        "blurb": "A regional park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-west-shawnigan-lake-park": {
+      "presentation": {
+        "short": "West Shawnigan Lake",
+        "biome": "lake",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 382,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          41.3,
+          47
+        ],
+        [
+          38.4,
+          43
+        ],
+        [
+          45,
+          55
+        ],
+        [
+          28.4,
+          34
+        ],
+        [
+          59.5,
+          64
+        ],
+        [
+          49.1,
+          62
+        ],
+        [
+          25.9,
+          33
+        ],
+        [
+          75.7,
+          79
+        ]
+      ]
+    },
+    "provincial-weymer-creek-park": {
+      "presentation": {
+        "short": "Weymer Creek",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "uncommon",
+        "seed": 734,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 65,
+      "drive": [
+        [
+          421.4,
+          419
+        ],
+        [
+          418.5,
+          415
+        ],
+        [
+          425.2,
+          427
+        ],
+        [
+          408.5,
+          407
+        ],
+        [
+          439.7,
+          436
+        ],
+        [
+          429.2,
+          434
+        ],
+        [
+          360.9,
+          362
+        ],
+        [
+          310.9,
+          319
+        ]
+      ]
+    },
+    "regional-greenspaces-strathcona-whale-s-rest-park-5295": {
+      "presentation": {
+        "short": "Whale's Rest",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 267539,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-whaleboat-island-marine-park": {
+      "presentation": {
+        "short": "Whaleboat Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 515691,
+        "blurb": "A provincial park in Southern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "regional-greenspaces-strathcona-whaletown-commons-park-5296": {
+      "presentation": {
+        "short": "Whaletown Commons",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 942401,
+        "blurb": "A regional park in Northern Vancouver Island. Parkdex badge and park story coming soon.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "accessUnknown": true
+    },
+    "provincial-white-ridge-park": {
+      "presentation": {
+        "short": "White Ridge",
+        "biome": "mountain",
+        "shape": "arch",
+        "rarity": "common",
+        "seed": 409,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 348,
+      "drive": [
+        [
+          362.7,
+          352
+        ],
+        [
+          359.8,
+          348
+        ],
+        [
+          366.4,
+          360
+        ],
+        [
+          349.8,
+          339
+        ],
+        [
+          381,
+          369
+        ],
+        [
+          370.5,
+          367
+        ],
+        [
+          302.2,
+          295
+        ],
+        [
+          252.2,
+          251
+        ]
+      ]
+    },
+    "provincial-white-river-park": {
+      "presentation": {
+        "short": "White River",
+        "biome": "river",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 470,
+        "blurb": "A river corridor of pools, rapids and shady banks.",
+        "scene": null
+      },
+      "walkM": 18,
+      "drive": [
+        [
+          353.7,
+          334
+        ],
+        [
+          350.7,
+          330
+        ],
+        [
+          357.4,
+          342
+        ],
+        [
+          340.8,
+          321
+        ],
+        [
+          371.9,
+          351
+        ],
+        [
+          361.5,
+          349
+        ],
+        [
+          293.2,
+          277
+        ],
+        [
+          243.2,
+          233
+        ]
+      ]
+    },
+    "provincial-wood-mountain-ski-park": {
+      "presentation": {
+        "short": "Wood Mountain Ski",
+        "biome": "mountain",
+        "shape": "arch",
+        "rarity": "uncommon",
+        "seed": 189,
+        "blurb": "A climb with a view as the prize. Pack snacks and aim for the top.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          239.6,
+          210
+        ],
+        [
+          236.7,
+          205
+        ],
+        [
+          243.3,
+          217
+        ],
+        [
+          226.7,
+          197
+        ],
+        [
+          257.8,
+          227
+        ],
+        [
+          247.4,
+          224
+        ],
+        [
+          179.1,
+          152
+        ],
+        [
+          129.1,
+          109
+        ]
+      ]
+    },
+    "provincial-woss-lake-park": {
+      "presentation": {
+        "short": "Woss Lake",
+        "biome": "lake",
+        "shape": "shield",
+        "rarity": "common",
+        "seed": 736,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 869,
+      "drive": [
+        [
+          415.6,
+          395
+        ],
+        [
+          412.6,
+          390
+        ],
+        [
+          419.3,
+          402
+        ],
+        [
+          402.7,
+          382
+        ],
+        [
+          433.8,
+          412
+        ],
+        [
+          423.4,
+          409
+        ],
+        [
+          355.1,
+          337
+        ],
+        [
+          305.1,
+          294
+        ]
+      ]
+    },
+    "regional-wrigglesworth-lake-regional-park": {
+      "presentation": {
+        "short": "Wrigglesworth Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 216,
+        "blurb": "Still water and shoreline trails. Perfect for a swim or a quiet paddle.",
+        "scene": null
+      },
+      "walkM": 0,
+      "drive": [
+        [
+          28.3,
+          40
+        ],
+        [
+          25.3,
+          35
+        ],
+        [
+          32,
+          47
+        ],
+        [
+          15.4,
+          27
+        ],
+        [
+          46.5,
+          57
+        ],
+        [
+          36.1,
+          54
+        ],
+        [
+          40.5,
+          45
+        ],
+        [
+          90.4,
+          92
+        ]
+      ]
+    }
+  }
+}

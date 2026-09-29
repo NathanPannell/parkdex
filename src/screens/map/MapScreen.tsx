@@ -124,24 +124,32 @@ export function MapScreen() {
   }
 
   function startTrip() {
-    if (!selected || !bounds) return;
-    const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
-    const path = arcPath(user, target);
-    tripStart.current = { from: user, total: estimateTrip(user, selected, content?.drive).km };
-    setRoute(path);
-    sfx.whoosh();
+    if (!selected) return;
+    const tripEstimate = estimateTrip(user, selected, content?.drive);
+    if (tripEstimate.mode === "unknown") {
+      tripStart.current = null;
+      setRoute(null);
+      sfx.pop();
+    } else {
+      if (!bounds) return;
+      const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
+      const path = arcPath(user, target);
+      tripStart.current = { from: user, total: tripEstimate.km };
+      setRoute(path);
+      sfx.whoosh();
+      const lngs = path.map((p) => p[0]);
+      const lats = path.map((p) => p[1]);
+      mapRef.current?.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: TRIP_PAD, duration: 1200, maxZoom: 14 },
+      );
+    }
     buzz(15);
     dispatch({ type: "trip", id: selected.id });
     dispatch({ type: "select", id: null });
-    const lngs = path.map((p) => p[0]);
-    const lats = path.map((p) => p[1]);
-    mapRef.current?.fitBounds(
-      [
-        [Math.min(...lngs), Math.min(...lats)],
-        [Math.max(...lngs), Math.max(...lats)],
-      ],
-      { padding: TRIP_PAD, duration: 1200, maxZoom: 14 },
-    );
   }
 
   function endTrip() {

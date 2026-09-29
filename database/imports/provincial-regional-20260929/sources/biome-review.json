@@ -1,0 +1,1591 @@
+{
+  "regional-greenspaces-comox-valley-bear-creek-nature-park-4816": {
+    "biome": "river",
+    "rationale": "The official park description identifies frontage on the Oyster River and its floodplain wetland, so river is the clearest primary setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      },
+      {
+        "url": "https://www.comoxvalleyrd.ca/parks-recreation/comox-valley-parks-trails/bear-creek-nature-park",
+        "title": "Bear Creek Nature Park | Comox Valley Regional District"
+      }
+    ]
+  },
+  "provincial-beaver-point-park": {
+    "biome": "coast",
+    "rationale": "The official record has no visitor overview. The coastal place-name supports coast as a provisional setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-bellhouse-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on the rocky shore and Active Pass views, with Garry oak meadow behind the shoreline.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-bere-point-regional-park": {
+    "biome": "coast",
+    "rationale": "The official RDMW description identifies a wooded coastal campground, beach, whale-watching platform and coastal views.",
+    "sources": [
+      {
+        "url": "https://www.rdmw.bc.ca/recreation-leisure/camping-information/bere-point/",
+        "title": "Regional District of Mount Waddington + BC Geographical Names Office"
+      }
+    ]
+  },
+  "provincial-big-bunsby-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-bill-mee-park-4847": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-bishop-park-8903": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-blenkin-park-5262": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-bligh-island-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-bodega-ridge-park": {
+    "biome": "mountain",
+    "rationale": "The defining route follows the ridge crest and cliff edge for broad island and channel views.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-boyle-point-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-bracken-park-4848": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-briardale-park-4849": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-brooks-point-regional-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "provincial-broughton-archipelago-park": {
+    "biome": "coast",
+    "rationale": "The park is a marine archipelago of islands and protected channels; coast best represents its boat-and-kayak setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      },
+      {
+        "url": "https://bcparks.ca/broughton-archipelago-park/",
+        "title": "Broughton Archipelago Park | BC Parks"
+      }
+    ]
+  },
+  "provincial-burgoyne-bay-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-burlo-view-park-8898": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-carrington-bay-park-5270": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-catala-island-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-chase-park-8909": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-coats-marsh-regional-park": {
+    "biome": "marsh",
+    "rationale": "The legacy description identifies a protected Gabriola wetland and marsh bird habitat.",
+    "sources": [
+      {
+        "url": "https://rdn.bc.ca/spatial-data-files",
+        "title": "Regional District of Nanaimo - Regional Parks spatial data"
+      },
+      {
+        "url": "https://rdn.bc.ca/coats-marsh-regional-park",
+        "title": "Coats Marsh Regional Park | Regional District of Nanaimo"
+      }
+    ]
+  },
+  "provincial-collinson-point-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      },
+      {
+        "url": "https://bcparks.ca/collinson-point-park/",
+        "title": "Collinson Point Park | BC Parks"
+      }
+    ]
+  },
+  "provincial-cormorant-channel-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-cougar-smith-park-8900": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-debeaux-park-8911": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-denman-island-park": {
+    "biome": "forest",
+    "rationale": "The legacy description highlights forest and the Chicadee watershed as the park’s protected landscape.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-descanso-bay-regional-park": {
+    "biome": "coast",
+    "rationale": "The legacy description identifies an oceanfront setting with shoreline coves and a small boat launch.",
+    "sources": [
+      {
+        "url": "https://rdn.bc.ca/spatial-data-files",
+        "title": "Regional District of Nanaimo - Regional Parks spatial data"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-dickson-park-8901": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-dionisio-point-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-discovery-island-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-dixie-cove-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-driftwood-marine-park-4853": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-drumbeg-park": {
+    "biome": "coast",
+    "rationale": "The legacy park description identifies a coastal or marine landscape as a defining feature.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-dyke-road-park-4843": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-eagle-bay-park-8896": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-east-point-regional-park": {
+    "biome": "coast",
+    "rationale": "The legacy description identifies open shoreline scenery on Saturna Island’s eastern point.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "provincial-echo-bay-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-eileen-scott-park-8894": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-epper-passage-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-esplanade-park-and-trails-5293": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-evergreen-park-8912": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-fanny-bay-community-park-4858": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-fillongley-park": {
+    "biome": "coast",
+    "rationale": "The legacy description describes mature trees and gardens beside a shoreline picnic setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-flores-island-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-foden-park-4859": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-gabriola-sands-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-george-hill-regional-park": {
+    "biome": "mountain",
+    "rationale": "The steep climb to a broad summit viewpoint is the park’s defining landscape experience.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "provincial-gerald-island-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-gibson-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description emphasizes a sheltered marine inlet, anchorage and shoreline hot spring.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-glover-community-nature-park-4860": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-gnat-park-5285": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-god-s-pocket-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      },
+      {
+        "url": "https://bcparks.ca/gods-pocket-marine-park/",
+        "title": "God’s Pocket Marine Park | BC Parks"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-goose-spit-park-4861": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      },
+      {
+        "url": "https://www.comoxvalleyrd.ca/parks-recreation/comox-valley-parks-trails/goose-spit-park",
+        "title": "Goose Spit Park | Comox Valley Regional District"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-grassy-point-park-4862": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-hank-s-beach-forest-conservation-park-5290": {
+    "biome": "forest",
+    "rationale": "The park name identifies a forested setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-hatchery-park-8907": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-hayes-park-5286": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-headquarters-townsite-park-4865": {
+    "biome": "heritage",
+    "rationale": "The park name identifies a historic or cultural landscape.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-helliwell-park": {
+    "biome": "coast",
+    "rationale": "The legacy park description identifies a coastal or marine landscape as a defining feature.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-hidden-beach-park-4866": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-highland-park-8908": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-huband-park-4867": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-hathayim-marine-park-a-k-a-von-donop-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-jack-shark-park-4869": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-joe-walker-park-4870": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-john-kim-nature-sanctuary-5294": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-jaji7em-and-kw-ulh-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-karen-place-park-8913": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-klista-park-8902": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-kw-as-park-5261": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-lanz-and-cox-islands-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-lazo-wildlife-park-4871": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-little-river-nature-park-4872": {
+    "biome": "river",
+    "rationale": "The park name identifies a river or creek corridor.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-loxley-park-4873": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-main-lake-park": {
+    "biome": "lake",
+    "rationale": "The legacy description identifies a connected chain of six lakes and freshwater paddling.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      },
+      {
+        "url": "https://bcparks.ca/main-lake-park/",
+        "title": "Main Lake Park | BC Parks"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-mallard-creek-nature-park-4874": {
+    "biome": "river",
+    "rationale": "The park name identifies a river or creek corridor.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-mansons-landing-park": {
+    "biome": "lake",
+    "rationale": "The legacy description foregrounds swimming and shoreline time at Hague Lake, alongside the adjacent bay and lagoon.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-maple-park-5281": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-maple-park-4825": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-maplehurst-park-8914": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-matthews-point-regional-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on coastal bluffs and Active Pass views.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "regional-mill-farm-regional-park": {
+    "biome": "forest",
+    "rationale": "The legacy description identifies old-growth forest as a major natural feature, alongside a historic logging waterwheel.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "provincial-mitlenatch-island-nature-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on a seabird colony and protected marine habitat around the island.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-mitlenatch-park-5276": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-montague-harbour-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on a sheltered harbour, beaches, tidal lagoon and marine access.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-montrose-park-4875": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-moon-park-5288": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-morning-beach-park-4876": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-mount-erskine-park": {
+    "biome": "mountain",
+    "rationale": "The park name identifies elevated terrain as its most distinctive landscape.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-mount-geoffrey-bench-park-4922": {
+    "biome": "mountain",
+    "rationale": "The name places this small park on Mount Geoffrey; its surrounding terrain is mountainous, although the source record does not describe the parcel itself.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-mount-geoffrey-escarpment-park": {
+    "biome": "mountain",
+    "rationale": "The legacy description centers on the Mount Geoffrey escarpment, its trail network and elevated coastal views.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-mount-geoffrey-nature-park-4822": {
+    "biome": "mountain",
+    "rationale": "The official CVRD description identifies Hornby Island’s high point, summit views and the connected Mount Geoffrey trail landscape.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      },
+      {
+        "url": "https://admin.comoxvalleyrd.ca/parks-recreation/comox-valley-parks-trails/mt-geoffrey-nature-park",
+        "title": "Mount Geoffrey Nature Park | Comox Valley Regional District"
+      }
+    ]
+  },
+  "provincial-mount-maxwell-park": {
+    "biome": "mountain",
+    "rationale": "Baynes Peak and the island-view summit are the park’s defining landscape, with forest and creek habitats along its trails.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-mount-parke-regional-park": {
+    "biome": "mountain",
+    "rationale": "The legacy description centers on a climb through woodland to elevated viewpoints.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-nobel-road-park-5264": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-nordstrom-park-8910": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-nuchatlitz-park": {
+    "biome": "coast",
+    "rationale": "The legacy park description identifies a coastal or marine landscape as a defining feature.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-nymph-falls-nature-park-4879": {
+    "biome": "waterfall",
+    "rationale": "Nymph Falls Nature Park is defined by its falls or cascade, so waterfall is the most specific biome.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      },
+      {
+        "url": "https://www.comoxvalleyrd.ca/parks-recreation/comox-valley-parks-trails/nymph-falls-nature-park",
+        "title": "Nymph Falls Nature Park | Comox Valley Regional District"
+      }
+    ]
+  },
+  "provincial-octopus-islands-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-oyster-bay-shoreline-park-5274": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-oyster-river-nature-park-5278": {
+    "biome": "river",
+    "rationale": "The park name identifies a river or creek corridor.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-periwinkle-park-4884": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-pine-park-8906": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-pinecrest-park-4827": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-pirates-cove-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description highlights sheltered coves, shoreline recreation and marine wildlife.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-quadra-school-garden-park-5300": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-read-island-park": {
+    "biome": "forest",
+    "rationale": "The legacy description identifies old and second-growth forest as the principal cover, with bog and lowland habitat also protected.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-rebecca-spit-marine-park": {
+    "biome": "coast",
+    "rationale": "The narrow sandy spit, beaches on both sides and sheltered harbour views define this park.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-rendezvous-island-south-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-roscoe-bay-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-ruckle-park": {
+    "biome": "coast",
+    "rationale": "The legacy description gives seven kilometres of shoreline, coves and bays as the park’s defining landscape.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-sander-park-8904": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-sandpiper-beach-park-4890": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-sandwell-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on a sandy beach, sandstone shoreline and a nearby petroglyph.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-santa-gertrudis-boca-del-infierno-park": {
+    "biome": "coast",
+    "rationale": "The legacy park description identifies a coastal or marine landscape as a defining feature.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-saysutshun-newcastle-island-marine-park": {
+    "biome": "heritage",
+    "rationale": "The legacy description emphasizes the island’s long cultural and recreational history; shoreline and forest provide the setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-sea-terrace-park-4891": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-seacliff-park-4892": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-seal-bay-nature-park-4840": {
+    "biome": "forest",
+    "rationale": "The official CVRD description names the large regenerated second-growth forest as the park’s primary value, with beach and wetland areas as complementary habitats.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      },
+      {
+        "url": "https://www.comoxvalleyrd.ca/parks-recreation/comox-valley-parks-trails/seal-bay-nature-park",
+        "title": "Seal Bay Nature Park | Comox Valley Regional District"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-seascape-park-5287": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-seaton-park-8916": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-seawave-park-5272": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-ship-peninsula-park-4837": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-ships-point-park-4894": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-siskin-forest-park-5255": {
+    "biome": "forest",
+    "rationale": "The park name identifies a forested setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-small-inlet-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description focuses on a protected marine anchorage and tidal rapids, with a lake reached by trail.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-smelt-bay-park": {
+    "biome": "coast",
+    "rationale": "The legacy description emphasizes a bay beach, low-tide marine habitat and coastal camping.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-somass-park-8915": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-alberni-clayoquot-south-bamfield-park-8899": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-squitty-bay-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-st-john-point-regional-park": {
+    "biome": "coast",
+    "rationale": "The legacy description highlights beaches, rocky bluffs and waterfront walking.",
+    "sources": [
+      {
+        "url": "https://mapservices.crd.bc.ca/arcgis/rest/services/Basemap/Basemap/MapServer/3",
+        "title": "Capital Regional District - Park GIS layer"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-stanehill-park-4821": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-storie-creek-park-5277": {
+    "biome": "river",
+    "rationale": "The park name identifies a river or creek corridor.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-surge-narrows-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on tidal rapids and marine life in the channel.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-teakerne-arm-park": {
+    "biome": "waterfall",
+    "rationale": "Cassel Falls cascading directly into the ocean is the distinctive park feature described by BC Parks.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      },
+      {
+        "url": "https://bcparks.ca/teakerne-arm-park/",
+        "title": "Teakerne Arm Park | BC Parks"
+      }
+    ]
+  },
+  "provincial-thurston-bay-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description highlights marine anchorages, beaches and paddling along Johnstone Strait.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-tribune-bay-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on the long white-sand swimming beach and shoreline rock formations.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-tsolum-river-commons-4903": {
+    "biome": "river",
+    "rationale": "The park name identifies a river or creek corridor.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-comox-valley-tsolum-spirit-park-4904": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-comox-valley-union-bay-nature-park-4910": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Comox Valley Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "provincial-vargas-island-park": {
+    "biome": "coast",
+    "rationale": "The legacy description emphasizes rugged coastline, offshore islets, paddling and marine wildlife.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-wakes-cove-park": {
+    "biome": "coast",
+    "rationale": "The legacy description centers on a sheltered Gulf Islands anchorage and cove-side trails.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-wallace-island-marine-park": {
+    "biome": "coast",
+    "rationale": "The legacy description emphasizes beaches, coves and sheltered marine paddling routes.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "provincial-walsh-cove-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-west-coast-magic-park-8897": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ]
+  },
+  "regional-greenspaces-alberni-clayoquot-west-park-8895": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "regional-greenspaces-strathcona-whale-s-rest-park-5295": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  },
+  "provincial-whaleboat-island-marine-park": {
+    "biome": "coast",
+    "rationale": "The park name identifies a coastal landform or marine setting.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/parks-ecological-reserves-and-protected-areas",
+        "title": "BC Parks / DataBC - TANTALIS protected areas"
+      }
+    ]
+  },
+  "regional-greenspaces-strathcona-whaletown-commons-park-5296": {
+    "biome": "forest",
+    "rationale": "The selected legacy record has only a generic mapped-park description and no habitat-level detail. Forest is a cautious default for a small local greenspace, not a verified dominant habitat.",
+    "sources": [
+      {
+        "url": "https://catalogue.data.gov.bc.ca/dataset/6a2fea1b-0cc4-4fc2-8017-eaf755d516da",
+        "title": "Strathcona Regional District via BC Local and Regional Greenspaces"
+      }
+    ],
+    "uncertain": true
+  }
+}
