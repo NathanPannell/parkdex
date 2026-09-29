@@ -6,7 +6,6 @@ import { ContentSyncStatus } from "../../components/ContentSyncStatus";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
-import { ContentGate } from "../../components/ContentGate";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
@@ -205,27 +204,36 @@ export function MapScreen() {
 
   const remaining = trip ? estimateTrip(user, trip, content?.drive) : null;
 
+  const mapView = (
+    <MapView
+      mapRef={mapRef}
+      user={user}
+      fc={content ? visibleFc : undefined}
+      parks={content ? parks : []}
+      claims={claims}
+      rarityProgress={rarityProgress}
+      progressReady={state.progressReady}
+      selectedId={content ? selectedId : null}
+      tripId={content ? tripId : null}
+      arrivedId={content ? arrivedId : null}
+      route={content ? route : null}
+      onSelect={content ? select : () => {}}
+      visible={state.screen === "map"}
+    />
+  );
+
   if (!content) {
-    return <ContentGate />;
+    return (
+      <div className="screen map-screen">
+        {mapView}
+        <ContentSyncStatus />
+      </div>
+    );
   }
 
   return (
     <div className="screen map-screen">
-      <MapView
-        mapRef={mapRef}
-        user={user}
-        fc={visibleFc}
-        parks={parks}
-        claims={claims}
-        rarityProgress={rarityProgress}
-        progressReady={state.progressReady}
-        selectedId={selectedId}
-        tripId={tripId}
-        arrivedId={arrivedId}
-        route={route}
-        onSelect={select}
-        visible={state.screen === "map"}
-      />
+      {mapView}
 
       <div className="map-top">
         <motion.button

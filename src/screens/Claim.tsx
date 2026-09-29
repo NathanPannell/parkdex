@@ -96,9 +96,6 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
   const [firstClaim] = useState(() => !state.claims[park.id]);
   const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const [rankUp, setRankUp] = useState<Rank | null>(null);
-  const badge = (state: "earned" | "preview") => (
-    <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} animated={state === "earned"} state={state} />
-  );
   const pal = PALETTES[park.biome];
   const rarity = RARITY[park.rarity];
   const [phase, setPhase] = useState<"charge" | "done">("charge");
@@ -115,6 +112,16 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
   const ring = useTransform(progress, (p) => 289 * (1 - p));
   // Fading a pre-dimmed copy is compositor-only; animating filter repainted the badge every frame.
   const dim = useTransform(progress, (p) => 1 - p);
+  const badgeArt = (
+    <div className="claim__badge-art">
+      <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} state={phase === "done" ? "earned" : "preview"} />
+      <motion.div className="claim__badge-dim" style={{ opacity: dim }} aria-hidden="true">
+        <Badge park={park} sceneHref={park.scene ? sceneHref ?? "" : undefined} size={236} state="preview" />
+      </motion.div>
+    </div>
+  );
+  // Android WebView mispaints SVG badge text under Tilt's 3D transform.
+  const presentedBadge = isNative ? badgeArt : <Tilt idle={phase === "done"} max={22}>{badgeArt}</Tilt>;
   const glow = useTransform(progress, (p) => p * 0.9);
   const shakeX = useMotionValue(0);
   const shakeR = useMotionValue(0);
@@ -259,7 +266,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
       <motion.div
         className="claim__photo"
         initial={{ x: -200, rotate: -40 }}
-        animate={phase === "done" ? { x: 0, rotate: -9, y: 0, scale: 1 } : { x: 0, rotate: -12, y: 0 }}
+        animate={phase === "done" ? { x: 0, rotate: -9, y: 0, scale: 1 } : { x: 0, rotate: -12, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 16, delay: 0.2 }}
       >
         <span className="tape" />
@@ -305,15 +312,7 @@ function ClaimReady({ identity }: { identity: ClaimEntry }) {
               : { type: "spring", stiffness: 240, damping: 18 }
           }
         >
-          {phase === "done" ? (
-            // Android WebView mispaints SVG badge text under Tilt's 3D transform.
-            isNative ? badge("earned") : <Tilt idle max={22}>{badge("earned")}</Tilt>
-          ) : (
-            <div className="claim__badge-art">
-              {badge("preview")}
-              <motion.div className="claim__badge-dim" style={{ opacity: dim }} aria-hidden="true">{badge("preview")}</motion.div>
-            </div>
-          )}
+          {presentedBadge}
         </motion.div>
         {phase === "done" && <motion.div className="claim__flash" initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ duration: 0.7 }} />}
       </div>

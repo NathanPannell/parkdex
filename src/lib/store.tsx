@@ -47,7 +47,7 @@ type Action =
   | { type: "mute" }
   | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "progressLoading"; ownerKey: string | null }
-  | { type: "progressLoaded"; ownerKey: string; claims: Record<string, Claim>; claimRevisionAtStart?: number }
+  | { type: "progressLoaded"; ownerKey: string; claims: Record<string, Claim>; claimRevisionAtStart?: number; metadataOnly?: boolean }
   | { type: "progressFailed"; ownerKey: string; message: string }
   | { type: "reset" };
 
@@ -76,13 +76,14 @@ const initial: State = {
   feedback: null,
 };
 
-function load(): State {
+export function load(): State {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (!saved || typeof saved !== "object") return initial;
     // Claims and photos are migrated transactionally by personalStore. Never project
     // the legacy unpartitioned records into the UI before an owner is known.
-    return { ...initial, onboarded: !!saved.onboarded, muted: !!saved.muted };
+    const onboarded = !!saved.onboarded;
+    return { ...initial, onboarded, muted: !!saved.muted, screen: onboarded ? "map" : "splash" };
   } catch {
     return initial;
   }
@@ -150,6 +151,16 @@ export function reducer(state: State, action: Action): State {
       {
         const claimRevisionAtStart = action.claimRevisionAtStart ?? state.claimRevision;
         const claims = { ...action.claims };
+        // A metadata-only refresh must not blank a photo already shown for the
+        // same durable claim while photo bytes are still being converted.
+        if (action.metadataOnly) {
+          for (const [parkId, claim] of Object.entries(claims)) {
+            const current = state.claims[parkId];
+            if (current?.claimId === claim.claimId && !claim.photo && current.photo) {
+              claims[parkId] = { ...claim, photo: current.photo };
+            }
+          }
+        }
         // A refresh may have started just before a new durable claim committed.
         // Preserve only claims written after that read began. Later fresh reads
         // can still replace them with a newer visit restored from another device.
@@ -208,11 +219,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     dispatch({ type: "progressLoading", ownerKey: key });
     let live = true;
+    let metadataPublished = false;
     const claimRevisionAtStart = state.progressOwnerKey === key ? state.claimRevision : 0;
-    void loadPersonalProgress(owner).then(({ claims, photos }) => {
+    void loadPersonalProgress(owner, (claims) => {
+      metadataPublished = true;
+      if (live && currentOwnerKey.current === key) {
+        dispatch({
+          type: "progressLoaded",
+          ownerKey: key,
+          claims: projectClaims(claims, {}),
+          claimRevisionAtStart,
+          metadataOnly: true,
+        });
+      }
+    }).then(({ claims, photos }) => {
       if (live && currentOwnerKey.current === key) dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
     }).catch(() => {
-      if (live && currentOwnerKey.current === key) dispatch({ type: "progressFailed", ownerKey: key, message: "Saved progress could not be opened. Retry from your account." });
+      if (live && currentOwnerKey.current === key) dispatch({
+        type: "progressFailed",
+        ownerKey: key,
+        message: metadataPublished
+          ? "Some saved photos could not be opened. Your saved parks are still available."
+          : "Saved progress could not be opened. Retry from your account.",
+      });
     });
     return () => { live = false; };
   }, [key, owner, auth.progressRevision, state.claimRevision]);

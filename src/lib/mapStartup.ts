@@ -1,9 +1,7 @@
-import { prewarm, setWorkerUrl, type ErrorEvent, type Map as MapLibreMap } from "maplibre-gl";
+import { prewarm, setWorkerUrl } from "maplibre-gl";
 import { prewarmBundledOverview } from "./offlineTiles";
 
 const MAPLIBRE_WORKER_PATH = "/maplibre/maplibre-gl-worker.mjs";
-const OVERVIEW_SOURCE_ID = "islandOverview";
-const OVERVIEW_READY_TIMEOUT_MS = 8_000;
 
 let workerConfigured = false;
 let workersPrewarmed = false;
@@ -32,46 +30,4 @@ export function prewarmMapStartup(): void {
     }
   }
   void prewarmBundledOverview().catch(() => {});
-}
-
-/**
- * Let pins mount after the overview has rendered, or after a bounded fallback
- * if the local archive cannot be read. Detailed-source errors do not open the gate.
- */
-export function watchBundledOverviewReadiness(
-  map: Pick<MapLibreMap, "isSourceLoaded" | "on" | "off">,
-  onReady: () => void,
-  timeoutMs = OVERVIEW_READY_TIMEOUT_MS,
-): () => void {
-  let settled = false;
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-
-  const removeListeners = () => {
-    map.off("render", checkRenderedOverview);
-    map.off("error", handleSourceError);
-  };
-  const finish = () => {
-    if (settled) return;
-    settled = true;
-    if (timeout !== null) clearTimeout(timeout);
-    removeListeners();
-    onReady();
-  };
-  const checkRenderedOverview = () => {
-    if (map.isSourceLoaded(OVERVIEW_SOURCE_ID)) finish();
-  };
-  const handleSourceError = (event: ErrorEvent) => {
-    if ((event as ErrorEvent & { sourceId?: string }).sourceId === OVERVIEW_SOURCE_ID) finish();
-  };
-
-  timeout = setTimeout(finish, timeoutMs);
-  map.on("render", checkRenderedOverview);
-  map.on("error", handleSourceError);
-
-  return () => {
-    if (settled) return;
-    settled = true;
-    if (timeout !== null) clearTimeout(timeout);
-    removeListeners();
-  };
 }

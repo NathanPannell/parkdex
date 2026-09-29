@@ -139,6 +139,8 @@ export type ContentStatus = {
   /** Number of content file transfers currently in progress. */
   activeDownloads: number;
   fullMapReady: boolean;
+  /** A validated map inventory and its glyphs are available locally, including offline cached detail. */
+  mapDetailReady: boolean;
   waitingForWifi: boolean;
   syncStage: ContentSyncStage;
   error: string | null;

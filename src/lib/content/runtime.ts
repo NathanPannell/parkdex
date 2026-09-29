@@ -57,6 +57,7 @@ const EMPTY_STATUS: ContentStatus = {
   totalBytes: 0,
   activeDownloads: 0,
   fullMapReady: false,
+  mapDetailReady: false,
   waitingForWifi: false,
   syncStage: "idle",
   error: null,
@@ -174,6 +175,7 @@ class ContentRuntimeController implements ContentRuntime {
   private readonly fileUrlPromises = new Map<string, Promise<string>>();
   private readonly syncManifests = new Map<string, ContentManifest>();
   private readonly mapInventories = new Map<string, ContentMapInventory>();
+  private readonly artworkReadyReleases = new Set<string>();
   private activeDownloads = 0;
   private localFileIndexPromise: Promise<void> | null = null;
   private retainedProjectionRevision = 0;
@@ -201,7 +203,8 @@ class ContentRuntimeController implements ContentRuntime {
   private discoveryEtag: string | null = null;
   private latestChannel: ContentChannel | null = null;
   private currentLocation: MapPoint | null = null;
-  private nearbyAnchor: MapPoint | null = null;
+  private nearbyAnchor: { releaseId: string; point: MapPoint } | null = null;
+  private nearbyRequest: { releaseId: string; point: MapPoint; controller: AbortController } | null = null;
   private nearbyTimer: ReturnType<typeof setTimeout> | undefined;
   private nearbyAbort: AbortController | null = null;
   private nearbyPromise: Promise<unknown> | null = null;
@@ -287,7 +290,11 @@ class ContentRuntimeController implements ContentRuntime {
     }
     if (this.initialized) {
       if (this.pendingActivationId && !this.busy) void this.activatePending();
-      void this.checkCurrentRelease(false);
+      if (this.hasSyncApi() && this.status.snapshot && !this.artworkReadyReleases.has(this.status.snapshot.releaseId) && this.canDownloadContent()) {
+        void this.syncContent(true, false);
+      } else {
+        void this.checkCurrentRelease(false);
+      }
       if (this.status.snapshot) {
         if (this.hasSyncApi()) this.startMapSync();
         else this.startBulkMap(this.status.snapshot.releaseId);
@@ -332,7 +339,11 @@ class ContentRuntimeController implements ContentRuntime {
     }
     this.updateWaitingStatus();
     if (this.initialized && downloadAllowed && this.foreground) {
-      void this.checkCurrentRelease(false);
+      if (this.hasSyncApi() && this.status.snapshot && !this.artworkReadyReleases.has(this.status.snapshot.releaseId)) {
+        void this.syncContent(true, false);
+      } else {
+        void this.checkCurrentRelease(false);
+      }
       if (!wasDownloadAllowed && this.status.snapshot) {
         if (this.hasSyncApi()) this.startMapSync();
         else this.startBulkMap(this.status.snapshot.releaseId);
@@ -470,6 +481,9 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.verifiedHashes.has(key)) return;
     const hasLocal = await this.hasVerifiedLocalFile(file);
     if (hasLocal) return;
+    if (path.startsWith("map/") && releaseId.startsWith(`sync-${this.environment}-`) && !this.artworkReadyReleases.has(releaseId)) {
+      throw new ContentUnavailableOfflineError("map details are waiting for verified badge art");
+    }
     if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
     if (this.hasSyncApi() && path.startsWith("map/") &&
       (!this.syncState?.map || manifest.version !== this.syncState.map.version)) {
@@ -824,7 +838,6 @@ class ContentRuntimeController implements ContentRuntime {
           const previous = state;
           const candidate = applyContentChangeBatch(state, batch);
           await this.retainChangedClaimedScenes(previous, candidate, signal);
-          await this.ensureSyncAssets(candidate.assets, signal);
           this.setStatus({ syncStage: "applying" });
           await this.options.store.applySyncBatch(this.environment, previous.revision, this.withInactiveAssetDeletes(previous, candidate, batch), sourceId);
           state = candidate;
@@ -835,6 +848,7 @@ class ContentRuntimeController implements ContentRuntime {
       if (!changes.hasMore) break;
     }
     if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
+    await this.syncCurrentSceneAssets(state, signal);
     this.setStatus({
       phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "ready",
       syncStage: "idle",
@@ -859,7 +873,6 @@ class ContentRuntimeController implements ContentRuntime {
     const sourceId = this.configuredSourceId();
     const candidate = validateContentSyncState({ ...next, sourceId });
     await this.retainChangedClaimedScenes(previous, candidate, signal);
-    await this.ensureSyncAssets(candidate.assets, signal);
     const persistedCursor = await this.options.store.getSyncCursor(this.environment);
     const expectedRevision = persistedCursor?.revision ?? null;
     const expectedSourceId = persistedCursor?.sourceId ?? null;
@@ -885,31 +898,43 @@ class ContentRuntimeController implements ContentRuntime {
     await this.publishSyncState(candidate, phaseForActive(this.connectivity().connected), null);
   }
 
-  private async ensureSyncAssets(assets: ContentFile[], signal: AbortSignal): Promise<void> {
-    const missing: ContentFile[] = [];
-    for (const file of assets) {
-      this.trackFile(file);
-      if (!(await this.hasVerifiedLocalFile(file))) missing.push(file);
-    }
-    if (!missing.length) return;
-    this.setStatus({ syncStage: "downloading", waitingForWifi: false });
-    const controller = new AbortController();
-    const abort = () => controller.abort(signal.reason);
-    if (signal.aborted) abort();
-    else signal.addEventListener("abort", abort, { once: true });
-    try {
-      await Promise.all(missing.map((file) => this.scheduleFileDownload(file, "update", controller.signal).catch((error) => {
-        controller.abort(error);
-        throw error;
-      })));
-    } finally {
-      signal.removeEventListener("abort", abort);
-    }
+  private async syncCurrentSceneAssets(state: ContentSyncState, signal: AbortSignal): Promise<void> {
+    const snapshot = this.status.snapshot;
+    if (!snapshot || snapshot.generation !== state.revision || this.syncState?.sourceId !== state.sourceId) return;
+    const releaseId = snapshot.releaseId;
+    const files = state.assets;
+    for (const file of files) this.trackFile(file);
+
+    await Promise.allSettled(files.map((file) => this.scheduleFileDownload(file, "update", signal)));
+    if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
+    if (!this.isCurrentSyncSnapshot(state, releaseId)) return;
+
+    // Keep the verified catalogue visible if one image fails. Missing art uses
+    // the existing badge placeholder, and a later sync event can retry it.
+    await this.publishSyncState(state, phaseForActive(this.connectivity().connected), null);
+    const currentReleaseId = this.status.snapshot?.releaseId;
+    if (currentReleaseId && this.artworkReadyReleases.has(currentReleaseId)) this.completeArtworkStage(currentReleaseId);
+  }
+
+  private isCurrentSyncSnapshot(state: ContentSyncState, releaseId: string): boolean {
+    return !this.stopped && this.status.snapshot?.releaseId === releaseId &&
+      this.syncState?.revision === state.revision && this.syncState.sourceId === state.sourceId;
+  }
+
+  private completeArtworkStage(releaseId: string): void {
+    if (!this.artworkReadyReleases.has(releaseId)) return;
+    if (this.status.snapshot?.releaseId !== releaseId || this.stopped || !this.foreground || !this.canDownloadContent()) return;
+    if (this.hasSyncApi()) this.startMapSync();
+    else this.startBulkMap(releaseId);
   }
 
   private async scheduleFileDownload(file: ContentFile, purpose: "core" | "nearby" | "bulk" | "update", signal?: AbortSignal): Promise<void> {
     const key = fileKey(file.sha256, file.byte_size);
     if (await this.hasVerifiedLocalFile(file)) return;
+    const snapshot = this.status.snapshot;
+    if (file.path.startsWith("map/") && snapshot?.releaseId.startsWith(`sync-${this.environment}-`) && !this.artworkReadyReleases.has(snapshot.releaseId)) {
+      throw new ContentUnavailableOfflineError("map details are waiting for verified badge art");
+    }
     if (!this.canDownloadContent()) throw this.contentUnavailableError();
     this.incrementInFlight(file.sha256);
     try {
@@ -964,7 +989,7 @@ class ContentRuntimeController implements ContentRuntime {
     let inventory: ContentMapInventory | null = null;
     if (validated.map) inventory = await this.getVerifiedMapInventory(validated.map.version);
     if (inventory) this.mapInventories.set(inventory.version, inventory);
-    const legacy = inventory ? null : await this.getLegacyMapRelease();
+    const legacy = inventory || validated.map ? null : await this.getLegacyMapRelease();
     const mapFiles = inventory?.files ?? legacy?.manifest.files.filter((file) => file.path.startsWith("map/")) ?? [];
     const mapManifest = inventory?.mapManifest ?? legacy?.manifest.mapManifest ?? { size: 1, chunkBytes: 1, count: 1 };
     const mapVersion = inventory?.version ?? legacy?.manifest.version ?? "pending";
@@ -981,11 +1006,16 @@ class ContentRuntimeController implements ContentRuntime {
     this.syncManifests.set(releaseId, manifest);
 
     const assetUrls = new Map<string, string>();
+    let allCurrentArtworkVerified = true;
     for (const park of validated.parks) {
       if (!park.scene) continue;
       const path = `art/badges/scenes/${park.scene}.webp`;
       const file = validated.assets.find((entry) => entry.path === path);
-      if (!file || !(await this.hasVerifiedLocalFile(file))) throw new Error(`Required park badge art is missing: ${path}`);
+      if (!file) throw new Error(`Required park badge descriptor is missing: ${path}`);
+      if (!(await this.hasVerifiedLocalFile(file))) {
+        allCurrentArtworkVerified = false;
+        continue;
+      }
       assetUrls.set(path, await this.localFileUrl(file));
     }
     const retained = await this.options.store.getRetainedParks();
@@ -1023,7 +1053,23 @@ class ContentRuntimeController implements ContentRuntime {
       assetUrls,
       retainedSceneUrls: publishedRetainedSceneUrls,
     };
-    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+    if (allCurrentArtworkVerified) this.artworkReadyReleases.add(releaseId);
+    else this.artworkReadyReleases.delete(releaseId);
+    const glyphFiles = inventory?.files.filter((file) => file.path.startsWith("map/fonts/")) ?? legacy?.manifest.files.filter((file) => file.path.startsWith("map/fonts/")) ?? [];
+    const hasMapManifest = !!(inventory || legacy);
+    const allGlyphsVerified = hasMapManifest && (await Promise.all(glyphFiles.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
+    const mapDetailReady = hasMapManifest && allGlyphsVerified;
+    const previousReleaseId = this.status.snapshot?.releaseId;
+    const previousGeneration = this.status.snapshot?.generation;
+    if (previousReleaseId && previousReleaseId !== releaseId && previousGeneration !== snapshot.generation) {
+      const reason = new DOMException("Map catalogue changed", "AbortError");
+      this.mapAbort?.abort(reason);
+      this.nearbyAbort?.abort(reason);
+      for (const [oldReleaseId, controller] of this.bulkControllers) {
+        if (oldReleaseId !== releaseId) controller.abort(reason);
+      }
+    }
+    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, mapDetailReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
     if (retainedProjectionRevision !== this.retainedProjectionRevision) this.refreshClaimedParks();
   }
 
@@ -1055,6 +1101,9 @@ class ContentRuntimeController implements ContentRuntime {
       mapManifest,
     };
     this.syncManifests.set(releaseId, manifest);
+    const hasCurrentArtwork = validated.parks.some((park) => park.scene !== null);
+    if (!hasCurrentArtwork) this.artworkReadyReleases.add(releaseId);
+    else this.artworkReadyReleases.delete(releaseId);
     resetAllowedMapChunks(releaseId);
     const snapshot: ContentSnapshot = {
       releaseId,
@@ -1075,6 +1124,7 @@ class ContentRuntimeController implements ContentRuntime {
       phase,
       syncStage: "idle",
       fullMapReady: false,
+      mapDetailReady: false,
       error,
       waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi,
     });
@@ -1101,20 +1151,27 @@ class ContentRuntimeController implements ContentRuntime {
           await this.ensureFile(releaseId, file.path, "update");
           if (!(await this.hasVerifiedLocalFile(file))) return null;
         }
-        return await this.localFileUrl(file);
+        const url = await this.localFileUrl(file);
+        this.publishCachedSceneAssetUrl(state, releaseId, file, url);
+        return url;
       } catch {
         return null;
       }
     });
     if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
+    if (!results.every(Boolean)) return;
+    await this.publishSyncState(state, this.status.phase, this.status.error);
+    const currentReleaseId = this.status.snapshot?.releaseId;
+    if (currentReleaseId && this.artworkReadyReleases.has(currentReleaseId)) this.completeArtworkStage(currentReleaseId);
+  }
+
+  private publishCachedSceneAssetUrl(state: ContentSyncState, releaseId: string, file: ContentFile, url: string): void {
+    if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
     const snapshot = this.status.snapshot;
-    if (!snapshot) return;
+    if (!snapshot || snapshot.assetUrls.get(file.path) === url) return;
     const assetUrls = new Map(snapshot.assetUrls);
-    for (let index = 0; index < files.length; index += 1) {
-      const url = results[index];
-      if (url) assetUrls.set(files[index]!.path, url);
-    }
-    if (assetUrls.size !== snapshot.assetUrls.size) this.setStatus({ snapshot: { ...snapshot, assetUrls } });
+    assetUrls.set(file.path, url);
+    this.setStatus({ snapshot: { ...snapshot, assetUrls } });
   }
 
   private async hydrateCachedRetainedParks(state: ContentSyncState, releaseId: string, projectionRevision: number): Promise<void> {
@@ -1151,6 +1208,10 @@ class ContentRuntimeController implements ContentRuntime {
     const mapFile = manifest.files.find((file) => file.path === "map/island/manifest.json");
     if (!mapFile || !(await this.hasVerifiedLocalFile(mapFile))) return;
     parseMapFile(await this.options.store.readFile(mapFile.sha256), manifest.mapManifest);
+    const glyphFiles = manifest.files.filter((file) => file.path.startsWith("map/fonts/"));
+    const glyphsVerified = glyphFiles.length > 0 && (await Promise.all(glyphFiles.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
+    if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
+    this.setStatus({ mapDetailReady: glyphsVerified });
     const chunks = mapChunkFiles(manifest);
     const checked = await this.verifyFilesBounded(chunks, 6, async (file) => {
       try { return await this.hasVerifiedLocalFile(file) ? file : null; }
@@ -1217,6 +1278,8 @@ class ContentRuntimeController implements ContentRuntime {
 
   private startMapSync(): void {
     if (!this.hasSyncApi() || this.options.apiUrl === null || !this.initialized || this.stopped || !this.foreground || !this.syncState) return;
+    const snapshot = this.status.snapshot;
+    if (!snapshot || !this.artworkReadyReleases.has(snapshot.releaseId)) return;
     const pointer = this.syncState.map;
     if (!pointer) return;
     if (this.mapSyncPromise && this.mapSyncVersion === pointer.version) return;
@@ -1262,7 +1325,12 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.syncState?.map?.version !== pointer.version) return;
     await this.publishSyncState(this.syncState, phaseForActive(this.connectivity().connected), null);
     this.waitingForBulkWifi = false;
-    if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+    const snapshot = this.status.snapshot;
+    if (!snapshot || !this.artworkReadyReleases.has(snapshot.releaseId)) return;
+    await prefetchMapArea(this, snapshot.releaseId, VICTORIA, "starter", signal, snapshot);
+    if (signal.aborted || this.syncState?.map?.version !== pointer.version) return;
+    this.startBulkMap(snapshot.releaseId);
+    this.scheduleNearbyPrefetch(false);
   }
 
   private get foreground() {
@@ -1653,36 +1721,58 @@ class ContentRuntimeController implements ContentRuntime {
       parkById: new Map([...snapshot.parks, ...retiredParks].map((park) => [park.id, park])),
       retainedSceneUrls: new Map([...snapshot.retainedSceneUrls].filter(([parkId]) => claimed.has(parkId) && !currentIds.has(parkId))),
     };
+    this.artworkReadyReleases.add(snapshot.releaseId);
     this.setStatus({ snapshot: currentSnapshot, phase, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
   }
 
   private scheduleNearbyPrefetch(force: boolean): void {
     if (!this.foreground || !this.connectivity().connected || !this.status.snapshot || !this.currentLocation || this.stopped) return;
+    const snapshot = this.status.snapshot;
+    if (!this.artworkReadyReleases.has(snapshot.releaseId)) return;
+    if (this.hasSyncApi() && !this.status.mapDetailReady) return;
     const point = this.currentLocation;
     if (!isPointInsideContentBounds(point)) return;
-    if (!force && this.nearbyAnchor && distanceKm(this.nearbyAnchor, point) < LOCATION_MOVE_THRESHOLD_KM) return;
+    if (!force && this.nearbyAnchor?.releaseId === snapshot.releaseId && distanceKm(this.nearbyAnchor.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
+    const activeRequest = this.nearbyRequest;
+    if (!force && activeRequest?.releaseId === snapshot.releaseId && !activeRequest.controller.signal.aborted &&
+      distanceKm(activeRequest.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
     if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
     this.nearbyAbort?.abort();
-    this.nearbyAbort = new AbortController();
-    const signal = this.nearbyAbort.signal;
+    const controller = new AbortController();
+    const request = { releaseId: snapshot.releaseId, point, controller };
+    this.nearbyAbort = controller;
+    this.nearbyRequest = request;
+    const signal = controller.signal;
     this.nearbyTimer = globalThis.setTimeout(() => {
       this.nearbyTimer = undefined;
-      const snapshot = this.status.snapshot;
-      if (!snapshot || this.stopped || !this.foreground || !this.connectivity().connected) return;
-      const work = prefetchMapArea(this, snapshot.releaseId, point, "nearby", signal, snapshot).then(() => {
-        this.nearbyAnchor = point;
+      const currentSnapshot = this.status.snapshot;
+      if (this.nearbyRequest !== request || signal.aborted || !currentSnapshot || currentSnapshot.releaseId !== request.releaseId ||
+        !this.artworkReadyReleases.has(currentSnapshot.releaseId) || (this.hasSyncApi() && !this.status.mapDetailReady) ||
+        this.stopped || !this.foreground || !this.connectivity().connected) {
+        if (this.nearbyRequest === request) this.nearbyRequest = null;
+        return;
+      }
+      const work = prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot).then(() => {
+        if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
+          this.nearbyAnchor = { releaseId: request.releaseId, point };
+        }
       }).catch((error) => {
         if (!this.stopped && (error as Error)?.name !== "AbortError") this.updateWaitingStatus();
       });
       this.nearbyPromise = work;
       void work.finally(() => {
-        if (this.nearbyPromise === work) this.nearbyPromise = null;
+        if (this.nearbyRequest === request) {
+          this.nearbyRequest = null;
+          this.nearbyAbort = null;
+          if (this.nearbyPromise === work) this.nearbyPromise = null;
+        }
       });
     }, LOCATION_DEBOUNCE_MS);
   }
 
   private startBulkMap(releaseId: string): void {
-    if (this.stopped || !this.initialized || this.bulkPromises.has(releaseId)) return;
+    if (this.stopped || !this.initialized || !this.artworkReadyReleases.has(releaseId) || this.bulkPromises.has(releaseId)) return;
+    if (this.hasSyncApi() && this.status.snapshot?.releaseId === releaseId && !this.status.mapDetailReady) return;
     const controller = new AbortController();
     this.bulkControllers.set(releaseId, controller);
     const task = this.runBulkMap(releaseId, controller.signal);

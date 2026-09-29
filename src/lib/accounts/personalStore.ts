@@ -636,6 +636,30 @@ async function readGuestProgressRows(): Promise<{ claims: PersonalClaim[]; photo
   }));
 }
 
+async function readAccountProgressRows(owner: Extract<ProgressOwner, { kind: "account" }>): Promise<{ claims: PersonalClaim[]; photos: PersonalPhoto[] }> {
+  await initializePersonalStore();
+  const key = ownerKey(owner);
+  return withDatabase((db) => transaction(db, [CLAIMS, PHOTOS], "readonly", (tx, complete, fail) => {
+    const claimsRequest = tx.objectStore(CLAIMS).index("byOwner").getAll(IDBKeyRange.only(key));
+    const photosRequest = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(key));
+    let ready = 0;
+    let claims: PersonalClaim[] = [];
+    let photos: PersonalPhoto[] = [];
+    const finish = () => {
+      ready += 1;
+      if (ready !== 2) return;
+      complete({
+        claims: claims.sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.claimId.localeCompare(b.claimId)),
+        photos,
+      });
+    };
+    claimsRequest.onsuccess = () => { claims = claimsRequest.result as PersonalClaim[]; finish(); };
+    photosRequest.onsuccess = () => { photos = photosRequest.result as PersonalPhoto[]; finish(); };
+    claimsRequest.onerror = () => fail(claimsRequest.error);
+    photosRequest.onerror = () => fail(photosRequest.error);
+  }));
+}
+
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1155,13 +1179,18 @@ export async function commitDownloadedPhoto(owner: ProgressOwner, claimId: strin
   }));
 }
 
-export async function loadPersonalProgress(owner: ProgressOwner): Promise<{ claims: PersonalClaim[]; photos: Record<string, string> }> {
-  if (owner.kind === "guest") {
-    const { claims, photos } = await readGuestProgressRows();
-    return { claims, photos: await projectPersonalPhotos(claims, photos) };
-  }
-  const [claims, photos] = await Promise.all([listPersonalClaims(owner), loadPersonalPhotos(owner)]);
-  return { claims, photos };
+export async function loadPersonalProgress(
+  owner: ProgressOwner,
+  onClaims?: (claims: PersonalClaim[]) => void,
+): Promise<{ claims: PersonalClaim[]; photos: Record<string, string> }> {
+  const { claims, photos } = owner.kind === "guest"
+    ? await readGuestProgressRows()
+    : await readAccountProgressRows(owner);
+  // Claims drive map eligibility and collection progress. Publish them before
+  // materializing private photo blobs into data URLs so large photos cannot
+  // block the first useful screen.
+  onClaims?.(claims);
+  return { claims, photos: await projectPersonalPhotos(claims, photos) };
 }
 
 function matchingPhotoCopy(source: PersonalPhoto, target: PersonalPhoto | undefined): target is PersonalPhoto {

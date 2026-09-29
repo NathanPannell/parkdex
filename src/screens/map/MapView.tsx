@@ -8,13 +8,13 @@ import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { configureMapLibreWorker, watchBundledOverviewReadiness } from "../../lib/mapStartup";
+import { configureMapLibreWorker } from "../../lib/mapStartup";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
 import { rarityAccessibleStatus } from "../../lib/rarityUi";
 import type { Claim } from "../../lib/store";
-import { useContent, useContentRuntime } from "../../lib/content/provider";
+import { useContent, useContentRuntime, useMapDetailReady } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
 const tierOf = (z: number): Tier => (z < 8.6 ? "far" : z < 10.4 ? "mid" : "near");
@@ -54,6 +54,7 @@ const BIOME_FILL = [
 export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
+  const contentMapDetailReady = useMapDetailReady();
   const container = useRef<HTMLDivElement>(null);
   const userMarker = useRef<Marker | null>(null);
   const camera = useRef<{ center: LngLat; zoom: number; bearing: number; pitch: number } | null>(null);
@@ -66,9 +67,9 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
-  const [overviewReadyMap, setOverviewReadyMap] = useState<MLMap | null>(null);
   const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
   const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
+  const [styleIsReady, setStyleIsReady] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
   // Stable marker props let memoized pins skip re-rendering when unrelated app state changes.
@@ -79,25 +80,21 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
   ])), [parks, progressReady, rarityProgress, claims]);
   const releaseId = content?.releaseId;
   const hasReadyMapContent = !!content && !!releaseId;
-  const loaded = releaseId !== undefined && loadedRelease === releaseId;
+  const mapDetailReady = !!releaseId && contentMapDetailReady;
+  const loaded = styleIsReady && (mapDetailReady ? loadedRelease === releaseId : loadedRelease === null);
 
   useEffect(() => {
-    if (!content || !releaseId) return;
-    setLoadedRelease(null);
-    setInitialStyleLoaded(false);
     styleReady.current = false;
-    setOverviewReadyMap(null);
+    setStyleIsReady(false);
     setHosts([]);
     setUserHost(null);
-    const unregisterProtocols = registerContentMapProtocols(runtime, content);
-    protocolCleanups.current.set(releaseId, unregisterProtocols);
-    styleRelease.current = releaseId;
+    styleRelease.current = null;
     const savedCamera = camera.current;
     const zoom = savedCamera?.zoom ?? 10.7;
     configureMapLibreWorker();
     const map = new MLMap({
       container: container.current!,
-      style: mapStyle(releaseId),
+      style: mapStyle(),
       minZoom: 6.5,
       maxBounds: [
         [ISLAND_BOUNDS[0] - 1.5, ISLAND_BOUNDS[1] - 0.8],
@@ -116,7 +113,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
     setTier(tierOf(zoom));
-    const stopOverviewReadiness = watchBundledOverviewReadiness(map, () => setOverviewReadyMap(map));
 
     const uEl = document.createElement("div");
     uEl.className = "user-host";
@@ -130,8 +126,11 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     });
     const markStyleReady = () => {
       const currentRelease = styleRelease.current;
-      if (!currentRelease || !map.getStyle().glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
+      const glyphs = map.getStyle().glyphs;
+      if (currentRelease && !glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
+      if (!currentRelease && glyphs) return;
       styleReady.current = true;
+      setStyleIsReady(true);
       setInitialStyleLoaded(true);
       setLoadedRelease(currentRelease);
       if (pendingDetailReload.current) flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
@@ -147,7 +146,6 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
         bearing: map.getBearing(),
         pitch: map.getPitch(),
       };
-      stopOverviewReadiness();
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
       for (const cleanup of protocolCleanups.current.values()) cleanup();
@@ -159,40 +157,37 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
       pendingDetailReload.current = false;
       styleReady.current = false;
     };
-  }, [hasReadyMapContent]);
+  }, []);
 
   useEffect(() => {
-    if (!content || !releaseId) return;
     if (!initialStyleLoaded) return;
     const map = mapRef.current;
-    if (!map || styleRelease.current === releaseId) return;
+    const desiredRelease = mapDetailReady ? releaseId : null;
+    if (!map || styleRelease.current === desiredRelease) return;
 
-    if (!protocolCleanups.current.has(releaseId)) {
-      protocolCleanups.current.set(releaseId, registerContentMapProtocols(runtime, content));
+    if (desiredRelease && content && !protocolCleanups.current.has(desiredRelease)) {
+      protocolCleanups.current.set(desiredRelease, registerContentMapProtocols(runtime, content));
     }
     setLoadedRelease(null);
-    styleRelease.current = releaseId;
+    setStyleIsReady(false);
+    styleRelease.current = desiredRelease;
     const generation = ++styleGeneration.current;
     map.once("style.load", () => {
       if (styleGeneration.current !== generation) return;
       for (const [registeredRelease, cleanup] of protocolCleanups.current) {
-        if (registeredRelease === releaseId) continue;
+        if (registeredRelease === desiredRelease) continue;
         cleanup();
         protocolCleanups.current.delete(registeredRelease);
       }
     });
     styleReady.current = false;
-    map.setStyle(mapStyle(releaseId), { diff: true });
-  }, [releaseId, initialStyleLoaded]);
+    map.setStyle(mapStyle(desiredRelease), { diff: true });
+  }, [releaseId, mapDetailReady, initialStyleLoaded]);
 
   useEffect(() => {
-    if (!content || !releaseId) return;
+    if (!hasReadyMapContent) return;
     const map = mapRef.current;
     if (!map) return;
-    if (overviewReadyMap !== map) {
-      setHosts([]);
-      return;
-    }
     const ranked = [...parks].sort(
       (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
     );
@@ -216,17 +211,17 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
       parkMarkers.current.set(park.id, { park, el, marker, rank });
       return { park, el, rank };
     }));
-  }, [parks, hasReadyMapContent, overviewReadyMap]);
+  }, [parks, hasReadyMapContent]);
 
   useEffect(() => {
-    if (!releaseId) return;
+    if (!releaseId || !mapDetailReady) return;
     return subscribeMapCoverage(releaseId, () => {
       pendingDetailReload.current = true;
       const map = mapRef.current;
       if (!map || !styleReady.current) return;
       flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
     });
-  }, [releaseId]);
+  }, [releaseId, mapDetailReady]);
 
   useEffect(() => {
     userMarker.current?.setLngLat(user);

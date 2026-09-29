@@ -56,6 +56,7 @@ beforeEach(() => {
   mocks.nativeCalls = [];
   vi.stubEnv("VITE_ACCOUNT_API_URL", API_ORIGIN);
   vi.stubEnv("VITE_CONTENT_API_URL", `${API_ORIGIN}/api/content/current`);
+  vi.stubGlobal("location", { origin: API_ORIGIN });
   vi.stubGlobal("document", undefined);
   vi.stubGlobal("fetch", vi.fn(async () => new Response("web response")));
 });

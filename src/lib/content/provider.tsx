@@ -16,6 +16,7 @@ const EMPTY_STATUS: ContentStatus = {
   totalBytes: 0,
   activeDownloads: 0,
   fullMapReady: false,
+  mapDetailReady: false,
   waitingForWifi: false,
   syncStage: "idle",
   error: null,
@@ -125,6 +126,15 @@ export function useContentRuntime() {
 export function useContentStatus(): ContentStatus {
   const runtime = useContentRuntime();
   return useSyncExternalStore((listener) => runtime.subscribe(listener), () => runtime.getStatus(), () => runtime.getStatus());
+}
+
+export function useMapDetailReady(): boolean {
+  const runtime = useContentRuntime();
+  return useSyncExternalStore(
+    (listener) => runtime.subscribe(listener),
+    () => runtime.getStatus().mapDetailReady,
+    () => runtime.getStatus().mapDetailReady,
+  );
 }
 
 // Select the snapshot inside the store read: status is replaced on every download

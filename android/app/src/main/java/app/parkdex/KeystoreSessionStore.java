@@ -12,10 +12,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.Arrays;
+import java.util.Locale;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -23,16 +26,20 @@ import javax.crypto.spec.GCMParameterSpec;
 
 /** Stores the Kip bearer session as authenticated ciphertext under a device Keystore key. */
 final class KeystoreSessionStore {
-    private static final String KEY_ALIAS = "app.parkdex.kip-session.v1";
+    private static final String KEY_ALIAS = "app.parkdex.kip-session.v2";
+    private static final String LEGACY_KEY_ALIAS = "app.parkdex.kip-session.v1";
     private static final String KEYSTORE_PROVIDER = "AndroidKeyStore";
     private static final String DIRECTORY_NAME = "kip-identity";
     private static final String FILE_NAME = "session.enc";
-    private static final String AAD = "app.parkdex.kip-session.v1";
-    private static final int FILE_MAGIC = 0x4B495031;
-    private static final int FORMAT_VERSION = 1;
+    private static final String REAUTH_FILE_NAME = "session.reauth";
+    private static final String AAD = "app.parkdex.kip-session.v2";
+    private static final int FILE_MAGIC = 0x4B495032;
+    private static final int LEGACY_FILE_MAGIC = 0x4B495031;
+    private static final int FORMAT_VERSION = 2;
     private static final int IV_BYTES = 12;
     private static final int TAG_BITS = 128;
     private static final int MAX_TOKEN_BYTES = 4096;
+    private static final int MAX_API_ORIGIN_BYTES = 512;
     private static final int MAX_FILE_BYTES = 16 * 1024;
 
     private final Context context;
@@ -41,15 +48,16 @@ final class KeystoreSessionStore {
         this.context = context.getApplicationContext();
     }
 
-    synchronized void write(String token, long expiresAt) throws IOException, GeneralSecurityException {
+    synchronized void write(String token, long expiresAt, String apiOrigin) throws IOException, GeneralSecurityException {
         if (token == null || token.isEmpty() || token.getBytes(StandardCharsets.UTF_8).length > MAX_TOKEN_BYTES) {
             throw new IllegalArgumentException("Invalid session token.");
         }
+        if (!isValidApiOrigin(apiOrigin)) throw new IllegalArgumentException("Invalid account API origin.");
         if (expiresAt <= System.currentTimeMillis()) {
             throw new IllegalArgumentException("Session expiry must be in the future.");
         }
 
-        byte[] plaintext = encodeSession(token, expiresAt);
+        byte[] plaintext = encodeSession(token, expiresAt, apiOrigin);
         try {
             try {
                 writeEncrypted(plaintext);
@@ -57,13 +65,14 @@ final class KeystoreSessionStore {
                 // A restored, invalidated, or otherwise lost Keystore key cannot decrypt the old
                 // file. Remove both halves before retrying with a new device-bound key.
                 try {
-                    clear();
+                    clearSessionMaterial();
                     writeEncrypted(plaintext);
                 } catch (IOException | GeneralSecurityException recoveryFailure) {
                     recoveryFailure.addSuppressed(staleKey);
                     throw recoveryFailure;
                 }
             }
+            clearReauthenticationMarkerQuietly();
         } finally {
             Arrays.fill(plaintext, (byte) 0);
         }
@@ -81,7 +90,7 @@ final class KeystoreSessionStore {
             if (iv == null || iv.length != IV_BYTES) throw new GeneralSecurityException("Unexpected session IV.");
             encrypted = cipher.doFinal(plaintext);
             encodedFile = encodeEncryptedFile(iv, encrypted);
-            AtomicFile atomicFile = getAtomicFile(true);
+            AtomicFile atomicFile = getAtomicFile(FILE_NAME, true);
             FileOutputStream output = null;
             try {
                 output = atomicFile.startWrite();
@@ -100,24 +109,28 @@ final class KeystoreSessionStore {
     }
 
     synchronized Session read() throws IOException {
-        AtomicFile atomicFile = getAtomicFile(false);
+        AtomicFile atomicFile = getAtomicFile(FILE_NAME, false);
         byte[] encodedFile;
         try (FileInputStream input = atomicFile.openRead()) {
             encodedFile = readBounded(input);
         } catch (java.io.FileNotFoundException missing) {
-            return null;
+            return hasReauthenticationMarker() ? Session.reauthenticationRequired() : null;
         } catch (IOException unreadable) {
-            clearQuietly();
-            return null;
+            markReauthenticationRequiredQuietly();
+            return Session.reauthenticationRequired();
         }
 
         byte[] plaintext = null;
         try {
+            if (isLegacyFile(encodedFile)) {
+                markReauthenticationRequiredQuietly();
+                return Session.reauthenticationRequired();
+            }
             EncryptedFile file = decodeEncryptedFile(encodedFile);
             SecretKey key = loadExistingKey();
             if (key == null) {
-                clearQuietly();
-                return null;
+                markReauthenticationRequiredQuietly();
+                return Session.reauthenticationRequired();
             }
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, file.iv));
@@ -125,15 +138,15 @@ final class KeystoreSessionStore {
             plaintext = cipher.doFinal(file.ciphertext);
             Session session = decodeSession(plaintext);
             if (session.expiresAt <= System.currentTimeMillis()) {
-                clearQuietly();
-                return null;
+                markReauthenticationRequiredQuietly();
+                return Session.reauthenticationRequired();
             }
             return session;
         } catch (GeneralSecurityException | RuntimeException | IOException invalid) {
-            // A missing or invalidated Keystore key makes the ciphertext unusable. Treat that
-            // condition as a logged-out session and remove both halves of the stored credential.
-            clearQuietly();
-            return null;
+            // Persist reauthentication before removing an unusable bearer so local account data
+            // remains visible across process restarts.
+            markReauthenticationRequiredQuietly();
+            return Session.reauthenticationRequired();
         } finally {
             Arrays.fill(encodedFile, (byte) 0);
             if (plaintext != null) Arrays.fill(plaintext, (byte) 0);
@@ -141,17 +154,26 @@ final class KeystoreSessionStore {
     }
 
     synchronized void clear() throws IOException, GeneralSecurityException {
-        getAtomicFile(false).delete();
-        KeyStore keyStore = loadKeyStore();
-        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS);
+        try {
+            clearSessionMaterial();
+        } finally {
+            getAtomicFile(REAUTH_FILE_NAME, false).delete();
+        }
     }
 
-    private AtomicFile getAtomicFile(boolean createDirectory) throws IOException {
+    private void clearSessionMaterial() throws IOException, GeneralSecurityException {
+        getAtomicFile(FILE_NAME, false).delete();
+        KeyStore keyStore = loadKeyStore();
+        if (keyStore.containsAlias(KEY_ALIAS)) keyStore.deleteEntry(KEY_ALIAS);
+        if (keyStore.containsAlias(LEGACY_KEY_ALIAS)) keyStore.deleteEntry(LEGACY_KEY_ALIAS);
+    }
+
+    private AtomicFile getAtomicFile(String fileName, boolean createDirectory) throws IOException {
         File directory = new File(context.getFilesDir(), DIRECTORY_NAME);
         if (createDirectory && !directory.exists() && !directory.mkdirs() && !directory.isDirectory()) {
             throw new IOException("Unable to create secure session directory.");
         }
-        return new AtomicFile(new File(directory, FILE_NAME));
+        return new AtomicFile(new File(directory, fileName));
     }
 
     private SecretKey loadExistingKey() throws GeneralSecurityException, IOException {
@@ -185,17 +207,21 @@ final class KeystoreSessionStore {
         return keyStore;
     }
 
-    private byte[] encodeSession(String token, long expiresAt) throws IOException {
+    private byte[] encodeSession(String token, long expiresAt, String apiOrigin) throws IOException {
         byte[] tokenBytes = token.getBytes(StandardCharsets.UTF_8);
+        byte[] originBytes = apiOrigin.getBytes(StandardCharsets.UTF_8);
         try {
-            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(16 + tokenBytes.length);
+            java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(20 + originBytes.length + tokenBytes.length);
             buffer.putInt(FORMAT_VERSION);
             buffer.putLong(expiresAt);
+            buffer.putInt(originBytes.length);
             buffer.putInt(tokenBytes.length);
+            buffer.put(originBytes);
             buffer.put(tokenBytes);
             return buffer.array();
         } finally {
             Arrays.fill(tokenBytes, (byte) 0);
+            Arrays.fill(originBytes, (byte) 0);
         }
     }
 
@@ -240,19 +266,45 @@ final class KeystoreSessionStore {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(plaintext))) {
             if (input.readInt() != FORMAT_VERSION) throw new IOException("Unsupported session payload.");
             long expiresAt = input.readLong();
+            int originLength = input.readInt();
             int tokenLength = input.readInt();
-            if (tokenLength < 1 || tokenLength > MAX_TOKEN_BYTES || tokenLength != input.available()) {
+            if (originLength < 1 || originLength > MAX_API_ORIGIN_BYTES || tokenLength < 1 || tokenLength > MAX_TOKEN_BYTES
+                    || originLength + tokenLength != input.available()) {
                 throw new IOException("Invalid session payload.");
             }
+            byte[] originBytes = new byte[originLength];
             byte[] tokenBytes = new byte[tokenLength];
+            input.readFully(originBytes);
             input.readFully(tokenBytes);
             try {
+                String apiOrigin = new String(originBytes, StandardCharsets.UTF_8);
+                if (!isValidApiOrigin(apiOrigin)) throw new IOException("Invalid account API origin.");
                 String token = new String(tokenBytes, StandardCharsets.UTF_8);
                 if (token.trim().isEmpty()) throw new IOException("Invalid session token.");
-                return new Session(token, expiresAt);
+                return new Session(token, expiresAt, apiOrigin);
             } finally {
+                Arrays.fill(originBytes, (byte) 0);
                 Arrays.fill(tokenBytes, (byte) 0);
             }
+        }
+    }
+
+    static boolean isLegacyFile(byte[] bytes) {
+        if (bytes.length < 8) return false;
+        java.nio.ByteBuffer header = java.nio.ByteBuffer.wrap(bytes, 0, 8);
+        return header.getInt() == LEGACY_FILE_MAGIC && header.getInt() == 1;
+    }
+
+    static boolean isValidApiOrigin(String value) {
+        if (value == null || value.isEmpty() || value.getBytes(StandardCharsets.UTF_8).length > MAX_API_ORIGIN_BYTES) return false;
+        try {
+            URI uri = new URI(value);
+            String host = uri.getHost();
+            return "https".equals(uri.getScheme()) && host != null && uri.getRawUserInfo() == null && uri.getPort() == -1
+                    && (uri.getRawPath() == null || uri.getRawPath().isEmpty()) && uri.getRawQuery() == null
+                    && uri.getRawFragment() == null && value.equals("https://" + host.toLowerCase(Locale.ROOT));
+        } catch (URISyntaxException | IllegalArgumentException invalid) {
+            return false;
         }
     }
 
@@ -270,21 +322,66 @@ final class KeystoreSessionStore {
         return bytes.toByteArray();
     }
 
-    private void clearQuietly() {
+    private boolean hasReauthenticationMarker() {
+        try (FileInputStream input = getAtomicFile(REAUTH_FILE_NAME, false).openRead()) {
+            return input.read() == 1 && input.read() == -1;
+        } catch (java.io.FileNotFoundException missing) {
+            return false;
+        } catch (IOException unreadable) {
+            return false;
+        }
+    }
+
+    private void markReauthenticationRequiredQuietly() {
         try {
-            clear();
+            AtomicFile marker = getAtomicFile(REAUTH_FILE_NAME, true);
+            FileOutputStream output = null;
+            try {
+                output = marker.startWrite();
+                output.write(1);
+                output.flush();
+                output.getFD().sync();
+                marker.finishWrite(output);
+                output = null;
+            } finally {
+                if (output != null) marker.failWrite(output);
+            }
+            clearSessionMaterial();
         } catch (IOException | GeneralSecurityException ignored) {
-            // There is no safe session to return even if cleanup itself is temporarily unavailable.
+            // Keep the envelope for another attempt if the marker cannot be made durable.
+        }
+    }
+
+    private void clearReauthenticationMarkerQuietly() {
+        try {
+            getAtomicFile(REAUTH_FILE_NAME, false).delete();
+        } catch (IOException ignored) {
+            // A valid scoped session takes precedence over a stale marker.
         }
     }
 
     static final class Session {
         final String token;
         final long expiresAt;
+        final String apiOrigin;
+        final boolean requiresReauth;
 
-        Session(String token, long expiresAt) {
+        Session(String token, long expiresAt, String apiOrigin) {
             this.token = token;
             this.expiresAt = expiresAt;
+            this.apiOrigin = apiOrigin;
+            this.requiresReauth = false;
+        }
+
+        private Session() {
+            this.token = null;
+            this.expiresAt = 0;
+            this.apiOrigin = null;
+            this.requiresReauth = true;
+        }
+
+        static Session reauthenticationRequired() {
+            return new Session();
         }
     }
 

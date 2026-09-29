@@ -80,9 +80,10 @@ public final class NativeIdentityPlugin extends Plugin {
     @PluginMethod
     public void setSession(PluginCall call) {
         String token = call.getString("token");
+        String apiOrigin = call.getString("apiOrigin");
         Object rawExpiry = call.getData().opt("expiresAt");
         if (token == null || token.isEmpty() || !token.equals(token.trim()) || token.length() > 4096
-                || !(rawExpiry instanceof Number)) {
+                || !KeystoreSessionStore.isValidApiOrigin(apiOrigin) || !(rawExpiry instanceof Number)) {
             call.reject("A valid native session is required.");
             return;
         }
@@ -94,7 +95,7 @@ public final class NativeIdentityPlugin extends Plugin {
 
         STORAGE_EXECUTOR.execute(() -> {
             try {
-                new KeystoreSessionStore(getContext()).write(token, expiresAt);
+                new KeystoreSessionStore(getContext()).write(token, expiresAt, apiOrigin);
                 call.resolve();
             } catch (IOException | GeneralSecurityException | RuntimeException error) {
                 call.reject("Unable to securely save the native session.");
@@ -112,8 +113,14 @@ public final class NativeIdentityPlugin extends Plugin {
                     return;
                 }
                 JSObject result = new JSObject();
+                if (session.requiresReauth) {
+                    result.put("requiresReauth", true);
+                    call.resolve(result);
+                    return;
+                }
                 result.put("token", session.token);
                 result.put("expiresAt", session.expiresAt);
+                result.put("apiOrigin", session.apiOrigin);
                 call.resolve(result);
             } catch (IOException | RuntimeException error) {
                 call.reject("Unable to read the secure native session.");
@@ -123,11 +130,18 @@ public final class NativeIdentityPlugin extends Plugin {
 
     @PluginMethod
     public void clearSession(PluginCall call) {
+        Boolean requestedProviderClear = call.getBoolean("clearCredentialState");
+        boolean clearCredentialState = requestedProviderClear == null || requestedProviderClear;
         STORAGE_EXECUTOR.execute(() -> {
             try {
                 new KeystoreSessionStore(getContext()).clear();
             } catch (IOException | GeneralSecurityException | RuntimeException error) {
                 call.reject("Unable to clear the secure native session.");
+                return;
+            }
+
+            if (!clearCredentialState) {
+                call.resolve();
                 return;
             }
 

@@ -1,10 +1,19 @@
 import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import {
+  hasRawUrlCredentials,
+  hasUrlCredentials,
+  isSecureUserDataApiOrigin,
+  resolveUserDataApiOrigin,
+} from "../userDataDestination";
+
+export { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 
 export interface NativeAccountSession {
   token: string;
   /** Unix epoch time in milliseconds. */
   expiresAt: number;
+  apiOrigin: string;
 }
 
 export interface ServerAccountSession {
@@ -14,9 +23,9 @@ export interface ServerAccountSession {
 
 interface NativeIdentityPlugin {
   getGoogleIdToken(options: { serverClientId: string; nonce: string }): Promise<{ idToken: string }>;
-  setSession(options: { token: string; expiresAt: number }): Promise<void>;
-  getSession(): Promise<{ token?: string; expiresAt?: number } | null | undefined>;
-  clearSession(): Promise<void>;
+  setSession(options: { token: string; expiresAt: number; apiOrigin: string }): Promise<void>;
+  getSession(): Promise<{ token?: string; expiresAt?: number; apiOrigin?: string; requiresReauth?: boolean } | null | undefined>;
+  clearSession(options?: { clearCredentialState?: boolean }): Promise<void>;
 }
 
 export interface NativeAuthLink {
@@ -29,14 +38,13 @@ type AuthLinkHandler = (url: string) => void | Promise<void>;
 
 const NativeIdentity = registerPlugin<NativeIdentityPlugin>("NativeIdentity");
 const recentAuthLinkDigests = new Set<string>();
-export const KIP_STAGING_ORIGIN = "https://staging.web.parkdex.app";
-export const KIP_PRODUCTION_ORIGIN = "https://web.parkdex.app";
-const APPROVED_KIP_ORIGINS = new Set([
-  KIP_STAGING_ORIGIN,
-  KIP_PRODUCTION_ORIGIN,
-  "https://parkdex-kip-staging.vercel.app",
-  "https://parkdex-kip.vercel.app",
-]);
+
+export class NativeSessionOriginMismatchError extends Error {
+  constructor() {
+    super("This saved Parkdex session needs a new sign-in before it can sync with this app environment. Your saved Dex remains on this device. Sign in again here to sync it.");
+    this.name = "NativeSessionOriginMismatchError";
+  }
+}
 
 export function isAndroidNativeIdentityAvailable(): boolean {
   return Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("NativeIdentity");
@@ -78,26 +86,31 @@ export async function persistNativeSession(session: ServerAccountSession): Promi
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
     throw new Error("The server returned an expired native session.");
   }
-  await NativeIdentity.setSession({ token: session.sessionToken, expiresAt });
+  await NativeIdentity.setSession({ token: session.sessionToken, expiresAt, apiOrigin: getAuthApiOrigin() });
 }
 
-export async function readNativeSession(): Promise<NativeAccountSession | null> {
+export async function readNativeSession(expectedApiOrigin = getAuthApiOrigin()): Promise<NativeAccountSession | null> {
   assertAndroidNativeIdentityAvailable();
   const stored = await NativeIdentity.getSession();
-  if (!stored || typeof stored.token !== "string" || !stored.token.trim()
-      || typeof stored.expiresAt !== "number" || !Number.isFinite(stored.expiresAt)) {
+  if (!stored) {
     return null;
   }
+  if (stored.requiresReauth) throw new NativeSessionOriginMismatchError();
+  if (typeof stored.token !== "string" || !stored.token.trim()
+      || typeof stored.expiresAt !== "number" || !Number.isFinite(stored.expiresAt)) return null;
   if (stored.expiresAt <= Date.now()) {
-    await NativeIdentity.clearSession();
-    return null;
+    throw new NativeSessionOriginMismatchError();
   }
-  return { token: stored.token, expiresAt: stored.expiresAt };
+  if (typeof stored.apiOrigin !== "string" || !isSecureUserDataApiOrigin(stored.apiOrigin)) {
+    throw new NativeSessionOriginMismatchError();
+  }
+  if (stored.apiOrigin !== expectedApiOrigin) throw new NativeSessionOriginMismatchError();
+  return { token: stored.token, expiresAt: stored.expiresAt, apiOrigin: stored.apiOrigin };
 }
 
-export async function clearNativeSession(): Promise<void> {
+export async function clearNativeSession(clearCredentialState = true): Promise<void> {
   assertAndroidNativeIdentityAvailable();
-  await NativeIdentity.clearSession();
+  await NativeIdentity.clearSession({ clearCredentialState });
 }
 
 /** Sends native auth requests without WebView cookies or caller-supplied bearer tokens. */
@@ -107,11 +120,12 @@ export async function nativeAuthFetch(
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<Response> {
   assertAndroidNativeIdentityAvailable();
-  const session = await readNativeSession();
   const apiOrigin = getAuthApiOrigin();
+  const session = await readNativeSession(apiOrigin);
   const rawUrl = typeof Request !== "undefined" && input instanceof Request ? input.url : String(input);
   const requestUrl = new URL(rawUrl, apiOrigin);
-  if (requestUrl.protocol !== "https:" || requestUrl.origin !== apiOrigin || requestUrl.username || requestUrl.password || requestUrl.hash) {
+  if (requestUrl.protocol !== "https:" || requestUrl.origin !== apiOrigin || hasUrlCredentials(requestUrl) ||
+      hasRawUrlCredentials(rawUrl) || requestUrl.hash) {
     throw new Error("Native account requests must use the configured account API origin.");
   }
   const headers = new Headers(
@@ -223,37 +237,27 @@ async function authLinkDigest(rawUrl: string): Promise<string> {
 }
 
 function getAuthLinkOrigin(): string {
-  return configuredKipOrigin(import.meta.env.VITE_APP_URL) ?? KIP_STAGING_ORIGIN;
+  return getAuthApiOrigin();
 }
 
 function getAuthApiOrigin(): string {
-  return configuredKipOrigin(import.meta.env.VITE_ACCOUNT_API_URL)
-    ?? configuredKipOrigin(import.meta.env.VITE_APP_URL)
-    ?? KIP_STAGING_ORIGIN;
-}
-
-function configuredKipOrigin(value: string | undefined): string | null {
-  const configured = (value ?? "").trim();
-  if (!configured) return null;
-  try {
-    const url = new URL(configured);
-    if (url.protocol !== "https:" || !isApprovedKipOrigin(url.origin)) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
+    || (import.meta.env.VITE_APP_URL ?? "").trim()
+    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim();
+  return resolveUserDataApiOrigin(configured, {
+    native: true,
+    environment: import.meta.env.VITE_CONTENT_ENV,
+    previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+  });
 }
 
 export function isApprovedKipOrigin(origin: string): boolean {
-  if (APPROVED_KIP_ORIGINS.has(origin)) return true;
   try {
-    const url = new URL(origin);
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash
-        || (url.port && url.port !== "443") || !["", "/"].includes(url.pathname)) return false;
-    const hostname = url.hostname.toLowerCase();
-    if (url.origin !== origin) return false;
-    return /^parkdex-kip-[a-z0-9]+(?:-[a-z0-9]+)*\.vercel\.app$/.test(hostname)
-      || /^parkdex-[a-z0-9]+-nathanpannells-projects\.vercel\.app$/.test(hostname);
+    return isSecureUserDataApiOrigin(origin) && resolveUserDataApiOrigin(origin, {
+      native: true,
+      environment: import.meta.env.VITE_CONTENT_ENV,
+      previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+    }) === origin;
   } catch {
     return false;
   }

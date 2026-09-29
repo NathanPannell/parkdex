@@ -25,9 +25,14 @@ import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
   calls: [] as { releaseId: string; detail: string }[],
+  onCall: null as null | ((detail: string) => void),
   pauseNext: false,
   onPause: null as null | (() => void),
   releasePause: null as null | (() => void),
+  pauseNearby: false,
+  nearbySignals: [] as Array<AbortSignal | undefined>,
+  onNearbyPause: null as null | (() => void),
+  releaseNearby: null as null | (() => void),
 }));
 
 vi.mock("./map-downloads", () => ({
@@ -40,13 +45,22 @@ vi.mock("./map-downloads", () => ({
     snapshotOverride?: ContentSnapshot,
   ) => {
     mapMock.calls.push({ releaseId, detail });
+    if (detail === "nearby") mapMock.nearbySignals.push(signal);
     if (!snapshotOverride || snapshotOverride.releaseId !== releaseId) throw new Error("candidate prefetch requires a private matching snapshot");
-    if (runtime.getStatus().snapshot?.releaseId === releaseId) throw new Error("candidate snapshot was published before map verification");
+    if (!releaseId.startsWith("sync-") && runtime.getStatus().snapshot?.releaseId === releaseId) throw new Error("candidate snapshot was published before map verification");
+    mapMock.onCall?.(detail);
     if (mapMock.pauseNext) {
       mapMock.pauseNext = false;
       await new Promise<void>((resolve) => {
         mapMock.releasePause = resolve;
         mapMock.onPause?.();
+      });
+    }
+    if (detail === "nearby" && mapMock.pauseNearby) {
+      mapMock.pauseNearby = false;
+      await new Promise<void>((resolve) => {
+        mapMock.releaseNearby = resolve;
+        mapMock.onNearbyPause?.();
       });
     }
     await runtime.ensureFile(releaseId, "map/island/000.bin", "nearby", signal);
@@ -297,7 +311,7 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
 
 type TestSyncPark = Omit<Awaited<ReturnType<typeof makeRelease>>["park"], "scene"> & { scene: string | null };
 
-function contentSyncSnapshot(revision: number, park: TestSyncPark, assets: ContentFile[]) {
+function contentSyncSnapshot(revision: number, park: TestSyncPark, assets: ContentFile[]): ContentSyncState & { schema: "parkdex.content-sync/v1" } {
   return {
     schema: "parkdex.content-sync/v1",
     revision,
@@ -404,9 +418,14 @@ function track(runtime: ContentRuntime) { runtimes.push(runtime); return runtime
 
 beforeEach(() => {
   mapMock.calls.length = 0;
+  mapMock.onCall = null;
   mapMock.pauseNext = false;
   mapMock.onPause = null;
   mapMock.releasePause = null;
+  mapMock.pauseNearby = false;
+  mapMock.nearbySignals.length = 0;
+  mapMock.onNearbyPause = null;
+  mapMock.releaseNearby = null;
   resetAllowedMapChunks("a".repeat(64));
   resetAllowedMapChunks("b".repeat(64));
   resetAllowedMapChunks("c".repeat(64));
@@ -416,6 +435,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   mapMock.releasePause?.();
+  mapMock.releaseNearby?.();
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
   vi.restoreAllMocks();
 });
@@ -893,6 +913,7 @@ describe("incremental content sync", () => {
 
   it("keeps a verified saved map available on cellular while Wi-Fi-only downloads wait", async () => {
     const release = await makeRelease("a".repeat(64), 1, "municipal-cellular-cache-park", "scene-cellular");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-cellular.webp")!;
     const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
     const inventory: ContentMapInventory = {
       schema: "parkdex.content-map/v1",
@@ -906,7 +927,7 @@ describe("incremental content sync", () => {
       manifestSha256: "e".repeat(64),
     };
     const state = parseContentSnapshot({
-      ...contentSyncSnapshot(18, { ...release.park, scene: null }, []),
+      ...contentSyncSnapshot(18, release.park, [sceneFile]),
       map: pointer,
     });
     const store = new MemoryContentStore();
@@ -939,11 +960,266 @@ describe("incremental content sync", () => {
     expect(snapshot.parks[0]?.id).toBe("municipal-cellular-cache-park");
     expect(snapshot.releaseId).toBe(`sync-staging-18-${release.channel.releaseId}`);
     expect(runtime.getStatus()).toMatchObject({ phase: "ready", syncStage: "waiting-for-wifi", activeDownloads: 0 });
+    expect(runtime.getStatus().mapDetailReady).toBe(true);
     expect(getAllowedMapChunks(snapshot.releaseId)).toEqual([]);
     expect(fetcher).not.toHaveBeenCalled();
     releaseChunkCheck();
     await vi.waitFor(() => expect(getAllowedMapChunks(snapshot.releaseId)).toEqual([0, 1]));
+    expect([...new Uint8Array(await runtime.readFile(snapshot.releaseId, "map/island/000.bin"))]).toEqual([1, 2, 3, 4]);
     expect(runtime.getStatus().fullMapReady).toBe(true);
+  });
+
+  it("publishes each verified cached badge before other files finish and discards stale completion", async () => {
+    const slowPark = { id: "municipal-slow-cached-art-park", name: "Slow art park", short: "Slow Art", ...PARK_FIELDS, scene: "slow-cached-scene" };
+    const fastPark = { id: "municipal-fast-cached-art-park", name: "Fast art park", short: "Fast Art", ...PARK_FIELDS, scene: "fast-cached-scene" };
+    const slowAsset = await makeSceneAsset("a".repeat(64), slowPark.scene, "slow cached scene art");
+    const fastAsset = await makeSceneAsset("b".repeat(64), fastPark.scene, "fast cached scene art");
+    const firstParkSnapshot = contentSyncSnapshot(1, slowPark, [slowAsset.file, fastAsset.file]);
+    const secondParkSnapshot = contentSyncSnapshot(1, fastPark, []);
+    const cachedState = parseContentSnapshot({
+      ...firstParkSnapshot,
+      parks: [slowPark, fastPark],
+      boundaries: {
+        type: "FeatureCollection",
+        features: [...firstParkSnapshot.boundaries.features, ...secondParkSnapshot.boundaries.features],
+      },
+      drive: {
+        hubs: firstParkSnapshot.drive.hubs,
+        parks: { ...firstParkSnapshot.drive.parks, ...secondParkSnapshot.drive.parks },
+      },
+    });
+    const delta = {
+      schema: "parkdex.content-sync/v1",
+      fromRevision: 1,
+      throughRevision: 2,
+      headRevision: 2,
+      hasMore: false,
+      batches: [{
+        revision: 2,
+        changes: [
+          { entity: "park", op: "upsert", id: slowPark.id, value: { ...slowPark, scene: null } },
+          { entity: "asset", op: "delete", id: slowAsset.file.path },
+        ],
+      }],
+    };
+    const deltas = new Map<number, unknown>();
+    const server = contentSyncServer(firstParkSnapshot, deltas);
+    const store = new MemoryContentStore();
+    store.sync.set("staging", { ...cachedState, sourceId: "staging|https://parkdex.example.test/api/content" });
+    store.files.set(slowAsset.file.sha256, slowAsset.bytes.slice(0));
+    store.files.set(fastAsset.file.sha256, fastAsset.bytes.slice(0));
+    const originalHasFile = store.hasFile.bind(store);
+    let releaseSlowVerification!: () => void;
+    let signalSlowVerification!: () => void;
+    const slowVerificationGate = new Promise<void>((resolve) => { releaseSlowVerification = resolve; });
+    const slowVerificationStarted = new Promise<void>((resolve) => { signalSlowVerification = resolve; });
+    store.hasFile = async (hash, size) => {
+      if (hash === slowAsset.file.sha256) {
+        signalSlowVerification();
+        await slowVerificationGate;
+      }
+      return originalHasFile(hash, size);
+    };
+    const originalFileUrl = store.fileUrl.bind(store);
+    let signalSlowUrlCreated!: () => void;
+    const slowUrlCreated = new Promise<void>((resolve) => { signalSlowUrlCreated = resolve; });
+    store.fileUrl = async (hash) => {
+      const url = await originalFileUrl(hash);
+      if (hash === slowAsset.file.sha256) signalSlowUrlCreated();
+      return url;
+    };
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: false, wifi: false }));
+
+    await runtime.start();
+    await slowVerificationStarted;
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(fastAsset.file.path)).toBe(`content-store://${fastAsset.file.sha256}`));
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+    expect(server.fetcher).not.toHaveBeenCalled();
+
+    deltas.set(1, delta);
+    runtime.setConnectivity({ connected: true, wifi: true });
+    const nextReleaseId = "sync-staging-2-pending";
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId));
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+
+    releaseSlowVerification();
+    await slowUrlCreated;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId);
+    expect(runtime.getStatus().snapshot?.assetUrls.has(slowAsset.file.path)).toBe(false);
+    expect(runtime.getStatus().snapshot?.assetUrls.get(fastAsset.file.path)).toBe(`content-store://${fastAsset.file.sha256}`);
+  });
+
+  it("publishes metadata before badge art and retries map startup only after art verifies", async () => {
+    const release = await makeRelease("7".repeat(64), 1, "municipal-startup-order-park", "scene-startup-order");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-startup-order.webp")!;
+    const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+    const inventory: ContentMapInventory = {
+      schema: "parkdex.content-map/v1",
+      version: release.channel.releaseId,
+      mapManifest: release.rawManifest.mapManifest,
+      files: mapFiles,
+    };
+    const inventoryBytes = toBytes(inventory);
+    const pointer = {
+      version: release.channel.releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+      manifestSha256: await sha256Hex(inventoryBytes),
+    };
+    const files = new Map<string, ArrayBuffer>([[pointer.manifestUrl, inventoryBytes]]);
+    for (const file of mapFiles) files.set(file.url, release.content.get(file.url)!.slice(0));
+    files.set(sceneFile.url, release.content.get(sceneFile.url)!.slice(0));
+    const server = contentSyncServer({ ...contentSyncSnapshot(41, release.park, [sceneFile]), map: pointer }, new Map(), new Map(), files);
+    const events: string[] = [];
+    let releaseFirstArt!: () => void;
+    let signalFirstArt!: () => void;
+    const firstArtGate = new Promise<void>((resolve) => { releaseFirstArt = resolve; });
+    const firstArtStarted = new Promise<void>((resolve) => { signalFirstArt = resolve; });
+    let artAttempts = 0;
+    const fetcher: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url === sceneFile.url) {
+        artAttempts += 1;
+        events.push(`art-${artAttempts}-started`);
+        if (artAttempts === 1) {
+          signalFirstArt();
+          await firstArtGate;
+          events.push("art-1-failed");
+          return new Response("badge temporarily unavailable", { status: 503 });
+        }
+      }
+      if (url === pointer.manifestUrl) events.push("inventory");
+      if (mapFiles.some((file) => file.url === url && file.path.startsWith("map/fonts/"))) events.push("glyph-requested");
+      return server.fetcher(input, init);
+    };
+    const store = new MemoryContentStore();
+    const glyphHashes = new Set(mapFiles.filter((file) => file.path.startsWith("map/fonts/")).map((file) => file.sha256));
+    const originalPutFile = store.putFile.bind(store);
+    store.putFile = async (hash, bytes) => {
+      await originalPutFile(hash, bytes);
+      if (hash === sceneFile.sha256) events.push("art-verified");
+      if (glyphHashes.has(hash)) events.push("glyph-verified");
+    };
+    mapMock.onCall = (detail) => events.push(detail);
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }));
+    const start = runtime.start();
+
+    await firstArtStarted;
+    expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe(release.park.id);
+    expect(runtime.getStatus().snapshot?.releaseId).toBe("sync-staging-41-pending");
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(runtime.getStatus().mapDetailReady).toBe(false);
+    runtime.setLocation([-123.4, 48.4]);
+    await new Promise((resolve) => setTimeout(resolve, 850));
+    expect(mapMock.calls).toEqual([]);
+    expect(events).not.toContain("inventory");
+    releaseFirstArt();
+    await start;
+
+    expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe(release.park.id);
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(mapMock.calls).toEqual([]);
+    expect(events).toContain("art-1-failed");
+    expect(events).not.toContain("inventory");
+
+    mapMock.pauseNearby = true;
+    let signalNearbyPaused!: () => void;
+    const nearbyPaused = new Promise<void>((resolve) => { signalNearbyPaused = resolve; });
+    mapMock.onNearbyPause = signalNearbyPaused;
+    await runtime.retry();
+    await vi.waitFor(() => expect(mapMock.calls.some((call) => call.detail === "starter")).toBe(true));
+    await nearbyPaused;
+    const initialNearbyCalls = mapMock.calls.filter((call) => call.detail === "nearby").length;
+    expect(initialNearbyCalls).toBe(1);
+    const initialNearbySignal = mapMock.nearbySignals[0];
+    expect(initialNearbySignal?.aborted).toBe(false);
+    runtime.setLocation([-123.4, 48.4]);
+    runtime.setLocation([-123.395, 48.402]);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(initialNearbyCalls);
+    expect(initialNearbySignal?.aborted).toBe(false);
+    mapMock.releaseNearby?.();
+    mapMock.releaseNearby = null;
+    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true));
+    runtime.setLocation([-123.4, 48.4]);
+    runtime.setLocation([-123.33, 48.43]);
+    await vi.waitFor(() => expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(initialNearbyCalls + 1), { timeout: 2_000 });
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(true);
+    const artVerifiedIndex = events.indexOf("art-verified");
+    const inventoryIndex = events.indexOf("inventory");
+    const glyphIndex = events.indexOf("glyph-verified");
+    const starterIndex = events.indexOf("starter");
+    const nearbyIndex = events.indexOf("nearby");
+    expect(artVerifiedIndex).toBeGreaterThanOrEqual(0);
+    expect(inventoryIndex).toBeGreaterThan(artVerifiedIndex);
+    expect(glyphIndex).toBeGreaterThan(inventoryIndex);
+    expect(starterIndex).toBeGreaterThan(glyphIndex);
+    expect(nearbyIndex).toBeGreaterThan(starterIndex);
+  });
+
+  it("starts nearby coverage again when the map release changes at the same location", async () => {
+    const firstRelease = await makeRelease("1".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-a");
+    const secondRelease = await makeRelease("2".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-b");
+    const makeMapPointer = async (release: Awaited<ReturnType<typeof makeRelease>>) => {
+      const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+      const inventory: ContentMapInventory = {
+        schema: "parkdex.content-map/v1",
+        version: release.channel.releaseId,
+        mapManifest: release.rawManifest.mapManifest,
+        files: mapFiles,
+      };
+      const bytes = toBytes(inventory);
+      const pointer: ContentMapPointer = {
+        version: release.channel.releaseId,
+        manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+        manifestSha256: await sha256Hex(bytes),
+      };
+      return { pointer, bytes, mapFiles, content: release.content };
+    };
+    const firstMap = await makeMapPointer(firstRelease);
+    const secondMap = await makeMapPointer(secondRelease);
+    const files = new Map<string, ArrayBuffer>([
+      [firstMap.pointer.manifestUrl, firstMap.bytes],
+      [secondMap.pointer.manifestUrl, secondMap.bytes],
+    ]);
+    for (const entry of [firstMap, secondMap]) {
+      for (const file of entry.mapFiles) files.set(file.url, entry.content.get(file.url)!.slice(0));
+    }
+    const park = { ...firstRelease.park, scene: null };
+    const delta = {
+      schema: "parkdex.content-sync/v1",
+      fromRevision: 1,
+      throughRevision: 2,
+      headRevision: 2,
+      hasMore: false,
+      batches: [{
+        revision: 2,
+        changes: [{ entity: "map", op: "upsert", id: "default", value: secondMap.pointer }],
+      }],
+    };
+    const deltas = new Map<number, unknown>();
+    const server = contentSyncServer(
+      { ...contentSyncSnapshot(1, park, []), map: firstMap.pointer },
+      deltas,
+      new Map(),
+      files,
+    );
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    const point: [number, number] = [-123.4, 48.4];
+    runtime.setLocation(point);
+
+    await runtime.start();
+    const firstReleaseId = `sync-staging-1-${firstMap.pointer.version}`;
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: firstReleaseId, detail: "nearby" }));
+    expect(mapMock.calls.filter((call) => call.releaseId === firstReleaseId && call.detail === "nearby")).toHaveLength(1);
+
+    deltas.set(1, delta);
+    await runtime.retry();
+    const nextReleaseId = `sync-staging-2-${secondMap.pointer.version}`;
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId));
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: nextReleaseId, detail: "nearby" }));
+    expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(2);
   });
 
   it("clears retained parks synchronously when the account claim projection changes", async () => {
@@ -1166,6 +1442,8 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(`sync-staging-31-${release.channel.releaseId}`));
     await vi.waitFor(() => expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([0, 1]));
     expect(runtime.getStatus().snapshot?.manifest.mapManifest).toEqual(release.rawManifest.mapManifest);
+    expect(mapMock.calls).toContainEqual({ releaseId: runtime.getStatus().snapshot!.releaseId, detail: "starter" });
+    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true));
   });
 
   it("syncs content over an online browser connection without a physical Wi-Fi signal", async () => {

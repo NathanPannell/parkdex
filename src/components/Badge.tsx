@@ -84,7 +84,7 @@ function Ribbon({ text, p }: { text: string; p: Palette }) {
 const MYSTERY_PALETTE: Palette = { ...PALETTES.forest, ribbon: "#8A8F87", ribbonText: "#FFF8EC" };
 
 // Placeholder for parks whose badge art isn't made yet.
-function Mystery() {
+function Mystery({ label }: { label: string }) {
   return (
     <g>
       <rect x={-10} y={-10} width={220} height={220} fill="#EDE3CF" />
@@ -95,7 +95,7 @@ function Mystery() {
         ?
       </text>
       <text x={100} y={36} textAnchor="middle" fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={12} letterSpacing={2} fill="#14231C" opacity={0.45}>
-        COMING SOON
+        {label}
       </text>
     </g>
   );
@@ -162,7 +162,7 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
         {park.scene && resolvedSceneHref ? (
           <image href={resolvedSceneHref} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
         ) : (
-          <Mystery />
+          <Mystery label={live ? "ART PENDING" : "COMING SOON"} />
         )}
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#p${uid})`} />
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#v${uid})`} />

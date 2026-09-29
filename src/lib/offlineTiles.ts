@@ -245,8 +245,9 @@ export class BundledOverviewSource implements Source {
 
 const bundledOverviewSource = new BundledOverviewSource();
 
-/** Start the bundled overview archive read before the first map requests it. */
+/** Register PMTiles and start the bundled archive read before the first map request. */
 export function prewarmBundledOverview(): Promise<void> {
+  ensureProtocols();
   return bundledOverviewSource.getBytes(0, 127).then(() => undefined);
 }
 

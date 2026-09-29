@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCollectionRankProgress, getRarityProgress } from "./progression";
-import { reducer, type Claim } from "./store";
+import { load, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
 type StoreState = Parameters<typeof reducer>[0];
@@ -42,6 +42,10 @@ const readyState: StoreState = {
   feedback: null,
 };
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 function restoredClaim(id: string, rarity: Rarity): Claim {
   const parkSnapshot = { ...park, id, name: id, short: id, rarity };
   return {
@@ -54,6 +58,22 @@ function restoredClaim(id: string, rarity: Rarity): Claim {
 }
 
 describe("claim progress hydration", () => {
+  it("opens directly on the map after onboarding has already been completed", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ onboarded: true, muted: true }),
+    });
+
+    expect(load()).toMatchObject({ onboarded: true, muted: true, screen: "map" });
+  });
+
+  it("keeps the splash for a visitor who has not completed onboarding", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ onboarded: false }),
+    });
+
+    expect(load().screen).toBe("splash");
+  });
+
   it("derives the same rank after owner claims are restored", () => {
     const restoredClaims: Record<string, Claim> = {};
     const catalogue: Pick<Park, "id" | "rarity">[] = [];
@@ -103,7 +123,7 @@ describe("claim progress hydration", () => {
         [park.id]: {
           claimId: "old-claim",
           at: "2026-09-26T12:00:00.000Z",
-          photo: "",
+          photo: "old-claim-photo",
           parkSnapshot: park,
           contentReleaseId: "release-1",
         },
@@ -112,6 +132,56 @@ describe("claim progress hydration", () => {
 
     expect(afterStaleRead.claims[park.id].claimId).toBe("new-claim");
     expect(afterStaleRead.claims[park.id].photo).toBe(readyState.pendingPhoto);
+  });
+
+  it("keeps a same-claim photo during metadata-only refresh", () => {
+    const stateWithPhoto: StoreState = {
+      ...readyState,
+      claims: {
+        [park.id]: {
+          claimId: "same-claim",
+          at: "2026-09-27T12:00:00.000Z",
+          photo: "saved-photo",
+          parkSnapshot: park,
+          contentReleaseId: "release-1",
+        },
+      },
+    };
+    const afterMetadata = reducer(stateWithPhoto, {
+      type: "progressLoaded",
+      ownerKey: "guest",
+      metadataOnly: true,
+      claims: {
+        [park.id]: {
+          claimId: "same-claim",
+          at: "2026-09-27T12:00:00.000Z",
+          photo: "",
+          parkSnapshot: park,
+          contentReleaseId: "release-1",
+        },
+      },
+    });
+
+    expect(afterMetadata.progressReady).toBe(true);
+    expect(afterMetadata.claims[park.id].photo).toBe("saved-photo");
+  });
+
+  it("keeps metadata ready when later photo hydration fails", () => {
+    const afterMetadata = reducer({ ...readyState, claims: {}, progressReady: false }, {
+      type: "progressLoaded",
+      ownerKey: "guest",
+      metadataOnly: true,
+      claims: { [park.id]: restoredClaim(park.id, "common") },
+    });
+    const afterPhotoFailure = reducer(afterMetadata, {
+      type: "progressFailed",
+      ownerKey: "guest",
+      message: "Some saved photos could not be opened. Your saved parks are still available.",
+    });
+
+    expect(afterPhotoFailure.progressReady).toBe(true);
+    expect(afterPhotoFailure.claims[park.id].claimId).toBe(`claim-${park.id}`);
+    expect(afterPhotoFailure.progressError).toBe("Some saved photos could not be opened. Your saved parks are still available.");
   });
 
   it("accepts a newer visit from a read that started after the local claim", () => {
@@ -146,11 +216,16 @@ describe("claim progress hydration", () => {
 
   it("still clears the old owner's claim screen when ownership changes", () => {
     const next = reducer(readyState, { type: "progressLoading", ownerKey: "account:new-owner" });
+    const afterStaleResult = reducer(next, {
+      type: "progressLoaded",
+      ownerKey: "guest",
+      claims: { [park.id]: restoredClaim(park.id, "common") },
+    });
 
-    expect(next.progressReady).toBe(false);
-    expect(next.screen).toBe("map");
-    expect(next.claims).toEqual({});
-    expect(next.pendingPhoto).toBeNull();
-    expect(next.progressOwnerKey).toBe("account:new-owner");
+    expect(afterStaleResult.progressReady).toBe(false);
+    expect(afterStaleResult.screen).toBe("map");
+    expect(afterStaleResult.claims).toEqual({});
+    expect(afterStaleResult.pendingPhoto).toBeNull();
+    expect(afterStaleResult.progressOwnerKey).toBe("account:new-owner");
   });
 });
