@@ -60,6 +60,20 @@
   padding-bottom: 18px;
 }
 
+.account-policy-link {
+  margin: auto 0 0;
+  padding: 8px 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  text-align: center;
+}
+
+.account-policy-link a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .account-card {
   display: flex;
   flex-direction: column;

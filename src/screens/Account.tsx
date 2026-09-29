@@ -577,6 +577,8 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-notice card is-error" role="alert"><span>{state.progressError}</span></section>
         )}
 
+        <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
+
       </div>
     </motion.main>
   );

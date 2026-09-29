@@ -82,6 +82,15 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
   return "GET";
 }
 
+/** Credentials and session headers may only go to the configured TLS account API. */
+export function assertSecureAccountRequest(url: URL, accountOrigin: string): void {
+  const origin = new URL(accountOrigin);
+  if (origin.protocol !== "https:" || url.protocol !== "https:" || url.origin !== origin.origin ||
+      url.username || url.password || url.hash || (url.port && url.port !== "443")) {
+    throw new Error("Account requests require the configured HTTPS account API.");
+  }
+}
+
 async function parseBody(response: Response): Promise<Record<string, unknown>> {
   try {
     const body: unknown = await response.json();
@@ -99,14 +108,15 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
   if (expectedAccountId) headers.set("X-Kip-Account-ID", expectedAccountId);
 
   const requestUrl = new URL(typeof Request !== "undefined" && url instanceof Request ? url.url : String(url), apiUrl("/"));
+  const accountOrigin = new URL(apiUrl("/")).origin;
+  assertSecureAccountRequest(requestUrl, accountOrigin);
   if (isAccountBackupPath(requestUrl)) {
     if (!authenticated) throw new Error("Account backup requests require an authenticated account session.");
-    const accountOrigin = new URL(apiUrl("/")).origin;
     assertAccountBackupRequest(requestUrl, method, accountOrigin);
     const signal = init.signal ?? (typeof Request !== "undefined" && url instanceof Request ? url.signal : undefined);
     if (isNative) {
       const backupFetcher: typeof fetch = (input, fetchInit) => accountBackupFetch(input, fetchInit ?? {}, accountOrigin);
-      return nativeAuthFetch(url, { ...init, headers, signal }, backupFetcher);
+      return nativeAuthFetch(url, { ...init, headers, signal, redirect: "error" }, backupFetcher);
     }
     headers.delete("Authorization");
     headers.delete("Cookie");
@@ -115,15 +125,15 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
       if (token) headers.set("X-CSRF-Token", token);
       else throw new Error("The security token is missing. Refresh this page and try again.");
     }
-    return accountBackupFetch(url, { ...init, method, headers, signal }, accountOrigin);
+    return accountBackupFetch(url, { ...init, method, headers, signal, redirect: "error" }, accountOrigin);
   }
 
   if (isNative) {
-    if (authenticated) return nativeAuthFetch(url, { ...init, headers });
+    if (authenticated) return nativeAuthFetch(url, { ...init, headers, redirect: "error" });
     headers.set("X-Kip-Auth-Transport", "native");
     headers.delete("Authorization");
     headers.delete("Cookie");
-    return fetch(url, { ...init, headers, credentials: "omit", cache: "no-store" });
+    return fetch(url, { ...init, headers, credentials: "omit", cache: "no-store", redirect: "error" });
   }
 
   headers.delete("Authorization");
@@ -133,7 +143,7 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
     if (token) headers.set("X-CSRF-Token", token);
     else if (authenticated) throw new Error("The security token is missing. Refresh this page and try again.");
   }
-  return fetch(url, { ...init, headers, credentials: "include", cache: "no-store" });
+  return fetch(url, { ...init, headers, credentials: "include", cache: "no-store", redirect: "error" });
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}, authenticated = false, expectedAccountId?: string): Promise<T> {

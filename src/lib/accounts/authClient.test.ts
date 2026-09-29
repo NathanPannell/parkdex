@@ -4,7 +4,7 @@ const nativeMocks = vi.hoisted(() => ({
   native: true,
   activeToken: "old-token",
   responses: [] as Response[],
-  calls: [] as { input: RequestInfo | URL; headers: Headers; tokenAtCall: string }[],
+  calls: [] as { input: RequestInfo | URL; headers: Headers; tokenAtCall: string; redirect?: RequestRedirect }[],
   persist: vi.fn(),
 }));
 
@@ -24,7 +24,7 @@ vi.mock("./nativeIdentity", () => ({
   isApprovedKipOrigin: () => true,
   KIP_STAGING_ORIGIN: "https://staging.web.parkdex.app",
   nativeAuthFetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    nativeMocks.calls.push({ input, headers: new Headers(init?.headers), tokenAtCall: nativeMocks.activeToken });
+    nativeMocks.calls.push({ input, headers: new Headers(init?.headers), tokenAtCall: nativeMocks.activeToken, redirect: init?.redirect });
     const response = nativeMocks.responses.shift();
     if (!response) throw new Error("Missing mocked response.");
     return response;
@@ -32,11 +32,30 @@ vi.mock("./nativeIdentity", () => ({
   persistNativeSession: nativeMocks.persist,
 }));
 
-import { getCurrentAccount, renewSession } from "./authClient";
+import { assertSecureAccountRequest, getCurrentAccount, renewSession } from "./authClient";
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
 }
+
+describe("account transport", () => {
+  const origin = "https://staging.web.parkdex.app";
+
+  it("refuses plaintext or redirected credential destinations", () => {
+    expect(() => assertSecureAccountRequest(new URL("http://staging.web.parkdex.app/api/auth/login"), origin)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("https://other.example/api/auth/login"), origin)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("https://user@staging.web.parkdex.app/api/auth/login"), origin)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("https://staging.web.parkdex.app/api/auth/login#token"), origin)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("https://staging.web.parkdex.app/api/auth/login"), origin)).not.toThrow();
+  });
+
+  it("blocks redirects on native authenticated requests", async () => {
+    nativeMocks.responses.push(jsonResponse({ account: { id: "a", email: "a@example.test" } }));
+    await getCurrentAccount("a");
+    expect(nativeMocks.calls[0].input).toBe("https://staging.web.parkdex.app/api/auth/me");
+    expect(nativeMocks.calls[0].redirect).toBe("error");
+  });
+});
 
 describe("native auth session renewal", () => {
   beforeEach(() => {

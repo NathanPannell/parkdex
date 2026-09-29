@@ -111,7 +111,7 @@ export async function nativeAuthFetch(
   const apiOrigin = getAuthApiOrigin();
   const rawUrl = typeof Request !== "undefined" && input instanceof Request ? input.url : String(input);
   const requestUrl = new URL(rawUrl, apiOrigin);
-  if (requestUrl.origin !== apiOrigin) {
+  if (requestUrl.protocol !== "https:" || requestUrl.origin !== apiOrigin || requestUrl.username || requestUrl.password || requestUrl.hash) {
     throw new Error("Native account requests must use the configured account API origin.");
   }
   const headers = new Headers(
@@ -128,6 +128,7 @@ export async function nativeAuthFetch(
     headers,
     credentials: "omit",
     cache: "no-store",
+    redirect: "error",
   });
 }
 
