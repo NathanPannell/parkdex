@@ -11,7 +11,7 @@ import type { Park } from "../lib/parks";
 import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
 import { RARITY } from "../lib/parks";
-import { RANKS } from "../lib/progression";
+import { RANKS, isRankProgressionEnabled } from "../lib/progression";
 import { parksLabel } from "../lib/rarityUi";
 import { RankEmblem } from "../components/Rank";
 import goMap from "../assets/onboarding-go-map.webp";
@@ -195,13 +195,15 @@ function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
 }
 
 export function Onboarding() {
+  // The rank-up step only appears while rank progression is switched on for this build.
+  const slides = isRankProgressionEnabled() ? SLIDES : SLIDES.slice(0, 3);
   const { dispatch } = useStore();
   const content = useContent();
   const toast = useToast();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const [asking, setAsking] = useState(false);
-  const slide = SLIDES[index];
+  const slide = slides[index];
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -215,7 +217,7 @@ export function Onboarding() {
   const parks = content?.liveParks ?? [];
 
   const goTo = (i: number) => {
-    if (i < 0 || i >= SLIDES.length) return;
+    if (i < 0 || i >= slides.length) return;
     sfx.tap();
     buzz(8);
     setDir(i > index ? 1 : -1);
@@ -258,8 +260,8 @@ export function Onboarding() {
     >
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
-        {index < SLIDES.length - 1 && (
-          <button className="onboarding__skip" onClick={() => goTo(SLIDES.length - 1)}>
+        {index < slides.length - 1 && (
+          <button className="onboarding__skip" onClick={() => goTo(slides.length - 1)}>
             Skip
           </button>
         )}
@@ -309,7 +311,7 @@ export function Onboarding() {
       </motion.div>
       <div className="onboarding__foot">
         <div className="dots">
-          {SLIDES.map((_, i) => (
+          {slides.map((_, i) => (
             <motion.button
               key={i}
               className="dot"
@@ -323,13 +325,13 @@ export function Onboarding() {
         <motion.button
           className="btn"
           layout
-          onClick={() => (index < SLIDES.length - 1 ? goTo(index + 1) : setAsking(true))}
+          onClick={() => (index < slides.length - 1 ? goTo(index + 1) : setAsking(true))}
           whileTap={{ scale: 0.96 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={index < SLIDES.length - 1 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
-              {index < SLIDES.length - 1 ? "Next" : "Let's go!"}
+            <motion.span key={index < slides.length - 1 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
+              {index < slides.length - 1 ? "Next" : "Let's go!"}
             </motion.span>
           </AnimatePresence>
           <Icon name="next" />

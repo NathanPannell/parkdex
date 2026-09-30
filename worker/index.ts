@@ -5,6 +5,7 @@ import type { FeedbackCursor, FeedbackStore, MailIntent, ResendPayload } from ".
 import { handleInteractionRequest, handleRetentionRequest, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
 import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
+import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import {
   HttpError,
   readJsonBody,
@@ -40,6 +41,7 @@ export interface WorkerDependencies {
   progress?: ProgressDependencies;
   interactions?: InteractionDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
+  createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
@@ -427,6 +429,17 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     const result = await resumeAccountDeletion(deletionResume[1], env, authDependencies);
     return json(result, result.complete ? 200 : 202);
   }
+  const appConfigResponse = await handleAppConfigRequest(request, {
+    json,
+    requireOperator: () => requireOperator(request, env),
+    sameOriginRequired: () => sameOriginRequired(request),
+    store: () => {
+      if (dependencies.createAppConfigStore) return dependencies.createAppConfigStore(env);
+      if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "App configuration is unavailable.");
+      return createNeonAppConfigStore(env.DATABASE_URL);
+    },
+  });
+  if (appConfigResponse) return appConfigResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
   if (path === "/api/operator/login" && request.method === "POST") return login(request, env, dependencies);
   if (path === "/api/operator/logout" && request.method === "POST") return clearLogin(request);

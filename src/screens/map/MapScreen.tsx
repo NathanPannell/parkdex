@@ -12,7 +12,7 @@ import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
-import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, type ParkRarityEligibility } from "../../lib/progression";
+import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
@@ -59,7 +59,7 @@ export function MapScreen() {
   const arrivedId = here && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
-  const rank = state.progressReady ? getCollectionRankProgress(rarityProgress) : null;
+  const rank = state.progressReady && isRankProgressionEnabled() ? getCollectionRankProgress(rarityProgress) : null;
   const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
   const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
 

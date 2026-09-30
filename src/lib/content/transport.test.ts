@@ -34,6 +34,7 @@ vi.mock("@capacitor/core", () => ({
 
 vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
+import { setContentChannelOverride } from "../contentChannel";
 import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDownloadAvailable, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
 
 const API_URL = "https://staging.web.parkdex.app/api/content/current";
@@ -155,6 +156,22 @@ describe("content transport", () => {
     expect(mocks.native.request).toHaveBeenCalledWith(expect.objectContaining({
       approvedApiOrigin: "https://parkdex-kip.vercel.app",
     }));
+  });
+
+  it("reads the remotely selected content database's host", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    try {
+      setContentChannelOverride("main");
+      expect(getContentApiOrigin()).toBe("https://web.parkdex.app");
+      await contentFetch("https://web.parkdex.app/api/content/current");
+      expect(mocks.native.request).toHaveBeenCalledWith(expect.objectContaining({ approvedApiOrigin: "https://web.parkdex.app" }));
+      setContentChannelOverride("staging");
+      vi.stubEnv("VITE_CONTENT_ENV", "main");
+      expect(getContentApiOrigin()).toBe("https://staging.web.parkdex.app");
+    } finally {
+      setContentChannelOverride(null);
+    }
   });
 
   it("resolves a deployed browser main build to its same-origin content API", () => {

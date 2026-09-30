@@ -1,6 +1,7 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
@@ -26,6 +27,8 @@ const NO_SUBSCRIBE = () => () => {};
 const ContentContext = createContext<ContentRuntime | null>(null);
 
 function contentEnvironment(): ContentEnvironment {
+  const override = contentChannelOverride();
+  if (override) return override;
   const value = import.meta.env.VITE_CONTENT_ENV;
   // Keep the existing data-environment label; the API source ID also binds the cache to its host.
   return value === "main" ? "main" : "staging";

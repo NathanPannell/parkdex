@@ -15,6 +15,7 @@ import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
+import { BuildConfigAdmin } from "./screens/BuildConfigAdmin";
 import { FeedbackReview } from "./screens/FeedbackReview";
 import { Account } from "./screens/Account";
 import { Gallery } from "./screens/Gallery";
@@ -25,6 +26,7 @@ import { Splash } from "./screens/Splash";
 
 export function App() {
   if (location.pathname === "/feedback/review") return <FeedbackReview />;
+  if (location.pathname === "/operator/builds") return <BuildConfigAdmin />;
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>

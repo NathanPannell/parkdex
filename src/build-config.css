@@ -1,0 +1,111 @@
+.fr-review.bc-page {
+  overflow-y: auto;
+  padding: 24px 16px 48px;
+}
+
+.bc-page > * {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.bc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bc-header h1 {
+  margin: 0;
+  font-family: var(--display, "Bricolage Grotesque Variable", system-ui, sans-serif);
+  font-size: 1.6rem;
+}
+
+.bc-intro,
+.bc-notes {
+  color: var(--fr-ink-soft);
+  line-height: 1.45;
+}
+
+.bc-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px auto;
+  display: grid;
+  gap: 10px;
+}
+
+.bc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--fr-paper-2);
+}
+
+.bc-row p {
+  margin: 4px 0 0;
+}
+
+.bc-row--empty {
+  color: var(--fr-ink-soft);
+}
+
+.bc-label {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--fr-paper-3);
+  font-size: 0.85rem;
+}
+
+.bc-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bc-form {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--fr-paper-2);
+}
+
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.bc-grid label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.bc-grid input,
+.bc-grid select,
+.bc-grid textarea {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--fr-paper-3);
+  border-radius: 10px;
+  background: var(--fr-paper);
+  color: var(--fr-ink);
+}
+
+.bc-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 560px) {
+  .bc-row {
+    flex-direction: column;
+  }
+}

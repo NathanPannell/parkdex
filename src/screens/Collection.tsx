@@ -8,7 +8,7 @@ import { RollingNumber, Tilt } from "../components/Motion";
 import { RankCard, RankTrail } from "../components/Rank";
 import { sfx } from "../lib/feedback";
 import { badgeTotal, CATEGORY_LABEL, type Park } from "../lib/parks";
-import { getCollectionRankProgress, getRarityProgress } from "../lib/progression";
+import { getCollectionRankProgress, getRarityProgress, isRankProgressionEnabled } from "../lib/progression";
 import { useStore, type Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 
@@ -67,7 +67,7 @@ export function Collection() {
         </button>
       </header>
 
-      <RankCard progress={rankProgress} onOpen={() => { sfx.pop(); setTrailOpen(true); }} />
+      {isRankProgressionEnabled() && <RankCard progress={rankProgress} onOpen={() => { sfx.pop(); setTrailOpen(true); }} />}
 
       <div className={`case ${count === 0 ? "case--empty" : ""}`}>
         <div className="case__glass" />

@@ -1,5 +1,5 @@
 import { RARITY, type Rarity } from "../lib/parks";
-import { rankFor, type ParkRarityEligibility } from "../lib/progression";
+import { isRankProgressionEnabled, rankFor, type ParkRarityEligibility } from "../lib/progression";
 import { parksLabel } from "../lib/rarityUi";
 import { RankEmblem } from "./Rank";
 
@@ -10,7 +10,7 @@ type Props = {
 
 /** Tells a visitor, on the park itself, which rank opens this park and how close they are. */
 export function RarityGuide({ rarity, eligibility }: Props) {
-  if (rarity === "common" || eligibility.reason === "already-earned") return null;
+  if (!isRankProgressionEnabled() || rarity === "common" || eligibility.reason === "already-earned") return null;
   const label = RARITY[rarity].label;
 
   if (eligibility.reason === "unavailable") {
