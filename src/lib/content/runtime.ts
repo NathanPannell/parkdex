@@ -953,7 +953,7 @@ class ContentRuntimeController implements ContentRuntime {
     }
     this.syncState = candidate;
     this.assertSyncCanCommit(signal);
-    await this.publishSyncState(candidate, phaseForActive(this.connectivity().connected), null);
+    await this.publishSyncState(candidate, phaseForActive(this.connectivity().connected), null, () => this.assertSyncCanCommit(signal));
   }
 
   private assertSyncCanCommit(signal: AbortSignal): void {
@@ -1041,7 +1041,7 @@ class ContentRuntimeController implements ContentRuntime {
     if (retained.length) await this.options.store.retainParks(retained);
   }
 
-  private async publishSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null): Promise<void> {
+  private async publishSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null, beforePublish?: () => void): Promise<void> {
     const retainedProjectionRevision = this.retainedProjectionRevision;
     const validated = validateContentSyncState(state);
     let inventory: ContentMapInventory | null = null;
@@ -1134,6 +1134,7 @@ class ContentRuntimeController implements ContentRuntime {
         if (oldReleaseId !== releaseId) controller.abort(reason);
       }
     }
+    beforePublish?.();
     this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, mapDetailReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
     if (retainedProjectionRevision !== this.retainedProjectionRevision) this.refreshClaimedParks();
     void this.hydrateCachedMapChunks(validated, releaseId).catch(() => {});
@@ -1177,7 +1178,12 @@ class ContentRuntimeController implements ContentRuntime {
     if (!manifest || !manifest.files.some((file) => file.path.startsWith("map/"))) return;
     const mapFile = manifest.files.find((file) => file.path === "map/island/manifest.json");
     if (!mapFile || !(await this.hasVerifiedLocalFile(mapFile))) return;
-    parseMapFile(await this.options.store.readFile(mapFile.sha256), manifest.mapManifest);
+    try {
+      parseMapFile(await this.options.store.readFile(mapFile.sha256), manifest.mapManifest);
+    } catch {
+      this.invalidateLocalFile(mapFile);
+      return;
+    }
     const glyphFiles = manifest.files.filter((file) => file.path.startsWith("map/fonts/"));
     const glyphsVerified = glyphFiles.length > 0 && (await Promise.all(glyphFiles.map((file) => this.hasVerifiedLocalFile(file)))).every(Boolean);
     if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
@@ -1304,6 +1310,8 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.syncState?.map?.version !== pointer.version) return;
     const glyphs = inventory.files.filter((file) => file.path.startsWith("map/fonts/"));
     await Promise.all(glyphs.map((file) => this.scheduleFileDownload(file, "bulk", signal)));
+    if (signal.aborted) throw signal.reason ?? new DOMException("Map sync cancelled", "AbortError");
+    if (this.stopped || !this.foreground) return;
     if (this.syncState?.map?.version !== pointer.version) return;
     this.publishMapInventory(pointer, inventory);
     this.waitingForBulkWifi = this.isWaitingForWifi();
