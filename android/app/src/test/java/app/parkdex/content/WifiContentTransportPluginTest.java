@@ -75,6 +75,46 @@ public class WifiContentTransportPluginTest {
     }
 
     @Test
+    public void reservesWifiForDetailedMapChunksAndUsesAnyValidatedNetworkForOtherContentAndBackup() throws Exception {
+        String apiOrigin = "https://parkdex-kip-staging.vercel.app";
+        String mapChunk = "https://kip-assets.parkdex.app/releases/release-1/map/island/001.bin";
+        String malformedMapChunk = "https://kip-assets.parkdex.app/releases/release-1/map/island/not-numeric.bin";
+        String encodedMapChunk = "https://kip-assets.parkdex.app/releases/release-1/%6Dap/island/manifest-ish.bin?cache=1";
+        String mapManifest = "https://kip-assets.parkdex.app/releases/release-1/map/island/manifest.json";
+        String badgeArt = "https://kip-assets.parkdex.app/releases/release-1/badges/sample.webp";
+        String mapFont = "https://kip-assets.parkdex.app/releases/release-1/map/fonts/regular.pbf";
+
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.WIFI_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(mapChunk, apiOrigin, CDN_ORIGIN), false));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.WIFI_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(malformedMapChunk, apiOrigin, CDN_ORIGIN), false));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.WIFI_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(encodedMapChunk, apiOrigin, CDN_ORIGIN), false));
+
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(
+                                apiOrigin + "/api/content/current", apiOrigin, CDN_ORIGIN), false));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(mapManifest, apiOrigin, CDN_ORIGIN), false));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(badgeArt, apiOrigin, CDN_ORIGIN), false));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(mapFont, apiOrigin, CDN_ORIGIN), false));
+
+        String claimUrl = apiOrigin + "/api/claims";
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateAccountBackupUrl(claimUrl, apiOrigin, "GET"), true));
+    }
+
+    @Test
     public void permitsOnlyExactAccountBackupRoutesAndMethods() throws Exception {
         String productionOrigin = "https://web.parkdex.app";
         assertEquals(productionOrigin + "/api/claims",

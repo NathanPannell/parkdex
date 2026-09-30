@@ -460,6 +460,15 @@
   text-align: center;
 }
 
+.map-loading--over-map {
+  background: transparent;
+  pointer-events: none;
+}
+
+.map-loading--over-map .map-loading__card {
+  pointer-events: auto;
+}
+
 .pm-host {
   cursor: pointer;
 }
@@ -698,6 +707,13 @@
   display: inline-grid;
   flex: none;
   place-items: center;
+}
+
+.content-sync--retry {
+  min-height: 44px;
+  white-space: normal;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .content-sync__wheel--active svg {

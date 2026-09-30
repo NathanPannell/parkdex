@@ -34,6 +34,73 @@ function assertRelease(release: StoredRelease) {
   }
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isReadableRelease(value: unknown, id: string): value is StoredRelease {
+  if (!isObjectRecord(value) || value.id !== id || !isObjectRecord(value.channel) || !isObjectRecord(value.manifest)) return false;
+  const channel = value.channel;
+  const manifest = value.manifest;
+  const mapManifest = manifest.mapManifest;
+  return channel.releaseId === id && Number.isSafeInteger(channel.generation) && typeof channel.environment === "string" &&
+    typeof channel.manifestUrl === "string" && typeof channel.manifestSha256 === "string" &&
+    typeof manifest.version === "string" && typeof manifest.sourceCommit === "string" && typeof manifest.cdnOrigin === "string" &&
+    Array.isArray(manifest.files) && Array.isArray(manifest.parkIds) && Array.isArray(manifest.boundaryIds) &&
+    isObjectRecord(mapManifest) && Number.isSafeInteger(mapManifest.size) && Number.isSafeInteger(mapManifest.chunkBytes) && Number.isSafeInteger(mapManifest.count) &&
+    (value.readiness === "candidate" || value.readiness === "starter" || value.readiness === "complete") && typeof value.healthy === "boolean";
+}
+
+function isReadablePark(value: unknown): value is RetainedPark["park"] {
+  if (!isObjectRecord(value)) return false;
+  return typeof value.id === "string" && value.id.length > 0 && typeof value.name === "string" && typeof value.short === "string" &&
+    typeof value.category === "string" && typeof value.region === "string" && Number.isFinite(value.lat) && Number.isFinite(value.lng) &&
+    typeof value.biome === "string" && typeof value.shape === "string" && typeof value.rarity === "string" && Number.isSafeInteger(value.seed) &&
+    typeof value.blurb === "string" && (value.scene === null || typeof value.scene === "string");
+}
+
+function parseReleaseRow(id: unknown, json: unknown): StoredRelease | undefined {
+  if (typeof id !== "string" || typeof json !== "string") return undefined;
+  try {
+    const release = JSON.parse(json) as unknown;
+    return isReadableRelease(release, id) ? release : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseRetainedParkRow(row: { park_json?: unknown; scene_file_json?: unknown }): RetainedPark | undefined {
+  if (typeof row.park_json !== "string") return undefined;
+  try {
+    const park = JSON.parse(row.park_json) as unknown;
+    if (!isReadablePark(park)) return undefined;
+    const retained: RetainedPark = {
+      park,
+      ...(typeof row.scene_file_json === "string" ? { sceneFile: JSON.parse(row.scene_file_json) as RetainedPark["sceneFile"] } : {}),
+    };
+    if (row.scene_file_json !== null && row.scene_file_json !== undefined && typeof row.scene_file_json !== "string") return undefined;
+    assertRetainedPark(retained);
+    return retained;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseArchivedSceneRow(row: { release_id?: unknown; scene?: unknown; file_json?: unknown }): ArchivedScene | undefined {
+  if (typeof row.release_id !== "string" || typeof row.scene !== "string" || typeof row.file_json !== "string") return undefined;
+  try {
+    const descriptor: ArchivedScene = {
+      releaseId: row.release_id,
+      scene: row.scene,
+      file: JSON.parse(row.file_json) as ArchivedScene["file"],
+    };
+    assertArchivedSceneDescriptor(descriptor);
+    return descriptor;
+  } catch {
+    return undefined;
+  }
+}
+
 function assertRetainedPark(retained: RetainedPark) {
   if (!retained?.park || typeof retained.park.id !== "string" || retained.park.id.length === 0) {
     throw new Error("Invalid retained park");
@@ -127,14 +194,17 @@ export class NativeContentStore implements ContentStore {
   }
 
   async getRelease(id: string): Promise<StoredRelease | undefined> {
-    const rows = await this.db().query("SELECT release_json FROM content_releases WHERE id = ?", [id]);
-    const json = rows.values?.[0]?.release_json;
-    return typeof json === "string" ? JSON.parse(json) as StoredRelease : undefined;
+    const rows = await this.db().query("SELECT id, release_json FROM content_releases WHERE id = ?", [id]);
+    const row = rows.values?.[0];
+    return row ? parseReleaseRow(row.id, row.release_json) : undefined;
   }
 
   async listReleases(): Promise<StoredRelease[]> {
-    const rows = await this.db().query("SELECT release_json FROM content_releases ORDER BY id");
-    return (rows.values ?? []).map((row) => JSON.parse(String(row.release_json)) as StoredRelease);
+    const rows = await this.db().query("SELECT id, release_json FROM content_releases ORDER BY id");
+    return (rows.values ?? []).flatMap((row) => {
+      const release = parseReleaseRow(row.id, row.release_json);
+      return release ? [release] : [];
+    });
   }
 
   async putRelease(release: StoredRelease): Promise<void> {
@@ -262,18 +332,21 @@ export class NativeContentStore implements ContentStore {
     await this.withFileLock(key, () => this.exclusive(async () => {
       const activeId = await this.getActiveId();
       const active = activeId ? await this.getRelease(activeId) : undefined;
+      if (activeId && !active) throw new Error("Cannot collect content while the active release metadata is unreadable");
       const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
-      const retainedReferencesFile = (await this.getRetainedParks()).some((park) => park.sceneFile?.sha256.toLowerCase() === key);
+      const retainedRows = (await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks", [])).values ?? [];
+      const retainedParks = retainedRows.map(parseRetainedParkRow);
+      if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
+      const retainedReferencesFile = retainedParks.some((park) => park?.sceneFile?.sha256.toLowerCase() === key);
       const syncState = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'asset'", [])).values ?? [];
       const syncReferencesFile = syncState.some((row) => {
         const file = JSON.parse(String(row.value_json)) as { sha256?: unknown };
         return file.sha256 === key;
       });
-      const archivedFiles = (await this.db().query("SELECT file_json FROM content_archived_scenes", [])).values ?? [];
-      const archivedReferencesFile = archivedFiles.some((row) => {
-        const file = JSON.parse(String(row.file_json)) as ContentFile;
-        return file.sha256 === key;
-      });
+      const archivedFiles = (await this.db().query("SELECT release_id, scene, file_json FROM content_archived_scenes", [])).values ?? [];
+      const archivedDescriptors = archivedFiles.map(parseArchivedSceneRow);
+      if (archivedDescriptors.some((scene) => !scene)) throw new Error("Cannot collect content while archived scene metadata is unreadable");
+      const archivedReferencesFile = archivedDescriptors.some((scene) => scene?.file.sha256 === key);
       const pointers = (await this.db().query("SELECT pointer_json FROM content_cached_maps", [])).values ?? [];
       const currentMapVersions = new Set(pointers.map((row) => (JSON.parse(String(row.pointer_json)) as ContentMapPointer).version));
       const currentMapRows = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'map'", [])).values ?? [];
@@ -300,10 +373,10 @@ export class NativeContentStore implements ContentStore {
 
   async getRetainedParks(): Promise<RetainedPark[]> {
     const rows = await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks ORDER BY park_id");
-    return (rows.values ?? []).map((row) => ({
-      park: JSON.parse(String(row.park_json)) as RetainedPark["park"],
-      ...(typeof row.scene_file_json === "string" ? { sceneFile: JSON.parse(row.scene_file_json) as RetainedPark["sceneFile"] } : {}),
-    }));
+    return (rows.values ?? []).flatMap((row) => {
+      const retained = parseRetainedParkRow(row);
+      return retained ? [retained] : [];
+    });
   }
 
   async retainParks(parks: RetainedPark[]): Promise<void> {
@@ -348,13 +421,7 @@ export class NativeContentStore implements ContentStore {
     if (row.release_id !== releaseId || row.scene !== scene || typeof row.file_json !== "string") {
       throw new Error("Archived scene storage row does not match its key");
     }
-    const descriptor: ArchivedScene = {
-      releaseId,
-      scene,
-      file: JSON.parse(row.file_json) as ArchivedScene["file"],
-    };
-    assertArchivedSceneDescriptor(descriptor);
-    return descriptor;
+    return parseArchivedSceneRow(row);
   }
 
   async retainArchivedScene(scene: ArchivedScene): Promise<void> {
@@ -373,17 +440,9 @@ export class NativeContentStore implements ContentStore {
     const rows = await this.db().query(
       "SELECT release_id, scene, file_json FROM content_archived_scenes ORDER BY release_id, scene",
     );
-    return (rows.values ?? []).map((row) => {
-      if (typeof row.release_id !== "string" || typeof row.scene !== "string" || typeof row.file_json !== "string") {
-        throw new Error("Archived scene storage row is invalid");
-      }
-      const descriptor: ArchivedScene = {
-        releaseId: row.release_id,
-        scene: row.scene,
-        file: JSON.parse(row.file_json) as ArchivedScene["file"],
-      };
-      assertArchivedSceneDescriptor(descriptor);
-      return descriptor;
+    return (rows.values ?? []).flatMap((row) => {
+      const descriptor = parseArchivedSceneRow(row);
+      return descriptor ? [descriptor] : [];
     });
   }
 
@@ -396,20 +455,27 @@ export class NativeContentStore implements ContentStore {
         const cursorRows = await db.query("SELECT revision, source_id FROM content_sync_cursors WHERE environment = ?", [environment]);
         const rawCursor = cursorRows.values?.[0]?.revision;
         const rawSource = cursorRows.values?.[0]?.source_id;
-        if (typeof rawCursor !== "number" || !Number.isSafeInteger(rawCursor)) {
+        if (typeof rawCursor !== "number" || !Number.isSafeInteger(rawCursor) || typeof rawSource !== "string") {
           await db.commitTransaction();
           return null;
         }
-        const parsed = (rows.values ?? []).map((row) => ({
-          entity: String(row.entity),
-          id: String(row.row_id),
-          value: JSON.parse(String(row.value_json)) as unknown,
-        }));
+        let parsed: { entity: string; id: string; value: unknown }[];
+        try {
+          parsed = (rows.values ?? []).map((row) => {
+            if (typeof row.entity !== "string" || typeof row.row_id !== "string" || typeof row.value_json !== "string") {
+              throw new Error("Invalid content sync row");
+            }
+            return { entity: row.entity, id: row.row_id, value: JSON.parse(row.value_json) as unknown };
+          });
+        } catch {
+          await db.commitTransaction();
+          return null;
+        }
         const parks = parsed.filter((row) => row.entity === "park").map((row) => row.value as ContentSyncState["parks"][number]);
         const boundaries = parsed.filter((row) => row.entity === "boundary").map((row) => row.value as ContentSyncState["boundaries"]["features"][number]);
         const drives = Object.fromEntries(parsed.filter((row) => row.entity === "drive").map((row) => [row.id, row.value as ContentSyncState["drive"]["parks"][string]]));
         const hubs = parsed.find((row) => row.entity === "hubs")?.value as ContentSyncState["drive"]["hubs"] | undefined;
-        if (!hubs) {
+        if (!Array.isArray(hubs)) {
           await db.commitTransaction();
           return null;
         }
@@ -449,7 +515,7 @@ export class NativeContentStore implements ContentStore {
       rows.push({ entity: "hubs", id: "default", value: state.drive.hubs, position: 0 });
       if (state.map) rows.push({ entity: "map", id: "default", value: state.map, position: 0 });
       const statements = [
-        { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN (? IS NULL AND NOT EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ?)) OR EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id IS ?) THEN 1 ELSE 0 END", values: [expectedRevision, environment, environment, expectedRevision, expectedSourceId] },
+        { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN ((? IS NULL AND NOT EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ?)) OR EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id IS ?)) OR (? = 1 AND ? IS NULL AND ? IS NULL AND EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND (typeof(revision) != 'integer' OR revision < -9007199254740991 OR revision > 9007199254740991 OR typeof(source_id) != 'text'))) THEN 1 ELSE 0 END", values: [expectedRevision, environment, environment, expectedRevision, expectedSourceId, resetCursor ? 1 : 0, expectedRevision, expectedSourceId, environment] },
         { statement: "DELETE FROM content_sync_guard", values: [] },
         { statement: "DELETE FROM content_sync_rows WHERE environment = ?", values: [environment] },
         ...rows.map((row) => ({
@@ -595,7 +661,6 @@ export class NativeContentStore implements ContentStore {
           value_json TEXT NOT NULL,
           PRIMARY KEY(environment, entity, row_id)
         );
-        CREATE INDEX IF NOT EXISTS content_sync_rows_order ON content_sync_rows(environment, entity, position, row_id);
         CREATE TABLE IF NOT EXISTS content_sync_cursors (
           environment TEXT PRIMARY KEY NOT NULL,
           revision INTEGER NOT NULL,
@@ -609,15 +674,30 @@ export class NativeContentStore implements ContentStore {
           environment TEXT PRIMARY KEY NOT NULL,
           pointer_json TEXT NOT NULL
         );
+      `);
+      const retainedParkColumns = await connection.query("PRAGMA table_info(content_retained_parks)");
+      if (!(retainedParkColumns.values ?? []).some((column) => column.name === "scene_file_json")) {
+        await connection.execute("ALTER TABLE content_retained_parks ADD COLUMN scene_file_json TEXT NULL");
+      }
+      const syncRowColumns = await connection.query("PRAGMA table_info(content_sync_rows)");
+      if (!(syncRowColumns.values ?? []).some((column) => column.name === "position")) {
+        await connection.execute("ALTER TABLE content_sync_rows ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
+      }
+      const cursorColumns = await connection.query("PRAGMA table_info(content_sync_cursors)");
+      const cursorColumnNames = new Set((cursorColumns.values ?? []).map((column) => column.name));
+      if (!cursorColumnNames.has("source_id")) {
+        await connection.execute("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
+      }
+      if (cursorColumnNames.has("source")) {
+        await connection.execute("UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')");
+      }
+      await connection.execute(`
+        CREATE INDEX IF NOT EXISTS content_sync_rows_order ON content_sync_rows(environment, entity, position, row_id);
         CREATE TABLE IF NOT EXISTS content_sync_guard (
           ok INTEGER NOT NULL CHECK(ok = 1)
         );
         INSERT OR IGNORE INTO content_active(singleton, release_id) VALUES('${ACTIVE_POINTER}', NULL);
       `);
-      const cursorColumns = await connection.query("PRAGMA table_info(content_sync_cursors)");
-      if (!(cursorColumns.values ?? []).some((column) => column.name === "source_id")) {
-        await connection.execute("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
-      }
       await this.ensureDirectory(TEMP);
       await this.removeInterruptedWrites();
     } catch (error) {

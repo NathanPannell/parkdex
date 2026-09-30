@@ -264,7 +264,25 @@ describe("account backup transport", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("aborts the native Wi-Fi request when the caller cancels it", async () => {
+  it("routes native account backup over cellular without requiring Wi-Fi", async () => {
+    mocks.native = true;
+    mocks.connectivity = { connected: true, wifi: false };
+    mocks.getConnectivity.mockClear();
+
+    await accountBackupFetch(`${API_ORIGIN}/api/claims`, {
+      method: "GET",
+      headers: scopedHeaders({
+        Authorization: "Bearer native-session-token",
+        "X-Kip-Auth-Transport": "native",
+      }),
+    }, API_ORIGIN);
+
+    expect(mocks.accountRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.getConnectivity).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("aborts the native account backup request when the caller cancels it", async () => {
     mocks.native = true;
     let requestId = "";
     mocks.accountRequest.mockImplementation((options: NativeAccountRequestOptions) => {

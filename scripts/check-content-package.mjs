@@ -15,6 +15,25 @@ const parkCatalogPath = resolve(projectRoot, "src/data/parks.json");
 const OVERVIEW_PATH = "map/bootstrap/island-overview.pmtiles";
 const OVERVIEW_PROVENANCE_PATH = resolve(projectRoot, "public/map/bootstrap/island-overview.provenance.json");
 const MAX_BUNDLED_OVERVIEW_BYTES = 2_000_000;
+const REQUIRED_BUNDLED_ONBOARDING_ASSETS = [
+  "assets/onboarding-go-map-",
+  "assets/onboarding-scene-beacon-hill-",
+  "assets/onboarding-scene-goldstream-",
+  "assets/onboarding-scene-wittys-lagoon-",
+  "art/kip/kip-wave.webp",
+  "art/kip/kip-point.webp",
+  "art/kip/kip-think.webp",
+  "art/kip/parts/tail.webp",
+  "art/kip/parts/legs.webp",
+  "art/kip/parts/wing-back.webp",
+  "art/kip/parts/body.webp",
+  "art/kip/parts/head.webp",
+  "art/kip/parts/eye-open.webp",
+  "art/kip/parts/eye-closed.webp",
+  "art/kip/parts/bill-lower.webp",
+  "art/kip/parts/bill-upper.webp",
+  "art/kip/parts/wing-front.webp",
+];
 
 try {
   const overviewProvenance = JSON.parse(await readFile(OVERVIEW_PROVENANCE_PATH, "utf8"));
@@ -42,6 +61,12 @@ try {
   const files = await collectFiles(outputDirectory);
   const failures = [];
   const packagedPaths = new Set(files.map((file) => toPosix(relative(outputDirectory, file))));
+  for (const required of REQUIRED_BUNDLED_ONBOARDING_ASSETS) {
+    const found = required.endsWith("-")
+      ? [...packagedPaths].some((path) => path.startsWith(required) && path.endsWith(".webp"))
+      : packagedPaths.has(required);
+    if (!found) failures.push({ path: required, reason: "required bundled onboarding artwork is missing" });
+  }
   for (const required of ["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs"]) {
     if (!packagedPaths.has(required)) failures.push({ path: required, reason: "required MapLibre runtime module is missing" });
   }

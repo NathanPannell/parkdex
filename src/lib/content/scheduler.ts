@@ -1,4 +1,4 @@
-import { canDownloadContent, type Connectivity, type DownloadPurpose } from "./contracts";
+import { canDownloadContent, requiresContentWifi, type Connectivity, type DownloadPurpose } from "./contracts";
 
 export type DownloadPolicy = {
   foreground: boolean;
@@ -35,9 +35,9 @@ function abortError() {
   return error;
 }
 
-export function isDownloadAllowed(_purpose: DownloadPurpose, _path: string, policy: DownloadPolicy): boolean {
-  // Android supplies a Wi-Fi-only policy; browsers allow any online connection.
-  return policy.foreground && canDownloadContent(policy.connectivity);
+export function isDownloadAllowed(_purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
+  return policy.foreground && canDownloadContent(policy.connectivity) &&
+    (!requiresContentWifi(path) || policy.connectivity.wifi);
 }
 
 function isMapWork(task: Pick<ScheduledDownload, "path" | "purpose">): boolean {

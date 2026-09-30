@@ -150,16 +150,23 @@ export type Connectivity = {
   connected: boolean;
   /** True only when the platform confirms a physical Wi-Fi connection. */
   wifi: boolean;
-  /** Platform policy for content downloads: online on web, confirmed Wi-Fi on Android. */
+  /** Optional platform override for essential content downloads. */
   contentDownloadAllowed?: boolean;
 };
 
 export function canDownloadContent(connectivity: Connectivity): boolean {
-  return connectivity.connected && (connectivity.contentDownloadAllowed ?? connectivity.wifi);
+  return connectivity.connected && (connectivity.contentDownloadAllowed ?? true);
 }
 
 export function isWaitingForContentWifi(connectivity: Connectivity): boolean {
-  return connectivity.connected && !canDownloadContent(connectivity);
+  return connectivity.connected && !connectivity.wifi;
+}
+
+/** Only large detailed map chunks require confirmed physical Wi-Fi. */
+export function requiresContentWifi(path: string): boolean {
+  let decoded = path;
+  try { decoded = decodeURIComponent(path); } catch { /* Keep malformed paths for URL validation. */ }
+  return /(?:^|\/)map\/island\/[^/]+\.bin$/.test(decoded);
 }
 export type MapPoint = [number, number];
 

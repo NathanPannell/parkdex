@@ -1,4 +1,3 @@
-import { Capacitor } from "@capacitor/core";
 import {
   getContentConnectivity,
   subscribeContentConnectivity,
@@ -7,15 +6,12 @@ import {
 
 export type AccountBackupConnectivity = { connected: boolean; allowed: boolean };
 
-/** Apply the account-backup network rule without changing content download policy. */
-export function mapAccountBackupConnectivity(
-  connectivity: ContentConnectivity,
-  native = Capacitor.isNativePlatform(),
-): AccountBackupConnectivity {
+/** Account backup can use any active internet connection on each platform. */
+export function mapAccountBackupConnectivity(connectivity: ContentConnectivity): AccountBackupConnectivity {
   const connected = connectivity.connected === true;
   return {
     connected,
-    allowed: connected && (!native || connectivity.wifi === true),
+    allowed: connected,
   };
 }
 
@@ -27,7 +23,7 @@ export async function getAccountBackupConnectivity(
   return mapAccountBackupConnectivity(connectivity);
 }
 
-/** Subscribe to account-backup availability using the platform-specific backup rule. */
+/** Subscribe to account-backup availability using the shared connected-network rule. */
 export function subscribeAccountBackupConnectivity(
   listener: (connectivity: AccountBackupConnectivity) => void,
 ): () => void {
