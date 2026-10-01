@@ -286,6 +286,17 @@ a { color: inherit; }
 .confirm { display: flex; gap: 10px; margin-top: 12px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--sun) 25%, transparent); font-size: 13.5px; }
 .confirm input { margin-top: 3px; accent-color: var(--kip); }
 
+/* The player's own words lead the report panel. */
+.drawer__actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.drawer__received { margin: 6px 0 0 !important; }
+.quote { position: relative; margin: 0 0 12px; padding: 20px 22px 22px; border: 2px solid var(--edge); border-radius: 20px 20px 20px 6px; background: #14231c; color: #fff8ec; box-shadow: var(--pop-lg); }
+.quote figcaption { margin-bottom: 10px; color: var(--sun); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; overflow-wrap: anywhere; }
+.quote blockquote { margin: 0; font: 600 19px/1.55 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote::after { content: ""; position: absolute; left: -2px; bottom: -14px; width: 22px; height: 14px; background: #14231c; border-left: 2px solid var(--edge); border-bottom: 2px solid var(--edge); clip-path: polygon(0 0, 100% 0, 0 100%); }
+@media (prefers-color-scheme: dark) { .quote, .quote::after { background: #fff8ec; color: #14231c; } .quote figcaption { color: var(--kip-dark); } }
+.app-version { margin: 6px 2px 0; font-size: 14px; }
+.app-version strong { margin-left: 6px; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); font-weight: 800; }
+
 /* Toasts */
 .toasts { position: fixed; left: 50%; bottom: 24px; z-index: 60; display: grid; gap: 8px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); }
 .toast {
