@@ -130,6 +130,20 @@ export function BuildConfigAdmin() {
     }
   }
 
+  async function signOut() {
+    setBusy(true);
+    try {
+      await request("/api/operator/logout", { method: "POST" });
+    } catch {
+      // The session cookie expires on its own; show the sign-in form either way.
+    } finally {
+      setListing(null);
+      setDraft(null);
+      setAuth("signed-out");
+      setBusy(false);
+    }
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!draft || !listing) return;
@@ -200,9 +214,13 @@ export function BuildConfigAdmin() {
     <main className="fr-review bc-page" aria-label="Build configuration">
       <header className="bc-header">
         <Kip pose="avatar" size={43} />
-        <div>
+        <div className="bc-title">
           <p className="fr-brand-name">parkdex · {window.location.host}</p>
           <h1>Build configuration</h1>
+        </div>
+        <div className="bc-actions">
+          <a className="fr-button fr-button--paper" href="/feedback/review">Feedback reports</a>
+          <button className="fr-button fr-button--quiet" type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>
         </div>
       </header>
       <p className="bc-intro">

@@ -672,6 +672,7 @@ export function FeedbackReview() {
           </div>
           <div className="fr-header-actions">
             <div className="fr-private-label"><LockMark /><span>Private operator area</span></div>
+            <a className="fr-button fr-button--paper" href="/operator/builds">Build config</a>
             <button className="fr-button fr-button--quiet fr-signout" type="button" onClick={signOut} disabled={logoutBusy}>
               {logoutBusy ? "Signing out..." : "Sign out"}
             </button>
