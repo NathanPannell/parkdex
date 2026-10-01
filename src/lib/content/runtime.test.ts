@@ -248,9 +248,11 @@ class MemoryContentStore implements ContentStore {
   async getArchivedScene(releaseId: string, scene: string) { const value = this.archived.get(`${releaseId}:${scene}`); return value ? structuredClone(value) : undefined; }
   async retainArchivedScene(scene: ArchivedScene) { this.archived.set(`${scene.releaseId}:${scene.scene}`, structuredClone(scene)); }
   async listArchivedScenes() { return [...this.archived.values()].map((value) => structuredClone(value)); }
+  readerVersions = new Map<ContentEnvironment, number>();
   async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
     const state = this.sync.get(environment);
-    return state ? { revision: state.revision, sourceId: state.sourceId ?? "" } : null;
+    const readerVersion = this.readerVersions.get(environment);
+    return state ? { revision: state.revision, sourceId: state.sourceId ?? "", ...(readerVersion === undefined ? {} : { readerVersion }) } : null;
   }
   async getSyncState(environment: ContentEnvironment) { const value = this.sync.get(environment); return value ? structuredClone(value) : null; }
   async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false) {
@@ -258,6 +260,7 @@ class MemoryContentStore implements ContentStore {
     if ((current?.revision ?? null) !== expectedRevision || (current?.sourceId ?? null) !== expectedSourceId) throw new Error("Content sync cursor changed before the snapshot could be committed");
     if (!resetCursor && current && state.revision < current.revision) throw new Error("Content snapshot cannot move the sync cursor backwards");
     this.sync.set(environment, structuredClone({ ...state, sourceId }));
+    this.readerVersions.delete(environment);
     if (state.map) this.cachedMapPointers.set(environment, structuredClone(state.map));
   }
   async applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string) {
@@ -1060,6 +1063,36 @@ describe("incremental content sync", () => {
     expect(snapshot.assetUrls.get(slowAsset.file.path)).toBe(`content-store://${slowAsset.file.sha256}`);
     expect(snapshot.assetUrls.get(fastAsset.file.path)).toBe(`content-store://${fastAsset.file.sha256}`);
     expect(deltas.size).toBe(0);
+  });
+
+  it("refreshes a cache written by an older content reader from one full snapshot", async () => {
+    const cachedPark = { id: "municipal-upgrade-park", name: "Old name", short: "Upgrade", ...PARK_FIELDS, scene: null };
+    const cached = parseContentSnapshot(contentSyncSnapshot(4, cachedPark, []));
+    const server = contentSyncServer(contentSyncSnapshot(4, { ...cachedPark, name: "Refreshed name" }, []));
+    const store = new MemoryContentStore();
+    store.sync.set("staging", { ...cached, sourceId: "staging|https://parkdex.example.test/api/content" });
+    store.readerVersions.set("staging", 0);
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+
+    await runtime.start();
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.name).toBe("Refreshed name"));
+    expect(server.calls.filter((url) => url.includes("/api/content/snapshot"))).toHaveLength(1);
+    expect(store.readerVersions.has("staging")).toBe(false);
+  });
+
+  it("keeps using incremental changes when the cache was written by the current reader", async () => {
+    const cachedPark = { id: "municipal-current-park", name: "Cached name", short: "Current", ...PARK_FIELDS, scene: null };
+    const cached = parseContentSnapshot(contentSyncSnapshot(4, cachedPark, []));
+    const server = contentSyncServer(contentSyncSnapshot(4, { ...cachedPark, name: "Snapshot name" }, []));
+    const store = new MemoryContentStore();
+    store.sync.set("staging", { ...cached, sourceId: "staging|https://parkdex.example.test/api/content" });
+    store.readerVersions.set("staging", 1);
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+
+    await runtime.start();
+    await vi.waitFor(() => expect(server.calls.some((url) => url.includes("/api/content/changes"))).toBe(true));
+    expect(server.calls.some((url) => url.includes("/api/content/snapshot"))).toBe(false);
+    expect(runtime.getStatus().snapshot?.parks[0]?.name).toBe("Cached name");
   });
 
   it("retries failed required badge art before publishing and starts map work afterward", async () => {

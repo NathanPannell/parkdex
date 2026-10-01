@@ -8,6 +8,8 @@ the badge, and share it. No accounts and no network sync: everything stays on th
   published badge art appear on the map, and the Dex starts empty.
 - Collector ranks: visiting 2, 5 and 10 unique parks opens Uncommon, Rare and Legendary
   parks. See `docs/rarity-progression.md`.
+- Older installed builds keep reading new content. Content API changes must be additive;
+  see `docs/content-compatibility.md`.
 - Offline basemap: a bundled Protomaps archive for the island (zoom 0 to 14) plus fonts.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 

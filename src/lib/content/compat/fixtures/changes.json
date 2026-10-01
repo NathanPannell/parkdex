@@ -1,0 +1,47 @@
+{
+  "schema": "parkdex.content-sync/v1",
+  "fromRevision": 118,
+  "throughRevision": 119,
+  "headRevision": 119,
+  "hasMore": false,
+  "batches": [
+    {
+      "revision": 119,
+      "changes": [
+        {
+          "entity": "asset",
+          "op": "upsert",
+          "id": "art/badges/scenes/buckbrush-swamp-yellow-grass-water.webp",
+          "value": {
+            "path": "art/badges/scenes/buckbrush-swamp-yellow-grass-water.webp",
+            "key": "releases/9abdc66fa61994be753e025ba6af9ec48f440c5e3aed62eb1d643bf71e22df49/art/badges/scenes/buckbrush-swamp-yellow-grass-water.webp",
+            "url": "https://kip-assets.parkdex.app/releases/9abdc66fa61994be753e025ba6af9ec48f440c5e3aed62eb1d643bf71e22df49/art/badges/scenes/buckbrush-swamp-yellow-grass-water.webp",
+            "sha256": "9abdc66fa61994be753e025ba6af9ec48f440c5e3aed62eb1d643bf71e22df49",
+            "byte_size": 96480,
+            "content_type": "image/webp"
+          }
+        },
+        {
+          "entity": "park",
+          "op": "upsert",
+          "id": "municipal-district-of-metchosin-562",
+          "value": {
+            "id": "municipal-district-of-metchosin-562",
+            "name": "Buckbrush Swamp Park",
+            "short": "Buckbrush Swamp",
+            "category": "municipal",
+            "region": "Southern Vancouver Island",
+            "lat": 48.36973,
+            "lng": -123.58312,
+            "biome": "forest",
+            "shape": "hex",
+            "rarity": "common",
+            "scene": "buckbrush-swamp-yellow-grass-water",
+            "seed": 937,
+            "blurb": "Look across the broad buckbrush wetland to the forest edge in Buckbrush Swamp Park."
+          }
+        }
+      ]
+    }
+  ]
+}

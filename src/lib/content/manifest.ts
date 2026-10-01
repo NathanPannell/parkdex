@@ -27,6 +27,11 @@ const CATEGORIES = new Set(["national", "provincial", "regional", "municipal", "
 const BIOMES = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPES = new Set(["circle", "hex", "shield", "arch", "seal"]);
 const RARITIES = new Set(["common", "uncommon", "rare", "epic", "legendary"]);
+const FALLBACK_CATEGORY = "community";
+const FALLBACK_BIOME = "forest";
+const FALLBACK_SHAPE = "circle";
+const FALLBACK_RARITY = "common";
+const SCENE_ASSET_PATH = /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40,64}$/;
 const PARK_ID = /^[a-z0-9][a-z0-9-]*$/;
@@ -43,12 +48,22 @@ function record(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function exactKeys(value: Record<string, unknown>, keys: readonly string[], label: string) {
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+// Installed builds must keep reading content published after them, so a record
+// only needs the fields this reader uses. Fields added later are ignored.
+function requireKeys(value: Record<string, unknown>, keys: readonly string[], label: string) {
+  if (keys.some((key) => !Object.hasOwn(value, key))) {
     throw new ContentValidationError(`${label} has an unsupported shape`);
   }
+}
+
+// A value added to an enum after this build shipped falls back to a neutral
+// presentation instead of rejecting the whole catalogue.
+function knownOr<T extends string>(allowed: ReadonlySet<string>, value: string, fallback: T): T {
+  return (allowed.has(value) ? value : fallback) as T;
+}
+
+function parkBiome(value: string): Park["biome"] {
+  return knownOr<Park["biome"]>(BIOMES, value, FALLBACK_BIOME);
 }
 
 function string(value: unknown, label: string, nonEmpty = true): string {
@@ -120,7 +135,7 @@ function safeContentFileUrl(path: string, key: string, url: string, label: strin
 
 function parseSyncFile(value: unknown, label: string, allowedPath: (path: string) => boolean): ContentFile {
   const entry = record(value, label);
-  exactKeys(entry, ["path", "key", "url", "sha256", "byte_size", "content_type"], label);
+  requireKeys(entry, ["path", "key", "url", "sha256", "byte_size", "content_type"], label);
   const path = string(entry.path, `${label}.path`);
   assertSafeLogicalPath(path);
   if (!allowedPath(path)) throw new ContentValidationError(`${label}.path is outside the supported content inventory`);
@@ -145,7 +160,7 @@ function nonNegativeSafeInteger(value: unknown, label: string): number {
 function parseMapPointer(value: unknown): ContentMapPointer | null {
   if (value === null) return null;
   const pointer = record(value, "snapshot.map");
-  exactKeys(pointer, ["version", "manifestUrl", "manifestSha256"], "snapshot.map");
+  requireKeys(pointer, ["version", "manifestUrl", "manifestSha256"], "snapshot.map");
   const version = string(pointer.version, "snapshot.map.version");
   if (!SHA256.test(version)) throw new ContentValidationError("snapshot.map.version is invalid");
   const manifestUrl = string(pointer.manifestUrl, "snapshot.map.manifestUrl");
@@ -159,7 +174,7 @@ function parseMapPointer(value: unknown): ContentMapPointer | null {
 
 function parseMapManifestLayout(value: unknown, label: string): MapManifest {
   const map = record(value, label);
-  exactKeys(map, ["size", "chunkBytes", "count"], label);
+  requireKeys(map, ["size", "chunkBytes", "count"], label);
   const result = {
     size: positiveInteger(map.size, `${label}.size`),
     chunkBytes: positiveInteger(map.chunkBytes, `${label}.chunkBytes`),
@@ -185,7 +200,7 @@ function expectedFileUrl(path: string, releaseId: string) {
 function parseFile(value: unknown, releaseId: string, index: number): ContentFile {
   const label = `manifest.files[${index}]`;
   const entry = record(value, label);
-  exactKeys(entry, ["path", "key", "url", "sha256", "byte_size", "content_type"], label);
+  requireKeys(entry, ["path", "key", "url", "sha256", "byte_size", "content_type"], label);
   const path = string(entry.path, `${label}.path`);
   assertSafeLogicalPath(path);
   if (!isSupportedManifestPath(path)) throw new ContentValidationError(`${label}.path is outside the supported content inventory`);
@@ -203,7 +218,7 @@ function parseFile(value: unknown, releaseId: string, index: number): ContentFil
 
 export function parseContentChannel(value: unknown, environment: ContentEnvironment): ContentChannel {
   const channel = record(value, "content channel");
-  exactKeys(channel, ["schema", "environment", "generation", "releaseId", "manifestUrl", "manifestSha256", "minimumReaderVersion"], "content channel");
+  requireKeys(channel, ["schema", "environment", "generation", "releaseId", "manifestUrl", "manifestSha256", "minimumReaderVersion"], "content channel");
   if (channel.schema !== "parkdex.content-channel/v1") throw new ContentValidationError("content channel schema is unsupported");
   if (channel.environment !== environment) throw new ContentValidationError("content channel environment does not match this build");
   const generation = positiveInteger(channel.generation, "content channel generation");
@@ -222,7 +237,7 @@ export function parseContentChannel(value: unknown, environment: ContentEnvironm
 
 export function parseContentManifest(value: unknown, channel: ContentChannel): ContentManifest {
   const manifest = record(value, "content manifest");
-  exactKeys(manifest, ["version", "sourceCommit", "cdnOrigin", "files", "parkIds", "boundaryIds", "mapManifest"], "content manifest");
+  requireKeys(manifest, ["version", "sourceCommit", "cdnOrigin", "files", "parkIds", "boundaryIds", "mapManifest"], "content manifest");
   const version = string(manifest.version, "manifest.version");
   if (version !== channel.releaseId || !SHA256.test(version)) throw new ContentValidationError("manifest version does not match the published release");
   const sourceCommit = string(manifest.sourceCommit, "manifest.sourceCommit");
@@ -244,7 +259,7 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
   const parkIds = uniqueStringArray(manifest.parkIds, "manifest.parkIds", PARK_ID);
   const boundaryIds = uniqueStringArray(manifest.boundaryIds, "manifest.boundaryIds", PARK_ID);
   const mapManifestValue = record(manifest.mapManifest, "manifest.mapManifest");
-  exactKeys(mapManifestValue, ["size", "chunkBytes", "count"], "manifest.mapManifest");
+  requireKeys(mapManifestValue, ["size", "chunkBytes", "count"], "manifest.mapManifest");
   const mapManifest = {
     size: positiveInteger(mapManifestValue.size, "manifest.mapManifest.size"),
     chunkBytes: positiveInteger(mapManifestValue.chunkBytes, "manifest.mapManifest.chunkBytes"),
@@ -294,19 +309,16 @@ export async function assertFileBytes(file: ContentFile, bytes: ArrayBuffer) {
 function validatePark(value: unknown, index: number): Park {
   const label = `data/parks.json[${index}]`;
   const park = record(value, label);
-  exactKeys(park, PARK_FIELDS, label);
+  requireKeys(park, PARK_FIELDS, label);
   const id = string(park.id, `${label}.id`);
   if (!PARK_ID.test(id)) throw new ContentValidationError(`${label}.id is invalid`);
   const name = string(park.name, `${label}.name`);
   const short = string(park.short, `${label}.short`);
-  const category = string(park.category, `${label}.category`);
+  const category = knownOr<Park["category"]>(CATEGORIES, string(park.category, `${label}.category`), FALLBACK_CATEGORY);
   const region = string(park.region, `${label}.region`, false);
-  const biome = string(park.biome, `${label}.biome`);
-  const shape = string(park.shape, `${label}.shape`);
-  const rarity = string(park.rarity, `${label}.rarity`);
-  if (!CATEGORIES.has(category) || !BIOMES.has(biome) || !SHAPES.has(shape) || !RARITIES.has(rarity)) {
-    throw new ContentValidationError(`${label} has an unsupported Park enum value`);
-  }
+  const biome = parkBiome(string(park.biome, `${label}.biome`));
+  const shape = knownOr<Park["shape"]>(SHAPES, string(park.shape, `${label}.shape`), FALLBACK_SHAPE);
+  const rarity = knownOr<Park["rarity"]>(RARITIES, string(park.rarity, `${label}.rarity`), FALLBACK_RARITY);
   const lat = finiteNumber(park.lat, `${label}.lat`, -90, 90);
   const lng = finiteNumber(park.lng, `${label}.lng`, -180, 180);
   if (typeof park.seed !== "number" || !Number.isSafeInteger(park.seed)) throw new ContentValidationError(`${label}.seed must be an integer`);
@@ -317,7 +329,7 @@ function validatePark(value: unknown, index: number): Park {
     scene = string(park.scene, `${label}.scene`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(scene)) throw new ContentValidationError(`${label}.scene is invalid`);
   }
-  return { id, name, short, category: category as Park["category"], region, lat, lng, biome: biome as Park["biome"], shape: shape as Park["shape"], rarity: rarity as Park["rarity"], seed: park.seed, blurb, scene };
+  return { id, name, short, category, region, lat, lng, biome, shape, rarity, seed: park.seed, blurb, scene };
 }
 
 export function validateParkRecord(value: unknown, label = "park"): Park {
@@ -347,7 +359,7 @@ function validateCoordinates(value: unknown, label: string) {
 
 function validateBoundaries(value: unknown, parks: Park[], manifest: ContentManifest): ContentBoundaries {
   const collection = record(value, "boundaries.geojson");
-  exactKeys(collection, ["type", "features"], "boundaries.geojson");
+  requireKeys(collection, ["type", "features"], "boundaries.geojson");
   if (collection.type !== "FeatureCollection" || !Array.isArray(collection.features)) {
     throw new ContentValidationError("boundaries.geojson must be a FeatureCollection");
   }
@@ -356,17 +368,17 @@ function validateBoundaries(value: unknown, parks: Park[], manifest: ContentMani
   const features = collection.features.map((rawFeature, index) => {
     const label = `boundaries.geojson.features[${index}]`;
     const feature = record(rawFeature, label);
-    exactKeys(feature, ["type", "properties", "geometry"], label);
+    requireKeys(feature, ["type", "properties", "geometry"], label);
     if (feature.type !== "Feature") throw new ContentValidationError(`${label}.type is invalid`);
     const properties = record(feature.properties, `${label}.properties`);
-    exactKeys(properties, ["id", "biome"], `${label}.properties`);
+    requireKeys(properties, ["id", "biome"], `${label}.properties`);
     const id = string(properties.id, `${label}.properties.id`);
-    const biome = string(properties.biome, `${label}.properties.biome`);
+    const biome = parkBiome(string(properties.biome, `${label}.properties.biome`));
     if (!parkById.has(id) || seen.has(id)) throw new ContentValidationError(`${label} references a missing or duplicate park`);
     if (parkById.get(id)!.biome !== biome) throw new ContentValidationError(`${label} biome does not match its park`);
     seen.add(id);
     const geometry = record(feature.geometry, `${label}.geometry`);
-    exactKeys(geometry, ["type", "coordinates"], `${label}.geometry`);
+    requireKeys(geometry, ["type", "coordinates"], `${label}.geometry`);
     if (geometry.type !== "MultiPolygon" || !Array.isArray(geometry.coordinates) || geometry.coordinates.length === 0) {
       throw new ContentValidationError(`${label}.geometry must be a non-empty MultiPolygon`);
     }
@@ -374,13 +386,18 @@ function validateBoundaries(value: unknown, parks: Park[], manifest: ContentMani
       if (!Array.isArray(polygon) || polygon.length === 0) throw new ContentValidationError(`${label} has an empty polygon`);
       polygon.forEach((ring, ringIndex) => validateCoordinates(ring, `${label}.geometry.coordinates[${polygonIndex}][${ringIndex}]`));
     });
-    return rawFeature;
+    // Rebuild from known fields so later additions never reach the map layers.
+    return {
+      type: "Feature",
+      properties: { id, biome },
+      geometry: { type: "MultiPolygon", coordinates: geometry.coordinates },
+    } as ContentBoundaries["features"][number];
   });
   if (seen.size !== parks.length) throw new ContentValidationError("boundary park references do not match the catalog");
-  if (!sameOrderedIds(features.map((feature) => (feature as { properties: { id: string } }).properties.id), manifest.boundaryIds)) {
+  if (!sameOrderedIds(features.map((feature) => feature.properties.id), manifest.boundaryIds)) {
     throw new ContentValidationError("boundary ids do not match the immutable manifest order");
   }
-  return collection as unknown as ContentBoundaries;
+  return { type: "FeatureCollection", features };
 }
 
 export function validateBoundaryFeature(value: unknown, park: Park, label = "boundary"): ContentBoundaries["features"][number] {
@@ -396,12 +413,12 @@ export function validateBoundaryFeature(value: unknown, park: Park, label = "bou
 
 function validateDrive(value: unknown, parks: Park[]): DriveData {
   const drive = record(value, "data/drive.json");
-  exactKeys(drive, ["hubs", "parks"], "data/drive.json");
+  requireKeys(drive, ["hubs", "parks"], "data/drive.json");
   if (!Array.isArray(drive.hubs) || !drive.hubs.length) throw new ContentValidationError("data/drive.json hubs must be a non-empty array");
   const hubs = drive.hubs.map((rawHub, index) => {
     const label = `data/drive.json.hubs[${index}]`;
     const hub = record(rawHub, label);
-    exactKeys(hub, ["name", "lng", "lat"], label);
+    requireKeys(hub, ["name", "lng", "lat"], label);
     return { name: string(hub.name, `${label}.name`), lng: finiteNumber(hub.lng, `${label}.lng`, -180, 180), lat: finiteNumber(hub.lat, `${label}.lat`, -90, 90) };
   });
   const rawParks = record(drive.parks, "data/drive.json.parks");
@@ -412,7 +429,7 @@ function validateDrive(value: unknown, parks: Park[]): DriveData {
   const driveParks: DriveData["parks"] = {};
   for (const id of parkIds) {
     const rawData = record(rawParks[id], `data/drive.json.parks.${id}`);
-    exactKeys(rawData, ["drive", "walkM"], `data/drive.json.parks.${id}`);
+    requireKeys(rawData, ["drive", "walkM"], `data/drive.json.parks.${id}`);
     if (!Array.isArray(rawData.drive) || rawData.drive.length !== hubs.length) throw new ContentValidationError(`drive routes for ${id} do not match the hub count`);
     const routes = rawData.drive.map((route, index): [number, number] | null => {
       if (route === null) return null;
@@ -426,7 +443,7 @@ function validateDrive(value: unknown, parks: Park[]): DriveData {
 
 export function validateDriveEntry(value: unknown, hubCount: number, label = "drive entry"): DriveData["parks"][string] {
   const data = record(value, label);
-  exactKeys(data, ["drive", "walkM"], label);
+  requireKeys(data, ["drive", "walkM"], label);
   if (!Array.isArray(data.drive) || data.drive.length !== hubCount) throw new ContentValidationError(`${label}.drive does not match the hub count`);
   const drive = data.drive.map((route, index): [number, number] | null => {
     if (route === null) return null;
@@ -444,7 +461,7 @@ export function validateHubs(value: unknown, label = "drive.hubs"): DriveData["h
   return value.map((rawHub, index) => {
     const hubLabel = `${label}[${index}]`;
     const hub = record(rawHub, hubLabel);
-    exactKeys(hub, ["name", "lng", "lat"], hubLabel);
+    requireKeys(hub, ["name", "lng", "lat"], hubLabel);
     return {
       name: string(hub.name, `${hubLabel}.name`),
       lng: finiteNumber(hub.lng, `${hubLabel}.lng`, -180, 180),
@@ -510,12 +527,12 @@ export function validateContentSyncState(value: ContentSyncState): ContentSyncSt
   let payload: ContentPayload;
   if (parks.length === 0) {
     const boundaries = record(value.boundaries, "snapshot.boundaries");
-    exactKeys(boundaries, ["type", "features"], "snapshot.boundaries");
+    requireKeys(boundaries, ["type", "features"], "snapshot.boundaries");
     if (boundaries.type !== "FeatureCollection" || !Array.isArray(boundaries.features) || boundaries.features.length !== 0) {
       throw new ContentValidationError("empty catalog boundaries must be an empty FeatureCollection");
     }
     const drive = record(value.drive, "snapshot.drive");
-    exactKeys(drive, ["hubs", "parks"], "snapshot.drive");
+    requireKeys(drive, ["hubs", "parks"], "snapshot.drive");
     const hubs = validateHubs(drive.hubs, "snapshot.drive.hubs");
     const driveParks = record(drive.parks, "snapshot.drive.parks");
     if (Object.keys(driveParks).length !== 0 || assets.length !== 0) throw new ContentValidationError("empty catalog cannot contain drive rows or scene assets");
@@ -528,18 +545,57 @@ export function validateContentSyncState(value: ContentSyncState): ContentSyncSt
   return { revision, ...(sourceId ? { sourceId } : {}), parks: payload.parks, boundaries: payload.boundaries, drive: payload.drive, assets, map };
 }
 
+// A park this build cannot read is left out with its boundary, drive row and
+// badge art, so one bad record never blanks the whole catalogue. A record
+// without a readable id cannot be reconciled and still fails the sync.
+function readableParks(values: unknown[], label: string): { parks: Park[]; skipped: Set<string> } {
+  const parks: Park[] = [];
+  const skipped = new Set<string>();
+  values.forEach((value, index) => {
+    try {
+      parks.push(validatePark(value, index));
+    } catch (error) {
+      const id = value !== null && typeof value === "object" ? (value as Record<string, unknown>).id : undefined;
+      if (!(error instanceof ContentValidationError) || typeof id !== "string" || !PARK_ID.test(id)) throw error;
+      console.warn(`${label}[${index}] skipped: ${error.message}`);
+      skipped.add(id);
+    }
+  });
+  if (values.length > 0 && parks.length === 0) throw new ContentValidationError(`${label} has no readable parks`);
+  return { parks, skipped };
+}
+
+function withoutSkippedParks(snapshot: Record<string, unknown>, parks: Park[], skipped: Set<string>) {
+  const boundaries = snapshot.boundaries as ContentBoundaries;
+  const drive = snapshot.drive as DriveData;
+  const scenes = new Set(parks.flatMap((park) => park.scene ? [`art/badges/scenes/${park.scene}.webp`] : []));
+  const assets = Array.isArray(snapshot.assets) ? snapshot.assets as ContentFile[] : [];
+  if (skipped.size === 0) return { boundaries, drive, assets };
+  return {
+    boundaries: boundaries && Array.isArray(boundaries.features)
+      ? { ...boundaries, features: boundaries.features.filter((feature) => !skipped.has(feature?.properties?.id)) }
+      : boundaries,
+    drive: drive && drive.parks && typeof drive.parks === "object"
+      ? { ...drive, parks: Object.fromEntries(Object.entries(drive.parks).filter(([id]) => !skipped.has(id))) }
+      : drive,
+    assets: assets.filter((file) => scenes.has(file?.path)),
+  };
+}
+
 export function parseContentSnapshot(value: unknown): ContentSyncState {
   const snapshot = record(value, "content snapshot");
-  exactKeys(snapshot, ["schema", "revision", "parks", "boundaries", "drive", "assets", "map"], "content snapshot");
+  requireKeys(snapshot, ["schema", "revision", "parks", "boundaries", "drive", "assets", "map"], "content snapshot");
   if (snapshot.schema !== "parkdex.content-sync/v1") throw new ContentValidationError("content snapshot schema is unsupported");
   if (!Array.isArray(snapshot.parks)) throw new ContentValidationError("snapshot.parks must be an array");
-  const parks = snapshot.parks.map((park, index) => validatePark(park, index));
+  const { parks, skipped } = readableParks(snapshot.parks, "snapshot.parks");
+  const rest = withoutSkippedParks(snapshot, parks, skipped);
   const state: ContentSyncState = {
     revision: nonNegativeSafeInteger(snapshot.revision, "snapshot.revision"),
     parks,
-    boundaries: snapshot.boundaries as ContentBoundaries,
-    drive: snapshot.drive as DriveData,
-    assets: Array.isArray(snapshot.assets) ? snapshot.assets as ContentFile[] : [],
+    boundaries: rest.boundaries,
+    drive: rest.drive,
+    // Later releases may publish other asset kinds; this build only stores badge scenes.
+    assets: rest.assets.filter((file) => typeof file?.path === "string" && SCENE_ASSET_PATH.test(file.path)),
     map: parseMapPointer(snapshot.map),
   };
   return validateContentSyncState(state);
@@ -547,7 +603,7 @@ export function parseContentSnapshot(value: unknown): ContentSyncState {
 
 export function parseContentMapInventory(value: unknown, expectedVersion: string): ContentMapInventory {
   const manifest = record(value, "content map manifest");
-  exactKeys(manifest, ["schema", "version", "mapManifest", "files"], "content map manifest");
+  requireKeys(manifest, ["schema", "version", "mapManifest", "files"], "content map manifest");
   if (manifest.schema !== "parkdex.content-map/v1") throw new ContentValidationError("content map manifest schema is unsupported");
   const version = string(manifest.version, "map manifest.version");
   if (!SHA256.test(version) || version !== expectedVersion) throw new ContentValidationError("map manifest version does not match its pointer");
@@ -574,22 +630,25 @@ export function parseContentMapInventory(value: unknown, expectedVersion: string
   return { schema: "parkdex.content-map/v1", version, mapManifest, files };
 }
 
-function parseChange(value: unknown, index: number): ContentChange {
+const CHANGE_ENTITIES = new Set(["park", "boundary", "drive", "asset", "hubs", "map"]);
+
+// Returns null for a change this build does not understand (a newer entity or
+// operation) so it is skipped instead of stopping every later update.
+function parseChange(value: unknown, index: number): ContentChange | null {
   const label = `changes.batches[].changes[${index}]`;
   const change = record(value, label);
   const entity = string(change.entity, `${label}.entity`, false);
   const op = string(change.op, `${label}.op`, false);
   const id = string(change.id, `${label}.id`);
-  const validEntity = ["park", "boundary", "drive", "asset", "hubs", "map"].includes(entity);
-  if (!validEntity || (op !== "upsert" && op !== "delete")) throw new ContentValidationError(`${label} has an unsupported entity or operation`);
+  if (!CHANGE_ENTITIES.has(entity) || (op !== "upsert" && op !== "delete")) return null;
+  if (entity === "asset" && !SCENE_ASSET_PATH.test(id)) return null;
   if (op === "delete") {
-    exactKeys(change, ["entity", "op", "id"], label);
+    requireKeys(change, ["entity", "op", "id"], label);
     if (entity === "hubs" || entity === "map") throw new ContentValidationError(`${label} cannot delete shared content settings`);
     if (entity === "park" && !PARK_ID.test(id)) throw new ContentValidationError(`${label}.id is invalid`);
-    if (entity === "asset" && !/^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(id)) throw new ContentValidationError(`${label}.id is invalid`);
     return { entity: entity as "park" | "boundary" | "drive" | "asset", op, id };
   }
-  exactKeys(change, ["entity", "op", "id", "value"], label);
+  requireKeys(change, ["entity", "op", "id", "value"], label);
   if (!("value" in change)) throw new ContentValidationError(`${label}.value is required`);
   switch (entity) {
     case "park": {
@@ -628,9 +687,28 @@ function parseChange(value: unknown, index: number): ContentChange {
   throw new ContentValidationError(`${label} has an unsupported entity`);
 }
 
+function batchChanges(values: unknown[], label: string): ContentChange[] {
+  const skippedParks = new Set<string>();
+  const changes: ContentChange[] = [];
+  values.forEach((value, index) => {
+    try {
+      const change = parseChange(value, index);
+      if (change) changes.push(change);
+    } catch (error) {
+      const raw = value !== null && typeof value === "object" ? value as Record<string, unknown> : {};
+      if (!(error instanceof ContentValidationError) || raw.entity !== "park" || raw.op !== "upsert" ||
+        typeof raw.id !== "string" || !PARK_ID.test(raw.id)) throw error;
+      // Keep the version already on the device; its boundary and drive rows stay with it.
+      console.warn(`${label} park ${raw.id} skipped: ${error.message}`);
+      skippedParks.add(raw.id);
+    }
+  });
+  return changes.filter((change) => !(skippedParks.has(change.id) && (change.entity === "boundary" || change.entity === "drive")));
+}
+
 export function parseContentChanges(value: unknown, requestedAfter: number): ContentChangesResponse {
   const response = record(value, "content changes");
-  exactKeys(response, ["schema", "fromRevision", "throughRevision", "headRevision", "hasMore", "batches"], "content changes");
+  requireKeys(response, ["schema", "fromRevision", "throughRevision", "headRevision", "hasMore", "batches"], "content changes");
   if (response.schema !== "parkdex.content-sync/v1") throw new ContentValidationError("content changes schema is unsupported");
   const fromRevision = nonNegativeSafeInteger(response.fromRevision, "changes.fromRevision");
   const throughRevision = nonNegativeSafeInteger(response.throughRevision, "changes.throughRevision");
@@ -642,10 +720,10 @@ export function parseContentChanges(value: unknown, requestedAfter: number): Con
   const batches = response.batches.map((rawBatch, batchIndex) => {
     const label = `changes.batches[${batchIndex}]`;
     const batch = record(rawBatch, label);
-    exactKeys(batch, ["revision", "changes"], label);
+    requireKeys(batch, ["revision", "changes"], label);
     const revision = nonNegativeSafeInteger(batch.revision, `${label}.revision`);
     if (!Array.isArray(batch.changes) || batch.changes.length === 0) throw new ContentValidationError(`${label}.changes must be a non-empty array`);
-    const changes = batch.changes.map((change, index) => parseChange(change, index));
+    const changes = batchChanges(batch.changes, label);
     const keys = changes.map((change) => `${change.entity}:${change.id}`);
     if (new Set(keys).size !== keys.length) throw new ContentValidationError(`${label} contains duplicate entity rows`);
     return { revision, changes };

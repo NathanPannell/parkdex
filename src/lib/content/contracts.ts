@@ -70,7 +70,11 @@ export type ContentSyncState = {
   assets: ContentFile[];
   map: ContentMapPointer | null;
 };
-export type ContentSyncCursor = { revision: number; sourceId: string };
+/**
+ * `readerVersion` is the CONTENT_READER_VERSION of the build that last replaced
+ * the whole cache. Caches from before it was recorded were written by reader 1.
+ */
+export type ContentSyncCursor = { revision: number; sourceId: string; readerVersion?: number };
 export type StoredRelease = {
   id: string;
   channel: ContentChannel;
@@ -201,6 +205,12 @@ export type ContentRuntimeOptions = {
   now?: () => number;
 };
 
+/**
+ * What content this build understands. Bump it when the app starts reading a
+ * new content field: installs upgrading from an older build then fetch one full
+ * snapshot (while still showing their cache) so the new field is filled in.
+ * The server's minimumReaderVersion compares against the same number.
+ */
 export const CONTENT_READER_VERSION = 1;
 export const VICTORIA: MapPoint = [-123.3656, 48.4284];
 export const CONTENT_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];

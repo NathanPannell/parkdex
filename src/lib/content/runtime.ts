@@ -1,6 +1,7 @@
 import {
   canDownloadContent,
   CONTENT_BOUNDS,
+  CONTENT_READER_VERSION,
   isWaitingForContentWifi,
   VICTORIA,
   type Connectivity,
@@ -884,6 +885,13 @@ class ContentRuntimeController implements ContentRuntime {
         this.syncCacheInvalid = true;
         resetCursor = true;
       }
+    }
+    // A build that reads more fields than the one that wrote this cache replaces
+    // it with one full snapshot. The cache stays on screen until that commits.
+    if (state && (expectedCursor?.readerVersion ?? 1) < CONTENT_READER_VERSION) {
+      previous = state;
+      state = null;
+      resetCursor = true;
     }
     if (!state) {
       const snapshotResponse = await this.requestContent(this.contentApiUrl("snapshot"), signal);
