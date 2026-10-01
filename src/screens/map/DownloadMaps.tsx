@@ -188,10 +188,19 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
       if (source) source.setData(data);
       else if (map.isStyleLoaded()) draw();
     };
+    // A swap that drops the layers mid-load leaves nothing to update yet; add them back
+    // once the map has finished loading the new style.
+    const onStyleData = () => {
+      sync();
+      if (!map.getSource(SOURCE)) map.once("idle", sync);
+    };
     if (map.isStyleLoaded()) draw();
-    else sync();
-    map.on("styledata", sync);
-    return () => void map.off("styledata", sync);
+    else onStyleData();
+    map.on("styledata", onStyleData);
+    return () => {
+      map.off("styledata", onStyleData);
+      map.off("idle", sync);
+    };
   }, [mapRef, index, states]);
 
   useEffect(() => () => {
