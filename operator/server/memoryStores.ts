@@ -4,7 +4,7 @@ import type { AttachmentRecord, ClaimEmailResult, EmailDeliveryView, FeedbackCur
 import type { EmailAudience, FeedbackStatus } from "../../worker/validation.js";
 import type { DashboardDependencies } from "./api.js";
 import { HttpError } from "../../worker/validation.js";
-import { publicFeature, publishBlockers, type BadgeAsset, type Draft, type DraftFields, type DraftStore, type DraftSummary } from "./drafts.js";
+import { publicFeature, publishBlockers, type BadgeAsset, type Draft, type DraftFields, type DraftPlacement, type DraftStore, type DraftSummary } from "./drafts.js";
 
 /** In-memory stores for tests and the local demo server. Never used by a deployment. */
 
@@ -185,7 +185,7 @@ export class MemoryDraftStore implements DraftStore {
     return this.view(draft)!;
   }
 
-  async update(id: string, fields: Partial<DraftFields>) {
+  async update(id: string, fields: Partial<DraftFields & DraftPlacement>) {
     const draft = this.drafts.get(id);
     if (!draft || draft.status !== "draft") return null;
     Object.assign(draft, fields);
@@ -236,7 +236,7 @@ export class MemoryDraftStore implements DraftStore {
     if (asset) this.assets.set(asset.logicalPath, asset);
     const { id: parkId, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb } = draft;
     this.parks.set(id, { id: parkId, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb });
-    this.boundaries.set(id, publicFeature(id, biome, draft.geometry));
+    this.boundaries.set(id, publicFeature(id, biome, draft.geometry!));
     this.revision += 1;
     draft.status = "published";
     draft.publishedAt = new Date().toISOString();

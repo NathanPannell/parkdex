@@ -12,6 +12,29 @@ export const CATEGORIES = ["national", "provincial", "regional", "municipal", "c
 export const BIOMES = ["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"] as const;
 export const SHAPES = ["circle", "hex", "shield", "arch", "seal"] as const;
 export const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
+
+/** Badge shape follows category; the arch shape is no longer used for new parks. */
+export const SHAPE_FOR_CATEGORY: Record<string, string> = {
+  community: "circle",
+  municipal: "circle",
+  regional: "hex",
+  provincial: "shield",
+  national: "seal",
+};
+
+/** A first guess at the biome from the park's name; the operator can change it. */
+export function guessBiome(name: string): string {
+  const text = name.toLowerCase();
+  if (/\b(falls|waterfall|cascade)\b/.test(text)) return "waterfall";
+  if (/\b(lake|lagoon|pond|reservoir)\b/.test(text)) return "lake";
+  if (/\b(river|creek|canyon|gorge)\b/.test(text)) return "river";
+  if (/\b(beach|marine|bay|cove|spit|point|ocean|shore|island|islet|harbour)\b/.test(text)) return "coast";
+  if (/\b(marsh|wetland|bog|swamp|estuary|sanctuary)\b/.test(text)) return "marsh";
+  if (/\b(cave|caves|caverns?)\b/.test(text)) return "cave";
+  if (/\b(mount|mountain|peak|hill|ridge|summit|bluffs?)\b/.test(text)) return "mountain";
+  if (/\b(heritage|historic|fort|lighthouse)\b/.test(text)) return "heritage";
+  return "forest";
+}
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 export interface DraftFields {
@@ -25,12 +48,16 @@ export interface DraftFields {
   blurb: string;
 }
 
-export interface Draft extends DraftFields {
-  id: string;
-  source: Record<string, unknown>;
-  geometry: MultiPolygon;
+/** The map side of a draft, edited by drawing in the dashboard. */
+export interface DraftPlacement {
+  geometry: MultiPolygon | null;
   lat: number;
   lng: number;
+}
+
+export interface Draft extends DraftFields, DraftPlacement {
+  id: string;
+  source: Record<string, unknown>;
   seed: number;
   scene: string | null;
   badgeSha256: string | null;
@@ -75,7 +102,7 @@ export interface DraftStore {
   /** Park ids already in public.parks, so the import list can mark them. */
   publishedParkIds(): Promise<Set<string>>;
   create(input: Omit<Draft, "status" | "publishedAt" | "createdAt" | "updatedAt" | "scene" | "badgeSha256" | "badgeBytes" | "referencePhotoType"> & { sourceSha256: string }): Promise<Draft>;
-  update(id: string, fields: Partial<DraftFields>): Promise<Draft | null>;
+  update(id: string, fields: Partial<DraftFields & DraftPlacement>): Promise<Draft | null>;
   setBadge(id: string, bytes: Uint8Array | null, scene: string | null): Promise<Draft | null>;
   getBadge(id: string): Promise<Uint8Array | null>;
   setReferencePhoto(id: string, bytes: Uint8Array | null, contentType: string | null): Promise<Draft | null>;
@@ -105,7 +132,7 @@ function toDraft(row: Record<string, unknown>): Draft {
   return {
     id: String(row.id),
     source: row.source as Record<string, unknown>,
-    geometry: row.geometry as MultiPolygon,
+    geometry: (row.geometry as MultiPolygon | null) ?? null,
     name: String(row.name),
     short: String(row.short),
     category: (row.category as string | null) ?? null,
@@ -140,13 +167,14 @@ function fromHex(hex: string): Uint8Array {
 }
 
 /** What a draft still needs before it can be published. Badge and description are optional. */
-export function publishBlockers(draft: Pick<Draft, "name" | "short" | "category" | "rarity" | "status">): string[] {
+export function publishBlockers(draft: Pick<Draft, "name" | "short" | "category" | "rarity" | "status" | "geometry">): string[] {
   const missing: string[] = [];
   if (draft.status !== "draft") missing.push("This draft is already published.");
   if (!draft.name.trim()) missing.push("Add a name.");
   if (!draft.short.trim()) missing.push("Add a short name.");
   if (!draft.category) missing.push("Choose a category.");
   if (!draft.rarity) missing.push("Choose a rarity.");
+  if (!draft.geometry) missing.push("Draw the park's boundary on the map.");
   return missing;
 }
 
@@ -159,7 +187,7 @@ export function publicFeature(id: string, biome: string, geometry: MultiPolygon)
 const GUARDS: Record<string, [number, string]> = {
   draft_missing: [404, "Draft not found."],
   draft_changed: [409, "This draft changed since you opened it. Reload and try again."],
-  draft_incomplete: [422, "This draft is missing a name, short name, category or rarity."],
+  draft_incomplete: [422, "This draft is missing a name, short name, category, rarity or boundary."],
   badge_changed: [409, "The badge changed while publishing. Try again."],
   park_exists: [409, "A park with this id is already in Parkdex."],
   scene_taken: [409, "That badge slug is already registered to a different image."],
@@ -182,7 +210,7 @@ export function publishStatements(id: string, expectedUpdatedAt: string, asset: 
     },
     {
       text: `SELECT kip_park_drafts.require(EXISTS (SELECT 1 FROM kip_park_drafts.drafts WHERE id = $1 AND length(btrim(name)) > 0
-        AND length(btrim(short)) > 0 AND category IS NOT NULL AND rarity IS NOT NULL), 'draft_incomplete')`,
+        AND length(btrim(short)) > 0 AND category IS NOT NULL AND rarity IS NOT NULL AND geometry IS NOT NULL), 'draft_incomplete')`,
       params: [id],
     },
     {
@@ -277,19 +305,20 @@ export function createSqlDraftStore(db: SqlRunner): DraftStore {
          SELECT $1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
          WHERE NOT EXISTS (SELECT 1 FROM public.parks WHERE id = $1)
          ON CONFLICT (id) DO NOTHING RETURNING id`,
-        [input.id, JSON.stringify(input.source), input.sourceSha256, JSON.stringify(input.geometry), input.name, input.short, input.category,
+        [input.id, JSON.stringify(input.source), input.sourceSha256, input.geometry ? JSON.stringify(input.geometry) : null, input.name, input.short, input.category,
           input.region, input.lat, input.lng, input.biome, input.shape, input.rarity, input.seed, input.blurb],
       );
       if (!inserted.length) throw new HttpError(409, "already_imported", "This park already has a draft or is already in Parkdex.");
       return (await one(input.id))!;
     },
     async update(id, fields) {
-      const columns = Object.keys(fields) as (keyof DraftFields)[];
+      const columns = Object.keys(fields) as (keyof (DraftFields & DraftPlacement))[];
       if (!columns.length) return one(id);
-      const sets = columns.map((column, index) => `${column} = $${index + 2}`).join(", ");
+      // Column names come from the validated field list, never from the request.
+      const sets = columns.map((column, index) => column === "geometry" ? `geometry = $${index + 2}::jsonb` : `${column} = $${index + 2}`).join(", ");
       return reread(await db.query(
         `UPDATE kip_park_drafts.drafts SET ${sets}, updated_at = now() WHERE id = $1 AND status = 'draft' RETURNING id`,
-        [id, ...columns.map((column) => fields[column])],
+        [id, ...columns.map((column) => column === "geometry" ? (fields.geometry ? JSON.stringify(fields.geometry) : null) : fields[column])],
       ), id);
     },
     async setBadge(id, bytes, scene) {
@@ -329,22 +358,51 @@ export function createNeonDraftStore(databaseUrl: string): DraftStore {
 }
 
 
-/** A fresh draft from a legacy park. Nathan sets rarity; category stays empty when the app lacks it. */
-export function draftFromLegacy(park: LegacyPark, seed: number) {
+export function shortName(name: string): string {
+  return name.replace(/\s+(Provincial|Regional|National|Community|Municipal)?\s*Park( Reserve)?$/i, "").trim() || name;
+}
+
+/** What a player proposal contributes to a draft: kept for reference and the AI brief. */
+export type ProposalSource = { id: string; name: string; note: string; point: [number, number]; outline: [number, number][] | null; createdAt: string };
+
+/** A fresh draft from a legacy park, pre-filled so most parks need only a check. */
+export function draftFromLegacy(park: LegacyPark, seed: number, proposal: ProposalSource | null = null) {
   const category = (CATEGORIES as readonly string[]).includes(park.category) ? park.category : null;
   return {
     id: park.id,
-    source: { record: park.record, boundaryProperties: park.boundaryProperties },
+    source: { record: park.record, boundaryProperties: park.boundaryProperties, ...(proposal ? { proposal } : {}) },
     geometry: park.geometry,
     name: park.name,
-    short: park.name.replace(/\s+(Provincial|Regional|National|Community|Municipal)?\s*Park( Reserve)?$/i, "").trim() || park.name,
+    short: shortName(park.name),
     category,
     region: park.region,
     lat: park.lat,
     lng: park.lng,
-    biome: "forest",
+    biome: guessBiome(park.name),
+    shape: SHAPE_FOR_CATEGORY[category ?? ""] ?? "circle",
+    rarity: "common",
+    seed,
+    blurb: "",
+  };
+}
+
+/** A draft built only from a player's proposal, for parks the legacy map does not have. */
+export function draftFromProposal(proposal: ProposalSource, seed: number, suffix: string) {
+  const slug = proposal.name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "park";
+  const ring = proposal.outline && proposal.outline.length >= 3 ? [...proposal.outline, proposal.outline[0]] : null;
+  return {
+    id: `proposed-${slug}-${suffix}`,
+    source: { proposal },
+    geometry: ring ? { type: "MultiPolygon" as const, coordinates: [[ring]] } : null,
+    name: proposal.name,
+    short: shortName(proposal.name),
+    category: null,
+    region: "",
+    lat: proposal.point[1],
+    lng: proposal.point[0],
+    biome: guessBiome(proposal.name),
     shape: "circle",
-    rarity: null,
+    rarity: "common",
     seed,
     blurb: "",
   };

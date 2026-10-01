@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { createDashboardApi, type DashboardEnv } from "./api.ts";
 import { assertWebp, badgeAsset, sceneSlug, sha256Hex, uploadAndVerifyBadge } from "./badges.ts";
 import { buildCatalogue, createLegacySource } from "./legacy.ts";
-import { MemoryDraftStore } from "./memoryStores.ts";
+import { MemoryDraftStore, MemoryProposalStore } from "./memoryStores.ts";
 
 const ORIGIN = "https://operator.example.test";
+const PROPOSAL_ID = "10000000-0000-4000-8000-000000000001";
 const env: DashboardEnv = { DATABASE_URL: "postgres://unused" };
 const square = (offset: number) => [[[offset, 48], [offset + 0.01, 48], [offset + 0.01, 48.01], [offset, 48.01], [offset, 48]]];
 
@@ -35,8 +36,13 @@ function legacyFetch(): typeof fetch {
 
 function setup(overrides: Partial<DashboardEnv> = {}, fetcher: typeof fetch = legacyFetch()) {
   const drafts = new MemoryDraftStore();
+  const proposals = new MemoryProposalStore();
+  proposals.rows.set(PROPOSAL_ID, {
+    id: PROPOSAL_ID, name: "Swan Lake Sanctuary", note: "Boardwalk loop with heron nests.", point: [-123.37, 48.46],
+    outline: [[-123.371, 48.461], [-123.369, 48.461], [-123.369, 48.459]], context: {}, status: "new", createdAt: "2026-09-30T00:00:00.000Z", updatedAt: "2026-09-30T00:00:00.000Z",
+  });
   const legacySource = createLegacySource({ LEGACY_BOUNDARY_URL: "https://legacy.test/boundaries.json", LEGACY_PLACES_URL: "https://legacy.test/places" }, legacyFetch());
-  const api = createDashboardApi({ draftStore: () => drafts, legacySource, randomSeed: () => 4242, fetch: fetcher });
+  const api = createDashboardApi({ draftStore: () => drafts, proposalStore: () => proposals, legacySource, randomSeed: () => 4242, fetch: fetcher });
   const call = (path: string, init: { method?: string; body?: unknown; raw?: Uint8Array; origin?: string | null } = {}) => {
     const headers = new Headers();
     const method = init.method ?? "GET";
@@ -45,7 +51,7 @@ function setup(overrides: Partial<DashboardEnv> = {}, fetcher: typeof fetch = le
     const body = init.raw ? new Uint8Array(init.raw) : init.body === undefined ? undefined : JSON.stringify(init.body);
     return api(new Request(`${ORIGIN}${path}`, { method, headers, body }), { ...env, ...overrides });
   };
-  return { drafts, call };
+  return { drafts, proposals, call };
 }
 
 /** The smallest structurally complete WebP: a RIFF header around a VP8L chunk. */
@@ -79,13 +85,15 @@ test("importing marks parks, creates a draft once, and keeps it off phones", asy
   assert.equal((await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" }, origin: "https://evil.test" })).status, 403);
   const created = await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" } });
   assert.equal(created.status, 201);
-  const { draft } = await created.json() as { draft: { id: string; rarity: string | null; blurb: string; scene: string | null; seed: number; short: string; blockers: string[] } };
-  assert.equal(draft.rarity, null);
+  const { draft } = await created.json() as { draft: { id: string; rarity: string | null; blurb: string; scene: string | null; seed: number; short: string; shape: string; biome: string; blockers: string[] } };
+  assert.equal(draft.rarity, "common", "every park starts as common");
+  assert.equal(draft.shape, "hex", "regional parks get the hex badge");
+  assert.equal(draft.biome, "lake", "the biome is guessed from the name");
   assert.equal(draft.blurb, "");
   assert.equal(draft.scene, null);
   assert.equal(draft.seed, 4242);
   assert.equal(draft.short, "Thetis Lake");
-  assert.deepEqual(draft.blockers, ["Choose a rarity."]);
+  assert.deepEqual(draft.blockers, [], "a legacy park arrives ready to publish");
   assert.equal(drafts.parks.size, 0, "a draft never writes a park row");
 
   assert.equal((await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" } })).status, 409);
@@ -105,9 +113,10 @@ test("draft edits are validated against the content contract", async () => {
   const { call } = setup();
   await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" } });
   const path = "/api/drafts/regional-thetis-lake";
-  for (const body of [{ rarity: "mythic" }, { biome: "desert" }, { category: "island" }, { name: "" }, { blurb: "x".repeat(801) }, { blurb: "bad\u0007" }, { scene: "x" }, { seed: 1 }]) {
+  for (const body of [{ rarity: "mythic" }, { biome: "desert" }, { category: "island" }, { name: "" }, { blurb: "x".repeat(801) }, { blurb: "bad\u0007" }, { scene: "x" }, { seed: 1 }, { shape: "arch" }, { lat: 48 }, { lat: 120, lng: 0 }]) {
     assert.equal((await call(path, { method: "PATCH", body })).status, 400, JSON.stringify(body));
   }
+  assert.equal((await call(path, { method: "PATCH", body: { geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 1]]] } } })).status, 422, "a malformed boundary is refused");
   const saved = await call(path, { method: "PATCH", body: { rarity: "rare", blurb: "  Two lakes.  ", biome: "lake" } });
   const { draft } = await saved.json() as { draft: { rarity: string; blurb: string; biome: string; blockers: string[] } };
   assert.deepEqual([draft.rarity, draft.blurb, draft.biome, draft.blockers], ["rare", "Two lakes.", "lake", []]);
@@ -131,16 +140,19 @@ test("badges must be WebP and get an immutable content-addressed slug; reference
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 1]);
   const photo = await (await call("/api/drafts/regional-thetis-lake/reference", { method: "PUT", raw: jpeg })).json() as { draft: { referencePhotoType: string } };
   assert.equal(photo.draft.referencePhotoType, "image/jpeg");
-  const brief = await (await call("/api/drafts/regional-thetis-lake/brief")).json() as { park: { legacyDescription: string }; referencePhoto: string; boundary: { type: string } };
-  assert.equal(brief.park.legacyDescription, "Lakes and trails.");
-  assert.equal(brief.referencePhoto, "/api/drafts/regional-thetis-lake/reference");
-  assert.equal(brief.boundary.type, "MultiPolygon");
+  const brief = await (await call("/api/drafts/regional-thetis-lake/brief")).json() as { park: Record<string, unknown> };
+  assert.deepEqual(brief.park, {
+    name: "Thetis Lake Regional Park", region: "Capital Region", category: "regional", description: "Lakes and trails.", sourceName: "CRD", center: { lat: 48.48, lng: -123.47 },
+  });
+  const text = JSON.stringify(brief);
+  for (const left of ["sourceUrl", "sourceId", "example.test/crd", "coordinates", "reference"]) assert.ok(!text.includes(left), `the brief leaves out ${left}`);
   assert.equal((await call("/api/drafts/regional-thetis-lake/badge", { method: "PUT", raw: new Uint8Array(4 * 1024 * 1024 + 1) })).status, 413);
 });
 
-test("publishing needs a rarity, rejects stale edits, and writes the park, boundary and drive rows", async () => {
+test("publishing needs a complete draft, rejects stale edits, and writes the park, boundary and drive rows", async () => {
   const { call, drafts } = setup();
-  const { draft } = await (await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" } })).json() as { draft: { updatedAt: string } };
+  await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake" } });
+  const { draft } = await (await call("/api/drafts/regional-thetis-lake", { method: "PATCH", body: { rarity: null } })).json() as { draft: { updatedAt: string } };
   assert.equal((await call("/api/drafts/regional-thetis-lake/publish", { method: "POST", body: { expectedUpdatedAt: draft.updatedAt } })).status, 422);
   const edited = await (await call("/api/drafts/regional-thetis-lake", { method: "PATCH", body: { rarity: "uncommon" } })).json() as { draft: { updatedAt: string } };
   assert.equal((await call("/api/drafts/regional-thetis-lake/publish", { method: "POST", body: { expectedUpdatedAt: draft.updatedAt } })).status, 409, "an older updatedAt is refused");
@@ -148,7 +160,7 @@ test("publishing needs a rarity, rejects stale edits, and writes the park, bound
   assert.equal(published.status, 200);
   const park = drafts.parks.get("regional-thetis-lake")!;
   assert.deepEqual([park.rarity, park.scene, park.blurb, park.category], ["uncommon", null, "", "regional"]);
-  assert.deepEqual((drafts.boundaries.get("regional-thetis-lake") as { properties: unknown }).properties, { id: "regional-thetis-lake", biome: "forest" });
+  assert.deepEqual((drafts.boundaries.get("regional-thetis-lake") as { properties: unknown }).properties, { id: "regional-thetis-lake", biome: "lake" });
   assert.equal((await call("/api/drafts/regional-thetis-lake", { method: "PATCH", body: { rarity: "rare" } })).status, 404, "a published draft is read only");
   const listed = await (await call("/api/legacy/parks")).json() as { parks: { id: string; status: string }[] };
   assert.equal(listed.parks.find((item) => item.id === "regional-thetis-lake")?.status, "in-parkdex");
@@ -202,4 +214,39 @@ test("an existing different object at the badge key is never overwritten", async
   const fetcher = (async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })) as unknown as typeof fetch;
   await assert.rejects(uploadAndVerifyBadge({ CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" }, asset, new Uint8Array(10), fetcher), /different image/);
   assert.throws(() => assertWebp(new Uint8Array(30)), /WebP/);
+});
+
+test("a proposal with no legacy match becomes a draft from the player's pin and sketch", async () => {
+  const { call, drafts } = setup();
+  const created = await call("/api/drafts", { method: "POST", body: { proposalId: PROPOSAL_ID } });
+  assert.equal(created.status, 201);
+  const { draft } = await created.json() as { draft: { id: string; name: string; lat: number; lng: number; rarity: string; biome: string; geometry: { coordinates: number[][][][] } | null; source: { proposal: { id: string } }; blockers: string[] } };
+  assert.match(draft.id, /^proposed-swan-lake-sanctuary-[0-9a-f]{4}$/);
+  assert.deepEqual([draft.name, draft.lat, draft.lng, draft.rarity, draft.biome], ["Swan Lake Sanctuary", 48.46, -123.37, "common", "lake"]);
+  assert.equal(draft.geometry?.coordinates[0][0].length, 4, "the sketch becomes a closed ring");
+  assert.equal(draft.source.proposal.id, PROPOSAL_ID);
+  assert.deepEqual(draft.blockers, ["Choose a category."]);
+  assert.equal(drafts.parks.size, 0);
+
+  // Choosing a category sets the badge shape; drawing replaces the boundary; the pin moves.
+  const square = { type: "MultiPolygon", coordinates: [[[[-123.38, 48.45], [-123.36, 48.45], [-123.36, 48.47], [-123.38, 48.47], [-123.38, 48.45]]]] };
+  const edited = await (await call(`/api/drafts/${draft.id}`, { method: "PATCH", body: { category: "national", geometry: square, lat: 48.461234567, lng: -123.371 } })).json() as { draft: { shape: string; lat: number; geometry: unknown; blockers: string[] } };
+  assert.deepEqual([edited.draft.shape, edited.draft.lat, edited.draft.blockers], ["seal", 48.461235, []]);
+  assert.deepEqual(edited.draft.geometry, square);
+
+  const brief = await (await call(`/api/drafts/${draft.id}/brief`)).json() as { park: { description: string } };
+  assert.equal(brief.park.description, "Boardwalk loop with heron nests.", "the player's note informs the brief");
+});
+
+test("a draft can start from a legacy park picked for a proposal, and needs a boundary to publish", async () => {
+  const { call } = setup();
+  const linked = await (await call("/api/drafts", { method: "POST", body: { legacyId: "regional-thetis-lake", proposalId: PROPOSAL_ID } })).json() as { draft: { source: { proposal?: { name: string }; record?: unknown } } };
+  assert.equal(linked.draft.source.proposal?.name, "Swan Lake Sanctuary");
+  assert.ok(linked.draft.source.record);
+  assert.equal((await call("/api/drafts", { method: "POST", body: { proposalId: "10000000-0000-4000-8000-000000000099" } })).status, 404);
+  assert.equal((await call("/api/drafts", { method: "POST", body: {} })).status, 400);
+
+  const cleared = await (await call("/api/drafts/regional-thetis-lake", { method: "PATCH", body: { geometry: null } })).json() as { draft: { updatedAt: string; blockers: string[] } };
+  assert.deepEqual(cleared.draft.blockers, ["Draw the park's boundary on the map."]);
+  assert.equal((await call("/api/drafts/regional-thetis-lake/publish", { method: "POST", body: { expectedUpdatedAt: cleared.draft.updatedAt } })).status, 422);
 });

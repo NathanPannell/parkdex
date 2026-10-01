@@ -254,6 +254,7 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
           env,
           requireSameOrigin: () => requireSameOrigin(request),
           drafts: () => dependencies.draftStore?.(env) ?? createNeonDraftStore(databaseUrl(env)),
+          proposals: () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)),
           legacy: legacy ??= createLegacySource(env, dependencies.fetch),
           fetch: dependencies.fetch,
           randomSeed: dependencies.randomSeed ?? (() => Math.floor(Math.random() * 1_000_001)),

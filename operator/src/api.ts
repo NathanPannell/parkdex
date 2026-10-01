@@ -131,8 +131,8 @@ export type DraftSummary = {
 
 export type Draft = {
   id: string;
-  source: { record?: Record<string, unknown>; boundaryProperties?: Record<string, unknown> };
-  geometry: MultiPolygon;
+  source: { record?: Record<string, unknown>; boundaryProperties?: Record<string, unknown>; proposal?: Record<string, unknown> };
+  geometry: MultiPolygon | null;
   name: string;
   short: string;
   category: string | null;

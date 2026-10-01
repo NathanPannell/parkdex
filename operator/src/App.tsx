@@ -12,9 +12,9 @@ import { Icon, Kip, ToastProvider, type IconName } from "./ui";
 type Route = "feedback" | "proposals" | "builds";
 
 const NAV: { route: Route; path: string; label: string; icon: IconName }[] = [
-  { route: "feedback", path: "/feedback", label: "Feedback", icon: "inbox" },
-  { route: "proposals", path: "/proposals", label: "Proposals", icon: "pin" },
-  { route: "builds", path: "/builds", label: "Builds", icon: "sliders" },
+  { route: "feedback", path: "/feedback", label: "User feedback", icon: "inbox" },
+  { route: "proposals", path: "/proposals", label: "Park proposals", icon: "pin" },
+  { route: "builds", path: "/builds", label: "Build config", icon: "sliders" },
 ];
 
 function routeFor(pathname: string): Route {

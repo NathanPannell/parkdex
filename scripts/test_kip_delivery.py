@@ -71,7 +71,7 @@ class AccountReleaseGates(unittest.TestCase):
             self.touch(name)
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
             "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
-            "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql",
+            "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
