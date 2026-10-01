@@ -290,6 +290,31 @@ describe("WebContentStore", () => {
     expect(retained[0].sceneFile).toEqual(earnedScene);
   });
 
+  it("removes a referenced detailed map chunk only when asked to drop optional coverage", async () => {
+    const chunkBytes = arrayBuffer("map chunk bytes");
+    const glyphBytes = arrayBuffer("glyph bytes");
+    const chunkHash = await hash(chunkBytes);
+    const glyphHash = await hash(glyphBytes);
+    const file = (path: string, sha256: string, byte_size: number, content_type: string) => ({
+      path, key: `releases/map/${path}`, url: `https://kip-assets.parkdex.app/releases/map/${path}`, sha256, byte_size, content_type,
+    });
+    await store.putFile(chunkHash, chunkBytes);
+    await store.putFile(glyphHash, glyphBytes);
+    const active = release("map-release");
+    active.manifest.files = [
+      file("map/island/0123.bin", chunkHash, chunkBytes.byteLength, "application/octet-stream"),
+      file("map/fonts/Noto Sans Regular/0-255.pbf", glyphHash, glyphBytes.byteLength, "application/x-protobuf"),
+    ];
+    await store.putRelease(active);
+    await store.activateRelease("map-release", null);
+
+    await expect(store.deleteFile(chunkHash)).rejects.toThrow(/active or retained content/);
+    await expect(store.deleteFile(glyphHash, { optionalMapChunk: true })).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(chunkHash, { optionalMapChunk: true });
+    expect(await store.hasFile(chunkHash, chunkBytes.byteLength)).toBe(false);
+    expect(await store.hasFile(glyphHash, glyphBytes.byteLength)).toBe(true);
+  });
+
   it("pins archived scene blobs by release and scene across recreation", async () => {
     const firstBytes = arrayBuffer("vintage one art");
     const secondBytes = arrayBuffer("vintage two art");

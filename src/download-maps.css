@@ -1,0 +1,135 @@
+.dlmaps {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.dlmaps > * {
+  pointer-events: auto;
+}
+
+/* One-finger drags paint squares here, so hide MapLibre's "use two fingers" hint. */
+.download-mode .maplibregl-cooperative-gesture-screen {
+  display: none;
+}
+
+.download-mode .maplibregl-canvas {
+  cursor: crosshair;
+}
+
+.dlmaps-top {
+  position: absolute;
+  top: var(--safe-top, 14px);
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 20px;
+}
+
+.dlmaps-top p {
+  margin: 2px 0 0;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.dlmaps-sheet {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--safe-bottom, 12px) + 84px);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 22px;
+}
+
+.dlmaps-modes {
+  display: flex;
+  gap: 8px;
+}
+
+.dlmaps-modes .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.dlmaps-stats {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.dlmaps-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.dlmaps-stats dt {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.dlmaps-stats dd {
+  margin: 0;
+  font-weight: 800;
+  text-align: right;
+}
+
+.dlmaps-progress {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dlmaps-progress__bar {
+  display: block;
+  height: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.dlmaps-progress__bar span {
+  display: block;
+  height: 100%;
+  background: var(--moss);
+  transition: width 200ms ease;
+}
+
+.dlmaps-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dlmaps-error {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--kip-dark);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.btn--berry {
+  background: var(--berry);
+}
+
+.dlmaps-sheet > * {
+  min-width: 0;
+}
+
+.dlmaps-sheet > .btn {
+  white-space: normal;
+}

@@ -22,6 +22,8 @@ import { useContent } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
 import { MapView } from "./MapView";
 import { ProposePark } from "./ProposePark";
+import { DownloadMaps } from "./DownloadMaps";
+import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
 import { isFeatureEnabled } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
 import { ArrivalCard, TripPanel } from "./TripPanel";
@@ -48,6 +50,7 @@ export function MapScreen() {
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
   const [proposing, setProposing] = useState(false);
+  const [downloadingMaps, setDownloadingMaps] = useState(false);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
   const [initialView] = useState(() => {
@@ -114,6 +117,18 @@ export function MapScreen() {
     hadFix.current = true;
     mapRef.current?.flyTo({ center: user, zoom: USER_ZOOM, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }, [hasUsableGpsFix, state.accuracy, user]);
+
+  // The account screen can ask to open Download maps.
+  useEffect(() => {
+    const open = () => {
+      if (!consumeDownloadMapsRequest()) return;
+      select(null);
+      setProposing(false);
+      setDownloadingMaps(true);
+    };
+    open();
+    return subscribeDownloadMapsRequest(open);
+  }, []);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
@@ -234,7 +249,7 @@ export function MapScreen() {
       tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
       route={content ? route : null}
-      onSelect={content && !proposing ? select : () => {}}
+      onSelect={content && !proposing && !downloadingMaps ? select : () => {}}
       visible={state.screen === "map"}
     />
   );
@@ -244,6 +259,15 @@ export function MapScreen() {
       <div className="screen map-screen">
         {mapView}
         <ContentGate overMap />
+      </div>
+    );
+  }
+
+  if (downloadingMaps) {
+    return (
+      <div className="screen map-screen">
+        {mapView}
+        <DownloadMaps mapRef={mapRef} user={user} hasFix={hasUsableGpsFix} onClose={() => setDownloadingMaps(false)} />
       </div>
     );
   }
@@ -284,6 +308,18 @@ export function MapScreen() {
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
           <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback" title="Send feedback">
             <Icon name="feedback" size={22} />
+          </button>
+          <button
+            className="tool card"
+            onClick={() => {
+              sfx.tap();
+              select(null);
+              setDownloadingMaps(true);
+            }}
+            aria-label="Download maps"
+            title="Download maps"
+          >
+            <Icon name="download" size={22} />
           </button>
           {isFeatureEnabled("parkProposals") && (
             <button

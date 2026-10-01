@@ -47,7 +47,7 @@ import {
 import { ContentDownloadScheduler, type DownloadPolicy } from "./scheduler";
 import { prefetchMapArea } from "./map-downloads";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity, restoreArchivedScene as restoreLegacyArchivedScene } from "./archived-art";
-import { resetAllowedMapChunks, setAllowedMapChunks } from "../offlineTiles";
+import { removeAllowedMapChunks, resetAllowedMapChunks, setAllowedMapChunks } from "../offlineTiles";
 
 const DISCOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const MANUAL_RETRY_COOLDOWN_MS = 15 * 1000;
@@ -532,6 +532,27 @@ class ContentRuntimeController implements ContentRuntime {
       if (isMapChunk(file.path)) resetAllowedMapChunks(releaseId);
       throw error;
     }
+  }
+
+  async hasLocalFile(releaseId: string, path: string): Promise<boolean> {
+    const release = await this.options.store.getRelease(releaseId);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) return false;
+    const file = fileByPath(manifest, path);
+    return this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)) || await this.hasVerifiedLocalFile(file);
+  }
+
+  async deleteMapChunk(releaseId: string, path: string): Promise<void> {
+    this.assertRunning();
+    if (!isMapChunk(path)) throw new Error("Only detailed map chunks can be removed");
+    const release = await this.options.store.getRelease(releaseId);
+    const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
+    if (!manifest) return;
+    const file = fileByPath(manifest, path);
+    this.invalidateLocalFile(file);
+    await this.options.store.deleteFile(file.sha256, { optionalMapChunk: true });
+    const index = Number(path.match(/\/(\d{3,})\.bin$/)?.[1]);
+    if (Number.isSafeInteger(index)) removeAllowedMapChunks(releaseId, [index]);
   }
 
   async getFileUrl(releaseId: string, path: string): Promise<string> {
@@ -1804,7 +1825,10 @@ class ContentRuntimeController implements ContentRuntime {
         if (this.nearbyRequest === request) this.nearbyRequest = null;
         return;
       }
-      const work = prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot).then(() => {
+      // The visitor's own square downloads on any connection; the squares around it wait for Wi-Fi.
+      const work = prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot)
+        .then(() => prefetchMapArea(this, request.releaseId, point, "surrounding", signal, currentSnapshot))
+        .then(() => {
         if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
           this.nearbyAnchor = { releaseId: request.releaseId, point };
         }

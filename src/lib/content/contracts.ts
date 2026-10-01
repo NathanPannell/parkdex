@@ -101,7 +101,11 @@ export interface ContentStore {
   readFile(hash: string, offset?: number, length?: number): Promise<ArrayBuffer>;
   fileUrl(hash: string, mime: string): Promise<string>;
   listFiles(): Promise<{ hash: string; size: number }[]>;
-  deleteFile(hash: string): Promise<void>;
+  /**
+   * Delete an unreferenced file. optionalMapChunk also allows a detailed map chunk the
+   * current map still lists, since chunks are optional coverage that can be fetched again.
+   */
+  deleteFile(hash: string, options?: { optionalMapChunk?: boolean }): Promise<void>;
   getRetainedParks(): Promise<RetainedPark[]>;
   retainParks(parks: RetainedPark[]): Promise<void>;
   getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined>;
@@ -198,6 +202,10 @@ export interface ContentRuntime {
   ensureFile(releaseId: string, path: string, purpose: DownloadPurpose, signal?: AbortSignal): Promise<void>;
   readFile(releaseId: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer>;
   getFileUrl(releaseId: string, path: string): Promise<string>;
+  /** Whether a release file is saved and verified on this device. */
+  hasLocalFile?(releaseId: string, path: string): Promise<boolean>;
+  /** Remove a saved detailed map chunk so a deleted map square frees its space. */
+  deleteMapChunk?(releaseId: string, path: string): Promise<void>;
   getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null;
   ensureArchivedScene(releaseId: string, scene: string): Promise<string>;
   stop(): Promise<void>;
