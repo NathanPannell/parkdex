@@ -26,8 +26,9 @@
     "database/migrations/progress_001_init.sql",
     "database/migrations/interactions_001_init.sql"
   ],
-  "appConfigMigrationPaths": [
-    "database/migrations/app_config_001_init.sql"
+  "independentMigrationPaths": [
+    "database/migrations/app_config_001_init.sql",
+    "database/migrations/park_proposals_001_init.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
