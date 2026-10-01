@@ -1,5 +1,6 @@
-import type { FeatureCollection, Polygon } from "geojson";
+import type { FeatureCollection, Point, Polygon } from "geojson";
 import { BUILD_MAP_POINTER, type MapPoint } from "./content/contracts";
+import type { Screen } from "./store";
 
 /** Zoom-9 squares (about 50 km in southern BC) that visitors choose to keep offline. */
 export const CELL_ZOOM = 9;
@@ -114,6 +115,35 @@ export function gridFeatures(index: CellIndex, states: ReadonlyMap<string, CellS
   };
 }
 
+/** Parks in each square, keyed like the index. */
+export function parkCountsByCell(parks: readonly { lng: number; lat: number }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const park of parks) {
+    const key = cellKeyAt([park.lng, park.lat]);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** A label point at each square's centre: its full download size and how many parks it holds. */
+export function squareLabels(index: CellIndex, parks: readonly { lng: number; lat: number }[]): FeatureCollection<Point, { key: string; label: string }> {
+  const counts = parkCountsByCell(parks);
+  return {
+    type: "FeatureCollection",
+    features: Object.keys(index.cells).map((key) => {
+      const ring = cellRing(key);
+      const parkCount = counts.get(key) ?? 0;
+      const size = formatMegabytes(bytesForChunks(index, chunkIdsForCells(index, [key])));
+      return {
+        type: "Feature",
+        properties: { key, label: parkCount ? `${size}
+${parkCount} ${parkCount === 1 ? "park" : "parks"}` : size },
+        geometry: { type: "Point", coordinates: [(ring[0][0] + ring[2][0]) / 2, (ring[0][1] + ring[2][1]) / 2] },
+      };
+    }),
+  };
+}
+
 export function formatMegabytes(bytes: number): string {
   const mb = bytes / 1_000_000;
   if (mb < 10) return `${mb.toFixed(1)} MB`;
@@ -152,18 +182,19 @@ function safeStorage(): Storage | undefined {
 
 type Listener = () => void;
 const openListeners = new Set<Listener>();
-let openRequested = false;
+type DownloadMapsRequest = { returnTo: Screen | null };
+let openRequest: DownloadMapsRequest | null = null;
 
-/** Lets the account screen open the download screen on the map. */
-export function requestDownloadMaps(): void {
-  openRequested = true;
+/** Lets Manage downloads open the square picker on the map, and return to it afterwards. */
+export function requestDownloadMaps(returnTo: Screen | null = null): void {
+  openRequest = { returnTo };
   for (const listener of openListeners) listener();
 }
 
-export function consumeDownloadMapsRequest(): boolean {
-  const requested = openRequested;
-  openRequested = false;
-  return requested;
+export function consumeDownloadMapsRequest(): DownloadMapsRequest | null {
+  const request = openRequest;
+  openRequest = null;
+  return request;
 }
 
 export function subscribeDownloadMapsRequest(listener: Listener): () => void {

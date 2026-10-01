@@ -3,10 +3,12 @@ import { Badge } from "../../components/Badge";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
-import { estimateTrip, finalWalk } from "../../lib/drive";
-import { formatDistance, type LngLat } from "../../lib/geo";
+import { boundaryAreaKm2, formatArea } from "../../lib/area";
+import { useBoundaries } from "../../lib/boundaries";
+import { estimateTrip } from "../../lib/drive";
+import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
-import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
+import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { ParkRarityEligibility } from "../../lib/progression";
 import { RarityGuide } from "../../components/RarityGuide";
 import { rarityLockMessage } from "../../lib/rarityUi";
@@ -35,8 +37,6 @@ const item = {
   show: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 420, damping: 30 } },
 };
 
-const minutes = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60}m` : ""}`.trim());
-
 export function directionsUrl(park: Park) {
   return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
@@ -49,7 +49,11 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
   const accessUnknown = trip.mode === "unknown";
-  const walk = finalWalk(park, content?.drive);
+  const boundary = useBoundaries()?.byId.get(park.id);
+  const areaKm2 = boundary ? boundaryAreaKm2(boundary) : 0;
+  const straightKm = distanceKm(user, [park.lng, park.lat]);
+  const landscape = landscapeOf(park);
+  const tint = LANDSCAPE_TINT[landscape];
   const live = isLive(park);
   const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
@@ -105,7 +109,6 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
           <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
             {"★".repeat(rarity.stars)} {rarity.label}
           </span>
-          <span className="pill">{landscapeLabel(park)}</span>
           {!live && <span className="pill park-sheet__art-pill">Badge art coming soon</span>}
         </motion.div>
         <motion.h2 variants={item} className="park-sheet__name">
@@ -119,32 +122,23 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
         <motion.div variants={item} className="stats">
           <div className="stat">
             <Icon name="pin" size={18} />
-            <strong>{inside ? "Here!" : accessUnknown ? "Unknown" : trip.mode === "boat" ? "Island" : formatDistance(trip.km)}</strong>
-            <span>{inside ? "you made it" : accessUnknown ? "access details unavailable" : trip.mode === "walk" ? "on foot" : trip.mode === "boat" ? "island access" : "by road"}</span>
+            <strong>{inside ? "Here!" : formatDistance(straightKm)}</strong>
+            <span>{inside ? "you made it" : "from you"}</span>
           </div>
           <div className="stat">
-            <Icon name={trip.mode === "walk" ? "walk" : accessUnknown ? "pin" : "car"} size={18} />
-            <strong>{inside ? "0 min" : accessUnknown ? "Unknown" : trip.mode === "boat" ? "Boat" : minutes(trip.minutes)}</strong>
-            <span>{inside ? "at the park" : accessUnknown ? "check local access" : trip.mode === "walk" ? "walk there" : trip.mode === "boat" ? "or ferry access" : "drive there"}</span>
+            <Icon name="corners" size={18} />
+            <strong>{areaKm2 > 0 ? formatArea(areaKm2) : "Unknown"}</strong>
+            <span>park area</span>
           </div>
-          <div className="stat">
-            <Icon name="walk" size={18} />
-            <strong>{walk.label}</strong>
-            <span>{walk.minutes === null ? "final walk not mapped" : walk.minutes ? "road to boundary" : "park by the road"}</span>
+          <div className="stat stat--landscape" style={{ background: tint.bg, color: tint.ink }}>
+            <Icon name={landscape === "legendary" ? "sparkle" : landscape} size={18} />
+            <strong>{landscapeLabel(park)}</strong>
           </div>
         </motion.div>
 
         <motion.p variants={item} className="park-sheet__blurb">
           {park.blurb}
         </motion.p>
-
-        <motion.div variants={item} className="park-sheet__how">
-          <span className="park-sheet__how-step">1</span> Get to the park
-          <span className="park-sheet__how-dash" />
-          <span className="park-sheet__how-step">2</span> Step inside
-          <span className="park-sheet__how-dash" />
-          <span className="park-sheet__how-step">3</span> Snap + claim
-        </motion.div>
 
         <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
           <Icon name="chat" size={16} /> Something wrong with this park? Tell us

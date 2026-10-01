@@ -1068,39 +1068,14 @@
   color: var(--ink-soft);
 }
 
+.stat--landscape svg {
+  color: inherit;
+}
+
 .park-sheet__blurb {
   font-size: 16px;
   line-height: 1.5;
   color: var(--ink-2);
-}
-
-.park-sheet__how {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 16px;
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--ink-soft);
-}
-
-.park-sheet__how-step {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 11px;
-}
-
-.park-sheet__how-dash {
-  width: 10px;
-  height: 2px;
-  background: currentColor;
-  opacity: 0.4;
 }
 
 .park-sheet__cta {
