@@ -180,12 +180,18 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
         paint: { "line-color": "#1c5b43", "line-width": 1, "line-opacity": 0.45 },
       });
     };
-    // Style swaps (a new release, or new detail coverage) can drop these layers or restore
-    // an older copy of the grid from a style snapshot, so redraw with the current states.
-    const redraw = () => { if (map.isStyleLoaded()) draw(); };
+    // Style swaps (a new release, or new detail coverage) can drop these layers, or restore
+    // an older copy of the grid when a diff deferred until the style loads is applied later.
+    // Re-apply the current states on every style change; setData does not change the style.
+    const sync = () => {
+      const source = map.getSource(SOURCE) as GeoJSONSource | undefined;
+      if (source) source.setData(data);
+      else if (map.isStyleLoaded()) draw();
+    };
     if (map.isStyleLoaded()) draw();
-    map.on("styledata", redraw);
-    return () => void map.off("styledata", redraw);
+    else sync();
+    map.on("styledata", sync);
+    return () => void map.off("styledata", sync);
   }, [mapRef, index, states]);
 
   useEffect(() => () => {
