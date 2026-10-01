@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { Kip } from "../components/Kip";
-import { fetchOperatorApi } from "../lib/operatorApiTransport";
+import { OperatorNav } from "../components/OperatorNav";
+import { OperatorGate, operatorRequest as request, useOperatorSession } from "../components/OperatorSession";
 import "../feedback-review.css";
 import "../build-config.css";
 
@@ -34,6 +35,7 @@ type Draft = {
 
 const FLAG_LABELS: Record<string, string> = {
   rankProgression: "Rank progression (level up to unlock rarities)",
+  parkProposals: "Propose a park (button next to feedback)",
 };
 
 const CHANNEL_LABELS: Record<"" | Channel, string> = {
@@ -41,32 +43,6 @@ const CHANNEL_LABELS: Record<"" | Channel, string> = {
   staging: "Staging database",
   main: "Production database",
 };
-
-class OperatorError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message);
-  }
-}
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
-  const response = await fetchOperatorApi(path, { ...init, headers }, globalThis.fetch, {
-    pageOrigin: window.location.origin,
-    allowLoopbackHttp: import.meta.env.DEV,
-  });
-  if (!response.ok) {
-    let message = response.status === 401 ? "Your operator session has expired." : "The request could not be completed.";
-    try {
-      const body = await response.json() as { message?: unknown };
-      if (typeof body.message === "string" && body.message.trim()) message = body.message.slice(0, 240);
-    } catch {
-      // Keep the generic message.
-    }
-    throw new OperatorError(response.status, message);
-  }
-  return await response.json() as T;
-}
 
 function emptyDraft(flags: string[]): Draft {
   return { platform: "android", build: "", label: "", contentChannel: "", flags: Object.fromEntries(flags.map((flag) => [flag, ""])), minimumBuild: "", latestBuild: "", notes: "" };
@@ -105,57 +81,22 @@ function flagSummary(config: BuildConfig): string {
 
 /** Private operator page for per-build remote configuration: content database and feature flags. */
 export function BuildConfigAdmin() {
-  const [auth, setAuth] = useState<"checking" | "signed-out" | "signed-in">("checking");
-  const [password, setPassword] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
   const [listing, setListing] = useState<Listing | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      const result = await request<Listing>("/api/operator/app-config");
-      setListing(result);
-      setAuth("signed-in");
-    } catch (error) {
-      if (error instanceof OperatorError && error.status === 401) setAuth("signed-out");
-      else setNotice(error instanceof Error ? error.message : "Could not load build configuration.");
-    }
+    setListing(await request<Listing>("/api/operator/app-config"));
   }, []);
-
-  useEffect(() => {
-    request<{ authenticated?: boolean }>("/api/operator/session")
-      .then((session) => (session.authenticated ? load() : setAuth("signed-out")))
-      .catch(() => setAuth("signed-out"));
-  }, [load]);
-
-  async function signIn(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setNotice(null);
-    try {
-      await request("/api/operator/login", { method: "POST", body: JSON.stringify({ password }) });
-      setPassword("");
-      await load();
-    } catch (error) {
-      setNotice(error instanceof OperatorError && error.status === 401 ? "That password did not match. Try again." : "Could not sign in.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const session = useOperatorSession(load);
+  const { notice, setNotice } = session;
 
   async function signOut() {
     setBusy(true);
-    try {
-      await request("/api/operator/logout", { method: "POST" });
-    } catch {
-      // The session cookie expires on its own; show the sign-in form either way.
-    } finally {
-      setListing(null);
-      setDraft(null);
-      setAuth("signed-out");
-      setBusy(false);
-    }
+    await session.signOut();
+    setListing(null);
+    setDraft(null);
+    setBusy(false);
   }
 
   async function save(event: FormEvent) {
@@ -188,7 +129,7 @@ export function BuildConfigAdmin() {
         }),
       });
       setDraft(null);
-      await load();
+      await session.refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not save.");
     } finally {
@@ -202,7 +143,7 @@ export function BuildConfigAdmin() {
     setNotice(null);
     try {
       await request(`/api/operator/app-config/${config.platform}/${config.build}`, { method: "DELETE" });
-      await load();
+      await session.refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not remove.");
     } finally {
@@ -210,34 +151,9 @@ export function BuildConfigAdmin() {
     }
   }
 
-  if (auth === "checking") {
-    return (
-      <main className="fr-review fr-review--center" aria-live="polite">
-        <div className="fr-state-card"><span className="fr-spinner" aria-hidden="true" /><p>Checking operator access...</p></div>
-      </main>
-    );
-  }
-
-  if (auth === "signed-out") {
-    return (
-      <main className="fr-review fr-review--auth">
-        <section className="fr-auth-panel" aria-labelledby="bc-auth-title">
-          <div className="fr-auth-mark"><Kip pose="think" size={62} /></div>
-          <h1 id="bc-auth-title">Operator sign in</h1>
-          <p className="fr-auth-copy">Build configuration controls which database each app build reads and which features it shows.</p>
-          {notice && <p className="fr-auth-notice" role="status">{notice}</p>}
-          <form className="fr-login-form" onSubmit={signIn}>
-            <label htmlFor="bc-password">Operator password</label>
-            <input id="bc-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required autoFocus />
-            <button className="fr-button fr-button--primary fr-button--wide" type="submit" disabled={!password.trim() || busy}>Sign in</button>
-          </form>
-        </section>
-      </main>
-    );
-  }
-
   const flags = listing?.flags ?? [];
   return (
+    <OperatorGate auth={session.auth} notice={notice} signIn={session.signIn} copy="Build configuration controls which database each app build reads and which features it shows.">
     <main className="fr-review bc-page" aria-label="Build configuration">
       <header className="bc-header">
         <Kip pose="avatar" size={43} />
@@ -246,7 +162,7 @@ export function BuildConfigAdmin() {
           <h1>Build configuration</h1>
         </div>
         <div className="bc-actions">
-          <a className="fr-button fr-button--paper" href="/feedback/review">Feedback reports</a>
+          <OperatorNav />
           <button className="fr-button fr-button--quiet" type="button" onClick={() => void signOut()} disabled={busy}>Sign out</button>
         </div>
       </header>
@@ -322,5 +238,6 @@ export function BuildConfigAdmin() {
         </form>
       )}
     </main>
+    </OperatorGate>
   );
 }

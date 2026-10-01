@@ -106,7 +106,8 @@ export function clearDraft(nextGeneration: string) {
   }
 }
 
-function apiUrl(): string {
+/** The API origin for feedback and other anonymous reports from this build. */
+export function feedbackApiOrigin(): string {
   const native = Capacitor.isNativePlatform();
   const configured = import.meta.env.VITE_FEEDBACK_API_URL;
   const previewOrigin = import.meta.env.VITE_PREVIEW_API_ORIGIN;
@@ -162,7 +163,7 @@ function parseSavedResult(value: unknown): FeedbackSubmitResult | null {
 export async function submitFeedback(report: FeedbackReport, generation: string): Promise<FeedbackSubmitResult> {
   let baseUrl: string;
   try {
-    baseUrl = apiUrl();
+    baseUrl = feedbackApiOrigin();
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Feedback is unavailable")) throw error;
     throw new Error("Feedback is unavailable because this app build has an invalid service destination.");
