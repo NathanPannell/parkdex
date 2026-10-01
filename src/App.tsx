@@ -15,6 +15,7 @@ import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
+import { UpdateGate } from "./components/UpdateGate";
 import { BuildConfigAdmin } from "./screens/BuildConfigAdmin";
 import { FeedbackReview } from "./screens/FeedbackReview";
 import { Account } from "./screens/Account";
@@ -32,6 +33,7 @@ export function App() {
       <AuthProvider>
         <StoreProvider>
           <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+          <UpdateGate />
         </StoreProvider>
       </AuthProvider>
     </MotionConfig>

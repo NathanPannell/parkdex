@@ -21,7 +21,7 @@ vi.mock("@capacitor/app", () => ({
 }));
 
 import { FEATURE_FLAGS } from "../../worker/appConfig";
-import { activeAppConfig, checkInAppConfig, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig } from "./appConfig";
+import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig, subscribeUpdateStatus } from "./appConfig";
 import { contentChannelOverride } from "./contentChannel";
 import { getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, setRankProgressionEnabled } from "./progression";
 
@@ -100,6 +100,38 @@ describe("app config", () => {
     await initAppConfig();
     expect(activeAppConfig().contentChannel).toBe("main");
     expect(contentChannelOverride()).toBeNull();
+  });
+
+  it("shows an update prompt as soon as the server asks for one", async () => {
+    await initAppConfig();
+    expect(currentUpdateStatus()).toBe("none");
+    const listener = vi.fn();
+    const stop = subscribeUpdateStatus(listener);
+    await checkInAppConfig(respond(answer({ update: "required" })));
+    expect(currentUpdateStatus()).toBe("required");
+    expect(listener).toHaveBeenCalledTimes(1);
+    stop();
+    await checkInAppConfig(respond(answer({ update: "available" })));
+    expect(currentUpdateStatus()).toBe("available");
+    // An answer from an older server without `update` never blocks.
+    await checkInAppConfig(respond(answer()));
+    expect(currentUpdateStatus()).toBe("none");
+  });
+
+  it("remembers a required update across launches", async () => {
+    await initAppConfig();
+    await checkInAppConfig(respond(answer({ update: "required" })));
+    await checkInAppConfig(respond({ error: "offline" }, 503));
+    await initAppConfig();
+    expect(currentUpdateStatus()).toBe("required");
+  });
+
+  it("never prompts a web page to update", async () => {
+    mocks.native = false;
+    vi.stubGlobal("location", { origin: "https://web.parkdex.app" });
+    await initAppConfig();
+    await checkInAppConfig(respond(answer({ platform: "web", build: 0, update: "required" })));
+    expect(currentUpdateStatus()).toBe("none");
   });
 
   it("drops unknown flags and channels", () => {

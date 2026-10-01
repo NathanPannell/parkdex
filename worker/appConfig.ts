@@ -26,6 +26,8 @@ export interface BuildConfigRecord {
   label: string;
   contentChannel: ContentChannel | null;
   flags: FeatureFlags;
+  minimumBuild: number | null;
+  latestBuild: number | null;
   notes: string;
   updatedAt: string;
 }
@@ -34,6 +36,8 @@ export interface BuildConfigInput {
   label: string;
   contentChannel: ContentChannel | null;
   flags: FeatureFlags;
+  minimumBuild: number | null;
+  latestBuild: number | null;
   notes: string;
 }
 
@@ -52,6 +56,11 @@ export interface AppConfigResponse {
   /** Null means the app keeps the content database it was built for. */
   contentChannel: ContentChannel | null;
   flags: FeatureFlags;
+  /** Builds below this must update from the store before they can be used. */
+  minimumBuild: number | null;
+  /** The newest build in the store; older builds get a dismissable nudge. */
+  latestBuild: number | null;
+  update: "required" | "available" | "none";
   /** Which rows contributed: the exact build, the platform default, or neither. */
   source: "build" | "default" | "none";
 }
@@ -62,6 +71,8 @@ type Row = {
   label: string;
   content_channel: string | null;
   flags: unknown;
+  minimum_build: number | null;
+  latest_build: number | null;
   notes: string;
   updated_at: string | Date;
 };
@@ -73,6 +84,8 @@ function toRecord(row: Row): BuildConfigRecord {
     label: row.label,
     contentChannel: (row.content_channel as ContentChannel | null) ?? null,
     flags: sanitizeFlags(row.flags),
+    minimumBuild: row.minimum_build === null ? null : Number(row.minimum_build),
+    latestBuild: row.latest_build === null ? null : Number(row.latest_build),
     notes: row.notes,
     updatedAt: new Date(row.updated_at).toISOString(),
   };
@@ -83,7 +96,7 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
   return {
     async resolve(platform, build) {
       const rows = await sql`
-        SELECT platform, build, label, content_channel, flags, notes, updated_at
+        SELECT platform, build, label, content_channel, flags, minimum_build, latest_build, notes, updated_at
         FROM kip_app_config.builds
         WHERE platform = ${platform} AND build IN (${build}, ${DEFAULT_BUILD})
       ` as Row[];
@@ -91,7 +104,7 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
     },
     async list() {
       const rows = await sql`
-        SELECT platform, build, label, content_channel, flags, notes, updated_at
+        SELECT platform, build, label, content_channel, flags, minimum_build, latest_build, notes, updated_at
         FROM kip_app_config.builds
         ORDER BY platform, build DESC
       ` as Row[];
@@ -99,15 +112,17 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
     },
     async upsert(platform, build, input) {
       const rows = await sql`
-        INSERT INTO kip_app_config.builds (platform, build, label, content_channel, flags, notes)
-        VALUES (${platform}, ${build}, ${input.label}, ${input.contentChannel}, ${JSON.stringify(input.flags)}::jsonb, ${input.notes})
+        INSERT INTO kip_app_config.builds (platform, build, label, content_channel, flags, minimum_build, latest_build, notes)
+        VALUES (${platform}, ${build}, ${input.label}, ${input.contentChannel}, ${JSON.stringify(input.flags)}::jsonb, ${input.minimumBuild}, ${input.latestBuild}, ${input.notes})
         ON CONFLICT (platform, build) DO UPDATE SET
           label = EXCLUDED.label,
           content_channel = EXCLUDED.content_channel,
           flags = EXCLUDED.flags,
+          minimum_build = EXCLUDED.minimum_build,
+          latest_build = EXCLUDED.latest_build,
           notes = EXCLUDED.notes,
           updated_at = now()
-        RETURNING platform, build, label, content_channel, flags, notes, updated_at
+        RETURNING platform, build, label, content_channel, flags, minimum_build, latest_build, notes, updated_at
       ` as Row[];
       return toRecord(rows[0]);
     },
@@ -147,7 +162,7 @@ export function validateBuildConfigInput(body: unknown): BuildConfigInput {
     throw new HttpError(400, "invalid_request", "Invalid build configuration.");
   }
   const input = body as Record<string, unknown>;
-  const allowed = new Set(["label", "contentChannel", "flags", "notes"]);
+  const allowed = new Set(["label", "contentChannel", "flags", "minimumBuild", "latestBuild", "notes"]);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new HttpError(400, "invalid_request", "Invalid build configuration.");
   const label = input.label ?? "";
   const notes = input.notes ?? "";
@@ -166,19 +181,48 @@ export function validateBuildConfigInput(body: unknown): BuildConfigInput {
       throw new HttpError(400, "invalid_flags", `Unknown or invalid feature flag: ${key.slice(0, 40)}.`);
     }
   }
-  return { label: label.trim(), notes: notes.trim(), contentChannel: channel as ContentChannel | null, flags: sanitizeFlags(rawFlags) };
+  const minimumBuild = optionalBuild(input.minimumBuild, "minimum");
+  const latestBuild = optionalBuild(input.latestBuild, "latest");
+  if (minimumBuild !== null && latestBuild !== null && minimumBuild > latestBuild) {
+    throw new HttpError(400, "invalid_builds", "The minimum build cannot be newer than the latest build.");
+  }
+  return {
+    label: label.trim(),
+    notes: notes.trim(),
+    contentChannel: channel as ContentChannel | null,
+    flags: sanitizeFlags(rawFlags),
+    minimumBuild,
+    latestBuild,
+  };
+}
+
+function optionalBuild(value: unknown, name: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > MAX_BUILD) {
+    throw new HttpError(400, "invalid_builds", `The ${name} build must be a whole number.`);
+  }
+  return value;
 }
 
 /** Merge the platform default under the exact build: build values win, flag by flag. */
 export function resolveAppConfig(platform: AppConfigPlatform, build: number, rows: BuildConfigRecord[]): AppConfigResponse {
   const fallback = rows.find((row) => row.build === DEFAULT_BUILD && row.platform === platform) ?? null;
   const exact = build === DEFAULT_BUILD ? null : rows.find((row) => row.build === build && row.platform === platform) ?? null;
+  const minimumBuild = exact?.minimumBuild ?? fallback?.minimumBuild ?? null;
+  const latestBuild = exact?.latestBuild ?? fallback?.latestBuild ?? null;
+  // Build 0 is an unversioned web or development build, which never needs a store update.
+  const update = build === DEFAULT_BUILD ? "none"
+    : minimumBuild !== null && build < minimumBuild ? "required"
+      : latestBuild !== null && build < latestBuild ? "available" : "none";
   return {
     schema: "parkdex.app-config/v1",
     platform,
     build,
     contentChannel: exact?.contentChannel ?? fallback?.contentChannel ?? null,
     flags: { ...fallback?.flags, ...exact?.flags },
+    minimumBuild,
+    latestBuild,
+    update,
     source: exact ? "build" : fallback ? "default" : "none",
   };
 }

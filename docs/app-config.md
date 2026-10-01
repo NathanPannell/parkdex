@@ -9,6 +9,10 @@ Every app build checks in with the production API to learn which content databas
 - `contentChannel` switches only park content (catalogue, art, change feed) between `staging.web.parkdex.app` and `web.parkdex.app`. Accounts, backups, feedback and photos always stay on the server the build was made for. Web pages ignore it and always read their own host.
 - Flags: `rankProgression` (default on). Off opens every rarity and hides the rank card, map rank line, park-sheet rarity guide and onboarding rank step.
 
+## Update prompts
+
+Set `minimumBuild` and `latestBuild` on the default row (or a specific build). An Android build below the minimum gets a blocking "Update on Google Play" screen; below the latest it gets a dismissable nudge. Unlike content and flags, these apply as soon as the check-in answers, and a required update is remembered offline. Raise the minimum only before shipping an API change older builds can't handle.
+
 ## Operator page
 
 Sign in at `https://web.parkdex.app/operator/builds` with the operator password to add, edit or remove build rows. The same page on the staging host edits the staging table, which native builds do not read.

@@ -13,6 +13,8 @@ type BuildConfig = {
   label: string;
   contentChannel: Channel | null;
   flags: Record<string, boolean>;
+  minimumBuild: number | null;
+  latestBuild: number | null;
   notes: string;
   updatedAt: string;
 };
@@ -25,6 +27,8 @@ type Draft = {
   label: string;
   contentChannel: "" | Channel;
   flags: Record<string, "" | "on" | "off">;
+  minimumBuild: string;
+  latestBuild: string;
   notes: string;
 };
 
@@ -65,7 +69,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 function emptyDraft(flags: string[]): Draft {
-  return { platform: "android", build: "", label: "", contentChannel: "", flags: Object.fromEntries(flags.map((flag) => [flag, ""])), notes: "" };
+  return { platform: "android", build: "", label: "", contentChannel: "", flags: Object.fromEntries(flags.map((flag) => [flag, ""])), minimumBuild: "", latestBuild: "", notes: "" };
 }
 
 function draftFrom(config: BuildConfig, flags: string[]): Draft {
@@ -75,12 +79,22 @@ function draftFrom(config: BuildConfig, flags: string[]): Draft {
     label: config.label,
     contentChannel: config.contentChannel ?? "",
     flags: Object.fromEntries(flags.map((flag) => [flag, config.flags[flag] === undefined ? "" : config.flags[flag] ? "on" : "off"])),
+    minimumBuild: config.minimumBuild === null ? "" : String(config.minimumBuild),
+    latestBuild: config.latestBuild === null ? "" : String(config.latestBuild),
     notes: config.notes,
   };
 }
 
 function buildName(config: Pick<BuildConfig, "build" | "platform">): string {
   return config.build === 0 ? `All ${config.platform} builds (default)` : `${config.platform} build ${config.build}`;
+}
+
+function updateSummary(config: BuildConfig): string | null {
+  if (config.minimumBuild === null && config.latestBuild === null) return null;
+  const parts = [];
+  if (config.minimumBuild !== null) parts.push(`must update below ${config.minimumBuild}`);
+  if (config.latestBuild !== null) parts.push(`nudge below ${config.latestBuild}`);
+  return `Updates: ${parts.join(", ")}`;
 }
 
 function flagSummary(config: BuildConfig): string {
@@ -147,6 +161,12 @@ export function BuildConfigAdmin() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!draft || !listing) return;
+    for (const value of [draft.minimumBuild, draft.latestBuild]) {
+      if (value && !/^\d{1,10}$/.test(value)) {
+        setNotice("Minimum and latest build must be whole numbers, or left blank.");
+        return;
+      }
+    }
     if (!/^\d{1,10}$/.test(draft.build)) {
       setNotice("Build must be a whole number. Use 0 for the default that applies to every build.");
       return;
@@ -158,7 +178,14 @@ export function BuildConfigAdmin() {
     try {
       await request(`/api/operator/app-config/${draft.platform}/${draft.build}`, {
         method: "PUT",
-        body: JSON.stringify({ label: draft.label, contentChannel: draft.contentChannel || null, flags, notes: draft.notes }),
+        body: JSON.stringify({
+          label: draft.label,
+          contentChannel: draft.contentChannel || null,
+          flags,
+          minimumBuild: draft.minimumBuild ? Number(draft.minimumBuild) : null,
+          latestBuild: draft.latestBuild ? Number(draft.latestBuild) : null,
+          notes: draft.notes,
+        }),
       });
       setDraft(null);
       await load();
@@ -224,7 +251,7 @@ export function BuildConfigAdmin() {
         </div>
       </header>
       <p className="bc-intro">
-        Apps check in at launch and apply changes on their next launch. A specific build overrides the default row (build 0). Accounts always stay with the server the build was made for; only park content switches databases.
+        Apps check in at launch and apply content and flag changes on their next launch; update prompts apply right away. A specific build overrides the default row (build 0). Accounts always stay with the server the build was made for; only park content switches databases.
       </p>
       {notice && <p className="fr-auth-notice" role="status">{notice}</p>}
 
@@ -235,6 +262,7 @@ export function BuildConfigAdmin() {
               <strong>{buildName(config)}</strong>
               {config.label && <span className="bc-label">{config.label}</span>}
               <p>{CHANNEL_LABELS[config.contentChannel ?? ""]} · {flagSummary(config)}</p>
+              {updateSummary(config) && <p>{updateSummary(config)}</p>}
               {config.notes && <p className="bc-notes">{config.notes}</p>}
             </div>
             <div className="bc-actions">
@@ -277,6 +305,12 @@ export function BuildConfigAdmin() {
                 </select>
               </label>
             ))}
+            <label>Minimum build (older must update)
+              <input inputMode="numeric" value={draft.minimumBuild} placeholder="Blank for none" onChange={(event) => setDraft({ ...draft, minimumBuild: event.target.value.trim() })} />
+            </label>
+            <label>Latest build (older get a nudge)
+              <input inputMode="numeric" value={draft.latestBuild} placeholder="Blank for none" onChange={(event) => setDraft({ ...draft, latestBuild: event.target.value.trim() })} />
+            </label>
             <label className="bc-wide">Notes
               <textarea value={draft.notes} maxLength={500} rows={2} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
             </label>

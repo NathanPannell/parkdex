@@ -18,12 +18,17 @@ export const FEATURE_FLAG_DEFAULTS = Object.freeze({
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;
 export type AppPlatform = "android" | "web";
+/** Whether this build must, or could, update from the store. */
+export type UpdateStatus = "required" | "available" | "none";
+
+export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.parkdex";
 
 export type AppConfig = {
   platform: AppPlatform;
   build: number;
   contentChannel: ContentChannel | null;
   flags: FeatureFlags;
+  update: UpdateStatus;
   /** When this configuration was fetched; null for built-in defaults. */
   fetchedAt: string | null;
 };
@@ -34,6 +39,7 @@ type RemoteAppConfig = {
   build: number;
   contentChannel: ContentChannel | null;
   flags: Partial<FeatureFlags>;
+  update: UpdateStatus;
 };
 
 const CACHE_KEY = "parkdex.app-config.v1";
@@ -41,9 +47,27 @@ const CHECK_IN_TIMEOUT_MS = 8_000;
 
 let buildInfo: { platform: AppPlatform; build: number } = { platform: "web", build: 0 };
 let active: AppConfig = defaults(buildInfo);
+let updateStatus: UpdateStatus = "none";
+const updateListeners = new Set<() => void>();
+
+function setUpdateStatus(next: UpdateStatus): void {
+  if (next === updateStatus) return;
+  updateStatus = next;
+  for (const listener of updateListeners) listener();
+}
+
+/** Update prompts apply as soon as they are known, unlike content and flags. */
+export function currentUpdateStatus(): UpdateStatus {
+  return updateStatus;
+}
+
+export function subscribeUpdateStatus(listener: () => void): () => void {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
+}
 
 function defaults(info: { platform: AppPlatform; build: number }): AppConfig {
-  return { ...info, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, fetchedAt: null };
+  return { ...info, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, update: "none", fetchedAt: null };
 }
 
 /** The content database this build was made for. */
@@ -64,7 +88,9 @@ export function parseRemoteAppConfig(value: unknown, expected: { platform: AppPl
       if (typeof flag === "boolean") flags[key] = flag;
     }
   }
-  return { schema: "parkdex.app-config/v1", platform: expected.platform, build: expected.build, contentChannel: channel, flags };
+  // Older servers omit `update`; anything unrecognised never blocks the app.
+  const update: UpdateStatus = body.update === "required" || body.update === "available" ? body.update : "none";
+  return { schema: "parkdex.app-config/v1", platform: expected.platform, build: expected.build, contentChannel: channel, flags, update };
 }
 
 function toAppConfig(remote: RemoteAppConfig, fetchedAt: string): AppConfig {
@@ -73,6 +99,7 @@ function toAppConfig(remote: RemoteAppConfig, fetchedAt: string): AppConfig {
     build: remote.build,
     contentChannel: remote.contentChannel,
     flags: { ...FEATURE_FLAG_DEFAULTS, ...remote.flags },
+    update: remote.update,
     fetchedAt,
   };
 }
@@ -122,6 +149,7 @@ export async function initAppConfig(): Promise<AppConfig> {
     : null;
   setContentChannelOverride(override);
   setRankProgressionEnabled(active.flags.rankProgression);
+  setUpdateStatus(active.platform === "android" ? active.update : "none");
   return active;
 }
 
@@ -165,6 +193,7 @@ export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch)
     if (!remote) return null;
     const fetchedAt = new Date().toISOString();
     writeCache(remote, fetchedAt);
+    if (buildInfo.platform === "android") setUpdateStatus(remote.update);
     return toAppConfig(remote, fetchedAt);
   } catch {
     return null;

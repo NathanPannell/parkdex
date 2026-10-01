@@ -62,20 +62,34 @@ test("a build with no configuration keeps its built-in defaults", async () => {
     build: 42,
     contentChannel: null,
     flags: {},
+    minimumBuild: null,
+    latestBuild: null,
+    update: "none",
     source: "none",
   });
 });
 
 test("an exact build overrides the platform default flag by flag", () => {
   const rows: BuildConfigRecord[] = [
-    { platform: "android", build: 0, label: "Default", contentChannel: "main", flags: { rankProgression: false }, notes: "", updatedAt: "" },
-    { platform: "android", build: 42, label: "Closed test", contentChannel: "staging", flags: {}, notes: "", updatedAt: "" },
+    { platform: "android", build: 0, label: "Default", contentChannel: "main", flags: { rankProgression: false }, minimumBuild: 5, latestBuild: 50, notes: "", updatedAt: "" },
+    { platform: "android", build: 42, label: "Closed test", contentChannel: "staging", flags: {}, minimumBuild: null, latestBuild: null, notes: "", updatedAt: "" },
   ];
   assert.deepEqual(resolveAppConfig("android", 42, rows), {
-    schema: "parkdex.app-config/v1", platform: "android", build: 42, contentChannel: "staging", flags: { rankProgression: false }, source: "build",
+    schema: "parkdex.app-config/v1", platform: "android", build: 42, contentChannel: "staging", flags: { rankProgression: false },
+    minimumBuild: 5, latestBuild: 50, update: "available", source: "build",
   });
   assert.equal(resolveAppConfig("android", 7, rows).contentChannel, "main");
   assert.equal(resolveAppConfig("android", 7, rows).source, "default");
+});
+
+test("builds below the minimum must update and below the latest are nudged", () => {
+  const rows: BuildConfigRecord[] = [
+    { platform: "android", build: 0, label: "", contentChannel: null, flags: {}, minimumBuild: 10, latestBuild: 20, notes: "", updatedAt: "" },
+  ];
+  assert.equal(resolveAppConfig("android", 9, rows).update, "required");
+  assert.equal(resolveAppConfig("android", 10, rows).update, "available");
+  assert.equal(resolveAppConfig("android", 20, rows).update, "none");
+  assert.equal(resolveAppConfig("android", 0, rows).update, "none");
 });
 
 test("the public check-in rejects malformed builds and platforms", async () => {
@@ -95,7 +109,7 @@ test("the public check-in is readable from the Android web view origin", async (
 
 test("only a signed-in operator on the same origin can change build configuration", async () => {
   const { store, worker, env } = setup();
-  const body = { label: "Build 42", contentChannel: "main", flags: { rankProgression: true }, notes: "" };
+  const body = { label: "Build 42", contentChannel: "main", flags: { rankProgression: true }, minimumBuild: 40, latestBuild: 44, notes: "" };
 
   const anonymous = await worker.fetch(request("/api/operator/app-config/android/42", { method: "PUT", body, origin: API_ORIGIN }), env as never);
   assert.equal(anonymous.status, 401);
@@ -116,7 +130,9 @@ test("only a signed-in operator on the same origin can change build configuratio
   assert.deepEqual(listing.flags, ["rankProgression"]);
 
   const checkIn = await worker.fetch(request("/api/app-config?platform=android&build=42"), env as never);
-  assert.deepEqual((await checkIn.json() as { flags: unknown }).flags, { rankProgression: true });
+  const checkInBody = await checkIn.json() as { flags: unknown; update: string };
+  assert.deepEqual(checkInBody.flags, { rankProgression: true });
+  assert.equal(checkInBody.update, "available");
 
   const removed = await worker.fetch(request("/api/operator/app-config/android/42", { method: "DELETE", origin: API_ORIGIN, cookie }), env as never);
   assert.equal(removed.status, 200);
@@ -131,6 +147,9 @@ test("unknown flags and channels are refused", async () => {
     { flags: { somethingNew: true } },
     { flags: { rankProgression: "yes" } },
     { extra: 1 },
+    { minimumBuild: 30, latestBuild: 20 },
+    { minimumBuild: "10" },
+    { latestBuild: -1 },
   ]) {
     const response = await worker.fetch(request("/api/operator/app-config/android/1", { method: "PUT", body, origin: API_ORIGIN, cookie }), env as never);
     assert.equal(response.status, 400, JSON.stringify(body));
