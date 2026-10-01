@@ -47,4 +47,7 @@ await writeFile(path.join(output, "config.json"), JSON.stringify({
     { src: "/(.*)", dest: "/index.html" },
   ],
 }, null, 2));
+// `vercel deploy --prebuilt` takes its target from this file and defaults to production
+// without it. This app must only ever be a preview deployment (see README).
+await writeFile(path.join(output, "builds.json"), JSON.stringify({ "//": "Written by scripts/build.mjs", target: "preview", argv: [], builds: [] }, null, 2));
 console.log(`Built ${path.relative(process.cwd(), output)}`);

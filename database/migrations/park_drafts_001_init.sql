@@ -35,3 +35,15 @@ CREATE TABLE IF NOT EXISTS kip_park_drafts.drafts (
 );
 
 CREATE INDEX IF NOT EXISTS drafts_updated_at_idx ON kip_park_drafts.drafts (updated_at DESC);
+
+-- Publication runs as one non-interactive transaction over HTTP, so its checks raise here.
+CREATE OR REPLACE FUNCTION kip_park_drafts.require(ok boolean, reason text)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF ok IS NOT TRUE THEN
+    RAISE EXCEPTION '%', reason USING ERRCODE = 'P0001';
+  END IF;
+END
+$$;

@@ -69,4 +69,8 @@ vercel deploy --prebuilt --cwd operator
 vercel alias set <deployment-url> <stable-host>
 ```
 
+The build writes `builds.json` with a preview target, because `vercel deploy --prebuilt` reads its target from there. Vercel still makes a project's first deployment its production deployment, so the `parkdex-operator` project's production deployment is a static "Nothing to see here" page with no API and no env vars. Leave it in place; replacing it with the dashboard would publish the UI shell on parkdex-operator.vercel.app.
+
+The live setup: project `parkdex-operator`, stable host `operator.parkdex.app` (Vercel DNS) aliased to the latest preview, reading the production Neon branch.
+
 Then set `OPERATOR_DASHBOARD_URL` to the stable host in the main app's runtime secret bundle, so operator emails link to the dashboard.

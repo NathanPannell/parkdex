@@ -25,7 +25,24 @@ before(async () => {
     await pool.query(await readFile(`${root}${file}`, "utf8"));
   }
   await pool.query("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (0, 'Victoria', -123.36, 48.43), (1, 'Nanaimo', -123.94, 49.17)");
-  store = createSqlDraftStore(async () => pool.connect());
+  store = createSqlDraftStore({
+    query: async (text, params = []) => (await pool.query(text, params)).rows,
+    async transaction(statements) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const results = [];
+        for (const { text, params } of statements) results.push((await client.query(text, params)).rows);
+        await client.query("COMMIT");
+        return results;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  });
 });
 
 after(async () => {
