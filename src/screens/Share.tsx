@@ -2,13 +2,16 @@ import { toBlob } from "html-to-image";
 import { LayoutGroup, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
+import { useEarnedSceneAsset } from "../components/EarnedBadge";
+import { ContentGate } from "../components/ContentGate";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useToast } from "../components/Toast";
 import { sfx } from "../lib/feedback";
 import { isNative, shareImage } from "../lib/native";
-import { PALETTES, PARK_BY_ID, RARITY, sceneUrl, TOTAL_BADGES, type Park } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, type Park } from "../lib/parks";
 import { useStore, type Claim } from "../lib/store";
+import { useContent } from "../lib/content/provider";
 
 type Look = "polaroid" | "badge";
 
@@ -17,15 +20,19 @@ export function StoryCard({
   claim,
   number,
   look,
+  totalBadges,
   cardRef,
   sceneHref,
+  sceneMessage,
 }: {
   park: Park;
   claim: Claim;
   number: number;
   look: Look;
+  totalBadges: number;
   cardRef?: React.Ref<HTMLDivElement>;
   sceneHref?: string;
+  sceneMessage?: string;
 }) {
   const pal = PALETTES[park.biome];
   const date = new Date(claim.at).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" });
@@ -40,13 +47,15 @@ export function StoryCard({
         <span className="story__photo-caption">{date}</span>
       </motion.div>
       <motion.div layout className="story__badge" transition={{ type: "spring", stiffness: 300, damping: 24 }}>
-        <Badge park={park} size={look === "badge" ? 210 : 132} state="earned" sceneHref={sceneHref} />
+        {park.scene && !sceneHref
+          ? <div className="story-art-restoring" role="status">{sceneMessage ?? "Restoring badge art…"}</div>
+          : <Badge park={park} size={look === "badge" ? 210 : 132} state="earned" sceneHref={sceneHref} />}
       </motion.div>
       <motion.div layout className="story__text" transition={{ type: "spring", stiffness: 300, damping: 28 }}>
         <span>I collected</span>
         <strong>{park.short}</strong>
         <em>
-          Badge #{number} of {TOTAL_BADGES.toLocaleString("en-CA")} · {RARITY[park.rarity].label}
+          Badge #{number} of {totalBadges.toLocaleString("en-CA")} · {RARITY[park.rarity].label}
         </em>
       </motion.div>
       <div className="story__kip">
@@ -57,29 +66,78 @@ export function StoryCard({
 }
 
 export function Share() {
+  const { state } = useStore();
+  const content = useContent();
+  const [pinned] = useState(() => {
+    if (state.shareClaimId) {
+      const entry = Object.entries(state.claims).find(([, claim]) => claim.claimId === state.shareClaimId);
+      if (entry) return { ownerKey: state.progressOwnerKey, parkId: entry[0], claim: entry[1] };
+    }
+    const parkId = state.tripId ?? "";
+    const claim = state.claims[parkId];
+    return claim ? { ownerKey: state.progressOwnerKey, parkId, claim } : null;
+  });
+  if (!state.progressReady || !pinned || state.progressOwnerKey !== pinned.ownerKey) return <ContentGate />;
+  const park = pinned.claim.parkSnapshot ?? content?.parkById.get(pinned.parkId);
+  if (!park) return <ContentGate />;
+  const number = Math.max(1, Object.keys(state.claims).indexOf(pinned.parkId) + 1);
+  return <ShareReady park={park} claim={pinned.claim} number={number} />;
+}
+
+function ShareReady({ park, claim, number }: { park: Park; claim: Claim; number: number }) {
   const { state, dispatch } = useStore();
   const toast = useToast();
-  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
-  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
-  const claim = state.claims[park.id];
-  const number = Object.keys(state.claims).indexOf(park.id) + 1;
+  const content = useContent();
+  const totalBadges = badgeTotal(content?.liveParks ?? [], Object.keys(state.claims));
   const [look, setLook] = useState<Look>("polaroid");
   const card = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   // html-to-image can't follow <image href> inside SVG, so embed the badge art up front.
   const [sceneHref, setSceneHref] = useState<string>();
+  const { displayPark, sceneHref: earnedSceneHref, contentDownloadAvailable, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
+  const sceneAsset = displayPark.scene ? earnedSceneHref : undefined;
+  const [sceneState, setSceneState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   useEffect(() => {
-    if (!park.scene) return;
-    fetch(sceneUrl(park.scene))
+    let live = true;
+    setSceneHref(undefined);
+    if (!displayPark.scene) {
+      setSceneState("ready");
+      return () => { live = false; };
+    }
+    if (!sceneAsset) {
+      setSceneState("error");
+      return () => { live = false; };
+    }
+    setSceneState("loading");
+    fetch(sceneAsset)
       .then((r) => r.blob())
-      .then((b) => new Promise<string>((res) => {
+      .then((b) => new Promise<string>((res, rej) => {
         const fr = new FileReader();
         fr.onload = () => res(String(fr.result));
+        fr.onerror = () => rej(new Error("Badge artwork could not be embedded."));
         fr.readAsDataURL(b);
       }))
-      .then(setSceneHref)
-      .catch(() => {});
-  }, [park.scene]);
+      .then((dataUrl) => {
+        if (!live) return;
+        setSceneHref(dataUrl);
+        setSceneState("ready");
+      })
+      .catch(() => { if (live) setSceneState("error"); });
+    return () => { live = false; };
+  }, [displayPark.id, displayPark.scene, sceneAsset]);
+
+  const sceneMessage = adoptedCurrentArt
+    ? sceneState === "error"
+      ? "Newly published badge art could not be loaded. Try again shortly."
+      : "Loading newly published badge art…"
+    : !claim.contentReleaseId
+      ? "Archived badge art is not available for this claim."
+      : !contentDownloadAvailable
+        ? "Original badge art is unavailable right now."
+        : sceneState === "error"
+          ? "Badge art could not be loaded. Try again shortly."
+          : "Restoring the original badge art…";
+  const sceneReady = !displayPark.scene || sceneState === "ready";
 
   const image = async () => {
     const blob = await toBlob(card.current!, { pixelRatio: 3, cacheBust: true });
@@ -88,6 +146,7 @@ export function Share() {
   };
 
   const share = async () => {
+    if (!sceneReady) return;
     setBusy(true);
     sfx.tap();
     try {
@@ -106,6 +165,7 @@ export function Share() {
   };
 
   const save = async () => {
+    if (!sceneReady) return;
     setBusy(true);
     try {
       download(await image());
@@ -115,8 +175,6 @@ export function Share() {
       setBusy(false);
     }
   };
-
-  if (!claim) return null;
 
   return (
     <motion.div
@@ -136,7 +194,7 @@ export function Share() {
 
       <LayoutGroup>
         <motion.div className="share__preview" initial={{ scale: 0.8, rotate: 6, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 18, delay: 0.15 }}>
-          <StoryCard park={park} claim={claim} number={number} look={look} cardRef={card} sceneHref={sceneHref} />
+          <StoryCard park={displayPark} claim={claim} number={number} look={look} totalBadges={totalBadges} cardRef={card} sceneHref={sceneHref} sceneMessage={sceneMessage} />
         </motion.div>
       </LayoutGroup>
 
@@ -150,17 +208,18 @@ export function Share() {
       </div>
 
       <div className="share__actions">
-        <button className="btn btn--block" onClick={share} disabled={busy}>
+        <button className="btn btn--block" onClick={share} disabled={busy || !sceneReady}>
           <Icon name="share" /> {busy ? "Getting it ready…" : "Share to story"}
         </button>
         {!isNative && (
           <div className="share__row">
-            <button className="btn btn--paper btn--sm" onClick={save} disabled={busy}>
+            <button className="btn btn--paper btn--sm" onClick={save} disabled={busy || !sceneReady}>
               <Icon name="download" size={18} /> Save image
             </button>
           </div>
         )}
       </div>
+      {!sceneReady && <p className="share-art-status" role="status">{sceneMessage}</p>}
     </motion.div>
   );
 }

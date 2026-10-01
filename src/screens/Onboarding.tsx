@@ -7,8 +7,16 @@ import { useToast } from "../components/Toast";
 import { buzz, sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
-import { PARK_BY_ID } from "../lib/parks";
+import type { Park } from "../lib/parks";
 import { DEMO_START, useStore } from "../lib/store";
+import { RARITY } from "../lib/parks";
+import { RANKS, isRankProgressionEnabled } from "../lib/progression";
+import { parksLabel } from "../lib/rarityUi";
+import { RankEmblem } from "../components/Rank";
+import goMap from "../assets/onboarding-go-map.webp";
+import beaconHillScene from "../assets/onboarding-scene-beacon-hill.webp";
+import goldstreamScene from "../assets/onboarding-scene-goldstream.webp";
+import wittysLagoonScene from "../assets/onboarding-scene-wittys-lagoon.webp";
 
 const SLIDES = [
   {
@@ -20,7 +28,7 @@ const SLIDES = [
   {
     eyebrow: "Step 2 · Go",
     title: ["Go there.", "For real."],
-    body: "No couch claims. Badges unlock only when you're standing inside the park boundary.",
+    body: "Pick a park on the map and head over. The badge unlocks once you're standing inside the park boundary.",
     tint: "#D6F0DF",
   },
   {
@@ -29,17 +37,109 @@ const SLIDES = [
     body: "Take a photo, claim the badge and build a collection worth putting on a shelf.",
     tint: "#DCEBFF",
   },
+  {
+    eyebrow: "Step 4 · Rank up",
+    title: ["Visit more.", "Rank up."],
+    body: "Every new park counts. Visit 2, 5 and 10 parks to rank up and open Uncommon, Rare and Legendary badges. Track your rank in My Dex.",
+    tint: "#E8E2FF",
+  },
 ];
 
-const fan = ["regional-thetis-lake-regional-park", "national-pacific-rim-national-park-reserve", "provincial-goldstream-park"].map(
-  (id) => PARK_BY_ID.get(id)!,
-);
+const ONBOARDING_PARKS: readonly Park[] = [
+  {
+    id: "onboarding-beacon-hill",
+    name: "Beacon Hill Park",
+    short: "Beacon Hill",
+    category: "municipal",
+    region: "Southern Vancouver Island",
+    lat: 48.4119,
+    lng: -123.36334,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    seed: 135,
+    blurb: "Garden paths, roaming peacocks and the stone bridge over Goodacre Lake make Beacon Hill a place to wander. Garry oak meadows shelter sensitive native plants, while the park's southern edge opens onto the Strait of Juan de Fuca. Nearby Mile Zero marks the western end of the Trans-Canada Highway.",
+    scene: "onboarding-beacon-hill",
+  },
+  {
+    id: "onboarding-goldstream",
+    name: "Goldstream Park",
+    short: "Goldstream",
+    category: "provincial",
+    region: "South Island",
+    lat: 48.47556,
+    lng: -123.54243,
+    biome: "river",
+    shape: "shield",
+    rarity: "uncommon",
+    seed: 372,
+    blurb: "Each autumn, salmon return to the Goldstream River beneath old-growth firs and cedars, drawing bald eagles to this South Island park.",
+    scene: "onboarding-goldstream",
+  },
+  {
+    id: "onboarding-wittys-lagoon",
+    name: "Witty's Lagoon Regional Park",
+    short: "Witty's Lagoon",
+    category: "regional",
+    region: "Capital Region",
+    lat: 48.38571,
+    lng: -123.51755,
+    biome: "coast",
+    shape: "circle",
+    rarity: "common",
+    seed: 592,
+    blurb: "A forest trail passes Sitting Lady Falls and reaches a broad tidal beach, one of the few sandy shores with significant tides on southern Vancouver Island. Witty's Lagoon also shelters more than 160 recorded bird species.",
+    scene: "onboarding-wittys-lagoon",
+  },
+];
+
+const ONBOARDING_SCENES: Readonly<Record<string, string>> = {
+  "onboarding-beacon-hill": beaconHillScene,
+  "onboarding-goldstream": goldstreamScene,
+  "onboarding-wittys-lagoon": wittysLagoonScene,
+};
+
+function SampleBadge({ park, size, animated = false, state = "earned", showName = true }: {
+  park: Park;
+  size: number;
+  animated?: boolean;
+  state?: "earned" | "preview" | "silhouette";
+  showName?: boolean;
+}) {
+  return <Badge park={park} size={size} animated={animated} state={state} showName={showName} sceneHref={ONBOARDING_SCENES[park.id]} />;
+}
+
+function RankRoadmap() {
+  return (
+    <div className="ob-ranks" aria-label="Collector ranks and the rarities they unlock">
+      {RANKS.map((rank, index) => (
+        <motion.div
+          key={rank.name}
+          className="ob-ranks__row"
+          initial={{ x: 24, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ delay: 0.1 + index * 0.1, type: "spring", stiffness: 320, damping: 24 }}
+        >
+          <RankEmblem rank={rank} size={50} />
+          <span className="ob-ranks__text">
+            <strong>{rank.name}</strong>
+            <span>{rank.parks === 0 ? "Where you start" : `Visit ${parksLabel(rank.parks)}`}</span>
+          </span>
+          <span className="ob-ranks__opens" style={{ background: RARITY[rank.rarity].color, color: RARITY[rank.rarity].ink }}>
+            {RARITY[rank.rarity].label}
+          </span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
 
 function BadgeFan() {
+  const fan = ONBOARDING_PARKS;
   const pos = [
-    { x: -92, y: 26, r: -14, s: 0.78, d: 0.1 },
-    { x: 0, y: -8, r: 0, s: 1, d: 0 },
-    { x: 92, y: 26, r: 14, s: 0.78, d: 0.2 },
+    { x: -92, y: -8, r: -14, s: 0.78, d: 0.1 },
+    { x: 0, y: -42, r: 0, s: 1, d: 0 },
+    { x: 92, y: -8, r: 14, s: 0.78, d: 0.2 },
   ];
   return (
     <div className="ob-fan">
@@ -54,13 +154,14 @@ function BadgeFan() {
           transition={{ type: "spring", stiffness: 240, damping: 16, delay: 0.15 + pos[i].d }}
         >
           <motion.div animate={{ y: [0, -8, 0], rotate: [0, i === 1 ? 2 : -2, 0] }} transition={{ duration: 3 + i * 0.4, repeat: Infinity, ease: "easeInOut" }}>
-            <Badge park={park} size={170} animated />
+            <SampleBadge park={park} size={170} animated />
           </motion.div>
         </motion.div>
       ))}
+      {/* Kip stands below the fan with his bubble beside him, clear of every badge ribbon. */}
       <motion.div className="ob-fan__kip" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.6, stiffness: 200, damping: 14 }}>
-        <Kip pose="wave" size={110} />
-        <Bubble side="left" style={{ left: 64, top: -34, whiteSpace: "nowrap" }}>
+        <Kip pose="wave" size={92} />
+        <Bubble side="to-left" style={{ position: "relative", marginBottom: 26, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
         </Bubble>
       </motion.div>
@@ -68,64 +169,55 @@ function BadgeFan() {
   );
 }
 
-const ROUTE = "M40 214 C 70 200, 60 150, 110 140 S 170 120, 176 96";
+// A real render of the Parkdex map around a fixed sample badge park.
+const ROUTE = "M62 118 C 92 100, 124 98, 148 112 S 186 142, 200 166";
 
 function GoThere() {
+  const park = ONBOARDING_PARKS[0]!;
   const dur = "4.2s";
-  const keys = { keyTimes: "0;0.65;1", keyPoints: "0;1;1", calcMode: "linear" as const };
+  const loop = { duration: 4.2, repeat: Infinity, ease: "linear" as const };
+  const keys = { keyTimes: "0;0.6;1", keyPoints: "0;1;1", calcMode: "linear" as const };
   return (
     <div className="ob-go">
-      <svg viewBox="0 0 300 260" width="100%" height="100%">
-        <defs>
-          <pattern id="ob-dots" width="14" height="14" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1.3" fill="#14231C" opacity="0.12" />
-          </pattern>
-        </defs>
-        <rect width="300" height="260" rx="28" fill="#F7ECD8" />
-        <rect width="300" height="260" rx="28" fill="url(#ob-dots)" />
-        <path d="M0 40 Q80 60 150 30 T300 50 L300 0 L0 0Z" fill="#A8E1EC" />
-        <path d="M-10 190 L310 150" stroke="#FFFFFF" strokeWidth="12" strokeLinecap="round" />
-        <path d="M-10 190 L310 150" stroke="#E3C697" strokeWidth="1.5" strokeDasharray="8 8" />
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="#C9E7B2" />
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="none" stroke="#2F9E6B" strokeWidth="3" strokeDasharray="7 6">
-          <animate attributeName="stroke-dashoffset" values="0;-26" dur="1.2s" repeatCount="indefinite" />
-        </path>
-        <path d="M128 60 C160 36 238 44 250 84 C262 124 222 150 190 142 C150 132 100 96 128 60Z" fill="#2F9E6B" opacity="0">
-          <animate attributeName="opacity" values="0;0;.35;0" keyTimes="0;.64;.72;1" dur={dur} repeatCount="indefinite" />
-        </path>
-        {[[160, 70], [214, 64], [230, 104], [190, 112]].map(([x, y], i) => (
-          <path key={i} d={`M${x} ${y - 16} l7 12 h-4 l6 10 h-18 l6 -10 h-4Z`} fill="#1C5B43" />
-        ))}
-        <path d={ROUTE} fill="none" stroke="#FF5A1F" strokeWidth="4" strokeLinecap="round" strokeDasharray="1 9" />
+      <img className="ob-go__map" src={goMap} alt="" draggable={false} />
+      <svg className="ob-go__route" viewBox="0 0 300 260" width="100%" height="100%" aria-hidden="true">
+        <path d={ROUTE} fill="none" stroke="#FFF8EC" strokeWidth="9" strokeLinecap="round" />
+        <path d={ROUTE} fill="none" stroke="#FF5A1F" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="1 9" />
         <g>
           <circle r="16" fill="#FF5A1F" opacity="0.2">
             <animate attributeName="r" values="10;20;10" dur="1.4s" repeatCount="indefinite" />
           </circle>
-          <circle r="9" fill="#FF5A1F" stroke="#FFF8EC" strokeWidth="3.5" />
+          <circle r="9" fill="#2F7BFF" stroke="#FFF8EC" strokeWidth="3.5" />
           <animateMotion path={ROUTE} dur={dur} repeatCount="indefinite" {...keys} />
         </g>
-        <g transform="translate(206 26)">
-          <g opacity="0">
-            <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;.66;.7;.95;1" dur={dur} repeatCount="indefinite" />
-            <animateTransform attributeName="transform" type="scale" values="0.2;0.2;1.15;1;1" keyTimes="0;.66;.72;.78;1" dur={dur} repeatCount="indefinite" />
-            <rect x="-44" y="-16" width="88" height="32" rx="16" fill="#14231C" />
-            <text x="0" y="5" textAnchor="middle" fill="#FFF8EC" fontFamily="'Bricolage Grotesque Variable'" fontWeight="800" fontSize="14">
-              You're in!
-            </text>
-          </g>
-        </g>
       </svg>
+      <motion.span
+        className="ob-go__in"
+        animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }}
+        transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}
+      >
+        You're in!
+      </motion.span>
+      {park && (
+        <motion.div
+          className="ob-go__badge"
+          animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.2, 0.2, 1.15, 1, 1], rotate: [-30, -30, 6, 0, 0] }}
+          transition={{ ...loop, times: [0, 0.62, 0.7, 0.95, 1] }}
+        >
+          <SampleBadge park={park} size={92} />
+        </motion.div>
+      )}
       <motion.div className="ob-go__kip" animate={{ rotate: [0, -6, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-        <Kip pose="point" size={104} />
+        <Kip pose="point" size={96} />
       </motion.div>
     </div>
   );
 }
 
 function SnapClaimKeep() {
-  const park = PARK_BY_ID.get("regional-east-sooke-regional-park")!;
+  const park = ONBOARDING_PARKS[0]!;
   const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.6 };
-  const cells = ["regional-mount-work-regional-park", "provincial-goldstream-park", "regional-thetis-lake-regional-park", "provincial-horne-lake-caves-park", "regional-witty-s-lagoon-regional-park"];
+  const cells = ONBOARDING_PARKS.slice(1, 4);
   return (
     <div className="ob-snap">
       <motion.div
@@ -143,19 +235,19 @@ function SnapClaimKeep() {
           </svg>
           <motion.div className="ob-flash" animate={{ opacity: [0, 0, 1, 0, 0] }} transition={{ ...loop, times: [0, 0.14, 0.16, 0.26, 1] }} />
         </div>
-        <span>east sooke · sep 26</span>
+        <span>{park?.short ?? "Your park"}</span>
       </motion.div>
       <motion.div
         className="ob-stamp"
-        animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 30, 30, 30, 30, 118] }}
+        animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 4, 4, 4, 4, 118] }}
         transition={{ ...loop, times: [0, 0.3, 0.4, 0.46, 0.5, 0.72, 0.86], ease: "easeOut" }}
       >
-        <Badge park={park} size={120} />
+        {park ? <SampleBadge park={park} size={120} /> : <Kip pose="think" size={100} />}
       </motion.div>
       <div className="ob-case">
-        {cells.map((id, i) => (
-          <div key={id} className="ob-case__cell">
-            <Badge park={PARK_BY_ID.get(id)!} size={32} showName={false} state={i < 3 ? "earned" : "silhouette"} />
+        {cells.map((item) => (
+          <div key={item.id} className="ob-case__cell">
+            <SampleBadge park={item} size={32} showName={false} state="earned" />
           </div>
         ))}
         <motion.div className="ob-case__cell ob-case__cell--new" animate={{ boxShadow: ["0 0 0 0 #FFC93C00", "0 0 0 0 #FFC93C00", "0 0 0 6px #FFC93Cff", "0 0 0 0 #FFC93C00"] }} transition={{ ...loop, times: [0, 0.84, 0.9, 1] }} />
@@ -164,15 +256,15 @@ function SnapClaimKeep() {
   );
 }
 
-const VISUALS = [BadgeFan, GoThere, SnapClaimKeep];
-
 export function Onboarding() {
+  // The rank-up step only appears while rank progression is switched on for this build.
+  const slides = isRankProgressionEnabled() ? SLIDES : SLIDES.slice(0, 3);
   const { dispatch } = useStore();
   const toast = useToast();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const [asking, setAsking] = useState(false);
-  const slide = SLIDES[index];
+  const slide = slides[index];
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -183,10 +275,8 @@ export function Onboarding() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const Visual = VISUALS[index];
-
   const goTo = (i: number) => {
-    if (i < 0 || i >= SLIDES.length) return;
+    if (i < 0 || i >= slides.length) return;
     sfx.tap();
     buzz(8);
     setDir(i > index ? 1 : -1);
@@ -209,7 +299,7 @@ export function Onboarding() {
       (pos) => {
         const here: [number, number] = [pos.coords.longitude, pos.coords.latitude];
         if (distanceKm(here, DEMO_START) > 300) toast("You're far from the Island. Using a Victoria demo spot.", "kip");
-        else dispatch({ type: "move", user: here });
+        else dispatch({ type: "move", user: here, accuracy: pos.coords.accuracy });
         dispatch({ type: "onboarded" });
       },
       () => {
@@ -229,8 +319,8 @@ export function Onboarding() {
     >
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
-        {index < 2 && (
-          <button className="onboarding__skip" onClick={() => goTo(2)}>
+        {index < slides.length - 1 && (
+          <button className="onboarding__skip" onClick={() => goTo(slides.length - 1)}>
             Skip
           </button>
         )}
@@ -253,7 +343,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                <Visual />
+                {index === 0 ? <BadgeFan /> : index === 1 ? <GoThere /> : index === 2 ? <SnapClaimKeep /> : <RankRoadmap />}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -280,7 +370,7 @@ export function Onboarding() {
       </motion.div>
       <div className="onboarding__foot">
         <div className="dots">
-          {SLIDES.map((_, i) => (
+          {slides.map((_, i) => (
             <motion.button
               key={i}
               className="dot"
@@ -294,13 +384,13 @@ export function Onboarding() {
         <motion.button
           className="btn"
           layout
-          onClick={() => (index < 2 ? goTo(index + 1) : setAsking(true))}
+          onClick={() => (index < slides.length - 1 ? goTo(index + 1) : setAsking(true))}
           whileTap={{ scale: 0.96 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={index < 2 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
-              {index < 2 ? "Next" : "Let's go!"}
+            <motion.span key={index < slides.length - 1 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
+              {index < slides.length - 1 ? "Next" : "Let's go!"}
             </motion.span>
           </AnimatePresence>
           <Icon name="next" />

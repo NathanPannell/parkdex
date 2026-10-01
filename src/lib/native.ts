@@ -1,12 +1,35 @@
 import { App } from "@capacitor/app";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Geolocation, type Position } from "@capacitor/geolocation";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { Share } from "@capacitor/share";
+import { packageInstallIdentity, type NativePackageInstallInfo } from "./onboardingIdentity";
 import type { LngLat } from "./geo";
 
 export const isNative = Capacitor.isNativePlatform();
+
+type NativeInstallInfoPlugin = {
+  getInstallInfo(): Promise<NativePackageInstallInfo>;
+};
+
+const NativeInstallInfo = registerPlugin<NativeInstallInfoPlugin>("NativeInstallInfo");
+
+export async function getNativeInstallIdentity(): Promise<string | null> {
+  const info = await getNativePackageInstallInfo();
+  return info ? packageInstallIdentity(info) : null;
+}
+
+export async function getNativePackageInstallInfo(): Promise<NativePackageInstallInfo | null> {
+  if (!isNative) return null;
+  try {
+    const info = await NativeInstallInfo.getInstallInfo();
+    return packageInstallIdentity(info) ? info : null;
+  } catch {
+    return null;
+  }
+}
+
 // Field builds are for real park visits: no demo location, teleports or simulated trips.
 export const FIELD = import.meta.env.VITE_FIELD === "1";
 

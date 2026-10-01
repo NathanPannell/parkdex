@@ -5,9 +5,12 @@ import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
 import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
-import type { Park } from "../../lib/parks";
+import { RARITY, type Park } from "../../lib/parks";
+import type { ParkRarityEligibility } from "../../lib/progression";
+import { rarityLockMessage } from "../../lib/rarityUi";
 import { FIELD } from "../../lib/native";
-import { directionsUrl } from "./ParkSheet";
+import { directionsUrl, parkLocationUrl } from "./ParkSheet";
+import { recordDirectionsOpened } from "../../lib/interactions";
 
 type TripProps = {
   park: Park;
@@ -17,9 +20,12 @@ type TripProps = {
   onSimulate: () => void;
   onEnd: () => void;
   onOpen: () => void;
+  entryPoint: "map" | "nearby" | "collection";
+  contentReleaseId: string;
 };
 
-export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen }: TripProps) {
+export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
+  const accessUnknown = remaining.mode === "unknown";
   const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
   return (
@@ -37,7 +43,7 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
           </motion.div>
         </button>
         <div className="trip__text">
-          <span className="eyebrow">Heading to</span>
+          <span className="eyebrow">{accessUnknown ? "Park location" : "Heading to"}</span>
           <strong>{park.short}</strong>
         </div>
         <button className="trip__end" onClick={onEnd} aria-label="End trip">
@@ -45,27 +51,38 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
         </button>
       </div>
       <div className="trip__meter">
-        <div className="trip__big">
-          <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
-            {formatDistance(remainingKm)}
-          </motion.span>
-          <small>by road · about {formatTrip(remaining)}</small>
-        </div>
-        <div className="trip__bar">
-          <motion.div className="trip__fill" animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
-          <motion.div className="trip__car" animate={{ left: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-            <Icon name="car" size={16} stroke={2.6} />
-          </motion.div>
-          <div className="trip__flag">
-            <Icon name="pin" size={16} stroke={2.6} />
+        {accessUnknown ? (
+          <div className="trip__big">
+            <span>Access unknown</span>
+            <small>Check local access before you go</small>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="trip__big">
+              <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
+                {formatDistance(remainingKm)}
+              </motion.span>
+              <small>by road · about {formatTrip(remaining)}</small>
+            </div>
+            <div className="trip__bar">
+              <motion.div className="trip__fill" animate={{ width: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+              <motion.div className="trip__car" animate={{ left: `${progress * 100}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
+                <Icon name="car" size={16} stroke={2.6} />
+              </motion.div>
+              <div className="trip__flag">
+                <Icon name="pin" size={16} stroke={2.6} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
       <div className="trip__actions">
-        <a className="btn btn--paper btn--sm" href={directionsUrl(park)} target="_blank" rel="noreferrer">
-          <Icon name="car" size={18} /> Open in Maps
+        <a className="btn btn--paper btn--sm" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" onClick={() => {
+          if (!accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId }).catch(() => {});
+        }}>
+          <Icon name={accessUnknown ? "pin" : "car"} size={18} /> {accessUnknown ? "View park location" : "Open in Maps"}
         </a>
-        {!FIELD && (
+        {!FIELD && !accessUnknown && (
           <button className="btn btn--sun btn--sm trip__sim" onClick={onSimulate} disabled={simulating}>
             <Icon name="play" size={14} /> {simulating ? "Travelling…" : "Demo: simulate trip"}
           </button>
@@ -75,7 +92,15 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
   );
 }
 
-export function ArrivalCard({ park, onCheckIn, onDismiss }: { park: Park; onCheckIn: () => void; onDismiss: () => void }) {
+export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onShowRequirements, onDismiss }: {
+  park: Park;
+  eligibility: ParkRarityEligibility;
+  artComingSoon: boolean;
+  onCheckIn: () => void;
+  onShowRequirements: () => void;
+  onDismiss: () => void;
+}) {
+  const canCheckIn = eligibility.eligible && eligibility.reason !== "already-earned";
   return (
     <motion.div
       className="arrival"
@@ -88,10 +113,10 @@ export function ArrivalCard({ park, onCheckIn, onDismiss }: { park: Park; onChec
         <Rays color="#FFC93C" size={520} opacity={0.55} speed={18} />
       </div>
       <motion.div className="arrival__kip" initial={{ scale: 0, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", delay: 0.25, stiffness: 400, damping: 14 }}>
-        <Kip pose="cheer" size={112} />
-        <Bubble side="right" style={{ right: 84, top: -6, whiteSpace: "nowrap" }}>
+        <Bubble side="to-right" style={{ position: "relative", marginBottom: 26, whiteSpace: "nowrap" }}>
           KLEEP! You made it!
         </Bubble>
+        <Kip pose="cheer" size={92} />
       </motion.div>
       <div className="arrival__card card">
         <motion.span className="arrival__tag" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.15, stiffness: 600, damping: 14 }}>
@@ -102,11 +127,23 @@ export function ArrivalCard({ park, onCheckIn, onDismiss }: { park: Park; onChec
           <br />
           {park.short}
         </h2>
-        <p>Snap a photo of where you're standing to claim your badge.</p>
+        <p>
+          {canCheckIn
+            ? `Snap a photo of where you're standing to claim your badge${artComingSoon ? ". Badge art is coming soon, but your visit counts now" : ""}.`
+            : eligibility.reason === "unavailable"
+              ? "Checking your saved rarity progress before check-in."
+              : `${RARITY[park.rarity].label} parks are locked. ${rarityLockMessage(eligibility)}.`}
+        </p>
         <AnimatePresence>
-          <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-            <Icon name="camera" /> Check in &amp; snap
-          </motion.button>
+          {canCheckIn ? (
+            <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="camera" /> Check in &amp; snap
+            </motion.button>
+          ) : (
+            <motion.button className="btn btn--block btn--paper" onClick={onShowRequirements} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="book" /> How to unlock it
+            </motion.button>
+          )}
         </AnimatePresence>
         <button className="arrival__later" onClick={onDismiss}>
           Look around first

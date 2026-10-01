@@ -1,0 +1,1004 @@
+{
+  "schema": "parkdex.content-sync/v1",
+  "revision": 119,
+  "parks": [
+    {
+      "id": "community-juan-de-fuca-electoral-area-1842",
+      "name": "Otter Point Park",
+      "short": "Otter Point",
+      "category": "community",
+      "region": "Southern Vancouver Island",
+      "lat": 48.35758,
+      "lng": -123.82206,
+      "biome": "coast",
+      "shape": "hex",
+      "rarity": "common",
+      "scene": "otter-point-conifer-rock",
+      "seed": 929,
+      "blurb": "Stand on low coastal rock beside a wind-shaped conifer above the Juan de Fuca Strait."
+    },
+    {
+      "id": "municipal-city-of-colwood-1299",
+      "name": "Lookout Lake Park",
+      "short": "Lookout Lake",
+      "category": "municipal",
+      "region": "Southern Vancouver Island",
+      "lat": 48.41847,
+      "lng": -123.51343,
+      "biome": "lake",
+      "shape": "hex",
+      "rarity": "common",
+      "scene": "enclosed-lake-shore",
+      "seed": 519,
+      "blurb": "A quiet pebble shore meets the small, wooded waters of Lookout Lake."
+    },
+    {
+      "id": "municipal-city-of-colwood-1463",
+      "name": "Havenwood Park",
+      "short": "Havenwood",
+      "category": "municipal",
+      "region": "Southern Vancouver Island",
+      "lat": 48.41363,
+      "lng": -123.50857,
+      "biome": "forest",
+      "shape": "circle",
+      "rarity": "common",
+      "scene": "forest-steps",
+      "seed": 92,
+      "blurb": "Timber steps climb through the green woodland of Havenwood Park."
+    },
+    {
+      "id": "provincial-arbutus-grove-park",
+      "name": "Arbutus Grove Park",
+      "short": "Arbutus Grove",
+      "category": "provincial",
+      "region": "Central Island",
+      "lat": 49.248767,
+      "lng": -124.15096,
+      "biome": "forest",
+      "shape": "shield",
+      "rarity": "uncommon",
+      "scene": null,
+      "seed": 992,
+      "blurb": "Moss, big trees and trails that smell like rain. A classic Island badge."
+    },
+    {
+      "id": "provincial-au-welnew-john-dean-park",
+      "name": "Ƚáuˌwelṉew̱ / John Dean Park",
+      "short": "Ƚáuˌwelṉew̱ / John Dean",
+      "category": "provincial",
+      "region": "South Island",
+      "lat": 48.61465,
+      "lng": -123.44819,
+      "biome": "forest",
+      "shape": "shield",
+      "rarity": "uncommon",
+      "scene": "john-dean-old-growth-canopy",
+      "seed": 42,
+      "blurb": "Walk beneath towering old-growth Douglas-firs in Ƚáuˌwelṉew̱ / John Dean Park. Shaded trails pass mossy trunks and ferns through one of the Saanich Peninsula's last stands of old-growth forest."
+    },
+    {
+      "id": "regional-albert-head-lagoon-regional-park",
+      "name": "Albert Head Lagoon Regional Park",
+      "short": "Albert Head Lagoon",
+      "category": "regional",
+      "region": "Capital Region",
+      "lat": 48.39516,
+      "lng": -123.49087,
+      "biome": "coast",
+      "shape": "circle",
+      "rarity": "common",
+      "scene": "albert-head-lagoon-cobble-beach",
+      "seed": 104,
+      "blurb": "Explore the cobble beach and driftwood at Albert Head Lagoon, where a rocky shore borders the sheltered lagoon and opens to views of the Olympic Mountains."
+    },
+    {
+      "id": "regional-ayum-creek-regional-park",
+      "name": "Ayum Creek Regional Park",
+      "short": "Ayum Creek",
+      "category": "regional",
+      "region": "Capital Region",
+      "lat": 48.391627,
+      "lng": -123.66096,
+      "biome": "river",
+      "shape": "hex",
+      "rarity": "common",
+      "scene": null,
+      "seed": 771,
+      "blurb": "A river corridor of pools, rapids and shady banks."
+    }
+  ],
+  "boundaries": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.82198673255952,
+                  48.35759736928284
+                ],
+                [
+                  -123.82221759618983,
+                  48.35761560125993
+                ],
+                [
+                  -123.82248954291424,
+                  48.35767024840355
+                ],
+                [
+                  -123.8227408374673,
+                  48.3577585095595
+                ],
+                [
+                  -123.82292460709873,
+                  48.35785336922415
+                ],
+                [
+                  -123.82308382831911,
+                  48.3579663068427
+                ],
+                [
+                  -123.82321454165194,
+                  48.358094384628785
+                ],
+                [
+                  -123.82330900980197,
+                  48.35822658937653
+                ],
+                [
+                  -123.82423631339813,
+                  48.35914013628582
+                ],
+                [
+                  -123.82376707801821,
+                  48.35850472957819
+                ],
+                [
+                  -123.82361004534911,
+                  48.35797504592171
+                ],
+                [
+                  -123.82322543438623,
+                  48.357563950205254
+                ],
+                [
+                  -123.82290745142193,
+                  48.357098395268096
+                ],
+                [
+                  -123.82232502630517,
+                  48.356976605103206
+                ],
+                [
+                  -123.82159586071911,
+                  48.356963822743786
+                ],
+                [
+                  -123.82091052191265,
+                  48.35715764606703
+                ],
+                [
+                  -123.82130942245725,
+                  48.35768677549015
+                ],
+                [
+                  -123.82167754520542,
+                  48.35761082412651
+                ],
+                [
+                  -123.8219090986138,
+                  48.35759666445893
+                ],
+                [
+                  -123.82198673255952,
+                  48.35759736928284
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "community-juan-de-fuca-electoral-area-1842",
+          "biome": "coast"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.5123522217159,
+                  48.420140057308274
+                ],
+                [
+                  -123.51316050363488,
+                  48.41946989066975
+                ],
+                [
+                  -123.51358616635447,
+                  48.41917956603179
+                ],
+                [
+                  -123.5143890588188,
+                  48.418951953349165
+                ],
+                [
+                  -123.51448135178907,
+                  48.418412284411474
+                ],
+                [
+                  -123.51428506131121,
+                  48.41780995426569
+                ],
+                [
+                  -123.51391890966497,
+                  48.41741416652851
+                ],
+                [
+                  -123.51314698439437,
+                  48.41725054066501
+                ],
+                [
+                  -123.51301447866079,
+                  48.417645567381626
+                ],
+                [
+                  -123.51297836827838,
+                  48.418177468113875
+                ],
+                [
+                  -123.51280195319863,
+                  48.41923045028454
+                ],
+                [
+                  -123.51238763700688,
+                  48.41952409970215
+                ],
+                [
+                  -123.51239261877785,
+                  48.41965440543368
+                ],
+                [
+                  -123.51233779498337,
+                  48.419800454258045
+                ],
+                [
+                  -123.51224105621708,
+                  48.41991573605129
+                ],
+                [
+                  -123.51221566594441,
+                  48.420040350803205
+                ],
+                [
+                  -123.51229422625289,
+                  48.420092256748426
+                ],
+                [
+                  -123.5123522217159,
+                  48.420140057308274
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "municipal-city-of-colwood-1299",
+          "biome": "lake"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.50624381500666,
+                  48.41253772659456
+                ],
+                [
+                  -123.5055838012482,
+                  48.41369522249817
+                ],
+                [
+                  -123.50533954779225,
+                  48.414318611231565
+                ],
+                [
+                  -123.50871215312529,
+                  48.41516978773506
+                ],
+                [
+                  -123.51035422856728,
+                  48.41558425606952
+                ],
+                [
+                  -123.5104560806438,
+                  48.415408415126535
+                ],
+                [
+                  -123.51087455787737,
+                  48.41467964439529
+                ],
+                [
+                  -123.51101497299565,
+                  48.414435109270535
+                ],
+                [
+                  -123.5111814839328,
+                  48.41414512517563
+                ],
+                [
+                  -123.51129079713289,
+                  48.41395475051208
+                ],
+                [
+                  -123.51131132480523,
+                  48.41391899955673
+                ],
+                [
+                  -123.51143894509876,
+                  48.413696739585205
+                ],
+                [
+                  -123.51161835333939,
+                  48.41338428611053
+                ],
+                [
+                  -123.51178009459765,
+                  48.413102595552736
+                ],
+                [
+                  -123.51186320252033,
+                  48.41295785145841
+                ],
+                [
+                  -123.51085626373933,
+                  48.41270107557297
+                ],
+                [
+                  -123.50929964164253,
+                  48.41231092269651
+                ],
+                [
+                  -123.50917418269691,
+                  48.412279501384845
+                ],
+                [
+                  -123.508212681335,
+                  48.412038640252135
+                ],
+                [
+                  -123.50705630516222,
+                  48.41174894818058
+                ],
+                [
+                  -123.50690384367319,
+                  48.411710749301385
+                ],
+                [
+                  -123.50683644991237,
+                  48.41169386360528
+                ],
+                [
+                  -123.50624381500666,
+                  48.41253772659456
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "municipal-city-of-colwood-1463",
+          "biome": "forest"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -124.15352,
+                  49.24601
+                ],
+                [
+                  -124.14835,
+                  49.24621
+                ],
+                [
+                  -124.14823,
+                  49.25092
+                ],
+                [
+                  -124.14913,
+                  49.25115
+                ],
+                [
+                  -124.1523,
+                  49.25174
+                ],
+                [
+                  -124.15253,
+                  49.25165
+                ],
+                [
+                  -124.15343,
+                  49.25168
+                ],
+                [
+                  -124.15352,
+                  49.24601
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "provincial-arbutus-grove-park",
+          "biome": "forest"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.43626,
+                  48.616
+                ],
+                [
+                  -123.43618,
+                  48.62286
+                ],
+                [
+                  -123.44422,
+                  48.62295
+                ],
+                [
+                  -123.44435,
+                  48.6158
+                ],
+                [
+                  -123.46666,
+                  48.61592
+                ],
+                [
+                  -123.4671,
+                  48.61459
+                ],
+                [
+                  -123.46718,
+                  48.61374
+                ],
+                [
+                  -123.46677,
+                  48.61297
+                ],
+                [
+                  -123.46621,
+                  48.6123
+                ],
+                [
+                  -123.45566,
+                  48.61221
+                ],
+                [
+                  -123.45566,
+                  48.60866
+                ],
+                [
+                  -123.44436,
+                  48.60863
+                ],
+                [
+                  -123.43902,
+                  48.61219
+                ],
+                [
+                  -123.43767,
+                  48.61218
+                ],
+                [
+                  -123.43763,
+                  48.61578
+                ],
+                [
+                  -123.43626,
+                  48.61577
+                ],
+                [
+                  -123.43626,
+                  48.616
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "provincial-au-welnew-john-dean-park",
+          "biome": "forest"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.48964,
+                  48.39615
+                ],
+                [
+                  -123.49008,
+                  48.39645
+                ],
+                [
+                  -123.49144,
+                  48.39642
+                ],
+                [
+                  -123.49248,
+                  48.39607
+                ],
+                [
+                  -123.49366,
+                  48.39507
+                ],
+                [
+                  -123.49279,
+                  48.39472
+                ],
+                [
+                  -123.49157,
+                  48.39443
+                ],
+                [
+                  -123.49087,
+                  48.39415
+                ],
+                [
+                  -123.48933,
+                  48.39345
+                ],
+                [
+                  -123.48921,
+                  48.39356
+                ],
+                [
+                  -123.48895,
+                  48.39336
+                ],
+                [
+                  -123.48896,
+                  48.39381
+                ],
+                [
+                  -123.48898,
+                  48.39506
+                ],
+                [
+                  -123.48961,
+                  48.39615
+                ],
+                [
+                  -123.48964,
+                  48.39615
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "regional-albert-head-lagoon-regional-park",
+          "biome": "coast"
+        }
+      },
+      {
+        "type": "Feature",
+        "geometry": {
+          "type": "MultiPolygon",
+          "coordinates": [
+            [
+              [
+                [
+                  -123.6617,
+                  48.39284
+                ],
+                [
+                  -123.66204,
+                  48.39326
+                ],
+                [
+                  -123.66224,
+                  48.39294
+                ],
+                [
+                  -123.66217,
+                  48.39263
+                ],
+                [
+                  -123.6617,
+                  48.39284
+                ]
+              ]
+            ]
+          ]
+        },
+        "properties": {
+          "id": "regional-ayum-creek-regional-park",
+          "biome": "river"
+        }
+      }
+    ]
+  },
+  "drive": {
+    "hubs": [
+      {
+        "name": "Downtown Victoria",
+        "lng": -123.3656,
+        "lat": 48.4284
+      },
+      {
+        "name": "Saanich",
+        "lng": -123.3765,
+        "lat": 48.4535
+      },
+      {
+        "name": "Oak Bay",
+        "lng": -123.3137,
+        "lat": 48.4263
+      },
+      {
+        "name": "Langford",
+        "lng": -123.5058,
+        "lat": 48.4497
+      },
+      {
+        "name": "Sidney",
+        "lng": -123.3986,
+        "lat": 48.6506
+      },
+      {
+        "name": "Sooke",
+        "lng": -123.736,
+        "lat": 48.374
+      },
+      {
+        "name": "Duncan",
+        "lng": -123.7079,
+        "lat": 48.7787
+      },
+      {
+        "name": "Nanaimo",
+        "lng": -123.9401,
+        "lat": 49.1659
+      }
+    ],
+    "parks": {
+      "community-juan-de-fuca-electoral-area-1842": {
+        "drive": [
+          [
+            47.3,
+            57
+          ],
+          [
+            44.4,
+            53
+          ],
+          [
+            51,
+            65
+          ],
+          [
+            31.6,
+            40
+          ],
+          [
+            65.5,
+            74
+          ],
+          [
+            7.1,
+            10
+          ],
+          [
+            76,
+            83
+          ],
+          [
+            125.9,
+            129
+          ]
+        ],
+        "walkM": 16
+      },
+      "municipal-city-of-colwood-1299": {
+        "drive": [
+          [
+            18.7,
+            25
+          ],
+          [
+            15.7,
+            20
+          ],
+          [
+            22.4,
+            32
+          ],
+          [
+            4.6,
+            9
+          ],
+          [
+            36.9,
+            42
+          ],
+          [
+            24.9,
+            34
+          ],
+          [
+            53.4,
+            55
+          ],
+          [
+            103.3,
+            102
+          ]
+        ],
+        "walkM": 10
+      },
+      "municipal-city-of-colwood-1463": {
+        "drive": [
+          [
+            19.7,
+            25
+          ],
+          [
+            16.8,
+            20
+          ],
+          [
+            23.5,
+            32
+          ],
+          [
+            5.7,
+            9
+          ],
+          [
+            38,
+            42
+          ],
+          [
+            24.9,
+            33
+          ],
+          [
+            54.5,
+            55
+          ],
+          [
+            104.3,
+            102
+          ]
+        ],
+        "walkM": 7
+      },
+      "provincial-arbutus-grove-park": {
+        "drive": [
+          [
+            131.4,
+            124
+          ],
+          [
+            128.5,
+            119
+          ],
+          [
+            135.2,
+            131
+          ],
+          [
+            118.6,
+            111
+          ],
+          [
+            149.7,
+            140
+          ],
+          [
+            139.2,
+            138
+          ],
+          [
+            71,
+            66
+          ],
+          [
+            20.9,
+            23
+          ]
+        ],
+        "walkM": 15
+      },
+      "provincial-au-welnew-john-dean-park": {
+        "drive": [
+          [
+            26.4,
+            34
+          ],
+          [
+            23.6,
+            30
+          ],
+          [
+            29.7,
+            41
+          ],
+          [
+            30.1,
+            39
+          ],
+          [
+            8.8,
+            13
+          ],
+          [
+            54.6,
+            71
+          ],
+          [
+            77,
+            82
+          ],
+          [
+            126.9,
+            129
+          ]
+        ],
+        "walkM": 0
+      },
+      "regional-albert-head-lagoon-regional-park": {
+        "drive": [
+          [
+            18.9,
+            28
+          ],
+          [
+            15.9,
+            24
+          ],
+          [
+            22.6,
+            36
+          ],
+          [
+            8.2,
+            14
+          ],
+          [
+            37.1,
+            45
+          ],
+          [
+            24.8,
+            37
+          ],
+          [
+            57,
+            60
+          ],
+          [
+            106.9,
+            107
+          ]
+        ],
+        "walkM": 16
+      },
+      "regional-ayum-creek-regional-park": {
+        "drive": [
+          [
+            33.2,
+            39
+          ],
+          [
+            30.3,
+            35
+          ],
+          [
+            37,
+            46
+          ],
+          [
+            17.5,
+            22
+          ],
+          [
+            51.5,
+            56
+          ],
+          [
+            6.8,
+            10
+          ],
+          [
+            62,
+            64
+          ],
+          [
+            111.8,
+            111
+          ]
+        ],
+        "walkM": 13
+      }
+    }
+  },
+  "assets": [
+    {
+      "path": "art/badges/scenes/albert-head-lagoon-cobble-beach.webp",
+      "key": "releases/3acbb4871235de58046916ceacc48cc3188aaa33807c313bb2450f9804b2e4e1/art/badges/scenes/albert-head-lagoon-cobble-beach.webp",
+      "url": "https://kip-assets.parkdex.app/releases/3acbb4871235de58046916ceacc48cc3188aaa33807c313bb2450f9804b2e4e1/art/badges/scenes/albert-head-lagoon-cobble-beach.webp",
+      "sha256": "3acbb4871235de58046916ceacc48cc3188aaa33807c313bb2450f9804b2e4e1",
+      "byte_size": 94178,
+      "content_type": "image/webp"
+    },
+    {
+      "path": "art/badges/scenes/enclosed-lake-shore.webp",
+      "key": "releases/1f0fb1cdbb12aa6181c1ea0f872ff0cf885644d1d3fc9138a041bbbb075c503f/art/badges/scenes/enclosed-lake-shore.webp",
+      "url": "https://kip-assets.parkdex.app/releases/1f0fb1cdbb12aa6181c1ea0f872ff0cf885644d1d3fc9138a041bbbb075c503f/art/badges/scenes/enclosed-lake-shore.webp",
+      "sha256": "1f0fb1cdbb12aa6181c1ea0f872ff0cf885644d1d3fc9138a041bbbb075c503f",
+      "byte_size": 93904,
+      "content_type": "image/webp"
+    },
+    {
+      "path": "art/badges/scenes/forest-steps.webp",
+      "key": "releases/a00a099d21670440cec4274f8b91da54312d31b5d399cb7bbdd07735c9704c8f/art/badges/scenes/forest-steps.webp",
+      "url": "https://kip-assets.parkdex.app/releases/a00a099d21670440cec4274f8b91da54312d31b5d399cb7bbdd07735c9704c8f/art/badges/scenes/forest-steps.webp",
+      "sha256": "a00a099d21670440cec4274f8b91da54312d31b5d399cb7bbdd07735c9704c8f",
+      "byte_size": 112088,
+      "content_type": "image/webp"
+    },
+    {
+      "path": "art/badges/scenes/john-dean-old-growth-canopy.webp",
+      "key": "releases/1c38e16d52412a964b3ea2321b1f0ec321ee09518f4a8afe86035b7b20bf1e72/art/badges/scenes/john-dean-old-growth-canopy.webp",
+      "url": "https://kip-assets.parkdex.app/releases/1c38e16d52412a964b3ea2321b1f0ec321ee09518f4a8afe86035b7b20bf1e72/art/badges/scenes/john-dean-old-growth-canopy.webp",
+      "sha256": "1c38e16d52412a964b3ea2321b1f0ec321ee09518f4a8afe86035b7b20bf1e72",
+      "byte_size": 106626,
+      "content_type": "image/webp"
+    },
+    {
+      "path": "art/badges/scenes/otter-point-conifer-rock.webp",
+      "key": "releases/f8936901af2b93187ddfbba41deba4c60bb38ed149aae2ebe56fa4d665b268f8/art/badges/scenes/otter-point-conifer-rock.webp",
+      "url": "https://kip-assets.parkdex.app/releases/f8936901af2b93187ddfbba41deba4c60bb38ed149aae2ebe56fa4d665b268f8/art/badges/scenes/otter-point-conifer-rock.webp",
+      "sha256": "f8936901af2b93187ddfbba41deba4c60bb38ed149aae2ebe56fa4d665b268f8",
+      "byte_size": 111666,
+      "content_type": "image/webp"
+    }
+  ],
+  "map": {
+    "version": "54c3748759470c8265d4b55be59697929de672162206ac2b90ac01a170ff56a6",
+    "manifestUrl": "https://kip-assets.parkdex.app/releases/54c3748759470c8265d4b55be59697929de672162206ac2b90ac01a170ff56a6/map/manifest.json",
+    "manifestSha256": "522a5fc5f868104fbd3e6bd2f5b6d134a068cce8d598d6482c93859aaf5ec192"
+  }
+}

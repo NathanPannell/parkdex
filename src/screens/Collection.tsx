@@ -1,48 +1,49 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Badge } from "../components/Badge";
+import { EarnedBadge } from "../components/EarnedBadge";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Tilt } from "../components/Motion";
-import { useToast } from "../components/Toast";
-import { burst } from "../lib/confetti";
-import { buzz, sfx } from "../lib/feedback";
-import { distanceKm } from "../lib/geo";
-import { CATEGORY_LABEL, LIVE_PARKS, PARK_BY_ID, RARITY, TOTAL_BADGES, type Park, type Rarity } from "../lib/parks";
-import { useStore } from "../lib/store";
-
-const PRODUCTS = [
-  { id: "case", name: "The Display Case", line: "Walnut shadow box with an enamel pin for every badge you've claimed.", price: "from $59" },
-  { id: "book", name: "The Field Book", line: "A hardcover photo book: one page per park, your photo and badge together.", price: "from $39" },
-];
+import { RankCard, RankTrail } from "../components/Rank";
+import { sfx } from "../lib/feedback";
+import { badgeTotal, CATEGORY_LABEL, type Park } from "../lib/parks";
+import { getCollectionRankProgress, getRarityProgress, isRankProgressionEnabled } from "../lib/progression";
+import { useStore, type Claim } from "../lib/store";
+import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
 
 export function Collection() {
   const { state, dispatch } = useStore();
-  const toast = useToast();
+  const content = useContent();
+  const status = useContentStatus();
+  const runtime = useContentRuntime();
   const [open, setOpen] = useState<string | null>(null);
+  const [trailOpen, setTrailOpen] = useState(false);
   const claimedIds = Object.keys(state.claims);
-  const claimed = claimedIds.map((id) => PARK_BY_ID.get(id)!).filter(Boolean);
-  const count = claimed.length;
-
-  const next = useMemo(
-    () => LIVE_PARKS.filter((p) => !state.claims[p.id]).sort((a, b) => distanceKm(state.user, [a.lng, a.lat]) - distanceKm(state.user, [b.lng, b.lat])),
-    [state.claims, state.user],
+  const claimed = claimedIds.map((id) => content?.parkById.get(id) ?? state.claims[id]?.parkSnapshot ?? undefined).filter((park): park is Park => !!park);
+  const count = claimedIds.length;
+  const showContentRetry = !status.waitingForWifi && (status.error || status.phase === "offline");
+  const catalogueMessage = status.waitingForWifi
+    ? null
+    : status.phase === "offline"
+      ? "Connect to the internet to download your park guides."
+      : status.error
+        ? "I couldn't download the park guides."
+        : "Loading your park guides…";
+  const totalBadges = content ? badgeTotal(content.liveParks, claimedIds) : undefined;
+  const rarityProgress = useMemo(
+    () => getRarityProgress(
+      state.claims,
+      state.progressReady && state.progressOwnerKey && content ? content.parkById : undefined,
+    ),
+    [state.claims, state.progressReady, state.progressOwnerKey, content],
   );
-  // The case always shows every live badge: claimed ones shine, the rest wait as silhouettes.
-  const ghosts = next;
-
-  const tally = claimed.reduce<Partial<Record<Rarity, number>>>((t, p) => ({ ...t, [p.rarity]: (t[p.rarity] ?? 0) + 1 }), {});
-  const openPark = open ? PARK_BY_ID.get(open) : undefined;
-
-  const want = (id: string, e: React.MouseEvent) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const host = document.querySelector(".device")!.getBoundingClientRect();
-    burst({ x: (r.left + r.width / 2 - host.left) / host.width, y: (r.top - host.top) / host.height }, 0.5);
-    sfx.chirp();
-    buzz([20, 40, 20]);
-    dispatch({ type: "waitlist", product: id });
-    toast("You're on the early list. Kip will ping you!", "moss");
+  const rankProgress = getCollectionRankProgress(rarityProgress);
+  const openPark = state.progressReady && open ? content?.parkById.get(open) ?? state.claims[open]?.parkSnapshot ?? undefined : undefined;
+  const openClaim = open ? state.claims[open] : undefined;
+  const findPark = () => {
+    setTrailOpen(false);
+    dispatch({ type: "go", screen: "map" });
   };
 
   return (
@@ -55,136 +56,108 @@ export function Collection() {
     >
       <header className="col-head">
         <div>
-          <span className="eyebrow">Your case</span>
+          <span className="eyebrow">Your Dex</span>
           <h1>
             <RollingNumber value={count} />
-            <small> / {TOTAL_BADGES.toLocaleString("en-CA")}</small>
+            <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"} badges</small>
           </h1>
         </div>
-        <motion.div className="col-head__kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
-          <Kip size={82} pose={count ? "idle" : "sleep"} />
-        </motion.div>
+        <button className="btn btn--paper btn--sm collection-account" onClick={() => dispatch({ type: "go", screen: "account" })}>
+          <Icon name="link" size={17} /> Account
+        </button>
       </header>
 
-      <div className="col-progress">
-        <motion.div
-          className="col-progress__fill"
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.max(1.5, (count / TOTAL_BADGES) * 100)}%` }}
-          transition={{ type: "spring", stiffness: 80, damping: 16, delay: 0.3 }}
-        />
-      </div>
-      <div className="col-rarity">
-        {(Object.keys(RARITY) as Rarity[]).map((r) => (
-          <span key={r} className={`col-rarity__chip ${tally[r] ? "" : "is-empty"}`} style={{ background: RARITY[r].color, color: RARITY[r].ink }}>
-            <b>{tally[r] ?? 0}</b> {RARITY[r].label}
-          </span>
-        ))}
-      </div>
+      {isRankProgressionEnabled() && <RankCard progress={rankProgress} onOpen={() => { sfx.pop(); setTrailOpen(true); }} />}
 
-      <div className="case">
+      <div className={`case ${count === 0 ? "case--empty" : ""}`}>
         <div className="case__glass" />
-        {count === 0 && (
+        {!state.progressReady ? (
           <div className="case__empty">
             <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
-              Your case is empty. I'm saving this spot for badge #1.
+              {state.progressError ? "Your saved Dex needs attention." : "Opening your saved Dex…"}
+            </Bubble>
+            {state.progressError && <button className="btn btn--sm btn--paper" onClick={() => dispatch({ type: "go", screen: "account" })}>Account help</button>}
+          </div>
+        ) : !content ? (
+          <div className="case__empty">
+            {catalogueMessage && (
+              <Bubble side="left" style={{ position: "relative", marginBottom: 14 }}>
+                {catalogueMessage}
+                {status.syncStage === "downloading" && status.totalBytes > 0 && ` ${Math.floor((status.downloadedBytes / status.totalBytes) * 100)}%`}
+              </Bubble>
+            )}
+            {showContentRetry && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
+          </div>
+        ) : count === 0 ? (
+          <div className="case__first">
+            <Bubble side="down" style={{ position: "relative" }}>
+              Nothing here yet. Your first badge goes right on this shelf!
+            </Bubble>
+            <motion.div className="case__first-kip" animate={{ rotate: [0, -3, 3, 0] }} transition={{ duration: 3, repeat: Infinity }}>
+              <Kip size={96} pose="idle" />
+            </motion.div>
+            <button className="btn btn--sun btn--sm" onClick={findPark}>
+              <Icon name="map" size={18} /> Find a park near me
+            </button>
+          </div>
+        ) : null}
+        {claimed.length > 0 && (
+          <div className="case__grid">
+            {claimed.map((p, i) => (
+              <motion.button
+                key={p.id}
+                className="slot slot--filled"
+                onClick={() => {
+                  sfx.pop();
+                  setOpen(p.id);
+                }}
+                initial={{ y: -60, opacity: 0, rotate: -12 }}
+                animate={{ y: 0, opacity: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 16, delay: 0.2 + i * 0.07 }}
+                whileTap={{ scale: 0.92 }}
+              >
+                <EarnedBadge park={p} claim={state.claims[p.id]} size={88} state="earned" showName={false} />
+                <span className="slot__plate">{p.short}</span>
+              </motion.button>
+            ))}
+          </div>
+        )}
+        {state.progressReady && content && claimedIds.some((id) => !content.parkById.has(id)) && (
+          <div className="case__empty account-case-note">
+            <Bubble side="left" style={{ position: "relative" }}>
+              Some saved badge details are not in this guide yet. Your visits remain saved for your account backup.
             </Bubble>
           </div>
         )}
-        <div className="case__grid">
-          {claimed.map((p, i) => (
-            <motion.button
-              key={p.id}
-              className="slot slot--filled"
-              onClick={() => {
-                sfx.pop();
-                setOpen(p.id);
-              }}
-              initial={{ y: -60, opacity: 0, rotate: -12 }}
-              animate={{ y: 0, opacity: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 16, delay: 0.2 + i * 0.07 }}
-              whileTap={{ scale: 0.92 }}
-            >
-              <Badge park={p} size={88} state="earned" showName={false} />
-              <span className="slot__plate">{p.short}</span>
-            </motion.button>
-          ))}
-          {ghosts.map((p, i) => (
-            <motion.button
-              key={p.id}
-              className="slot"
-              onClick={() => {
-                dispatch({ type: "focus", id: p.id });
-                dispatch({ type: "go", screen: "map" });
-              }}
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 + (count + i) * 0.04 }}
-            >
-              <Badge park={p} size={88} state="silhouette" showName={false} />
-              <span className="slot__q">?</span>
-              <span className="slot__plate slot__plate--ghost">{p.short}</span>
-            </motion.button>
-          ))}
-        </div>
       </div>
 
-      <section className="real">
-        <span className="eyebrow">Coming soon</span>
-        <h2>Make your case real.</h2>
-        <p>Every badge you claim can become a real enamel pin and every photo a printed page.</p>
-        <div className="real__cards">
-          {PRODUCTS.map((prod, i) => {
-            const joined = state.waitlist.includes(prod.id);
-            return (
-              <motion.div
-                key={prod.id}
-                className="product card"
-                initial={{ y: 40, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ type: "spring", delay: i * 0.08 }}
-              >
-                <div className={`product__art product__art--${prod.id}`}>
-                  {prod.id === "case" ? (
-                    <MiniCase parks={claimed.length ? claimed : next} />
-                  ) : (
-                    <MiniBook park={claimed[0] ?? next[0]} photo={claimed[0] ? state.claims[claimed[0].id].photo : undefined} />
-                  )}
-                </div>
-                <div className="product__body">
-                  <div className="product__row">
-                    <strong>{prod.name}</strong>
-                    <span className="product__price">{prod.price}</span>
-                  </div>
-                  <p>{prod.line}</p>
-                  <button className={`btn btn--sm btn--block ${joined ? "btn--paper" : "btn--ink"}`} onClick={(e) => !joined && want(prod.id, e)}>
-                    {joined ? (
-                      <>
-                        <Icon name="check" size={18} /> You're on the list
-                      </>
-                    ) : (
-                      "I want this"
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+      <section className="fb-cta card">
+        <Kip pose="think" size={64} />
+        <div>
+          <strong>Found a bug or have an idea?</strong>
+          <span>Tell the Parkdex team without leaving the app.</span>
         </div>
+        <button className="btn btn--sm btn--paper" onClick={() => dispatch({ type: "feedback", open: true })}>
+          <Icon name="chat" size={18} /> Send feedback
+        </button>
       </section>
 
       <div className="col-foot" />
 
+      <AnimatePresence>
+        {trailOpen && <RankTrail key="trail" progress={rankProgress} onClose={() => setTrailOpen(false)} onExplore={findPark} />}
+      </AnimatePresence>
+
       {/* Portalled to the device so the detail covers the bottom nav too. */}
       {createPortal(
         <AnimatePresence>
-          {openPark && (
+          {openPark && openClaim && (
             <BadgeDetail
               park={openPark}
+              claim={openClaim}
               onClose={() => setOpen(null)}
               onShare={() => {
-                dispatch({ type: "trip", id: openPark.id });
+                dispatch({ type: "shareClaim", claimId: state.claims[openPark.id]?.claimId ?? null });
                 dispatch({ type: "go", screen: "share" });
               }}
             />
@@ -196,9 +169,7 @@ export function Collection() {
   );
 }
 
-function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => void; onShare: () => void }) {
-  const { state } = useStore();
-  const claim = state.claims[park.id];
+function BadgeDetail({ park, claim, onClose, onShare }: { park: Park; claim: Claim; onClose: () => void; onShare: () => void }) {
   const [flipped, setFlipped] = useState(false);
   const date = new Date(claim.at).toLocaleDateString("en-CA", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
 
@@ -223,7 +194,7 @@ function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => vo
           <motion.div className="flip__card" animate={{ rotateY: flipped ? 180 : 0 }} transition={{ type: "spring", stiffness: 160, damping: 16 }}>
             <div className="flip__face">
               <Tilt>
-                <Badge park={park} size={250} animated state="earned" />
+                <EarnedBadge park={park} claim={claim} size={250} animated state="earned" />
               </Tilt>
             </div>
             <div className="flip__face flip__face--back">
@@ -256,34 +227,5 @@ function BadgeDetail({ park, onClose, onShare }: { park: Park; onClose: () => vo
         </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-function MiniCase({ parks }: { parks: Park[] }) {
-  return (
-    <div className="mini-case">
-      {Array.from({ length: 6 }, (_, i) => (
-        <span key={i} className="mini-case__cell">
-          {parks[i] && <Badge park={parks[i]} size={34} showName={false} state="earned" />}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function MiniBook({ park, photo }: { park?: Park; photo?: string }) {
-  return (
-    <div className="mini-book">
-      <div className="mini-book__page mini-book__page--back" />
-      <div className="mini-book__page">
-        <span className="mini-book__photo">{photo ? <img src={photo} alt="" /> : null}</span>
-        {park && (
-          <span className="mini-book__badge">
-            <Badge park={park} size={40} showName={false} state="earned" />
-          </span>
-        )}
-        <span className="mini-book__title">Field Book</span>
-      </div>
-    </div>
   );
 }

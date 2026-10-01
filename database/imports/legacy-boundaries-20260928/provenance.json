@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Pinned legacy boundary repair input for issue 20.",
+  "source": {
+    "url": "https://staging.web.parkdex.app/data/boundaries.v1.geojson",
+    "fileName": "legacy-boundaries.v1.geojson",
+    "featureCount": 1656,
+    "subsetFileName": "boundaries.geojson",
+    "subsetSha256": "95abf42bb696370a0f26273c4efab82e72ea9a2bc60c29d1be57b8bbd0aa8d05",
+    "subsetFeatureCount": 11,
+    "coordinateReference": "WGS 84 / EPSG:4326",
+    "coordinateOrder": "[longitude, latitude]",
+    "fullFileSha256": "c9be9a8a8813ad0147692bcd99fc14a22300ac037c34906b127031c740846cc8",
+    "fullFileBytes": 13003941,
+    "subsetBytes": 132200
+  },
+  "comparison": {
+    "currentKipSnapshotUrl": "https://parkdex-kip-staging.vercel.app/api/content/snapshot",
+    "currentKipRevision": 3,
+    "currentKipParkCount": 100,
+    "selectionRationale": "Selected every exact-ID legacy feature whose current Kip revision 3 boundary has fewer polygon parts or fewer interior holes. This includes five material multipart coverage losses, two small component-count differences, and four omitted holes. The independent topology review confirms all 11 selected legacy geometries are valid.",
+    "countByIssue": {
+      "materialMultipartCoverageLosses": 5,
+      "smallComponentCountLosses": 2,
+      "omittedHoleFeatures": 4,
+      "topologyValidatedLegacyFeatures": 11
+    },
+    "evidence": {
+      "auditFile": "audit.json",
+      "auditSha256": "26aa760d50a7bc0954a0624f194ae3f1dd04662e2bb7059216bf93b6aabbb6c3",
+      "topologyReviewFile": "root-topology-review.json",
+      "topologyReviewSha256": "7b969f063ad5b4fb966cc40c099c26348ceca68b0460345590d477f26bfce7e2"
+    }
+  },
+  "databaseLifecycleNote": "This is geometry-only repair input keyed by the existing stable park IDs. Existing park metadata and identity stay unchanged. Fresh database setup replays reset first, then applies the repair.",
+  "features": [
+    {
+      "id": "municipal-city-of-victoria-872",
+      "name": "Summit Park",
+      "sourceId": "872",
+      "sourceObjectIds": [
+        872,
+        874
+      ],
+      "geometryType": "MultiPolygon",
+      "polygonParts": 2,
+      "rings": 3,
+      "holes": 1,
+      "coordinatePositions": 61
+    },
+    {
+      "id": "municipal-city-of-victoria-938",
+      "name": "Cecelia Ravine Park",
+      "sourceId": "938",
+      "sourceObjectIds": [
+        938,
+        941,
+        942
+      ],
+      "geometryType": "MultiPolygon",
+      "polygonParts": 3,
+      "rings": 3,
+      "holes": 0,
+      "coordinatePositions": 179
+    },
+    {
+      "id": "municipal-district-of-saanich-1920",
+      "name": "Cuthbert Holmes Park",
+      "sourceId": "1920",
+      "sourceObjectIds": [
+        1920,
+        1922
+      ],
+      "geometryType": "Polygon",
+      "polygonParts": 1,
+      "rings": 2,
+      "holes": 1,
+      "coordinatePositions": 496
+    },
+    {
+      "id": "municipal-district-of-saanich-232",
+      "name": "Gorge Waterway Park",
+      "sourceId": "232",
+      "sourceObjectIds": [
+        232,
+        409
+      ],
+      "geometryType": "MultiPolygon",
+      "polygonParts": 2,
+      "rings": 2,
+      "holes": 0,
+      "coordinatePositions": 748
+    },
+    {
+      "id": "municipal-district-of-saanich-244",
+      "name": "PKOLS (Mount Douglas Park)",
+      "sourceId": "244",
+      "sourceObjectIds": [
+        244,
+        347,
+        549
+      ],
+      "geometryType": "MultiPolygon",
+      "polygonParts": 3,
+      "rings": 3,
+      "holes": 0,
+      "coordinatePositions": 1271
+    },
+    {
+      "id": "municipal-district-of-saanich-27",
+      "name": "Quick's Bottom Park",
+      "sourceId": "27",
+      "sourceObjectIds": [
+        27,
+        298
+      ],
+      "geometryType": "MultiPolygon",
+      "polygonParts": 2,
+      "rings": 2,
+      "holes": 0,
+      "coordinatePositions": 70
+    },
+    {
+      "id": "provincial-au-welnew-john-dean-park",
+      "name": "Ƚáuˌwelṉew̱ / John Dean Park",
+      "sourceId": "775",
+      "sourceObjectIds": null,
+      "geometryType": "Polygon",
+      "polygonParts": 1,
+      "rings": 3,
+      "holes": 2,
+      "coordinatePositions": 28
+    },
+    {
+      "id": "provincial-gowlland-tod-park",
+      "name": "Gowlland Tod Park",
+      "sourceId": "708",
+      "sourceObjectIds": null,
+      "geometryType": "Polygon",
+      "polygonParts": 1,
+      "rings": 2,
+      "holes": 1,
+      "coordinatePositions": 297
+    },
+    {
+      "id": "regional-island-view-beach-regional-park",
+      "name": "Island View Beach Regional Park",
+      "sourceId": "1960",
+      "sourceObjectIds": null,
+      "geometryType": "MultiPolygon",
+      "polygonParts": 3,
+      "rings": 3,
+      "holes": 0,
+      "coordinatePositions": 45
+    },
+    {
+      "id": "regional-mount-wells-regional-park",
+      "name": "Mount Wells Regional Park",
+      "sourceId": "1796",
+      "sourceObjectIds": null,
+      "geometryType": "MultiPolygon",
+      "polygonParts": 2,
+      "rings": 2,
+      "holes": 0,
+      "coordinatePositions": 47
+    },
+    {
+      "id": "regional-sea-to-sea-regional-park",
+      "name": "Sea to Sea Regional Park",
+      "sourceId": "1659",
+      "sourceObjectIds": null,
+      "geometryType": "MultiPolygon",
+      "polygonParts": 4,
+      "rings": 5,
+      "holes": 1,
+      "coordinatePositions": 230
+    }
+  ]
+}

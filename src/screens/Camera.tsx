@@ -1,42 +1,78 @@
 import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
-import { Bubble, Kip } from "../components/Kip";
+import { Kip } from "../components/Kip";
+import { ContentGate } from "../components/ContentGate";
 import { buzz, sfx } from "../lib/feedback";
-import { PALETTES, PARK_BY_ID, type Park } from "../lib/parks";
+import type { Park } from "../lib/parks";
 import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
+import { useContent } from "../lib/content/provider";
+import { getParkRarityEligibility, getRarityProgress } from "../lib/progression";
+import { sceneSvg } from "../lib/accounts/photoBackupRendition";
 
 // When no camera is available (desktop without webcam, denied permission),
 // the mockup "photographs" an illustrated scene so the flow still completes.
-function sceneSvg(park: Park) {
-  const p = PALETTES[park.biome];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice">
-<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.skyTop}"/><stop offset="1" stop-color="${p.skyBottom}"/></linearGradient></defs>
-<rect width="600" height="800" fill="url(#s)"/>
-<circle cx="${180 + (park.seed % 240)}" cy="220" r="70" fill="${p.sun}"/>
-<path d="M0 420 Q120 330 240 400 T480 370 T600 390 L600 800 L0 800Z" fill="${p.far}"/>
-<path d="M0 500 Q150 430 300 490 T600 470 L600 800 L0 800Z" fill="${p.mid}"/>
-<path d="M0 560 L600 540 L600 800 L0 800Z" fill="${p.water}" opacity=".85"/>
-<path d="M0 640 Q160 590 320 650 T600 630 L600 800 L0 800Z" fill="${p.near}"/>
-${Array.from({ length: 7 }, (_, i) => {
-    const x = 30 + i * 90 + ((park.seed * (i + 3)) % 40);
-    const h = 120 + ((park.seed * (i + 7)) % 90);
-    return `<path d="M${x} ${700 - h} l${h * 0.28} ${h * 0.55} h-${h * 0.12} l${h * 0.2} ${h * 0.45} h-${h * 0.72} l${h * 0.2} -${h * 0.45} h-${h * 0.12}Z" fill="#14231C" opacity=".9"/>`;
-  }).join("")}
-</svg>`;
+function rasterizeSyntheticScene(svg: string): Promise<string> {
+  const objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const releaseUrl = () => URL.revokeObjectURL(objectUrl);
+    image.onload = () => {
+      releaseUrl();
+      try {
+        const width = 720;
+        const height = 960;
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("A photo canvas could not be opened.");
+        context.drawImage(image, 0, 0, width, height);
+        const photo = canvas.toDataURL("image/jpeg", 0.82);
+        if (!photo.startsWith("data:image/jpeg;base64,")) throw new Error("The demo photo could not be encoded as JPEG.");
+        resolve(photo);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    image.onerror = () => {
+      releaseUrl();
+      reject(new Error("The demo scene could not be rasterized."));
+    };
+    image.src = objectUrl;
+  });
 }
 
 export function Camera() {
   const { state, dispatch } = useStore();
-  // Pinned at mount: exit animations keep this screen rendering after the trip is cleared.
-  const [park] = useState(() => PARK_BY_ID.get(state.tripId ?? "")!);
+  const content = useContent();
+  const park = content?.parkById.get(state.tripId ?? "");
+  const rarityProgress = useMemo(() => getRarityProgress(state.claims, content?.parkById), [state.claims, content?.parkById]);
+  const eligibility = park ? getParkRarityEligibility(park, rarityProgress, !!state.claims[park.id]) : null;
+  const canClaim = !!park && state.progressReady && !state.claims[park.id] && !!eligibility?.eligible && eligibility.reason === "unlocked";
+
+  useEffect(() => {
+    if (!park || !state.progressReady || canClaim) return;
+    dispatch({ type: "trip", id: null });
+    dispatch({ type: "select", id: park.id });
+    dispatch({ type: "go", screen: "map" });
+  }, [canClaim, dispatch, park, state.progressReady]);
+
+  if (!park || !state.progressReady || !canClaim) return <ContentGate />;
+  return <CameraReady park={park} />;
+}
+
+function CameraReady({ park }: { park: Park }) {
+  const { dispatch } = useStore();
   const video = useRef<HTMLVideoElement>(null);
   const [live, setLive] = useState<"pending" | "on" | "off">("pending");
   const [photo, setPhoto] = useState<string | null>(null);
   const [flash, setFlash] = useState(0);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  const [syntheticBusy, setSyntheticBusy] = useState(false);
+  const [syntheticError, setSyntheticError] = useState<string | null>(null);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -82,6 +118,7 @@ export function Camera() {
   };
 
   const shoot = () => {
+    if (syntheticBusy) return;
     if (FIELD && live !== "on") {
       void nativeShot();
       return;
@@ -107,7 +144,12 @@ export function Camera() {
       ctx.drawImage(v, (w - dw) / 2, (h - dh) / 2, dw, dh);
       setPhoto(c.toDataURL("image/jpeg", 0.82));
     } else {
-      setPhoto(`data:image/svg+xml;utf8,${encodeURIComponent(sceneSvg(park))}`);
+      setSyntheticBusy(true);
+      setSyntheticError(null);
+      void rasterizeSyntheticScene(sceneSvg(park))
+        .then(setPhoto)
+        .catch(() => setSyntheticError("Kip couldn’t prepare the demo photo. Try taking it again."))
+        .finally(() => setSyntheticBusy(false));
     }
   };
 
@@ -156,18 +198,17 @@ export function Camera() {
         </motion.div>
       )}
 
-      <motion.div className="camera__kip" initial={{ x: 120 }} animate={{ x: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 200, damping: 16 }}>
-        <Bubble side="right" style={{ right: 50, top: -44, whiteSpace: "nowrap" }}>
-          Say "cheese"!
-        </Bubble>
-        <Kip pose="camera" size={96} flip />
-      </motion.div>
-
       <div className="camera__bottom">
-        <div className="camera__hint">Get the park in the shot. This photo goes on your badge.</div>
-        <motion.button className="shutter" onClick={shoot} whileTap={{ scale: 0.86 }} aria-label="Take photo">
-          <span />
-        </motion.button>
+        <div className="camera__hint" role={syntheticError ? "alert" : undefined}>{syntheticError ?? (syntheticBusy ? "Preparing your demo photo…" : "Get the park in the shot. This photo goes on your badge.")}</div>
+        {/* Kip waits beside the shutter, outside the viewfinder, so he never covers the shot. */}
+        <div className="camera__controls">
+          <motion.button className="shutter" onClick={shoot} disabled={syntheticBusy} whileTap={{ scale: 0.86 }} aria-label="Take photo">
+            <span />
+          </motion.button>
+          <motion.div className="camera__kip" initial={{ x: 120 }} animate={{ x: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 200, damping: 16 }}>
+            <Kip pose="camera" size={78} flip />
+          </motion.div>
+        </div>
       </div>
 
       <AnimatePresence>

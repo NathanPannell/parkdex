@@ -1,9 +1,10 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
-import { OFFLINE_TILES } from "./offlineTiles";
+import { ISLAND_OVERVIEW_KEY } from "./offlineTiles";
 
 // Must match the extract bounds in scripts/fetch-map.mjs.
 export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
+export const ISLAND_OVERVIEW_MAX_ZOOM = 7;
 
 // Storybook palette over the bundled Protomaps tiles: warm paper land,
 // candy water, soft greens and quiet roads.
@@ -64,34 +65,58 @@ const FLAVOR: Flavor = {
   pois: undefined,
 };
 
-export function mapStyle(origin: string): StyleSpecification {
+export function mapStyle(releaseId?: string | null): StyleSpecification {
+  if (releaseId === "") throw new Error("A content release ID cannot be empty");
+  const hasRelease = typeof releaseId === "string";
   // No sprite ships offline, so drop icon-only layers and icons on labels.
   const base = (layers("protomaps", FLAVOR, { lang: "en" }) as LayerSpecification[])
     .filter((l) => l.id !== "roads_oneway" && l.id !== "roads_shields")
+    .filter((l) => hasRelease || l.type === "background")
     .map((l) => {
       if (l.type !== "symbol" || !l.layout?.["icon-image"]) return l;
       const { ["icon-image"]: _icon, ...layout } = l.layout;
       return { ...l, layout };
     });
-  const waterIndex = base.findIndex((l) => l.id === "water");
+  const overview = (layers("island-overview", FLAVOR, { lang: "en" }) as LayerSpecification[])
+    .filter((layer) => layer.type !== "symbol" && layer.type !== "background")
+    .map((layer) => ({ ...layer, id: `overview-${layer.id}`, source: "islandOverview" }));
+  const backgroundIndex = base.findIndex((layer) => layer.type === "background");
+  const withOverview = backgroundIndex < 0
+    ? [...overview, ...base]
+    : [...base.slice(0, backgroundIndex + 1), ...overview, ...base.slice(backgroundIndex + 1)];
+  const waterIndex = hasRelease ? withOverview.findIndex((l) => l.id === "water") : -1;
   // An offset copy of the water under itself gives coastlines a soft sticker edge.
   const shadow: LayerSpecification = {
     id: "water-shadow",
     type: "fill",
     source: "protomaps",
     "source-layer": "water",
+    // The water source also contains creek lines; filling them creates broad blue artifacts.
+    filter: ["==", "$type", "Polygon"],
     paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] },
   };
-  const style = waterIndex >= 0 ? [...base.slice(0, waterIndex), shadow, ...base.slice(waterIndex)] : base;
+  const style = waterIndex >= 0
+    ? [...withOverview.slice(0, waterIndex), shadow, ...withOverview.slice(waterIndex)]
+    : withOverview;
   return {
     version: 8,
-    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
+    ...(hasRelease ? { glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf` } : {}),
     sources: {
-      protomaps: {
+      ...(hasRelease ? {
+        protomaps: {
+          type: "vector" as const,
+          tiles: [`pmtiles://${encodeURIComponent(releaseId!)}/{z}/{x}/{y}`],
+          minzoom: 0,
+          maxzoom: 14,
+          bounds: ISLAND_BOUNDS,
+          attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        },
+      } : {}),
+      islandOverview: {
         type: "vector",
-        tiles: [OFFLINE_TILES],
+        tiles: [`pmtiles://${ISLAND_OVERVIEW_KEY}/{z}/{x}/{y}`],
         minzoom: 0,
-        maxzoom: 14,
+        maxzoom: ISLAND_OVERVIEW_MAX_ZOOM,
         bounds: ISLAND_BOUNDS,
         attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
       },

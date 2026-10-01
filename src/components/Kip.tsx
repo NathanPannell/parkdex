@@ -131,7 +131,12 @@ function Zzz({ size }: { size: number }) {
   );
 }
 
-export function Bubble({ children, show = true, side = "left", style }: { children: ReactNode; show?: boolean; side?: "left" | "right"; style?: CSSProperties }) {
+// "left"/"right" put a downward tail near that corner, for a bubble above Kip.
+// "to-left"/"to-right" point the tail sideways at Kip standing beside the bubble;
+// "down" centres it over Kip standing below.
+type BubbleSide = "left" | "right" | "to-left" | "to-right" | "down";
+
+export function Bubble({ children, show = true, side = "left", style }: { children: ReactNode; show?: boolean; side?: BubbleSide; style?: CSSProperties }) {
   return (
     <AnimatePresence mode="popLayout">
       {show && (
@@ -139,14 +144,26 @@ export function Bubble({ children, show = true, side = "left", style }: { childr
           key={String(children)}
           className={`bubble bubble--${side}`}
           style={style}
-          initial={{ opacity: 0, scale: 0.4, y: 10, rotate: side === "left" ? -6 : 6 }}
+          initial={{ opacity: 0, scale: 0.4, y: 10, rotate: side === "left" || side === "to-left" ? -6 : 6 }}
           animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
           exit={{ opacity: 0, scale: 0.6, y: -6 }}
           transition={{ type: "spring", stiffness: 520, damping: 22 }}
         >
           {children}
+          {(side === "to-left" || side === "to-right") && <BubbleTail />}
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// A sideways tail drawn as one shape: paper fill with ink only on its two outer
+// edges, overlapping the bubble border so the outline joins without a seam.
+function BubbleTail() {
+  return (
+    <svg className="bubble__tail" viewBox="0 0 18 20" width="18" height="20" aria-hidden="true">
+      <path d="M18 0.5 L1.5 10 L18 19.5 Z" fill="var(--paper)" />
+      <path d="M18 1.25 L1.75 10 L18 18.75" fill="none" stroke="var(--ink)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="butt" />
+    </svg>
   );
 }

@@ -1,0 +1,11 @@
+# Android App Links and OAuth signing setup
+
+The Parkdex app uses `staging.web.parkdex.app` for staging account links and API requests. Debug and release builds default to this staging host. Set `PARKDEX_AUTH_LINK_HOST=web.parkdex.app` when preparing a production Android build. The prior `parkdex-kip-staging.vercel.app` alias remains assigned to the staging deployment so already installed Android builds can continue using their compiled API origin and App Link host.
+
+`public/.well-known/assetlinks.json` contains measured signer associations for the debug package and the direct release APK signed with the upload key. Serve this file from both stable Parkdex app hosts. Google Play replaces the upload signature on Play delivered installs with the Play App Signing signature, so the upload fingerprint does not verify Play installs. Add the Play App Signing SHA-256 to the `app.parkdex` statement after retrieving it from Play Console.
+
+`PARKDEX_AUTH_LINK_HOST` accepts `staging.web.parkdex.app`, `web.parkdex.app`, the compatibility staging alias, Kip Vercel preview hosts, and owner scoped Parkdex Vercel preview hosts. The Android content transport allows the two stable app hosts and the old staging alias. It still checks each API request against its configured origin and permits the separate pinned content CDN for downloads.
+
+The Capacitor listener handles both `appUrlOpen` and the initial launch URL. It accepts an HTTPS `/account` action token on the exact configured origin and removes the token fragment from the WebView URL before passing the action to the auth flow. Parser tests pass. No device link dispatch or Android OS App Links verification has been run.
+
+The Credential Manager and ID token exchange paths use the configured Google Web client ID. Add the production web origin to the OAuth client's authorized origins before enabling production Google sign in. Register the Android packages and signing certificates separately. A real Google account sign in and linking journey has not been exercised. The Play App Signing certificate is still needed, so the upload certificate association covers a directly installed APK signed with that key, not a Play delivered install.

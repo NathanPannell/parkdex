@@ -4,8 +4,12 @@ A standalone, fully offline Android app for the core Parkdex loop on Vancouver I
 pick a park on the map, go there, check in inside the park boundary, take a photo, claim
 the badge, and share it. No accounts and no network sync: everything stays on the phone.
 
-- 122 parks on Vancouver Island itself. 20 have live badges (0/20 to start); the rest
-  show "badge coming soon".
+- Parks on Vancouver Island come from the downloaded content catalogue. Only parks with
+  published badge art appear on the map, and the Dex starts empty.
+- Collector ranks: visiting 2, 5 and 10 unique parks opens Uncommon, Rare and Legendary
+  parks. See `docs/rarity-progression.md`.
+- Older installed builds keep reading new content. Content API changes must be additive;
+  see `docs/content-compatibility.md`.
 - Offline basemap: a bundled Protomaps archive for the island (zoom 0 to 14) plus fonts.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 
@@ -61,8 +65,8 @@ Set `sdk.dir` in `android/local.properties` to your Android SDK path before the 
 ## How check-in works
 
 The app watches GPS with high accuracy. A visitor counts as inside a park when they are within
-its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims and waitlist
-taps live in localStorage; photos live in IndexedDB.
+its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims live in
+localStorage; photos live in IndexedDB.
 
 ## End-to-end check
 

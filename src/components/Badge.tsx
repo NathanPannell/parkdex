@@ -1,5 +1,6 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
-import { PALETTES, RARITY, sceneUrl, type Park, type Palette, type Shape } from "../lib/parks";
+import { PALETTES, RARITY, scenePath, type Park, type Palette, type Shape } from "../lib/parks";
+import { useOptionalContent } from "../lib/content/provider";
 
 export type BadgeState = "earned" | "preview" | "silhouette";
 
@@ -64,7 +65,7 @@ function Star({ x, y, r, fill }: { x: number; y: number; r: number; fill: string
   return <polygon points={pts.join(" ")} fill={fill} stroke="#14231C" strokeWidth={1.6} strokeLinejoin="round" />;
 }
 
-function Ribbon({ text, p, id }: { text: string; p: Palette; id: string }) {
+function Ribbon({ text, p }: { text: string; p: Palette }) {
   const upper = text.toUpperCase();
   const size = Math.max(9.5, Math.min(17, 190 / Math.max(upper.length, 1) + 1.2));
   const fit = upper.length > 13;
@@ -73,11 +74,8 @@ function Ribbon({ text, p, id }: { text: string; p: Palette; id: string }) {
       <path d="M2 150 L26 146 L26 178 L2 182 L12 166Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
       <path d="M198 150 L174 146 L174 178 L198 182 L188 166Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
       <path d="M18 142 Q100 128 182 142 L182 174 Q100 160 18 174Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
-      <path id={id} d="M26 163 Q100 149 174 163" fill="none" />
-      <text fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={size} fill={p.ribbonText} letterSpacing={0.4} textAnchor="middle" dominantBaseline="middle">
-        <textPath href={`#${id}`} startOffset="50%" {...(fit ? { textLength: 138, lengthAdjust: "spacingAndGlyphs" } : {})}>
-          {upper}
-        </textPath>
+      <text x={100} y={156} fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={size} fill={p.ribbonText} letterSpacing={0.4} textAnchor="middle" dominantBaseline="middle" {...(fit ? { textLength: 138, lengthAdjust: "spacingAndGlyphs" } : {})}>
+        {upper}
       </text>
     </g>
   );
@@ -86,7 +84,7 @@ function Ribbon({ text, p, id }: { text: string; p: Palette; id: string }) {
 const MYSTERY_PALETTE: Palette = { ...PALETTES.forest, ribbon: "#8A8F87", ribbonText: "#FFF8EC" };
 
 // Placeholder for parks whose badge art isn't made yet.
-function Mystery() {
+function Mystery({ label }: { label: string }) {
   return (
     <g>
       <rect x={-10} y={-10} width={220} height={220} fill="#EDE3CF" />
@@ -97,19 +95,23 @@ function Mystery() {
         ?
       </text>
       <text x={100} y={36} textAnchor="middle" fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={12} letterSpacing={2} fill="#14231C" opacity={0.45}>
-        COMING SOON
+        {label}
       </text>
     </g>
   );
 }
 
 function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref }: Props) {
+  const content = useOptionalContent();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const live = park.scene !== null;
+  const resolvedSceneHref = sceneHref ?? (park.scene
+    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id)
+    : undefined);
   const p = live ? PALETTES[park.biome] : MYSTERY_PALETTE;
   const shape = SHAPES[park.shape];
   const rim = RIM[park.rarity];
-  const stars = live ? RARITY[park.rarity].stars : 0;
+  const stars = RARITY[park.rarity].stars;
   const shiny = live && state === "earned" && (park.rarity === "rare" || park.rarity === "epic" || park.rarity === "legendary");
 
   const defs: ReactNode = (
@@ -157,10 +159,10 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
       {defs}
       <path d={shape} fill={`url(#r${uid})`} stroke="#14231C" strokeWidth={4} transform="translate(0 3)" opacity={0.25} />
       <g clipPath={`url(#c${uid})`}>
-        {park.scene ? (
-          <image href={sceneHref ?? sceneUrl(park.scene)} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
+        {park.scene && resolvedSceneHref ? (
+          <image href={resolvedSceneHref} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
         ) : (
-          <Mystery />
+          <Mystery label={live ? "ART PENDING" : "COMING SOON"} />
         )}
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#p${uid})`} />
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#v${uid})`} />
@@ -178,10 +180,16 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
       <path d={shape} fill="none" stroke="#FFFFFF" strokeOpacity={0.75} strokeWidth={1.6} strokeDasharray="4 3.2" transform="translate(100 100) scale(0.9) translate(-100 -100)" />
       <g>
         {Array.from({ length: stars }, (_, i) => (
-          <Star key={i} x={100 + (i - (stars - 1) / 2) * 15} y={park.shape === "arch" ? 30 : 26} r={6.5} fill={i < stars ? "#FFD23F" : "#FFF"} />
+          <Star
+            key={i}
+            x={100 + (i - (stars - 1) / 2) * 15}
+            y={live ? (park.shape === "arch" ? 30 : 26) : 20}
+            r={live ? 6.5 : 4.5}
+            fill="#FFD23F"
+          />
         ))}
       </g>
-      {showName && <Ribbon text={park.short} p={p} id={`t${uid}`} />}
+      {showName && <Ribbon text={park.short} p={p} />}
     </svg>
   );
 }

@@ -1,0 +1,1056 @@
+{
+  "generated": "2026-09-29",
+  "scope": "Vancouver Island and surrounding islands; mainland parks excluded. Selection is the frozen 271-member legacy displayed island-region catalogue with explicit geographic exclusion of Allison Harbour Marine Park.",
+  "selection_provenance": {
+    "sourceSelection": "legacy API catalogue filtered using legacy frontend listRegionForPlace island mappings; raw source files frozen by root task.",
+    "legacyFrontendCommit": "cacff6540fa84c06c702ef8b2dce7b20aa003178",
+    "rawIslandSelectionCount": 271,
+    "selectionIdCount": 271,
+    "fullLegacyCatalogueCount": 986,
+    "oldLocalProvincialRegionalCount": 172,
+    "overlapWithOldLocalCount": 172,
+    "newlyAddedVsOldLocalCount": 99,
+    "newlyAddedCountsByCategory": {
+      "provincial": 18,
+      "regional": 81
+    },
+    "newlyAddedProvincialIds": [
+      {
+        "id": "provincial-allison-harbour-marine-park",
+        "name": "Allison Harbour Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 51.051573,
+        "lng": -127.505225,
+        "sourceId": "5277"
+      },
+      {
+        "id": "provincial-bligh-island-marine-park",
+        "name": "Bligh Island Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 49.633205,
+        "lng": -126.552632,
+        "sourceId": "509"
+      },
+      {
+        "id": "provincial-broughton-archipelago-park",
+        "name": "Broughton Archipelago Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.733888,
+        "lng": -126.66209,
+        "sourceId": "531"
+      },
+      {
+        "id": "provincial-catala-island-marine-park",
+        "name": "Catala Island Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 49.835359,
+        "lng": -127.06009,
+        "sourceId": "558"
+      },
+      {
+        "id": "provincial-cormorant-channel-marine-park",
+        "name": "Cormorant Channel Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.59496,
+        "lng": -126.798451,
+        "sourceId": "600"
+      },
+      {
+        "id": "provincial-discovery-island-marine-park",
+        "name": "Discovery Island Marine Park",
+        "region": "Southern Vancouver Island",
+        "lat": 48.424209,
+        "lng": -123.236955,
+        "sourceId": "626"
+      },
+      {
+        "id": "provincial-dixie-cove-marine-park",
+        "name": "Dixie Cove Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.050479,
+        "lng": -127.197732,
+        "sourceId": "627"
+      },
+      {
+        "id": "provincial-echo-bay-marine-park",
+        "name": "Echo Bay Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.750945,
+        "lng": -126.494846,
+        "sourceId": "646"
+      },
+      {
+        "id": "provincial-epper-passage-park",
+        "name": "Epper Passage Park",
+        "region": "Southern Vancouver Island",
+        "lat": 49.220374,
+        "lng": -125.950791,
+        "sourceId": "662"
+      },
+      {
+        "id": "provincial-gerald-island-park",
+        "name": "Gerald Island Park",
+        "region": "Southern Vancouver Island",
+        "lat": 49.311437,
+        "lng": -124.162273,
+        "sourceId": "5419"
+      },
+      {
+        "id": "provincial-god-s-pocket-marine-park",
+        "name": "God's Pocket Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.838524,
+        "lng": -127.561732,
+        "sourceId": "702"
+      },
+      {
+        "id": "provincial-jaji7em-and-kw-ulh-marine-park",
+        "name": "Jáji7em and Kw'ulh Marine Park",
+        "region": "Northern Vancouver Island",
+        "lat": 49.618204,
+        "lng": -124.849926,
+        "sourceId": "1027"
+      },
+      {
+        "id": "provincial-lanz-and-cox-islands-park",
+        "name": "Lanz And Cox Islands Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.808367,
+        "lng": -128.646072,
+        "sourceId": "1039"
+      },
+      {
+        "id": "provincial-rendezvous-island-south-park",
+        "name": "Rendezvous Island South Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.260791,
+        "lng": -125.033101,
+        "sourceId": "1000"
+      },
+      {
+        "id": "provincial-roscoe-bay-park",
+        "name": "Roscoe Bay Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.159372,
+        "lng": -124.773052,
+        "sourceId": "1013"
+      },
+      {
+        "id": "provincial-teakerne-arm-park",
+        "name": "Teakerne Arm Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.202287,
+        "lng": -124.842957,
+        "sourceId": "1161"
+      },
+      {
+        "id": "provincial-walsh-cove-park",
+        "name": "Walsh Cove Park",
+        "region": "Northern Vancouver Island",
+        "lat": 50.267696,
+        "lng": -124.800926,
+        "sourceId": "1209"
+      },
+      {
+        "id": "provincial-whaleboat-island-marine-park",
+        "name": "Whaleboat Island Marine Park",
+        "region": "Southern Vancouver Island",
+        "lat": 49.07299,
+        "lng": -123.692884,
+        "sourceId": "1219"
+      }
+    ]
+  },
+  "geographicScopeDecision": {
+    "excludedMainland": {
+      "id": "provincial-allison-harbour-marine-park",
+      "name": "Allison Harbour Marine Park",
+      "category": "provincial",
+      "sourceId": "5277",
+      "region": "Northern Vancouver Island",
+      "lat": 51.051573,
+      "lng": -127.505225,
+      "boundary": {
+        "valid": true,
+        "reason": "Valid Geometry",
+        "type": "Polygon",
+        "bbox": [
+          -127.51574,
+          51.04499,
+          -127.49789,
+          51.05925
+        ],
+        "area_degrees2": 0.00016869929999991986,
+        "polygon_count": 1,
+        "hole_count": 0
+      },
+      "reason": "This feature lies on the mainland Central Coast north of Vancouver Island, not on Vancouver Island or a surrounding island. Its source mapping to Northern Vancouver Island is a region-label artifact, not island geography."
+    },
+    "recommendedImportCount": 270,
+    "recommendedCategoryCounts": {
+      "regional": 136,
+      "provincial": 134
+    },
+    "recommendedAddedVsOldLocalCount": 98,
+    "recommendedTargetStableIdAdditions": 244
+  },
+  "sourceCoverage": {
+    "selected271Counts": {
+      "Capital Regional District — Park GIS layer": 34,
+      "BC Parks / DataBC — TANTALIS protected areas": 135,
+      "Regional District of Nanaimo — Regional Parks spatial data": 14,
+      "Comox Valley Regional District via BC Local and Regional Greenspaces": 38,
+      "Regional District of Mount Waddington + BC Geographical Names Office": 1,
+      "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces": 22,
+      "Strathcona Regional District via BC Local and Regional Greenspaces": 21,
+      "Regional District of Mount Waddington + OpenStreetMap contributors": 3,
+      "Cowichan Valley Regional District — Parks GIS layer": 3
+    },
+    "recommended270Counts": {
+      "Capital Regional District — Park GIS layer": 34,
+      "BC Parks / DataBC — TANTALIS protected areas": 134,
+      "Regional District of Nanaimo — Regional Parks spatial data": 14,
+      "Comox Valley Regional District via BC Local and Regional Greenspaces": 38,
+      "Regional District of Mount Waddington + BC Geographical Names Office": 1,
+      "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces": 22,
+      "Strathcona Regional District via BC Local and Regional Greenspaces": 21,
+      "Regional District of Mount Waddington + OpenStreetMap contributors": 3,
+      "Cowichan Valley Regional District — Parks GIS layer": 3
+    },
+    "boundarySourceCounts": {
+      "BC Parks / DataBC — TANTALIS protected areas": 135,
+      "Capital Regional District — Park GIS layer": 34,
+      "Regional District of Nanaimo — Regional Parks spatial data": 14,
+      "OpenStreetMap contributors": 4,
+      "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces": 22,
+      "Comox Valley Regional District via BC Local and Regional Greenspaces": 38,
+      "Strathcona Regional District via BC Local and Regional Greenspaces": 21,
+      "Cowichan Valley Regional District — Parks GIS layer": 3
+    }
+  },
+  "targetOverlap": {
+    "targetParkCount": 100,
+    "exactStableIdOverlapCount": 26,
+    "exactStableIdOverlaps": [
+      {
+        "id": "regional-albert-head-lagoon-regional-park",
+        "name": "Albert Head Lagoon Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "provincial-bamberton-park",
+        "name": "Bamberton Park",
+        "category": "provincial",
+        "region": "South Island"
+      },
+      {
+        "id": "regional-bear-hill-regional-park",
+        "name": "Bear Hill Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-coles-bay-regional-park",
+        "name": "Coles Bay Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-devonian-regional-park",
+        "name": "Devonian Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-east-sooke-regional-park",
+        "name": "East Sooke Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-elk-beaver-lake-regional-park",
+        "name": "Elk/Beaver Lake Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-francis-king-regional-park",
+        "name": "Francis/King Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "provincial-goldstream-park",
+        "name": "Goldstream Park",
+        "category": "provincial",
+        "region": "South Island"
+      },
+      {
+        "id": "regional-gonzales-hill-regional-park",
+        "name": "Gonzales Hill Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "provincial-gowlland-tod-park",
+        "name": "Gowlland Tod Park",
+        "category": "provincial",
+        "region": "South Island"
+      },
+      {
+        "id": "regional-horth-hill-regional-park",
+        "name": "Horth Hill Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-island-view-beach-regional-park",
+        "name": "Island View Beach Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-lone-tree-hill-regional-park",
+        "name": "Lone Tree Hill Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-matheson-lake-regional-park",
+        "name": "Matheson Lake Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-mill-hill-regional-park",
+        "name": "Mill Hill Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-mount-wells-regional-park",
+        "name": "Mount Wells Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-mount-work-regional-park",
+        "name": "Mount Work Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-roche-cove-regional-park",
+        "name": "Roche Cove Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-sea-to-sea-regional-park",
+        "name": "Sea to Sea Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-sooke-hills-wilderness-regional-park",
+        "name": "Sooke Hills Wilderness Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-sooke-potholes-regional-park",
+        "name": "Sooke Potholes Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "provincial-spectacle-lake-park",
+        "name": "Spectacle Lake Park",
+        "category": "provincial",
+        "region": "South Island"
+      },
+      {
+        "id": "regional-thetis-lake-regional-park",
+        "name": "Thetis Lake Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "regional-witty-s-lagoon-regional-park",
+        "name": "Witty's Lagoon Regional Park",
+        "category": "regional",
+        "region": "Capital Region"
+      },
+      {
+        "id": "provincial-au-welnew-john-dean-park",
+        "name": "Ƚáuˌwelṉew̱ / John Dean Park",
+        "category": "provincial",
+        "region": "South Island"
+      }
+    ],
+    "targetNameAliasCandidates": [
+      {
+        "incomingId": "provincial-sooke-potholes-park",
+        "incomingName": "Sooke Potholes Park",
+        "incomingCategory": "provincial",
+        "targetId": "regional-sooke-potholes-regional-park",
+        "targetName": "Sooke Potholes Regional Park",
+        "targetCategory": "regional",
+        "incomingSourceId": "1104",
+        "incomingSourceName": "BC Parks / DataBC — TANTALIS protected areas"
+      }
+    ],
+    "resultingTargetParkCountIfAddedByStableId": 344
+  },
+  "dedupAudit": {
+    "method": "Stable IDs compared with the existing 172-entry local provincial/regional catalogue and current staging target; normalized names lowercased with diacritics/punctuation removed and trailing park/regional/nature/marine descriptors stripped; source feature IDs and polygon footprints compared for normalized-name candidates. Exact normalized-name candidate groups are listed below.",
+    "exactNormalizedNameGroups": [
+      {
+        "canonicalName": "maple",
+        "members": [
+          {
+            "id": "regional-greenspaces-strathcona-maple-park-5281",
+            "name": "Maple Park",
+            "category": "regional",
+            "region": "Northern Vancouver Island",
+            "sourceName": "Strathcona Regional District via BC Local and Regional Greenspaces",
+            "sourceId": "5281",
+            "latitude": 49.918014,
+            "longitude": -125.187549,
+            "geometry": {
+              "valid": true,
+              "reason": "Valid Geometry",
+              "type": "Polygon",
+              "bbox": [
+                -125.18899,
+                49.91759,
+                -125.18561,
+                49.91845
+              ],
+              "area_degrees2": 2.3076500000073165e-06,
+              "polygon_count": 1,
+              "hole_count": 0
+            }
+          },
+          {
+            "id": "regional-greenspaces-comox-valley-maple-park-4825",
+            "name": "Maple Park",
+            "category": "regional",
+            "region": "Northern Vancouver Island",
+            "sourceName": "Comox Valley Regional District via BC Local and Regional Greenspaces",
+            "sourceId": "4825",
+            "latitude": 49.500797,
+            "longitude": -124.732032,
+            "geometry": {
+              "valid": true,
+              "reason": "Valid Geometry",
+              "type": "Polygon",
+              "bbox": [
+                -124.73223,
+                49.50036,
+                -124.7316,
+                49.50118
+              ],
+              "area_degrees2": 2.559499999988461e-07,
+              "polygon_count": 1,
+              "hole_count": 0
+            }
+          }
+        ],
+        "pairwiseGeometry": [
+          {
+            "ids": [
+              "regional-greenspaces-strathcona-maple-park-5281",
+              "regional-greenspaces-comox-valley-maple-park-4825"
+            ],
+            "intersection_area_degrees2": 0.0,
+            "intersection_error": null,
+            "bounds_overlap": false
+          }
+        ]
+      },
+      {
+        "canonicalName": "sooke potholes",
+        "members": [
+          {
+            "id": "provincial-sooke-potholes-park",
+            "name": "Sooke Potholes Park",
+            "category": "provincial",
+            "region": "South Island",
+            "sourceName": "BC Parks / DataBC — TANTALIS protected areas",
+            "sourceId": "1104",
+            "latitude": 48.428675,
+            "longitude": -123.711595,
+            "geometry": {
+              "valid": false,
+              "reason": "Self-intersection[-123.713038207343 48.4253896544276]",
+              "type": "MultiPolygon",
+              "bbox": [
+                -123.7136,
+                48.42537,
+                -123.71042,
+                48.43106
+              ],
+              "area_degrees2": 6.579299999991409e-06,
+              "polygon_count": 3,
+              "hole_count": 0
+            }
+          },
+          {
+            "id": "regional-sooke-potholes-regional-park",
+            "name": "Sooke Potholes Regional Park",
+            "category": "regional",
+            "region": "Capital Region",
+            "sourceName": "Capital Regional District — Park GIS layer",
+            "sourceId": null,
+            "latitude": 48.447059,
+            "longitude": -123.727756,
+            "geometry": {
+              "valid": true,
+              "reason": "Valid Geometry",
+              "type": "MultiPolygon",
+              "bbox": [
+                -123.74013,
+                48.43058,
+                -123.71174,
+                48.48674
+              ],
+              "area_degrees2": 8.759775000001169e-05,
+              "polygon_count": 4,
+              "hole_count": 0
+            }
+          }
+        ],
+        "pairwiseGeometry": [
+          {
+            "ids": [
+              "provincial-sooke-potholes-park",
+              "regional-sooke-potholes-regional-park"
+            ],
+            "intersection_area_degrees2": 0.0,
+            "intersection_error": null,
+            "bounds_overlap": true
+          }
+        ]
+      }
+    ],
+    "fuzzyNameCandidates": [
+      {
+        "ids": [
+          "provincial-beaver-point-park",
+          "regional-bere-point-regional-park"
+        ],
+        "names": [
+          "Beaver Point Park",
+          "Bere Point Regional Park"
+        ],
+        "sourceIds": [
+          "493",
+          "bcgnis-22727"
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Regional District of Mount Waddington + BC Geographical Names Office"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.818,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-alberni-clayoquot-eagle-bay-park-8896",
+          "regional-greenspaces-comox-valley-seal-bay-nature-park-4840"
+        ],
+        "names": [
+          "Eagle Bay Park",
+          "Seal Bay Nature Park"
+        ],
+        "sourceIds": [
+          "8896",
+          "4840"
+        ],
+        "sourceNames": [
+          "Alberni-Clayoquot Regional District via BC Local and Regional Greenspaces",
+          "Comox Valley Regional District via BC Local and Regional Greenspaces"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.824,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-englishman-river-falls-park",
+          "regional-englishman-river-regional-park"
+        ],
+        "names": [
+          "Englishman River Falls Park",
+          "Englishman River Regional Park"
+        ],
+        "sourceIds": [
+          "661",
+          null
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Regional District of Nanaimo — Regional Parks spatial data"
+        ],
+        "token_jaccard": 0.667,
+        "sequence_similarity": 0.842,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-gerald-island-park",
+          "provincial-read-island-park"
+        ],
+        "names": [
+          "Gerald Island Park",
+          "Read Island Park"
+        ],
+        "sourceIds": [
+          "5419",
+          "995"
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "BC Parks / DataBC — TANTALIS protected areas"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.833,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-horne-lake-caves-park",
+          "regional-horne-lake-regional-park"
+        ],
+        "names": [
+          "Horne Lake Caves Park",
+          "Horne Lake Regional Park"
+        ],
+        "sourceIds": [
+          "754",
+          null
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Regional District of Nanaimo — Regional Parks spatial data"
+        ],
+        "token_jaccard": 0.667,
+        "sequence_similarity": 0.769,
+        "bbox_overlap": true,
+        "intersection_area_degrees2": 2.408157647019871e-06,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-little-qualicum-river-regional-park",
+          "regional-greenspaces-comox-valley-little-river-nature-park-4872"
+        ],
+        "names": [
+          "Little Qualicum River Regional Park",
+          "Little River Nature Park"
+        ],
+        "sourceIds": [
+          null,
+          "4872"
+        ],
+        "sourceNames": [
+          "Regional District of Nanaimo — Regional Parks spatial data",
+          "Comox Valley Regional District via BC Local and Regional Greenspaces"
+        ],
+        "token_jaccard": 0.667,
+        "sequence_similarity": 0.727,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-comox-valley-little-river-nature-park-4872",
+          "provincial-white-river-park"
+        ],
+        "names": [
+          "Little River Nature Park",
+          "White River Park"
+        ],
+        "sourceIds": [
+          "4872",
+          "1225"
+        ],
+        "sourceNames": [
+          "Comox Valley Regional District via BC Local and Regional Greenspaces",
+          "BC Parks / DataBC — TANTALIS protected areas"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.783,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-strathcona-maple-park-5281",
+          "regional-greenspaces-comox-valley-maple-park-4825"
+        ],
+        "names": [
+          "Maple Park",
+          "Maple Park"
+        ],
+        "sourceIds": [
+          "5281",
+          "4825"
+        ],
+        "sourceNames": [
+          "Strathcona Regional District via BC Local and Regional Greenspaces",
+          "Comox Valley Regional District via BC Local and Regional Greenspaces"
+        ],
+        "token_jaccard": 1.0,
+        "sequence_similarity": 1.0,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-comox-valley-mount-geoffrey-bench-park-4922",
+          "regional-greenspaces-comox-valley-mount-geoffrey-nature-park-4822"
+        ],
+        "names": [
+          "Mount Geoffrey Bench Park",
+          "Mount Geoffrey Nature Park"
+        ],
+        "sourceIds": [
+          "4922",
+          "4822"
+        ],
+        "sourceNames": [
+          "Comox Valley Regional District via BC Local and Regional Greenspaces",
+          "Comox Valley Regional District via BC Local and Regional Greenspaces"
+        ],
+        "token_jaccard": 0.667,
+        "sequence_similarity": 0.824,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-mount-geoffrey-escarpment-park",
+          "regional-greenspaces-comox-valley-mount-geoffrey-nature-park-4822"
+        ],
+        "names": [
+          "Mount Geoffrey Escarpment Park",
+          "Mount Geoffrey Nature Park"
+        ],
+        "sourceIds": [
+          "5135",
+          "4822"
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Comox Valley Regional District via BC Local and Regional Greenspaces"
+        ],
+        "token_jaccard": 0.667,
+        "sequence_similarity": 0.718,
+        "bbox_overlap": true,
+        "intersection_area_degrees2": 4.1419237062069897e-07,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-mount-maxwell-park",
+          "regional-mount-wells-regional-park"
+        ],
+        "names": [
+          "Mount Maxwell Park",
+          "Mount Wells Regional Park"
+        ],
+        "sourceIds": [
+          "895",
+          null
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Capital Regional District — Park GIS layer"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.833,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-comox-valley-seal-bay-nature-park-4840",
+          "provincial-smelt-bay-park"
+        ],
+        "names": [
+          "Seal Bay Nature Park",
+          "Smelt Bay Park"
+        ],
+        "sourceIds": [
+          "4840",
+          "1098"
+        ],
+        "sourceNames": [
+          "Comox Valley Regional District via BC Local and Regional Greenspaces",
+          "BC Parks / DataBC — TANTALIS protected areas"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.824,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-sooke-potholes-park",
+          "regional-sooke-potholes-regional-park"
+        ],
+        "names": [
+          "Sooke Potholes Park",
+          "Sooke Potholes Regional Park"
+        ],
+        "sourceIds": [
+          "1104",
+          null
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "Capital Regional District — Park GIS layer"
+        ],
+        "token_jaccard": 1.0,
+        "sequence_similarity": 1.0,
+        "bbox_overlap": true,
+        "intersection_area_degrees2": 0.0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "regional-greenspaces-comox-valley-stanehill-park-4821",
+          "regional-stoney-hill-regional-park"
+        ],
+        "names": [
+          "Stanehill Park",
+          "Stoney Hill Regional Park"
+        ],
+        "sourceIds": [
+          "4821",
+          "980399"
+        ],
+        "sourceNames": [
+          "Comox Valley Regional District via BC Local and Regional Greenspaces",
+          "Cowichan Valley Regional District — Parks GIS layer"
+        ],
+        "token_jaccard": 0.0,
+        "sequence_similarity": 0.8,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-wakes-cove-park",
+          "provincial-walsh-cove-park"
+        ],
+        "names": [
+          "Wakes Cove Park",
+          "Walsh Cove Park"
+        ],
+        "sourceIds": [
+          "5003",
+          "1209"
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "BC Parks / DataBC — TANTALIS protected areas"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.8,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      },
+      {
+        "ids": [
+          "provincial-white-ridge-park",
+          "provincial-white-river-park"
+        ],
+        "names": [
+          "White Ridge Park",
+          "White River Park"
+        ],
+        "sourceIds": [
+          "1224",
+          "1225"
+        ],
+        "sourceNames": [
+          "BC Parks / DataBC — TANTALIS protected areas",
+          "BC Parks / DataBC — TANTALIS protected areas"
+        ],
+        "token_jaccard": 0.333,
+        "sequence_similarity": 0.818,
+        "bbox_overlap": false,
+        "intersection_area_degrees2": 0,
+        "intersection_error": null
+      }
+    ],
+    "recommendations": [
+      "Do not create duplicate rows for the 26 exact stable IDs already in the current staging target. Reuse/retain those target entries and their IDs.",
+      "Two Maple Park records are distinct: regional-greenspaces-strathcona-maple-park-5281 (source 5281) and regional-greenspaces-comox-valley-maple-park-4825 (source 4825) have distinct source districts and spatially separate footprints. Keep both.",
+      "The Sooke Potholes provincial and regional entries are distinct source records (DataBC sourceId 1104 versus CRD sourceId 1678) and non-identical park footprints. The valid regional polygon and provincial source geometries have zero calculated area intersection; keep both stable IDs. Do not collapse the provincial ID into the existing regional target ID solely from similar names.",
+      "No exact stable ID duplicate exists within the 271 selected entries. No normalized-name group supports an automatic deduplication. Similar names/nearby areas remain separate parks unless additional official evidence says otherwise."
+    ]
+  },
+  "boundaryQA": {
+    "boundaryFeatureCount": 271,
+    "boundaryTypeCounts": {
+      "Polygon": 193,
+      "MultiPolygon": 78
+    },
+    "totalPolygonComponents": 432,
+    "totalInteriorRings": 65,
+    "invalidGeometryCount": 7,
+    "invalidGeometries": [
+      {
+        "id": "provincial-cape-scott-park",
+        "name": "Cape Scott Park",
+        "category": "provincial",
+        "sourceId": "549",
+        "reason": "Self-intersection[-128.40223 50.76978]",
+        "type": "Polygon",
+        "bbox": [
+          -128.44526,
+          50.64932,
+          -127.85063,
+          50.87544
+        ]
+      },
+      {
+        "id": "provincial-sooke-potholes-park",
+        "name": "Sooke Potholes Park",
+        "category": "provincial",
+        "sourceId": "1104",
+        "reason": "Self-intersection[-123.713038207343 48.4253896544276]",
+        "type": "MultiPolygon",
+        "bbox": [
+          -123.7136,
+          48.42537,
+          -123.71042,
+          48.43106
+        ]
+      },
+      {
+        "id": "provincial-wakes-cove-park",
+        "name": "Wakes Cove Park",
+        "category": "provincial",
+        "sourceId": "5003",
+        "reason": "Self-intersection[-123.71333651715 49.1270401846966]",
+        "type": "Polygon",
+        "bbox": [
+          -123.71925,
+          49.11779,
+          -123.68113,
+          49.12896
+        ]
+      },
+      {
+        "id": "regional-greenspaces-comox-valley-driftwood-marine-park-4853",
+        "name": "Driftwood Marine Park",
+        "category": "regional",
+        "sourceId": "4853",
+        "reason": "Self-intersection[-125.10281 49.85598]",
+        "type": "MultiPolygon",
+        "bbox": [
+          -125.10817,
+          49.8538,
+          -125.10134,
+          49.85771
+        ]
+      },
+      {
+        "id": "regional-greenspaces-comox-valley-seal-bay-nature-park-4840",
+        "name": "Seal Bay Nature Park",
+        "category": "regional",
+        "sourceId": "4840",
+        "reason": "Self-intersection[-124.97232 49.76138]",
+        "type": "MultiPolygon",
+        "bbox": [
+          -124.99867,
+          49.73563,
+          -124.95992,
+          49.77236
+        ]
+      },
+      {
+        "id": "regional-greenspaces-strathcona-siskin-forest-park-5255",
+        "name": "Siskin Forest Park",
+        "category": "regional",
+        "sourceId": "5255",
+        "reason": "Self-intersection[-124.98128 50.0498]",
+        "type": "MultiPolygon",
+        "bbox": [
+          -124.98944,
+          50.03764,
+          -124.97573,
+          50.05211
+        ]
+      },
+      {
+        "id": "regional-greenspaces-strathcona-whaletown-commons-park-5296",
+        "name": "Whaletown Commons Park",
+        "category": "regional",
+        "sourceId": "5296",
+        "reason": "Self-intersection[-125.038230298013 50.10706]",
+        "type": "MultiPolygon",
+        "bbox": [
+          -125.03967,
+          50.10341,
+          -125.0324,
+          50.11063
+        ]
+      }
+    ],
+    "scopeNote": "Do not repair or drop source geometry as part of identity deduplication. Existing importer validation had identified the following seven invalid source features; preserve source and resolve separately if import contract rejects them."
+  },
+  "frozenInputs": {
+    "sources\\island-catalogue.json": {
+      "bytes": 156175,
+      "sha256": "419bdf709cfead9be0547f50b46198bf91bf0ccbdd0041643dcab701467b21ba"
+    },
+    "sources\\island-boundaries.geojson": {
+      "bytes": 799549,
+      "sha256": "5f185fa46c85c5e87a84823afc6930d7151d7a9af45605d3cd8eeb2f47cbb1aa"
+    },
+    "sources\\full-catalogue.json": {
+      "bytes": 523742,
+      "sha256": "e30b7523efe9018e84fbe92c752c970ab3c1acb3416414113e1533db87a45dd5"
+    },
+    "sources\\full-boundaries.geojson": {
+      "bytes": 6323018,
+      "sha256": "5539c6bb95e002b327ba6ca5fabb6fcb7c30ce5285ba91f725900296a0ba61e1"
+    },
+    "sources\\legacy-catalogue.json": {
+      "bytes": 806531,
+      "sha256": "672de82ba44ebb06bcbe723f16dfe7f5f4ea63b43b7784620aecf0e9aedd639e"
+    },
+    "sources\\legacy-boundaries.json": {
+      "bytes": 13003941,
+      "sha256": "c9be9a8a8813ad0147692bcd99fc14a22300ac037c34906b127031c740846cc8"
+    },
+    "staging-before.json": {
+      "bytes": 855273,
+      "sha256": "c6929fc41154f2f60cbf6c60e706481f5bd10bbc12b4bb33cc8d6a375e6a0c9f"
+    }
+  }
+}

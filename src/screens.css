@@ -148,7 +148,7 @@
 .ob-fan {
   position: relative;
   width: 320px;
-  height: 300px;
+  height: 340px;
   display: grid;
   place-items: center;
 }
@@ -169,9 +169,12 @@
 
 .ob-fan__kip {
   position: absolute;
-  left: -10px;
-  bottom: -26px;
+  left: 4px;
+  bottom: 0;
   z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
 }
 
 .ob-go {
@@ -184,15 +187,92 @@
   overflow: visible;
 }
 
-.ob-go svg {
+.ob-go__map {
   display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   border-radius: 28px;
+  user-select: none;
 }
 
+.ob-go__route {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.ob-go__in {
+  position: absolute;
+  left: 150px;
+  top: 64px;
+  padding: 6px 12px;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 99px;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* The real badge pops in the top-right corner, over map labels rather than the park or route. */
+.ob-go__badge {
+  position: absolute;
+  right: -18px;
+  top: -30px;
+  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.25));
+}
+
+/* Kip stands in the open water at bottom-left, clear of the route and the park. */
 .ob-go__kip {
   position: absolute;
-  left: -34px;
-  bottom: -44px;
+  left: -26px;
+  bottom: -40px;
+}
+
+.ob-ranks {
+  display: grid;
+  gap: 10px;
+  width: 310px;
+}
+
+.ob-ranks__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px 9px 9px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+
+.ob-ranks__text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ob-ranks__text strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.ob-ranks__text span {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.ob-ranks__opens {
+  padding: 3px 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .ob-snap {
@@ -217,6 +297,11 @@
   position: absolute;
   bottom: 8px;
   left: 14px;
+  /* Long park names stay on one line instead of spilling under the stamp. */
+  right: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--display);
   font-weight: 700;
   font-size: 14px;
@@ -358,6 +443,32 @@
   pointer-events: none;
 }
 
+.map-loading--content {
+  z-index: 10;
+  pointer-events: auto;
+  padding: 24px;
+  background: var(--paper);
+}
+
+.map-loading__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  padding: 24px;
+  text-align: center;
+}
+
+.map-loading--over-map {
+  background: transparent;
+  pointer-events: none;
+}
+
+.map-loading--over-map .map-loading__card {
+  pointer-events: auto;
+}
+
 .pm-host {
   cursor: pointer;
 }
@@ -396,6 +507,26 @@
   background: var(--moss);
   border: 2px solid var(--ink);
   border-radius: 50%;
+}
+
+.pm__lock {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--sun);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 1px 0 rgba(20, 35, 28, 0.25);
+}
+
+.pm--locked .pm__dot {
+  background: #d6aa33;
+  box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 3px var(--paper);
 }
 
 .pm__dot {
@@ -538,11 +669,85 @@
   font-size: 11.5px;
   font-weight: 700;
   color: var(--ink-soft);
+  text-align: left;
+  white-space: nowrap;
 }
 
 .map-top__tools {
   display: flex;
   gap: 8px;
+}
+
+.content-sync {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: min(260px, calc(100vw - 28px));
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.content-sync__icon,
+.content-sync__wheel {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+
+.content-sync--retry {
+  min-height: 44px;
+  white-space: normal;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.content-sync__wheel--active svg {
+  animation: content-sync-spin 1.15s linear infinite;
+}
+
+.content-sync__progress {
+  padding-left: 7px;
+  border-left: 1px solid var(--paper-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.content-sync__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+
+@keyframes content-sync-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-sync__wheel--active svg {
+    animation: none;
+  }
 }
 
 .tool {
@@ -727,6 +932,8 @@
 }
 
 .rays {
+  /* Its own layer, so spinning the masked gradient composites instead of repainting. */
+  will-change: transform;
   border-radius: 50%;
   mask-image: radial-gradient(circle, #000 5%, transparent 64%);
   -webkit-mask-image: radial-gradient(circle, #000 5%, transparent 64%);
@@ -778,8 +985,14 @@
 
 .park-sheet__pills {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.park-sheet__art-pill {
+  background: #f2ead9;
+  color: var(--ink-2);
 }
 
 .park-sheet__name {
@@ -1028,11 +1241,14 @@
   pointer-events: none;
 }
 
+/* Kip and his bubble share one short row on the card's top edge, so they cover as little map as possible. */
 .arrival__kip {
   position: absolute;
-  right: 12px;
-  top: -86px;
+  right: 8px;
+  bottom: calc(100% - 12px);
   z-index: 2;
+  display: flex;
+  align-items: flex-end;
 }
 
 .arrival__card {
@@ -1213,6 +1429,14 @@
   content: "This park's badge is coming soon";
 }
 
+.fab__hint[data-reason="locked"]::before {
+  content: "This rarity is locked. Open the park for requirements";
+}
+
+.fab__hint[data-reason="progress"]::before {
+  content: "Checking your saved rarity progress";
+}
+
 .fab__hint[data-reason="claimed"]::before {
   content: "You've already claimed this park";
 }
@@ -1388,15 +1612,20 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
-.camera__kip {
-  position: absolute;
-  right: 0;
-  bottom: 200px;
-  z-index: 3;
+.camera__controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
 }
 
-.camera__kip .bubble {
-  color: var(--ink);
+.camera__controls .shutter {
+  grid-column: 2;
+}
+
+.camera__kip {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .camera__bottom {
@@ -1500,6 +1729,9 @@
 
 .claim {
   z-index: 60;
+  isolation: isolate;
+  /* Keep the opaque claim surface and its animated children in one stable WebView layer. */
+  transform: translate3d(0, 0, 0);
   background: radial-gradient(120% 70% at 50% 42%, #2d4a3d 0%, var(--ink) 60%, #0b1511 100%);
   color: var(--paper);
   display: flex;
@@ -1592,8 +1824,23 @@
 .claim__stage {
   position: relative;
   flex: 1;
+  min-height: 0;
   display: grid;
   place-items: center;
+  container-type: size;
+}
+
+/* The badge art is a fixed size; shrink it on short screens so it never slides under the foot. */
+@container (max-height: 300px) {
+  .claim__badge {
+    scale: 0.82;
+  }
+}
+
+@container (max-height: 240px) {
+  .claim__badge {
+    scale: 0.66;
+  }
 }
 
 .claim__rays {
@@ -1606,6 +1853,18 @@
   position: relative;
   z-index: 2;
   filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.45));
+}
+
+.claim__badge-art {
+  position: relative;
+}
+
+.claim__badge-dim {
+  position: absolute;
+  inset: 0;
+  filter: grayscale(1) brightness(0.55) contrast(0.9);
+  will-change: opacity;
+  pointer-events: none;
 }
 
 .claim__flash {
@@ -1748,14 +2007,15 @@
 }
 
 .claim__kip {
-  position: absolute;
-  right: -4px;
-  bottom: 212px;
-  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin: 0 -10px -6px 0;
+  color: var(--ink);
 }
 
 .claim__kip .bubble {
-  color: var(--ink);
+  white-space: nowrap;
 }
 
 .confetti-canvas {
@@ -2033,43 +2293,6 @@
   margin-left: 4px;
 }
 
-.col-progress {
-  height: 14px;
-  margin: 12px 0 10px;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.col-progress__fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--kip), var(--sun));
-  border-right: 2px solid var(--ink);
-}
-
-.col-rarity {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -18px 16px;
-  padding: 0 18px;
-}
-
-.col-rarity__chip {
-  flex: none;
-  padding: 5px 10px;
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.col-rarity__chip.is-empty {
-  opacity: 0.45;
-}
-
 .case {
   position: relative;
   padding: 16px 12px 14px;
@@ -2099,6 +2322,27 @@
   max-width: 260px;
 }
 
+/* An empty Dex is one inviting shelf, not a wall of locked slots. */
+.case__first {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 12px;
+}
+
+.case__first .bubble {
+  max-width: 250px;
+  text-align: center;
+}
+
+.case__first-kip {
+  margin: 4px 0 8px;
+  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.35));
+}
+
 .case__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2122,22 +2366,6 @@
   filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.35));
 }
 
-.slot .badge--silhouette {
-  filter: brightness(10);
-  opacity: 0.1;
-}
-
-.slot__q {
-  position: absolute;
-  top: 38px;
-  left: 50%;
-  translate: -50% 0;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 28px;
-  color: rgba(255, 248, 236, 0.4);
-}
-
 .slot__plate {
   max-width: 94%;
   padding: 2px 7px;
@@ -2150,173 +2378,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.slot__plate--ghost {
-  background: rgba(255, 248, 236, 0.1);
-  color: rgba(255, 248, 236, 0.45);
-  box-shadow: none;
-}
-
-.real {
-  margin-top: 32px;
-}
-
-.real h2 {
-  font-size: 34px;
-  font-weight: 800;
-  margin: 6px 0 8px;
-}
-
-.real > p {
-  color: var(--ink-soft);
-  line-height: 1.45;
-  font-weight: 600;
-}
-
-.real__cards {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 16px;
-}
-
-.product {
-  overflow: hidden;
-  border-radius: 24px;
-}
-
-.product__art {
-  height: 150px;
-  display: grid;
-  place-items: center;
-  border-bottom: 2.5px solid var(--ink);
-}
-
-.product__art--case {
-  background: radial-gradient(circle at 50% 30%, #ffe8c7, #f7cf9a);
-}
-
-.product__art--book {
-  background: radial-gradient(circle at 50% 30%, #d8f1ff, #9fd8ff);
-}
-
-.product__body {
-  padding: 14px 16px 16px;
-}
-
-.product__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.product__row strong {
-  font-family: var(--display);
-  font-size: 21px;
-  font-weight: 800;
-}
-
-.product__price {
-  font-weight: 800;
-  color: var(--kip-dark);
-}
-
-.product__body p {
-  margin: 6px 0 12px;
-  color: var(--ink-soft);
-  font-size: 14.5px;
-  line-height: 1.4;
-}
-
-.mini-case {
-  display: grid;
-  grid-template-columns: repeat(3, 42px);
-  gap: 6px;
-  padding: 10px;
-  background: #22392f;
-  border: 6px solid #8a5530;
-  border-radius: 10px;
-  box-shadow: 0 0 0 2px var(--ink), 0 6px 0 2px var(--ink);
-  rotate: -4deg;
-  animation: bob 4s ease-in-out infinite;
-}
-
-.mini-case__cell {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-}
-
-@keyframes bob {
-  50% {
-    transform: translateY(-6px) rotate(2deg);
-  }
-}
-
-.mini-book {
-  position: relative;
-  width: 118px;
-  height: 128px;
-  animation: bob 4.6s ease-in-out infinite;
-}
-
-.mini-book__page {
-  position: absolute;
-  inset: 0;
-  background: var(--pine);
-  border: 2.5px solid var(--ink);
-  border-radius: 6px 12px 12px 6px;
-  box-shadow: inset 8px 0 0 rgba(0, 0, 0, 0.2), 0 5px 0 var(--ink);
-  rotate: 5deg;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 12px;
-}
-
-.mini-book__page--back {
-  background: var(--paper-2);
-  rotate: -3deg;
-  translate: -6px 4px;
-}
-
-.mini-book__photo {
-  width: 62px;
-  height: 58px;
-  background: #fffdf8;
-  padding: 4px;
-  border-radius: 2px;
-  rotate: -5deg;
-}
-
-.mini-book__photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.mini-book__photo:empty {
-  background: linear-gradient(#ffd9a8, #27a9c4);
-  border: 4px solid #fffdf8;
-}
-
-.mini-book__badge {
-  position: absolute;
-  right: 6px;
-  top: 44px;
-}
-
-.mini-book__title {
-  margin-top: 12px;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 13px;
-  color: var(--sun);
 }
 
 .col-foot {
@@ -2495,4 +2556,434 @@
 .park-sheet__badge .badge {
   width: min(176px, calc(30vh - 44px));
   height: auto;
+}
+
+/* ---------- Feedback ---------- */
+
+.fb-scrim {
+  z-index: 70;
+}
+
+.fb-sheet {
+  z-index: 71;
+  max-height: 92%;
+  display: flex;
+  flex-direction: column;
+  padding-top: 26px;
+}
+
+.fb-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.fb-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 64px 12px 20px;
+}
+
+.fb-head__kip {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--paper-2);
+  border: 2.5px solid var(--ink);
+  overflow: hidden;
+}
+
+.fb-head h2 {
+  font-size: 28px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+.fb-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fb-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.fb-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 4px 10px;
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 14px;
+  transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+}
+
+.fb-kind:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.fb-kind.is-on {
+  background: var(--sun);
+}
+
+.fb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fb-label {
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.fb-label em {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-left: 4px;
+}
+
+.fb-input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.fb-input:focus {
+  border-color: var(--kip);
+  box-shadow: 0 0 0 3px rgba(255, 90, 31, 0.2);
+}
+
+.fb-input::placeholder {
+  color: #9aa69f;
+}
+
+.fb-input[aria-invalid="true"] {
+  border-color: var(--berry);
+}
+
+.fb-textarea {
+  resize: none;
+  line-height: 1.4;
+  min-height: 118px;
+}
+
+.fb-attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  border: 2.5px dashed var(--ink-soft);
+  border-radius: 16px;
+  font-weight: 800;
+  color: var(--ink-2);
+}
+
+.fb-attach:active {
+  background: var(--paper-2);
+}
+
+.fb-shot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 44px 8px 8px;
+  border-radius: 16px;
+}
+
+.fb-shot img {
+  width: 54px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  flex: none;
+}
+
+.fb-shot__name {
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-shot__remove {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  translate: 0 -50%;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+
+.fb-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.fb-switch__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fb-switch__text strong {
+  font-size: 15px;
+}
+
+.fb-switch__text span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.fb-switch__track {
+  flex: none;
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  display: flex;
+  border-radius: 99px;
+  border: 2.5px solid var(--ink);
+  background: var(--paper-3);
+  transition: background 0.15s;
+}
+
+.fb-switch.is-on .fb-switch__track {
+  background: var(--moss);
+  justify-content: flex-end;
+}
+
+.fb-switch__knob {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+
+.fb-email {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px;
+}
+
+.fb-error-text {
+  color: #c2185b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fb-context {
+  border-top: 2px dashed rgba(20, 35, 28, 0.2);
+  padding-top: 12px;
+}
+
+.fb-context summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.fb-context summary::-webkit-details-marker {
+  display: none;
+}
+
+.fb-context summary svg {
+  transition: rotate 0.2s;
+}
+
+.fb-context[open] summary svg {
+  rotate: 90deg;
+}
+
+.fb-context dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 10px 0 8px;
+  font-size: 14px;
+}
+
+.fb-context dt {
+  font-weight: 800;
+}
+
+.fb-context dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.fb-context p {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.fb-foot {
+  flex: none;
+  padding: 12px 20px calc(var(--safe-bottom) + 8px);
+  border-top: 2px solid rgba(20, 35, 28, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fb-failed {
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 2.5px solid var(--ink);
+  background: #ffe1ea;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.fb-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 248, 236, 0.4);
+  border-top-color: var(--paper);
+  animation: fb-spin 0.7s linear infinite;
+}
+
+@keyframes fb-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.fb-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 8px 24px calc(var(--safe-bottom) + 12px);
+}
+
+.fb-done h2 {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.fb-done p {
+  color: var(--ink-soft);
+  font-weight: 600;
+  line-height: 1.45;
+  max-width: 300px;
+}
+
+.fb-done__actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.fb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.park-sheet__report {
+  margin-top: 18px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.fb-cta {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 14px 16px;
+}
+
+.fb-cta div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fb-cta strong {
+  font-family: var(--display);
+  font-size: 18px;
+}
+
+.fb-cta span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.fb-cta .btn {
+  grid-column: 1 / -1;
+  margin-top: 10px;
 }

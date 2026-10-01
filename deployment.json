@@ -1,0 +1,97 @@
+{
+  "schema": "parkdex-kip.deployment/v1",
+  "repository": "NathanPannell/parkdex-kip",
+  "stagingBranch": "staging",
+  "productionBranch": "main",
+  "vercelProjectName": "parkdex-kip",
+  "vercelProjectIdEnvironment": "VERCEL_STAGING_PROJECT_ID",
+  "productionVercelProjectIdEnvironment": "VERCEL_PRODUCTION_PROJECT_ID",
+  "vercelPreviewProjectIdEnvironment": "VERCEL_PREVIEW_PROJECT_ID",
+  "vercelTeamIdEnvironment": "VERCEL_ORG_ID",
+  "vercelTokenEnvironment": "VERCEL_TOKEN",
+  "stagingAlias": "staging.web.parkdex.app",
+  "stagingUrl": "https://staging.web.parkdex.app",
+  "legacyStagingAlias": "parkdex-kip-staging.vercel.app",
+  "legacyStagingCutoverSha": "0c5a9bca512497d343464f26f7ccf44bfad8f135",
+  "productionAlias": "web.parkdex.app",
+  "productionUrl": "https://web.parkdex.app",
+  "neonProjectId": "small-cloud-35890217",
+  "neonProductionBranchId": "br-shy-hat-akg1paip",
+  "neonStagingBranchId": "br-odd-paper-aktgtidp",
+  "neonDatabaseName": "parkdex_kip",
+  "neonRoleName": "parkdex_kip_owner",
+  "migrationPath": "database/migrations/feedback_001_init.sql",
+  "optionalMigrationPaths": [
+    "database/migrations/accounts_001_init.sql",
+    "database/migrations/progress_001_init.sql",
+    "database/migrations/interactions_001_init.sql"
+  ],
+  "independentMigrationPaths": [
+    "database/migrations/app_config_001_init.sql",
+    "database/migrations/park_proposals_001_init.sql"
+  ],
+  "contentSync": {
+    "supportingMigrationPaths": [
+      "database/001_cloud_content.sql"
+    ],
+    "migrationPaths": [
+      "database/migrations/content_001_sync.sql",
+      "database/migrations/content_002_authoring.sql"
+    ],
+    "apiPaths": [
+      "api/content/snapshot.ts",
+      "api/content/changes.ts",
+      "api/content/scene.ts"
+    ],
+    "bootstrapPath": "scripts/bootstrap-content.py",
+    "qaSqlPath": "scripts/qa-content-sync.sql",
+    "pythonTestPaths": [
+      "scripts/test_bootstrap_content.py",
+      "scripts/test_map_only_manifest.py",
+      "scripts/test_publish_content.py",
+      "scripts/test_publish_park_update.py",
+      "scripts/test_reset_victoria_100.py",
+      "scripts/test_authoring_queue.py",
+      "scripts/test_downshift_park_rarities.py"
+    ],
+    "legacyImporterPath": "scripts/import_legacy_parks.py",
+    "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
+    "pythonRequirementsPath": "database/delivery-test-requirements.txt",
+    "previewClockTable": "content_clock"
+  },
+  "runtimeOptionalKeys": [
+    "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
+    "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"
+  ],
+  "privatePhotos": {
+    "accountId": "6f0eb57971124f41fadc7897ace74dac",
+    "sourcePath": "cloudflare/private-photos.mjs",
+    "stagingWorkerName": "parkdex-kip-photos-staging",
+    "stagingBucketName": "parkdex-kip-photos-staging",
+    "productionWorkerName": "parkdex-kip-photos-production",
+    "productionBucketName": "parkdex-kip-photos-production",
+    "wranglerVersion": "4.132.0",
+    "compatibilityDate": "2026-09-27",
+    "retentionCron": "23 9 * * *"
+  },
+  "apiEntrypoint": "api/feedback-api.ts",
+  "healthPath": "/api/health",
+  "releasePath": "/release.json",
+  "previewDatabaseInitSource": "parent-schema",
+  "previewExpiryHours": 72,
+  "previewEmailMode": "disabled",
+  "stagingEmailMode": "resend",
+  "productionEmailMode": "resend",
+  "runtimeSecretBundleEnvironment": "KIP_STAGING_RUNTIME_JSON",
+  "productionRuntimeSecretBundleEnvironment": "KIP_PRODUCTION_RUNTIME_JSON",
+  "runtimeSecretBundleKeys": [
+    "DATABASE_URL",
+    "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "EMAIL_REPLY_TO",
+    "OPERATOR_EMAIL",
+    "OPERATOR_PASSWORD_HASH",
+    "SESSION_SECRET"
+  ],
+  "vercelCliVersion": "50.1.3"
+}

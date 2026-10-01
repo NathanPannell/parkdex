@@ -1,17 +1,20 @@
-import { AttributionControl, Map as MLMap, Marker, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
-
-setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
-registerOfflineTiles(location.origin);
+import { AttributionControl, Map as MLMap, Marker, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 import { motion } from "motion/react";
-import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Badge } from "../../components/Badge";
+import { EarnedBadge } from "../../components/EarnedBadge";
 import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
-import { registerOfflineTiles } from "../../lib/offlineTiles";
-import { isLive, PARKS, type Park } from "../../lib/parks";
+import { configureMapLibreWorker } from "../../lib/mapStartup";
+import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
+import { isLive, type Park } from "../../lib/parks";
+import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
+import { rarityAccessibleStatus } from "../../lib/rarityUi";
+import type { Claim } from "../../lib/store";
+import { useContent, useContentRuntime, useMapDetailReady } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
 const tierOf = (z: number): Tier => (z < 8.6 ? "far" : z < 10.4 ? "mid" : "near");
@@ -20,12 +23,18 @@ type Props = {
   mapRef: RefObject<MLMap | null>;
   user: LngLat;
   fc: BoundaryCollection | undefined;
-  claims: Record<string, unknown>;
+  /** Parks to pin: those with a badge to earn, plus any already in the Dex. */
+  parks: readonly Park[];
+  claims: Readonly<Record<string, Claim>>;
+  rarityProgress: RarityProgress;
+  progressReady: boolean;
   selectedId: string | null;
   tripId: string | null;
   arrivedId: string | null;
   route: LngLat[] | null;
   onSelect: (id: string | null) => void;
+  /** False while a full-screen view covers the map, so map animations pause. */
+  visible: boolean;
 };
 
 const BIOME_FILL = [
@@ -42,27 +51,59 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedId, route, onSelect }: Props) {
+export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
+  const content = useContent();
+  const runtime = useContentRuntime();
+  const contentMapDetailReady = useMapDetailReady();
   const container = useRef<HTMLDivElement>(null);
   const userMarker = useRef<Marker | null>(null);
+  const camera = useRef<{ center: LngLat; zoom: number; bearing: number; pitch: number } | null>(null);
+  const parkMarkers = useRef(new Map<string, { park: Park; el: HTMLElement; marker: Marker; rank: number }>());
+  const protocolCleanups = useRef(new Map<string, () => void>());
+  const styleRelease = useRef<string | null>(null);
+  const styleGeneration = useRef(0);
+  const pendingDetailReload = useRef(false);
+  const styleReady = useRef(false);
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
-  const [loaded, setLoaded] = useState(false);
+  const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
+  const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
+  const [styleIsReady, setStyleIsReady] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  // Stable marker props let memoized pins skip re-rendering when unrelated app state changes.
+  const selectMarker = useCallback((id: string) => selectRef.current(id), []);
+  const eligibilityById = useMemo(() => new Map(parks.map((park) => [
+    park.id,
+    progressReady ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id]) : UNAVAILABLE_ELIGIBILITY,
+  ])), [parks, progressReady, rarityProgress, claims]);
+  const releaseId = content?.releaseId;
+  const hasReadyMapContent = !!content && !!releaseId;
+  const mapDetailReady = !!releaseId && contentMapDetailReady;
+  const loaded = styleIsReady && (mapDetailReady ? loadedRelease === releaseId : loadedRelease === null);
 
   useEffect(() => {
+    styleReady.current = false;
+    setStyleIsReady(false);
+    setHosts([]);
+    setUserHost(null);
+    styleRelease.current = null;
+    const savedCamera = camera.current;
+    const zoom = savedCamera?.zoom ?? 10.7;
+    configureMapLibreWorker();
     const map = new MLMap({
       container: container.current!,
-      style: mapStyle(location.origin),
+      style: mapStyle(),
       minZoom: 6.5,
       maxBounds: [
         [ISLAND_BOUNDS[0] - 1.5, ISLAND_BOUNDS[1] - 0.8],
         [ISLAND_BOUNDS[2] + 1.5, ISLAND_BOUNDS[3] + 0.8],
       ],
-      center: user,
-      zoom: 10.7,
+      center: savedCamera?.center ?? user,
+      zoom,
+      bearing: savedCamera?.bearing ?? 0,
+      pitch: savedCamera?.pitch ?? 0,
       attributionControl: false,
       pitchWithRotate: false,
       dragRotate: false,
@@ -71,18 +112,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     map.touchZoomRotate.disableRotation();
     map.addControl(new AttributionControl({ compact: true }), "top-left");
     mapRef.current = map;
-
-    const ranked = [...PARKS].sort(
-      (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
-    );
-    setHosts(
-      ranked.map((park, rank) => {
-        const el = document.createElement("div");
-        el.className = "pm-host";
-        new Marker({ element: el, anchor: "bottom" }).setLngLat([park.lng, park.lat]).addTo(map);
-        return { park, el, rank };
-      }),
-    );
+    setTier(tierOf(zoom));
 
     const uEl = document.createElement("div");
     uEl.className = "user-host";
@@ -94,75 +124,156 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
       if ((e.originalEvent.target as HTMLElement).closest(".pm")) return;
       selectRef.current(null);
     });
-    map.on("load", () => setLoaded(true));
+    const markStyleReady = () => {
+      const currentRelease = styleRelease.current;
+      const glyphs = map.getStyle().glyphs;
+      if (currentRelease && !glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
+      if (!currentRelease && glyphs) return;
+      styleReady.current = true;
+      setStyleIsReady(true);
+      setInitialStyleLoaded(true);
+      setLoadedRelease(currentRelease);
+      if (pendingDetailReload.current) flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+    };
+    map.on("style.load", markStyleReady);
+    map.on("load", markStyleReady);
 
     return () => {
+      const center = map.getCenter();
+      camera.current = {
+        center: [center.lng, center.lat],
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
       map.remove();
-      mapRef.current = null;
+      if (mapRef.current === map) mapRef.current = null;
+      for (const cleanup of protocolCleanups.current.values()) cleanup();
+      protocolCleanups.current.clear();
+      parkMarkers.current.clear();
+      userMarker.current = null;
+      styleRelease.current = null;
+      styleGeneration.current += 1;
+      pendingDetailReload.current = false;
+      styleReady.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!initialStyleLoaded) return;
+    const map = mapRef.current;
+    const desiredRelease = mapDetailReady ? releaseId : null;
+    if (!map || styleRelease.current === desiredRelease) return;
+
+    if (desiredRelease && content && !protocolCleanups.current.has(desiredRelease)) {
+      protocolCleanups.current.set(desiredRelease, registerContentMapProtocols(runtime, content));
+    }
+    setLoadedRelease(null);
+    setStyleIsReady(false);
+    styleRelease.current = desiredRelease;
+    const generation = ++styleGeneration.current;
+    map.once("style.load", () => {
+      if (styleGeneration.current !== generation) return;
+      for (const [registeredRelease, cleanup] of protocolCleanups.current) {
+        if (registeredRelease === desiredRelease) continue;
+        cleanup();
+        protocolCleanups.current.delete(registeredRelease);
+      }
+    });
+    styleReady.current = false;
+    map.setStyle(mapStyle(desiredRelease), { diff: true });
+  }, [releaseId, mapDetailReady, initialStyleLoaded]);
+
+  useEffect(() => {
+    if (!hasReadyMapContent) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const ranked = [...parks].sort(
+      (a, b) => Math.hypot(a.lng - user[0], a.lat - user[1]) - Math.hypot(b.lng - user[0], b.lat - user[1]),
+    );
+    const wanted = new Set(ranked.map((park) => park.id));
+    for (const [id, record] of parkMarkers.current) {
+      if (wanted.has(id)) continue;
+      record.marker.remove();
+      parkMarkers.current.delete(id);
+    }
+    setHosts(ranked.map((park, rank) => {
+      const current = parkMarkers.current.get(park.id);
+      if (current) {
+        current.park = park;
+        current.rank = rank;
+        current.marker.setLngLat([park.lng, park.lat]);
+        return { park, el: current.el, rank };
+      }
+      const el = document.createElement("div");
+      el.className = "pm-host";
+      const marker = new Marker({ element: el, anchor: "bottom" }).setLngLat([park.lng, park.lat]).addTo(map);
+      parkMarkers.current.set(park.id, { park, el, marker, rank });
+      return { park, el, rank };
+    }));
+  }, [parks, hasReadyMapContent]);
+
+  useEffect(() => {
+    if (!releaseId || !mapDetailReady) return;
+    return subscribeMapCoverage(releaseId, () => {
+      pendingDetailReload.current = true;
+      const map = mapRef.current;
+      if (!map || !styleReady.current) return;
+      flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+    });
+  }, [releaseId, mapDetailReady]);
 
   useEffect(() => {
     userMarker.current?.setLngLat(user);
   }, [user]);
 
-  // Park boundary layers go in once both the style and the data are ready.
+  // Park and route overlays are restored after a content style transition.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !loaded || !fc || map.getSource("parks")) return;
-    map.addSource("parks", { type: "geojson", data: fc });
-    map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    const before = "water_waterway_label";
-    map.addLayer(
-      {
-        id: "park-fill",
-        type: "fill",
-        source: "parks",
-        paint: { "fill-color": BIOME_FILL, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.12, 12, 0.22] },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-line",
-        type: "line",
-        source: "parks",
-        minzoom: 9,
-        paint: { "line-color": BIOME_FILL, "line-width": 1.6, "line-dasharray": [2, 2], "line-opacity": 0.7 },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-glow",
-        type: "line",
-        source: "parks",
-        filter: ["==", ["get", "id"], ""],
-        paint: { "line-color": "#FFC93C", "line-width": 14, "line-blur": 8, "line-opacity": 0.9 },
-      },
-      before,
-    );
-    map.addLayer(
-      {
-        id: "park-selected",
-        type: "line",
-        source: "parks",
-        filter: ["==", ["get", "id"], ""],
-        paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
-      },
-      before,
-    );
-    map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFF8EC", "line-width": 10 } }, before);
-    map.addLayer(
-      {
-        id: "route-line",
-        type: "line",
-        source: "route",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#FF5A1F", "line-width": 5, "line-dasharray": [0.1, 2] },
-      },
-      before,
-    );
+    if (!map || !loaded || !fc) return;
+    const parksSource = map.getSource("parks") as GeoJSONSource | undefined;
+    if (parksSource) parksSource.setData(fc);
+    else map.addSource("parks", { type: "geojson", data: fc });
+    if (!map.getSource("route")) map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    const before = map.getLayer("water_waterway_label") ? "water_waterway_label" : undefined;
+    const addLayer = (layer: Parameters<MLMap["addLayer"]>[0]) => {
+      if (!map.getLayer(layer.id)) map.addLayer(layer, before);
+    };
+    addLayer({
+      id: "park-fill",
+      type: "fill",
+      source: "parks",
+      paint: { "fill-color": BIOME_FILL, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.12, 12, 0.22] },
+    });
+    addLayer({
+      id: "park-line",
+      type: "line",
+      source: "parks",
+      minzoom: 9,
+      paint: { "line-color": BIOME_FILL, "line-width": 1.6, "line-dasharray": [2, 2], "line-opacity": 0.7 },
+    });
+    addLayer({
+      id: "park-glow",
+      type: "line",
+      source: "parks",
+      filter: ["==", ["get", "id"], ""],
+      paint: { "line-color": "#FFC93C", "line-width": 14, "line-blur": 8, "line-opacity": 0.9 },
+    });
+    addLayer({
+      id: "park-selected",
+      type: "line",
+      source: "parks",
+      filter: ["==", ["get", "id"], ""],
+      paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
+    });
+    addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFF8EC", "line-width": 10 } });
+    addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FF5A1F", "line-width": 5, "line-dasharray": [0.1, 2] },
+    });
   }, [loaded, fc]);
 
   useEffect(() => {
@@ -175,7 +286,8 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
   // Gently breathe the arrival glow so the boundary feels alive.
   useEffect(() => {
     const map = mapRef.current;
-    if (!arrivedId || !map) return;
+    // Each paint-property change redraws the whole WebGL map, so only breathe while it is on screen.
+    if (!arrivedId || !map || !visible) return;
     let raf = 0;
     const tick = (t: number) => {
       if (map.getLayer("park-glow")) map.setPaintProperty("park-glow", "line-width", 12 + Math.sin(t / 260) * 7);
@@ -183,7 +295,7 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [arrivedId]);
+  }, [arrivedId, visible]);
 
   useEffect(() => {
     const src = mapRef.current?.getSource("route") as GeoJSONSource | undefined;
@@ -203,9 +315,10 @@ export function MapView({ mapRef, user, fc, claims, selectedId, tripId, arrivedI
             park={park}
             tier={tier}
             rank={rank}
-            claimed={!!claims[park.id]}
+            claim={claims[park.id]}
+            eligibility={eligibilityById.get(park.id) ?? UNAVAILABLE_ELIGIBILITY}
             focused={park.id === (tripId ?? selectedId)}
-            onSelect={onSelect}
+            onSelect={selectMarker}
           />,
           el,
           park.id,
@@ -220,18 +333,22 @@ const ParkMarker = memo(function ParkMarker({
   park,
   tier,
   rank,
-  claimed,
+  claim,
+  eligibility,
   focused,
   onSelect,
 }: {
   park: Park;
   tier: Tier;
   rank: number;
-  claimed: boolean;
+  claim?: Claim;
+  eligibility: ParkRarityEligibility;
   focused: boolean;
   onSelect: (id: string) => void;
 }) {
   const live = isLive(park);
+  const claimed = !!claim;
+  const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const size = !live ? (tier === "near" ? 30 : 22) : tier === "near" ? 50 : 38;
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -242,8 +359,8 @@ const ParkMarker = memo(function ParkMarker({
   return (
     <motion.button
       ref={ref}
-      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""} ${live ? "" : "pm--soon"}`}
-      aria-label={park.name}
+      className={`pm ${claimed ? "pm--claimed" : ""} ${focused ? "pm--focused" : ""} ${live ? "" : "pm--soon"} ${locked ? "pm--locked" : ""}`}
+      aria-label={`${park.name}. ${rarityAccessibleStatus(park, eligibility, !live)}`}
       initial={{ scale: 0, y: 24 }}
       animate={{ scale: focused ? 1.4 : 1, y: focused ? -6 : 0 }}
       whileHover={{ scale: focused ? 1.45 : 1.12 }}
@@ -256,13 +373,16 @@ const ParkMarker = memo(function ParkMarker({
       ) : (
         <>
           <span className="pm__badge">
-            <Badge park={park} size={size} showName={false} state={claimed ? "earned" : "preview"} />
+            {claim
+              ? <EarnedBadge park={park} claim={claim} size={size} showName={false} state="earned" />
+              : <Badge park={park} size={size} showName={false} state="preview" />}
           </span>
           {claimed && (
             <span className="pm__check">
               <Icon name="check" size={12} stroke={3.4} />
             </span>
           )}
+          {locked && <span className="pm__lock" aria-hidden="true"><Icon name="lock" size={10} stroke={2.8} /></span>}
           <span className="pm__stem" />
         </>
       )}

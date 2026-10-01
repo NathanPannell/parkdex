@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.parkdex.debug",
+      "sha256_cert_fingerprints": [
+        "CD:A2:DE:EC:33:11:2A:3D:99:2C:55:CF:2E:2F:48:FB:06:1D:E7:70:CE:F6:F1:40:0F:03:86:8B:49:75:74:6E"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.parkdex",
+      "sha256_cert_fingerprints": [
+        "5B:1D:AC:4D:C7:D4:7F:ED:6C:FC:B2:7B:BB:C1:33:BD:B3:EA:6A:DF:A7:86:89:73:FA:C2:02:28:E3:6D:BF:D9"
+      ]
+    }
+  }
+]

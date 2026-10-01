@@ -308,6 +308,41 @@ p {
   right: 22px;
 }
 
+.bubble--down::after {
+  left: calc(50% - 8px);
+}
+
+/* Sideways tails (see BubbleTail) point at Kip beside the bubble, centred on
+   the side facing him. drop-shadow lets the bubble's shadow follow the tail. */
+.bubble--to-left,
+.bubble--to-right {
+  border-radius: 14px;
+  box-shadow: none;
+  filter: drop-shadow(0 3px 0 var(--ink));
+}
+
+.bubble--to-left::after,
+.bubble--to-right::after {
+  display: none;
+}
+
+.bubble__tail {
+  position: absolute;
+  top: 50%;
+  margin-top: -10px;
+  overflow: visible;
+}
+
+/* The tail's straight end sits on top of the 2.5px border to hide it at the join. */
+.bubble--to-left .bubble__tail {
+  left: -18px;
+}
+
+.bubble--to-right .bubble__tail {
+  right: -18px;
+  transform: scaleX(-1);
+}
+
 /* ---------- Badge effects ---------- */
 
 .badge {
