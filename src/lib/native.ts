@@ -16,9 +16,15 @@ type NativeInstallInfoPlugin = {
 const NativeInstallInfo = registerPlugin<NativeInstallInfoPlugin>("NativeInstallInfo");
 
 export async function getNativeInstallIdentity(): Promise<string | null> {
+  const info = await getNativePackageInstallInfo();
+  return info ? packageInstallIdentity(info) : null;
+}
+
+export async function getNativePackageInstallInfo(): Promise<NativePackageInstallInfo | null> {
   if (!isNative) return null;
   try {
-    return packageInstallIdentity(await NativeInstallInfo.getInstallInfo());
+    const info = await NativeInstallInfo.getInstallInfo();
+    return packageInstallIdentity(info) ? info : null;
   } catch {
     return null;
   }

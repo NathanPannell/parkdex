@@ -678,7 +678,7 @@
   opacity: 0.57;
 }
 
-.fr-button--primary {
+.fr-review .fr-button--primary {
   color: var(--fr-paper);
   background: var(--fr-action-orange);
   box-shadow: 0 3px 8px rgba(113, 43, 12, 0.18);
