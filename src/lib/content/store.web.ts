@@ -1,4 +1,4 @@
-import type { ArchivedScene, ContentChangeBatch, ContentEnvironment, ContentMapInventory, ContentMapPointer, ContentStore, ContentSyncCursor, ContentSyncState, RetainedPark, StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
 
 const DATABASE = "parkdex-content-v1";
@@ -18,7 +18,12 @@ type MetaRecord = { key: string; value: string | null };
 type FileRecord = { hash: string; size: number; bytes: Blob };
 type RetainedRecord = { parkId: string; park: RetainedPark["park"]; sceneFile?: RetainedPark["sceneFile"] };
 type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | "boundary" | "drive" | "asset" | "hubs" | "map"; id: string; value: unknown; position: number };
-type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string };
+type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string; readerVersion?: number };
+
+// Incremental batches keep the version of the reader that wrote the full cache.
+function storedReaderVersion(cursor: SyncCursor): number {
+  return Number.isSafeInteger(cursor.readerVersion) && cursor.readerVersion! > 0 ? cursor.readerVersion! : 1;
+}
 type MapInventoryRecord = { version: string; inventory: ContentMapInventory };
 type CachedMapPointer = { environment: ContentEnvironment; pointer: ContentMapPointer };
 type ArchivedSceneRecord = ArchivedScene & { key: string };
@@ -580,7 +585,7 @@ export class WebContentStore implements ContentStore {
       request.onsuccess = () => {
         const cursor = request.result;
         if (!cursor || !Number.isSafeInteger(cursor.revision) || typeof cursor.sourceId !== "string") complete(null);
-        else complete({ revision: cursor.revision, sourceId: cursor.sourceId });
+        else complete({ revision: cursor.revision, sourceId: cursor.sourceId, readerVersion: storedReaderVersion(cursor) });
       };
       request.onerror = () => fail(request.error);
     });
@@ -610,7 +615,7 @@ export class WebContentStore implements ContentStore {
         }
         for (const row of getAll.result) if (row.environment === environment) rowsStore.delete(row.key);
         for (const row of contentRows(environment, state)) rowsStore.put(row);
-        cursorStore.put({ environment, revision: state.revision, sourceId } satisfies SyncCursor);
+        cursorStore.put({ environment, revision: state.revision, sourceId, readerVersion: CONTENT_READER_VERSION } satisfies SyncCursor);
         if (state.map) tx.objectStore(CACHED_MAP_POINTERS).put({ environment, pointer: state.map } satisfies CachedMapPointer);
         complete(undefined);
       };
@@ -654,7 +659,7 @@ export class WebContentStore implements ContentStore {
             if (change.entity === "map" && change.value) tx.objectStore(CACHED_MAP_POINTERS).put({ environment, pointer: change.value } satisfies CachedMapPointer);
           }
         }
-        cursorStore.put({ environment, revision: batch.revision, sourceId } satisfies SyncCursor);
+        cursorStore.put({ environment, revision: batch.revision, sourceId, readerVersion: storedReaderVersion(cursor) } satisfies SyncCursor);
         complete(undefined);
       };
       request.onsuccess = () => { cursorReady = true; finish(); };
@@ -674,7 +679,7 @@ export class WebContentStore implements ContentStore {
           fail(new Error("Content sync cursor changed before the revision could advance"));
           return;
         }
-        store.put({ environment, revision, sourceId } satisfies SyncCursor);
+        store.put({ environment, revision, sourceId, readerVersion: storedReaderVersion(request.result) } satisfies SyncCursor);
         complete(undefined);
       };
       request.onerror = () => fail(request.error);

@@ -1,6 +1,6 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import type { ArchivedScene, ContentChangeBatch, ContentEnvironment, ContentFile, ContentMapInventory, ContentMapPointer, ContentStore, ContentSyncCursor, ContentSyncState, RetainedPark, StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
 
 const DATABASE = "parkdex_content";
@@ -167,6 +167,53 @@ function mimeType(mime: string): string {
 }
 
 /** Native metadata is held in its own SQLite database and blobs in a private app-data folder. */
+async function columnNames(connection: SQLiteDBConnection, table: string): Promise<Set<string>> {
+  const columns = await connection.query(`PRAGMA table_info(${table})`);
+  return new Set((columns.values ?? []).map((column) => column.name as string));
+}
+
+/**
+ * Numbered changes to the on-device tables, applied once in order on app start.
+ * Append new steps; never edit or reorder a shipped one. Each step checks the
+ * table first so an install that already has a column (from before this list
+ * existed) skips it safely.
+ */
+const LOCAL_MIGRATIONS: ReadonlyArray<(connection: SQLiteDBConnection) => Promise<void>> = [
+  async (connection) => {
+    if (!(await columnNames(connection, "content_retained_parks")).has("scene_file_json")) {
+      await connection.execute("ALTER TABLE content_retained_parks ADD COLUMN scene_file_json TEXT NULL");
+    }
+    if (!(await columnNames(connection, "content_sync_rows")).has("position")) {
+      await connection.execute("ALTER TABLE content_sync_rows ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
+    }
+    const cursorColumns = await columnNames(connection, "content_sync_cursors");
+    if (!cursorColumns.has("source_id")) {
+      await connection.execute("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
+    }
+    if (cursorColumns.has("source")) {
+      await connection.execute("UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')");
+    }
+  },
+  async (connection) => {
+    // Caches written before this column existed came from reader version 1.
+    if (!(await columnNames(connection, "content_sync_cursors")).has("reader_version")) {
+      await connection.execute("ALTER TABLE content_sync_cursors ADD COLUMN reader_version INTEGER NOT NULL DEFAULT 1");
+    }
+  },
+];
+
+async function migrateLocalSchema(connection: SQLiteDBConnection): Promise<void> {
+  await connection.execute("CREATE TABLE IF NOT EXISTS content_local_schema (singleton TEXT PRIMARY KEY NOT NULL, version INTEGER NOT NULL)");
+  const rows = await connection.query("SELECT version FROM content_local_schema WHERE singleton = 'schema'");
+  const stored = rows?.values?.[0]?.version;
+  let version = typeof stored === "number" && Number.isSafeInteger(stored) ? stored : 0;
+  while (version < LOCAL_MIGRATIONS.length) {
+    await LOCAL_MIGRATIONS[version]!(connection);
+    version += 1;
+    await connection.execute(`INSERT OR REPLACE INTO content_local_schema(singleton, version) VALUES('schema', ${version})`);
+  }
+}
+
 export class NativeContentStore implements ContentStore {
   private sqlite: SQLiteConnection | null = null;
   private connection: SQLiteDBConnection | null = null;
@@ -498,10 +545,11 @@ export class NativeContentStore implements ContentStore {
   }
 
   async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
-    const rows = await this.db().query("SELECT revision, source_id FROM content_sync_cursors WHERE environment = ?", [environment]);
+    const rows = await this.db().query("SELECT revision, source_id, reader_version FROM content_sync_cursors WHERE environment = ?", [environment]);
     const row = rows.values?.[0];
     if (typeof row?.revision !== "number" || !Number.isSafeInteger(row.revision) || typeof row.source_id !== "string") return null;
-    return { revision: row.revision, sourceId: row.source_id };
+    const readerVersion = typeof row.reader_version === "number" && Number.isSafeInteger(row.reader_version) && row.reader_version > 0 ? row.reader_version : 1;
+    return { revision: row.revision, sourceId: row.source_id, readerVersion };
   }
 
   async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false): Promise<void> {
@@ -523,7 +571,7 @@ export class NativeContentStore implements ContentStore {
           values: [environment, row.entity, row.id, row.position, JSON.stringify(row.value)],
         })),
         ...(state.map ? [{ statement: "INSERT OR REPLACE INTO content_cached_maps(environment, pointer_json) VALUES(?, ?)", values: [environment, JSON.stringify(state.map)] }] : []),
-        { statement: "INSERT OR REPLACE INTO content_sync_cursors(environment, revision, source_id) VALUES(?, ?, ?)", values: [environment, state.revision, sourceId] },
+        { statement: "INSERT OR REPLACE INTO content_sync_cursors(environment, revision, source_id, reader_version) VALUES(?, ?, ?, ?)", values: [environment, state.revision, sourceId, CONTENT_READER_VERSION] },
       ];
       await this.db().executeSet(statements, true);
     });
@@ -675,22 +723,7 @@ export class NativeContentStore implements ContentStore {
           pointer_json TEXT NOT NULL
         );
       `);
-      const retainedParkColumns = await connection.query("PRAGMA table_info(content_retained_parks)");
-      if (!(retainedParkColumns.values ?? []).some((column) => column.name === "scene_file_json")) {
-        await connection.execute("ALTER TABLE content_retained_parks ADD COLUMN scene_file_json TEXT NULL");
-      }
-      const syncRowColumns = await connection.query("PRAGMA table_info(content_sync_rows)");
-      if (!(syncRowColumns.values ?? []).some((column) => column.name === "position")) {
-        await connection.execute("ALTER TABLE content_sync_rows ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
-      }
-      const cursorColumns = await connection.query("PRAGMA table_info(content_sync_cursors)");
-      const cursorColumnNames = new Set((cursorColumns.values ?? []).map((column) => column.name));
-      if (!cursorColumnNames.has("source_id")) {
-        await connection.execute("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
-      }
-      if (cursorColumnNames.has("source")) {
-        await connection.execute("UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')");
-      }
+      await migrateLocalSchema(connection);
       await connection.execute(`
         CREATE INDEX IF NOT EXISTS content_sync_rows_order ON content_sync_rows(environment, entity, position, row_id);
         CREATE TABLE IF NOT EXISTS content_sync_guard (

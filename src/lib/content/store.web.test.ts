@@ -125,7 +125,7 @@ describe("WebContentStore", () => {
     });
     store = new WebContentStore();
     await store.initialize();
-    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 12, sourceId: "legacy-source" });
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 12, sourceId: "legacy-source", readerVersion: 1 });
 
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(DATABASE);
@@ -142,7 +142,7 @@ describe("WebContentStore", () => {
     await expect(store.getSyncState("staging")).resolves.toBeNull();
     await expect(store.getSyncCursor("staging")).resolves.toBeNull();
     await store.replaceSyncState("staging", null, emptyState(13), "recovered-source", null, true);
-    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 13, sourceId: "recovered-source" });
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 13, sourceId: "recovered-source", readerVersion: 1 });
 
     const concurrentDb = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(DATABASE);
@@ -157,7 +157,7 @@ describe("WebContentStore", () => {
     });
     concurrentDb.close();
     await expect(store.replaceSyncState("staging", null, emptyState(15), "stale-reset", null, true)).rejects.toThrow(/cursor changed/);
-    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 14, sourceId: "newer-source" });
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 14, sourceId: "newer-source", readerVersion: 1 });
   });
 
   it("treats a cursor without its required hubs record as an invalid cache", async () => {
