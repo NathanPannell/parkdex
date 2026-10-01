@@ -14,7 +14,7 @@ Staging uses `Kip at Parkdex <feedback@mail.parkdex.app>`. The receipt Reply-To 
 
 ## Private review
 
-Open `/feedback/review` and use the operator password supplied privately during deployment. The server verifies its PBKDF2 hash and issues a Secure, HttpOnly, SameSite=Strict session cookie. Lists, report details, status changes, and attachments require that session. The four statuses are New, Reviewing, Planned, and Closed.
+Reports are reviewed in the separate operator dashboard (`operator/`), which runs only as a preview deployment behind Vercel login. See [operator/README.md](../operator/README.md). The web app no longer serves `/feedback/review` or any `/api/operator/*` route. Operator emails link to the dashboard when `OPERATOR_DASHBOARD_URL` is set. The dashboard shows reports as a board with four columns, New, Reviewing, Planned and Closed, and cards can be dragged between them.
 
 Failed notifications can be retried from the report. Each audience has its own saved payload, delivery status, lease, and Resend idempotency key. Sent messages are skipped. If a provider outcome remains unknown after Resend's 24-hour idempotency window, check Resend and the relevant mailbox before confirming a retry that could duplicate an email. There is no background retry schedule or polling service.
 
@@ -22,6 +22,6 @@ Failed notifications can be retried from the report. Each audience has its own s
 
 Run `npm run typecheck`, `npm test`, and `npm run build`. `npm run email:preview` writes operator and receipt previews under `.codex/email-previews` and checks escaping, safe URLs, and receipt privacy.
 
-Native field builds use `VITE_FEEDBACK_API_URL` from `.env.field`; web deployments use the same origin. The API requires `DATABASE_URL`, `SESSION_SECRET`, `OPERATOR_PASSWORD_HASH`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, and `OPERATOR_EMAIL`. The deployment helper sets the public URL, native origin allowlist, release SHA, and email mode. Keep every secret out of Vite variables and source control.
+Native field builds use `VITE_FEEDBACK_API_URL` from `.env.field`; web deployments use the same origin. The API requires `DATABASE_URL`, `SESSION_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, and `OPERATOR_EMAIL`. `OPERATOR_PASSWORD_HASH` is still part of the delivery secret bundle but is no longer read. `OPERATOR_DASHBOARD_URL` is optional. The deployment helper sets the public URL, native origin allowlist, release SHA, and email mode. Keep every secret out of Vite variables and source control.
 
 Follow [delivery.md](delivery.md) for the isolated preview, exact staging release, and owned teardown. Preview mail is disabled and previews receive fresh database and operator credentials. Production promotion is a separate task.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFeedbackWorker } from "./index.ts";
-import { createSessionToken } from "./security.ts";
+import { sendEmail, type DeliveryDependencies } from "./feedbackDelivery.ts";
 import type {
   AttachmentRecord,
   ClaimedEmail,
@@ -297,15 +297,10 @@ function testEnvironment(overrides: Record<string, unknown> = {}) {
     RESEND_API_KEY: "re_test_key",
     EMAIL_MODE: "resend" as const,
     PUBLIC_APP_URL: API_ORIGIN,
-    OPERATOR_PASSWORD_HASH: "invalid-unless-login-test-overrides",
     RELEASE_SHA: "abc123",
     ALLOWED_ORIGINS: "https://evil.example.test",
     ...overrides,
   };
-}
-
-async function operatorCookie(now = Date.now()): Promise<string> {
-  return `kip_operator_session=${await createSessionToken(SECRET, now)}`;
 }
 
 async function requestFeedback(worker: ReturnType<typeof createFeedbackWorker>, env: ReturnType<typeof testEnvironment>, body = requestBody()) {
@@ -353,10 +348,7 @@ test("valid feedback commits a screenshot and sends independent operator and rec
   const record = await store.getReport(body.id);
   assert.equal(record?.hasScreenshot, true);
   assert.equal((await store.getAttachment(body.id))?.contentType, "image/png");
-  const cookie = await operatorCookie(now);
-  const detail = await worker.fetch(makeRequest(`/api/operator/feedback/${body.id}`, undefined, { cookie }), env as never);
-  const detailBody = await responseBody(detail);
-  assert.equal(detailBody.report.emails.find((email: EmailDeliveryView) => email.audience === "operator")?.providerMessageId, "email-1");
+  assert.equal(record?.emails.find((email: EmailDeliveryView) => email.audience === "operator")?.providerMessageId, "email-1");
 });
 
 test("invalid feedback and image magic are rejected before creating a store", async () => {
@@ -457,91 +449,26 @@ test("disabled preview stores per-audience states and does not call the email pr
   assert.equal(sends, 0);
 });
 
-test("operator login signs a strict cookie; tampering, cross-origin writes, and anonymous attachment reads fail", async () => {
+test("the app no longer serves operator sign-in or report review routes", async () => {
   const now = Date.now();
   const store = new MemoryStore(() => now);
   const worker = createFeedbackWorker({ createStore: () => store, now: () => now, uuid: newUuidFactory() });
-  const salt = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("correct horse battery staple"), "PBKDF2", false, ["deriveBits"]);
-  const digest = new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: salt.buffer, iterations: 210_000 }, key, 256));
-  const hex = (bytes: Uint8Array) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const env = testEnvironment({ OPERATOR_PASSWORD_HASH: `${hex(salt)}:${hex(digest)}` });
-  const login = await worker.fetch(makeRequest("/api/operator/login", { password: "correct horse battery staple" }, { origin: API_ORIGIN }), env as never);
-  assert.equal(login.status, 200);
-  const cookie = login.headers.get("set-cookie")!;
-  assert.match(cookie, /HttpOnly/);
-  assert.match(cookie, /Secure/);
-  assert.match(cookie, /SameSite=Strict/);
-  const token = cookie.split(";")[0];
-  const reports = await worker.fetch(makeRequest("/api/operator/feedback", undefined, { cookie: token }), env as never);
-  assert.equal(reports.status, 200);
-  const tamperedToken = token.replace(/=([^=]+)$/, "=tampered");
-  const tampered = await worker.fetch(makeRequest("/api/operator/feedback", undefined, { cookie: tamperedToken }), env as never);
-  assert.equal(tampered.status, 401);
-  const csrf = await worker.fetch(makeRequest("/api/operator/feedback/00000000-0000-4000-8000-000000000100", { status: "closed" }, {
-    method: "PATCH", cookie: token, origin: "https://evil.example.test",
-  }), env as never);
-  assert.equal(csrf.status, 403);
-  const attachment = await worker.fetch(makeRequest("/api/operator/feedback/00000000-0000-4000-8000-000000000100/attachment"), env as never);
-  assert.equal(attachment.status, 401);
+  const env = testEnvironment();
+  const id = "00000000-0000-4000-8000-000000000100";
+  for (const [path, method] of [
+    ["/api/operator/login", "POST"],
+    ["/api/operator/session", "GET"],
+    ["/api/operator/feedback", "GET"],
+    [`/api/operator/feedback/${id}`, "PATCH"],
+    [`/api/operator/feedback/${id}/attachment`, "GET"],
+    [`/api/operator/feedback/${id}/retry-emails`, "POST"],
+  ] as const) {
+    const response = await worker.fetch(makeRequest(path, method === "GET" ? undefined : {}, { method }), env as never);
+    assert.equal(response.status, 404, `${method} ${path}`);
+  }
   const capOrigin = await worker.fetch(makeRequest("/api/health", undefined, { origin: "capacitor://localhost" }), env as never);
   assert.equal(capOrigin.status, 200);
   assert.equal((await responseBody(capOrigin)).releaseSha, "abc123");
-});
-
-test("authenticated attachment route returns raw image bytes and hides them from anonymous callers", async () => {
-  const now = Date.now();
-  const store = new MemoryStore(() => now);
-  const worker = createFeedbackWorker({
-    createStore: () => store,
-    now: () => now,
-    uuid: newUuidFactory(),
-    fetch: async () => new Response(null, { status: 200 }),
-  });
-  const saved = await requestFeedback(worker, testEnvironment(), requestBody({ screenshot: "data:image/png;base64,iVBORw0KGgo=" }));
-  const { id } = await responseBody(saved);
-  const cookie = await operatorCookie(now);
-  const anonymous = await worker.fetch(makeRequest(`/api/operator/feedback/${id}/attachment`), testEnvironment() as never);
-  assert.equal(anonymous.status, 401);
-  const authorized = await worker.fetch(makeRequest(`/api/operator/feedback/${id}/attachment`, undefined, { cookie }), testEnvironment() as never);
-  assert.equal(authorized.status, 200);
-  assert.equal(authorized.headers.get("content-type"), "image/png");
-  assert.deepEqual(new Uint8Array(await authorized.arrayBuffer()), new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-});
-
-test("operator list filters with stable 30-row cursor pages", async () => {
-  const store = new MemoryStore(Date.now);
-  const baseTime = Date.now();
-  for (let index = 0; index < 31; index += 1) {
-    const id = `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-    store.seed({
-      id,
-      submissionId: id,
-      kind: "idea",
-      message: `Report ${index}`,
-      email: null,
-      contact: false,
-      context: { version: "1", platform: "web", screen: "Map", parkId: null, parkName: null },
-      createdAt: new Date(baseTime - index * 1000).toISOString(),
-      hasScreenshot: false,
-      status: "reviewing",
-      emails: [],
-      screenshot: null,
-    });
-  }
-  const worker = createFeedbackWorker({ createStore: () => store });
-  const cookie = await operatorCookie();
-  const page1 = await worker.fetch(makeRequest("/api/operator/feedback?status=reviewing", undefined, { cookie }), testEnvironment() as never);
-  const data1 = await responseBody(page1);
-  assert.equal(data1.reports.length, 30);
-  assert.equal(typeof data1.nextCursor, "string");
-  const page2 = await worker.fetch(makeRequest(`/api/operator/feedback?status=reviewing&cursor=${encodeURIComponent(data1.nextCursor)}`, undefined, { cookie }), testEnvironment() as never);
-  const data2 = await responseBody(page2);
-  assert.equal(data2.reports.length, 1);
-  assert.equal(data2.nextCursor, null);
-  assert.equal(new Set([...data1.reports, ...data2.reports].map((report: OperatorFeedbackRecord) => report.id)).size, 31);
-  const invalid = await worker.fetch(makeRequest(`/api/operator/feedback?status=closed&cursor=${encodeURIComponent(data1.nextCursor)}`, undefined, { cookie }), testEnvironment() as never);
-  assert.equal(invalid.status, 400, "a cursor cannot be reused with a different filter");
 });
 
 test("simultaneous manual email retries claim each recipient once", async () => {
@@ -555,8 +482,7 @@ test("simultaneous manual email retries claim each recipient once", async () => 
   let retries = 0;
   let firstFetch = 0;
   const keys: string[] = [];
-  const worker = createFeedbackWorker({
-    createStore: () => store,
+  const delivery: DeliveryDependencies = {
     now: () => now,
     uuid: newUuidFactory(),
     fetch: async (_input, init) => {
@@ -571,20 +497,21 @@ test("simultaneous manual email retries claim each recipient once", async () => 
       await retryGate;
       return new Response(null, { status: 200 });
     },
-  });
+  };
+  const worker = createFeedbackWorker({ createStore: () => store, ...delivery });
   const env = testEnvironment();
   const saved = await requestFeedback(worker, env, requestBody({ email: "person@example.test", contact: true }));
   const { id } = await responseBody(saved);
   phase = "retry";
-  const cookie = await operatorCookie(now);
-  const retryRequest = () => worker.fetch(makeRequest(`/api/operator/feedback/${id}/retry-emails`, {}, { method: "POST", cookie }), env as never);
+  // The operator dashboard retries both audiences with this shared delivery function.
+  const retryRequest = () => Promise.all((["operator", "receipt"] as const).map((audience) => sendEmail(store, env, delivery, id, audience, false)));
   const firstRetry = retryRequest();
   await retryStartedPromise;
   const secondRetry = retryRequest();
   releaseRetry();
   const [first, second] = await Promise.all([firstRetry, secondRetry]);
-  assert.equal(first.status, 200);
-  assert.equal(second.status, 200);
+  assert.deepEqual(first.map((result) => result.status), ["sent", "sent"]);
+  assert.deepEqual(second.map((result) => result.status), ["skipped", "skipped"]);
   assert.equal(retries, 2, "only the first request claimed operator and receipt delivery");
   assert.equal(store.getDelivery(id, "operator")?.status, "sent");
   assert.equal(store.getDelivery(id, "receipt")?.status, "sent");
@@ -597,8 +524,7 @@ test("an accepted send with failed status persistence is not resent after 24 hou
   store.failNextFinishAudience = "operator";
   const keys: string[] = [];
   let providerCalls = 0;
-  const worker = createFeedbackWorker({
-    createStore: () => store,
+  const delivery: DeliveryDependencies = {
     now: () => now,
     uuid: newUuidFactory(),
     fetch: async (_input, init) => {
@@ -606,24 +532,21 @@ test("an accepted send with failed status persistence is not resent after 24 hou
       keys.push(new Headers(init?.headers).get("idempotency-key")!);
       return new Response(null, { status: 200 });
     },
-  });
+  };
+  const worker = createFeedbackWorker({ createStore: () => store, ...delivery });
   const env = testEnvironment();
   const saved = await requestFeedback(worker, env, requestBody({ email: "person@example.test" }));
   const { id } = await responseBody(saved);
   assert.equal(saved.status, 201);
   assert.equal(providerCalls, 2);
   assert.equal(store.getDelivery(id, "operator")?.status, "sending");
-  const cookie = await operatorCookie(now);
   now += 25 * 60 * 60 * 1000;
-  const retry = (confirm: boolean) => worker.fetch(makeRequest(`/api/operator/feedback/${id}/retry-emails`, {
-    audiences: ["operator"], confirmAmbiguousAfter24h: confirm,
-  }, { method: "POST", cookie }), env as never);
+  const retry = (confirm: boolean) => sendEmail(store, env, delivery, id, "operator", confirm);
   const guarded = await retry(false);
-  const guardedBody = await responseBody(guarded);
-  assert.equal(guardedBody.results[0].status, "requires_confirmation");
+  assert.equal(guarded.status, "requires_confirmation");
   assert.equal(providerCalls, 2, "old ambiguous delivery was not blindly sent again");
   const confirmed = await retry(true);
-  assert.equal(confirmed.status, 200);
+  assert.equal(confirmed.status, "sent");
   assert.equal(providerCalls, 3);
   assert.notEqual(keys[0], keys[2], "confirmed retry gets a new deterministic idempotency key");
   assert.equal(store.getDelivery(id, "operator")?.status, "sent");

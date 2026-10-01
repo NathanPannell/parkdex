@@ -170,55 +170,31 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
 
 export interface ParkProposalHandlers {
   json(data: unknown, status?: number): Response;
-  requireOperator(): Promise<void>;
-  sameOriginRequired(): void;
   ipHash(): Promise<string>;
   newId(): string;
   store(): ParkProposalStore;
 }
 
-const OPERATOR_ROW = /^\/api\/operator\/park-proposals\/([^/]+)$/;
-
-function parseStatus(value: unknown): ProposalStatus {
+export function parseProposalStatus(value: unknown): ProposalStatus {
   if (typeof value === "string" && (PROPOSAL_STATUSES as readonly string[]).includes(value)) return value as ProposalStatus;
   throw new HttpError(400, "invalid_status", "Unknown proposal status.");
 }
 
-/** Routes `/api/park-proposals` (public submit) and `/api/operator/park-proposals` (review). Null for other paths. */
+/**
+ * Routes the public `/api/park-proposals` submit. Null for other paths.
+ * Reviewing proposals belongs to the separately deployed operator dashboard.
+ */
 export async function handleParkProposalRequest(request: Request, handlers: ParkProposalHandlers): Promise<Response | null> {
-  const url = new URL(request.url);
-  const path = url.pathname;
-  if (path === "/api/park-proposals") {
-    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
-    const proposal = validateProposalBody(await readJsonBody(request, 32 * 1024));
-    const result = await handlers.store().save({
-      id: handlers.newId(),
-      payloadHash: await proposalHash(proposal),
-      ipHash: await handlers.ipHash(),
-      proposal,
-    });
-    if (result.status === "conflict") throw new HttpError(409, "submission_id_reused", "This submission ID was already used for a different proposal.");
-    if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before proposing more parks.");
-    return handlers.json({ id: result.proposal.id }, result.status === "created" ? 201 : 200);
-  }
-  if (path === "/api/operator/park-proposals") {
-    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    await handlers.requireOperator();
-    const statusValue = url.searchParams.get("status");
-    const status = !statusValue || statusValue === "all" ? null : parseStatus(statusValue);
-    return handlers.json({ proposals: await handlers.store().list(status), statuses: PROPOSAL_STATUSES });
-  }
-  const row = OPERATOR_ROW.exec(path);
-  if (!row) return null;
-  if (request.method !== "PATCH") throw new HttpError(405, "method_not_allowed", "Use PATCH.");
-  handlers.sameOriginRequired();
-  await handlers.requireOperator();
-  if (!UUID.test(row[1])) throw new HttpError(404, "not_found", "Proposal not found.");
-  const body = await readJsonBody(request, 4096);
-  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some((key) => key !== "status")) {
-    throw new HttpError(400, "invalid_request", "Invalid proposal update.");
-  }
-  const proposal = await handlers.store().updateStatus(row[1].toLowerCase(), parseStatus((body as Record<string, unknown>).status));
-  if (!proposal) throw new HttpError(404, "not_found", "Proposal not found.");
-  return handlers.json({ proposal });
+  if (new URL(request.url).pathname !== "/api/park-proposals") return null;
+  if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+  const proposal = validateProposalBody(await readJsonBody(request, 32 * 1024));
+  const result = await handlers.store().save({
+    id: handlers.newId(),
+    payloadHash: await proposalHash(proposal),
+    ipHash: await handlers.ipHash(),
+    proposal,
+  });
+  if (result.status === "conflict") throw new HttpError(409, "submission_id_reused", "This submission ID was already used for a different proposal.");
+  if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before proposing more parks.");
+  return handlers.json({ id: result.proposal.id }, result.status === "created" ? 201 : 200);
 }
