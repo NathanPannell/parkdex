@@ -825,7 +825,7 @@
 .locate {
   position: absolute;
   right: 14px;
-  bottom: calc(var(--safe-bottom) + 262px);
+  bottom: calc(var(--safe-bottom) + 276px);
   z-index: 10;
   width: 52px;
   height: 52px;

@@ -10,8 +10,8 @@ import { RollingNumber } from "../../components/Motion";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
-import { estimateTrip, formatTrip } from "../../lib/drive";
-import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
+import { estimateTrip } from "../../lib/drive";
+import { arcPath, arrivalPoint, distanceKm, formatDistance, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
@@ -84,13 +84,14 @@ export function MapScreen() {
   const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
   const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
 
+  // Straight-line distance ranks every park, including ones without a drive estimate.
   const nearby = useMemo(
     () =>
       parks.filter((p) => !claims[p.id])
-        .map((p) => ({ p, trip: estimateTrip(user, p, content?.drive), eligibility: eligibilityFor(p) }))
-        .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.trip.minutes - b.trip.minutes)
+        .map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]), eligibility: eligibilityFor(p) }))
+        .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.km - b.km)
         .slice(0, 8),
-    [parks, content?.drive, user, claims, eligibilityFor],
+    [parks, user, claims, eligibilityFor],
   );
 
   // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
@@ -444,12 +445,12 @@ export function MapScreen() {
               <span className="eyebrow">Badges near you</span>
             </div>
             <div className="nearby__rail scroll">
-              {nearby.map(({ p, trip: est, eligibility }, i) => (
+              {nearby.map(({ p, km, eligibility }, i) => (
                 <motion.button
                   key={p.id}
                   className={`nearby__card card ${eligibility.eligible ? "" : "nearby__card--locked"}`}
                   onClick={() => select(p.id, "nearby")}
-                  aria-label={`${p.name}, ${RARITY[p.rarity].label}. ${eligibility.eligible ? formatTrip(est) : rarityLockMessage(eligibility)}${isLive(p) ? "" : ". Badge art coming soon"}`}
+                  aria-label={`${p.name}, ${RARITY[p.rarity].label}. ${eligibility.eligible ? `${formatDistance(km)} away` : rarityLockMessage(eligibility)}${isLive(p) ? "" : ". Badge art coming soon"}`}
                   initial={{ y: 60, opacity: 0, rotate: 4 }}
                   animate={{ y: 0, opacity: 1, rotate: 0 }}
                   transition={{ type: "spring", stiffness: 380, damping: 22, delay: 0.1 + i * 0.05 }}
@@ -461,7 +462,7 @@ export function MapScreen() {
                   <span className="nearby__name">{p.short}</span>
                   <span className="nearby__meta">
                     <i style={{ background: RARITY[p.rarity].ink }} />
-                    {eligibility.eligible ? formatTrip(est) : eligibility.reason === "unavailable" ? "Checking" : "Locked"}
+                    {eligibility.eligible ? `${formatDistance(km)} away` : eligibility.reason === "unavailable" ? "Checking" : "Locked"}
                   </span>
                 </motion.button>
               ))}
