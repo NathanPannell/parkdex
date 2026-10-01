@@ -197,3 +197,17 @@
   justify-content: space-between;
   gap: 10px;
 }
+
+/* While the square picker is open the bottom navigation is hidden and the sheet takes its place. */
+.map-tool-open .nav {
+  display: none;
+}
+
+.map-tool-open .dlmaps-sheet {
+  bottom: calc(var(--safe-bottom, 12px) + 12px);
+}
+
+.dlmaps-top .btn--icon {
+  flex: none;
+  border-radius: 50%;
+}

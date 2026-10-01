@@ -577,17 +577,6 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-notice card is-error" role="alert"><span>{state.progressError}</span></section>
         )}
 
-        <section className="account-card card account-section">
-          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "settings" })}>
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="gear" size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Settings</strong>
-              <span>Sound effects, downloads and offline maps</span>
-            </span>
-            <Icon name="next" size={18} />
-          </button>
-        </section>
-
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
 
       </div>

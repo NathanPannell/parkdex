@@ -383,8 +383,9 @@
 }
 
 .collection-settings {
-  width: 38px;
-  height: 38px;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 6px;
 }
 
 .collection-account {
