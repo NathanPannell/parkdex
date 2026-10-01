@@ -16,11 +16,15 @@ const STARTER_ZOOMS = [10, 11] as const;
 // Nearby coverage is whole zoom-9 squares (about 50 km in southern BC) so it lines
 // up with the squares a visitor can choose to download later.
 export const NEARBY_CELL_ZOOM = 9;
-const NEARBY_CELL_RADIUS = 1;
 const DETAIL_MAX_ZOOM = 14;
 const ANCESTOR_ZOOMS = [7, 8] as const;
 
-export type MapDownloadDetail = "starter" | "nearby";
+/**
+ * starter: one viewport at z10-11. nearby: the visitor's own square, on any
+ * connection. surrounding: the 3x3 block of squares around them, which can be
+ * 20-60 MB and so waits for Wi-Fi.
+ */
+export type MapDownloadDetail = "starter" | "nearby" | "surrounding";
 export type MapBounds = [west: number, south: number, east: number, north: number];
 export type MapPrefetchResult = {
   releaseId: string;
@@ -38,8 +42,8 @@ type Tile = { z: number; x: number; y: number };
 /**
  * Ensure the indexed PMTiles coverage for a representative map viewport.
  * Starter coverage is one viewport at z10-11 around the anchor; the bundled
- * Canada base map already covers coarser zooms. Nearby coverage is the 3x3 block of zoom-9 squares around the
- * anchor at z9-14, plus their z7-8 ancestors.
+ * Canada base map already covers coarser zooms. Nearby and surrounding coverage
+ * download whole zoom-9 squares at z9-14, plus their z7-8 ancestors.
  */
 export async function prefetchMapArea(
   runtime: ContentRuntime,
@@ -49,7 +53,7 @@ export async function prefetchMapArea(
   signal?: AbortSignal,
   snapshotOverride?: ContentSnapshot,
 ): Promise<MapPrefetchResult> {
-  if (detail !== "starter" && detail !== "nearby") throw new Error(`Unsupported map download detail: ${detail}`);
+  if (detail !== "starter" && detail !== "nearby" && detail !== "surrounding") throw new Error(`Unsupported map download detail: ${detail}`);
   validatePoint(point);
   throwIfAborted(signal);
 
@@ -57,7 +61,7 @@ export async function prefetchMapArea(
   const manifest = snapshot.manifest.mapManifest;
   const source = new RuntimeChunkSource(runtime, releaseId, manifest, () => undefined, true, signal);
   const archive = new PMTiles(source);
-  const tiles = detail === "starter" ? starterTiles(point) : nearbyCells(point);
+  const tiles = detail === "starter" ? starterTiles(point) : nearbyCells(point, detail === "surrounding" ? 1 : 0);
   const header = await archive.getHeader();
 
   if (detail === "starter") {
@@ -71,7 +75,7 @@ export async function prefetchMapArea(
     for (const index of dataChunks) {
       throwIfAborted(signal);
       if (index < 0 || index >= manifest.count) throw new Error("The PMTiles index points outside the declared map chunks");
-      await runtime.ensureFile(releaseId, mapChunkPath(index), "nearby", signal);
+      await runtime.ensureFile(releaseId, mapChunkPath(index), detail === "surrounding" ? "bulk" : "nearby", signal);
       source.touchedChunks.add(index);
     }
   }
@@ -129,18 +133,18 @@ async function touchTileRange(
  */
 export function mapAreaTiles(point: MapPoint, detail: MapDownloadDetail): Tile[] {
   validatePoint(point);
-  return detail === "starter" ? starterTiles(point) : nearbyCells(point);
+  return detail === "starter" ? starterTiles(point) : nearbyCells(point, detail === "surrounding" ? 1 : 0);
 }
 
 /** The zoom-9 square containing a point and its eight neighbours. */
-export function nearbyCells(point: MapPoint): Tile[] {
+export function nearbyCells(point: MapPoint, radius = 1): Tile[] {
   const [lng, lat] = point;
   const scale = 2 ** NEARBY_CELL_ZOOM;
   const cx = Math.floor(((lng + 180) / 360) * scale);
   const cy = Math.floor(latitudeToMercatorY(lat) * scale);
   const tiles = new Map<string, Tile>();
-  for (let dy = -NEARBY_CELL_RADIUS; dy <= NEARBY_CELL_RADIUS; dy += 1) {
-    for (let dx = -NEARBY_CELL_RADIUS; dx <= NEARBY_CELL_RADIUS; dx += 1) {
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
       addTileIfInBounds(tiles, NEARBY_CELL_ZOOM, cx + dx, cy + dy);
     }
   }

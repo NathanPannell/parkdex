@@ -9,6 +9,9 @@ const BLOBS = `${ROOT}/blobs`;
 const TEMP = `${ROOT}/tmp`;
 const ACTIVE_POINTER = "1";
 
+// Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
+const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
+
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
   return hash.toLowerCase();
@@ -374,13 +377,14 @@ export class NativeContentStore implements ContentStore {
     return output.sort((a, b) => a.hash.localeCompare(b.hash));
   }
 
-  async deleteFile(hash: string): Promise<void> {
+  async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
     const key = assertHash(hash);
+    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
     await this.withFileLock(key, () => this.exclusive(async () => {
       const activeId = await this.getActiveId();
       const active = activeId ? await this.getRelease(activeId) : undefined;
       if (activeId && !active) throw new Error("Cannot collect content while the active release metadata is unreadable");
-      const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
+      const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key && required(file.path)) ?? false;
       const retainedRows = (await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks", [])).values ?? [];
       const retainedParks = retainedRows.map(parseRetainedParkRow);
       if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
@@ -402,7 +406,7 @@ export class NativeContentStore implements ContentStore {
       const mapReferencesFile = inventories.some((row) => {
         if (!currentMapVersions.has(String(row.version))) return false;
         const inventory = JSON.parse(String(row.inventory_json)) as ContentMapInventory;
-        return inventory.files.some((file) => file.sha256 === key);
+        return inventory.files.some((file) => file.sha256 === key && required(file.path));
       });
       if (activeReferencesFile || retainedReferencesFile || syncReferencesFile || archivedReferencesFile || mapReferencesFile) {
         throw new Error(`Cannot delete content file referenced by active or retained content: ${key}`);

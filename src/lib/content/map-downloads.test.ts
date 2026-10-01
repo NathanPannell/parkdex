@@ -33,9 +33,12 @@ describe("map download coverage", () => {
     expect(tiles.some((tile) => tile.z === 9 || tile.z > 11)).toBe(false);
   });
 
-  it("plans nearby coverage as the 3x3 block of zoom-9 squares around its anchor", () => {
-    const victoria = mapAreaTiles(VICTORIA, "nearby");
-    const kelowna = mapAreaTiles([-119.496, 49.888], "nearby");
+  it("plans nearby coverage as the anchor's own square and surrounding coverage as its 3x3 block", () => {
+    const own = mapAreaTiles(VICTORIA, "nearby");
+    expect(own).toHaveLength(1);
+    const victoria = mapAreaTiles(VICTORIA, "surrounding");
+    const kelowna = mapAreaTiles([-119.496, 49.888], "surrounding");
+    expect(victoria).toContainEqual(own[0]);
 
     expect(victoria).toHaveLength(9);
     expect(new Set(victoria.map((tile) => tile.z))).toEqual(new Set([NEARBY_CELL_ZOOM]));
