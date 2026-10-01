@@ -81,12 +81,33 @@ export const BIOME_LABEL: Record<Biome, string> = {
   heritage: "Heritage",
 };
 
-// The landscape label follows the badge art when a park has it.
-export function landscapeLabel(park: Park) {
+export type Landscape = Biome | "legendary";
+
+// The landscape follows the badge art when a park has it.
+export function landscapeOf(park: Park): Landscape {
   const kind = park.scene?.split("-")[0];
-  if (kind === "legendary") return "Legendary vista";
-  return BIOME_LABEL[(kind as Biome) ?? park.biome] ?? BIOME_LABEL[park.biome];
+  if (kind === "legendary") return "legendary";
+  return kind && kind in BIOME_LABEL ? (kind as Biome) : park.biome;
 }
+
+export function landscapeLabel(park: Park) {
+  const kind = landscapeOf(park);
+  return kind === "legendary" ? "Legendary vista" : BIOME_LABEL[kind];
+}
+
+// Light card tints with a readable ink; the badge palettes are too dark for some biomes (cave).
+export const LANDSCAPE_TINT: Record<Landscape, { bg: string; ink: string }> = {
+  coast: { bg: "#DDF1F7", ink: "#0E6E86" },
+  forest: { bg: "#DFF3E4", ink: "#1C5B43" },
+  mountain: { bg: "#E3E8FF", ink: "#39479F" },
+  lake: { bg: "#DCEFFA", ink: "#1F7FA8" },
+  waterfall: { bg: "#E6E1FA", ink: "#4B3C9E" },
+  river: { bg: "#E4F3DC", ink: "#3F8F48" },
+  cave: { bg: "#E4DFF5", ink: "#2A1F57" },
+  marsh: { bg: "#EAF0D8", ink: "#5B7A2E" },
+  heritage: { bg: "#F8E6D6", ink: "#8C4A2F" },
+  legendary: { bg: "#FFE9A8", ink: "#8A5A00" },
+};
 
 export const CATEGORY_LABEL: Record<ParkCategory, string> = {
   national: "National Park",
