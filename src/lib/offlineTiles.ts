@@ -307,6 +307,13 @@ function markStreamedMapChunks(releaseId: string, chunkIds: Iterable<number>): v
   for (const id of chunkIds) allowed.add(id);
 }
 
+/** Forget chunks whose files were removed, so offline reads fall back to the base map. */
+export function removeAllowedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
+  const allowed = allowedChunkIds.get(releaseId);
+  if (!allowed) return;
+  for (const id of chunkIds) allowed.delete(id);
+}
+
 export function getAllowedMapChunks(releaseId: string): readonly number[] {
   return [...(allowedChunkIds.get(releaseId) ?? [])].sort((a, b) => a - b);
 }

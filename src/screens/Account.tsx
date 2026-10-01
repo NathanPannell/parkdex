@@ -6,6 +6,7 @@ import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
 import { useStore } from "../lib/store";
+import { readSavedSquares, requestDownloadMaps } from "../lib/mapCells";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -127,6 +128,7 @@ function GoogleSignInButton({
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const { state, dispatch } = useStore();
+  const [savedSquareCount] = useState(() => readSavedSquares().length);
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -594,6 +596,20 @@ export function Account({ onBack }: { onBack: () => void }) {
               aria-label="Sound effects"
             />
           </label>
+          <button
+            className="account-setting account-setting--button"
+            onClick={() => {
+              dispatch({ type: "go", screen: "map" });
+              requestDownloadMaps();
+            }}
+          >
+            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
+            <span className="account-setting__text">
+              <strong>Offline maps</strong>
+              <span>{savedSquareCount ? `${savedSquareCount} ${savedSquareCount === 1 ? "square" : "squares"} saved` : "Choose map squares to keep offline"}</span>
+            </span>
+            <Icon name="next" size={18} />
+          </button>
         </section>
 
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>

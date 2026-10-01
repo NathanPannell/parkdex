@@ -179,6 +179,18 @@ describe("NativeContentStore deletion guard", () => {
     await store.close();
   });
 
+  it("deletes a detailed map chunk the active release lists only as optional coverage", async () => {
+    activeRelease = release([{ ...sceneFile, path: "map/island/0123.bin", content_type: "application/octet-stream" }]);
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    await expect(store.deleteFile(HASH)).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(HASH, { optionalMapChunk: true });
+    expect(nativeMocks.deleteFile).toHaveBeenCalledOnce();
+    expect(nativeMocks.db.run).toHaveBeenCalledWith("DELETE FROM content_files WHERE hash = ?", [HASH]);
+    await store.close();
+  });
+
   it("refuses to delete a retained earned-park scene after its release is retired", async () => {
     activeRelease = release([]);
     retainedRows = [{
