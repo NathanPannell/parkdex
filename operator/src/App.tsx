@@ -67,7 +67,7 @@ export function App() {
                 <span>{live ? "Production data" : `${environment[0]?.toUpperCase() ?? ""}${environment.slice(1)} data`}</span>
               </div>
             )}
-            {health?.emailMode === "disabled" && <p className="sidebar__note">Email sending is off here.</p>}
+            {health && health.emailMode !== "resend" && <p className="sidebar__note">{health.emailMode === "disabled" ? "Email sending is off here." : "Email retry is not set up yet."}</p>}
             <p className="sidebar__note"><Icon name="shield" size={14} /> Protected by Vercel login</p>
           </div>
         </aside>

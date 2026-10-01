@@ -135,6 +135,10 @@ async function routeFeedback(request: Request, path: string, store: () => Feedba
   if (match[2] === "/retry-emails") {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
     requireSameOrigin(request);
+    // Without a provider key a retry would only mark deliveries failed, so leave them untouched.
+    if (env.EMAIL_MODE !== "disabled" && !env.RESEND_API_KEY) {
+      throw new HttpError(503, "email_not_configured", "Email retry is not set up on this deployment yet.");
+    }
     const feedback = store();
     const report = await feedback.getReport(id);
     if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
@@ -200,7 +204,7 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
     try {
       const path = new URL(request.url).pathname;
       if (path === "/api/health") {
-        return json({ ok: true, environment: env.DASHBOARD_ENVIRONMENT ?? "unknown", emailMode: env.EMAIL_MODE === "disabled" ? "disabled" : "resend" });
+        return json({ ok: true, environment: env.DASHBOARD_ENVIRONMENT ?? "unknown", emailMode: env.EMAIL_MODE === "disabled" ? "disabled" : env.RESEND_API_KEY ? "resend" : "unconfigured" });
       }
       const response =
         await routeFeedback(request, path, () => dependencies.feedbackStore?.(env) ?? createNeonFeedbackStore(databaseUrl(env)), env, dependencies) ??

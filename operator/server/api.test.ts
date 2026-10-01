@@ -125,7 +125,7 @@ test("proposals can be filtered and reviewed", async () => {
 test("health reports the data environment, and a missing database fails closed", async () => {
   const api = createDashboardApi();
   const health = await api(request("/api/health"), { DASHBOARD_ENVIRONMENT: "production" });
-  assert.deepEqual(await health.json(), { ok: true, environment: "production", emailMode: "resend" });
+  assert.deepEqual(await health.json(), { ok: true, environment: "production", emailMode: "unconfigured" });
   const missing = await api(request("/api/feedback"), {});
   assert.equal(missing.status, 503);
   assert.equal((await api(request("/api/unknown"), env)).status, 404);
@@ -146,4 +146,14 @@ test("a production deployment refuses to serve data because Vercel login would n
   assert.equal(production.status, 403);
   const preview = await createEdgeHandler({ ...env, VERCEL_ENV: "preview" })(request("/api/health"));
   assert.equal(preview.status, 200);
+});
+
+test("email retry refuses to touch deliveries when no provider key is configured", async () => {
+  const deps = demoDependencies();
+  const api = createDashboardApi(deps);
+  const id = "00000000-0000-4000-8000-000000000002";
+  const before = (await deps.feedbackStore!(env).getReport(id))!.emails;
+  const retry = await api(request(`/api/feedback/${id}/retry-emails`, { method: "POST", body: {} }), { ...env, EMAIL_MODE: "resend" });
+  assert.equal(retry.status, 503);
+  assert.deepEqual((await deps.feedbackStore!(env).getReport(id))!.emails, before);
 });
