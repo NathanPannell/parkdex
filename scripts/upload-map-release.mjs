@@ -10,7 +10,7 @@ import { join, relative, sep } from "node:path";
 const ACCOUNT_ID = "6f0eb57971124f41fadc7897ace74dac";
 const BUCKET = "parkdex-kip-content";
 const CDN_ORIGIN = "https://kip-assets.parkdex.app";
-const CONCURRENCY = 8;
+const CONCURRENCY = 4;
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, all) => {
   if (value.startsWith("--")) pairs.push([value.slice(2), all[index + 1]]);
@@ -53,10 +53,10 @@ async function put(key, body) {
       body,
     });
     if (response.ok) return;
-    if (attempt >= 4 || (response.status < 500 && response.status !== 429)) {
+    if (attempt >= 8 || (response.status < 500 && response.status !== 429)) {
       throw new Error(`PUT ${key} returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
+    await new Promise((resolve) => setTimeout(resolve, Math.min(2 ** attempt, 60) * 1000));
   }
 }
 
