@@ -1,6 +1,7 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { setContentChannelOverride, type ContentChannel } from "./contentChannel";
+import { getNativePackageInstallInfo } from "./native";
 import { setRankProgressionEnabled } from "./progression";
 import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
 
@@ -44,9 +45,12 @@ type RemoteAppConfig = {
 
 const CACHE_KEY = "parkdex.app-config.v1";
 const CHECK_IN_TIMEOUT_MS = 8_000;
+const BUILD_INFO_TIMEOUT_MS = 1_500;
 
-let buildInfo: { platform: AppPlatform; build: number } = { platform: "web", build: 0 };
-let active: AppConfig = defaults(buildInfo);
+type BuildInfo = { platform: AppPlatform; build: number };
+
+let buildInfo: BuildInfo | null = { platform: "web", build: 0 };
+let active: AppConfig = defaults({ platform: "web", build: 0 });
 let updateStatus: UpdateStatus = "none";
 const updateListeners = new Set<() => void>();
 
@@ -125,26 +129,55 @@ function writeCache(config: RemoteAppConfig, fetchedAt: string): void {
   }
 }
 
-async function readBuildInfo(): Promise<{ platform: AppPlatform; build: number }> {
+function androidBuildNumber(value: unknown): number | null {
+  const build = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : Number.NaN;
+  return Number.isSafeInteger(build) && build > 0 ? build : null;
+}
+
+async function withBuildInfoTimeout<T>(work: () => Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(work),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Android build information timed out")), BUILD_INFO_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+async function readBuildInfo(): Promise<BuildInfo | null> {
   if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") return { platform: "web", build: 0 };
   try {
-    const info = await Promise.race([
-      App.getInfo(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("App info timed out")), 1_500)),
-    ]);
-    const build = Number.parseInt(info.build, 10);
-    return { platform: "android", build: Number.isSafeInteger(build) && build >= 0 ? build : 0 };
+    const info = await withBuildInfoTimeout(() => App.getInfo());
+    const build = androidBuildNumber(info.build);
+    if (build !== null) return { platform: "android", build };
   } catch {
-    return { platform: "android", build: 0 };
+    // The app plugin can be unavailable during startup. Use the package-info plugin next.
   }
+  try {
+    const info = await withBuildInfoTimeout(() => getNativePackageInstallInfo());
+    const build = androidBuildNumber(info?.versionCode);
+    if (build !== null) return { platform: "android", build };
+  } catch {
+    // Without a valid installed version code, avoid requesting Android build zero.
+  }
+  return null;
 }
 
 /** Apply the saved configuration for this build before the app renders. Never throws. */
 export async function initAppConfig(): Promise<AppConfig> {
   buildInfo = await readBuildInfo();
-  active = readCache(buildInfo) ?? defaults(buildInfo);
+  const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
+  active = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
   // Only native builds switch databases; a web deployment always reads its own host's content.
-  const override = Capacitor.isNativePlatform() && active.contentChannel && active.contentChannel !== bakedContentChannel()
+  const override = buildInfo?.platform === "android" && active.contentChannel && active.contentChannel !== bakedContentChannel()
     ? active.contentChannel
     : null;
   setContentChannelOverride(override);
@@ -181,19 +214,29 @@ export function appConfigOrigin(): string | null {
 export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch): Promise<AppConfig | null> {
   const origin = appConfigOrigin();
   if (!origin) return null;
+  if (!buildInfo) {
+    const recovered = await readBuildInfo();
+    if (!recovered) return null;
+    buildInfo = recovered;
+    // A late device-info recovery may update build identity and the update gate only.
+    active = { ...active, platform: recovered.platform, build: recovered.build };
+    const cached = readCache(recovered);
+    if (cached && recovered.platform === "android") setUpdateStatus(cached.update);
+  }
+  const currentBuildInfo = buildInfo;
   const url = new URL("/api/app-config", origin);
-  url.searchParams.set("platform", buildInfo.platform);
-  url.searchParams.set("build", String(buildInfo.build));
+  url.searchParams.set("platform", currentBuildInfo.platform);
+  url.searchParams.set("build", String(currentBuildInfo.build));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHECK_IN_TIMEOUT_MS);
   try {
     const response = await fetcher(url.href, { credentials: "omit", cache: "no-store", redirect: "error", signal: controller.signal });
     if (!response.ok) return null;
-    const remote = parseRemoteAppConfig(await response.json(), buildInfo);
+    const remote = parseRemoteAppConfig(await response.json(), currentBuildInfo);
     if (!remote) return null;
     const fetchedAt = new Date().toISOString();
     writeCache(remote, fetchedAt);
-    if (buildInfo.platform === "android") setUpdateStatus(remote.update);
+    if (currentBuildInfo.platform === "android") setUpdateStatus(remote.update);
     return toAppConfig(remote, fetchedAt);
   } catch {
     return null;

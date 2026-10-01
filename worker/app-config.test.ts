@@ -82,6 +82,25 @@ test("an exact build overrides the platform default flag by flag", () => {
   assert.equal(resolveAppConfig("android", 7, rows).source, "default");
 });
 
+test("an exact build with no content channel keeps its built-in channel under a main default", async () => {
+  const { store, worker, env } = setup();
+  store.rows.set("android:0", {
+    platform: "android", build: 0, label: "Default", contentChannel: "main", flags: {},
+    minimumBuild: 5, latestBuild: 50, notes: "", updatedAt: "",
+  });
+  store.rows.set("android:42", {
+    platform: "android", build: 42, label: "Build 42", contentChannel: null, flags: {},
+    minimumBuild: null, latestBuild: null, notes: "", updatedAt: "",
+  });
+
+  const response = await worker.fetch(request("/api/app-config?platform=android&build=42"), env as never);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    schema: "parkdex.app-config/v1", platform: "android", build: 42, contentChannel: null, flags: {},
+    minimumBuild: 5, latestBuild: 50, update: "available", source: "build",
+  });
+});
+
 test("builds below the minimum must update and below the latest are nudged", () => {
   const rows: BuildConfigRecord[] = [
     { platform: "android", build: 0, label: "", contentChannel: null, flags: {}, minimumBuild: 10, latestBuild: 20, notes: "", updatedAt: "" },

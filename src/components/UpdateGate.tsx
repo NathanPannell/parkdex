@@ -1,12 +1,16 @@
-import { useState, useSyncExternalStore } from "react";
-import { currentUpdateStatus, PLAY_STORE_URL, subscribeUpdateStatus } from "../lib/appConfig";
+import { useEffect, useRef, useState } from "react";
+import { PLAY_STORE_URL, type UpdateStatus } from "../lib/appConfig";
 import { Kip } from "./Kip";
 import "../update-gate.css";
 
 /** Blocks builds below the minimum and nudges builds below the latest to update from Google Play. */
-export function UpdateGate() {
-  const status = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
+export function UpdateGate({ status }: { status: UpdateStatus }) {
   const [dismissed, setDismissed] = useState(false);
+  const updateAction = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (status === "required") updateAction.current?.focus();
+  }, [status]);
 
   if (status === "required") {
     return (
@@ -15,7 +19,7 @@ export function UpdateGate() {
           <Kip pose="wave" size={96} />
           <h2 id="update-gate-title">Time to update Parkdex</h2>
           <p>This version is too old to keep exploring. Update from Google Play to carry on. Your badges and photos stay on your phone.</p>
-          <a className="btn btn--block update-gate__button" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Update on Google Play</a>
+          <a ref={updateAction} className="btn btn--block update-gate__button" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Update on Google Play</a>
         </div>
       </div>
     );

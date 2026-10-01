@@ -218,7 +218,8 @@ export function resolveAppConfig(platform: AppConfigPlatform, build: number, row
     schema: "parkdex.app-config/v1",
     platform,
     build,
-    contentChannel: exact?.contentChannel ?? fallback?.contentChannel ?? null,
+    // A null value on an exact row deliberately keeps that build's built-in content channel.
+    contentChannel: exact ? exact.contentChannel : fallback?.contentChannel ?? null,
     flags: { ...fallback?.flags, ...exact?.flags },
     minimumBuild,
     latestBuild,
