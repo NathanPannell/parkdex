@@ -25,9 +25,10 @@ describe("boundaryAreaKm2", () => {
 });
 
 describe("formatArea", () => {
-  it("uses hectares under one square kilometre", () => {
-    expect(formatArea(0.042)).toBe("4.2 ha");
-    expect(formatArea(0.42)).toBe("42 ha");
+  it("keeps two decimals under one square kilometre", () => {
+    expect(formatArea(0.2)).toBe("0.20 km²");
+    expect(formatArea(0.042)).toBe("0.04 km²");
+    expect(formatArea(0.001)).toBe("0.01 km²");
   });
 
   it("uses square kilometres from one upward", () => {

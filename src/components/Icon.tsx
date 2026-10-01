@@ -38,6 +38,17 @@ const PATHS = {
   pinPlus: "M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Zm0-14.5v5m-2.5-2.5h5",
   flagPlus: "M5 21V4h10l-1.5 3.5L15 11H5m13 3v6m-3-3h6",
   draw: "M4 18c3-5 6 1 9-4s4-7 7-6M15 5l4 4",
+  // Park area: the four corners of a square, like a "fit to screen" glyph.
+  corners: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
+  coast: "M3 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0",
+  forest: "M12 3 6 11h3l-4 6h14l-4-6h3L12 3Zm0 14v4",
+  mountain: "M3 20 9.5 8l4 7 2.5-4 5 9H3Zm4.5-8.5 2 1.5 2-1.5",
+  lake: "M4 14c0-3 3.6-5 8-5s8 2 8 5-3.6 5-8 5-8-2-8-5Zm4 0c1.3-.8 2.7-.8 4 0s2.7.8 4 0",
+  waterfall: "M5 4h14M8 4v8M12 4v12M16 4v8M4 20c2.5-2 5.5-2 8 0s5.5 2 8 0",
+  river: "M7 3c-3 4 5 6 2 10s4 6 2 8M15 3c-3 4 5 6 2 10s4 6 2 8",
+  cave: "M3 20c0-8 4-15 9-15s9 7 9 15H3Zm6 0c0-4 1.3-7 3-7s3 3 3 7",
+  marsh: "M4 20h16M8 20V10M12 20V6M16 20V11M8 10c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Zm4-4c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Zm4 5c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Z",
+  heritage: "M3 9 12 4l9 5H3Zm2 0v9m4.7-9v9m4.6-9v9M19 9v9M3 20h18",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -8,7 +8,7 @@ import { useBoundaries } from "../../lib/boundaries";
 import { estimateTrip } from "../../lib/drive";
 import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
-import { CATEGORY_LABEL, isLive, landscapeLabel, PALETTES, RARITY, type Park } from "../../lib/parks";
+import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
 import type { ParkRarityEligibility } from "../../lib/progression";
 import { RarityGuide } from "../../components/RarityGuide";
 import { rarityLockMessage } from "../../lib/rarityUi";
@@ -52,6 +52,8 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
   const boundary = useBoundaries()?.byId.get(park.id);
   const areaKm2 = boundary ? boundaryAreaKm2(boundary) : 0;
   const straightKm = distanceKm(user, [park.lng, park.lat]);
+  const landscape = landscapeOf(park);
+  const tint = LANDSCAPE_TINT[landscape];
   const live = isLive(park);
   const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
@@ -121,17 +123,16 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
           <div className="stat">
             <Icon name="pin" size={18} />
             <strong>{inside ? "Here!" : formatDistance(straightKm)}</strong>
-            <span>{inside ? "you made it" : "straight line"}</span>
+            <span>{inside ? "you made it" : "from you"}</span>
           </div>
           <div className="stat">
-            <Icon name="map" size={18} />
+            <Icon name="corners" size={18} />
             <strong>{areaKm2 > 0 ? formatArea(areaKm2) : "Unknown"}</strong>
             <span>park area</span>
           </div>
-          <div className="stat">
-            <Icon name="sparkle" size={18} />
+          <div className="stat stat--landscape" style={{ background: tint.bg, color: tint.ink }}>
+            <Icon name={landscape === "legendary" ? "sparkle" : landscape} size={18} />
             <strong>{landscapeLabel(park)}</strong>
-            <span>biome</span>
           </div>
         </motion.div>
 

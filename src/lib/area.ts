@@ -25,11 +25,8 @@ export function boundaryAreaKm2(boundary: Boundary) {
   return Math.max(0, m2) / 1e6;
 }
 
-// Hectares read better than "0.04 km²" for small neighbourhood parks.
+// Small neighbourhood parks keep two decimals so they never read as "0.0 km²".
 export function formatArea(km2: number) {
-  if (km2 < 1) {
-    const ha = km2 * 100;
-    return `${ha < 10 ? ha.toFixed(1) : Math.round(ha)} ha`;
-  }
+  if (km2 < 1) return `${Math.max(km2, 0.01).toFixed(2)} km²`;
   return `${km2 < 10 ? km2.toFixed(1) : Math.round(km2).toLocaleString("en-CA")} km²`;
 }
