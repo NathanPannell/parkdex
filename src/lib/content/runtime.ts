@@ -1123,16 +1123,21 @@ class ContentRuntimeController implements ContentRuntime {
     this.syncManifests.set(releaseId, manifest);
 
     const assetUrls = new Map<string, string>();
-    for (const park of validated.parks) {
-      if (!park.scene) continue;
+    const sceneFiles = validated.parks.flatMap((park) => {
+      if (!park.scene) return [];
       const path = `art/badges/scenes/${park.scene}.webp`;
       const file = validated.assets.find((entry) => entry.path === path);
       if (!file) throw new Error(`Required park badge descriptor is missing: ${path}`);
+      return [file];
+    });
+    // Read badge art concurrently: one at a time over the native bridge held the
+    // map behind the loading card for many seconds on every cold start.
+    await Promise.all(sceneFiles.map(async (file) => {
       if (!(await this.hasVerifiedLocalFile(file))) {
-        throw new Error(`Required park badge art is missing: ${path}`);
+        throw new Error(`Required park badge art is missing: ${file.path}`);
       }
-      assetUrls.set(path, await this.localFileUrl(file));
-    }
+      assetUrls.set(file.path, await this.localFileUrl(file));
+    }));
     let retained: RetainedPark[] = [];
     try {
       retained = await this.options.store.getRetainedParks();

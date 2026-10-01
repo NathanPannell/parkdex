@@ -19,6 +19,9 @@ type ReleaseRegistration = {
 const registrations = new Map<string, ReleaseRegistration>();
 const allowedChunkIds = new Map<string, Set<number>>();
 const mapCoverageListeners = new Map<string, Set<() => void>>();
+// Releases with a tile request refused since their detail source was last rebuilt.
+// Only those need a rebuild when coverage grows; otherwise new chunks are read on demand.
+const refusedReleases = new Set<string>();
 let tileProtocol: Protocol | null = null;
 let tileProtocolInstalled = false;
 let glyphProtocolInstalled = false;
@@ -181,6 +184,7 @@ export class RuntimeChunkSource implements Source {
       for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index), "nearby", signal);
     } catch (error) {
       if (signal?.aborted || (error as Error)?.name === "AbortError") throw error;
+      refusedReleases.add(this.releaseId);
       throw new Error("Map area has not been downloaded. Connect to the internet to load detail here.");
     }
     markStreamedMapChunks(this.releaseId, indices);
@@ -282,7 +286,10 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     allowed.add(id);
     changed = true;
   }
-  if (changed) {
+  // A rebuild redraws every detail tile, which shows as a flicker. It is only needed when
+  // MapLibre is holding failed tiles that the new chunks can now fill.
+  if (changed && refusedReleases.has(releaseId)) {
+    refusedReleases.delete(releaseId);
     const registration = registrations.get(releaseId);
     if (registration && tileProtocol) {
       // PMTiles v4.5 keeps rejected header and directory promises in its shared
