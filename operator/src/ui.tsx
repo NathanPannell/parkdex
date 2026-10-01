@@ -25,6 +25,9 @@ const ICONS = {
   user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
   phone: "M8 3h8v18H8zM11 18h2",
   chevron: "M9 6l6 6-6 6",
+  expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  layers: "M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4",
+  park: "M12 3l5 8h-3l4 6H6l4-6H7zM12 17v4",
 } as const;
 
 export type IconName = keyof typeof ICONS;

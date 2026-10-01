@@ -4,7 +4,9 @@ import type { AttachmentRecord, ClaimEmailResult, EmailDeliveryView, FeedbackCur
 import type { EmailAudience, FeedbackStatus } from "../../worker/validation.js";
 import type { DashboardDependencies } from "./api.js";
 import { HttpError } from "../../worker/validation.js";
-import { publicFeature, publishBlockers, type BadgeAsset, type Draft, type DraftFields, type DraftPlacement, type DraftStore, type DraftSummary } from "./drafts.js";
+import { publicFeature, publishBlockers, SHAPE_FOR_CATEGORY, type BadgeAsset, type Draft, type DraftFields, type DraftPlacement, type DraftStore, type DraftSummary } from "./drafts.js";
+import type { MultiPolygon } from "./legacy.js";
+import type { LivePark, LiveParkChanges, LiveParkDetail, LiveParkStore } from "./liveParks.js";
 
 /** In-memory stores for tests and the local demo server. Never used by a deployment. */
 
@@ -245,6 +247,50 @@ export class MemoryDraftStore implements DraftStore {
   }
 }
 
+export class MemoryLiveParkStore implements LiveParkStore {
+  readonly parks = new Map<string, LivePark & { geometry: MultiPolygon | null }>();
+  readonly assets = new Map<string, BadgeAsset>();
+  revision = 0;
+
+  async list(): Promise<LivePark[]> {
+    return [...this.parks.values()].sort((a, b) => a.name.localeCompare(b.name)).map(({ geometry: _geometry, ...park }) => structuredClone(park));
+  }
+
+  async regions(): Promise<string[]> {
+    return [...new Set([...this.parks.values()].map((park) => park.region).filter(Boolean))].sort();
+  }
+
+  async get(id: string): Promise<LiveParkDetail | null> {
+    const park = this.parks.get(id);
+    if (!park) return null;
+    const asset = park.scene ? this.assets.get(`art/badges/scenes/${park.scene}.webp`) : undefined;
+    return { ...structuredClone(park), badgeUrl: asset?.url ?? null };
+  }
+
+  async update(id: string, expected: LivePark, changes: LiveParkChanges, asset: BadgeAsset | null) {
+    const park = this.parks.get(id);
+    if (!park || LIVE_KEYS.some((key) => park[key] !== expected[key])) {
+      throw new HttpError(409, "park_changed", "This park changed since you opened it. Reload it and make your edit again.");
+    }
+    const { geometry, ...fields } = changes;
+    Object.assign(park, fields);
+    if (changes.category && changes.category !== expected.category) park.shape = SHAPE_FOR_CATEGORY[changes.category] ?? park.shape;
+    if (geometry) park.geometry = geometry;
+    if (asset) {
+      this.assets.set(asset.logicalPath, asset);
+      park.scene = asset.logicalPath.slice("art/badges/scenes/".length, -".webp".length);
+    }
+    this.revision += 1;
+    return this.revision;
+  }
+}
+
+const LIVE_KEYS = ["name", "short", "category", "region", "lat", "lng", "biome", "shape", "rarity", "scene", "blurb"] as const;
+
+function square(lng: number, lat: number, size: number): MultiPolygon {
+  return { type: "MultiPolygon", coordinates: [[[[lng - size, lat - size], [lng + size, lat - size], [lng + size, lat + size], [lng - size, lat + size], [lng - size, lat - size]]]] };
+}
+
 async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
@@ -331,5 +377,21 @@ export function demoDependencies(): DashboardDependencies {
   });
 
   const drafts = new MemoryDraftStore();
-  return { feedbackStore: () => feedback, appConfigStore: () => builds, proposalStore: () => proposals, draftStore: () => drafts };
+
+  const live = new MemoryLiveParkStore();
+  const liveSamples: Array<[string, string, string, string, number, number, string, string]> = [
+    ["beacon-hill-park", "Beacon Hill Park", "Beacon Hill", "municipal", -123.3632, 48.4136, "forest", "uncommon"],
+    ["mount-douglas-park", "Mount Douglas Park", "Mount Doug", "regional", -123.3453, 48.4927, "mountain", "rare"],
+    ["thetis-lake-park", "Thetis Lake Regional Park", "Thetis Lake", "regional", -123.4642, 48.4646, "lake", "uncommon"],
+    ["cattle-point", "Cattle Point", "Cattle Point", "municipal", -123.2985, 48.4383, "coast", "common"],
+  ];
+  liveSamples.forEach(([id, name, short, category, lng, lat, biome, rarity], index) => {
+    live.parks.set(id, {
+      id, name, short, category, region: index % 2 ? "Saanich" : "Capital", lat, lng, biome, shape: SHAPE_FOR_CATEGORY[category], rarity, scene: null, seed: 1000 + index,
+      blurb: index === 0 ? "Gardens, ponds and a view across the strait to the Olympic Mountains." : "", geometry: square(lng, lat, 0.004 + index * 0.001),
+    });
+  });
+  return { feedbackStore: () => feedback, appConfigStore: () => builds, proposalStore: () => proposals, draftStore: () => drafts, liveParkStore: () => live,
+    // The demo has one set of sample rows, so the other database reports fixed counts.
+    queueCounts: async () => ({ feedback: { new: 6, reviewing: 2, closed: 9 }, proposals: { new: 14, reviewing: 3, declined: 1 } }) };
 }

@@ -156,9 +156,27 @@ export type Draft = {
   badgeUploads: boolean;
 };
 
+export type LivePark = {
+  id: string;
+  name: string;
+  short: string;
+  category: string;
+  region: string;
+  lat: number;
+  lng: number;
+  biome: string;
+  shape: string;
+  rarity: string;
+  scene: string | null;
+  seed: number;
+  blurb: string;
+};
+
+export type LiveParkDetail = LivePark & { geometry: MultiPolygon | null; badgeUrl: string | null; badgeUploads: boolean };
+
 /** Uploads raw image bytes; the dashboard API checks the type itself. */
-export async function uploadImage<T>(path: string, file: File): Promise<T> {
-  const response = await fetch(path, { method: "PUT", body: file, credentials: "same-origin", headers: { "content-type": file.type || "application/octet-stream" } });
+export async function uploadImage<T>(path: string, file: File, headers: Record<string, string> = {}): Promise<T> {
+  const response = await fetch(path, { method: "PUT", body: file, credentials: "same-origin", headers: { ...headers, "content-type": file.type || "application/octet-stream" } });
   if (!response.ok) {
     let message = "The upload failed.";
     try {

@@ -3,6 +3,7 @@ import { assertWebp, badgeAsset, badgeUploadsConfigured, imageType, sceneSlug, s
 import type { ParkProposalStore } from "../../worker/parkProposals.js";
 import { BIOMES, CATEGORIES, draftFromLegacy, draftFromProposal, MAX_IMAGE_BYTES, publishBlockers, RARITIES, SHAPE_FOR_CATEGORY, type Draft, type DraftFields, type DraftPlacement, type DraftStore, type ProposalSource } from "./drafts.js";
 import { normalizeGeometry, type LegacySource } from "./legacy.js";
+import { bestPhoto, downloadPhoto, searchPhotos } from "./photos.js";
 
 /** Routes for importing legacy parks as drafts, editing them, and publishing them to Parkdex. */
 
@@ -96,6 +97,18 @@ export function aiBrief(draft: Draft) {
   };
 }
 
+/** Best effort: a new draft starts with a web photo of the park when one is easy to find. */
+async function attachFirstPhoto(context: ImportContext, draft: Draft): Promise<Draft> {
+  try {
+    const photo = bestPhoto(await searchPhotos(draft, context.fetch), draft.name);
+    if (!photo) return draft;
+    const { bytes, contentType } = await downloadPhoto(photo.thumbUrl, context.fetch);
+    return await context.drafts().setReferencePhoto(draft.id, bytes, contentType) ?? draft;
+  } catch {
+    return draft;
+  }
+}
+
 async function proposalSource(context: ImportContext, id: unknown): Promise<ProposalSource | null> {
   if (id === undefined) return null;
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, "invalid_request", "Unknown proposal.");
@@ -135,18 +148,19 @@ export async function routeImport(request: Request, path: string, context: Impor
       // No legacy match: start from the player's pin and sketch.
       if (!proposal) throw new HttpError(400, "invalid_request", "Send a legacy park id, a proposal id, or both.");
       const suffix = crypto.randomUUID().slice(0, 4);
-      const draft = await context.drafts().create({ ...draftFromProposal(proposal, context.randomSeed(), suffix), sourceSha256: await sha256Hex(new TextEncoder().encode(JSON.stringify(proposal))) });
+      const created = await context.drafts().create({ ...draftFromProposal(proposal, context.randomSeed(), suffix), sourceSha256: await sha256Hex(new TextEncoder().encode(JSON.stringify(proposal))) });
+      const draft = await attachFirstPhoto(context, created);
       return json({ draft: draftView(draft, context.env) }, 201);
     }
     if (typeof body.legacyId !== "string" || !ID.test(body.legacyId)) throw new HttpError(400, "invalid_request", "Unknown legacy park.");
     const park = await context.legacy.get(body.legacyId);
     if (!park) throw new HttpError(404, "not_found", "That park is not in the legacy map.");
     const sourceSha256 = await sha256Hex(new TextEncoder().encode(JSON.stringify({ record: park.record, boundaryProperties: park.boundaryProperties, geometry: park.geometry })));
-    const draft = await context.drafts().create({ ...draftFromLegacy(park, context.randomSeed(), proposal), sourceSha256 });
+    const draft = await attachFirstPhoto(context, await context.drafts().create({ ...draftFromLegacy(park, context.randomSeed(), proposal), sourceSha256 }));
     return json({ draft: draftView(draft, context.env) }, 201);
   }
 
-  const match = /^\/api\/drafts\/([^/]+)(?:\/(badge|reference|brief|publish))?$/.exec(path);
+  const match = /^\/api\/drafts\/([^/]+)(?:\/(badge|reference|brief|publish|photos|reference-from-web))?$/.exec(path);
   if (!match) return null;
   const id = match[1];
   if (!ID.test(id)) throw new HttpError(404, "not_found", "Draft not found.");
@@ -177,6 +191,25 @@ export async function routeImport(request: Request, path: string, context: Impor
     const draft = await drafts.get(id);
     if (!draft) throw new HttpError(404, "not_found", "Draft not found.");
     return json(aiBrief(draft));
+  }
+
+  if (action === "photos") {
+    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
+    const draft = await drafts.get(id);
+    if (!draft) throw new HttpError(404, "not_found", "Draft not found.");
+    // An operator's own search words replace the name and region; the pin still finds nearby photos.
+    const words = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 200);
+    return json({ photos: await searchPhotos(words ? { ...draft, name: words, region: "" } : draft, context.fetch) });
+  }
+
+  if (action === "reference-from-web") {
+    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+    context.requireSameOrigin();
+    const body = await readJsonBody(request, 4096) as Record<string, unknown>;
+    const { bytes, contentType } = await downloadPhoto(body?.url, context.fetch);
+    const draft = await drafts.setReferencePhoto(id, bytes, contentType);
+    if (!draft) throw new HttpError(404, "not_found", "Draft not found, or it is already published.");
+    return json({ draft: draftView(draft, context.env) });
   }
 
   if (action === "badge" || action === "reference") {

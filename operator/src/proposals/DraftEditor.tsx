@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { api, errorText, uploadImage, type Draft, type MultiPolygon, type Position } from "../api";
-import { ParkMap } from "../components/ParkMap";
+import { MapEditor } from "../components/MapEditor";
+import { RegionSelect } from "../components/RegionSelect";
 import { linkHandler, navigate } from "../router";
 import { Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
 import { ParksTabs } from "./ParksTabs";
+import { ReferenceFinder } from "./ReferenceFinder";
 
 const CATEGORIES = ["national", "provincial", "regional", "municipal", "community"];
 const BIOMES = ["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"];
@@ -17,8 +19,6 @@ function editable(draft: Draft): Editable {
   const { name, short, category, region, biome, rarity, blurb } = draft;
   return { name, short, category, region, biome, rarity, blurb };
 }
-
-type DrawMode = { kind: "boundary"; vertices: Position[] } | { kind: "pin" } | null;
 
 // "2h ago" reads well mid-sentence; "Just now" needs a lower-case start.
 function when(value: string): string {
@@ -39,8 +39,6 @@ export function DraftEditor({ id }: { id: string }) {
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState<"badge" | "reference" | null>(null);
   const [imageRevision, setImageRevision] = useState(0);
-  const [draw, setDraw] = useState<DrawMode>(null);
-  const [fitKey, setFitKey] = useState("initial");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -62,26 +60,6 @@ export function DraftEditor({ id }: { id: string }) {
     } catch (reason) {
       toast.show(errorText(reason, "Could not save the map change."), { tone: "error" });
       return false;
-    }
-  }
-
-  function onMapClick(position: Position) {
-    if (!draw) return;
-    const rounded: Position = [Math.round(position[0] * 1e6) / 1e6, Math.round(position[1] * 1e6) / 1e6];
-    if (draw.kind === "pin") {
-      setDraw(null);
-      void savePlacement({ lat: rounded[1], lng: rounded[0] }, "Pin moved");
-      return;
-    }
-    setDraw({ kind: "boundary", vertices: [...draw.vertices, rounded] });
-  }
-
-  async function finishBoundary() {
-    if (draw?.kind !== "boundary" || draw.vertices.length < 3) return;
-    const ring = [...draw.vertices, draw.vertices[0]];
-    if (await savePlacement({ geometry: { type: "MultiPolygon", coordinates: [[ring]] } }, "Boundary saved")) {
-      setDraw(null);
-      setFitKey(`drawn-${Date.now()}`);
     }
   }
 
@@ -199,40 +177,14 @@ export function DraftEditor({ id }: { id: string }) {
 
       <div className="editor">
         <div className="editor__side">
-          <div className="map-frame map-frame--editor">
-            <ParkMap
-              boundary={draft.geometry}
-              pin={[draft.lng, draft.lat]}
-              sketch={proposal?.outline ?? null}
-              drawing={draw?.kind === "boundary" ? draw.vertices : null}
-              onMapClick={onMapClick}
-              crosshair={Boolean(draw)}
-              fitKey={fitKey}
-              pinZoom={15}
-            />
-            {!live && (
-              <div className="map-tools">
-                {draw?.kind === "boundary" ? (
-                  <>
-                    <span className="map-tools__hint">Click the map to add corners ({draw.vertices.length})</span>
-                    <button type="button" className="button button--ghost button--small" disabled={!draw.vertices.length} onClick={() => setDraw({ kind: "boundary", vertices: draw.vertices.slice(0, -1) })}>Undo</button>
-                    <button type="button" className="button button--ghost button--small" onClick={() => setDraw(null)}>Cancel</button>
-                    <button type="button" className="button button--primary button--small" disabled={draw.vertices.length < 3} onClick={() => void finishBoundary()}><Icon name="check" size={15} /> Save boundary</button>
-                  </>
-                ) : draw?.kind === "pin" ? (
-                  <>
-                    <span className="map-tools__hint">Click where the pin should go</span>
-                    <button type="button" className="button button--ghost button--small" onClick={() => setDraw(null)}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button type="button" className="button button--ghost button--small" onClick={() => setDraw({ kind: "boundary", vertices: [] })}><Icon name="edit" size={15} /> {draft.geometry ? "Redraw boundary" : "Draw boundary"}</button>
-                    <button type="button" className="button button--ghost button--small" onClick={() => setDraw({ kind: "pin" })}><Icon name="pin" size={15} /> Move pin</button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          <MapEditor
+            boundary={draft.geometry}
+            pin={[draft.lng, draft.lat]}
+            sketch={proposal?.outline ?? null}
+            editable={!live}
+            onBoundary={(geometry) => savePlacement({ geometry }, "Boundary saved")}
+            onPin={([lng, lat]) => void savePlacement({ lat, lng }, "Pin moved")}
+          />
           <p className="muted map-legend"><span className="legend-pin" /> Park pin <span className="legend-boundary" /> Boundary {proposal?.outline && <><span className="legend-sketch" /> Player's sketch</>}</p>
           {!live && draft.blockers.length > 0 && (
             <div className="notice"><Icon name="alert" size={18} /> Before publishing: {draft.blockers.join(" ")}</div>
@@ -271,7 +223,7 @@ export function DraftEditor({ id }: { id: string }) {
                   {CATEGORIES.map((value) => <option key={value} value={value}>{title(value)}</option>)}
                 </select>
               </label>
-              <label className="field"><span>Region</span><input value={form.region} maxLength={140} onChange={(event) => set("region", event.target.value)} /></label>
+              <label className="field"><span>Region</span><RegionSelect value={form.region} onChange={(value) => set("region", value)} /></label>
             </div>
             <div className="field">
               <span>Rarity</span>
@@ -329,6 +281,7 @@ export function DraftEditor({ id }: { id: string }) {
           )}
         </div>
       </div>
+      {!live && <ReferenceFinder draft={draft} onChange={(saved) => { setDraft(saved); setImageRevision((value) => value + 1); }} />}
       {live && <div className="empty"><Kip pose="celebrate" size={90} /><p className="muted">Published. Players can find {draft.name} on the map.</p></div>}
     </section>
   );

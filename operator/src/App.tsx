@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { api, type Health } from "./api";
 import { BuildsPage } from "./builds/BuildsPage";
 import { FeedbackBoard } from "./feedback/FeedbackBoard";
+import { OtherDatabaseNote } from "./components/OtherDatabaseNote";
 import { DraftEditor } from "./proposals/DraftEditor";
 import { DraftsPage } from "./proposals/DraftsPage";
 import { ImportPage } from "./proposals/ImportPage";
+import { LiveParkEditor } from "./proposals/LiveParkEditor";
+import { LiveParksPage } from "./proposals/LiveParksPage";
 import { ProposalsPage } from "./proposals/ProposalsPage";
 import { linkHandler, usePath } from "./router";
 import { Icon, Kip, ToastProvider, type IconName } from "./ui";
@@ -38,12 +41,14 @@ export function App() {
     document.title = `${label} · Parkdex Operator`;
   }, [route]);
 
-  const environment = health?.environment ?? "";
+  // Build config always lives in production, whichever database the boards are showing.
+  const buildsPage = route === "builds";
+  const environment = buildsPage ? "production" : health?.environment ?? "";
   const live = environment === "production";
   const staging = environment === "staging";
 
   // A cookie, not local state, so screenshots and badge images load from the same database.
-  function switchDatabase(target: "production" | "staging") {
+  function switchDatabase(target: string) {
     if (target === environment) return;
     document.cookie = `parkdex_operator_db=${target}; Path=/; Max-Age=31536000; SameSite=Strict; Secure`;
     window.location.reload();
@@ -69,7 +74,12 @@ export function App() {
             ))}
           </nav>
           <div className="sidebar__foot">
-            {health?.canSwitch ? (
+            {buildsPage && health ? (
+              <div className="env env--live" title="Apps read build config from production only">
+                <span className="env__dot" aria-hidden="true" />
+                <span>Production only</span>
+              </div>
+            ) : health?.canSwitch ? (
               <div className="db-toggle" role="radiogroup" aria-label="Database">
                 {(["production", "staging"] as const).map((target) => (
                   <button key={target} type="button" role="radio" aria-checked={environment === target} className={`db-toggle__item db-toggle__item--${target}${environment === target ? " is-on" : ""}`} onClick={() => switchDatabase(target)}>
@@ -95,6 +105,7 @@ export function App() {
               <span>Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.</span>
             </div>
           )}
+          {(route === "feedback" || path === "/proposals") && <OtherDatabaseNote key={`${route}:${environment}`} board={route === "feedback" ? "feedback" : "proposals"} onSwitch={switchDatabase} />}
           {route === "feedback" && <FeedbackBoard />}
           {route === "proposals" && <ParksRoute path={path} />}
           {route === "builds" && <BuildsPage />}
@@ -108,6 +119,9 @@ function ParksRoute({ path }: { path: string }) {
   const draft = /^\/proposals\/drafts\/([^/]+)$/.exec(path);
   if (draft) return <DraftEditor key={draft[1]} id={decodeURIComponent(draft[1])} />;
   if (path.startsWith("/proposals/drafts")) return <DraftsPage />;
+  const live = /^\/proposals\/live\/([^/]+)$/.exec(path);
+  if (live) return <LiveParkEditor key={live[1]} id={decodeURIComponent(live[1])} />;
+  if (path.startsWith("/proposals/live")) return <LiveParksPage />;
   if (path.startsWith("/proposals/import")) return <ImportPage />;
   return <ProposalsPage />;
 }
