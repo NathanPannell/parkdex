@@ -5,6 +5,7 @@ const TABS: { path: string; label: string; icon: IconName }[] = [
   { path: "/proposals", label: "From players", icon: "pin" },
   { path: "/proposals/import", label: "Import from map", icon: "download" },
   { path: "/proposals/drafts", label: "Drafts", icon: "edit" },
+  { path: "/proposals/live", label: "Live parks", icon: "park" },
 ];
 
 export function ParksTabs({ current }: { current: string }) {

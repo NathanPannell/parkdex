@@ -7,6 +7,7 @@ import {
   type ServerAccountSession,
 } from "./nativeIdentity";
 import { hasUrlCredentials, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
+import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
 
 export type AccountProfile = {
   id: string;
@@ -50,14 +51,14 @@ export class AuthHttpError extends Error {
 const isNative = Capacitor.isNativePlatform();
 
 function accountApiOrigin(): string {
-  const configured = [import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
+  const configured = pointedApiUrl([import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
     .map((value) => (value ?? "").trim())
-    .find(Boolean) ?? "";
+    .find(Boolean) ?? "") ?? "";
   return resolveUserDataApiOrigin(configured, {
     native: isNative,
     webOrigin: isNative ? undefined : (typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin),
     allowLoopbackHttp: import.meta.env.DEV,
-    environment: import.meta.env.VITE_CONTENT_ENV,
+    environment: apiEnvironment(),
     previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
   }) || KIP_STAGING_ORIGIN;
 }

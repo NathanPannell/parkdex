@@ -43,17 +43,21 @@ export type Proposal = {
 };
 
 export type Platform = "android" | "web";
-export type Channel = "staging" | "main";
+export type ApiPointer = "production" | "staging";
 export type BuildConfig = {
   platform: Platform;
   build: number;
   label: string;
-  contentChannel: Channel | null;
+  apiPointer: ApiPointer | null;
   flags: Record<string, boolean>;
-  minimumBuild: number | null;
-  latestBuild: number | null;
   notes: string;
   updatedAt: string;
+};
+export type UpdateRules = {
+  environment: ApiPointer;
+  minimumBuild: number | null;
+  latestBuild: number | null;
+  updatedAt: string | null;
 };
 
 export type Health = { ok: boolean; environment: string; canSwitch: boolean; emailMode: "resend" | "disabled" | "unconfigured" };
@@ -127,8 +131,8 @@ export type DraftSummary = {
 
 export type Draft = {
   id: string;
-  source: { record?: Record<string, unknown>; boundaryProperties?: Record<string, unknown> };
-  geometry: MultiPolygon;
+  source: { record?: Record<string, unknown>; boundaryProperties?: Record<string, unknown>; proposal?: Record<string, unknown> };
+  geometry: MultiPolygon | null;
   name: string;
   short: string;
   category: string | null;
@@ -152,9 +156,27 @@ export type Draft = {
   badgeUploads: boolean;
 };
 
+export type LivePark = {
+  id: string;
+  name: string;
+  short: string;
+  category: string;
+  region: string;
+  lat: number;
+  lng: number;
+  biome: string;
+  shape: string;
+  rarity: string;
+  scene: string | null;
+  seed: number;
+  blurb: string;
+};
+
+export type LiveParkDetail = LivePark & { geometry: MultiPolygon | null; badgeUrl: string | null; badgeUploads: boolean };
+
 /** Uploads raw image bytes; the dashboard API checks the type itself. */
-export async function uploadImage<T>(path: string, file: File): Promise<T> {
-  const response = await fetch(path, { method: "PUT", body: file, credentials: "same-origin", headers: { "content-type": file.type || "application/octet-stream" } });
+export async function uploadImage<T>(path: string, file: File, headers: Record<string, string> = {}): Promise<T> {
+  const response = await fetch(path, { method: "PUT", body: file, credentials: "same-origin", headers: { ...headers, "content-type": file.type || "application/octet-stream" } });
   if (!response.ok) {
     let message = "The upload failed.";
     try {

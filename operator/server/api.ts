@@ -1,11 +1,14 @@
-import { createNeonAppConfigStore, CONTENT_CHANNELS, FEATURE_FLAGS, parseBuild, parsePlatform, validateBuildConfigInput, type AppConfigStore } from "../../worker/appConfig.js";
+import { API_POINTERS, createNeonAppConfigStore, FEATURE_FLAGS, parseBuild, parseEnvironment, parsePlatform, validateBuildConfigInput, validateUpdateRulesInput, type AppConfigStore } from "../../worker/appConfig.js";
 import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDelivery.js";
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
 import { HttpError, readJsonBody, validateRetryBody, validateStatus } from "../../worker/validation.js";
+import { neon } from "@neondatabase/serverless";
 import type { BadgeEnv } from "./badges.js";
 import { createNeonDraftStore, type DraftStore } from "./drafts.js";
 import { routeImport } from "./importRoutes.js";
+import { createNeonLiveParkStore, type LiveParkStore } from "./liveParks.js";
+import { routeParks } from "./parkRoutes.js";
 import { createLegacySource, type LegacyEnv, type LegacySource } from "./legacy.js";
 
 /**
@@ -28,6 +31,8 @@ export interface DashboardDependencies extends DeliveryDependencies {
   appConfigStore?(env: DashboardEnv): AppConfigStore;
   proposalStore?(env: DashboardEnv): ParkProposalStore;
   draftStore?(env: DashboardEnv): DraftStore;
+  liveParkStore?(env: DashboardEnv): LiveParkStore;
+  queueCounts?(env: DashboardEnv): Promise<QueueCounts>;
   legacySource?: LegacySource;
   randomSeed?(): number;
 }
@@ -165,7 +170,17 @@ async function routeFeedback(request: Request, path: string, store: () => Feedba
 async function routeBuilds(request: Request, path: string, store: () => AppConfigStore): Promise<Response | null> {
   if (path === "/api/builds") {
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    return json({ builds: await store().list(), flags: FEATURE_FLAGS, channels: CONTENT_CHANNELS });
+    const config = store();
+    const [builds, rules] = await Promise.all([config.list(), config.listUpdateRules()]);
+    return json({ builds, rules, knownFlags: FEATURE_FLAGS, pointers: API_POINTERS });
+  }
+  const rulesMatch = /^\/api\/update-rules\/([a-z]+)$/.exec(path);
+  if (rulesMatch) {
+    if (request.method !== "PUT") throw new HttpError(405, "method_not_allowed", "Use PUT.");
+    requireSameOrigin(request);
+    const environment = parseEnvironment(rulesMatch[1]);
+    const { minimumBuild, latestBuild } = validateUpdateRulesInput(await readJsonBody(request, 1024));
+    return json({ rules: await store().setUpdateRules(environment, minimumBuild, latestBuild) });
   }
   const match = /^\/api\/builds\/([a-z]+)\/(\d{1,10})$/.exec(path);
   if (!match) return null;
@@ -177,7 +192,7 @@ async function routeBuilds(request: Request, path: string, store: () => AppConfi
     if (!await store().remove(platform, build)) throw new HttpError(404, "not_found", "Build configuration not found.");
     return json({ ok: true });
   }
-  const input = validateBuildConfigInput(await readJsonBody(request, 4096));
+  const input = validateBuildConfigInput(await readJsonBody(request, 8192));
   return json({ build: await store().upsert(platform, build, input) });
 }
 
@@ -197,6 +212,29 @@ async function routeProposals(request: Request, path: string, store: () => ParkP
   const proposal = await store().updateStatus(match[1].toLowerCase(), parseProposalStatus(body.status));
   if (!proposal) throw new HttpError(404, "not_found", "Proposal not found.");
   return json({ proposal });
+}
+
+/** Status counts for the boards, used to show what is waiting in the database not on screen. */
+export interface QueueCounts {
+  feedback: Record<string, number>;
+  proposals: Record<string, number>;
+}
+
+async function neonQueueCounts(env: DashboardEnv): Promise<QueueCounts> {
+  const sql = neon(databaseUrl(env));
+  const [feedback, proposals] = await Promise.all([
+    sql.query("SELECT status, count(*)::int AS count FROM kip_feedback.reports GROUP BY status"),
+    sql.query("SELECT status, count(*)::int AS count FROM kip_proposals.parks GROUP BY status"),
+  ]) as Array<Array<{ status: string; count: number }>>;
+  const counts = (rows: Array<{ status: string; count: number }>) => Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
+  return { feedback: counts(feedback), proposals: counts(proposals) };
+}
+
+/** The database the operator is not looking at, if this deployment can reach it. */
+function otherDatabase(request: Request, env: DashboardEnv): DashboardEnv | null {
+  if (!env.STAGING_DATABASE_URL) return null;
+  if (cookie(request, DATABASE_COOKIE) === "staging") return env;
+  return { ...env, DATABASE_URL: env.STAGING_DATABASE_URL, DASHBOARD_ENVIRONMENT: "staging" };
 }
 
 export const DATABASE_COOKIE = "parkdex_operator_db";
@@ -234,16 +272,32 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
           emailMode: baseEnv.EMAIL_MODE === "disabled" ? "disabled" : baseEnv.RESEND_API_KEY ? "resend" : "unconfigured",
         });
       }
+      if (path === "/api/other-database") {
+        if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
+        const other = otherDatabase(request, baseEnv);
+        if (!other) return json({ available: false });
+        const counts = await (dependencies.queueCounts?.(other) ?? neonQueueCounts(other));
+        return json({ available: true, environment: other.DASHBOARD_ENVIRONMENT ?? "production", ...counts });
+      }
       const env = selectDatabase(request, baseEnv);
       const response =
         await routeFeedback(request, path, () => dependencies.feedbackStore?.(env) ?? createNeonFeedbackStore(databaseUrl(env)), env, dependencies) ??
-        await routeBuilds(request, path, () => dependencies.appConfigStore?.(env) ?? createNeonAppConfigStore(databaseUrl(env))) ??
+        // Apps read build config from production only, so it never follows the database toggle.
+        await routeBuilds(request, path, () => dependencies.appConfigStore?.(baseEnv) ?? createNeonAppConfigStore(databaseUrl(baseEnv))) ??
         await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env))) ??
+        await routeParks(request, path, {
+          json,
+          env,
+          requireSameOrigin: () => requireSameOrigin(request),
+          parks: () => dependencies.liveParkStore?.(env) ?? createNeonLiveParkStore(databaseUrl(env)),
+          fetch: dependencies.fetch,
+        }) ??
         await routeImport(request, path, {
           json,
           env,
           requireSameOrigin: () => requireSameOrigin(request),
           drafts: () => dependencies.draftStore?.(env) ?? createNeonDraftStore(databaseUrl(env)),
+          proposals: () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)),
           legacy: legacy ??= createLegacySource(env, dependencies.fetch),
           fetch: dependencies.fetch,
           randomSeed: dependencies.randomSeed ?? (() => Math.floor(Math.random() * 1_000_001)),

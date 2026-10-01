@@ -1,3 +1,4 @@
+import { apiEnvironment, apiUrl } from "../apiPointer";
 import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import {
@@ -241,12 +242,12 @@ function getAuthLinkOrigin(): string {
 }
 
 function getAuthApiOrigin(): string {
-  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
+  const configured = apiUrl((import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
     || (import.meta.env.VITE_APP_URL ?? "").trim()
-    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim();
+    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim()) ?? "";
   return resolveUserDataApiOrigin(configured, {
     native: true,
-    environment: import.meta.env.VITE_CONTENT_ENV,
+    environment: apiEnvironment(),
     previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
   });
 }
@@ -255,7 +256,7 @@ export function isApprovedKipOrigin(origin: string): boolean {
   try {
     return isSecureUserDataApiOrigin(origin) && resolveUserDataApiOrigin(origin, {
       native: true,
-      environment: import.meta.env.VITE_CONTENT_ENV,
+      environment: apiEnvironment(),
       previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
     }) === origin;
   } catch {

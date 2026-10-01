@@ -1,125 +1,86 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, errorText, type Draft, type LegacyPark, type LegacySummary } from "../api";
-import { BoundarySketch } from "../components/BoundarySketch";
+import { api, errorText, type Draft, type LegacyPark, type LegacySummary, type Position, type Proposal } from "../api";
+import { ParkMap } from "../components/ParkMap";
 import { navigate } from "../router";
-import { Drawer, Icon, Kip, Spinner, useToast } from "../ui";
+import { Icon, Spinner, useToast } from "../ui";
 import { ParksTabs } from "./ParksTabs";
 
 const STATUS_LABEL: Record<LegacySummary["status"], string> = { available: "Available", draft: "Draft", "in-parkdex": "In Parkdex" };
-const PAGE = 80;
 
+function distanceKm([lng1, lat1]: Position, [lng2, lat2]: Position): number {
+  const rad = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lng2 - lng1) * rad) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(a));
+}
+
+function proposalFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("proposal");
+}
+
+/**
+ * Pick a legacy park on a map to start a draft. Opened from a proposal, the map centres on the
+ * player's pin and sketch and lists the nearest legacy parks first; with no match, the draft
+ * starts from the proposal itself.
+ */
 export function ImportPage() {
+  const toast = useToast();
+  const proposalId = proposalFromUrl();
   const [parks, setParks] = useState<LegacySummary[] | null>(null);
+  const [proposal, setProposal] = useState<Proposal | null>(null);
   const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("all");
-  const [hideTaken, setHideTaken] = useState(true);
-  const [limit, setLimit] = useState(PAGE);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<LegacyPark | null>(null);
+  const [loadingPark, setLoadingPark] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [fly, setFly] = useState<{ position: Position; zoom?: number; key: string } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    setError("");
     api<{ parks: LegacySummary[] }>("/api/legacy/parks", { signal: controller.signal })
       .then((result) => setParks(result.parks))
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorText(reason, "Could not load the legacy map.")); });
+    if (proposalId) {
+      api<{ proposals: Proposal[] }>("/api/proposals?status=all", { signal: controller.signal })
+        .then((result) => setProposal(result.proposals.find((item) => item.id === proposalId) ?? null))
+        .catch(() => undefined);
+    }
     return () => controller.abort();
-  }, [revision]);
-
-  const categories = useMemo(() => [...new Set(parks?.map((park) => park.category) ?? [])].sort(), [parks]);
-  const matches = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return (parks ?? []).filter((park) =>
-      (category === "all" || park.category === category) &&
-      (!hideTaken || park.status === "available") &&
-      (!text || `${park.name} ${park.region} ${park.source} ${park.id}`.toLowerCase().includes(text)));
-  }, [parks, query, category, hideTaken]);
-
-  useEffect(() => setLimit(PAGE), [query, category, hideTaken]);
-
-  return (
-    <section className="page" aria-labelledby="import-title">
-      <ParksTabs current="/proposals/import" />
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">map.parkdex.app</p>
-          <h1 id="import-title">Import a park</h1>
-          <p className="page-lede">Pick a park from the legacy map. Its boundary and record become a draft with no badge or description. Drafts stay off phones until you publish them.</p>
-        </div>
-        <div className="toolbar">
-          <label className="search">
-            <Icon name="search" size={17} />
-            <input type="search" placeholder="Search name, region or source" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search legacy parks" />
-          </label>
-          <select className="select" value={category} onChange={(event) => setCategory(event.target.value)} aria-label="Category">
-            <option value="all">All categories</option>
-            {categories.map((value) => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}
-          </select>
-          <label className="toggle">
-            <input type="checkbox" checked={hideTaken} onChange={(event) => setHideTaken(event.target.checked)} />
-            <span>Only parks not yet imported</span>
-          </label>
-        </div>
-      </header>
-
-      {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error} <button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button></div>}
-      {!parks && !error && <div className="legacy-list">{[0, 1, 2, 3, 4].map((key) => <div key={key} className="legacy-row legacy-row--skeleton" aria-hidden="true" />)}</div>}
-      {parks && (
-        <>
-          <p className="muted result-count">{matches.length.toLocaleString()} of {parks.length.toLocaleString()} legacy parks</p>
-          {matches.length === 0 && (
-            <div className="empty"><Kip pose="think" size={90} /><h2>No matching parks</h2><p className="muted">Try another name, or include parks that are already imported.</p></div>
-          )}
-          <div className="legacy-list">
-            {matches.slice(0, limit).map((park) => (
-              <button key={park.id} type="button" className="legacy-row" onClick={() => setSelected(park.id)}>
-                <span className={`cat-dot cat-dot--${park.category}`} aria-hidden="true" />
-                <span className="legacy-row__main">
-                  <strong>{park.name}</strong>
-                  <span className="muted">{park.region || "No region"} · {park.source}</span>
-                </span>
-                <span className="meta-pill">{park.category}</span>
-                <span className={`status-chip status-chip--${park.status}`}>{STATUS_LABEL[park.status]}</span>
-                <Icon name="chevron" size={16} className="legacy-row__chevron" />
-              </button>
-            ))}
-          </div>
-          {matches.length > limit && (
-            <button type="button" className="button button--ghost button--wide load-more" onClick={() => setLimit((value) => value + PAGE)}>
-              Show more ({(matches.length - limit).toLocaleString()} left)
-            </button>
-          )}
-        </>
-      )}
-
-      <LegacyPreview id={selected} status={parks?.find((park) => park.id === selected)?.status ?? null} onClose={() => setSelected(null)} />
-    </section>
-  );
-}
-
-function LegacyPreview({ id, status, onClose }: { id: string | null; status: LegacySummary["status"] | null; onClose(): void }) {
-  const toast = useToast();
-  const [park, setPark] = useState<LegacyPark | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [busy, setBusy] = useState(false);
+  }, [proposalId]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!selectedId) {
+      setSelected(null);
+      return;
+    }
     const controller = new AbortController();
-    setPark(null);
-    setState("loading");
-    api<{ park: LegacyPark }>(`/api/legacy/parks/${encodeURIComponent(id)}`, { signal: controller.signal })
-      .then((result) => { setPark(result.park); setState("ready"); })
-      .catch(() => { if (!controller.signal.aborted) setState("error"); });
+    setLoadingPark(true);
+    api<{ park: LegacyPark }>(`/api/legacy/parks/${encodeURIComponent(selectedId)}`, { signal: controller.signal })
+      .then(({ park }) => setSelected(park))
+      .catch((reason: unknown) => { if (!controller.signal.aborted) toast.show(errorText(reason, "Could not load that park."), { tone: "error" }); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingPark(false); });
     return () => controller.abort();
-  }, [id]);
+  }, [selectedId, toast]);
 
-  async function createDraft() {
-    if (!park) return;
+  const list = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    const filtered = (parks ?? []).filter((park) => !text || `${park.name} ${park.region} ${park.source}`.toLowerCase().includes(text));
+    if (!proposal) return filtered.slice(0, 60).map((park) => ({ park, km: null as number | null }));
+    return filtered
+      .map((park) => ({ park, km: distanceKm(proposal.point, [park.lng, park.lat]) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 40);
+  }, [parks, query, proposal]);
+
+  function pick(park: LegacySummary) {
+    setSelectedId(park.id);
+    setFly({ position: [park.lng, park.lat], zoom: 13, key: park.id });
+  }
+
+  async function createDraft(body: { legacyId?: string; proposalId?: string }) {
     setBusy(true);
     try {
-      const { draft } = await api<{ draft: Draft }>("/api/drafts", { method: "POST", body: JSON.stringify({ legacyId: park.id }) });
+      const { draft } = await api<{ draft: Draft }>("/api/drafts", { method: "POST", body: JSON.stringify(body) });
       toast.show(`Draft created for ${draft.name}`);
       navigate(`/proposals/drafts/${encodeURIComponent(draft.id)}`);
     } catch (reason) {
@@ -129,52 +90,96 @@ function LegacyPreview({ id, status, onClose }: { id: string | null; status: Leg
     }
   }
 
-  const recordRows = park ? Object.entries(park.record).filter(([, value]) => value !== null && value !== "") : [];
+  const selectedSummary = parks?.find((park) => park.id === selectedId);
+
   return (
-    <Drawer open={Boolean(id)} onClose={onClose} label="Legacy park">
-      <div className="drawer__head">
+    <section className="page page--wide" aria-labelledby="import-title">
+      <ParksTabs current="/proposals/import" />
+      <header className="page-head">
         <div>
-          <p className="eyebrow">Legacy park</p>
-          <h2>{park?.name ?? "Loading..."}</h2>
-          {park && <p className="muted">{park.id}</p>}
+          <p className="eyebrow">{proposal ? "Create a draft" : "map.parkdex.app"}</p>
+          <h1 id="import-title">{proposal ? `Match "${proposal.name}"` : "Import a park"}</h1>
+          <p className="page-lede">{proposal
+            ? "The orange pin and dashed area are what the player sent. Pick a legacy park nearby to start from its boundary and record, or start from the proposal itself."
+            : "Pick a park from the legacy map. Its boundary and record become a draft. Drafts stay off phones until you publish them."}</p>
         </div>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
-      </div>
-      {state === "loading" && <div className="drawer__state"><Spinner /> Loading the boundary...</div>}
-      {state === "error" && <div className="drawer__state" role="alert">This park could not be loaded from the legacy map.</div>}
-      {park && (
-        <>
-          <div className="drawer__body">
-            <div className="preview-map"><BoundarySketch polygons={park.geometry.coordinates} pin={[park.lng, park.lat]} width={420} height={260} /></div>
-            <p className="muted geometry-stats">
-              {park.geometryStats.polygons} {park.geometryStats.polygons === 1 ? "polygon" : "polygons"} · {park.geometryStats.holes} {park.geometryStats.holes === 1 ? "hole" : "holes"} · {park.geometryStats.positions.toLocaleString()} points
-            </p>
-            <section className="panel">
-              <h3>Legacy record</h3>
-              <dl className="facts facts--wide">
-                {recordRows.map(([key, value]) => (
-                  <div key={key}><dt>{key}</dt><dd>{typeof value === "string" && /^https?:\/\//.test(value) ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === "object" ? JSON.stringify(value) : String(value)}</dd></div>
-                ))}
-              </dl>
-            </section>
-            {!["national", "provincial", "regional", "municipal", "community"].includes(park.category) && (
-              <div className="notice"><Icon name="alert" size={18} /> The app has no "{park.category}" category yet. You will pick one in the draft before publishing.</div>
-            )}
+        {proposal && (
+          <div className="toolbar">
+            <button type="button" className="button button--ghost" disabled={busy} onClick={() => void createDraft({ proposalId: proposal.id })}>
+              <Icon name="edit" size={16} /> No match, start from the proposal
+            </button>
           </div>
-          <div className="drawer__foot">
-            <span className="spacer" />
-            {status === "available" ? (
-              <button type="button" className="button button--primary" onClick={() => void createDraft()} disabled={busy}>
-                {busy ? <><Spinner small /> Creating</> : <><Icon name="plus" size={16} /> Create draft</>}
+        )}
+      </header>
+
+      {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error}</div>}
+
+      <div className="picker">
+        <aside className="picker__list">
+          <label className="search">
+            <Icon name="search" size={17} />
+            <input type="search" placeholder="Search legacy parks" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search legacy parks" />
+          </label>
+          <p className="muted result-count">{parks ? (proposal ? "Nearest legacy parks" : `${list.length < 60 ? list.length : "First 60"} of ${parks.length.toLocaleString()} legacy parks`) : "Loading the legacy map..."}</p>
+          <div className="picker__rows">
+            {!parks && !error && [0, 1, 2, 3].map((key) => <div key={key} className="legacy-row legacy-row--skeleton" aria-hidden="true" />)}
+            {list.map(({ park, km }) => (
+              <button key={park.id} type="button" className={`picker-row${park.id === selectedId ? " is-on" : ""}`} onClick={() => pick(park)}>
+                <span className={`cat-dot cat-dot--${park.category}`} aria-hidden="true" />
+                <span className="picker-row__main">
+                  <strong>{park.name}</strong>
+                  <span className="muted">{km !== null ? `${km < 1 ? km.toFixed(2) : km.toFixed(1)} km away · ` : ""}{park.category}</span>
+                </span>
+                {park.status !== "available" && <span className={`status-chip status-chip--${park.status}`}>{STATUS_LABEL[park.status]}</span>}
               </button>
-            ) : status === "draft" ? (
-              <button type="button" className="button button--primary" onClick={() => navigate(`/proposals/drafts/${encodeURIComponent(park.id)}`)}>Open draft</button>
-            ) : (
-              <span className="muted">Already in Parkdex</span>
-            )}
+            ))}
           </div>
-        </>
-      )}
-    </Drawer>
+        </aside>
+
+        <div className="picker__map">
+          <ParkMap
+            pin={proposal?.point ?? null}
+            sketch={proposal?.outline ?? null}
+            boundary={selected?.geometry ?? null}
+            points={parks?.map((park) => ({ id: park.id, name: park.name, lng: park.lng, lat: park.lat, status: park.status })) ?? []}
+            selectedPointId={selectedId}
+            onPointClick={(id) => { const park = parks?.find((item) => item.id === id); if (park) pick(park); }}
+            fitKey={proposal?.id ?? "all"}
+            pinZoom={13}
+            flyTarget={fly}
+          />
+          {selectedId && (
+            <div className="picker__card">
+              {loadingPark || !selected ? <div className="drawer__state"><Spinner small /> Loading boundary...</div> : (
+                <>
+                  <div>
+                    <strong>{selected.name}</strong>
+                    <p className="muted">{[selected.category, selected.region, `${selected.geometryStats.polygons} ${selected.geometryStats.polygons === 1 ? "area" : "areas"}`].filter(Boolean).join(" · ")}</p>
+                    {typeof selected.record.description === "string" && <p className="picker__desc">{selected.record.description}</p>}
+                  </div>
+                  <div className="picker__actions">
+                    <button type="button" className="icon-button icon-button--small" aria-label="Clear selection" onClick={() => setSelectedId(null)}><Icon name="close" size={15} /></button>
+                    {selectedSummary?.status === "available" ? (
+                      <button type="button" className="button button--primary button--small" disabled={busy} onClick={() => void createDraft({ legacyId: selected.id, ...(proposal ? { proposalId: proposal.id } : {}) })}>
+                        {busy ? <><Spinner small /> Creating</> : <><Icon name="plus" size={15} /> Use this park</>}
+                      </button>
+                    ) : selectedSummary?.status === "draft" ? (
+                      <button type="button" className="button button--ghost button--small" onClick={() => navigate(`/proposals/drafts/${encodeURIComponent(selected.id)}`)}>Open its draft</button>
+                    ) : <span className="muted">Already in Parkdex</span>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <div className="map-key">
+            {proposal && <span><span className="legend-pin" /> Player's pin</span>}
+            {proposal?.outline && <span><span className="legend-sketch" /> Player's area</span>}
+            <span><span className="legend-dot legend-dot--available" /> Legacy park</span>
+            <span><span className="legend-dot legend-dot--draft" /> Draft</span>
+            <span><span className="legend-dot legend-dot--in-parkdex" /> In Parkdex</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

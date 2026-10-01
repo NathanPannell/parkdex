@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { api, errorText, uploadImage, type Draft } from "../api";
-import { BoundarySketch } from "../components/BoundarySketch";
+import { api, errorText, uploadImage, type Draft, type MultiPolygon, type Position } from "../api";
+import { MapEditor } from "../components/MapEditor";
+import { RegionSelect } from "../components/RegionSelect";
 import { linkHandler, navigate } from "../router";
 import { Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
 import { ParksTabs } from "./ParksTabs";
+import { ReferenceFinder } from "./ReferenceFinder";
 
 const CATEGORIES = ["national", "provincial", "regional", "municipal", "community"];
 const BIOMES = ["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"];
-const SHAPES = ["circle", "hex", "shield", "arch", "seal"];
+/** Mirrors the server: the badge shape follows the category. */
+const SHAPE_FOR_CATEGORY: Record<string, string> = { community: "Circle", municipal: "Circle", regional: "Hex", provincial: "Shield", national: "Seal" };
 const RARITIES = ["common", "uncommon", "rare", "epic", "legendary"];
 
-type Editable = Pick<Draft, "name" | "short" | "category" | "region" | "biome" | "shape" | "rarity" | "blurb">;
+type Editable = Pick<Draft, "name" | "short" | "category" | "region" | "biome" | "rarity" | "blurb">;
 
 function editable(draft: Draft): Editable {
-  const { name, short, category, region, biome, shape, rarity, blurb } = draft;
-  return { name, short, category, region, biome, shape, rarity, blurb };
+  const { name, short, category, region, biome, rarity, blurb } = draft;
+  return { name, short, category, region, biome, rarity, blurb };
 }
 
 // "2h ago" reads well mid-sentence; "Just now" needs a lower-case start.
@@ -47,6 +50,18 @@ export function DraftEditor({ id }: { id: string }) {
 
   const dirty = Boolean(draft && form && JSON.stringify(editable(draft)) !== JSON.stringify(form));
   const live = draft?.status === "published";
+
+  async function savePlacement(changes: { geometry?: MultiPolygon | null; lat?: number; lng?: number }, message: string) {
+    try {
+      const { draft: saved } = await api<{ draft: Draft }>(`/api/drafts/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(changes) });
+      setDraft(saved);
+      toast.show(message);
+      return true;
+    } catch (reason) {
+      toast.show(errorText(reason, "Could not save the map change."), { tone: "error" });
+      return false;
+    }
+  }
 
   async function save(): Promise<Draft | null> {
     if (!draft || !form) return null;
@@ -139,6 +154,8 @@ export function DraftEditor({ id }: { id: string }) {
   if (!draft || !form) return <section className="page"><ParksTabs current="/proposals/drafts" /><div className="drawer__state"><Spinner /> Opening draft...</div></section>;
 
   const record = draft.source.record ?? {};
+  const proposal = draft.source.proposal as { name: string; note: string; outline: Position[] | null; createdAt: string } | undefined;
+  const fromLegacy = Boolean(draft.source.record);
   const set = <K extends keyof Editable>(key: K, value: Editable[K]) => setForm({ ...form, [key]: value });
 
   return (
@@ -149,7 +166,7 @@ export function DraftEditor({ id }: { id: string }) {
         <div>
           <p className="eyebrow">{live ? "Published" : "Draft"} · {draft.id}</p>
           <h1 id="draft-title">{form.name || "Untitled park"}</h1>
-          <p className="page-lede">{live ? `Published to Parkdex ${when(draft.publishedAt!)}. Edit it from now on with the content tools.` : `Imported from the legacy map ${when(draft.createdAt)}. Phones will not see it until you publish.`}</p>
+          <p className="page-lede">{live ? `Published to Parkdex ${when(draft.publishedAt!)}. Edit it from now on with the content tools.` : `${fromLegacy ? "Imported from the legacy map" : "Started from a player's proposal"} ${when(draft.createdAt)}. Phones will not see it until you publish.`}</p>
         </div>
         <div className="toolbar">
           <button type="button" className="button button--ghost" onClick={() => void copyBrief()}><Icon name="bulb" size={16} /> Copy AI brief</button>
@@ -160,14 +177,28 @@ export function DraftEditor({ id }: { id: string }) {
 
       <div className="editor">
         <div className="editor__side">
-          <div className="preview-map preview-map--tall"><BoundarySketch polygons={draft.geometry.coordinates} pin={[draft.lng, draft.lat]} width={420} height={320} /></div>
+          <MapEditor
+            boundary={draft.geometry}
+            pin={[draft.lng, draft.lat]}
+            sketch={proposal?.outline ?? null}
+            editable={!live}
+            onBoundary={(geometry) => savePlacement({ geometry }, "Boundary saved")}
+            onPin={([lng, lat]) => void savePlacement({ lat, lng }, "Pin moved")}
+          />
+          <p className="muted map-legend"><span className="legend-pin" /> Park pin <span className="legend-boundary" /> Boundary {proposal?.outline && <><span className="legend-sketch" /> Player's sketch</>}</p>
           {!live && draft.blockers.length > 0 && (
             <div className="notice"><Icon name="alert" size={18} /> Before publishing: {draft.blockers.join(" ")}</div>
           )}
           {!live && !draft.badgeUploads && draft.scene && (
             <div className="notice notice--error"><Icon name="alert" size={18} /> Badge publishing is not set up on this deployment. Remove the badge to publish without one.</div>
           )}
-          <section className="panel">
+          {proposal && (
+            <figure className="quote quote--small">
+              <figcaption>Proposed by a player · {proposal.name}</figcaption>
+              <blockquote dir="auto">{proposal.note || "No note added."}</blockquote>
+            </figure>
+          )}
+          {fromLegacy && <section className="panel">
             <h3>Legacy record</h3>
             <dl className="facts facts--wide">
               {["name", "category", "region", "description", "sourceName", "sourceId"].filter((key) => record[key]).map((key) => (
@@ -175,7 +206,7 @@ export function DraftEditor({ id }: { id: string }) {
               ))}
               {typeof record.sourceUrl === "string" && <div><dt>sourceUrl</dt><dd><a href={record.sourceUrl} target="_blank" rel="noreferrer">{record.sourceUrl}</a></dd></div>}
             </dl>
-          </section>
+          </section>}
         </div>
 
         <div className="editor__main">
@@ -192,7 +223,7 @@ export function DraftEditor({ id }: { id: string }) {
                   {CATEGORIES.map((value) => <option key={value} value={value}>{title(value)}</option>)}
                 </select>
               </label>
-              <label className="field"><span>Region</span><input value={form.region} maxLength={140} onChange={(event) => set("region", event.target.value)} /></label>
+              <label className="field"><span>Region</span><RegionSelect value={form.region} onChange={(value) => set("region", value)} /></label>
             </div>
             <div className="field">
               <span>Rarity</span>
@@ -206,9 +237,9 @@ export function DraftEditor({ id }: { id: string }) {
               <label className="field"><span>Biome</span>
                 <select value={form.biome} onChange={(event) => set("biome", event.target.value)}>{BIOMES.map((value) => <option key={value} value={value}>{title(value)}</option>)}</select>
               </label>
-              <label className="field"><span>Badge shape</span>
-                <select value={form.shape} onChange={(event) => set("shape", event.target.value)}>{SHAPES.map((value) => <option key={value} value={value}>{title(value)}</option>)}</select>
-              </label>
+              <div className="field"><span>Badge shape</span>
+                <p className="derived">{form.category ? SHAPE_FOR_CATEGORY[form.category] : "Set by category"}</p>
+              </div>
             </div>
           </fieldset>
 
@@ -250,6 +281,7 @@ export function DraftEditor({ id }: { id: string }) {
           )}
         </div>
       </div>
+      {!live && <ReferenceFinder draft={draft} onChange={(saved) => { setDraft(saved); setImageRevision((value) => value + 1); }} />}
       {live && <div className="empty"><Kip pose="celebrate" size={90} /><p className="muted">Published. Players can find {draft.name} on the map.</p></div>}
     </section>
   );

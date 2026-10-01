@@ -1,5 +1,6 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { bakedApiPointer, setApiPointerOverride, type ApiPointer } from "./apiPointer";
 import { setContentChannelOverride, type ContentChannel } from "./contentChannel";
 import { getNativePackageInstallInfo } from "./native";
 import { setRankProgressionEnabled } from "./progression";
@@ -7,12 +8,13 @@ import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
 
 /**
  * Remote per-build configuration. Every build checks in with the production API
- * (`/api/app-config`) to learn which content database it reads and which features are on.
- * A fresh answer is saved and takes effect on the next launch, so nothing switches mid-session.
- * Offline or before the first check-in, the build uses its own defaults below.
+ * (`/api/app-config`) to learn which server it talks to (its API pointer) and which features
+ * are on. A fresh answer is saved and takes effect on the next launch, so nothing switches
+ * mid-session. Update prompts apply as soon as they are known. Offline or before the first
+ * check-in, the build uses its own defaults below.
  */
 
-/** Every remotely controlled feature and its built-in default. Keep in step with `worker/appConfig.ts`. */
+/** Every remotely controlled feature this build reads, and its built-in default. */
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   rankProgression: true,
   parkProposals: true,
@@ -28,8 +30,12 @@ export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app
 export type AppConfig = {
   platform: AppPlatform;
   build: number;
+  /** The server this build should use; null keeps the one it was built for. */
+  apiPointer: ApiPointer | null;
   contentChannel: ContentChannel | null;
   flags: FeatureFlags;
+  /** Every flag the server sent, including ones this build does not read yet. */
+  remoteFlags: Record<string, boolean>;
   update: UpdateStatus;
   /** When this configuration was fetched; null for built-in defaults. */
   fetchedAt: string | null;
@@ -39,12 +45,16 @@ type RemoteAppConfig = {
   schema: "parkdex.app-config/v1";
   platform: AppPlatform;
   build: number;
+  apiPointer: ApiPointer | null;
   contentChannel: ContentChannel | null;
-  flags: Partial<FeatureFlags>;
+  flags: Record<string, boolean>;
   update: UpdateStatus;
 };
 
 const CACHE_KEY = "parkdex.app-config.v1";
+/** The server applied at the last launch, so a change can sign the player out of the old one first. */
+const APPLIED_SERVER_KEY = "parkdex.api-pointer.applied";
+const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 const CHECK_IN_TIMEOUT_MS = 8_000;
 const BUILD_INFO_TIMEOUT_MS = 1_500;
 
@@ -61,7 +71,7 @@ function setUpdateStatus(next: UpdateStatus): void {
   for (const listener of updateListeners) listener();
 }
 
-/** Update prompts apply as soon as they are known, unlike content and flags. */
+/** Update prompts apply as soon as they are known, unlike the pointer and flags. */
 export function currentUpdateStatus(): UpdateStatus {
   return updateStatus;
 }
@@ -72,7 +82,7 @@ export function subscribeUpdateStatus(listener: () => void): () => void {
 }
 
 function defaults(info: { platform: AppPlatform; build: number }): AppConfig {
-  return { ...info, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, update: "none", fetchedAt: null };
+  return { ...info, apiPointer: null, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, remoteFlags: {}, update: "none", fetchedAt: null };
 }
 
 /** The content database this build was made for. */
@@ -86,24 +96,40 @@ export function parseRemoteAppConfig(value: unknown, expected: { platform: AppPl
   if (body.schema !== "parkdex.app-config/v1" || body.platform !== expected.platform || body.build !== expected.build) return null;
   const channel = body.contentChannel ?? null;
   if (channel !== null && channel !== "staging" && channel !== "main") return null;
-  const flags: Partial<FeatureFlags> = {};
+  // Older servers only send a content channel, which then decides the pointer too.
+  const pointer = "apiPointer" in body ? body.apiPointer ?? null : channel === "main" ? "production" : channel;
+  if (pointer !== null && pointer !== "production" && pointer !== "staging") return null;
+  const flags: Record<string, boolean> = {};
   if (typeof body.flags === "object" && body.flags !== null && !Array.isArray(body.flags)) {
-    for (const key of Object.keys(FEATURE_FLAG_DEFAULTS) as FeatureFlag[]) {
-      const flag = (body.flags as Record<string, unknown>)[key];
-      if (typeof flag === "boolean") flags[key] = flag;
+    for (const [key, flag] of Object.entries(body.flags as Record<string, unknown>)) {
+      if (FLAG_NAME.test(key) && typeof flag === "boolean") flags[key] = flag;
     }
   }
   // Older servers omit `update`; anything unrecognised never blocks the app.
   const update: UpdateStatus = body.update === "required" || body.update === "available" ? body.update : "none";
-  return { schema: "parkdex.app-config/v1", platform: expected.platform, build: expected.build, contentChannel: channel, flags, update };
+  return {
+    schema: "parkdex.app-config/v1",
+    platform: expected.platform,
+    build: expected.build,
+    apiPointer: pointer as ApiPointer | null,
+    contentChannel: channel,
+    flags,
+    update,
+  };
 }
 
 function toAppConfig(remote: RemoteAppConfig, fetchedAt: string): AppConfig {
+  const flags = { ...FEATURE_FLAG_DEFAULTS } as FeatureFlags;
+  for (const key of Object.keys(FEATURE_FLAG_DEFAULTS) as FeatureFlag[]) {
+    if (typeof remote.flags[key] === "boolean") flags[key] = remote.flags[key];
+  }
   return {
     platform: remote.platform,
     build: remote.build,
+    apiPointer: remote.apiPointer,
     contentChannel: remote.contentChannel,
-    flags: { ...FEATURE_FLAG_DEFAULTS, ...remote.flags },
+    flags,
+    remoteFlags: { ...remote.flags },
     update: remote.update,
     fetchedAt,
   };
@@ -172,16 +198,46 @@ async function readBuildInfo(): Promise<BuildInfo | null> {
   return null;
 }
 
+/**
+ * Accounts belong to one server. When the pointer moves this build to the other server, sign
+ * the player out locally first so the old session is never sent to the new one. Progress saved
+ * on the device is kept.
+ */
+async function signOutIfServerChanged(server: ApiPointer): Promise<void> {
+  let previous: string | null;
+  try {
+    previous = globalThis.localStorage?.getItem(APPLIED_SERVER_KEY) ?? null;
+  } catch {
+    return;
+  }
+  if (previous !== null && previous !== server) {
+    try {
+      const { clearLocalNativeSession } = await import("./accounts/authClient");
+      await clearLocalNativeSession();
+    } catch {
+      // A session the new server rejects is treated as signed out anyway.
+    }
+  }
+  try {
+    globalThis.localStorage?.setItem(APPLIED_SERVER_KEY, server);
+  } catch {
+    // Without storage there is no previous server to compare against.
+  }
+}
+
 /** Apply the saved configuration for this build before the app renders. Never throws. */
 export async function initAppConfig(): Promise<AppConfig> {
   buildInfo = await readBuildInfo();
   const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
   active = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
-  // Only native builds switch databases; a web deployment always reads its own host's content.
-  const override = buildInfo?.platform === "android" && active.contentChannel && active.contentChannel !== bakedContentChannel()
-    ? active.contentChannel
+  // Only native production and staging builds switch servers; web pages always use their own host.
+  const baked = bakedApiPointer();
+  const pointer = buildInfo?.platform === "android" && baked && active.apiPointer && active.apiPointer !== baked
+    ? active.apiPointer
     : null;
-  setContentChannelOverride(override);
+  if (buildInfo?.platform === "android" && baked) await signOutIfServerChanged(pointer ?? baked);
+  setApiPointerOverride(pointer);
+  setContentChannelOverride(pointer === "production" ? "main" : pointer === "staging" ? "staging" : null);
   setRankProgressionEnabled(active.flags.rankProgression);
   setUpdateStatus(active.platform === "android" ? active.update : "none");
   return active;
@@ -193,6 +249,11 @@ export function activeAppConfig(): AppConfig {
 
 export function isFeatureEnabled(flag: FeatureFlag): boolean {
   return active.flags[flag];
+}
+
+/** Any flag the server sent, for features newer than the list above. */
+export function remoteFlag(name: string): boolean | undefined {
+  return active.remoteFlags[name];
 }
 
 /** Where builds check in. Native builds always ask production; web pages ask their own host. */
@@ -228,6 +289,9 @@ export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch)
   const url = new URL("/api/app-config", origin);
   url.searchParams.set("platform", currentBuildInfo.platform);
   url.searchParams.set("build", String(currentBuildInfo.build));
+  // The server applies the update rules of the environment this build was made for.
+  const baked = bakedApiPointer();
+  if (baked) url.searchParams.set("env", baked);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHECK_IN_TIMEOUT_MS);
   try {

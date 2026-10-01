@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     versionCode: number;
   } | null),
   resumeListener: null as (() => void) | null,
+  clearLocalNativeSession: vi.fn(async () => undefined),
   addListener: vi.fn(async (_event: string, listener: () => void) => {
     mocks.resumeListener = listener;
     return { remove: async () => undefined };
@@ -33,9 +34,11 @@ vi.mock("@capacitor/app", () => ({
 }));
 
 vi.mock("./native", () => ({ getNativePackageInstallInfo: mocks.getNativePackageInstallInfo }));
+vi.mock("./accounts/authClient", () => ({ clearLocalNativeSession: mocks.clearLocalNativeSession }));
 
 import { FEATURE_FLAGS } from "../../worker/appConfig";
-import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig, startAppConfigCheckIns, subscribeUpdateStatus } from "./appConfig";
+import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeUpdateStatus } from "./appConfig";
+import { apiEnvironment, apiPointerOverride } from "./apiPointer";
 import { contentChannelOverride } from "./contentChannel";
 import { getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, setRankProgressionEnabled } from "./progression";
 
@@ -57,6 +60,7 @@ beforeEach(() => {
   mocks.getNativePackageInstallInfo.mockResolvedValue(null);
   mocks.resumeListener = null;
   mocks.addListener.mockClear();
+  mocks.clearLocalNativeSession.mockClear();
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => mocks.storage.get(key) ?? null,
     setItem: (key: string, value: string) => void mocks.storage.set(key, value),
@@ -179,7 +183,7 @@ describe("app config", () => {
     const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: false } }));
     const fresh = await checkInAppConfig(fetcher);
     expect(fresh?.flags.rankProgression).toBe(false);
-    expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42");
+    expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42&env=staging");
     expect(isRankProgressionEnabled()).toBe(true);
 
     await initAppConfig();
@@ -203,7 +207,7 @@ describe("app config", () => {
     expect(await checkInAppConfig(respond({ error: "down" }, 503))).toBeNull();
     expect(await checkInAppConfig(respond(answer({ build: 7 })))).toBeNull();
     expect(await checkInAppConfig(vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch)).toBeNull();
-    expect(mocks.storage.size).toBe(0);
+    expect(mocks.storage.has("parkdex.app-config.v1")).toBe(false);
   });
 
   it("does not switch a web page's content database", async () => {
@@ -248,10 +252,48 @@ describe("app config", () => {
     expect(currentUpdateStatus()).toBe("none");
   });
 
-  it("drops unknown flags and channels", () => {
+  it("rejects unknown channels and pointers, and keeps every well-formed flag for later builds", async () => {
     expect(parseRemoteAppConfig(answer({ contentChannel: "production" }), { platform: "android", build: 42 })).toBeNull();
-    expect(parseRemoteAppConfig(answer({ flags: { rankProgression: true, other: true } }), { platform: "android", build: 42 })?.flags)
-      .toEqual({ rankProgression: true });
+    expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
+    await initAppConfig();
+    const fresh = await checkInAppConfig(respond(answer({ flags: { rankProgression: false, futureThing: true, "bad key": true } })));
+    expect(fresh?.flags).toEqual({ rankProgression: false, parkProposals: true });
+    expect(fresh?.remoteFlags).toEqual({ rankProgression: false, futureThing: true });
+    await initAppConfig();
+    expect(remoteFlag("futureThing")).toBe(true);
+    expect(remoteFlag("missing")).toBeUndefined();
+  });
+
+  it("switches a native build's whole API to the pointed server on the next launch and signs out of the old one", async () => {
+    await initAppConfig();
+    expect(apiPointerOverride()).toBeNull();
+    expect(apiEnvironment()).not.toBe("main");
+    await checkInAppConfig(respond(answer({ apiPointer: "production", contentChannel: "main" })));
+    // Nothing changes mid-session.
+    expect(apiPointerOverride()).toBeNull();
+    expect(mocks.clearLocalNativeSession).not.toHaveBeenCalled();
+
+    await initAppConfig();
+    expect(apiPointerOverride()).toBe("production");
+    expect(apiEnvironment()).toBe("main");
+    expect(contentChannelOverride()).toBe("main");
+    expect(mocks.clearLocalNativeSession).toHaveBeenCalledTimes(1);
+
+    // Same server again: no further sign-out.
+    await initAppConfig();
+    expect(mocks.clearLocalNativeSession).toHaveBeenCalledTimes(1);
+
+    // Pointing back at the build's own server clears the override and signs out once more.
+    await checkInAppConfig(respond(answer({ apiPointer: null })));
+    await initAppConfig();
+    expect(apiPointerOverride()).toBeNull();
+    expect(contentChannelOverride()).toBeNull();
+    expect(mocks.clearLocalNativeSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads an older server's content channel as the pointer", () => {
+    expect(parseRemoteAppConfig(answer({ contentChannel: "main" }), { platform: "android", build: 42 })?.apiPointer).toBe("production");
+    expect(parseRemoteAppConfig(answer({ contentChannel: null }), { platform: "android", build: 42 })?.apiPointer).toBeNull();
   });
 });
 
