@@ -533,3 +533,18 @@
   outline: 3px solid var(--kip-dark);
   outline-offset: 2px;
 }
+
+.account-setting--button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.account-setting--button .account-setting__text {
+  flex: 1 1 auto;
+}
