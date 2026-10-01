@@ -91,6 +91,8 @@ export function mapStyle(releaseId?: string | null): StyleSpecification {
     type: "fill",
     source: "protomaps",
     "source-layer": "water",
+    // The water source also contains creek lines; filling them creates broad blue artifacts.
+    filter: ["==", "$type", "Polygon"],
     paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] },
   };
   const style = waterIndex >= 0
