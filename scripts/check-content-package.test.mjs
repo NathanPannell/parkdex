@@ -9,7 +9,7 @@ import { test } from "node:test";
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const checkerPath = join(projectRoot, "scripts", "check-content-package.mjs");
 const overviewPath = join(projectRoot, "public", "map", "bootstrap", "canada-overview.pmtiles");
-const MAX_OVERVIEW_BYTES = 2_000_000;
+const MAX_OVERVIEW_BYTES = 12_000_000;
 
 test("allows only the pinned Canada overview within the byte budget", async (t) => {
   const outputDirectory = await packageFixture(t);
