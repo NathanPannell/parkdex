@@ -56,6 +56,18 @@ function scopedHeaders(extra: Record<string, string> = {}) {
   });
 }
 
+function stubMissingRequestBodyGetter(arrayBuffer?: () => Promise<ArrayBuffer>) {
+  const NativeRequest = globalThis.Request;
+  class FirefoxRequest extends NativeRequest {
+    override arrayBuffer(): Promise<ArrayBuffer> {
+      return arrayBuffer ? arrayBuffer() : super.arrayBuffer();
+    }
+  }
+  Object.defineProperty(FirefoxRequest.prototype, "body", { configurable: true, get: () => undefined });
+  vi.stubGlobal("Request", FirefoxRequest);
+  return () => vi.stubGlobal("Request", NativeRequest);
+}
+
 beforeEach(() => {
   mocks.native = false;
   mocks.connectivity = { connected: true, wifi: true };
@@ -88,6 +100,74 @@ describe("account backup transport", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows a bodyless GET when Firefox omits the Request body getter", async () => {
+    const restoreRequest = stubMissingRequestBodyGetter();
+    try {
+      const request = new Request(`${API_ORIGIN}/api/claims`, { method: "GET", headers: scopedHeaders() });
+      await expect(accountBackupFetch(request, {}, API_ORIGIN)).resolves.toMatchObject({ status: 200 });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(globalThis.fetch).mock.calls[0]?.[1]).toMatchObject({ method: "GET" });
+    } finally {
+      restoreRequest();
+    }
+  });
+
+  it("uploads a PUT body through Request.arrayBuffer when Firefox omits its body getter", async () => {
+    const restoreRequest = stubMissingRequestBodyGetter();
+    const payload = new Uint8Array([7, 13, 21]);
+    try {
+      const request = new Request(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
+        method: "PUT",
+        headers: scopedHeaders({ "Content-Type": "image/jpeg" }),
+        body: new Blob([payload], { type: "image/jpeg" }),
+      });
+      await expect(accountBackupFetch(request, {}, API_ORIGIN)).resolves.toMatchObject({ status: 200 });
+      const requestInit = vi.mocked(globalThis.fetch).mock.calls[0]?.[1];
+      expect(requestInit?.method).toBe("PUT");
+      expect(Array.from(new Uint8Array(requestInit?.body as ArrayBuffer))).toEqual(Array.from(payload));
+    } finally {
+      restoreRequest();
+    }
+  });
+
+  it("bounds a PUT body read with Request.arrayBuffer when Firefox omits the body getter", async () => {
+    const restoreRequest = stubMissingRequestBodyGetter();
+    try {
+      const request = new Request(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
+        method: "PUT",
+        headers: scopedHeaders({ "Content-Type": "image/jpeg" }),
+        body: new Blob([new Uint8Array(2_621_441)], { type: "image/jpeg" }),
+      });
+      await expect(accountBackupFetch(request, {}, API_ORIGIN)).rejects.toThrow("exceeds its byte limit");
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    } finally {
+      restoreRequest();
+    }
+  });
+
+  it("honors cancellation after a Firefox Request.arrayBuffer body read finishes", async () => {
+    let resolveBody: ((bytes: ArrayBuffer) => void) | undefined;
+    const bodyRead = new Promise<ArrayBuffer>((resolve) => { resolveBody = resolve; });
+    const restoreRequest = stubMissingRequestBodyGetter(() => bodyRead);
+    const controller = new AbortController();
+    try {
+      const request = new Request(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
+        method: "PUT",
+        headers: scopedHeaders({ "Content-Type": "image/jpeg" }),
+        body: new Blob([new Uint8Array([1])], { type: "image/jpeg" }),
+      });
+      const pending = accountBackupFetch(request, { signal: controller.signal }, API_ORIGIN);
+      await vi.waitFor(() => expect(resolveBody).toBeDefined());
+      controller.abort(new DOMException("Account changed", "AbortError"));
+      resolveBody?.(new Uint8Array([1]).buffer);
+
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    } finally {
+      restoreRequest();
+    }
   });
 
   it("rejects browser backup while offline before sending a request", async () => {
