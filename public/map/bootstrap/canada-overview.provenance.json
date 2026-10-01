@@ -1,0 +1,33 @@
+{
+  "schema": "parkdex.bundled-map-overview/v2",
+  "source": {
+    "url": "https://build.protomaps.com/20260925.pmtiles",
+    "sourceBuild": "20260925",
+    "tileType": "mvt",
+    "archiveBasemapVersion": "4.15.2"
+  },
+  "tool": {
+    "path": "parkdex-badge-mockup/.tools/go-pmtiles.exe",
+    "sha256": "77043701c3584b2df0d0491beab8407370a3840025e1384a5eb177b99a69c1f4",
+    "reportedVersion": "pmtiles dev, commit none, built at unknown"
+  },
+  "extract": {
+    "rebuildCommand": "powershell -NoProfile -File scripts/build-map-overview.ps1 -PmtilesCli <path-to-go-pmtiles.exe>",
+    "command": "go-pmtiles extract https://build.protomaps.com/20260925.pmtiles <output> --bbox=-141.0,41.6,-52.6,83.2 --minzoom=0 --maxzoom=6",
+    "minZoom": 0,
+    "maxZoom": 6,
+    "bounds": [-141.0, 41.6, -52.6, 83.2],
+    "tileEntries": 433
+  },
+  "artifact": {
+    "path": "public/map/bootstrap/canada-overview.pmtiles",
+    "sha256": "f72861a5932e082042ae7595bdfc7990610b3c171a59a20270b5efc63fa89d61",
+    "bytes": 9513119,
+    "maxBytes": 12000000,
+    "tileType": "mvt",
+    "minZoom": 0,
+    "maxZoom": 6,
+    "bounds": [-141.0, 41.6, -52.6, 83.2],
+    "attribution": ["Protomaps", "OpenStreetMap"]
+  }
+}

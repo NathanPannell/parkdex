@@ -12,13 +12,15 @@ When the app is open with an internet connection, it calls `GET /api/content/sna
 - Descriptors for the active badge images: URL, SHA-256, size and type.
 - The URL and hash of the separate map file manifest.
 
-The app downloads missing badge images from their R2 URLs and verifies their bytes. It saves the complete catalogue and revision together and publishes the verified result once. Catalogue data, artwork, map metadata, glyphs, and account backup can use cellular data. Only detailed map chunks require confirmed Wi-Fi. A browser that cannot identify its physical network keeps using the bundled overview instead of assuming that its connection is Wi-Fi.
+The app downloads missing badge images from their R2 URLs and verifies their bytes. It saves the complete catalogue and revision together and publishes the verified result once. Catalogue data, artwork, map metadata, glyphs, and account backup can use cellular data. Detailed map chunks for the area around the visitor, and detail streamed while they look at an area that is not downloaded, also use any connection. Other detailed map downloads require confirmed Wi-Fi. The app never downloads the whole detailed map on its own.
 
 The snapshot contains public park content. Account details, visits and private photos continue to use their existing private APIs.
 
 On Android, catalogue records live in SQLite and downloaded files live in the app's private data directory. On the web, the equivalent data is stored in IndexedDB. These are explicit offline stores; routine HTTP cache eviction is not the mechanism used to manage them. Uninstalling or clearing application data removes the saved copy.
 
-The app includes a compact overview map of Vancouver Island. It appears with the first park pins while detailed map files download, remains available offline, and stays in place as downloaded detail becomes usable.
+The app includes a low-detail base map of Canada (zooms 0-6, about 9.5 MB). It appears with the first park pins while detailed map files download, remains available offline anywhere in the country, and stays in place as detail becomes usable. The map opens on the visitor's last known location at badge zoom, or frames British Columbia when no location is known.
+
+Detailed coverage comes from three places: the 3x3 block of zoom-9 squares (about 50 km each) around the visitor, downloaded automatically and refreshed after they move about half a square; detail streamed while online for any area the visitor views; and chunks already saved on the device. Offline, areas without saved detail show the base map.
 
 The app prepares its local overview archive and map worker during the splash and onboarding screens. Park markers are added after the overview has rendered, so creating the badge illustrations does not compete with the first basemap frame. This step does not wait for detailed tiles or labels. Preparing the archive and rendering it share the same local bytes.
 
@@ -70,7 +72,7 @@ See [content-authoring.md](content-authoring.md) for the publishing command and 
 
 ## Offline and Wi-Fi behavior
 
-Saved parks remain usable offline. Essential content and account backup use any online connection on web and Android, including browsers without the Network Information API. Android binds detailed map requests to Wi-Fi so those bytes cannot fall back to cellular data. Essential downloads pause only while offline or backgrounded; detailed maps also pause when Wi-Fi is lost.
+Saved parks remain usable offline. Essential content and account backup use any online connection on web and Android, including browsers without the Network Information API. Android binds detailed map requests to Wi-Fi unless the request is for nearby or streamed detail, which may use any validated network. Essential downloads pause only while offline or backgrounded; Wi-Fi-only map downloads also pause when Wi-Fi is lost.
 
 The app reports physical Wi-Fi only when the platform confirms it. Browser connection speed and unknown connection types never count as Wi-Fi; they do not block essential content while the browser is online.
 

@@ -4,9 +4,10 @@ import type { ContentRuntime, ContentSnapshot, MapManifest } from "./content/con
 
 const TILE_SCHEME = "pmtiles";
 const GLYPH_SCHEME = "contentglyph";
-export const ISLAND_OVERVIEW_KEY = "bundled-island-overview-v1";
-export const ISLAND_OVERVIEW_PATH = "/map/bootstrap/island-overview.pmtiles";
-const MAX_CACHED_CHUNKS = 12;
+export const BASE_OVERVIEW_KEY = "bundled-canada-overview-v1";
+export const BASE_OVERVIEW_PATH = "/map/bootstrap/canada-overview.pmtiles";
+// 512 KB chunks: enough for a phone viewport across a few zoom levels.
+const MAX_CACHED_CHUNKS = 32;
 
 type ReleaseRegistration = {
   runtime: ContentRuntime;
@@ -79,7 +80,7 @@ function releaseCleanup(releaseId: string, entry: ReleaseRegistration): () => vo
 function ensureProtocols(): void {
   if (!tileProtocol) tileProtocol = new Protocol();
   if (!bundledOverview) bundledOverview = new PMTiles(bundledOverviewSource);
-  if (!tileProtocol.tiles.has(ISLAND_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
+  if (!tileProtocol.tiles.has(BASE_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
   if (!tileProtocolInstalled) {
     addProtocol(TILE_SCHEME, tileProtocol.tile);
     tileProtocolInstalled = true;
@@ -153,9 +154,8 @@ export class RuntimeChunkSource implements Source {
     const lastChunk = Math.floor((end - 1) / this.manifest.chunkBytes);
     const indices = Array.from({ length: lastChunk - firstChunk + 1 }, (_, i) => firstChunk + i);
     const allowed = this.allowed();
-    if (!this.bypassAllowlist && (!allowed || indices.some((index) => !allowed.has(index)))) {
-      throw new Error("Map area has not been downloaded. Expand nearby map coverage before panning there.");
-    }
+    const missing = this.bypassAllowlist ? [] : indices.filter((index) => !allowed?.has(index));
+    if (missing.length) await this.streamChunks(missing, requestSignal);
 
     const parts: ArrayBuffer[] = [];
     for (const index of indices) parts.push(await this.readChunk(index, requestSignal));
@@ -170,6 +170,20 @@ export class RuntimeChunkSource implements Source {
       result.set(chunk.subarray(from, to), chunkStart + from - offset);
     }
     return { data: result.buffer };
+  }
+
+  /**
+   * Online visitors stream detail for areas they have not downloaded, on any
+   * connection. Offline, the request fails and the bundled base map stays visible.
+   */
+  private async streamChunks(indices: number[], signal?: AbortSignal): Promise<void> {
+    try {
+      for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index), "nearby", signal);
+    } catch (error) {
+      if (signal?.aborted || (error as Error)?.name === "AbortError") throw error;
+      throw new Error("Map area has not been downloaded. Connect to the internet to load detail here.");
+    }
+    markStreamedMapChunks(this.releaseId, indices);
   }
 
   private async readChunk(index: number, signal?: AbortSignal): Promise<ArrayBuffer> {
@@ -205,7 +219,7 @@ export class BundledOverviewSource implements Source {
 
   constructor(
     private readonly loadArchive: () => Promise<ArrayBuffer> = () => fetchBundledOverview(),
-    private readonly key = ISLAND_OVERVIEW_KEY,
+    private readonly key = BASE_OVERVIEW_KEY,
   ) {}
 
   getKey(): string {
@@ -278,6 +292,19 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     }
     for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
   }
+}
+
+/**
+ * Record chunks a tile request has already read. Unlike setAllowedMapChunks this
+ * does not reload the detail source, because the requesting reader succeeded.
+ */
+function markStreamedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
+  let allowed = allowedChunkIds.get(releaseId);
+  if (!allowed) {
+    allowed = new Set<number>();
+    allowedChunkIds.set(releaseId, allowed);
+  }
+  for (const id of chunkIds) allowed.add(id);
 }
 
 export function getAllowedMapChunks(releaseId: string): readonly number[] {
@@ -363,7 +390,7 @@ function validateMapManifest(manifest: MapManifest): void {
 
 async function fetchBundledOverview(): Promise<ArrayBuffer> {
   const base = typeof document === "undefined" ? "http://localhost/" : document.baseURI;
-  const response = await fetch(new URL(ISLAND_OVERVIEW_PATH, base));
+  const response = await fetch(new URL(BASE_OVERVIEW_PATH, base));
   if (!response.ok) throw new Error(`Bundled map overview failed to load (${response.status})`);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength === 0) throw new Error("Bundled map overview is empty");

@@ -1,4 +1,4 @@
-import { canDownloadContent, requiresContentWifi, type Connectivity, type DownloadPurpose } from "./contracts";
+import { canDownloadContent, requiresContentWifiFor, type Connectivity, type DownloadPurpose } from "./contracts";
 
 export type DownloadPolicy = {
   foreground: boolean;
@@ -35,9 +35,9 @@ function abortError() {
   return error;
 }
 
-export function isDownloadAllowed(_purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
+export function isDownloadAllowed(purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
   return policy.foreground && canDownloadContent(policy.connectivity) &&
-    (!requiresContentWifi(path) || policy.connectivity.wifi);
+    (!requiresContentWifiFor(purpose, path) || policy.connectivity.wifi);
 }
 
 function isMapWork(task: Pick<ScheduledDownload, "path" | "purpose">): boolean {

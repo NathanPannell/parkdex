@@ -15,8 +15,8 @@ import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, typ
 import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
-import { ISLAND_BOUNDS } from "../../lib/mapStyle";
-import { FIELD } from "../../lib/native";
+import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
+import { FIELD, isNative } from "../../lib/native";
 import { useStore } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
@@ -28,6 +28,13 @@ import { ArrivalCard, TripPanel } from "./TripPanel";
 
 const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
 const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
+
+// Close enough to show badges rather than dots when the map opens on the visitor.
+const USER_ZOOM = 12.5;
+// Without any known location, frame British Columbia rather than a placeholder town.
+const BC_VIEW = { center: [-125.5, 53.8] as LngLat, zoom: 4.6 };
+// Devices with real GPS never open on the demo starting point.
+const TRACKS_REAL_LOCATION = FIELD || isNative;
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
@@ -43,6 +50,11 @@ export function MapScreen() {
   const [proposing, setProposing] = useState(false);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
+  const [initialView] = useState(() => {
+    if (!TRACKS_REAL_LOCATION) return { center: state.user, zoom: 12 };
+    const last = readLastLocation();
+    return last ? { center: last, zoom: USER_ZOOM } : BC_VIEW;
+  });
 
   const { user, claims, selectedId, tripId } = state;
   const parks = useMemo(() => mapParks(content?.parks ?? [], claims), [content?.parks, claims]);
@@ -93,16 +105,15 @@ export function MapScreen() {
     lastArrived.current = arrivedId;
   }, [arrivedId, state.screen]);
 
-  // Jump to the visitor the first time a real GPS fix lands.
+  // Jump to the visitor the first time a real GPS fix lands, wherever they are.
   const hadFix = useRef(false);
   useEffect(() => {
-    if (!hasUsableGpsFix || hadFix.current) return;
+    if (!hasUsableGpsFix) return;
+    saveLastLocation(user);
+    if (hadFix.current) return;
     hadFix.current = true;
-    // Visitors off the island keep the island in view instead of an empty ocean.
-    const [w, s, e, n] = ISLAND_BOUNDS;
-    if (user[0] < w || user[0] > e || user[1] < s || user[1] > n) return;
-    mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
-  }, [hasUsableGpsFix, state.accuracy]);
+    mapRef.current?.flyTo({ center: user, zoom: USER_ZOOM, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+  }, [hasUsableGpsFix, state.accuracy, user]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
@@ -212,6 +223,8 @@ export function MapScreen() {
     <MapView
       mapRef={mapRef}
       user={user}
+      showUser={!TRACKS_REAL_LOCATION || hasUsableGpsFix}
+      initialView={initialView}
       fc={content ? visibleFc : undefined}
       parks={content ? parks : []}
       claims={claims}

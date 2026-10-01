@@ -5,7 +5,7 @@ import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
-import type { ContentEnvironment, ContentRuntime, ContentStatus } from "./contracts";
+import { BUILD_MAP_POINTER, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
 import { useStore } from "../store";
 import { useAuth } from "../accounts/AuthProvider";
 import { isUsableGpsAccuracy } from "../geo";
@@ -67,6 +67,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       claimedParkIds: () => claimsReadyRef.current ? Object.keys(claimsRef.current) : [],
       connectivity: initialConnectivity(),
       fetch: contentFetch,
+      mapPointer: BUILD_MAP_POINTER,
     });
   }
   const runtime = runtimeRef.current;

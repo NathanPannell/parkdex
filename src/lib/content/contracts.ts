@@ -166,7 +166,18 @@ export function isWaitingForContentWifi(connectivity: Connectivity): boolean {
   return connectivity.connected && !connectivity.wifi;
 }
 
-/** Only large detailed map chunks require confirmed physical Wi-Fi. */
+/** Request options understood by the content transport. */
+export type ContentRequestInit = RequestInit & {
+  /** Allow a detailed map chunk on any connection, for nearby and streamed detail. */
+  anyNetwork?: boolean;
+};
+
+/** Nearby and streamed map detail may use mobile data; other map chunk downloads wait for Wi-Fi. */
+export function requiresContentWifiFor(purpose: DownloadPurpose, path: string): boolean {
+  return purpose !== "nearby" && requiresContentWifi(path);
+}
+
+/** Detailed map chunks require confirmed physical Wi-Fi unless a request allows any network. */
 export function requiresContentWifi(path: string): boolean {
   let decoded = path;
   try { decoded = decodeURIComponent(path); } catch { /* Keep malformed paths for URL validation. */ }
@@ -203,6 +214,8 @@ export type ContentRuntimeOptions = {
   fetch?: typeof fetch;
   connectivity?: Connectivity;
   now?: () => number;
+  /** A map pointer this build uses in place of the server's (see BUILD_MAP_POINTER). */
+  mapPointer?: ContentMapPointer;
 };
 
 /**
@@ -213,7 +226,20 @@ export type ContentRuntimeOptions = {
  */
 export const CONTENT_READER_VERSION = 1;
 export const VICTORIA: MapPoint = [-123.3656, 48.4284];
-export const CONTENT_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
+/** Bounds of the detailed map archive this build uses (the --bbox of its Protomaps extract). */
+export const CONTENT_BOUNDS: [number, number, number, number] = [-139.1, 48.2, -114.0, 60.0];
+/**
+ * The detailed BC map (Protomaps 20260925, zooms 0-14, 512 KB chunks) built by
+ * scripts/build-map-inventory.py. This build uses it instead of the server's map
+ * pointer, which stays on the island archive because installed builds still
+ * download the whole map they are given. The inventory is immutable and verified
+ * against this hash before use.
+ */
+export const BUILD_MAP_POINTER: ContentMapPointer = {
+  version: "01a7e200fc12922215be78afd9800d8f9458369b077e9f7fea94b67497233f8d",
+  manifestUrl: "https://kip-assets.parkdex.app/releases/01a7e200fc12922215be78afd9800d8f9458369b077e9f7fea94b67497233f8d/map/manifest.json",
+  manifestSha256: "ef99db0a47f2614f5396f042642122b7241473322d84947a8e79ae3cb0595106",
+};
 export const CONTENT_CDN_ORIGIN = "https://kip-assets.parkdex.app";
 
 export function isRemoteContentPath(path: string): boolean {
