@@ -261,6 +261,16 @@ describe("content transport", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it("allows bodyless requests when the Request body getter is missing", async () => {
+    const NativeRequest = globalThis.Request;
+    class FirefoxRequest extends NativeRequest {}
+    Object.defineProperty(FirefoxRequest.prototype, "body", { configurable: true, get: () => undefined });
+    vi.stubGlobal("Request", FirefoxRequest);
+
+    await expect(contentFetch(API_URL)).resolves.toMatchObject({ status: 200 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the Android plugin and returns response metadata and binary bytes", async () => {
     mocks.capacitor.isNativePlatform.mockReturnValue(true);
     mocks.capacitor.getPlatform.mockReturnValue("android");

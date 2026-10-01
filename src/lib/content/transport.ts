@@ -150,7 +150,8 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
   if (request.method !== "GET" && request.method !== "HEAD") {
     throw new TypeError("Content transport only permits GET and HEAD requests");
   }
-  if (request.body !== null) throw new TypeError("Content transport does not accept request bodies");
+  // Firefox can expose a bodyless Request.body as undefined when its stream getter is unavailable.
+  if (request.body != null) throw new TypeError("Content transport does not accept request bodies");
   throwIfAborted(request.signal);
 
   if (Capacitor.isNativePlatform()) {
