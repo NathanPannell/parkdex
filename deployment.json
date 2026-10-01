@@ -29,7 +29,8 @@
   "independentMigrationPaths": [
     "database/migrations/app_config_001_init.sql",
     "database/migrations/park_proposals_001_init.sql",
-    "database/migrations/park_drafts_001_init.sql"
+    "database/migrations/park_drafts_001_init.sql",
+    "database/migrations/app_config_002_global_rules.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
