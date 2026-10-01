@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeIdentityPlugin.class);
+        registerPlugin(NativeInstallInfoPlugin.class);
         registerPlugin(WifiContentTransportPlugin.class);
         super.onCreate(savedInstanceState);
     }

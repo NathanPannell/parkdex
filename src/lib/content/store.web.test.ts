@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ArchivedScene, RetainedPark, StoredRelease } from "./contracts";
+import type { ArchivedScene, ContentSyncState, RetainedPark, StoredRelease } from "./contracts";
 import { WebContentStore } from "./store.web";
 
 const DATABASE = "parkdex-content-v1";
@@ -29,6 +29,18 @@ function release(id: string): StoredRelease {
     manifest: EMPTY_MANIFEST,
     readiness: "candidate",
     healthy: false,
+  };
+}
+
+function emptyState(revision: number, sourceId = "test-source"): ContentSyncState {
+  return {
+    revision,
+    sourceId,
+    parks: [],
+    boundaries: { type: "FeatureCollection", features: [] },
+    drive: { hubs: [{ name: "Victoria", lng: -123.3656, lat: 48.4284 }], parks: {} },
+    assets: [],
+    map: null,
   };
 }
 
@@ -94,6 +106,111 @@ describe("WebContentStore", () => {
     expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
     expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
     expect(["release-a", "release-b"]).toContain(await store.getActiveId());
+  });
+
+  it("migrates the old cursor source field and repairs only an absent or malformed cursor", async () => {
+    await store.close();
+    await deleteDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(DATABASE, 3);
+      request.onupgradeneeded = () => request.result.createObjectStore("syncCursors", { keyPath: "environment" });
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction("syncCursors", "readwrite");
+        tx.objectStore("syncCursors").put({ environment: "staging", revision: 12, source: "legacy-source" });
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+    store = new WebContentStore();
+    await store.initialize();
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 12, sourceId: "legacy-source" });
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(DATABASE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("syncCursors", "readwrite");
+      tx.objectStore("syncCursors").put({ environment: "staging", revision: "corrupt", sourceId: 9 });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    await expect(store.getSyncState("staging")).resolves.toBeNull();
+    await expect(store.getSyncCursor("staging")).resolves.toBeNull();
+    await store.replaceSyncState("staging", null, emptyState(13), "recovered-source", null, true);
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 13, sourceId: "recovered-source" });
+
+    const concurrentDb = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(DATABASE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = concurrentDb.transaction("syncCursors", "readwrite");
+      tx.objectStore("syncCursors").put({ environment: "staging", revision: 14, sourceId: "newer-source" });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    concurrentDb.close();
+    await expect(store.replaceSyncState("staging", null, emptyState(15), "stale-reset", null, true)).rejects.toThrow(/cursor changed/);
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 14, sourceId: "newer-source" });
+  });
+
+  it("treats a cursor without its required hubs record as an invalid cache", async () => {
+    await store.replaceSyncState("staging", null, emptyState(3), "source", null);
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(DATABASE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("syncRows", "readwrite");
+      tx.objectStore("syncRows").delete("staging\u0000hubs\u0000default");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    await expect(store.getSyncState("staging")).resolves.toBeNull();
+  });
+
+  it("skips malformed optional descriptors while retaining their possible blob references", async () => {
+    await store.putRelease(release("good-release"));
+    const bytes = arrayBuffer("retained public art");
+    const digest = await hash(bytes);
+    const sceneFile = {
+      path: "art/badges/scenes/retained.webp",
+      key: "retained-scene",
+      url: "https://kip-assets.parkdex.app/retained.webp",
+      sha256: digest,
+      byte_size: bytes.byteLength,
+      content_type: "image/webp",
+    };
+    await store.putFile(digest, bytes);
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(DATABASE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(["releases", "retainedParks"], "readwrite");
+      tx.objectStore("releases").put({ id: "broken-release" });
+      tx.objectStore("retainedParks").put({ parkId: "broken-park", park: { id: "broken-park" }, sceneFile });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    await expect(store.getRelease("broken-release")).resolves.toBeUndefined();
+    await expect(store.listReleases()).resolves.toEqual([release("good-release")]);
+    await expect(store.getRetainedParks()).resolves.toEqual([]);
+    await expect(store.deleteFile(digest)).rejects.toThrow(/active or retained content/);
+    await expect(store.hasFile(digest, bytes.byteLength)).resolves.toBe(true);
   });
 
   it("rejects corrupt or incorrectly addressed content and can recover on a correct retry", async () => {

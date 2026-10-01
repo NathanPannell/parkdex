@@ -4,7 +4,7 @@ Neon holds the park catalogue. R2 holds the image and map bytes. The phone keeps
 
 ## The first download
 
-When the app is open on Wi-Fi, it calls `GET /api/content/snapshot` once. The response contains:
+When the app is open with an internet connection, it calls `GET /api/content/snapshot` once. The response contains:
 
 - A revision number, such as `42`.
 - Park names, descriptions, rarity, coordinates and scene names.
@@ -12,7 +12,7 @@ When the app is open on Wi-Fi, it calls `GET /api/content/snapshot` once. The re
 - Descriptors for the active badge images: URL, SHA-256, size and type.
 - The URL and hash of the separate map file manifest.
 
-The app downloads missing badge images from their R2 URLs and verifies their bytes. It then saves the catalogue and revision together. Map files download afterward. An unfinished map download does not prevent the park catalogue from becoming available.
+The app downloads missing badge images from their R2 URLs and verifies their bytes. It saves the complete catalogue and revision together and publishes the verified result once. Catalogue data, artwork, map metadata, glyphs, and account backup can use cellular data. Only detailed map chunks require confirmed Wi-Fi. A browser that cannot identify its physical network keeps using the bundled overview instead of assuming that its connection is Wi-Fi.
 
 The snapshot contains public park content. Account details, visits and private photos continue to use their existing private APIs.
 
@@ -24,9 +24,11 @@ The app prepares its local overview archive and map worker during the splash and
 
 ## Opening an app with saved parks
 
-During the short orange splash, the app opens its saved catalogue and cached map inventory. It validates the catalogue's source and structure before publishing the saved parks to the map. Reading and checking every image or detailed map chunk happens afterward, alongside the normal update check. The opening map does not wait for either operation.
+The app checks its saved catalogue's source, structure, and required badge artwork before publishing it. Missing or invalid public content is repaired online without clearing personal visits, photos, or account state. A valid cached catalogue stays visible during an update. If no complete catalogue is usable, the bundled map remains behind a loading or retry message.
 
-Only hash-verified local image and map files become available for rendering. Until those checks finish, the bundled overview remains visible and badge illustrations can use their placeholders. Account ranks and earned badges separately wait for the current owner's saved claims, so an account change cannot reuse another owner's progress.
+Only verified local files become available for rendering. Required scene downloads must finish before publication, while detailed maps remain optional. Account ranks and earned badges separately wait for the current owner's saved claims, so an account change cannot reuse another owner's progress.
+
+Onboarding examples use bundled artwork and display-only park descriptions, independent of downloaded content. Completion is tied to the app build and, on Android, the package install/update identity. A fresh install or app update replays onboarding; an ordinary restart of the same installation does not.
 
 ## The next update check
 
@@ -42,13 +44,13 @@ For example, a badge publication returns one batch containing the new image desc
 
 The app then:
 
-1. Checks which required image hashes it already has.
-2. Downloads only missing image files over Wi-Fi.
-3. Verifies each file's size and hash.
-4. Applies the entire batch and advances its saved revision in one local database transaction.
-5. Requests another page if the response says more batches remain.
+1. Folds every returned batch and subsequent page into an in-memory candidate.
+2. Checks the final candidate and downloads only missing required images over any internet connection.
+3. Verifies each file's size and hash, retaining artwork needed by earned badges.
+4. Replaces the catalogue and revision in one local database transaction.
+5. Publishes the complete cached result to the interface once. Download progress can update throughout.
 
-An interrupted or invalid download does not advance the revision. The next check retries from the last completed batch. If nothing has changed, the API returns an empty batch list and the app downloads no catalogue or image files.
+An interrupted page or invalid required download does not advance the revision or replace the visible catalogue. The next check retries from the last complete update. Foreground online failures retry with backoff; reconnecting and returning to the app also resume recovery. If nothing has changed and required files are intact, the API returns an empty batch list and the app downloads no catalogue or image files.
 
 When the server's retained change history no longer covers a phone's revision, the app takes a fresh catalogue snapshot. It still reuses image and map files whose hashes are already saved.
 
@@ -68,13 +70,13 @@ See [content-authoring.md](content-authoring.md) for the publishing command and 
 
 ## Offline and Wi-Fi behavior
 
-Saved parks remain usable offline. Web content checks and downloads use any online connection, including in browsers without the Network Information API. Android requires confirmed Wi-Fi and binds content requests to that network so they cannot fall back to cellular data. Content downloads pause while the browser is offline or Android loses Wi-Fi. Sign-in and explicit uploads retain their existing behavior.
+Saved parks remain usable offline. Essential content and account backup use any online connection on web and Android, including browsers without the Network Information API. Android binds detailed map requests to Wi-Fi so those bytes cannot fall back to cellular data. Essential downloads pause only while offline or backgrounded; detailed maps also pause when Wi-Fi is lost.
 
-The app reports physical Wi-Fi only when the platform confirms it. Browser connection speed and unknown connection types never count as Wi-Fi; they do not block content downloads while the browser is online.
+The app reports physical Wi-Fi only when the platform confirms it. Browser connection speed and unknown connection types never count as Wi-Fi; they do not block essential content while the browser is online.
 
-The app checks at startup, when it returns to the foreground, when the browser comes online or Android Wi-Fi returns, and when the visitor retries. These checks run while the app is open. There is no hourly polling service on the phone or server.
+The app checks at startup, when it returns to the foreground, when connectivity returns, and when the visitor retries. Failed essential updates retry with backoff only while the app is open and online. Successful checks do not start a polling service.
 
-The map header shows `Downloading update` while content file bytes are transferring. Update discovery, local file verification and paused downloads stay quiet. There is no Wi-Fi waiting banner. An app with no saved catalogue can still show its initial download or connection screen; an app with saved parks keeps its map available.
+The map header shows `Downloading update` while checking, preparing, or transferring an update. An essential-content error exposes a retry control. There is no persistent Wi-Fi waiting banner for optional detailed maps. An app with no usable catalogue shows a preparation or connection card over its bundled map; an app with valid saved parks keeps its map available.
 
 Earned claims keep their original park snapshot, photo and content provenance. Their display adopts current catalogue artwork once its verified image is saved locally, including artwork published after a skeleton park was claimed. Until then, the previous image or placeholder remains. Removed parks fall back to their saved snapshot and retained artwork.
 

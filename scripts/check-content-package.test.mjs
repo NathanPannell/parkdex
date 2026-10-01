@@ -30,6 +30,34 @@ test("requires the bundled overview in every app package", async (t) => {
   assert.match(result.output, /required bundled island overview is missing/);
 });
 
+test("requires every onboarding illustration and Kip pose in the app package", async (t) => {
+  const outputDirectory = await packageFixture(t);
+  const scenePath = join(outputDirectory, "assets", "onboarding-scene-goldstream-testhash.webp");
+  await rm(scenePath);
+
+  const result = checkPackage(outputDirectory);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /assets\/onboarding-scene-goldstream-: required bundled onboarding artwork is missing/);
+});
+
+test("requires the onboarding map illustration in the app package", async (t) => {
+  const outputDirectory = await packageFixture(t);
+  await rm(join(outputDirectory, "assets", "onboarding-go-map-testhash.webp"));
+
+  const result = checkPackage(outputDirectory);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /assets\/onboarding-go-map-: required bundled onboarding artwork is missing/);
+});
+
+test("requires Kip's bundled rig parts in the app package", async (t) => {
+  const outputDirectory = await packageFixture(t);
+  await rm(join(outputDirectory, "art", "kip", "parts", "body.webp"));
+
+  const result = checkPackage(outputDirectory);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /art\/kip\/parts\/body\.webp: required bundled onboarding artwork is missing/);
+});
+
 test("rejects an overview above the explicit package byte budget", async (t) => {
   const outputDirectory = await packageFixture(t);
   const archivePath = join(outputDirectory, "map", "bootstrap", "island-overview.pmtiles");
@@ -69,6 +97,21 @@ async function packageFixture(t) {
   await mkdir(mapLibre, { recursive: true });
   await writeFile(join(mapLibre, "maplibre-gl-worker.mjs"), "export {};\n");
   await writeFile(join(mapLibre, "maplibre-gl-shared.mjs"), "export {};\n");
+  const bundledAssets = join(outputDirectory, "assets");
+  await mkdir(bundledAssets, { recursive: true });
+  for (const name of ["onboarding-go-map", "onboarding-scene-beacon-hill", "onboarding-scene-goldstream", "onboarding-scene-wittys-lagoon"]) {
+    await writeFile(join(bundledAssets, `${name}-testhash.webp`), "bundled onboarding art");
+  }
+  const kipArt = join(outputDirectory, "art", "kip");
+  await mkdir(kipArt, { recursive: true });
+  for (const pose of ["wave", "point", "think"]) {
+    await writeFile(join(kipArt, `kip-${pose}.webp`), "bundled Kip art");
+  }
+  const kipParts = join(kipArt, "parts");
+  await mkdir(kipParts, { recursive: true });
+  for (const part of ["tail", "legs", "wing-back", "body", "head", "eye-open", "eye-closed", "bill-lower", "bill-upper", "wing-front"]) {
+    await writeFile(join(kipParts, `${part}.webp`), "bundled Kip rig art");
+  }
   return outputDirectory;
 }
 

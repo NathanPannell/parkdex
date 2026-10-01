@@ -184,8 +184,8 @@ describe("account progress sync", () => {
       return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
     });
     const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
-    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false }, false)).toEqual({ connected: true, allowed: true });
-    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false }, true)).toEqual({ connected: true, allowed: false });
+    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false })).toEqual({ connected: true, allowed: true });
+    expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: true })).toEqual({ connected: true, allowed: true });
     expect(sync.shouldScheduleAccountBackup(null, { connected: true, allowed: true })).toBe(false);
 
     let previous = { connected: true, allowed: false };

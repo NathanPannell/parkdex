@@ -36,6 +36,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "WifiContentTransport")
@@ -45,14 +48,17 @@ public class WifiContentTransportPlugin extends Plugin {
     private static final int MAX_ACCOUNT_BACKUP_BYTES = 2_621_440;
     private static final int MAX_CLAIM_JSON_BYTES = 16 * 1024;
     private static final int DEFAULT_TIMEOUT_MS = 20_000;
-    private static final int WIFI_WAIT_TIMEOUT_MS = 15_000;
+    private static final int NETWORK_WAIT_TIMEOUT_MS = 15_000;
     private static final int MAX_TIMEOUT_MS = 60_000;
     private static final int READ_BUFFER_BYTES = 16 * 1024;
+    private static final java.util.regex.Pattern WIFI_ONLY_MAP_CHUNK_PATH = java.util.regex.Pattern.compile(
+            "(?i)(?:^|/)map/island/[^/]+\\.bin$");
     private static final Set<String> BLOCKED_HEADERS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "host", "connection", "content-length", "transfer-encoding", "upgrade",
             "keep-alive", "proxy-authorization", "proxy-authenticate", "cookie", "set-cookie", "accept-encoding"
     )));
     private static final ExecutorService REQUEST_EXECUTOR = Executors.newCachedThreadPool();
+    private static final ScheduledExecutorService NETWORK_TIMEOUT_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
 
     private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
     private final Object lifecycleLock = new Object();
@@ -150,7 +156,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
         ConnectivityManager manager = connectivityManager();
         if (manager == null) {
-            call.reject("Wi-Fi networking is unavailable");
+            call.reject("Network connectivity is unavailable");
             return;
         }
 
@@ -169,7 +175,7 @@ public class WifiContentTransportPlugin extends Plugin {
             }
         }
 
-        startWifiRequest(state);
+        startNetworkRequest(state);
     }
 
     @PluginMethod
@@ -228,7 +234,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
         ConnectivityManager manager = connectivityManager();
         if (manager == null) {
-            call.reject("Wi-Fi networking is unavailable");
+            call.reject("Network connectivity is unavailable");
             return;
         }
 
@@ -246,7 +252,12 @@ public class WifiContentTransportPlugin extends Plugin {
                 return;
             }
         }
-        startWifiRequest(state);
+        startNetworkRequest(state);
+    }
+
+    private void startNetworkRequest(ActiveRequest state) {
+        if (state.wifiRequired) startWifiRequest(state);
+        else startAnyValidatedNetworkRequest(state);
     }
 
     private void startWifiRequest(ActiveRequest state) {
@@ -254,44 +265,78 @@ public class WifiContentTransportPlugin extends Plugin {
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build();
-        state.networkCallback = new ConnectivityManager.NetworkCallback() {
+        state.networkCallback = createNetworkCallback(state, true);
+        state.scheduleNetworkWaitTimeout();
+
+        try {
+            state.registerNetwork(wifiRequest);
+            Network[] networks = state.manager.getAllNetworks();
+            for (Network network : networks) {
+                if (state.isFinished() || state.selectedNetwork != null) break;
+                acceptNetworkIfUsable(state, network, state.manager.getNetworkCapabilities(network), true);
+            }
+        } catch (RuntimeException error) {
+            state.fail("Wi-Fi networking is unavailable");
+        }
+    }
+
+    private void startAnyValidatedNetworkRequest(ActiveRequest state) {
+        state.networkCallback = createNetworkCallback(state, false);
+        state.scheduleNetworkWaitTimeout();
+        try {
+            state.registerDefaultNetwork();
+            Network activeNetwork = state.manager.getActiveNetwork();
+            if (activeNetwork != null) {
+                acceptNetworkIfUsable(state, activeNetwork,
+                        state.manager.getNetworkCapabilities(activeNetwork), false);
+            }
+        } catch (RuntimeException error) {
+            state.fail("Validated internet networking is unavailable");
+        }
+    }
+
+    private ConnectivityManager.NetworkCallback createNetworkCallback(ActiveRequest state, boolean wifiOnly) {
+        return new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
-                if (!state.bindNetwork(network)) return;
-                if (state.accountBackup) REQUEST_EXECUTOR.execute(() -> performAccountBackupRequest(state, network));
-                else REQUEST_EXECUTOR.execute(() -> performRequest(state, network));
+                NetworkCapabilities capabilities = state.manager.getNetworkCapabilities(network);
+                acceptNetworkIfUsable(state, network, capabilities, wifiOnly);
             }
 
             @Override
             public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
-                if (state.isSelectedNetwork(network) && !isUsableWifi(capabilities)) {
-                    state.fail("The Wi-Fi connection was lost");
+                if (state.isSelectedNetwork(network) && !isUsableNetwork(capabilities, wifiOnly)) {
+                    state.fail(state.networkLostMessage());
+                    return;
                 }
+                acceptNetworkIfUsable(state, network, capabilities, wifiOnly);
             }
 
             @Override
             public void onBlockedStatusChanged(Network network, boolean blocked) {
-                if (blocked && state.isSelectedNetwork(network)) state.fail("The Wi-Fi connection is blocked");
+                if (blocked && state.isSelectedNetwork(network)) {
+                    state.fail(state.wifiRequired ? "The Wi-Fi connection is blocked" : "The internet connection is blocked");
+                }
             }
 
             @Override
             public void onLost(Network network) {
-                if (state.isSelectedNetwork(network)) state.fail("The Wi-Fi connection was lost");
+                if (state.isSelectedNetwork(network)) state.fail(state.networkLostMessage());
             }
 
             @Override
             public void onUnavailable() {
-                state.fail(state.accountBackup
-                        ? "Wi-Fi is unavailable for account backup"
-                        : "Wi-Fi is unavailable for content downloads");
+                if (wifiOnly) state.fail("Wi-Fi is unavailable for detailed map downloads");
             }
         };
+    }
 
-        try {
-            state.registerNetwork(wifiRequest);
-        } catch (RuntimeException error) {
-            state.fail("Wi-Fi networking is unavailable");
-        }
+    private void acceptNetworkIfUsable(ActiveRequest state, Network network,
+                                       NetworkCapabilities capabilities, boolean wifiOnly) {
+        if (state.isFinished() || !isUsableNetwork(capabilities, wifiOnly)) return;
+        if (!state.bindNetwork(network)) return;
+        if (state.accountBackup) REQUEST_EXECUTOR.execute(() -> performAccountBackupRequest(state, network));
+        else REQUEST_EXECUTOR.execute(() -> performRequest(state, network));
     }
 
     @PluginMethod
@@ -340,7 +385,7 @@ public class WifiContentTransportPlugin extends Plugin {
         } catch (Exception error) {
             if (!state.isFinished()) {
                 String message = error.getMessage();
-                state.fail(message == null || message.isEmpty() ? "Wi-Fi content request failed" : message);
+                state.fail(message == null || message.isEmpty() ? "Content request failed" : message);
             }
         } finally {
             state.clearConnection(connection);
@@ -390,7 +435,7 @@ public class WifiContentTransportPlugin extends Plugin {
         } catch (Exception error) {
             if (!state.isFinished()) {
                 String message = error.getMessage();
-                state.fail(message == null || message.isEmpty() ? "Wi-Fi account backup request failed" : message);
+                state.fail(message == null || message.isEmpty() ? "Account backup request failed" : message);
             }
         } finally {
             state.clearConnection(connection);
@@ -576,6 +621,24 @@ public class WifiContentTransportPlugin extends Plugin {
         return uri.toURL();
     }
 
+    static NetworkPolicy networkPolicyForRequest(URL url, boolean accountBackup) {
+        if (accountBackup) return NetworkPolicy.ANY_VALIDATED;
+        try {
+            String path = url.toURI().getPath();
+            return WIFI_ONLY_MAP_CHUNK_PATH.matcher(path).find()
+                    ? NetworkPolicy.WIFI_VALIDATED
+                    : NetworkPolicy.ANY_VALIDATED;
+        } catch (Exception ignored) {
+            // A URL is validated before this policy is applied. Fail closed if that invariant changes.
+            return NetworkPolicy.WIFI_VALIDATED;
+        }
+    }
+
+    enum NetworkPolicy {
+        ANY_VALIDATED,
+        WIFI_VALIDATED
+    }
+
     private static String canonicalApprovedOrigin(String value, boolean apiOrigin) throws Exception {
         if (value == null || value.isEmpty()) return null;
         URI uri = new URI(value);
@@ -607,7 +670,15 @@ public class WifiContentTransportPlugin extends Plugin {
     private static boolean isUsableWifi(NetworkCapabilities capabilities) {
         return capabilities != null
                 && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+    }
+
+    private static boolean isUsableNetwork(NetworkCapabilities capabilities, boolean wifiOnly) {
+        return capabilities != null
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                && (!wifiOnly || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI));
     }
 
     private ConnectivityManager connectivityManager() {
@@ -632,6 +703,7 @@ public class WifiContentTransportPlugin extends Plugin {
         final int maxResponseBytes;
         final int timeoutMs;
         final boolean accountBackup;
+        final boolean wifiRequired;
         final byte[] requestBody;
         final AtomicBoolean finished = new AtomicBoolean(false);
         private final Object registrationLock = new Object();
@@ -639,6 +711,7 @@ public class WifiContentTransportPlugin extends Plugin {
         volatile ConnectivityManager.NetworkCallback networkCallback;
         volatile Network selectedNetwork;
         volatile HttpURLConnection connection;
+        volatile ScheduledFuture<?> networkWaitTimeout;
 
         ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
                       JSObject headers, int maxResponseBytes, int timeoutMs) {
@@ -656,17 +729,25 @@ public class WifiContentTransportPlugin extends Plugin {
             this.maxResponseBytes = maxResponseBytes;
             this.timeoutMs = timeoutMs;
             this.accountBackup = accountBackup;
+            this.wifiRequired = networkPolicyForRequest(url, accountBackup) == NetworkPolicy.WIFI_VALIDATED;
             this.requestBody = requestBody;
+        }
+
+        String networkLostMessage() {
+            if (wifiRequired) return "The Wi-Fi connection was lost";
+            return accountBackup ? "The internet connection was lost during account backup" : "The internet connection was lost during content download";
         }
 
         synchronized boolean bindNetwork(Network network) {
             if (isFinished()) return false;
             if (selectedNetwork == null) {
                 selectedNetwork = network;
+                cancelNetworkWaitTimeout();
                 return true;
             }
             if (selectedNetwork.equals(network)) return false;
-            fail("The Wi-Fi connection changed during a content request");
+            fail(wifiRequired ? "The Wi-Fi connection changed during a content request" :
+                    (accountBackup ? "The internet connection changed during account backup" : "The internet connection changed during content download"));
             return false;
         }
 
@@ -681,9 +762,33 @@ public class WifiContentTransportPlugin extends Plugin {
         void registerNetwork(NetworkRequest request) {
             synchronized (registrationLock) {
                 if (isFinished()) return;
-                manager.requestNetwork(request, networkCallback, WIFI_WAIT_TIMEOUT_MS);
+                manager.registerNetworkCallback(request, networkCallback);
                 callbackRegistered = true;
             }
+        }
+
+        void registerDefaultNetwork() {
+            synchronized (registrationLock) {
+                if (isFinished()) return;
+                manager.registerDefaultNetworkCallback(networkCallback);
+                callbackRegistered = true;
+            }
+        }
+
+        void scheduleNetworkWaitTimeout() {
+            networkWaitTimeout = NETWORK_TIMEOUT_EXECUTOR.schedule(
+                    () -> fail(wifiRequired
+                            ? "Validated Wi-Fi is unavailable for detailed map downloads"
+                            : (accountBackup
+                                    ? "A validated internet connection is unavailable for account backup"
+                                    : "A validated internet connection is unavailable for content downloads")),
+                    NETWORK_WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+
+        private void cancelNetworkWaitTimeout() {
+            ScheduledFuture<?> timeout = networkWaitTimeout;
+            networkWaitTimeout = null;
+            if (timeout != null) timeout.cancel(false);
         }
 
         void setConnection(HttpURLConnection value) {
@@ -711,6 +816,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
         private void cleanup() {
             activeRequests.remove(requestId, this);
+            cancelNetworkWaitTimeout();
             ConnectivityManager.NetworkCallback callback = networkCallback;
             synchronized (registrationLock) {
                 if (callbackRegistered && callback != null) {

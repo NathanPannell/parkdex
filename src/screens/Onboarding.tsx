@@ -8,13 +8,15 @@ import { buzz, sfx } from "../lib/feedback";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
 import type { Park } from "../lib/parks";
-import { useContent } from "../lib/content/provider";
 import { DEMO_START, useStore } from "../lib/store";
 import { RARITY } from "../lib/parks";
 import { RANKS } from "../lib/progression";
 import { parksLabel } from "../lib/rarityUi";
 import { RankEmblem } from "../components/Rank";
 import goMap from "../assets/onboarding-go-map.webp";
+import beaconHillScene from "../assets/onboarding-scene-beacon-hill.webp";
+import goldstreamScene from "../assets/onboarding-scene-goldstream.webp";
+import wittysLagoonScene from "../assets/onboarding-scene-wittys-lagoon.webp";
 
 const SLIDES = [
   {
@@ -43,6 +45,70 @@ const SLIDES = [
   },
 ];
 
+const ONBOARDING_PARKS: readonly Park[] = [
+  {
+    id: "onboarding-beacon-hill",
+    name: "Beacon Hill Park",
+    short: "Beacon Hill",
+    category: "municipal",
+    region: "Southern Vancouver Island",
+    lat: 48.4119,
+    lng: -123.36334,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    seed: 135,
+    blurb: "Garden paths, roaming peacocks and the stone bridge over Goodacre Lake make Beacon Hill a place to wander. Garry oak meadows shelter sensitive native plants, while the park's southern edge opens onto the Strait of Juan de Fuca. Nearby Mile Zero marks the western end of the Trans-Canada Highway.",
+    scene: "onboarding-beacon-hill",
+  },
+  {
+    id: "onboarding-goldstream",
+    name: "Goldstream Park",
+    short: "Goldstream",
+    category: "provincial",
+    region: "South Island",
+    lat: 48.47556,
+    lng: -123.54243,
+    biome: "river",
+    shape: "shield",
+    rarity: "uncommon",
+    seed: 372,
+    blurb: "Each autumn, salmon return to the Goldstream River beneath old-growth firs and cedars, drawing bald eagles to this South Island park.",
+    scene: "onboarding-goldstream",
+  },
+  {
+    id: "onboarding-wittys-lagoon",
+    name: "Witty's Lagoon Regional Park",
+    short: "Witty's Lagoon",
+    category: "regional",
+    region: "Capital Region",
+    lat: 48.38571,
+    lng: -123.51755,
+    biome: "coast",
+    shape: "circle",
+    rarity: "common",
+    seed: 592,
+    blurb: "A forest trail passes Sitting Lady Falls and reaches a broad tidal beach, one of the few sandy shores with significant tides on southern Vancouver Island. Witty's Lagoon also shelters more than 160 recorded bird species.",
+    scene: "onboarding-wittys-lagoon",
+  },
+];
+
+const ONBOARDING_SCENES: Readonly<Record<string, string>> = {
+  "onboarding-beacon-hill": beaconHillScene,
+  "onboarding-goldstream": goldstreamScene,
+  "onboarding-wittys-lagoon": wittysLagoonScene,
+};
+
+function SampleBadge({ park, size, animated = false, state = "earned", showName = true }: {
+  park: Park;
+  size: number;
+  animated?: boolean;
+  state?: "earned" | "preview" | "silhouette";
+  showName?: boolean;
+}) {
+  return <Badge park={park} size={size} animated={animated} state={state} showName={showName} sceneHref={ONBOARDING_SCENES[park.id]} />;
+}
+
 function RankRoadmap() {
   return (
     <div className="ob-ranks" aria-label="Collector ranks and the rarities they unlock">
@@ -68,8 +134,8 @@ function RankRoadmap() {
   );
 }
 
-function BadgeFan({ parks }: { parks: readonly Park[] }) {
-  const fan = parks.slice(0, 3);
+function BadgeFan() {
+  const fan = ONBOARDING_PARKS;
   const pos = [
     { x: -92, y: -8, r: -14, s: 0.78, d: 0.1 },
     { x: 0, y: -42, r: 0, s: 1, d: 0 },
@@ -88,7 +154,7 @@ function BadgeFan({ parks }: { parks: readonly Park[] }) {
           transition={{ type: "spring", stiffness: 240, damping: 16, delay: 0.15 + pos[i].d }}
         >
           <motion.div animate={{ y: [0, -8, 0], rotate: [0, i === 1 ? 2 : -2, 0] }} transition={{ duration: 3 + i * 0.4, repeat: Infinity, ease: "easeInOut" }}>
-            <Badge park={park} size={170} animated />
+            <SampleBadge park={park} size={170} animated />
           </motion.div>
         </motion.div>
       ))}
@@ -103,15 +169,11 @@ function BadgeFan({ parks }: { parks: readonly Park[] }) {
   );
 }
 
-// A real render of the Parkdex map around a badge park, framed so the walk comes in
-// from downtown. The badge shown is whichever published park sits closest to it.
-const GO_MAP_CENTER: [number, number] = [-123.3636, 48.4128];
+// A real render of the Parkdex map around a fixed sample badge park.
 const ROUTE = "M62 118 C 92 100, 124 98, 148 112 S 186 142, 200 166";
 
-function GoThere({ parks }: { parks: readonly Park[] }) {
-  const park = parks.length
-    ? parks.reduce((best, candidate) => (distanceKm(GO_MAP_CENTER, [candidate.lng, candidate.lat]) < distanceKm(GO_MAP_CENTER, [best.lng, best.lat]) ? candidate : best))
-    : undefined;
+function GoThere() {
+  const park = ONBOARDING_PARKS[0]!;
   const dur = "4.2s";
   const loop = { duration: 4.2, repeat: Infinity, ease: "linear" as const };
   const keys = { keyTimes: "0;0.6;1", keyPoints: "0;1;1", calcMode: "linear" as const };
@@ -142,7 +204,7 @@ function GoThere({ parks }: { parks: readonly Park[] }) {
           animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.2, 0.2, 1.15, 1, 1], rotate: [-30, -30, 6, 0, 0] }}
           transition={{ ...loop, times: [0, 0.62, 0.7, 0.95, 1] }}
         >
-          <Badge park={park} size={92} />
+          <SampleBadge park={park} size={92} />
         </motion.div>
       )}
       <motion.div className="ob-go__kip" animate={{ rotate: [0, -6, 0] }} transition={{ duration: 2, repeat: Infinity }}>
@@ -152,10 +214,10 @@ function GoThere({ parks }: { parks: readonly Park[] }) {
   );
 }
 
-function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
-  const park = parks[0];
+function SnapClaimKeep() {
+  const park = ONBOARDING_PARKS[0]!;
   const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.6 };
-  const cells = parks.slice(1, 4);
+  const cells = ONBOARDING_PARKS.slice(1, 4);
   return (
     <div className="ob-snap">
       <motion.div
@@ -180,12 +242,12 @@ function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
         animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 4, 4, 4, 4, 118] }}
         transition={{ ...loop, times: [0, 0.3, 0.4, 0.46, 0.5, 0.72, 0.86], ease: "easeOut" }}
       >
-        {park ? <Badge park={park} size={120} /> : <Kip pose="think" size={100} />}
+        {park ? <SampleBadge park={park} size={120} /> : <Kip pose="think" size={100} />}
       </motion.div>
       <div className="ob-case">
         {cells.map((item) => (
           <div key={item.id} className="ob-case__cell">
-            <Badge park={item} size={32} showName={false} state="earned" />
+            <SampleBadge park={item} size={32} showName={false} state="earned" />
           </div>
         ))}
         <motion.div className="ob-case__cell ob-case__cell--new" animate={{ boxShadow: ["0 0 0 0 #FFC93C00", "0 0 0 0 #FFC93C00", "0 0 0 6px #FFC93Cff", "0 0 0 0 #FFC93C00"] }} transition={{ ...loop, times: [0, 0.84, 0.9, 1] }} />
@@ -196,7 +258,6 @@ function SnapClaimKeep({ parks }: { parks: readonly Park[] }) {
 
 export function Onboarding() {
   const { dispatch } = useStore();
-  const content = useContent();
   const toast = useToast();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
@@ -212,8 +273,6 @@ export function Onboarding() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const parks = content?.liveParks ?? [];
-
   const goTo = (i: number) => {
     if (i < 0 || i >= SLIDES.length) return;
     sfx.tap();
@@ -282,7 +341,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <BadgeFan parks={parks} /> : index === 1 ? <GoThere parks={parks} /> : index === 2 ? <SnapClaimKeep parks={parks} /> : <RankRoadmap />}
+                {index === 0 ? <BadgeFan /> : index === 1 ? <GoThere /> : index === 2 ? <SnapClaimKeep /> : <RankRoadmap />}
               </div>
             </motion.div>
           </AnimatePresence>
