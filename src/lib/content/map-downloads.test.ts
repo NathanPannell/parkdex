@@ -9,7 +9,7 @@ import {
   BundledOverviewSource,
   flushPendingDetailedMapSourceRefresh,
   getAllowedMapChunks,
-  ISLAND_OVERVIEW_PATH,
+  BASE_OVERVIEW_PATH,
   registerContentMapProtocols,
   resetAllowedMapChunks,
   reloadDetailedMapSource,
@@ -18,7 +18,7 @@ import {
   subscribeMapCoverage,
 } from "../offlineTiles";
 import type { ContentRuntime, ContentSnapshot, MapManifest } from "./contracts";
-import { ISLAND_OVERVIEW_MAX_ZOOM, mapStyle } from "../mapStyle";
+import { BASE_OVERVIEW_BOUNDS, BASE_OVERVIEW_MAX_ZOOM, mapStyle } from "../mapStyle";
 
 const VICTORIA: [number, number] = [-123.3656, 48.4284];
 
@@ -48,12 +48,12 @@ describe("map download coverage", () => {
   it("keys both tile and glyph requests by the content release", () => {
     const style = mapStyle("release-v2");
     const tiles = (style.sources?.protomaps as { tiles: string[] }).tiles;
-    const overview = style.sources?.islandOverview as { maxzoom: number; tiles: string[] };
+    const overview = style.sources?.baseOverview as { maxzoom: number; tiles: string[] };
 
     expect(tiles[0]).toContain("pmtiles://release-v2/");
     expect(style.glyphs).toContain("contentglyph://release-v2/");
-    expect(overview.maxzoom).toBe(ISLAND_OVERVIEW_MAX_ZOOM);
-    expect(overview.tiles[0]).toContain("pmtiles://bundled-island-overview-v1/");
+    expect(overview.maxzoom).toBe(BASE_OVERVIEW_MAX_ZOOM);
+    expect(overview.tiles[0]).toContain("pmtiles://bundled-canada-overview-v1/");
     const ids = style.layers.map((layer) => layer.id);
     const overviewEarthIndex = ids.indexOf("overview-earth");
     expect(ids.indexOf("background")).toBeLessThan(overviewEarthIndex);
@@ -65,14 +65,14 @@ describe("map download coverage", () => {
 
   it("builds a useful bundled-only style before a content release is available", () => {
     const style = mapStyle();
-    const overview = style.sources?.islandOverview as { maxzoom: number; tiles: string[] };
+    const overview = style.sources?.baseOverview as { maxzoom: number; tiles: string[] };
 
     expect(style.sources?.protomaps).toBeUndefined();
     expect(style.glyphs).toBeUndefined();
-    expect(overview.maxzoom).toBe(ISLAND_OVERVIEW_MAX_ZOOM);
-    expect(overview.tiles[0]).toContain("pmtiles://bundled-island-overview-v1/");
+    expect(overview.maxzoom).toBe(BASE_OVERVIEW_MAX_ZOOM);
+    expect(overview.tiles[0]).toContain("pmtiles://bundled-canada-overview-v1/");
     expect(style.layers.some((layer) => layer.type === "background")).toBe(true);
-    expect(style.layers.every((layer) => layer.type === "background" || layer.source === "islandOverview")).toBe(true);
+    expect(style.layers.every((layer) => layer.type === "background" || layer.source === "baseOverview")).toBe(true);
     expect(style.layers.some((layer) => layer.type === "symbol")).toBe(false);
   });
 
@@ -119,7 +119,7 @@ describe("bundled overview PMTiles source", () => {
     await expect(abortedRead).rejects.toMatchObject({ name: "AbortError" });
     await expect(concurrentRead).resolves.toMatchObject({ data: new Uint8Array([13, 14, 15]).buffer });
     await expect(source.getBytes(0, 2)).resolves.toMatchObject({ data: new Uint8Array([10, 11]).buffer });
-    expect(source.getKey()).toBe("bundled-island-overview-v1");
+    expect(source.getKey()).toBe("bundled-canada-overview-v1");
     expect(loadArchive).toHaveBeenCalledOnce();
   });
 
@@ -148,30 +148,33 @@ describe("bundled overview PMTiles source", () => {
 
       expect(fetcher).toHaveBeenCalledOnce();
       expect(fetcher.mock.calls[0][0]).toBeInstanceOf(URL);
-      expect((fetcher.mock.calls[0][0] as URL).pathname).toBe(ISLAND_OVERVIEW_PATH);
+      expect((fetcher.mock.calls[0][0] as URL).pathname).toBe(BASE_OVERVIEW_PATH);
       expect(fetcher.mock.calls[0]).toHaveLength(1);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("reads the bundled Island archive at its declared zoom and coverage", async () => {
-    const path = join(process.cwd(), "public", "map", "bootstrap", "island-overview.pmtiles");
+  it("reads the bundled Canada archive at its declared zoom and coverage, including the mainland", async () => {
+    const path = join(process.cwd(), "public", "map", "bootstrap", "canada-overview.pmtiles");
     const file = readFileSync(path);
     const archive = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
     const pmtiles = new PMTiles(new BundledOverviewSource(async () => archive));
     const header = await pmtiles.getHeader();
 
     expect(header.minZoom).toBe(0);
-    expect(header.maxZoom).toBe(ISLAND_OVERVIEW_MAX_ZOOM);
-    expect([header.minLon, header.minLat, header.maxLon, header.maxLat]).toEqual([-128.45, 48.28, -123.25, 50.92]);
-    const zoom = ISLAND_OVERVIEW_MAX_ZOOM;
+    expect(header.maxZoom).toBe(BASE_OVERVIEW_MAX_ZOOM);
+    expect([header.minLon, header.minLat, header.maxLon, header.maxLat]).toEqual([...BASE_OVERVIEW_BOUNDS]);
+    const zoom = BASE_OVERVIEW_MAX_ZOOM;
     const scale = 2 ** zoom;
-    const radians = (VICTORIA[1] * Math.PI) / 180;
-    const x = Math.floor(((VICTORIA[0] + 180) / 360) * scale);
-    const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
-    const tile = await pmtiles.getZxy(zoom, x, y);
-    expect(tile?.data.byteLength).toBeGreaterThan(0);
+    // Victoria, Kelowna, Prince George and Toronto all render from the bundled map.
+    for (const [lng, lat] of [VICTORIA, [-119.4960, 49.8880], [-122.7497, 53.9171], [-79.3832, 43.6532]]) {
+      const radians = (lat * Math.PI) / 180;
+      const x = Math.floor(((lng + 180) / 360) * scale);
+      const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
+      const tile = await pmtiles.getZxy(zoom, x, y);
+      expect(tile?.data.byteLength).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -206,12 +209,12 @@ describe("detail map coverage notifications", () => {
       zoom: 10,
       sources: {
         protomaps: { type: "vector", tiles: ["pmtiles://release-v2/{z}/{x}/{y}"], maxzoom: 14 },
-        islandOverview: { type: "vector", tiles: ["pmtiles://bundled-overview/{z}/{x}/{y}"], maxzoom: 7 },
+        baseOverview: { type: "vector", tiles: ["pmtiles://bundled-overview/{z}/{x}/{y}"], maxzoom: 7 },
         parks: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
         route: { type: "geojson", data: { type: "FeatureCollection", features: [] } },
       },
       layers: [
-        { id: "overview-land", type: "fill", source: "islandOverview", "source-layer": "land" },
+        { id: "overview-land", type: "fill", source: "baseOverview", "source-layer": "land" },
         { id: "detail-water", type: "fill", source: "protomaps", "source-layer": "water" },
         { id: "park-fill", type: "fill", source: "parks" },
         { id: "route-line", type: "line", source: "route" },
@@ -228,7 +231,7 @@ describe("detail map coverage notifications", () => {
     const refreshedDetailUrl = refreshed.sources.protomaps.type === "vector" ? refreshed.sources.protomaps.tiles?.[0] : undefined;
     expect(refreshedDetailUrl).not.toBe(originalDetailUrl);
     expect(refreshedDetailUrl).toMatch(/[?&]coverage=\d+/);
-    expect(refreshed.sources.islandOverview).toEqual(style.sources.islandOverview);
+    expect(refreshed.sources.baseOverview).toEqual(style.sources.baseOverview);
     expect(refreshed.sources.parks).toEqual(style.sources.parks);
     expect(refreshed.sources.route).toEqual(style.sources.route);
     expect(refreshed.layers).toEqual(style.layers);
@@ -268,7 +271,7 @@ describe("detail map coverage notifications", () => {
   });
 
   it("replaces a PMTiles reader whose header was denied before coverage arrived", async () => {
-    const path = join(process.cwd(), "public", "map", "bootstrap", "island-overview.pmtiles");
+    const path = join(process.cwd(), "public", "map", "bootstrap", "canada-overview.pmtiles");
     const file = readFileSync(path);
     const archiveBytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
     const releaseId = "failed-header-retry-test";
@@ -287,7 +290,7 @@ describe("detail map coverage notifications", () => {
     try {
       const archives = () => addArchive.mock.calls.map(([pmtiles]) => pmtiles).filter((pmtiles) => pmtiles.source.getKey() === releaseId);
       const first = archives().at(-1)!;
-      const zoom = ISLAND_OVERVIEW_MAX_ZOOM;
+      const zoom = BASE_OVERVIEW_MAX_ZOOM;
       const scale = 2 ** zoom;
       const radians = (VICTORIA[1] * Math.PI) / 180;
       const x = Math.floor(((VICTORIA[0] + 180) / 360) * scale);

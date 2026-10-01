@@ -8,14 +8,14 @@ import { test } from "node:test";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const checkerPath = join(projectRoot, "scripts", "check-content-package.mjs");
-const overviewPath = join(projectRoot, "public", "map", "bootstrap", "island-overview.pmtiles");
+const overviewPath = join(projectRoot, "public", "map", "bootstrap", "canada-overview.pmtiles");
 const MAX_OVERVIEW_BYTES = 2_000_000;
 
-test("allows only the pinned whole-island overview within the byte budget", async (t) => {
+test("allows only the pinned Canada overview within the byte budget", async (t) => {
   const outputDirectory = await packageFixture(t);
   const bootstrapDirectory = join(outputDirectory, "map", "bootstrap");
   await mkdir(bootstrapDirectory, { recursive: true });
-  await copyFile(overviewPath, join(bootstrapDirectory, "island-overview.pmtiles"));
+  await copyFile(overviewPath, join(bootstrapDirectory, "canada-overview.pmtiles"));
 
   const result = checkPackage(outputDirectory);
   assert.equal(result.status, 0, result.output);
@@ -27,7 +27,7 @@ test("requires the bundled overview in every app package", async (t) => {
 
   const result = checkPackage(outputDirectory);
   assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /required bundled island overview is missing/);
+  assert.match(result.output, /required bundled Canada overview is missing/);
 });
 
 test("requires every onboarding illustration and Kip pose in the app package", async (t) => {
@@ -60,7 +60,7 @@ test("requires Kip's bundled rig parts in the app package", async (t) => {
 
 test("rejects an overview above the explicit package byte budget", async (t) => {
   const outputDirectory = await packageFixture(t);
-  const archivePath = join(outputDirectory, "map", "bootstrap", "island-overview.pmtiles");
+  const archivePath = join(outputDirectory, "map", "bootstrap", "canada-overview.pmtiles");
   await mkdir(dirname(archivePath), { recursive: true });
   await writeFile(archivePath, Buffer.alloc(MAX_OVERVIEW_BYTES + 1));
 
@@ -71,7 +71,7 @@ test("rejects an overview above the explicit package byte budget", async (t) => 
 
 test("rejects changed overview bytes and any additional map archive, chunk, or glyph", async (t) => {
   const outputDirectory = await packageFixture(t);
-  const archivePath = join(outputDirectory, "map", "bootstrap", "island-overview.pmtiles");
+  const archivePath = join(outputDirectory, "map", "bootstrap", "canada-overview.pmtiles");
   const archive = await readFile(overviewPath);
   archive[0] ^= 1;
   await mkdir(dirname(archivePath), { recursive: true });
