@@ -126,7 +126,7 @@ function GoogleSignInButton({
 
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -576,6 +576,25 @@ export function Account({ onBack }: { onBack: () => void }) {
         {state.progressError && (
           <section className="account-notice card is-error" role="alert"><span>{state.progressError}</span></section>
         )}
+
+        <section className="account-card card account-section" aria-labelledby="account-settings-title">
+          <span className="eyebrow" id="account-settings-title">Settings</span>
+          <label className="account-setting">
+            <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
+            <span className="account-setting__text">
+              <strong>Sound effects</strong>
+              <span>{state.muted ? "Off" : "On"}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="account-switch"
+              checked={!state.muted}
+              onChange={() => dispatch({ type: "mute" })}
+              aria-label="Sound effects"
+            />
+          </label>
+        </section>
 
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
 

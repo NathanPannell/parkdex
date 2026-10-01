@@ -1300,8 +1300,8 @@ def migration_paths(config: dict, candidate_root: Path) -> list[Path]:
     paths.extend(present)
     if has_content_sync:
         paths.extend(candidate_root / name for name in config["contentSync"]["migrationPaths"])
-    # Build configuration is independent and additive; it ships whenever its file is present.
-    paths.extend(path for path in (candidate_root / name for name in config.get("appConfigMigrationPaths", [])) if path.is_file())
+    # Standalone additive schemas (build configuration, park proposals) ship whenever their file is present.
+    paths.extend(path for path in (candidate_root / name for name in config.get("independentMigrationPaths", [])) if path.is_file())
     return paths
 
 

@@ -6,6 +6,7 @@ import { handleInteractionRequest, handleRetentionRequest, type InteractionDepen
 import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
+import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import {
   HttpError,
   readJsonBody,
@@ -42,6 +43,7 @@ export interface WorkerDependencies {
   interactions?: InteractionDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
+  createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
@@ -440,6 +442,24 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     },
   });
   if (appConfigResponse) return appConfigResponse;
+  const proposalResponse = await handleParkProposalRequest(request, {
+    json,
+    requireOperator: () => requireOperator(request, env),
+    sameOriginRequired: () => sameOriginRequired(request),
+    ipHash: async () => {
+      if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
+        throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
+      }
+      return keyedHash(env.SESSION_SECRET, "proposal-ip", getClientAddress(request));
+    },
+    newId: () => requestUuid(dependencies),
+    store: () => {
+      if (dependencies.createParkProposalStore) return dependencies.createParkProposalStore(env);
+      if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
+      return createNeonParkProposalStore(env.DATABASE_URL);
+    },
+  });
+  if (proposalResponse) return proposalResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
   if (path === "/api/operator/login" && request.method === "POST") return login(request, env, dependencies);
   if (path === "/api/operator/logout" && request.method === "POST") return clearLogin(request);

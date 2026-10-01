@@ -8,6 +8,7 @@ Every app build checks in with the production API to learn which content databas
 - The app reads its saved answer before it renders (`src/lib/appConfig.ts`), then checks in again at startup and on resume. A fresh answer takes effect on the next launch, so content and flags never switch mid-session. Offline or on first launch, the build uses its own defaults.
 - `contentChannel` switches only park content (catalogue, art, change feed) between `staging.web.parkdex.app` and `web.parkdex.app`. Accounts, backups, feedback and photos always stay on the server the build was made for. Web pages ignore it and always read their own host.
 - Flags: `rankProgression` (default on). Off opens every rarity and hides the rank card, map rank line, park-sheet rarity guide and onboarding rank step.
+- `parkProposals` (default on). Off hides the "Propose a park" map button.
 
 ## Update prompts
 
@@ -16,6 +17,10 @@ Set `minimumBuild` and `latestBuild` on the default row (or a specific build). A
 ## Operator page
 
 Sign in at `https://web.parkdex.app/operator/builds` with the operator password to add, edit or remove build rows. The same page on the staging host edits the staging table, which native builds do not read.
+
+## Park proposals
+
+Players tap the pin button next to feedback on the map, drop a pin (or use their location), optionally trace a rough outline with a finger, and name the park. `POST /api/park-proposals` stores it in `kip_proposals.parks` on the server the build talks to, limited to 10 per hour per network. Proposals never touch park content responses, so installed builds are unaffected. Review them at `/operator/proposals` (same operator sign-in): filter by status, open the pin in Google Maps, download the pin and outline as GeoJSON, and mark each one reviewing, accepted or declined.
 
 ## Builds
 
@@ -29,4 +34,4 @@ Add it to `FEATURE_FLAGS` in `worker/appConfig.ts` and `FEATURE_FLAG_DEFAULTS` i
 
 ## Schema
 
-`database/migrations/app_config_001_init.sql` creates `kip_app_config.builds`. It is additive and applied by the normal staging and production release workflows (`appConfigMigrationPaths` in `deployment.json`).
+`database/migrations/app_config_001_init.sql` creates `kip_app_config.builds` and `database/migrations/park_proposals_001_init.sql` creates `kip_proposals`. Both are additive and are applied by the normal staging and production release workflows (`independentMigrationPaths` in `deployment.json`).

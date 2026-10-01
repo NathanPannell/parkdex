@@ -65,12 +65,13 @@ class AccountReleaseGates(unittest.TestCase):
     def test_bootstrap_runs_existing_migration_only(self):
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], ["feedback_001_init.sql"])
 
-    def test_app_config_migration_is_appended_last_when_present(self):
+    def test_independent_migrations_are_appended_last_when_present(self):
         self.account_files()
-        self.touch(self.config["appConfigMigrationPaths"][0])
+        for name in self.config["independentMigrationPaths"]:
+            self.touch(name)
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
             "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
-            "app_config_001_init.sql",
+            "app_config_001_init.sql", "park_proposals_001_init.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):

@@ -15,6 +15,7 @@
     { "source": "/map/fonts/:path*", "destination": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/fonts/:path*" },
     { "source": "/feedback/review", "destination": "/index.html" },
     { "source": "/operator/builds", "destination": "/index.html" },
+    { "source": "/operator/proposals", "destination": "/index.html" },
     { "source": "/account", "destination": "/index.html" },
     { "source": "/account/:path*", "destination": "/index.html" }
   ],
@@ -24,7 +25,7 @@
       { "key": "Referrer-Policy", "value": "no-referrer" },
       { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
     ] },
-    { "source": "/operator/builds", "headers": [
+    { "source": "/operator/(builds|proposals)", "headers": [
       { "key": "Cache-Control", "value": "no-store" },
       { "key": "Referrer-Policy", "value": "no-referrer" },
       { "key": "X-Robots-Tag", "value": "noindex, nofollow" }

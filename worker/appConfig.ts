@@ -13,7 +13,7 @@ export const CONTENT_CHANNELS = ["staging", "main"] as const;
 export type ContentChannel = (typeof CONTENT_CHANNELS)[number];
 
 /** Every remotely controlled feature. Keep in step with `src/lib/appConfig.ts`. */
-export const FEATURE_FLAGS = ["rankProgression"] as const;
+export const FEATURE_FLAGS = ["rankProgression", "parkProposals"] as const;
 export type FeatureFlag = (typeof FEATURE_FLAGS)[number];
 export type FeatureFlags = Partial<Record<FeatureFlag, boolean>>;
 

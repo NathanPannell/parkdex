@@ -127,7 +127,7 @@ test("only a signed-in operator on the same origin can change build configuratio
   const listed = await worker.fetch(request("/api/operator/app-config", { cookie }), env as never);
   const listing = await listed.json() as { builds: BuildConfigRecord[]; flags: string[] };
   assert.equal(listing.builds.length, 1);
-  assert.deepEqual(listing.flags, ["rankProgression"]);
+  assert.deepEqual(listing.flags, ["rankProgression", "parkProposals"]);
 
   const checkIn = await worker.fetch(request("/api/app-config?platform=android&build=42"), env as never);
   const checkInBody = await checkIn.json() as { flags: unknown; update: string };
