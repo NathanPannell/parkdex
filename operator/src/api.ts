@@ -91,3 +91,79 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
+
+export type Position = [number, number];
+export type MultiPolygon = { type: "MultiPolygon"; coordinates: Position[][][] };
+
+export type LegacySummary = {
+  id: string;
+  name: string;
+  category: string;
+  region: string;
+  lat: number;
+  lng: number;
+  source: string;
+  status: "available" | "draft" | "in-parkdex";
+};
+
+export type LegacyPark = Omit<LegacySummary, "status"> & {
+  record: Record<string, unknown>;
+  boundaryProperties: Record<string, unknown>;
+  geometry: MultiPolygon;
+  geometryStats: { polygons: number; holes: number; positions: number; bbox: [number, number, number, number] };
+};
+
+export type DraftSummary = {
+  id: string;
+  name: string;
+  category: string | null;
+  rarity: string | null;
+  status: "draft" | "published";
+  hasBadge: boolean;
+  hasBlurb: boolean;
+  hasReferencePhoto: boolean;
+  updatedAt: string;
+};
+
+export type Draft = {
+  id: string;
+  source: { record?: Record<string, unknown>; boundaryProperties?: Record<string, unknown> };
+  geometry: MultiPolygon;
+  name: string;
+  short: string;
+  category: string | null;
+  region: string;
+  lat: number;
+  lng: number;
+  biome: string;
+  shape: string;
+  rarity: string | null;
+  seed: number;
+  blurb: string;
+  scene: string | null;
+  badgeSha256: string | null;
+  badgeBytes: number | null;
+  referencePhotoType: string | null;
+  status: "draft" | "published";
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  blockers: string[];
+  badgeUploads: boolean;
+};
+
+/** Uploads raw image bytes; the dashboard API checks the type itself. */
+export async function uploadImage<T>(path: string, file: File): Promise<T> {
+  const response = await fetch(path, { method: "PUT", body: file, credentials: "same-origin", headers: { "content-type": file.type || "application/octet-stream" } });
+  if (!response.ok) {
+    let message = "The upload failed.";
+    try {
+      const body = await response.json() as { error?: { message?: string } };
+      if (body.error?.message) message = body.error.message;
+    } catch {
+      // Keep the generic message for non-JSON errors.
+    }
+    throw new ApiError(response.status, message);
+  }
+  return await response.json() as T;
+}

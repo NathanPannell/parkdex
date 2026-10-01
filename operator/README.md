@@ -15,10 +15,14 @@ On the Hobby plan, Vercel Authentication (Standard Protection) covers every prev
 
 Writes also require the request's `Origin` to match the dashboard host.
 
+Drafts live in `kip_park_drafts.drafts` (`database/migrations/park_drafts_001_init.sql`), outside synchronized content. Installed apps see nothing until a draft is published, and publishing only writes fields and values every supported build already reads (see `docs/content-compatibility.md`). A badge is uploaded to `releases/<sha256>/art/badges/scenes/<slug>.webp` on the Kip CDN and verified there before the park row is written, the same layout as `scripts/publish_park_update.py`. Each new image gets a new slug.
+
 ## Pages
 
 - **Feedback:** a board with New, Reviewing, Planned and Closed columns. Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel. `/feedback/review?id=<report>` opens a report directly; operator emails use this link.
 - **Proposals:** parks players suggested from the map, with an outline sketch, Google Maps link, GeoJSON download and status.
+- **Import from map:** search the legacy map's 1,656 parks (map.parkdex.app) and create a draft from one. A draft copies the park's complete boundary (every feature, in source order, holes kept) and its full legacy record.
+- **Drafts:** set the category, rarity, name, short name, biome and badge shape, write an optional description, attach a reference photo and upload an optional WebP badge. "Copy AI brief" copies a JSON brief with the record, boundary and photo link for an LLM or image model. Publish copies the draft into `public.parks`, `public.boundaries` and the drive tables in one transaction. Drive and walk access start as unknown (walk 0, no routes), the importer's existing sentinel.
 - **Builds:** rows in `kip_app_config.builds` that choose each build's content database, feature flags, and minimum and latest builds.
 
 ## Local development
@@ -38,6 +42,8 @@ npm run typecheck --prefix operator
 npm test --prefix operator
 ```
 
+`server/drafts.pg.test.ts` runs the draft store and publish transaction against the real content triggers when `OPERATOR_DRAFTS_TEST_DATABASE_URL` points at a disposable loopback database named `kip_qa_*`. It applies the content and drafts migrations itself.
+
 ## Build and deploy
 
 `npm run build` writes a Vercel Build Output bundle to `operator/.vercel/output`: the static UI plus one Edge Function at `/api/*` that bundles the shared worker modules. The Vercel project therefore needs no access to the rest of the repository.
@@ -50,6 +56,10 @@ Runtime environment variables (Preview target only):
 | `RESEND_API_KEY` | Needed only to retry failed feedback emails (sensitive) |
 | `EMAIL_MODE` | `resend`, or `disabled` to turn retries into a no-op |
 | `DASHBOARD_ENVIRONMENT` | Label shown in the sidebar, for example `production` |
+| `CLOUDFLARE_API_TOKEN` | R2 write token, needed only to publish a draft with a badge (sensitive) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the content bucket |
+| `ASSETS_BUCKET` | Optional; defaults to `parkdex-kip-content` |
+| `LEGACY_BOUNDARY_URL`, `LEGACY_PLACES_URL` | Optional; default to map.parkdex.app's boundary file and the production places API |
 
 Deploy from the `operator` folder after linking it to the `parkdex-operator` Vercel project (`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, or `vercel link`):
 

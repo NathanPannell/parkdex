@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BoundarySketch } from "../components/BoundarySketch";
 import { api, errorText, type LngLat, type Proposal, type ProposalStatus } from "../api";
 import { Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
+import { ParksTabs } from "./ParksTabs";
 
 const STATUSES: { status: ProposalStatus; label: string }[] = [
   { status: "new", label: "New" },
@@ -28,36 +30,6 @@ function downloadGeoJson(proposal: Proposal) {
   link.download = `${proposal.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "park"}.geojson`;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-/** A north-up sketch of the outline and pin, scaled to fit the card. */
-function Sketch({ point, outline }: Pick<Proposal, "point" | "outline">) {
-  const gridId = `sketch-grid${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const all = [...(outline ?? []), point];
-  const midLat = all.reduce((sum, p) => sum + p[1], 0) / all.length;
-  // Longitude degrees shrink toward the poles; scale them so the shape is not stretched.
-  const xs = all.map((p) => p[0] * Math.cos((midLat * Math.PI) / 180));
-  const ys = all.map((p) => -p[1]);
-  const minX = Math.min(...xs), minY = Math.min(...ys);
-  const span = Math.max(Math.max(...xs) - minX, Math.max(...ys) - minY) || 1;
-  const project = (index: number) => outline ? [20 + ((xs[index] - minX) / span) * 120, 14 + ((ys[index] - minY) / span) * 120] : [80, 74];
-  const path = outline?.map((_, index) => project(index).map((value) => value.toFixed(1)).join(" ")).join("L");
-  const [pinX, pinY] = project(all.length - 1);
-  return (
-    <svg className="sketch" viewBox="0 0 160 148" role="img" aria-label={outline ? "Outline sketch with pin" : "Pin only"}>
-      <defs>
-        <pattern id={gridId} width="16" height="16" patternUnits="userSpaceOnUse">
-          <path d="M16 0H0V16" fill="none" className="sketch__grid" />
-        </pattern>
-      </defs>
-      <rect width="160" height="148" fill={`url(#${gridId})`} />
-      {path && <path className="sketch__shape" d={`M${path}Z`} />}
-      <g transform={`translate(${pinX} ${pinY})`} className="sketch__pin">
-        <path d="M0 0c-5-6-9-10-9-15a9 9 0 0 1 18 0c0 5-4 9-9 15z" />
-        <circle cx="0" cy="-15" r="3.2" />
-      </g>
-    </svg>
-  );
 }
 
 export function ProposalsPage() {
@@ -100,6 +72,7 @@ export function ProposalsPage() {
 
   return (
     <section className="page" aria-labelledby="proposals-title">
+      <ParksTabs current="/proposals" />
       <header className="page-head">
         <div>
           <p className="eyebrow">From the map</p>
@@ -133,7 +106,7 @@ export function ProposalsPage() {
       <div className="grid">
         {visible.map((proposal) => (
           <article key={proposal.id} className={`proposal proposal--${proposal.status}`}>
-            <div className="proposal__map"><Sketch point={proposal.point} outline={proposal.outline} /></div>
+            <div className="proposal__map"><BoundarySketch polygons={proposal.outline ? [[[...proposal.outline, proposal.outline[0]]]] : []} pin={proposal.point} /></div>
             <div className="proposal__body">
               <div className="proposal__title">
                 <h2>{proposal.name}</h2>

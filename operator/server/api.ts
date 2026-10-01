@@ -3,13 +3,17 @@ import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDeliv
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
 import { HttpError, readJsonBody, validateRetryBody, validateStatus } from "../../worker/validation.js";
+import type { BadgeEnv } from "./badges.js";
+import { createNeonDraftStore, type DraftStore } from "./drafts.js";
+import { routeImport } from "./importRoutes.js";
+import { createLegacySource, type LegacyEnv, type LegacySource } from "./legacy.js";
 
 /**
  * The operator dashboard API. It has no sign-in of its own: every deployment of this app sits
  * behind Vercel Authentication, which rejects unauthenticated requests before they reach here.
  */
 
-export interface DashboardEnv {
+export interface DashboardEnv extends BadgeEnv, LegacyEnv {
   DATABASE_URL?: string;
   RESEND_API_KEY?: string;
   EMAIL_MODE?: string;
@@ -21,6 +25,9 @@ export interface DashboardDependencies extends DeliveryDependencies {
   feedbackStore?(env: DashboardEnv): FeedbackStore;
   appConfigStore?(env: DashboardEnv): AppConfigStore;
   proposalStore?(env: DashboardEnv): ParkProposalStore;
+  draftStore?(env: DashboardEnv): DraftStore;
+  legacySource?: LegacySource;
+  randomSeed?(): number;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,7 +57,7 @@ function databaseUrl(env: DashboardEnv): string {
 
 // Vercel Authentication cookies are not sent on cross-site fetches, but a same-origin check
 // keeps writes safe even if that ever changes.
-function requireSameOrigin(request: Request): void {
+export function requireSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) {
     throw new HttpError(403, "forbidden", "This change must come from the dashboard itself.");
@@ -187,6 +194,8 @@ async function routeProposals(request: Request, path: string, store: () => ParkP
 }
 
 export function createDashboardApi(dependencies: DashboardDependencies = {}) {
+  // Kept for the life of the isolate so the large legacy files are fetched at most every few minutes.
+  let legacy: LegacySource | null = dependencies.legacySource ?? null;
   return async function handle(request: Request, env: DashboardEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
@@ -196,7 +205,16 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
       const response =
         await routeFeedback(request, path, () => dependencies.feedbackStore?.(env) ?? createNeonFeedbackStore(databaseUrl(env)), env, dependencies) ??
         await routeBuilds(request, path, () => dependencies.appConfigStore?.(env) ?? createNeonAppConfigStore(databaseUrl(env))) ??
-        await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)));
+        await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env))) ??
+        await routeImport(request, path, {
+          json,
+          env,
+          requireSameOrigin: () => requireSameOrigin(request),
+          drafts: () => dependencies.draftStore?.(env) ?? createNeonDraftStore(databaseUrl(env)),
+          legacy: legacy ??= createLegacySource(env, dependencies.fetch),
+          fetch: dependencies.fetch,
+          randomSeed: dependencies.randomSeed ?? (() => Math.floor(Math.random() * 1_000_001)),
+        });
       return response ?? json({ error: { code: "not_found", message: "API route not found." } }, 404);
     } catch (error) {
       return errorResponse(error);

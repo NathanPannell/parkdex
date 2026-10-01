@@ -3,6 +3,8 @@ import type { ParkProposalRecord, ParkProposalStore, ProposalStatus } from "../.
 import type { AttachmentRecord, ClaimEmailResult, EmailDeliveryView, FeedbackCursor, FeedbackStore, OperatorFeedbackRecord } from "../../worker/store.js";
 import type { EmailAudience, FeedbackStatus } from "../../worker/validation.js";
 import type { DashboardDependencies } from "./api.js";
+import { HttpError } from "../../worker/validation.js";
+import { publicFeature, publishBlockers, type BadgeAsset, type Draft, type DraftFields, type DraftStore, type DraftSummary } from "./drafts.js";
 
 /** In-memory stores for tests and the local demo server. Never used by a deployment. */
 
@@ -125,6 +127,113 @@ export class MemoryProposalStore implements ParkProposalStore {
   }
 }
 
+type StoredDraft = Draft & { badge: Uint8Array | null; reference: Uint8Array | null };
+
+export class MemoryDraftStore implements DraftStore {
+  readonly drafts = new Map<string, StoredDraft>();
+  readonly parks = new Map<string, Record<string, unknown>>();
+  readonly boundaries = new Map<string, unknown>();
+  readonly assets = new Map<string, BadgeAsset>();
+  revision = 0;
+
+  private view(draft: StoredDraft | undefined): Draft | null {
+    if (!draft) return null;
+    const { badge: _badge, reference: _reference, ...rest } = draft;
+    return structuredClone(rest);
+  }
+
+  private touch(draft: StoredDraft) {
+    // Strictly increasing, so a stale updatedAt is always detected.
+    const next = Math.max(Date.now(), Date.parse(draft.updatedAt) + 1);
+    draft.updatedAt = new Date(next).toISOString();
+  }
+
+  async list(): Promise<DraftSummary[]> {
+    return [...this.drafts.values()]
+      .sort((a, b) => a.status.localeCompare(b.status) || b.updatedAt.localeCompare(a.updatedAt))
+      .map((draft) => ({
+        id: draft.id, name: draft.name, category: draft.category, rarity: draft.rarity, status: draft.status,
+        hasBadge: Boolean(draft.badge), hasBlurb: Boolean(draft.blurb.trim()), hasReferencePhoto: Boolean(draft.reference), updatedAt: draft.updatedAt,
+      }));
+  }
+
+  async get(id: string) { return this.view(this.drafts.get(id)); }
+  async publishedParkIds() { return new Set(this.parks.keys()); }
+
+  async create(input: Parameters<DraftStore["create"]>[0]) {
+    if (this.drafts.has(input.id) || this.parks.has(input.id)) throw new HttpError(409, "already_imported", "This park already has a draft or is already in Parkdex.");
+    const now = new Date().toISOString();
+    const { sourceSha256: _sha, ...fields } = input;
+    const draft: StoredDraft = { ...structuredClone(fields), scene: null, badgeSha256: null, badgeBytes: null, referencePhotoType: null, status: "draft", publishedAt: null, createdAt: now, updatedAt: now, badge: null, reference: null };
+    this.drafts.set(input.id, draft);
+    return this.view(draft)!;
+  }
+
+  async update(id: string, fields: Partial<DraftFields>) {
+    const draft = this.drafts.get(id);
+    if (!draft || draft.status !== "draft") return null;
+    Object.assign(draft, fields);
+    this.touch(draft);
+    return this.view(draft);
+  }
+
+  async setBadge(id: string, bytes: Uint8Array | null, scene: string | null) {
+    const draft = this.drafts.get(id);
+    if (!draft || draft.status !== "draft") return null;
+    draft.badge = bytes;
+    draft.scene = scene;
+    draft.badgeBytes = bytes?.byteLength ?? null;
+    draft.badgeSha256 = bytes ? await sha256(bytes) : null;
+    this.touch(draft);
+    return this.view(draft);
+  }
+
+  async getBadge(id: string) { return this.drafts.get(id)?.badge ?? null; }
+
+  async setReferencePhoto(id: string, bytes: Uint8Array | null, contentType: string | null) {
+    const draft = this.drafts.get(id);
+    if (!draft) return null;
+    draft.reference = bytes;
+    draft.referencePhotoType = contentType;
+    this.touch(draft);
+    return this.view(draft);
+  }
+
+  async getReferencePhoto(id: string) {
+    const draft = this.drafts.get(id);
+    return draft?.reference && draft.referencePhotoType ? { bytes: draft.reference, contentType: draft.referencePhotoType } : null;
+  }
+
+  async remove(id: string) {
+    const draft = this.drafts.get(id);
+    if (!draft || draft.status !== "draft") return false;
+    return this.drafts.delete(id);
+  }
+
+  async publish(id: string, expectedUpdatedAt: string, asset: BadgeAsset | null) {
+    const draft = this.drafts.get(id);
+    if (!draft) throw new HttpError(404, "not_found", "Draft not found.");
+    if (draft.updatedAt !== new Date(expectedUpdatedAt).toISOString()) throw new HttpError(409, "draft_changed", "This draft changed since you opened it. Reload and try again.");
+    const blockers = publishBlockers(draft);
+    if (blockers.length) throw new HttpError(422, "draft_incomplete", blockers.join(" "));
+    if (this.parks.has(id)) throw new HttpError(409, "park_exists", "A park with this id is already in Parkdex.");
+    if (asset) this.assets.set(asset.logicalPath, asset);
+    const { id: parkId, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb } = draft;
+    this.parks.set(id, { id: parkId, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb });
+    this.boundaries.set(id, publicFeature(id, biome, draft.geometry));
+    this.revision += 1;
+    draft.status = "published";
+    draft.publishedAt = new Date().toISOString();
+    this.touch(draft);
+    return { id, revision: this.revision };
+  }
+}
+
+async function sha256(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 function delivery(audience: EmailAudience, status: EmailDeliveryView["status"], hoursAgo: number): EmailDeliveryView {
   const at = new Date(Date.now() - hoursAgo * 3_600_000).toISOString();
   return {
@@ -204,5 +313,6 @@ export function demoDependencies(): DashboardDependencies {
     });
   });
 
-  return { feedbackStore: () => feedback, appConfigStore: () => builds, proposalStore: () => proposals };
+  const drafts = new MemoryDraftStore();
+  return { feedbackStore: () => feedback, appConfigStore: () => builds, proposalStore: () => proposals, draftStore: () => drafts };
 }

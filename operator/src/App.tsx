@@ -1,8 +1,12 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { api, type Health } from "./api";
 import { BuildsPage } from "./builds/BuildsPage";
 import { FeedbackBoard } from "./feedback/FeedbackBoard";
+import { DraftEditor } from "./proposals/DraftEditor";
+import { DraftsPage } from "./proposals/DraftsPage";
+import { ImportPage } from "./proposals/ImportPage";
 import { ProposalsPage } from "./proposals/ProposalsPage";
+import { linkHandler, usePath } from "./router";
 import { Icon, Kip, ToastProvider, type IconName } from "./ui";
 
 type Route = "feedback" | "proposals" | "builds";
@@ -21,14 +25,9 @@ function routeFor(pathname: string): Route {
 }
 
 export function App() {
-  const [route, setRoute] = useState<Route>(() => routeFor(window.location.pathname));
+  const path = usePath();
+  const route = routeFor(path);
   const [health, setHealth] = useState<Health | null>(null);
-
-  useEffect(() => {
-    const onPop = () => setRoute(routeFor(window.location.pathname));
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
 
   useEffect(() => {
     api<Health>("/api/health").then(setHealth).catch(() => setHealth(null));
@@ -38,14 +37,6 @@ export function App() {
     const label = NAV.find((item) => item.route === route)?.label ?? "Operator";
     document.title = `${label} · Parkdex Operator`;
   }, [route]);
-
-  function navigate(event: MouseEvent<HTMLAnchorElement>, path: string, next: Route) {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-    event.preventDefault();
-    if (window.location.pathname !== path) window.history.pushState(null, "", path);
-    setRoute(next);
-    window.scrollTo({ top: 0 });
-  }
 
   const environment = health?.environment ?? "";
   const live = environment === "production";
@@ -63,7 +54,7 @@ export function App() {
           </div>
           <nav className="nav" aria-label="Sections">
             {NAV.map((item) => (
-              <a key={item.route} href={item.path} className={`nav__item${route === item.route ? " is-on" : ""}`} aria-current={route === item.route ? "page" : undefined} onClick={(event) => navigate(event, item.path, item.route)}>
+              <a key={item.route} href={item.path} className={`nav__item${route === item.route ? " is-on" : ""}`} aria-current={route === item.route ? "page" : undefined} onClick={linkHandler(item.path)}>
                 <Icon name={item.icon} size={20} />
                 <span>{item.label}</span>
               </a>
@@ -82,10 +73,18 @@ export function App() {
         </aside>
         <main className="main">
           {route === "feedback" && <FeedbackBoard />}
-          {route === "proposals" && <ProposalsPage />}
+          {route === "proposals" && <ParksRoute path={path} />}
           {route === "builds" && <BuildsPage />}
         </main>
       </div>
     </ToastProvider>
   );
+}
+
+function ParksRoute({ path }: { path: string }) {
+  const draft = /^\/proposals\/drafts\/([^/]+)$/.exec(path);
+  if (draft) return <DraftEditor key={draft[1]} id={decodeURIComponent(draft[1])} />;
+  if (path.startsWith("/proposals/drafts")) return <DraftsPage />;
+  if (path.startsWith("/proposals/import")) return <ImportPage />;
+  return <ProposalsPage />;
 }
