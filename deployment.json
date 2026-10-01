@@ -26,6 +26,9 @@
     "database/migrations/progress_001_init.sql",
     "database/migrations/interactions_001_init.sql"
   ],
+  "appConfigMigrationPaths": [
+    "database/migrations/app_config_001_init.sql"
+  ],
   "contentSync": {
     "supportingMigrationPaths": [
       "database/001_cloud_content.sql"
