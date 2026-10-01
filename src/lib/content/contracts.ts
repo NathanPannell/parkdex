@@ -189,6 +189,8 @@ export function requiresContentWifi(path: string): boolean {
 }
 export type MapPoint = [number, number];
 
+export type StoredFileSummary = { hash: string; size: number; path: string | null };
+
 export interface ContentRuntime {
   getStatus(): ContentStatus;
   subscribe(listener: () => void): () => void;
@@ -206,6 +208,10 @@ export interface ContentRuntime {
   hasLocalFile?(releaseId: string, path: string): Promise<boolean>;
   /** Remove a saved detailed map chunk so a deleted map square frees its space. */
   deleteMapChunk?(releaseId: string, path: string): Promise<void>;
+  /** Every file saved on this device, with its path in the current content when it has one. */
+  listStoredFiles?(): Promise<StoredFileSummary[]>;
+  /** Delete saved files the current content no longer uses. Files still referenced are kept. */
+  deleteUnusedFiles?(): Promise<number>;
   getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null;
   ensureArchivedScene(releaseId: string, scene: string): Promise<string>;
   stop(): Promise<void>;

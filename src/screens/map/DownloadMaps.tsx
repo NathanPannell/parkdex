@@ -1,4 +1,4 @@
-import type { GeoJSONSource, Map as MLMap, MapMouseEvent, MapTouchEvent } from "maplibre-gl";
+import type { GeoJSONSource, Map as MLMap, MapMouseEvent } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Icon } from "../../components/Icon";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
@@ -13,6 +13,7 @@ import {
   gridFeatures,
   loadCellIndex,
   readSavedSquares,
+  squareLabels,
   surroundingCellKeys,
   writeSavedSquares,
   type CellIndex,
@@ -29,19 +30,21 @@ type Props = {
   onClose: () => void;
 };
 
-type Mode = "add" | "remove";
 type Progress = { done: number; total: number; waitingForWifi: boolean };
 
 const SOURCE = "download-grid";
 const FILL = "download-grid-fill";
 const LINE = "download-grid-line";
-// Squares are about 50 km; below this zoom they are too small to paint accurately.
-const MIN_PAINT_ZOOM = 6;
+const LABEL_SOURCE = "download-grid-labels";
+const LABEL = "download-grid-label";
+// Size and park labels need room inside a square, which is about 90 px wide at zoom 6.5.
+const LABEL_MIN_ZOOM = 6.5;
 const DOWNLOAD_CONCURRENCY = 4;
 
 /**
- * Download maps: a grid of map squares over the map. One finger paints squares to
- * download or remove; two fingers move the map. Downloads wait for Wi-Fi.
+ * Download maps: a grid of map squares over the map, each labelled with its size and
+ * park count. The map moves as usual; tapping a square marks it to download, or marks
+ * a saved square to remove. Downloads wait for Wi-Fi.
  */
 export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   const content = useContent();
@@ -49,20 +52,17 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   const [index, setIndex] = useState<CellIndex | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Set<string>>(() => new Set(readSavedSquares()));
-  const [selection, setSelection] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<Mode>("add");
-  const [zoom, setZoom] = useState(() => mapRef.current?.getZoom() ?? 0);
+  const [toAdd, setToAdd] = useState<Set<string>>(new Set());
+  const [toRemove, setToRemove] = useState<Set<string>>(new Set());
   const [wifi, setWifi] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [freeBytes, setFreeBytes] = useState<number | null>(null);
   const abort = useRef<AbortController | null>(null);
-  const selectionRef = useRef(selection);
-  selectionRef.current = selection;
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
   const savedRef = useRef(saved);
   savedRef.current = saved;
+  const busyRef = useRef(false);
+  busyRef.current = progress !== null;
 
   useEffect(() => {
     loadCellIndex().then(setIndex, (caught) => setLoadError(caught instanceof Error ? caught.message : "Map squares failed to load"));
@@ -83,148 +83,127 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
 
   useEffect(() => () => abort.current?.abort(), []);
 
-  // One finger paints squares; two fingers pan and zoom (MapLibre's cooperative gestures).
+  // The map pans and zooms normally; a tap (not a drag) toggles the square under it.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !index) return;
-    const container = map.getContainer();
-    container.classList.add("download-mode");
-    map.cooperativeGestures.enable();
-    let painting: boolean | null = null;
-
-    const paint = (event: MapMouseEvent | MapTouchEvent) => {
+    const toggle = (event: MapMouseEvent) => {
+      if (busyRef.current) return;
       const key = cellKeyAt([event.lngLat.lng, event.lngLat.lat]);
-      if (!index.cells[key] || painting === null) return;
-      const isSaved = savedRef.current.has(key);
-      if (modeRef.current === "add" ? isSaved : !isSaved) return;
-      setSelection((current) => {
-        if (current.has(key) === painting) return current;
+      if (!index.cells[key]) return;
+      const flip = (current: Set<string>) => {
         const next = new Set(current);
-        if (painting) next.add(key);
-        else next.delete(key);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         return next;
-      });
+      };
+      sfx.tap();
+      if (savedRef.current.has(key)) setToRemove(flip);
+      else setToAdd(flip);
     };
-    const start = (event: MapMouseEvent | MapTouchEvent) => {
-      if ("points" in event && event.points.length !== 1) {
-        painting = null;
-        return;
-      }
-      if (map.getZoom() < MIN_PAINT_ZOOM) return;
-      if (!("points" in event)) event.preventDefault();
-      const key = cellKeyAt([event.lngLat.lng, event.lngLat.lat]);
-      painting = !selectionRef.current.has(key);
-      paint(event);
-    };
-    const move = (event: MapMouseEvent | MapTouchEvent) => {
-      if ("points" in event && event.points.length !== 1) painting = null;
-      else paint(event);
-    };
-    const end = () => { painting = null; };
-    const onZoom = () => setZoom(map.getZoom());
-
-    map.on("mousedown", start);
-    map.on("touchstart", start);
-    map.on("mousemove", move);
-    map.on("touchmove", move);
-    map.on("mouseup", end);
-    map.on("touchend", end);
-    map.on("touchcancel", end);
-    map.on("zoom", onZoom);
-    return () => {
-      map.off("mousedown", start);
-      map.off("touchstart", start);
-      map.off("mousemove", move);
-      map.off("touchmove", move);
-      map.off("mouseup", end);
-      map.off("touchend", end);
-      map.off("touchcancel", end);
-      map.off("zoom", onZoom);
-      map.cooperativeGestures.disable();
-      container.classList.remove("download-mode");
-    };
+    map.on("click", toggle);
+    return () => void map.off("click", toggle);
   }, [mapRef, index]);
 
   const states = useMemo(() => {
     const result = new Map<string, CellState>();
-    for (const key of saved) result.set(key, "saved");
-    for (const key of selection) result.set(key, mode === "add" ? "selected" : "unselect");
+    for (const key of saved) result.set(key, toRemove.has(key) ? "unselect" : "saved");
+    for (const key of toAdd) result.set(key, "selected");
     return result;
-  }, [saved, selection, mode]);
+  }, [saved, toAdd, toRemove]);
+
+  // Each square's full size and park count, shown once squares are large enough to label.
+  const labels = useMemo(() => (index ? squareLabels(index, content?.parks ?? []) : null), [index, content?.parks]);
 
   // Draw the grid above the base map and below the park pins, which are HTML markers.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !index) return;
     const data = gridFeatures(index, states);
+    // Add whatever is missing and refresh the data; safe to call repeatedly.
     const draw = () => {
       const source = map.getSource(SOURCE) as GeoJSONSource | undefined;
-      if (source) {
-        source.setData(data);
-        return;
+      if (source) source.setData(data);
+      if (!map.isStyleLoaded()) return;
+      if (!source) map.addSource(SOURCE, { type: "geojson", data });
+      if (!map.getLayer(FILL)) {
+        map.addLayer({
+          id: FILL,
+          type: "fill",
+          source: SOURCE,
+          paint: {
+            "fill-color": ["match", ["get", "state"], "saved", "#2f9e6b", "selected", "#ffc93c", "unselect", "#ff5c8a", "#ffffff"],
+            "fill-opacity": ["match", ["get", "state"], "saved", 0.32, "selected", 0.5, "unselect", 0.45, 0.06],
+          },
+        });
       }
-      map.addSource(SOURCE, { type: "geojson", data });
-      map.addLayer({
-        id: FILL,
-        type: "fill",
-        source: SOURCE,
-        paint: {
-          "fill-color": ["match", ["get", "state"], "saved", "#2f9e6b", "selected", "#ffc93c", "unselect", "#ff5c8a", "#ffffff"],
-          "fill-opacity": ["match", ["get", "state"], "saved", 0.32, "selected", 0.5, "unselect", 0.45, 0.06],
-        },
-      });
-      map.addLayer({
-        id: LINE,
-        type: "line",
-        source: SOURCE,
-        paint: { "line-color": "#1c5b43", "line-width": 1, "line-opacity": 0.45 },
-      });
+      if (!map.getLayer(LINE)) {
+        map.addLayer({
+          id: LINE,
+          type: "line",
+          source: SOURCE,
+          paint: { "line-color": "#1c5b43", "line-width": 1, "line-opacity": 0.45 },
+        });
+      }
+      // Labels need map glyphs, which only the detailed map style provides.
+      if (labels && map.getStyle().glyphs && !map.getLayer(LABEL)) {
+        if (!map.getSource(LABEL_SOURCE)) map.addSource(LABEL_SOURCE, { type: "geojson", data: labels });
+        map.addLayer({
+          id: LABEL,
+          type: "symbol",
+          source: LABEL_SOURCE,
+          minzoom: LABEL_MIN_ZOOM,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-font": ["Noto Sans Medium"],
+            "text-size": 12,
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          },
+          paint: { "text-color": "#14231c", "text-halo-color": "#fff8ec", "text-halo-width": 1.6 },
+        });
+      }
     };
     // Style swaps (a new release, or new detail coverage) can drop these layers, or restore
     // an older copy of the grid when a diff deferred until the style loads is applied later.
-    // Re-apply the current states on every style change; setData does not change the style.
-    const sync = () => {
-      const source = map.getSource(SOURCE) as GeoJSONSource | undefined;
-      if (source) source.setData(data);
-      else if (map.isStyleLoaded()) draw();
-    };
-    // A swap that drops the layers mid-load leaves nothing to update yet; add them back
-    // once the map has finished loading the new style.
+    // Redraw on every style change, and again once the map settles if layers are missing.
     const onStyleData = () => {
-      sync();
-      if (!map.getSource(SOURCE)) map.once("idle", sync);
+      draw();
+      if (!map.getLayer(FILL)) map.once("idle", draw);
     };
-    if (map.isStyleLoaded()) draw();
-    else onStyleData();
+    onStyleData();
     map.on("styledata", onStyleData);
     return () => {
       map.off("styledata", onStyleData);
-      map.off("idle", sync);
+      map.off("idle", draw);
     };
-  }, [mapRef, index, states]);
+  }, [mapRef, index, states, labels]);
 
   useEffect(() => () => {
     const map = mapRef.current;
     if (!map) return;
-    for (const layer of [LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
-    if (map.getSource(SOURCE)) map.removeSource(SOURCE);
+    for (const layer of [LABEL, LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
+    for (const source of [LABEL_SOURCE, SOURCE]) if (map.getSource(source)) map.removeSource(source);
   }, [mapRef]);
 
   const savedBytes = index ? bytesForChunks(index, chunkIdsForCells(index, saved)) : 0;
-  const selectionBytes = useMemo(() => {
+  const addBytes = useMemo(() => {
     if (!index) return 0;
-    if (mode === "remove") return bytesForChunks(index, chunksToRemove(index, selection, [...saved].filter((key) => !selection.has(key))));
     const have = chunkIdsForCells(index, saved);
-    return bytesForChunks(index, [...chunkIdsForCells(index, selection)].filter((id) => !have.has(id)));
-  }, [index, selection, saved, mode]);
+    return bytesForChunks(index, [...chunkIdsForCells(index, toAdd)].filter((id) => !have.has(id)));
+  }, [index, toAdd, saved]);
+  const removeBytes = useMemo(() => {
+    if (!index) return 0;
+    return bytesForChunks(index, chunksToRemove(index, toRemove, [...saved].filter((key) => !toRemove.has(key))));
+  }, [index, toRemove, saved]);
 
   const releaseId = content?.releaseId;
   const mapReady = !!releaseId && content?.manifest.mapManifest.size === index?.size;
   const busy = progress !== null;
 
   async function download() {
-    if (!index || !releaseId || !selection.size || busy) return;
-    const keys = [...selection];
+    if (!index || !releaseId || !toAdd.size || busy) return;
+    const keys = [...toAdd];
     const controller = new AbortController();
     abort.current = controller;
     setError(null);
@@ -252,7 +231,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
       const nextSaved = new Set([...savedRef.current, ...keys]);
       writeSavedSquares(nextSaved);
       setSaved(nextSaved);
-      setSelection(new Set());
+      setToAdd(new Set());
       sfx.chirp();
     } catch (caught) {
       if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "The download stopped. Try again.");
@@ -263,9 +242,9 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   }
 
   async function remove() {
-    if (!index || !releaseId || !selection.size || busy) return;
-    const removed = [...selection];
-    const remaining = [...saved].filter((key) => !selection.has(key));
+    if (!index || !releaseId || !toRemove.size || busy) return;
+    const removed = [...toRemove];
+    const remaining = [...saved].filter((key) => !toRemove.has(key));
     // Keep the squares around the visitor, which nearby coverage downloads again anyway.
     const kept = hasFix ? [...remaining, ...surroundingCellKeys(user)] : remaining;
     setError(null);
@@ -274,7 +253,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
       const nextSaved = new Set(remaining);
       writeSavedSquares(nextSaved);
       setSaved(nextSaved);
-      setSelection(new Set());
+      setToRemove(new Set());
     } catch {
       setError("Some squares could not be removed. Try again.");
     }
@@ -282,11 +261,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
 
   const instruction = loadError
     ? "Map squares are unavailable in this build."
-    : zoom < MIN_PAINT_ZOOM
-      ? "Zoom in to choose squares."
-      : mode === "add"
-        ? "Drag one finger across the squares you want offline. Use two fingers to move the map."
-        : "Drag across saved squares to remove them. Use two fingers to move the map.";
+    : "Tap a square to download it, or tap a saved square to remove it.";
 
   return (
     <div className="dlmaps" aria-label="Download maps">
@@ -301,25 +276,17 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
       </div>
 
       <div className="dlmaps-sheet card">
-        <div className="dlmaps-modes" role="group" aria-label="Choose squares to">
-          <button className={`btn btn--sm ${mode === "add" ? "btn--ink" : "btn--paper"}`} aria-pressed={mode === "add"} disabled={busy}
-            onClick={() => { setMode("add"); setSelection(new Set()); }}>
-            <Icon name="download" size={16} /> Add
-          </button>
-          <button className={`btn btn--sm ${mode === "remove" ? "btn--ink" : "btn--paper"}`} aria-pressed={mode === "remove"} disabled={busy || !saved.size}
-            onClick={() => { setMode("remove"); setSelection(new Set()); }}>
-            <Icon name="close" size={16} /> Remove
-          </button>
-          {selection.size > 0 && !busy && (
-            <button className="btn btn--paper btn--sm" onClick={() => setSelection(new Set())}>Clear</button>
-          )}
-        </div>
-
         <dl className="dlmaps-stats">
           <div>
-            <dt>{mode === "add" ? "Selected" : "To remove"}</dt>
-            <dd>{selection.size} {selection.size === 1 ? "square" : "squares"} · {formatMegabytes(selectionBytes)}</dd>
+            <dt>To download</dt>
+            <dd>{toAdd.size} {toAdd.size === 1 ? "square" : "squares"} · {formatMegabytes(addBytes)}</dd>
           </div>
+          {toRemove.size > 0 && (
+            <div>
+              <dt>To remove</dt>
+              <dd>{toRemove.size} {toRemove.size === 1 ? "square" : "squares"} · {formatMegabytes(removeBytes)}</dd>
+            </div>
+          )}
           <div>
             <dt>Saved on this phone</dt>
             <dd>{saved.size} {saved.size === 1 ? "square" : "squares"} · {formatMegabytes(savedBytes)}</dd>
@@ -342,20 +309,23 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
             </span>
           </div>
         )}
-        {mode === "add" && !wifi && !progress && <p className="dlmaps-note">Downloads start when you're on Wi-Fi.</p>}
+        {toAdd.size > 0 && !wifi && !progress && <p className="dlmaps-note">Downloads start when you're on Wi-Fi.</p>}
         {!mapReady && !loadError && <p className="dlmaps-note">Detailed maps are still getting ready. Try again in a moment.</p>}
         {error && <p className="dlmaps-error" role="alert">{error}</p>}
 
         {busy ? (
           <button className="btn btn--paper btn--block" onClick={() => abort.current?.abort()}>Stop download</button>
-        ) : mode === "add" ? (
-          <button className="btn btn--block" onClick={() => void download()} disabled={!selection.size || !mapReady}>
-            {selection.size ? `Download ${formatMegabytes(selectionBytes)}` : "Choose squares to download"}
-          </button>
         ) : (
-          <button className="btn btn--block btn--berry" onClick={() => void remove()} disabled={!selection.size || !mapReady}>
-            {selection.size ? `Remove ${selection.size} ${selection.size === 1 ? "square" : "squares"}` : "Choose squares to remove"}
-          </button>
+          <div className="dlmaps-actions">
+            {toRemove.size > 0 && (
+              <button className="btn btn--berry" onClick={() => void remove()} disabled={!mapReady}>
+                Remove {toRemove.size}
+              </button>
+            )}
+            <button className="btn" onClick={() => void download()} disabled={!toAdd.size || !mapReady}>
+              {toAdd.size ? `Download ${formatMegabytes(addBytes)}` : "Tap squares to download"}
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -46,6 +46,8 @@ const SCREEN_LABEL: Record<Screen, string> = {
   claim: "Claim",
   share: "Share",
   account: "Account & backup",
+  settings: "Settings",
+  downloads: "Manage downloads",
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.

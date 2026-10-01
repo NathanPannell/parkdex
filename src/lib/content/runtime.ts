@@ -22,6 +22,7 @@ import {
   type ContentSyncCursor,
   type ContentRequestInit,
   type DownloadPurpose,
+  type StoredFileSummary,
   type MapPoint,
   type RetainedPark,
   type StoredRelease,
@@ -553,6 +554,32 @@ class ContentRuntimeController implements ContentRuntime {
     await this.options.store.deleteFile(file.sha256, { optionalMapChunk: true });
     const index = Number(path.match(/\/(\d{3,})\.bin$/)?.[1]);
     if (Number.isSafeInteger(index)) removeAllowedMapChunks(releaseId, [index]);
+  }
+
+  async listStoredFiles(): Promise<StoredFileSummary[]> {
+    const pathByHash = new Map((this.status.snapshot?.manifest.files ?? []).map((file) => [file.sha256, file.path]));
+    return (await this.options.store.listFiles()).map((file) => ({ hash: file.hash, size: file.size, path: pathByHash.get(file.hash) ?? null }));
+  }
+
+  async deleteUnusedFiles(): Promise<number> {
+    this.assertRunning();
+    const current = new Set((this.status.snapshot?.manifest.files ?? []).map((file) => file.sha256));
+    for (const [hash, count] of this.inFlightHashes) if (count > 0) current.add(hash);
+    let freed = 0;
+    for (const file of await this.options.store.listFiles()) {
+      if (current.has(file.hash)) continue;
+      try {
+        // The store still refuses files that earned badges or other retained content need.
+        await this.options.store.deleteFile(file.hash);
+        freed += file.size;
+        this.localFileSizes.delete(file.hash);
+        for (const key of this.verifiedHashes) if (key.startsWith(`${file.hash}:`)) this.verifiedHashes.delete(key);
+        for (const [key] of this.fileUrlPromises) if (key.startsWith(`${file.hash}:`)) this.fileUrlPromises.delete(key);
+      } catch {
+        // Kept because something still references it.
+      }
+    }
+    return freed;
   }
 
   async getFileUrl(releaseId: string, path: string): Promise<string> {

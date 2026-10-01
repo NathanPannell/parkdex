@@ -133,3 +133,60 @@
 .dlmaps-sheet > .btn {
   white-space: normal;
 }
+
+.downloads-stats {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.downloads-stats div,
+.downloads-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.downloads-stats dt {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.downloads-stats dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.downloads-list {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads-list__text {
+  display: grid;
+  min-width: 0;
+}
+
+.downloads-list__text span {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.dlmaps-labels {
+  pointer-events: none;
+}
+
+.dlmaps-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dlmaps-actions .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
