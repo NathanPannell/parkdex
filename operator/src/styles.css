@@ -390,6 +390,16 @@ a { color: inherit; }
 .tri__item--off.is-on { background: var(--berry); color: #14231c; }
 
 
+/* Database toggle */
+.db-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 13px; background: rgba(255,248,236,.1); }
+.db-toggle__item { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 6px; border: 0; border-radius: 10px; background: none; color: inherit; font-size: 12.5px; font-weight: 800; opacity: .7; }
+.db-toggle__item:hover { opacity: 1; }
+.db-toggle__item.is-on { opacity: 1; background: var(--paper); color: #14231c; }
+.db-toggle__item--production .env__dot { background: #4be38f; box-shadow: none; }
+.db-toggle__item--staging .env__dot { background: var(--sun); box-shadow: none; }
+.shell--staging .sidebar { box-shadow: inset -4px 0 0 var(--sun); }
+.staging-banner { display: flex; align-items: center; gap: 8px; margin: -10px 0 20px; padding: 10px 14px; border: 2px solid var(--edge); border-radius: 14px; background: var(--sun); color: #14231c; font-weight: 700; box-shadow: var(--pop); }
+
 /* Parks sub-navigation */
 .subnav { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 18px; padding: 4px; border: 2px solid var(--edge); border-radius: 15px; background: var(--card); box-shadow: var(--pop); }
 .subnav__item { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 10px; font-weight: 800; font-size: 14px; text-decoration: none; transition: background .15s; }

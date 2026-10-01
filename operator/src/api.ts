@@ -56,7 +56,7 @@ export type BuildConfig = {
   updatedAt: string;
 };
 
-export type Health = { ok: boolean; environment: string; emailMode: "resend" | "disabled" | "unconfigured" };
+export type Health = { ok: boolean; environment: string; canSwitch: boolean; emailMode: "resend" | "disabled" | "unconfigured" };
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
