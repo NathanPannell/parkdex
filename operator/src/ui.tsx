@@ -49,7 +49,7 @@ export function timeAgo(value: string): string {
   const then = Date.parse(value);
   if (!Number.isFinite(then)) return "Unknown time";
   const minutes = Math.round((Date.now() - then) / 60_000);
-  if (minutes < 1) return "Just now";
+  if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;

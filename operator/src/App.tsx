@@ -91,7 +91,8 @@ export function App() {
         <main className="main">
           {staging && (
             <div className="staging-banner" role="status">
-              <Icon name="alert" size={17} /> You are viewing and editing the <strong>staging</strong> database. Changes reach only staging and builds set to staging content, not production players.
+              <Icon name="alert" size={17} />
+              <span>Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.</span>
             </div>
           )}
           {route === "feedback" && <FeedbackBoard />}

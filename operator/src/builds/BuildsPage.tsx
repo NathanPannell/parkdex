@@ -50,12 +50,13 @@ function buildTitle(config: Pick<BuildConfig, "build" | "platform">): string {
   return config.build === 0 ? `Every ${PLATFORMS[config.platform]} build` : `${PLATFORMS[config.platform]} build ${config.build}`;
 }
 
-function UpdateRulesCard({ rules, onSaved }: { rules: UpdateRules; onSaved(rules: UpdateRules): void }) {
+function UpdateRulesRow({ rules, onSaved }: { rules: UpdateRules; onSaved(rules: UpdateRules): void }) {
   const toast = useToast();
   const [minimum, setMinimum] = useState(rules.minimumBuild === null ? "" : String(rules.minimumBuild));
   const [latest, setLatest] = useState(rules.latestBuild === null ? "" : String(rules.latestBuild));
   const [busy, setBusy] = useState(false);
   const dirty = minimum !== (rules.minimumBuild === null ? "" : String(rules.minimumBuild)) || latest !== (rules.latestBuild === null ? "" : String(rules.latestBuild));
+  const name = rules.environment === "production" ? "Production" : "Staging";
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -69,7 +70,7 @@ function UpdateRulesCard({ rules, onSaved }: { rules: UpdateRules; onSaved(rules
         body: JSON.stringify({ minimumBuild: minimum ? Number(minimum) : null, latestBuild: latest ? Number(latest) : null }),
       });
       onSaved(saved.rules);
-      toast.show(`Saved ${rules.environment} update rules`);
+      toast.show(`Saved ${name.toLowerCase()} update rules`);
     } catch (reason) {
       toast.show(errorText(reason, "Could not save the update rules."), { tone: "error" });
     } finally {
@@ -78,25 +79,24 @@ function UpdateRulesCard({ rules, onSaved }: { rules: UpdateRules; onSaved(rules
   }
 
   return (
-    <form className={`rules rules--${rules.environment}`} onSubmit={save}>
-      <div className="rules__head">
-        <span className="rules__dot" aria-hidden="true" />
-        <div>
-          <h2>{rules.environment === "production" ? "Production" : "Staging"} builds</h2>
-          <p className="muted">{rules.updatedAt ? `Updated ${timeAgo(rules.updatedAt)}` : "No rules yet"}</p>
-        </div>
+    <form className={`rule-row rule-row--${rules.environment}`} onSubmit={save}>
+      <div className="rule-row__env">
+        <span className="env-dot" aria-hidden="true" />
+        <strong>{name}</strong>
       </div>
-      <label className="field">
-        <span>Force update below build</span>
-        <input inputMode="numeric" value={minimum} placeholder="No minimum" onChange={(event) => setMinimum(event.target.value.trim())} />
-        <small className="muted">Older builds show a blocking update screen.</small>
+      <label className="rule-row__field">
+        <span className="sr-only">{name}: force update below build</span>
+        <input className="build-input" inputMode="numeric" value={minimum} placeholder="—" onChange={(event) => setMinimum(event.target.value.trim())} />
       </label>
-      <label className="field">
-        <span>Latest build</span>
-        <input inputMode="numeric" value={latest} placeholder="Not set" onChange={(event) => setLatest(event.target.value.trim())} />
-        <small className="muted">Older builds get a dismissable update prompt.</small>
+      <label className="rule-row__field">
+        <span className="sr-only">{name}: latest build</span>
+        <input className="build-input" inputMode="numeric" value={latest} placeholder="—" onChange={(event) => setLatest(event.target.value.trim())} />
       </label>
-      <button type="submit" className="button button--primary button--small" disabled={!dirty || busy}>{busy ? <><Spinner small /> Saving</> : "Save rules"}</button>
+      <div className="rule-row__action">
+        {dirty || busy
+          ? <button type="submit" className="button button--primary button--small" disabled={busy}>{busy ? <><Spinner small /> Saving</> : "Save"}</button>
+          : <span className="muted">{rules.updatedAt ? `Saved ${timeAgo(rules.updatedAt)}` : "Not set"}</span>}
+      </div>
     </form>
   );
 }
@@ -191,7 +191,7 @@ export function BuildsPage() {
         <div>
           <p className="eyebrow">Remote config</p>
           <h1 id="builds-title">Build configuration</h1>
-          <p className="page-lede">Every build checks in with the production API on launch. Update rules apply to every build of an environment. The API pointer and flags are set per build, and builds 9 and newer follow the pointer.</p>
+          <p className="page-lede">When each environment's builds must or should update, and which server and features each build uses.</p>
         </div>
         <div className="toolbar">
           <button type="button" className="button button--primary" onClick={() => open(emptyDraft(knownFlags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>
@@ -200,15 +200,21 @@ export function BuildsPage() {
 
       {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error} <button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button></div>}
 
-      <h2 className="build-group__title">Update rules</h2>
-      <div className="rules-row">
+      <section className="rules-panel" aria-labelledby="rules-title">
+        <div className="rules-panel__head">
+          <h2 id="rules-title">Update rules</h2>
+          <p className="muted">Builds 8 and earlier count as production.</p>
+        </div>
+        <div className="rule-row rule-row--header" aria-hidden="true">
+          <span>Environment</span>
+          <span>Force update below<small>Blocking update screen</small></span>
+          <span>Latest build<small>Dismissable update prompt</small></span>
+          <span />
+        </div>
         {listing ? listing.rules.map((rules) => (
-          <UpdateRulesCard key={`${rules.environment}:${rules.updatedAt}`} rules={rules} onSaved={(saved) => setListing({ ...listing, rules: listing.rules.map((item) => item.environment === saved.environment ? saved : item) })} />
-        )) : <><div className="build build--skeleton" aria-hidden="true" /><div className="build build--skeleton" aria-hidden="true" /></>}
-      </div>
-      <p className="muted rules-note">A build follows its environment's rules: its API pointer if set, otherwise the server it was built for. Builds 8 and earlier always count as production.</p>
-
-      <div className="notice"><Icon name="alert" size={18} /> Pointer and flag changes apply on the app's next launch. Moving a build to the other server signs players out there, because accounts belong to one server; progress on the device is kept.</div>
+          <UpdateRulesRow key={`${rules.environment}:${rules.updatedAt}`} rules={rules} onSaved={(saved) => setListing({ ...listing, rules: listing.rules.map((item) => item.environment === saved.environment ? saved : item) })} />
+        )) : <div className="rule-row rule-row--loading"><Spinner small /> Loading rules...</div>}
+      </section>
 
       {listing && listing.builds.length === 0 && (
         <div className="empty">
@@ -219,16 +225,16 @@ export function BuildsPage() {
       )}
       {listing && groups.filter((group) => group.rows.length).map((group) => (
         <div key={group.platform} className="build-group">
-          <h2 className="build-group__title">{PLATFORMS[group.platform]}</h2>
+          <div className="build-group__head"><h2 className="build-group__title">{PLATFORMS[group.platform]} builds</h2><p className="muted">Pointer and flag changes apply on the next app launch.</p></div>
           {group.rows.map((config) => (
             <button key={`${config.platform}:${config.build}`} type="button" className={`build${config.build === 0 ? " build--default" : ""}`} onClick={() => open(draftFrom(config))}>
               <span className="build__number">{config.build === 0 ? "All" : config.build}</span>
               <span className="build__main">
                 <strong>{buildTitle(config)}{config.label && <span className="build__label">{config.label}</span>}</strong>
                 <span className="build__chips">
-                  <span className={`meta-pill meta-pill--${config.apiPointer ?? "builtin"}`}>{config.apiPointer ? `${config.apiPointer === "production" ? "Production" : "Staging"} API` : "Built-in API"}</span>
+                  <span className={`pointer-pill pointer-pill--${config.apiPointer ?? "builtin"}`}><span className="env-dot" aria-hidden="true" />{config.apiPointer ? (config.apiPointer === "production" ? "Production API" : "Staging API") : "Built-in API"}</span>
                   {Object.entries(config.flags).map(([flag, on]) => (
-                    <span key={flag} className={`meta-pill ${on ? "meta-pill--on" : "meta-pill--off"}`}>{flag} {on ? "on" : "off"}</span>
+                    <span key={flag} className={`flag-pill${on ? " is-on" : ""}`}>{flag}</span>
                   ))}
                 </span>
                 {config.notes && <span className="build__notes">{config.notes}</span>}
@@ -271,6 +277,7 @@ export function BuildsPage() {
 
               <fieldset className="field">
                 <legend>API pointer</legend>
+                <small className="muted field-hint">Moving a build to the other server signs players out there on their next launch; progress on the phone is kept.</small>
                 <div className="choice-row">
                   {POINTERS.map((pointer) => (
                     <label key={pointer.value || "builtin"} className={`choice${draft.apiPointer === pointer.value ? " is-on" : ""}`}>
