@@ -1,0 +1,9 @@
+{
+  "schema": "parkdex.content-channel/v1",
+  "environment": "staging",
+  "generation": 1,
+  "releaseId": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744",
+  "manifestUrl": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/manifest.json",
+  "manifestSha256": "d84ecf3f969cc00c351f85401625024b8f526a2d82ba7344f9980d9f01ae1c32",
+  "minimumReaderVersion": 1
+}

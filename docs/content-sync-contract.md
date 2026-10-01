@@ -1,5 +1,7 @@
 # Kip content sync contract
 
+Compatibility rules for changing this contract while older builds are installed are in [content-compatibility.md](content-compatibility.md).
+
 This contract describes the first Neon-backed content reader. It replaces hourly whole-catalogue R2 releases with a small on-demand API and immutable R2 assets. The migration starts with the existing 122 park records unchanged. Replacing that catalogue with the ranked 100, generating Beacon Hill's badge, and enabling an hourly schedule are later content operations.
 
 ## Authority and scope
