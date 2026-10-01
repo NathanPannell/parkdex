@@ -405,6 +405,7 @@ function createSyncRuntime(
   claimedParkIds: string[] = [],
   apiUrl: string | null = "https://parkdex.example.test/api/content/current",
   environment: ContentEnvironment = "staging",
+  mapPointer?: ContentMapPointer,
 ) {
   return createContentRuntime({
     store,
@@ -413,6 +414,7 @@ function createSyncRuntime(
     environment,
     claimedParkIds: () => claimedParkIds,
     connectivity,
+    ...(mapPointer ? { mapPointer } : {}),
   } satisfies ContentRuntimeOptions);
 }
 
@@ -690,6 +692,44 @@ describe("content runtime", () => {
     expect(runtime.getStatus().snapshot?.releaseId).toBe(a.channel.releaseId);
     expect(runtime.getStatus().phase).toBe("error");
     expect(runtime.getStatus().error).toMatch(/compare-and-swap/);
+  });
+
+  it("uses the build's pinned map instead of the server's map pointer", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "provincial-pinned-map-park", "scene-pinned");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-pinned.webp")!;
+    const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+    const inventory: ContentMapInventory = {
+      schema: "parkdex.content-map/v1",
+      version: release.channel.releaseId,
+      mapManifest: release.rawManifest.mapManifest,
+      files: mapFiles,
+    };
+    const inventoryBytes = toBytes(inventory);
+    const pinned: ContentMapPointer = {
+      version: release.channel.releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+      manifestSha256: await sha256Hex(inventoryBytes),
+    };
+    const serverVersion = "e".repeat(64);
+    const serverPointer: ContentMapPointer = {
+      version: serverVersion,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${serverVersion}/map/manifest.json`,
+      manifestSha256: "f".repeat(64),
+    };
+    const snapshot = { ...contentSyncSnapshot(9, release.park, [sceneFile]), map: serverPointer };
+    const remoteFiles = new Map<string, ArrayBuffer>([[pinned.manifestUrl, inventoryBytes]]);
+    for (const file of mapFiles) remoteFiles.set(file.url, release.content.get(file.url)!.slice(0));
+    remoteFiles.set(sceneFile.url, release.content.get(sceneFile.url)!.slice(0));
+    const server = contentSyncServer(snapshot, new Map(), new Map(), remoteFiles);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [], undefined, "staging", pinned));
+    await runtime.start();
+
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    expect(runtime.getStatus().snapshot?.releaseId).toBe(`sync-staging-9-${pinned.version}`);
+    expect(server.calls).toContain(pinned.manifestUrl);
+    expect(server.calls).not.toContain(serverPointer.manifestUrl);
+    expect((await store.getSyncState("staging"))?.map).toEqual(pinned);
   });
 
   it("downloads nearby detail on mobile data and never fetches the whole map", async () => {

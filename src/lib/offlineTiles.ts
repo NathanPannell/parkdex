@@ -6,7 +6,8 @@ const TILE_SCHEME = "pmtiles";
 const GLYPH_SCHEME = "contentglyph";
 export const BASE_OVERVIEW_KEY = "bundled-canada-overview-v1";
 export const BASE_OVERVIEW_PATH = "/map/bootstrap/canada-overview.pmtiles";
-const MAX_CACHED_CHUNKS = 12;
+// 512 KB chunks: enough for a phone viewport across a few zoom levels.
+const MAX_CACHED_CHUNKS = 32;
 
 type ReleaseRegistration = {
   runtime: ContentRuntime;

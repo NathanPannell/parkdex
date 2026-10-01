@@ -638,7 +638,7 @@ class ContentRuntimeController implements ContentRuntime {
     try {
       stored = await this.options.store.getSyncState(this.environment);
       if (stored) {
-        stored = validateContentSyncState(stored);
+        stored = this.withBuildMap(validateContentSyncState(stored));
         if (stored.sourceId !== sourceId) {
           this.sourceMismatch = true;
           this.syncCacheInvalid = true;
@@ -844,7 +844,7 @@ class ContentRuntimeController implements ContentRuntime {
     let resetCursor = this.syncCacheInvalid || cursorReadFailed;
     if (state) {
       try {
-        state = validateContentSyncState(state);
+        state = this.withBuildMap(validateContentSyncState(state));
         if (state.parks.length === 0 && state.revision > 0) {
           previous = state;
           state = null;
@@ -943,7 +943,7 @@ class ContentRuntimeController implements ContentRuntime {
 
   private async commitContentSnapshot(next: ContentSyncState, previous: ContentSyncState | null, expectedCursor: ContentSyncCursor | null, signal: AbortSignal, resetCursor = false): Promise<void> {
     const sourceId = this.configuredSourceId();
-    const candidate = validateContentSyncState({ ...next, sourceId });
+    const candidate = this.withBuildMap(validateContentSyncState({ ...next, sourceId }));
     await this.retainChangedClaimedScenes(previous, candidate);
     await this.ensureSyncAssets(candidate, signal);
     this.assertSyncCanCommit(signal);
@@ -1054,7 +1054,7 @@ class ContentRuntimeController implements ContentRuntime {
 
   private async publishSyncState(state: ContentSyncState, phase: ContentPhase, error: string | null, beforePublish?: () => void): Promise<void> {
     const retainedProjectionRevision = this.retainedProjectionRevision;
-    const validated = validateContentSyncState(state);
+    const validated = this.withBuildMap(validateContentSyncState(state));
     let inventory: ContentMapInventory | null = null;
     if (validated.map) inventory = await this.getVerifiedMapInventory(validated.map.version);
     if (inventory) this.mapInventories.set(inventory.version, inventory);
@@ -1854,6 +1854,13 @@ class ContentRuntimeController implements ContentRuntime {
     this.waitingForBulkWifi = false;
     await this.refreshMapReadinessForManifest(releaseId, manifest);
     this.updateWaitingStatus();
+  }
+
+  /** Builds that pin a detailed map read it instead of the server's map pointer. */
+  private withBuildMap(state: ContentSyncState): ContentSyncState {
+    const pointer = this.options.mapPointer;
+    if (!pointer || state.map?.version === pointer.version) return state;
+    return { ...state, map: { ...pointer } };
   }
 
   /** Coverage is anchored on the visitor when known, otherwise on the demo start. */

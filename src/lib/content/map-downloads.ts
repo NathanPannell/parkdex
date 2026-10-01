@@ -1,5 +1,5 @@
 import { findTile, PMTiles, zxyToTileId } from "pmtiles";
-import { CONTENT_BOUNDS, type ContentRuntime, type ContentSnapshot, type MapPoint } from "./contracts";
+import type { ContentRuntime, ContentSnapshot, MapPoint } from "./contracts";
 import {
   getAllowedMapChunks,
   getRegisteredMapSnapshot,
@@ -13,7 +13,6 @@ const VIEWPORT_HEIGHT = 844;
 const TILE_SIZE = 512;
 const START_ZOOM = 10.7;
 const STARTER_ZOOMS = [10, 11] as const;
-const COARSE_ZOOMS = [6, 7, 8] as const;
 // Nearby coverage is whole zoom-9 squares (about 50 km in southern BC) so it lines
 // up with the squares a visitor can choose to download later.
 export const NEARBY_CELL_ZOOM = 9;
@@ -38,8 +37,8 @@ type Tile = { z: number; x: number; y: number };
 
 /**
  * Ensure the indexed PMTiles coverage for a representative map viewport.
- * Starter coverage includes z10-11 around the anchor and coarse z6-8 tiles for
- * the archive. Nearby coverage is the 3x3 block of zoom-9 squares around the
+ * Starter coverage is one viewport at z10-11 around the anchor; the bundled
+ * Canada base map already covers coarser zooms. Nearby coverage is the 3x3 block of zoom-9 squares around the
  * anchor at z9-14, plus their z7-8 ancestors.
  */
 export async function prefetchMapArea(
@@ -240,9 +239,6 @@ function starterTiles(point: MapPoint): Tile[] {
   for (const zoom of STARTER_ZOOMS) {
     addViewportTiles(tiles, point, zoom, 1);
   }
-  for (const zoom of COARSE_ZOOMS) {
-    addBoundsTiles(tiles, CONTENT_BOUNDS, zoom);
-  }
   return [...tiles.values()].sort(compareTiles);
 }
 
@@ -257,20 +253,6 @@ function addViewportTiles(tiles: Map<string, Tile>, point: MapPoint, zoom: numbe
   const maxX = Math.floor((centerX * worldScale) + halfWidth);
   const minY = Math.floor((centerY * worldScale) - halfHeight);
   const maxY = Math.floor((centerY * worldScale) + halfHeight);
-  for (let x = minX; x <= maxX; x += 1) {
-    for (let y = minY; y <= maxY; y += 1) {
-      addTileIfInBounds(tiles, zoom, x, y);
-    }
-  }
-}
-
-function addBoundsTiles(tiles: Map<string, Tile>, bounds: MapBounds, zoom: number): void {
-  const [west, south, east, north] = bounds;
-  const worldScale = 2 ** zoom;
-  const minX = Math.floor(((west + 180) / 360) * worldScale);
-  const maxX = Math.floor(((east + 180) / 360) * worldScale);
-  const minY = Math.floor(latitudeToMercatorY(north) * worldScale);
-  const maxY = Math.floor(latitudeToMercatorY(south) * worldScale);
   for (let x = minX; x <= maxX; x += 1) {
     for (let y = minY; y <= maxY; y += 1) {
       addTileIfInBounds(tiles, zoom, x, y);

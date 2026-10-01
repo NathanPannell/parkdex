@@ -3,7 +3,7 @@ import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { BASE_OVERVIEW_KEY } from "./offlineTiles";
 import { CONTENT_BOUNDS } from "./content/contracts";
 
-// Detailed tiles cover the downloadable archive; must match scripts/fetch-map.mjs.
+// Detailed tiles cover the archive named by BUILD_MAP_POINTER.
 export const DETAIL_BOUNDS = CONTENT_BOUNDS;
 // The bundled low-detail base map; must match canada-overview.provenance.json.
 export const BASE_OVERVIEW_BOUNDS: [number, number, number, number] = [-141.0, 41.6, -52.6, 83.2];
