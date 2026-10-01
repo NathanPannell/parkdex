@@ -13,7 +13,7 @@ import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip, formatTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
-import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, type ParkRarityEligibility } from "../../lib/progression";
+import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
 import { rarityLockMessage } from "../../lib/rarityUi";
 import { ISLAND_BOUNDS } from "../../lib/mapStyle";
 import { FIELD } from "../../lib/native";
@@ -21,6 +21,8 @@ import { useStore } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
 import { MapView } from "./MapView";
+import { ProposePark } from "./ProposePark";
+import { isFeatureEnabled } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
 import { ArrivalCard, TripPanel } from "./TripPanel";
 
@@ -38,6 +40,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [proposing, setProposing] = useState(false);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
 
@@ -60,7 +63,7 @@ export function MapScreen() {
   const arrivedId = here && !claims[here.id] ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const claimedCount = Object.keys(claims).length;
-  const rank = state.progressReady ? getCollectionRankProgress(rarityProgress) : null;
+  const rank = state.progressReady && isRankProgressionEnabled() ? getCollectionRankProgress(rarityProgress) : null;
   const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
   const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
 
@@ -218,7 +221,7 @@ export function MapScreen() {
       tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
       route={content ? route : null}
-      onSelect={content ? select : () => {}}
+      onSelect={content && !proposing ? select : () => {}}
       visible={state.screen === "map"}
     />
   );
@@ -228,6 +231,15 @@ export function MapScreen() {
       <div className="screen map-screen">
         {mapView}
         <ContentGate overMap />
+      </div>
+    );
+  }
+
+  if (proposing) {
+    return (
+      <div className="screen map-screen">
+        {mapView}
+        <ProposePark mapRef={mapRef} user={user} onClose={() => setProposing(false)} />
       </div>
     );
   }
@@ -257,12 +269,23 @@ export function MapScreen() {
           </span>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
-          <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback">
-            <Icon name="chat" size={20} />
+          <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback" title="Send feedback">
+            <Icon name="feedback" size={22} />
           </button>
-          <button className="tool card" onClick={() => dispatch({ type: "mute" })} aria-label="Toggle sound">
-            <Icon name={state.muted ? "mute" : "sound"} size={20} />
-          </button>
+          {isFeatureEnabled("parkProposals") && (
+            <button
+              className="tool card"
+              onClick={() => {
+                sfx.tap();
+                select(null);
+                setProposing(true);
+              }}
+              aria-label="Propose a park"
+              title="Propose a park"
+            >
+              <Icon name="pinPlus" size={22} />
+            </button>
+          )}
           {!FIELD && (
             <button className="tool card" onClick={() => setDemoOpen((v) => !v)} aria-label="Demo controls">
               <Icon name="wand" size={20} />

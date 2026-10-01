@@ -1,6 +1,6 @@
 import { AnimatePresence, MotionConfig } from "motion/react";
 import { AnimatePresence as Presence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
@@ -15,7 +15,11 @@ import { Camera } from "./screens/Camera";
 import { Claim } from "./screens/Claim";
 import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
+import { UpdateGate } from "./components/UpdateGate";
+import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
+import { BuildConfigAdmin } from "./screens/BuildConfigAdmin";
 import { FeedbackReview } from "./screens/FeedbackReview";
+import { ParkProposalsAdmin } from "./screens/ParkProposalsAdmin";
 import { Account } from "./screens/Account";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
@@ -24,12 +28,18 @@ import { Share } from "./screens/Share";
 import { Splash } from "./screens/Splash";
 
 export function App() {
+  const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
   if (location.pathname === "/feedback/review") return <FeedbackReview />;
+  if (location.pathname === "/operator/builds") return <BuildConfigAdmin />;
+  if (location.pathname === "/operator/proposals") return <ParkProposalsAdmin />;
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
         <StoreProvider>
-          <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+          <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
+            <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+          </div>
+          <UpdateGate status={updateStatus} />
         </StoreProvider>
       </AuthProvider>
     </MotionConfig>

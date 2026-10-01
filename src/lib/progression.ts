@@ -12,6 +12,17 @@ export const RANKS = Object.freeze([
   Object.freeze({ rarity: "legendary", name: "Island Legend", parks: 10 }),
 ] as const);
 
+// Remote feature flag `rankProgression`. When off, every rarity is open and rank UI is hidden.
+let rankProgressionEnabled = true;
+
+export function setRankProgressionEnabled(enabled: boolean): void {
+  rankProgressionEnabled = enabled;
+}
+
+export function isRankProgressionEnabled(): boolean {
+  return rankProgressionEnabled;
+}
+
 export type Rank = (typeof RANKS)[number];
 export type CollectionRank = Rank["name"];
 
@@ -105,9 +116,9 @@ export function getRarityProgress(
   for (const rank of RANKS) {
     tiers[rank.rarity] = {
       rarity: rank.rarity,
-      unlocked: visited >= rank.parks,
+      unlocked: !rankProgressionEnabled || visited >= rank.parks,
       required: rank.parks,
-      remaining: Math.max(0, rank.parks - visited),
+      remaining: rankProgressionEnabled ? Math.max(0, rank.parks - visited) : 0,
     };
   }
 

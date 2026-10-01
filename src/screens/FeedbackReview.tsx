@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
+import { OperatorNav } from "../components/OperatorNav";
 import { fetchOperatorApi } from "../lib/operatorApiTransport";
 import "../feedback-review.css";
+import "../build-config.css";
 
 type ReportStatus = "new" | "reviewing" | "planned" | "closed";
 type StatusFilter = "all" | ReportStatus;
@@ -672,6 +674,7 @@ export function FeedbackReview() {
           </div>
           <div className="fr-header-actions">
             <div className="fr-private-label"><LockMark /><span>Private operator area</span></div>
+            <OperatorNav />
             <button className="fr-button fr-button--quiet fr-signout" type="button" onClick={signOut} disabled={logoutBusy}>
               {logoutBusy ? "Signing out..." : "Sign out"}
             </button>

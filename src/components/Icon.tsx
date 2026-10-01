@@ -30,6 +30,13 @@ const PATHS = {
   bug: "M8 10a4 4 0 0 1 8 0v4a4 4 0 0 1-8 0v-4Zm4 0v8M3 13h5m8 0h5M5 8l3 2m11-2-3 2M5 19l3-2m11 2-3-2M9.5 6.5 8 4m6.5 2.5L16 4",
   bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z",
   image: "M4 5h16v14H4V5Zm0 11 5-5 4 4 3-3 4 4M15.5 9.5h.01",
+  // Feedback: a speech bubble with a pencil line, so it reads as "write to us".
+  feedback: "M4 5h16v11H9l-5 4V5Zm4.5 7.5 1-3 4.5-4.5 2 2-4.5 4.5-3 1Z",
+  megaphone: "M3 10v4h3l8 4V6l-8 4H3Zm14-1a4 4 0 0 1 0 6m-10 0 1.5 5h3L12 16",
+  // Propose a park: a map pin with a plus.
+  pinPlus: "M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Zm0-14.5v5m-2.5-2.5h5",
+  flagPlus: "M5 21V4h10l-1.5 3.5L15 11H5m13 3v6m-3-3h6",
+  draw: "M4 18c3-5 6 1 9-4s4-7 7-6M15 5l4 4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

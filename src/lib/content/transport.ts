@@ -1,6 +1,8 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity } from "./contracts";
+import { contentChannelOverride } from "../contentChannel";
+import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 
 const DEFAULT_API_URL = "https://staging.web.parkdex.app/api/content/current";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -324,6 +326,9 @@ async function nativeFetch(request: Request, url: URL, apiOrigin: string): Promi
 }
 
 export function getContentApiOrigin(): string | null {
+  // A build remotely switched to the other content database reads that environment's host.
+  const override = contentChannelOverride();
+  if (override) return override === "main" ? KIP_PRODUCTION_ORIGIN : KIP_STAGING_ORIGIN;
   const explicit = import.meta.env.VITE_CONTENT_API_URL?.trim();
   const nativeOrDevelopment = Capacitor.isNativePlatform() || import.meta.env.DEV;
   if (!explicit && import.meta.env.VITE_CONTENT_ENV === "main" && nativeOrDevelopment) return null;
