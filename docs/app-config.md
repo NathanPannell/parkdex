@@ -14,13 +14,13 @@ Every app build checks in with the production API to learn which content databas
 
 Set `minimumBuild` and `latestBuild` on the default row (or a specific build). An Android build below the minimum gets a blocking "Update on Google Play" screen; below the latest it gets a dismissable nudge. Unlike content and flags, these apply as soon as the check-in answers, and a required update is remembered offline. Raise the minimum only before shipping an API change older builds can't handle.
 
-## Operator page
+## Operator dashboard
 
-Sign in at `https://web.parkdex.app/operator/builds` with the operator password to add, edit or remove build rows. The same page on the staging host edits the staging table, which native builds do not read.
+Add, edit or remove build rows on the Builds page of the operator dashboard ([operator/README.md](../operator/README.md)). It edits the table of whichever database its deployment points at; native builds read the production table.
 
 ## Park proposals
 
-Players tap the pin button next to feedback on the map, drop a pin (or use their location), optionally trace a rough outline with a finger, and name the park. `POST /api/park-proposals` stores it in `kip_proposals.parks` on the server the build talks to, limited to 10 per hour per network. Proposals never touch park content responses, so installed builds are unaffected. Review them at `/operator/proposals` (same operator sign-in): filter by status, open the pin in Google Maps, download the pin and outline as GeoJSON, and mark each one reviewing, accepted or declined.
+Players tap the pin button next to feedback on the map, drop a pin (or use their location), optionally trace a rough outline with a finger, and name the park. `POST /api/park-proposals` stores it in `kip_proposals.parks` on the server the build talks to, limited to 10 per hour per network. Proposals never touch park content responses, so installed builds are unaffected. Review them on the Proposals page of the operator dashboard: filter by status, open the pin in Google Maps, download the pin and outline as GeoJSON, and mark each one reviewing, accepted or declined.
 
 ## Builds
 
