@@ -17,9 +17,6 @@ import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
-import { BuildConfigAdmin } from "./screens/BuildConfigAdmin";
-import { FeedbackReview } from "./screens/FeedbackReview";
-import { ParkProposalsAdmin } from "./screens/ParkProposalsAdmin";
 import { Account } from "./screens/Account";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
@@ -29,9 +26,6 @@ import { Splash } from "./screens/Splash";
 
 export function App() {
   const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
-  if (location.pathname === "/feedback/review") return <FeedbackReview />;
-  if (location.pathname === "/operator/builds") return <BuildConfigAdmin />;
-  if (location.pathname === "/operator/proposals") return <ParkProposalsAdmin />;
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>

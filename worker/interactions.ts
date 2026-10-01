@@ -267,7 +267,7 @@ function constantTimeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-function retentionAuthorized(request: Request, secret: string): boolean {
+export function retentionAuthorized(request: Request, secret: string): boolean {
   const provided = request.headers.get("authorization") ?? "";
   if (provided.length > 1024 || !provided.startsWith("Bearer ")) return false;
   return constantTimeEqual(provided.slice(7), secret);

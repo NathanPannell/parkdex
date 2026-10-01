@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFeedbackWorker } from "./index.ts";
-import { createSessionToken } from "./security.ts";
 import { resolveAppConfig, type AppConfigPlatform, type AppConfigStore, type BuildConfigInput, type BuildConfigRecord } from "./appConfig.ts";
 
 const API_ORIGIN = "https://api.example.test";
@@ -46,10 +45,6 @@ function request(path: string, options: { method?: string; body?: unknown; cooki
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
-}
-
-async function operatorCookie() {
-  return `kip_operator_session=${await createSessionToken(SECRET, Date.now())}`;
 }
 
 test("a build with no configuration keeps its built-in defaults", async () => {
@@ -126,51 +121,11 @@ test("the public check-in is readable from the Android web view origin", async (
   assert.equal(response.headers.get("access-control-allow-origin"), "https://localhost");
 });
 
-test("only a signed-in operator on the same origin can change build configuration", async () => {
+test("the app no longer edits build configuration; the operator dashboard does", async () => {
   const { store, worker, env } = setup();
-  const body = { label: "Build 42", contentChannel: "main", flags: { rankProgression: true }, minimumBuild: 40, latestBuild: 44, notes: "" };
-
-  const anonymous = await worker.fetch(request("/api/operator/app-config/android/42", { method: "PUT", body, origin: API_ORIGIN }), env as never);
-  assert.equal(anonymous.status, 401);
-  const crossOrigin = await worker.fetch(request("/api/operator/app-config/android/42", { method: "PUT", body, origin: "https://localhost", cookie: await operatorCookie() }), env as never);
-  assert.equal(crossOrigin.status, 403);
-  const listAnonymous = await worker.fetch(request("/api/operator/app-config"), env as never);
-  assert.equal(listAnonymous.status, 401);
+  const body = { label: "Build 42", contentChannel: "main", flags: {}, minimumBuild: null, latestBuild: null, notes: "" };
+  const put = await worker.fetch(request("/api/operator/app-config/android/42", { method: "PUT", body, origin: API_ORIGIN }), env as never);
+  assert.equal(put.status, 404);
+  assert.equal((await worker.fetch(request("/api/operator/app-config"), env as never)).status, 404);
   assert.equal(store.rows.size, 0);
-
-  const cookie = await operatorCookie();
-  const saved = await worker.fetch(request("/api/operator/app-config/android/42", { method: "PUT", body, origin: API_ORIGIN, cookie }), env as never);
-  assert.equal(saved.status, 200);
-  assert.equal(store.rows.get("android:42")?.contentChannel, "main");
-
-  const listed = await worker.fetch(request("/api/operator/app-config", { cookie }), env as never);
-  const listing = await listed.json() as { builds: BuildConfigRecord[]; flags: string[] };
-  assert.equal(listing.builds.length, 1);
-  assert.deepEqual(listing.flags, ["rankProgression", "parkProposals"]);
-
-  const checkIn = await worker.fetch(request("/api/app-config?platform=android&build=42"), env as never);
-  const checkInBody = await checkIn.json() as { flags: unknown; update: string };
-  assert.deepEqual(checkInBody.flags, { rankProgression: true });
-  assert.equal(checkInBody.update, "available");
-
-  const removed = await worker.fetch(request("/api/operator/app-config/android/42", { method: "DELETE", origin: API_ORIGIN, cookie }), env as never);
-  assert.equal(removed.status, 200);
-  assert.equal(store.rows.size, 0);
-});
-
-test("unknown flags and channels are refused", async () => {
-  const { worker, env } = setup();
-  const cookie = await operatorCookie();
-  for (const body of [
-    { contentChannel: "production" },
-    { flags: { somethingNew: true } },
-    { flags: { rankProgression: "yes" } },
-    { extra: 1 },
-    { minimumBuild: 30, latestBuild: 20 },
-    { minimumBuild: "10" },
-    { latestBuild: -1 },
-  ]) {
-    const response = await worker.fetch(request("/api/operator/app-config/android/1", { method: "PUT", body, origin: API_ORIGIN, cookie }), env as never);
-    assert.equal(response.status, 400, JSON.stringify(body));
-  }
 });

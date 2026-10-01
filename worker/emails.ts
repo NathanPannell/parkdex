@@ -16,7 +16,8 @@ export type FeedbackEmailReport = {
   hasScreenshot: boolean;
 };
 
-export type FeedbackEmailOptions = { appUrl: string };
+/** `reviewUrl` is the separately deployed operator dashboard; report links open there when set. */
+export type FeedbackEmailOptions = { appUrl: string; reviewUrl?: string };
 
 export type FeedbackEmail = { subject: string; html: string; text: string };
 
@@ -269,8 +270,9 @@ function reportRows(report: FeedbackEmailReport, reviewUrl: string): string {
 
 export function renderOperatorEmail(report: FeedbackEmailReport, options: FeedbackEmailOptions): FeedbackEmail {
   const base = appBase(options.appUrl);
-  const reportUrl = reviewLink(report, base);
-  const screenshotUrl = reviewLink(report, base, true);
+  const reviewBase = options.reviewUrl ? appBase(options.reviewUrl) : base;
+  const reportUrl = reviewLink(report, reviewBase);
+  const screenshotUrl = reviewLink(report, reviewBase, true);
   const label = kindLabel(report.kind);
   const reference = referenceFor(report.id);
   const message = report.message || "(No message provided.)";

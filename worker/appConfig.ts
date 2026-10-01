@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { HttpError, readJsonBody } from "./validation.js";
+import { HttpError } from "./validation.js";
 
 /**
  * Per-build remote configuration. Each app build checks in with the production API to learn
@@ -230,40 +230,19 @@ export function resolveAppConfig(platform: AppConfigPlatform, build: number, row
 
 export interface AppConfigHandlers {
   json(data: unknown, status?: number): Response;
-  requireOperator(): Promise<void>;
-  sameOriginRequired(): void;
   store(): AppConfigStore;
 }
 
-const OPERATOR_ROW = /^\/api\/operator\/app-config\/([a-z]+)\/(\d{1,10})$/;
-
-/** Routes `/api/app-config` (public) and `/api/operator/app-config` (operator only). Returns null for other paths. */
+/**
+ * Routes the public `/api/app-config` check-in. Returns null for other paths.
+ * Editing rows belongs to the separately deployed operator dashboard.
+ */
 export async function handleAppConfigRequest(request: Request, handlers: AppConfigHandlers): Promise<Response | null> {
   const url = new URL(request.url);
-  const path = url.pathname;
-  if (path === "/api/app-config") {
-    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    const platform = parsePlatform(url.searchParams.get("platform"));
-    const build = parseBuild(url.searchParams.get("build"));
-    const rows = await handlers.store().resolve(platform, build);
-    return handlers.json(resolveAppConfig(platform, build, rows));
-  }
-  if (path === "/api/operator/app-config") {
-    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    await handlers.requireOperator();
-    return handlers.json({ builds: await handlers.store().list(), flags: FEATURE_FLAGS, channels: CONTENT_CHANNELS });
-  }
-  const row = OPERATOR_ROW.exec(path);
-  if (!row) return null;
-  if (request.method !== "PUT" && request.method !== "DELETE") throw new HttpError(405, "method_not_allowed", "Use PUT or DELETE.");
-  handlers.sameOriginRequired();
-  await handlers.requireOperator();
-  const platform = parsePlatform(row[1]);
-  const build = parseBuild(row[2]);
-  if (request.method === "DELETE") {
-    if (!await handlers.store().remove(platform, build)) throw new HttpError(404, "not_found", "Build configuration not found.");
-    return handlers.json({ ok: true });
-  }
-  const input = validateBuildConfigInput(await readJsonBody(request, 4096));
-  return handlers.json({ build: await handlers.store().upsert(platform, build, input) });
+  if (url.pathname !== "/api/app-config") return null;
+  if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
+  const platform = parsePlatform(url.searchParams.get("platform"));
+  const build = parseBuild(url.searchParams.get("build"));
+  const rows = await handlers.store().resolve(platform, build);
+  return handlers.json(resolveAppConfig(platform, build, rows));
 }

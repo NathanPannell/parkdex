@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFeedbackWorker } from "./index.ts";
-import { createSessionToken } from "./security.ts";
 import type { ParkProposalRecord, ParkProposalStore, ProposalStatus, SaveProposalResult } from "./parkProposals.ts";
 
 const API_ORIGIN = "https://api.example.test";
@@ -119,21 +118,12 @@ test("one address can propose ten parks an hour", async () => {
   assert.deepEqual(statuses.slice(-2), [201, 429]);
 });
 
-test("only a signed-in operator can list and review proposals", async () => {
+test("the app no longer lists or reviews proposals; the operator dashboard does", async () => {
   const { store, worker, env } = setup();
   await worker.fetch(request("/api/park-proposals", { method: "POST", body: proposal() }), env as never);
   const id = [...store.rows.keys()][0];
-
-  assert.equal((await worker.fetch(request("/api/operator/park-proposals"), env as never)).status, 401);
-  const cookie = `kip_operator_session=${await createSessionToken(SECRET, Date.now())}`;
-  const listed = await worker.fetch(request("/api/operator/park-proposals?status=new", { cookie }), env as never);
-  assert.equal((await listed.json() as { proposals: unknown[] }).proposals.length, 1);
-
-  const crossOrigin = await worker.fetch(request(`/api/operator/park-proposals/${id}`, { method: "PATCH", body: { status: "accepted" }, cookie, origin: "https://localhost" }), env as never);
-  assert.equal(crossOrigin.status, 403);
-  const accepted = await worker.fetch(request(`/api/operator/park-proposals/${id}`, { method: "PATCH", body: { status: "accepted" }, cookie, origin: API_ORIGIN }), env as never);
-  assert.equal(accepted.status, 200);
-  assert.equal(store.rows.get(id)?.status, "accepted");
-  const bad = await worker.fetch(request(`/api/operator/park-proposals/${id}`, { method: "PATCH", body: { status: "done" }, cookie, origin: API_ORIGIN }), env as never);
-  assert.equal(bad.status, 400);
+  assert.equal((await worker.fetch(request("/api/operator/park-proposals?status=new"), env as never)).status, 404);
+  const patch = await worker.fetch(request(`/api/operator/park-proposals/${id}`, { method: "PATCH", body: { status: "accepted" }, origin: API_ORIGIN }), env as never);
+  assert.equal(patch.status, 404);
+  assert.equal(store.rows.get(id)?.status, "new");
 });
