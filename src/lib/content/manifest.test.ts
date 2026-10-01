@@ -117,7 +117,7 @@ describe("content manifest validation", () => {
     expect(() => parseContentManifest({ ...valid, files: [file("data/parks.json"), ...fixtureManifest().files.slice(1).map((entry) => entry.path === "data/drive.json" ? { ...entry, url: entry.url.replace("kip-assets.parkdex.app", "evil.example") } : entry)] }, validChannel)).toThrow();
   });
 
-  it("requires exact park fields and matching catalog, boundary, scene, and drive references", () => {
+  it("requires park fields, ignores later additions, and requires matching catalog, boundary, scene, and drive references", () => {
     const manifest = fixtureManifest();
     const park = {
       id: "provincial-one-park",
@@ -144,7 +144,9 @@ describe("content manifest validation", () => {
     };
     const drive = { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [park.id]: { drive: [null], walkM: 0 } } };
     expect(validateContentPayload([park], boundaries, drive, manifest).parks).toEqual([park]);
-    expect(() => validateContentPayload([{ ...park, unexpected: true }], boundaries, drive, manifest)).toThrow(/unsupported shape/);
+    expect(validateContentPayload([{ ...park, addedLater: true }], boundaries, drive, manifest).parks).toEqual([park]);
+    const { blurb: _blurb, ...missingBlurb } = park;
+    expect(() => validateContentPayload([missingBlurb], boundaries, drive, manifest)).toThrow(/unsupported shape/);
     expect(() => validateContentPayload([park], { ...boundaries, features: [] }, drive, manifest)).toThrow(/boundary park references/);
     expect(() => validateContentPayload([park], boundaries, { ...drive, parks: {} }, manifest)).toThrow(/drive park references/);
   });
@@ -189,6 +191,80 @@ describe("incremental content validation", () => {
     expect(parsed.parks[0]?.scene).toBeNull();
     expect(parsed.parks[0]?.category).toBe("municipal");
     expect(parsed.assets).toEqual([]);
+  });
+
+  it("ignores fields and asset kinds added after this build", () => {
+    const parsed = parseContentSnapshot({
+      schema: "parkdex.content-sync/v1",
+      revision: 2,
+      parks: [{ ...park, proposedBy: "someone", accessibility: { stepFree: true } }],
+      boundaries: { ...boundaries, generatedAt: "2026-10-01", features: [{ ...boundaries.features[0], properties: { ...boundaries.features[0]!.properties, area: 12 } }] },
+      drive: { ...drive, transit: {} },
+      assets: [{ path: "art/stickers/new.webp", key: "x", url: "y", sha256: "0".repeat(64), byte_size: 1, content_type: "image/webp" }],
+      map: null,
+      trails: [],
+    });
+    expect(parsed.parks).toEqual([park]);
+    expect(parsed.boundaries.features[0]!.properties).toEqual({ id: park.id, biome: park.biome });
+    expect(parsed.assets).toEqual([]);
+  });
+
+  it("shows enum values added after this build with neutral fallbacks", () => {
+    const parsed = parseContentSnapshot({
+      schema: "parkdex.content-sync/v1",
+      revision: 2,
+      parks: [{ ...park, category: "ecological-reserve", biome: "tundra", shape: "star", rarity: "mythic" }],
+      boundaries: { ...boundaries, features: [{ ...boundaries.features[0], properties: { id: park.id, biome: "tundra" } }] },
+      drive,
+      assets: [],
+      map: null,
+    });
+    expect(parsed.parks[0]).toMatchObject({ category: "community", biome: "forest", shape: "circle", rarity: "common" });
+    expect(parsed.boundaries.features[0]!.properties.biome).toBe("forest");
+  });
+
+  it("leaves out an unreadable park with its boundary and drive row but keeps the rest", () => {
+    const other = { ...park, id: "municipal-two-park", name: "Two Park" };
+    const parsed = parseContentSnapshot({
+      schema: "parkdex.content-sync/v1",
+      revision: 3,
+      parks: [{ ...other, lat: "north" }, park],
+      boundaries: { ...boundaries, features: [{ ...boundaries.features[0], properties: { id: other.id, biome: other.biome } }, boundaries.features[0]] },
+      drive: { ...drive, parks: { ...drive.parks, [other.id]: { drive: [null], walkM: 0 } } },
+      assets: [],
+      map: null,
+    });
+    expect(parsed.parks.map((entry) => entry.id)).toEqual([park.id]);
+    expect(parsed.boundaries.features).toHaveLength(1);
+    expect(Object.keys(parsed.drive.parks)).toEqual([park.id]);
+    expect(() => parseContentSnapshot({
+      schema: "parkdex.content-sync/v1", revision: 3, parks: [{ ...park, lat: "north" }], boundaries, drive, assets: [], map: null,
+    })).toThrow(/no readable parks/);
+  });
+
+  it("still rejects a breaking snapshot schema", () => {
+    expect(() => parseContentSnapshot({
+      schema: "parkdex.content-sync/v2", revision: 0, parks: [park], boundaries, drive, assets: [], map: null,
+    })).toThrow(/schema is unsupported/);
+  });
+
+  it("skips changes this build does not understand and unreadable park updates", () => {
+    const parsed = parseContentChanges({
+      schema: "parkdex.content-sync/v1",
+      fromRevision: 4,
+      throughRevision: 5,
+      headRevision: 5,
+      hasMore: false,
+      batches: [{ revision: 5, changes: [
+        { entity: "proposal", op: "upsert", id: "p1", value: {} },
+        { entity: "park", op: "archive", id: park.id },
+        { entity: "asset", op: "upsert", id: "art/stickers/new.webp", value: {} },
+        { entity: "park", op: "upsert", id: "municipal-two-park", value: { ...park, id: "municipal-two-park", seed: "x" } },
+        { entity: "boundary", op: "upsert", id: "municipal-two-park", value: { ...boundaries.features[0], properties: { id: "municipal-two-park", biome: "coast" } } },
+        { entity: "park", op: "upsert", id: park.id, value: { ...park, extra: 1 }, note: "added later" },
+      ] }],
+    }, 4);
+    expect(parsed.batches[0]!.changes).toEqual([{ entity: "park", op: "upsert", id: park.id, value: park }]);
   });
 
   it("rejects a skeleton whose scene is not present in the active asset inventory", () => {
