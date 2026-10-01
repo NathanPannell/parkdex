@@ -118,8 +118,19 @@ async function readRequestBody(
   }
 
   const request = new Request(input, { ...init, method });
-  if (!request.body) return new Uint8Array(0);
-  const reader = request.body.getReader();
+  const requestBody = request.body;
+  if (requestBody === null) return new Uint8Array(0);
+  if (requestBody === undefined) {
+    // Firefox may omit the Request.body stream getter while still supporting arrayBuffer().
+    if (signal?.aborted) throw signal.reason ?? abortError();
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (signal?.aborted) throw signal.reason ?? abortError();
+    if (bytes.byteLength > MAX_ACCOUNT_BACKUP_BYTES) {
+      throw new RangeError("The account backup request exceeds its byte limit.");
+    }
+    return bytes;
+  }
+  const reader = requestBody.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
