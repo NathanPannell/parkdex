@@ -692,7 +692,7 @@ describe("content runtime", () => {
     expect(runtime.getStatus().error).toMatch(/compare-and-swap/);
   });
 
-  it("keeps detailed map chunks queued while backgrounded and resumes them on Wi-Fi", async () => {
+  it("downloads nearby detail on mobile data and never fetches the whole map", async () => {
     const release = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-a.webp")!;
     const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
@@ -717,19 +717,18 @@ describe("content runtime", () => {
     store.files.set(sceneFile.sha256, release.content.get(sceneFile.url)!.slice(0));
     const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }));
     await runtime.start();
+    const firstChunk = mapFiles.find((file) => file.path === "map/island/000.bin")!;
     const secondChunkUrl = mapFiles.find((file) => file.path === "map/island/001.bin")!.url;
-    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
+    await vi.waitFor(async () => expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(true));
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
 
-    runtime.setForeground(false);
     runtime.setConnectivity({ connected: true, wifi: true });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(server.calls).not.toContain(secondChunkUrl);
-
+    runtime.setForeground(false);
     runtime.setForeground(true);
-    await vi.waitFor(() => expect(server.calls).toContain(secondChunkUrl));
-    const secondChunk = mapFiles.find((file) => file.path === "map/island/001.bin")!;
-    await vi.waitFor(async () => expect(await store.hasFile(secondChunk.sha256, 4)).toBe(true));
-  });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.calls).not.toContain(secondChunkUrl);
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
+  });;
 });
 
 describe("legacy archived art compatibility", () => {
@@ -1162,8 +1161,8 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe(release.park.id), { timeout: 4_000 });
     expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`);
     expect(runtime.getStatus().error).toBeNull();
-    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true), { timeout: 4_000 });
-    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true), { timeout: 4_000 });
+    await vi.waitFor(() => expect(events).toContain("starter"));
     const artVerifiedIndex = events.indexOf("art-verified");
     const inventoryIndex = events.indexOf("inventory");
     const glyphIndex = events.indexOf("glyph-verified");
@@ -1454,13 +1453,12 @@ describe("incremental content sync", () => {
     await start;
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(`sync-staging-31-${release.channel.releaseId}`));
     await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
-    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
-    expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([]);
-    runtime.setConnectivity({ connected: true, wifi: true, contentDownloadAllowed: true });
-    await vi.waitFor(() => expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([0, 1]));
+    // Starter coverage downloads on mobile data; the rest of the archive is never fetched automatically.
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: runtime.getStatus().snapshot!.releaseId, detail: "starter" }));
+    await vi.waitFor(() => expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([0]));
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
     expect(runtime.getStatus().snapshot?.manifest.mapManifest).toEqual(release.rawManifest.mapManifest);
-    expect(mapMock.calls).toContainEqual({ releaseId: runtime.getStatus().snapshot!.releaseId, detail: "starter" });
-    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true));
+    expect(runtime.getStatus().fullMapReady).toBe(false);
   });
 
   it("syncs content over an online browser connection without a physical Wi-Fi signal", async () => {

@@ -153,9 +153,8 @@ export class RuntimeChunkSource implements Source {
     const lastChunk = Math.floor((end - 1) / this.manifest.chunkBytes);
     const indices = Array.from({ length: lastChunk - firstChunk + 1 }, (_, i) => firstChunk + i);
     const allowed = this.allowed();
-    if (!this.bypassAllowlist && (!allowed || indices.some((index) => !allowed.has(index)))) {
-      throw new Error("Map area has not been downloaded. Expand nearby map coverage before panning there.");
-    }
+    const missing = this.bypassAllowlist ? [] : indices.filter((index) => !allowed?.has(index));
+    if (missing.length) await this.streamChunks(missing, requestSignal);
 
     const parts: ArrayBuffer[] = [];
     for (const index of indices) parts.push(await this.readChunk(index, requestSignal));
@@ -170,6 +169,20 @@ export class RuntimeChunkSource implements Source {
       result.set(chunk.subarray(from, to), chunkStart + from - offset);
     }
     return { data: result.buffer };
+  }
+
+  /**
+   * Online visitors stream detail for areas they have not downloaded, on any
+   * connection. Offline, the request fails and the bundled base map stays visible.
+   */
+  private async streamChunks(indices: number[], signal?: AbortSignal): Promise<void> {
+    try {
+      for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index), "nearby", signal);
+    } catch (error) {
+      if (signal?.aborted || (error as Error)?.name === "AbortError") throw error;
+      throw new Error("Map area has not been downloaded. Connect to the internet to load detail here.");
+    }
+    markStreamedMapChunks(this.releaseId, indices);
   }
 
   private async readChunk(index: number, signal?: AbortSignal): Promise<ArrayBuffer> {
@@ -278,6 +291,19 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     }
     for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
   }
+}
+
+/**
+ * Record chunks a tile request has already read. Unlike setAllowedMapChunks this
+ * does not reload the detail source, because the requesting reader succeeded.
+ */
+function markStreamedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
+  let allowed = allowedChunkIds.get(releaseId);
+  if (!allowed) {
+    allowed = new Set<number>();
+    allowedChunkIds.set(releaseId, allowed);
+  }
+  for (const id of chunkIds) allowed.add(id);
 }
 
 export function getAllowedMapChunks(releaseId: string): readonly number[] {

@@ -39,11 +39,12 @@ describe("ContentDownloadScheduler policy transitions", () => {
     expect(isDownloadAllowed("core", "data/parks.json", browser)).toBe(true);
   });
 
-  it("allows metadata, art and glyphs on cellular but defers detailed chunks for every purpose", () => {
+  it("allows metadata, art, glyphs and nearby detail on cellular but defers other detailed chunks", () => {
     expect(isDownloadAllowed("core", "data/parks.json", cellular)).toBe(true);
     expect(isDownloadAllowed("update", "art/badges/scenes/park.webp", cellular)).toBe(true);
     expect(isDownloadAllowed("core", "map/fonts/font/0-255.pbf", cellular)).toBe(true);
-    for (const purpose of ["core", "nearby", "bulk", "update"] as const) {
+    expect(isDownloadAllowed("nearby", "map/island/001.bin", cellular)).toBe(true);
+    for (const purpose of ["core", "bulk", "update"] as const) {
       expect(isDownloadAllowed(purpose, "map/island/001.bin", cellular)).toBe(false);
       expect(isDownloadAllowed(purpose, "map/island/001.bin", wifi)).toBe(true);
     }

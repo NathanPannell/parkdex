@@ -108,6 +108,14 @@ public class WifiContentTransportPluginTest {
                 WifiContentTransportPlugin.networkPolicyForRequest(
                         WifiContentTransportPlugin.validateContentUrl(mapFont, apiOrigin, CDN_ORIGIN), false));
 
+        // Nearby and streamed detail opts in to any validated network.
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(mapChunk, apiOrigin, CDN_ORIGIN), false, true));
+        assertEquals(WifiContentTransportPlugin.NetworkPolicy.WIFI_VALIDATED,
+                WifiContentTransportPlugin.networkPolicyForRequest(
+                        WifiContentTransportPlugin.validateContentUrl(mapChunk, apiOrigin, CDN_ORIGIN), false, false));
+
         String claimUrl = apiOrigin + "/api/claims";
         assertEquals(WifiContentTransportPlugin.NetworkPolicy.ANY_VALIDATED,
                 WifiContentTransportPlugin.networkPolicyForRequest(

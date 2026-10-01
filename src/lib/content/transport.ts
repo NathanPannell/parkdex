@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity } from "./contracts";
+import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity, type ContentRequestInit } from "./contracts";
 import { contentChannelOverride } from "../contentChannel";
 import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 
@@ -43,6 +43,8 @@ type NativeContentTransport = {
     approvedCdnOrigin: string;
     maxResponseBytes: number;
     timeoutMs: number;
+    /** Lets a detailed map chunk use any validated network instead of Wi-Fi only. */
+    anyNetwork: boolean;
   }): Promise<NativeContentResponse>;
   accountRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse>;
   abort(options: { requestId: string }): Promise<void>;
@@ -140,9 +142,10 @@ export async function isContentDownloadAvailable(): Promise<boolean> {
   return canDownloadContent(await getContentConnectivity());
 }
 
-/** Download essential content on any connection; bind detailed map chunks to Wi-Fi. */
-export async function contentFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const request = input instanceof Request ? new Request(input, init) : new Request(input, init);
+/** Download essential content on any connection; bind detailed map chunks to Wi-Fi unless a request allows any network. */
+export async function contentFetch(input: RequestInfo | URL, init?: ContentRequestInit): Promise<Response> {
+  const { anyNetwork = false, ...requestInit } = init ?? {};
+  const request = input instanceof Request ? new Request(input, requestInit) : new Request(input, requestInit);
   const url = new URL(request.url);
   const apiOrigin = getContentApiOrigin();
   if (!apiOrigin) throw new Error("The content API is not configured for this environment.");
@@ -158,15 +161,15 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
     if (Capacitor.getPlatform() !== "android") {
       throw new Error("Content transport is unavailable on this native platform");
     }
-    return nativeFetch(request, url, apiOrigin);
+    return nativeFetch(request, url, apiOrigin, anyNetwork);
   }
 
-  return browserFetch(request, url);
+  return browserFetch(request, url, anyNetwork);
 }
 
-async function browserFetch(request: Request, url: URL): Promise<Response> {
+async function browserFetch(request: Request, url: URL, anyNetwork: boolean): Promise<Response> {
   const allowed = (connectivity: ContentConnectivity) => canDownloadContent(connectivity) &&
-    (!requiresContentWifi(url.pathname) || connectivity.wifi);
+    (anyNetwork || !requiresContentWifi(url.pathname) || connectivity.wifi);
   const initialConnectivity = await getContentConnectivity();
   if (!allowed(initialConnectivity)) throw contentUnavailableError(initialConnectivity);
   throwIfAborted(request.signal);
@@ -274,7 +277,7 @@ async function readBoundedResponseBody(
   return buffer;
 }
 
-async function nativeFetch(request: Request, url: URL, apiOrigin: string): Promise<Response> {
+async function nativeFetch(request: Request, url: URL, apiOrigin: string, anyNetwork: boolean): Promise<Response> {
   const requestId = createRequestId();
   const pending = NativeTransport.request({
     requestId,
@@ -285,6 +288,7 @@ async function nativeFetch(request: Request, url: URL, apiOrigin: string): Promi
     approvedCdnOrigin: CONTENT_CDN_ORIGIN,
     maxResponseBytes: MAX_RESPONSE_BYTES,
     timeoutMs: 20_000,
+    anyNetwork,
   });
 
   const signal = request.signal;

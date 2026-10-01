@@ -166,7 +166,18 @@ export function isWaitingForContentWifi(connectivity: Connectivity): boolean {
   return connectivity.connected && !connectivity.wifi;
 }
 
-/** Only large detailed map chunks require confirmed physical Wi-Fi. */
+/** Request options understood by the content transport. */
+export type ContentRequestInit = RequestInit & {
+  /** Allow a detailed map chunk on any connection, for nearby and streamed detail. */
+  anyNetwork?: boolean;
+};
+
+/** Nearby and streamed map detail may use mobile data; other map chunk downloads wait for Wi-Fi. */
+export function requiresContentWifiFor(purpose: DownloadPurpose, path: string): boolean {
+  return purpose !== "nearby" && requiresContentWifi(path);
+}
+
+/** Detailed map chunks require confirmed physical Wi-Fi unless a request allows any network. */
 export function requiresContentWifi(path: string): boolean {
   let decoded = path;
   try { decoded = decodeURIComponent(path); } catch { /* Keep malformed paths for URL validation. */ }

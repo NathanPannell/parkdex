@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { PMTiles, Protocol } from "pmtiles";
+import { PMTiles, Protocol, tileIdToZxy, zxyToTileId } from "pmtiles";
 import type { StyleSpecification } from "maplibre-gl";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { mapAreaTiles } from "./map-downloads";
+import { cellTileIdRanges, mapAreaTiles, NEARBY_CELL_ZOOM } from "./map-downloads";
 import { prefetchMapArea } from "./map-downloads";
 import {
   BundledOverviewSource,
@@ -33,16 +33,35 @@ describe("map download coverage", () => {
     expect(tiles.some((tile) => tile.z === 9 || tile.z > 11)).toBe(false);
   });
 
-  it("expands nearby coverage through zoom 14 and follows its anchor", () => {
+  it("plans nearby coverage as the 3x3 block of zoom-9 squares around its anchor", () => {
     const victoria = mapAreaTiles(VICTORIA, "nearby");
-    const nanaimo = mapAreaTiles([-123.9401, 49.1659], "nearby");
-    const zooms = new Set(victoria.map((tile) => tile.z));
+    const kelowna = mapAreaTiles([-119.496, 49.888], "nearby");
 
-    expect([...zooms].sort((a, b) => a - b)).toEqual([9, 10, 11, 12, 13, 14]);
-    expect(victoria.length).toBeGreaterThan(mapAreaTiles(VICTORIA, "starter").length);
-    expect(victoria.map(({ z, x, y }) => `${z}/${x}/${y}`)).not.toEqual(
-      nanaimo.map(({ z, x, y }) => `${z}/${x}/${y}`),
-    );
+    expect(victoria).toHaveLength(9);
+    expect(new Set(victoria.map((tile) => tile.z))).toEqual(new Set([NEARBY_CELL_ZOOM]));
+    const xs = victoria.map((tile) => tile.x);
+    const ys = victoria.map((tile) => tile.y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBe(2);
+    expect(Math.max(...ys) - Math.min(...ys)).toBe(2);
+    expect(kelowna.map(({ x, y }) => `${x}/${y}`)).not.toEqual(victoria.map(({ x, y }) => `${x}/${y}`));
+  });
+
+  it("maps every descendant of a square to one contiguous tile ID range per zoom", () => {
+    const cell = { z: NEARBY_CELL_ZOOM, x: 80, y: 178 };
+    const ranges = cellTileIdRanges(cell);
+    expect(ranges).toHaveLength(2 + (14 - NEARBY_CELL_ZOOM + 1));
+    const inRanges = (id: number) => ranges.some(([a, b]) => id >= a && id <= b);
+    for (const z of [9, 10, 12, 14]) {
+      const shift = z - cell.z;
+      const size = 2 ** shift;
+      for (const [dx, dy] of [[0, 0], [size - 1, size - 1], [Math.floor(size / 2), 0], [0, size - 1]]) {
+        expect(inRanges(zxyToTileId(z, (cell.x << shift) + dx, (cell.y << shift) + dy))).toBe(true);
+      }
+      // The neighbouring square's tiles stay outside.
+      expect(inRanges(zxyToTileId(z, (cell.x + 1) << shift, cell.y << shift))).toBe(false);
+    }
+    expect(inRanges(zxyToTileId(8, cell.x >> 1, cell.y >> 1))).toBe(true);
+    expect(inRanges(zxyToTileId(7, cell.x >> 2, cell.y >> 2))).toBe(true);
   });
 
   it("keys both tile and glyph requests by the content release", () => {
@@ -76,29 +95,37 @@ describe("map download coverage", () => {
     expect(style.layers.some((layer) => layer.type === "symbol")).toBe(false);
   });
 
-  it("blocks renderer reads outside prefetched chunks and forwards cancellation", async () => {
-    const ensureFile = vi.fn(async () => undefined);
+  it("streams chunks outside downloaded coverage while online and refuses them offline", async () => {
+    let online = false;
+    const ensureFile = vi.fn(async () => {
+      if (!online) throw Object.assign(new Error("offline"), { name: "ContentUnavailableOfflineError" });
+    });
     const runtime = {
       ensureFile,
       readFile: async () => new Uint8Array([3, 4]).buffer,
     } as unknown as ContentRuntime;
     const controller = new AbortController();
+    const allowed = new Set([1]);
     const source = new RuntimeChunkSource(
       runtime,
       "release-v2",
       { size: 4, chunkBytes: 2, count: 2 },
-      () => new Set([1]),
+      () => allowed,
       false,
       controller.signal,
     );
 
     await expect(source.getBytes(0, 1, controller.signal)).rejects.toThrow("has not been downloaded");
+    online = true;
     await expect(source.getBytes(2, 2)).resolves.toMatchObject({ data: expect.any(ArrayBuffer) });
+    await expect(source.getBytes(0, 1, controller.signal)).resolves.toMatchObject({ data: expect.any(ArrayBuffer) });
 
     expect(source.getKey()).toBe("release-v2");
-    expect(ensureFile).toHaveBeenCalledOnce();
+    expect(ensureFile).toHaveBeenCalledWith("release-v2", "map/island/000.bin", "nearby", controller.signal);
     expect(ensureFile).toHaveBeenCalledWith("release-v2", "map/island/001.bin", "nearby", controller.signal);
-  });
+    expect(getAllowedMapChunks("release-v2")).toContain(0);
+    resetAllowedMapChunks("release-v2");
+  });;
 });
 
 describe("bundled overview PMTiles source", () => {
@@ -276,8 +303,11 @@ describe("detail map coverage notifications", () => {
     const archiveBytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
     const releaseId = "failed-header-retry-test";
     const manifest: MapManifest = { size: archiveBytes.byteLength, chunkBytes: archiveBytes.byteLength, count: 1 };
+    let online = false;
     const runtime = {
-      ensureFile: vi.fn(async () => undefined),
+      ensureFile: vi.fn(async () => {
+        if (!online) throw Object.assign(new Error("offline"), { name: "ContentUnavailableOfflineError" });
+      }),
       readFile: vi.fn(async () => archiveBytes),
     } as unknown as ContentRuntime;
     const snapshot = {
@@ -297,6 +327,7 @@ describe("detail map coverage notifications", () => {
       const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
 
       await expect(first.getZxy(zoom, x, y)).rejects.toThrow("has not been downloaded");
+      online = true;
       setAllowedMapChunks(releaseId, [0]);
       await expect(first.getZxy(zoom, x, y)).rejects.toThrow("has not been downloaded");
 
@@ -348,8 +379,30 @@ describe("canonical PMTiles chunk selection", () => {
 
     resetAllowedMapChunks(releaseId);
     const nearby = await prefetchMapArea(runtime, releaseId, VICTORIA, "nearby", undefined, snapshot);
-    expect(nearby.chunkIds).toEqual([0, 1, 2, 3, 6, 11, 12, 23, 24, 42, 43, 44]);
-    expect(nearby.chunkIds).toHaveLength(12);
-    expect(nearby.coveredBytes).toBe(24 * 1024 * 1024);
+
+    // Cross-check against a brute-force scan of every tile in the archive.
+    const cells = new Set(mapAreaTiles(VICTORIA, "nearby").map(({ x, y }) => `${x}/${y}`));
+    const pmtiles = new PMTiles(new BundledOverviewSource(async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer));
+    const header = await pmtiles.getHeader();
+    const expected = new Set<number>();
+    const walk = async (offset: number, length: number): Promise<void> => {
+      for (const entry of await pmtiles.cache.getDirectory(pmtiles.source, offset, length, header)) {
+        if (entry.runLength === 0) { await walk(header.leafDirectoryOffset + entry.offset, entry.length); continue; }
+        for (let i = 0; i < entry.runLength; i += 1) {
+          const [z, x, y] = tileIdToZxy(entry.tileId + i);
+          const inCell = z >= 9 ? cells.has(`${x >> (z - 9)}/${y >> (z - 9)}`)
+            : z >= 7 && [...cells].some((key) => { const [cx, cy] = key.split("/").map(Number); return cx >> (9 - z) === x && cy >> (9 - z) === y; });
+          if (!inCell) continue;
+          const start = header.tileDataOffset + entry.offset;
+          for (let c = Math.floor(start / mapManifest.chunkBytes); c <= Math.floor((start + entry.length - 1) / mapManifest.chunkBytes); c += 1) expected.add(c);
+        }
+      }
+    };
+    await walk(header.rootDirectoryOffset, header.rootDirectoryLength);
+    for (const chunk of expected) expect(nearby.chunkIds).toContain(chunk);
+    // Anything extra holds directories, which sit before the tile data.
+    for (const chunk of nearby.chunkIds.filter((id) => !expected.has(id))) {
+      expect(chunk * mapManifest.chunkBytes).toBeLessThan(header.tileDataOffset);
+    }
   }, 30000);
 });

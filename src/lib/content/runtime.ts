@@ -20,6 +20,8 @@ import {
   type ContentSnapshot,
   type ContentStatus,
   type ContentSyncCursor,
+  type ContentRequestInit,
+  type DownloadPurpose,
   type MapPoint,
   type RetainedPark,
   type StoredRelease,
@@ -53,7 +55,8 @@ const SYNC_RETRY_BASE_MS = 1000;
 const SYNC_RETRY_MAX_MS = 30 * 1000;
 const SYNC_BATCH_LIMIT = 50;
 const LOCATION_DEBOUNCE_MS = 800;
-const LOCATION_MOVE_THRESHOLD_KM = 5;
+// Nearby coverage is a 3x3 block of ~50 km squares, so re-anchor after about half a square.
+const LOCATION_MOVE_THRESHOLD_KM = 25;
 const EMPTY_STATUS: ContentStatus = {
   phase: "starting",
   snapshot: null,
@@ -505,7 +508,7 @@ class ContentRuntimeController implements ContentRuntime {
       path: file.path,
       purpose: effectivePurpose,
       priority: requestPriority(effectivePurpose, file.path),
-      run: (downloadSignal) => this.downloadFile(file, downloadSignal),
+      run: (downloadSignal) => this.downloadFile(file, downloadSignal, effectivePurpose),
       }, signal);
       this.verifiedHashes.add(key);
       this.localFileSizes.set(file.sha256, file.byte_size);
@@ -600,7 +603,7 @@ class ContentRuntimeController implements ContentRuntime {
         if (!verifiedRelease.healthy) await this.options.store.putRelease({ ...verifiedRelease, healthy: true });
         this.publishSnapshot(activeSnapshot, phaseForActive(this.connectivity().connected), startupError);
         if (this.canDownloadContent() && this.foreground) {
-          void prefetchMapArea(this, activeSnapshot.releaseId, VICTORIA, "starter", undefined, activeSnapshot).catch(() => {});
+          void prefetchMapArea(this, activeSnapshot.releaseId, this.mapAnchor(), "starter", undefined, activeSnapshot).catch(() => {});
         }
         this.refreshLocalFileIndexInBackground();
         await this.refreshMapReadiness(activeSnapshot);
@@ -1014,7 +1017,7 @@ class ContentRuntimeController implements ContentRuntime {
         path: file.path,
         purpose,
         priority: requestPriority(purpose, file.path),
-        run: (downloadSignal) => this.downloadFile(file, downloadSignal),
+        run: (downloadSignal) => this.downloadFile(file, downloadSignal, purpose),
       }, signal);
       this.verifiedHashes.add(key);
       this.localFileSizes.set(file.sha256, file.byte_size);
@@ -1326,7 +1329,7 @@ class ContentRuntimeController implements ContentRuntime {
     this.updateWaitingStatus();
     const snapshot = this.status.snapshot;
     if (!snapshot || !this.artworkReadyReleases.has(snapshot.releaseId)) return;
-    await prefetchMapArea(this, snapshot.releaseId, VICTORIA, "starter", signal, snapshot);
+    await prefetchMapArea(this, snapshot.releaseId, this.mapAnchor(), "starter", signal, snapshot);
     if (signal.aborted || this.syncState?.map?.version !== pointer.version) return;
     this.startBulkMap(snapshot.releaseId);
     this.scheduleNearbyPrefetch(false);
@@ -1500,7 +1503,7 @@ class ContentRuntimeController implements ContentRuntime {
 
     if (!active) {
       const snapshot = await this.prepareSnapshot(candidate, payload);
-      await prefetchMapArea(this, candidate.id, VICTORIA, "starter", undefined, snapshot);
+      await prefetchMapArea(this, candidate.id, this.mapAnchor(), "starter", undefined, snapshot);
       candidate = { ...candidate, readiness: "starter" };
       await this.options.store.putRelease(candidate);
     } else {
@@ -1514,7 +1517,7 @@ class ContentRuntimeController implements ContentRuntime {
         .map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]))
         .filter(Number.isSafeInteger);
       setAllowedMapChunks(candidate.id, chunkIds);
-      await prefetchMapArea(this, candidate.id, VICTORIA, "starter", undefined, snapshot);
+      await prefetchMapArea(this, candidate.id, this.mapAnchor(), "starter", undefined, snapshot);
       candidate = { ...candidate, readiness: "complete" };
       await this.options.store.putRelease(candidate);
     }
@@ -1590,7 +1593,7 @@ class ContentRuntimeController implements ContentRuntime {
     return check;
   }
 
-  private async downloadFile(file: ContentFile, signal: AbortSignal): Promise<void> {
+  private async downloadFile(file: ContentFile, signal: AbortSignal, purpose: DownloadPurpose = "core"): Promise<void> {
     const hash = fileKey(file.sha256, file.byte_size);
     this.incrementInFlight(file.sha256);
     try {
@@ -1599,7 +1602,9 @@ class ContentRuntimeController implements ContentRuntime {
       this.setStatus({ activeDownloads: this.activeDownloads });
       let bytes: ArrayBuffer;
       try {
-        const response = await this.fetcher(file.url, { signal, cache: "force-cache" });
+        // Nearby and streamed map detail may use mobile data; other map chunks wait for Wi-Fi.
+        const init: ContentRequestInit = { signal, cache: "force-cache", anyNetwork: purpose === "nearby" };
+        const response = await this.fetcher(file.url, init);
         if (!response.ok) throw new Error(`Content file ${file.path} returned HTTP ${response.status}`);
         assertUnredirected(response, file.url, `Content file ${file.path}`);
         bytes = await response.arrayBuffer();
@@ -1833,25 +1838,27 @@ class ContentRuntimeController implements ContentRuntime {
     });
   }
 
-  private async runBulkMap(releaseId: string, signal: AbortSignal): Promise<void> {
+  /**
+   * Allow the detailed chunks already saved on the device. The whole archive is
+   * never downloaded automatically: coverage comes from nearby squares, chosen
+   * downloads and streaming while online.
+   */
+  private async runBulkMap(releaseId: string, _signal: AbortSignal): Promise<void> {
     const release = await this.options.store.getRelease(releaseId);
     const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
     if (!manifest) return;
     const chunks = mapChunkFiles(manifest);
-    this.trackFiles(chunks);
-    const missing = await this.missingFiles(chunks);
-    this.waitingForBulkWifi = missing.length > 0 && this.isWaitingForWifi();
-    this.updateWaitingStatus();
-    if (missing.length === 0) {
-      setAllowedMapChunks(releaseId, chunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
-      await this.refreshMapReadinessForManifest(releaseId, manifest);
-      return;
-    }
-    await this.ensureFiles(missing, releaseId, "bulk", signal);
-    setAllowedMapChunks(releaseId, chunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
+    const missing = new Set((await this.missingFiles(chunks)).map((file) => file.path));
+    const local = chunks.filter((file) => !missing.has(file.path));
+    setAllowedMapChunks(releaseId, local.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
     this.waitingForBulkWifi = false;
     await this.refreshMapReadinessForManifest(releaseId, manifest);
     this.updateWaitingStatus();
+  }
+
+  /** Coverage is anchored on the visitor when known, otherwise on the demo start. */
+  private mapAnchor(): MapPoint {
+    return this.currentLocation ?? VICTORIA;
   }
 
   private async refreshMapReadiness(snapshot: ContentSnapshot): Promise<void> {

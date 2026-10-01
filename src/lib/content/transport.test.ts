@@ -410,6 +410,21 @@ describe("content transport", () => {
     await expect(contentFetch(ART_URL)).resolves.toMatchObject({ status: 200 });
   });
 
+  it("lets nearby map detail use cellular when the request allows any network", async () => {
+    setBrowserNetwork({ online: true, type: "cellular" });
+    await expect(contentFetch(CDN_URL, { anyNetwork: true })).resolves.toMatchObject({ status: 200 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the any-network allowance to the Android plugin only when requested", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    await contentFetch(CDN_URL);
+    await contentFetch(CDN_URL, { anyNetwork: true });
+    expect(mocks.native.request).toHaveBeenNthCalledWith(1, expect.objectContaining({ anyNetwork: false }));
+    expect(mocks.native.request).toHaveBeenNthCalledWith(2, expect.objectContaining({ anyNetwork: true }));
+  });
+
   it("aborts detailed map streaming when Wi-Fi changes to cellular", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
       start(controller) {

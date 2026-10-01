@@ -124,6 +124,8 @@ public class WifiContentTransportPlugin extends Plugin {
         String method = call.getString("method", "GET");
         int maxResponseBytes = call.getInt("maxResponseBytes", DEFAULT_MAX_RESPONSE_BYTES);
         int timeoutMs = call.getInt("timeoutMs", DEFAULT_TIMEOUT_MS);
+        // Nearby and streamed map detail may use mobile data; other map chunks stay on Wi-Fi.
+        boolean anyNetwork = Boolean.TRUE.equals(call.getBoolean("anyNetwork", false));
 
         if (requestId == null || requestId.isEmpty() || requestId.length() > 128) {
             call.reject("A valid requestId is required");
@@ -167,7 +169,7 @@ public class WifiContentTransportPlugin extends Plugin {
                 return;
             }
             state = new ActiveRequest(requestId, call, manager, url, method,
-                    call.getObject("headers"), maxResponseBytes, timeoutMs);
+                    call.getObject("headers"), maxResponseBytes, timeoutMs, anyNetwork);
             ActiveRequest existing = activeRequests.putIfAbsent(requestId, state);
             if (existing != null) {
                 call.reject("A content request already uses this requestId");
@@ -622,7 +624,11 @@ public class WifiContentTransportPlugin extends Plugin {
     }
 
     static NetworkPolicy networkPolicyForRequest(URL url, boolean accountBackup) {
-        if (accountBackup) return NetworkPolicy.ANY_VALIDATED;
+        return networkPolicyForRequest(url, accountBackup, false);
+    }
+
+    static NetworkPolicy networkPolicyForRequest(URL url, boolean accountBackup, boolean anyNetwork) {
+        if (accountBackup || anyNetwork) return NetworkPolicy.ANY_VALIDATED;
         try {
             String path = url.toURI().getPath();
             return WIFI_ONLY_MAP_CHUNK_PATH.matcher(path).find()
@@ -714,12 +720,18 @@ public class WifiContentTransportPlugin extends Plugin {
         volatile ScheduledFuture<?> networkWaitTimeout;
 
         ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
-                      JSObject headers, int maxResponseBytes, int timeoutMs) {
-            this(requestId, call, manager, url, method, headers, maxResponseBytes, timeoutMs, false, new byte[0]);
+                      JSObject headers, int maxResponseBytes, int timeoutMs, boolean anyNetwork) {
+            this(requestId, call, manager, url, method, headers, maxResponseBytes, timeoutMs, false, anyNetwork, new byte[0]);
         }
 
         ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
                       JSObject headers, int maxResponseBytes, int timeoutMs, boolean accountBackup, byte[] requestBody) {
+            this(requestId, call, manager, url, method, headers, maxResponseBytes, timeoutMs, accountBackup, false, requestBody);
+        }
+
+        ActiveRequest(String requestId, PluginCall call, ConnectivityManager manager, URL url, String method,
+                      JSObject headers, int maxResponseBytes, int timeoutMs, boolean accountBackup, boolean anyNetwork,
+                      byte[] requestBody) {
             this.requestId = requestId;
             this.call = call;
             this.manager = manager;
@@ -729,7 +741,7 @@ public class WifiContentTransportPlugin extends Plugin {
             this.maxResponseBytes = maxResponseBytes;
             this.timeoutMs = timeoutMs;
             this.accountBackup = accountBackup;
-            this.wifiRequired = networkPolicyForRequest(url, accountBackup) == NetworkPolicy.WIFI_VALIDATED;
+            this.wifiRequired = networkPolicyForRequest(url, accountBackup, anyNetwork) == NetworkPolicy.WIFI_VALIDATED;
             this.requestBody = requestBody;
         }
 
