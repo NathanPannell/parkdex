@@ -56,6 +56,7 @@ Runtime environment variables (Preview target only):
 | `RESEND_API_KEY` | Needed only to retry failed feedback emails (sensitive) |
 | `EMAIL_MODE` | `resend`, or `disabled` to turn retries into a no-op |
 | `DASHBOARD_ENVIRONMENT` | Label shown in the sidebar, for example `production` |
+| `STAGING_DATABASE_URL` | Optional staging branch connection string (sensitive). When set, a sidebar toggle switches the whole dashboard to staging; the choice is the `parkdex_operator_db` cookie |
 | `CLOUDFLARE_API_TOKEN` | R2 write token, needed only to publish a draft with a badge (sensitive) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the content bucket |
 | `ASSETS_BUCKET` | Optional; defaults to `parkdex-kip-content` |

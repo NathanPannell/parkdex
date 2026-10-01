@@ -19,6 +19,8 @@ export interface DashboardEnv extends BadgeEnv, LegacyEnv {
   EMAIL_MODE?: string;
   /** Shown in the UI so it is obvious which database the dashboard edits. */
   DASHBOARD_ENVIRONMENT?: string;
+  /** Optional second database the operator can switch to, such as the staging branch. */
+  STAGING_DATABASE_URL?: string;
 }
 
 export interface DashboardDependencies extends DeliveryDependencies {
@@ -197,15 +199,42 @@ async function routeProposals(request: Request, path: string, store: () => ParkP
   return json({ proposal });
 }
 
+export const DATABASE_COOKIE = "parkdex_operator_db";
+
+function cookie(request: Request, name: string): string | null {
+  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
+    const [key, ...value] = part.trim().split("=");
+    if (key === name) return value.join("=");
+  }
+  return null;
+}
+
+/**
+ * The dashboard edits production unless the operator switched to staging with the sidebar
+ * toggle, which sets a cookie so image requests follow the same choice.
+ */
+export function selectDatabase(request: Request, env: DashboardEnv): DashboardEnv {
+  if (cookie(request, DATABASE_COOKIE) !== "staging") return env;
+  if (!env.STAGING_DATABASE_URL) throw new HttpError(503, "staging_unavailable", "The staging database is not configured on this deployment.");
+  return { ...env, DATABASE_URL: env.STAGING_DATABASE_URL, DASHBOARD_ENVIRONMENT: "staging" };
+}
+
 export function createDashboardApi(dependencies: DashboardDependencies = {}) {
   // Kept for the life of the isolate so the large legacy files are fetched at most every few minutes.
   let legacy: LegacySource | null = dependencies.legacySource ?? null;
-  return async function handle(request: Request, env: DashboardEnv): Promise<Response> {
+  return async function handle(request: Request, baseEnv: DashboardEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
       if (path === "/api/health") {
-        return json({ ok: true, environment: env.DASHBOARD_ENVIRONMENT ?? "unknown", emailMode: env.EMAIL_MODE === "disabled" ? "disabled" : env.RESEND_API_KEY ? "resend" : "unconfigured" });
+        const staging = cookie(request, DATABASE_COOKIE) === "staging" && Boolean(baseEnv.STAGING_DATABASE_URL);
+        return json({
+          ok: true,
+          environment: staging ? "staging" : baseEnv.DASHBOARD_ENVIRONMENT ?? "unknown",
+          canSwitch: Boolean(baseEnv.STAGING_DATABASE_URL),
+          emailMode: baseEnv.EMAIL_MODE === "disabled" ? "disabled" : baseEnv.RESEND_API_KEY ? "resend" : "unconfigured",
+        });
       }
+      const env = selectDatabase(request, baseEnv);
       const response =
         await routeFeedback(request, path, () => dependencies.feedbackStore?.(env) ?? createNeonFeedbackStore(databaseUrl(env)), env, dependencies) ??
         await routeBuilds(request, path, () => dependencies.appConfigStore?.(env) ?? createNeonAppConfigStore(databaseUrl(env))) ??

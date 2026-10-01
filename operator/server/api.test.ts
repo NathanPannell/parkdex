@@ -125,7 +125,7 @@ test("proposals can be filtered and reviewed", async () => {
 test("health reports the data environment, and a missing database fails closed", async () => {
   const api = createDashboardApi();
   const health = await api(request("/api/health"), { DASHBOARD_ENVIRONMENT: "production" });
-  assert.deepEqual(await health.json(), { ok: true, environment: "production", emailMode: "unconfigured" });
+  assert.deepEqual(await health.json(), { ok: true, environment: "production", canSwitch: false, emailMode: "unconfigured" });
   const missing = await api(request("/api/feedback"), {});
   assert.equal(missing.status, 503);
   assert.equal((await api(request("/api/unknown"), env)).status, 404);
@@ -156,4 +156,22 @@ test("email retry refuses to touch deliveries when no provider key is configured
   const retry = await api(request(`/api/feedback/${id}/retry-emails`, { method: "POST", body: {} }), { ...env, EMAIL_MODE: "resend" });
   assert.equal(retry.status, 503);
   assert.deepEqual((await deps.feedbackStore!(env).getReport(id))!.emails, before);
+});
+
+test("the staging toggle cookie switches every store to the staging database", async () => {
+  const seen: string[] = [];
+  const builds = new MemoryAppConfigStore();
+  const api = createDashboardApi({ appConfigStore: (scoped) => { seen.push(`${scoped.DATABASE_URL} ${scoped.DASHBOARD_ENVIRONMENT}`); return builds; } });
+  const withCookie = (path: string, value?: string) => new Request(`${ORIGIN}${path}`, { headers: value ? { cookie: `other=1; parkdex_operator_db=${value}` } : {} });
+  const both = { ...env, DATABASE_URL: "postgres://prod", DASHBOARD_ENVIRONMENT: "production", STAGING_DATABASE_URL: "postgres://staging" };
+
+  assert.equal((await api(withCookie("/api/builds"), both)).status, 200);
+  assert.equal((await api(withCookie("/api/builds", "staging"), both)).status, 200);
+  assert.equal((await api(withCookie("/api/builds", "production"), both)).status, 200);
+  assert.deepEqual(seen, ["postgres://prod production", "postgres://staging staging", "postgres://prod production"]);
+
+  const health = await (await api(withCookie("/api/health", "staging"), both)).json() as { environment: string; canSwitch: boolean };
+  assert.deepEqual([health.environment, health.canSwitch], ["staging", true]);
+  const unconfigured = await api(withCookie("/api/builds", "staging"), { ...both, STAGING_DATABASE_URL: undefined });
+  assert.equal(unconfigured.status, 503, "staging is never silently replaced by production");
 });

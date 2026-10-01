@@ -40,10 +40,18 @@ export function App() {
 
   const environment = health?.environment ?? "";
   const live = environment === "production";
+  const staging = environment === "staging";
+
+  // A cookie, not local state, so screenshots and badge images load from the same database.
+  function switchDatabase(target: "production" | "staging") {
+    if (target === environment) return;
+    document.cookie = `parkdex_operator_db=${target}; Path=/; Max-Age=31536000; SameSite=Strict; Secure`;
+    window.location.reload();
+  }
 
   return (
     <ToastProvider>
-      <div className="shell">
+      <div className={`shell${staging ? " shell--staging" : ""}`}>
         <aside className="sidebar">
           <div className="brand">
             <Kip pose="avatar" size={44} className="brand__kip" />
@@ -61,7 +69,16 @@ export function App() {
             ))}
           </nav>
           <div className="sidebar__foot">
-            {health && (
+            {health?.canSwitch ? (
+              <div className="db-toggle" role="radiogroup" aria-label="Database">
+                {(["production", "staging"] as const).map((target) => (
+                  <button key={target} type="button" role="radio" aria-checked={environment === target} className={`db-toggle__item db-toggle__item--${target}${environment === target ? " is-on" : ""}`} onClick={() => switchDatabase(target)}>
+                    <span className="env__dot" aria-hidden="true" />
+                    {target === "production" ? "Production" : "Staging"}
+                  </button>
+                ))}
+              </div>
+            ) : health && (
               <div className={`env${live ? " env--live" : ""}`} title="The database this dashboard reads and writes">
                 <span className="env__dot" aria-hidden="true" />
                 <span>{live ? "Production data" : `${environment[0]?.toUpperCase() ?? ""}${environment.slice(1)} data`}</span>
@@ -72,6 +89,11 @@ export function App() {
           </div>
         </aside>
         <main className="main">
+          {staging && (
+            <div className="staging-banner" role="status">
+              <Icon name="alert" size={17} /> You are viewing and editing the <strong>staging</strong> database. Changes reach only staging and builds set to staging content, not production players.
+            </div>
+          )}
           {route === "feedback" && <FeedbackBoard />}
           {route === "proposals" && <ParksRoute path={path} />}
           {route === "builds" && <BuildsPage />}
