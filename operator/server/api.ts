@@ -1,4 +1,4 @@
-import { createNeonAppConfigStore, CONTENT_CHANNELS, FEATURE_FLAGS, parseBuild, parsePlatform, validateBuildConfigInput, type AppConfigStore } from "../../worker/appConfig.js";
+import { API_POINTERS, createNeonAppConfigStore, FEATURE_FLAGS, parseBuild, parseEnvironment, parsePlatform, validateBuildConfigInput, validateUpdateRulesInput, type AppConfigStore } from "../../worker/appConfig.js";
 import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDelivery.js";
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
@@ -165,7 +165,17 @@ async function routeFeedback(request: Request, path: string, store: () => Feedba
 async function routeBuilds(request: Request, path: string, store: () => AppConfigStore): Promise<Response | null> {
   if (path === "/api/builds") {
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    return json({ builds: await store().list(), flags: FEATURE_FLAGS, channels: CONTENT_CHANNELS });
+    const config = store();
+    const [builds, rules] = await Promise.all([config.list(), config.listUpdateRules()]);
+    return json({ builds, rules, knownFlags: FEATURE_FLAGS, pointers: API_POINTERS });
+  }
+  const rulesMatch = /^\/api\/update-rules\/([a-z]+)$/.exec(path);
+  if (rulesMatch) {
+    if (request.method !== "PUT") throw new HttpError(405, "method_not_allowed", "Use PUT.");
+    requireSameOrigin(request);
+    const environment = parseEnvironment(rulesMatch[1]);
+    const { minimumBuild, latestBuild } = validateUpdateRulesInput(await readJsonBody(request, 1024));
+    return json({ rules: await store().setUpdateRules(environment, minimumBuild, latestBuild) });
   }
   const match = /^\/api\/builds\/([a-z]+)\/(\d{1,10})$/.exec(path);
   if (!match) return null;
@@ -177,7 +187,7 @@ async function routeBuilds(request: Request, path: string, store: () => AppConfi
     if (!await store().remove(platform, build)) throw new HttpError(404, "not_found", "Build configuration not found.");
     return json({ ok: true });
   }
-  const input = validateBuildConfigInput(await readJsonBody(request, 4096));
+  const input = validateBuildConfigInput(await readJsonBody(request, 8192));
   return json({ build: await store().upsert(platform, build, input) });
 }
 

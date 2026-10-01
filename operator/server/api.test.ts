@@ -80,30 +80,28 @@ test("email retry uses the shared delivery path and respects disabled email", as
   assert.equal((await api(request(`/api/feedback/${id}/retry-emails`, { method: "POST", body: {}, origin: "https://evil.example.test" }), env)).status, 403);
 });
 
-test("build rows can be listed, saved and removed, and invalid rows are refused", async () => {
+test("build rows and per-environment update rules can be edited, and invalid input is refused", async () => {
   const builds = new MemoryAppConfigStore();
   const api = createDashboardApi({ appConfigStore: () => builds });
-  const body = { label: "Build 42", contentChannel: "main", flags: { rankProgression: true }, minimumBuild: 40, latestBuild: 44, notes: "" };
+  const body = { label: "Build 42", apiPointer: "staging", flags: { rankProgression: true, futureThing: false } };
   assert.equal((await api(request("/api/builds/android/42", { method: "PUT", body, origin: "https://evil.example.test" }), env)).status, 403);
   assert.equal((await api(request("/api/builds/android/42", { method: "PUT", body }), env)).status, 200);
-  assert.equal(builds.rows.get("android:42")?.contentChannel, "main");
-  const listing = await (await api(request("/api/builds"), env)).json() as { builds: unknown[]; flags: string[] };
+  assert.deepEqual(builds.rows.get("android:42")?.flags, { rankProgression: true, futureThing: false });
+  const listing = await (await api(request("/api/builds"), env)).json() as { builds: unknown[]; rules: { environment: string }[]; knownFlags: string[] };
   assert.equal(listing.builds.length, 1);
-  assert.deepEqual(listing.flags, ["rankProgression", "parkProposals"]);
-  for (const invalid of [
-    { contentChannel: "production" },
-    { flags: { somethingNew: true } },
-    { flags: { rankProgression: "yes" } },
-    { extra: 1 },
-    { minimumBuild: 30, latestBuild: 20 },
-    { minimumBuild: "10" },
-    { latestBuild: -1 },
-  ]) {
+  assert.deepEqual(listing.rules.map((rule) => rule.environment), ["production", "staging"]);
+  assert.deepEqual(listing.knownFlags, ["rankProgression", "parkProposals"]);
+  for (const invalid of [{ apiPointer: "main" }, { flags: { "bad name": true } }, { flags: { ok: "yes" } }, { extra: 1 }, { minimumBuild: 3 }]) {
     assert.equal((await api(request("/api/builds/android/1", { method: "PUT", body: invalid }), env)).status, 400, JSON.stringify(invalid));
   }
-  assert.equal((await api(request("/api/builds/ios/1", { method: "PUT", body }), env)).status, 400);
+
+  assert.equal((await api(request("/api/update-rules/production", { method: "PUT", body: { minimumBuild: 9, latestBuild: 12 } }), env)).status, 200);
+  assert.deepEqual(await builds.updateRules("production").then(({ minimumBuild, latestBuild }) => [minimumBuild, latestBuild]), [9, 12]);
+  assert.equal((await api(request("/api/update-rules/production", { method: "PUT", body: { minimumBuild: 13, latestBuild: 12 } }), env)).status, 400);
+  assert.equal((await api(request("/api/update-rules/main", { method: "PUT", body: {} }), env)).status, 400);
+  assert.equal((await api(request("/api/update-rules/staging", { method: "PUT", body: { minimumBuild: null, latestBuild: 5 }, origin: "https://evil.example.test" }), env)).status, 403);
+
   assert.equal((await api(request("/api/builds/android/42", { method: "DELETE" }), env)).status, 200);
-  assert.equal(builds.rows.size, 0);
   assert.equal((await api(request("/api/builds/android/42", { method: "DELETE" }), env)).status, 404);
 });
 

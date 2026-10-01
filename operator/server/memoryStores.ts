@@ -1,4 +1,4 @@
-import type { AppConfigPlatform, AppConfigStore, BuildConfigInput, BuildConfigRecord } from "../../worker/appConfig.js";
+import type { ApiPointer, AppConfigPlatform, AppConfigStore, BuildConfigInput, BuildConfigRecord, UpdateRules } from "../../worker/appConfig.js";
 import type { ParkProposalRecord, ParkProposalStore, ProposalStatus } from "../../worker/parkProposals.js";
 import type { AttachmentRecord, ClaimEmailResult, EmailDeliveryView, FeedbackCursor, FeedbackStore, OperatorFeedbackRecord } from "../../worker/store.js";
 import type { EmailAudience, FeedbackStatus } from "../../worker/validation.js";
@@ -104,6 +104,22 @@ export class MemoryAppConfigStore implements AppConfigStore {
 
   async remove(platform: AppConfigPlatform, build: number) {
     return this.rows.delete(`${platform}:${build}`);
+  }
+
+  readonly rules = new Map<ApiPointer, UpdateRules>();
+
+  async updateRules(environment: ApiPointer) {
+    return this.rules.get(environment) ?? { environment, minimumBuild: null, latestBuild: null, updatedAt: null };
+  }
+
+  async listUpdateRules() {
+    return Promise.all((["production", "staging"] as const).map((environment) => this.updateRules(environment)));
+  }
+
+  async setUpdateRules(environment: ApiPointer, minimumBuild: number | null, latestBuild: number | null) {
+    const rules = { environment, minimumBuild, latestBuild, updatedAt: new Date().toISOString() };
+    this.rules.set(environment, rules);
+    return rules;
   }
 }
 
@@ -285,9 +301,10 @@ export function demoDependencies(): DashboardDependencies {
   });
 
   const builds = new MemoryAppConfigStore();
-  void builds.upsert("android", 0, { label: "Default", contentChannel: null, flags: { rankProgression: true }, minimumBuild: 30, latestBuild: 44, notes: "Applies to every Android build without its own row." });
-  void builds.upsert("android", 44, { label: "1.4 closed test", contentChannel: "staging", flags: { parkProposals: true }, minimumBuild: null, latestBuild: null, notes: "" });
-  void builds.upsert("web", 0, { label: "", contentChannel: null, flags: {}, minimumBuild: null, latestBuild: null, notes: "" });
+  void builds.upsert("android", 0, { label: "Default", apiPointer: "production", flags: { rankProgression: true, parkProposals: true, mapDownloads: false }, notes: "Applies to every Android build without its own row." });
+  void builds.upsert("android", 12, { label: "1.4 closed test", apiPointer: "staging", flags: { parkProposals: true, mapDownloads: true }, notes: "" });
+  void builds.setUpdateRules("production", 9, 11);
+  void builds.setUpdateRules("staging", null, 12);
 
   const proposals = new MemoryProposalStore();
   const proposalSamples: Array<[string, string, ProposalStatus, [number, number], boolean]> = [

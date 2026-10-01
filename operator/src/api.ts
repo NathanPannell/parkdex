@@ -43,17 +43,21 @@ export type Proposal = {
 };
 
 export type Platform = "android" | "web";
-export type Channel = "staging" | "main";
+export type ApiPointer = "production" | "staging";
 export type BuildConfig = {
   platform: Platform;
   build: number;
   label: string;
-  contentChannel: Channel | null;
+  apiPointer: ApiPointer | null;
   flags: Record<string, boolean>;
-  minimumBuild: number | null;
-  latestBuild: number | null;
   notes: string;
   updatedAt: string;
+};
+export type UpdateRules = {
+  environment: ApiPointer;
+  minimumBuild: number | null;
+  latestBuild: number | null;
+  updatedAt: string | null;
 };
 
 export type Health = { ok: boolean; environment: string; canSwitch: boolean; emailMode: "resend" | "disabled" | "unconfigured" };

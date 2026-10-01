@@ -1,48 +1,47 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, errorText, type BuildConfig, type Channel, type Platform } from "../api";
+import { api, errorText, type ApiPointer, type BuildConfig, type Platform, type UpdateRules } from "../api";
 import { Drawer, Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
 
-type Listing = { builds: BuildConfig[]; flags: string[] };
+type Listing = { builds: BuildConfig[]; rules: UpdateRules[]; knownFlags: string[] };
+
+type FlagDraft = { name: string; value: boolean };
 
 type Draft = {
   isNew: boolean;
   platform: Platform;
   build: string;
   label: string;
-  contentChannel: "" | Channel;
-  flags: Record<string, "" | "on" | "off">;
-  minimumBuild: string;
-  latestBuild: string;
+  apiPointer: "" | ApiPointer;
+  flags: FlagDraft[];
   notes: string;
 };
 
-const FLAG_LABELS: Record<string, { title: string; detail: string }> = {
-  rankProgression: { title: "Rank progression", detail: "Level up to unlock rarities" },
-  parkProposals: { title: "Propose a park", detail: "Button next to feedback on the map" },
+const FLAG_HINTS: Record<string, string> = {
+  rankProgression: "Level up to unlock rarities",
+  parkProposals: "Propose-a-park button on the map",
 };
 
-const CHANNELS: { value: "" | Channel; label: string; detail: string }[] = [
-  { value: "", label: "Built-in", detail: "Whatever the build was made for" },
-  { value: "staging", label: "Staging", detail: "Staging park content" },
-  { value: "main", label: "Production", detail: "Production park content" },
+const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [
+  { value: "", label: "Built-in", detail: "The server the build was made for" },
+  { value: "production", label: "Production", detail: "web.parkdex.app API, accounts and content" },
+  { value: "staging", label: "Staging", detail: "staging.web.parkdex.app API, accounts and content" },
 ];
 
 const PLATFORMS: Record<Platform, string> = { android: "Android", web: "Web" };
+const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 
-function emptyDraft(flags: string[]): Draft {
-  return { isNew: true, platform: "android", build: "", label: "", contentChannel: "", flags: Object.fromEntries(flags.map((flag) => [flag, ""])), minimumBuild: "", latestBuild: "", notes: "" };
+function emptyDraft(knownFlags: string[]): Draft {
+  return { isNew: true, platform: "android", build: "", label: "", apiPointer: "", flags: knownFlags.map((name) => ({ name, value: true })), notes: "" };
 }
 
-function draftFrom(config: BuildConfig, flags: string[]): Draft {
+function draftFrom(config: BuildConfig): Draft {
   return {
     isNew: false,
     platform: config.platform,
     build: String(config.build),
     label: config.label,
-    contentChannel: config.contentChannel ?? "",
-    flags: Object.fromEntries(flags.map((flag) => [flag, config.flags[flag] === undefined ? "" : config.flags[flag] ? "on" : "off"])),
-    minimumBuild: config.minimumBuild === null ? "" : String(config.minimumBuild),
-    latestBuild: config.latestBuild === null ? "" : String(config.latestBuild),
+    apiPointer: config.apiPointer ?? "",
+    flags: Object.entries(config.flags).map(([name, value]) => ({ name, value })),
     notes: config.notes,
   };
 }
@@ -51,12 +50,64 @@ function buildTitle(config: Pick<BuildConfig, "build" | "platform">): string {
   return config.build === 0 ? `Every ${PLATFORMS[config.platform]} build` : `${PLATFORMS[config.platform]} build ${config.build}`;
 }
 
+function UpdateRulesCard({ rules, onSaved }: { rules: UpdateRules; onSaved(rules: UpdateRules): void }) {
+  const toast = useToast();
+  const [minimum, setMinimum] = useState(rules.minimumBuild === null ? "" : String(rules.minimumBuild));
+  const [latest, setLatest] = useState(rules.latestBuild === null ? "" : String(rules.latestBuild));
+  const [busy, setBusy] = useState(false);
+  const dirty = minimum !== (rules.minimumBuild === null ? "" : String(rules.minimumBuild)) || latest !== (rules.latestBuild === null ? "" : String(rules.latestBuild));
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    for (const value of [minimum, latest]) {
+      if (value && !/^\d{1,10}$/.test(value)) return toast.show("Builds are whole numbers, or leave the box empty.", { tone: "error" });
+    }
+    setBusy(true);
+    try {
+      const saved = await api<{ rules: UpdateRules }>(`/api/update-rules/${rules.environment}`, {
+        method: "PUT",
+        body: JSON.stringify({ minimumBuild: minimum ? Number(minimum) : null, latestBuild: latest ? Number(latest) : null }),
+      });
+      onSaved(saved.rules);
+      toast.show(`Saved ${rules.environment} update rules`);
+    } catch (reason) {
+      toast.show(errorText(reason, "Could not save the update rules."), { tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className={`rules rules--${rules.environment}`} onSubmit={save}>
+      <div className="rules__head">
+        <span className="rules__dot" aria-hidden="true" />
+        <div>
+          <h2>{rules.environment === "production" ? "Production" : "Staging"} builds</h2>
+          <p className="muted">{rules.updatedAt ? `Updated ${timeAgo(rules.updatedAt)}` : "No rules yet"}</p>
+        </div>
+      </div>
+      <label className="field">
+        <span>Force update below build</span>
+        <input inputMode="numeric" value={minimum} placeholder="No minimum" onChange={(event) => setMinimum(event.target.value.trim())} />
+        <small className="muted">Older builds show a blocking update screen.</small>
+      </label>
+      <label className="field">
+        <span>Latest build</span>
+        <input inputMode="numeric" value={latest} placeholder="Not set" onChange={(event) => setLatest(event.target.value.trim())} />
+        <small className="muted">Older builds get a dismissable update prompt.</small>
+      </label>
+      <button type="submit" className="button button--primary button--small" disabled={!dirty || busy}>{busy ? <><Spinner small /> Saving</> : "Save rules"}</button>
+    </form>
+  );
+}
+
 export function BuildsPage() {
   const toast = useToast();
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [newFlag, setNewFlag] = useState("");
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -69,22 +120,28 @@ export function BuildsPage() {
     return () => controller.abort();
   }, [revision]);
 
-  const flags = listing?.flags ?? [];
+  const knownFlags = listing?.knownFlags ?? [];
 
   function open(next: Draft) {
     setFormError("");
+    setNewFlag("");
     setDraft(next);
+  }
+
+  function addFlag() {
+    if (!draft) return;
+    const name = newFlag.trim();
+    if (!FLAG_NAME.test(name)) return setFormError("Flag names start with a letter and use letters, digits or underscores.");
+    if (draft.flags.some((flag) => flag.name === name)) return setFormError("That flag is already on this build.");
+    setFormError("");
+    setDraft({ ...draft, flags: [...draft.flags, { name, value: true }] });
+    setNewFlag("");
   }
 
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
     if (!/^\d{1,10}$/.test(draft.build)) return setFormError("Build must be a whole number. Use 0 for the default row.");
-    for (const value of [draft.minimumBuild, draft.latestBuild]) {
-      if (value && !/^\d{1,10}$/.test(value)) return setFormError("Minimum and latest build must be whole numbers, or left blank.");
-    }
-    const flagValues: Record<string, boolean> = {};
-    for (const [flag, value] of Object.entries(draft.flags)) if (value) flagValues[flag] = value === "on";
     setBusy(true);
     setFormError("");
     try {
@@ -92,10 +149,8 @@ export function BuildsPage() {
         method: "PUT",
         body: JSON.stringify({
           label: draft.label,
-          contentChannel: draft.contentChannel || null,
-          flags: flagValues,
-          minimumBuild: draft.minimumBuild ? Number(draft.minimumBuild) : null,
-          latestBuild: draft.latestBuild ? Number(draft.latestBuild) : null,
+          apiPointer: draft.apiPointer || null,
+          flags: Object.fromEntries(draft.flags.map((flag) => [flag.name, flag.value])),
           notes: draft.notes,
         }),
       });
@@ -110,7 +165,7 @@ export function BuildsPage() {
   }
 
   async function remove(config: BuildConfig) {
-    if (!window.confirm(`Remove the row for ${buildTitle(config).toLowerCase()}? It will fall back to the default.`)) return;
+    if (!window.confirm(`Remove the row for ${buildTitle(config).toLowerCase()}? It will fall back to the default row.`)) return;
     setBusy(true);
     try {
       await api(`/api/builds/${config.platform}/${config.build}`, { method: "DELETE" });
@@ -136,39 +191,45 @@ export function BuildsPage() {
         <div>
           <p className="eyebrow">Remote config</p>
           <h1 id="builds-title">Build configuration</h1>
-          <p className="page-lede">Choose which park content each app build reads, which features it shows, and when it should update. A build's own row overrides the default (build 0).</p>
+          <p className="page-lede">Every build checks in with the production API on launch. Update rules apply to every build of an environment. The API pointer and flags are set per build, and builds 9 and newer follow the pointer.</p>
         </div>
         <div className="toolbar">
-          <button type="button" className="button button--primary" onClick={() => open(emptyDraft(flags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>
+          <button type="button" className="button button--primary" onClick={() => open(emptyDraft(knownFlags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>
         </div>
       </header>
 
-      <div className="notice"><Icon name="alert" size={18} /> Apps pick up content and flag changes on their next launch. Update prompts apply right away. Accounts always stay on the server the build was made for.</div>
       {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error} <button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button></div>}
 
-      {!listing && !error && <div className="build-group"><div className="build build--skeleton" aria-hidden="true" /><div className="build build--skeleton" aria-hidden="true" /></div>}
+      <h2 className="build-group__title">Update rules</h2>
+      <div className="rules-row">
+        {listing ? listing.rules.map((rules) => (
+          <UpdateRulesCard key={`${rules.environment}:${rules.updatedAt}`} rules={rules} onSaved={(saved) => setListing({ ...listing, rules: listing.rules.map((item) => item.environment === saved.environment ? saved : item) })} />
+        )) : <><div className="build build--skeleton" aria-hidden="true" /><div className="build build--skeleton" aria-hidden="true" /></>}
+      </div>
+      <p className="muted rules-note">A build follows its environment's rules: its API pointer if set, otherwise the server it was built for. Builds 8 and earlier always count as production.</p>
+
+      <div className="notice"><Icon name="alert" size={18} /> Pointer and flag changes apply on the app's next launch. Moving a build to the other server signs players out there, because accounts belong to one server; progress on the device is kept.</div>
+
       {listing && listing.builds.length === 0 && (
         <div className="empty">
           <Kip pose="think" size={96} />
           <h2>No builds configured</h2>
-          <p className="muted">Every build uses its built-in defaults until you add a row.</p>
+          <p className="muted">Every build uses its built-in server and flags until you add a row.</p>
         </div>
       )}
       {listing && groups.filter((group) => group.rows.length).map((group) => (
         <div key={group.platform} className="build-group">
           <h2 className="build-group__title">{PLATFORMS[group.platform]}</h2>
           {group.rows.map((config) => (
-            <button key={`${config.platform}:${config.build}`} type="button" className={`build${config.build === 0 ? " build--default" : ""}`} onClick={() => open(draftFrom(config, flags))}>
+            <button key={`${config.platform}:${config.build}`} type="button" className={`build${config.build === 0 ? " build--default" : ""}`} onClick={() => open(draftFrom(config))}>
               <span className="build__number">{config.build === 0 ? "All" : config.build}</span>
               <span className="build__main">
                 <strong>{buildTitle(config)}{config.label && <span className="build__label">{config.label}</span>}</strong>
                 <span className="build__chips">
-                  <span className={`meta-pill meta-pill--${config.contentChannel ?? "builtin"}`}>{CHANNELS.find((item) => item.value === (config.contentChannel ?? ""))?.label} content</span>
+                  <span className={`meta-pill meta-pill--${config.apiPointer ?? "builtin"}`}>{config.apiPointer ? `${config.apiPointer === "production" ? "Production" : "Staging"} API` : "Built-in API"}</span>
                   {Object.entries(config.flags).map(([flag, on]) => (
-                    <span key={flag} className={`meta-pill ${on ? "meta-pill--on" : "meta-pill--off"}`}>{FLAG_LABELS[flag]?.title ?? flag} {on ? "on" : "off"}</span>
+                    <span key={flag} className={`meta-pill ${on ? "meta-pill--on" : "meta-pill--off"}`}>{flag} {on ? "on" : "off"}</span>
                   ))}
-                  {config.minimumBuild !== null && <span className="meta-pill meta-pill--warn">Must update below {config.minimumBuild}</span>}
-                  {config.latestBuild !== null && <span className="meta-pill">Nudge below {config.latestBuild}</span>}
                 </span>
                 {config.notes && <span className="build__notes">{config.notes}</span>}
               </span>
@@ -200,7 +261,7 @@ export function BuildsPage() {
                 </label>
                 <label className="field">
                   <span>Build number</span>
-                  <input inputMode="numeric" value={draft.build} disabled={!draft.isNew} placeholder="0 = default" onChange={(event) => setDraft({ ...draft, build: event.target.value.trim() })} required />
+                  <input inputMode="numeric" value={draft.build} disabled={!draft.isNew} placeholder="0 = every build" onChange={(event) => setDraft({ ...draft, build: event.target.value.trim() })} required />
                 </label>
               </div>
               <label className="field">
@@ -209,49 +270,53 @@ export function BuildsPage() {
               </label>
 
               <fieldset className="field">
-                <legend>Park content</legend>
+                <legend>API pointer</legend>
                 <div className="choice-row">
-                  {CHANNELS.map((channel) => (
-                    <label key={channel.value || "builtin"} className={`choice${draft.contentChannel === channel.value ? " is-on" : ""}`}>
-                      <input type="radio" name="channel" checked={draft.contentChannel === channel.value} onChange={() => setDraft({ ...draft, contentChannel: channel.value })} />
-                      <strong>{channel.label}</strong>
-                      <span>{channel.detail}</span>
+                  {POINTERS.map((pointer) => (
+                    <label key={pointer.value || "builtin"} className={`choice${draft.apiPointer === pointer.value ? " is-on" : ""}`}>
+                      <input type="radio" name="pointer" checked={draft.apiPointer === pointer.value} onChange={() => setDraft({ ...draft, apiPointer: pointer.value })} />
+                      <strong>{pointer.label}</strong>
+                      <span>{pointer.detail}</span>
                     </label>
                   ))}
                 </div>
               </fieldset>
 
               <fieldset className="field">
-                <legend>Features</legend>
-                {flags.map((flag) => (
-                  <div key={flag} className="flag">
+                <legend>Feature flags</legend>
+                {draft.flags.length === 0 && <p className="muted">No flags. The build uses its built-in defaults.</p>}
+                {draft.flags.map((flag, index) => (
+                  <div key={flag.name} className="flag">
                     <div>
-                      <strong>{FLAG_LABELS[flag]?.title ?? flag}</strong>
-                      {FLAG_LABELS[flag] && <span className="muted">{FLAG_LABELS[flag].detail}</span>}
+                      <strong>{flag.name}</strong>
+                      <span className="muted">{FLAG_HINTS[flag.name] ?? (knownFlags.includes(flag.name) ? "" : "Not read by current builds yet")}</span>
                     </div>
-                    <div className="tri" role="radiogroup" aria-label={FLAG_LABELS[flag]?.title ?? flag}>
-                      {(["", "on", "off"] as const).map((value) => (
-                        <button key={value || "default"} type="button" role="radio" aria-checked={draft.flags[flag] === value} className={`tri__item${draft.flags[flag] === value ? ` is-on tri__item--${value || "default"}` : ""}`} onClick={() => setDraft({ ...draft, flags: { ...draft.flags, [flag]: value } })}>
-                          {value === "" ? "Default" : value === "on" ? "On" : "Off"}
-                        </button>
-                      ))}
+                    <div className="flag__controls">
+                      <div className="tri" role="radiogroup" aria-label={flag.name}>
+                        {([true, false] as const).map((value) => (
+                          <button key={String(value)} type="button" role="radio" aria-checked={flag.value === value} className={`tri__item${flag.value === value ? ` is-on tri__item--${value ? "on" : "off"}` : ""}`}
+                            onClick={() => setDraft({ ...draft, flags: draft.flags.map((item, at) => at === index ? { ...item, value } : item) })}>
+                            {value ? "On" : "Off"}
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button" className="icon-button icon-button--small" aria-label={`Remove ${flag.name}`} onClick={() => setDraft({ ...draft, flags: draft.flags.filter((_, at) => at !== index) })}><Icon name="close" size={15} /></button>
                     </div>
                   </div>
                 ))}
+                <div className="flag-add">
+                  <input value={newFlag} placeholder="newFlagName" onChange={(event) => setNewFlag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addFlag(); } }} aria-label="New flag name" />
+                  <button type="button" className="button button--ghost button--small" onClick={addFlag}><Icon name="plus" size={15} /> Add flag</button>
+                </div>
+                {knownFlags.filter((name) => !draft.flags.some((flag) => flag.name === name)).length > 0 && (
+                  <div className="chip-row flag-suggestions">
+                    {knownFlags.filter((name) => !draft.flags.some((flag) => flag.name === name)).map((name) => (
+                      <button key={name} type="button" className="chip" onClick={() => setDraft({ ...draft, flags: [...draft.flags, { name, value: true }] })}><Icon name="plus" size={13} /> {name}</button>
+                    ))}
+                  </div>
+                )}
               </fieldset>
 
-              <div className="field-row">
-                <label className="field">
-                  <span>Minimum build</span>
-                  <input inputMode="numeric" value={draft.minimumBuild} placeholder="None" onChange={(event) => setDraft({ ...draft, minimumBuild: event.target.value.trim() })} />
-                  <small className="muted">Older builds must update.</small>
-                </label>
-                <label className="field">
-                  <span>Latest build</span>
-                  <input inputMode="numeric" value={draft.latestBuild} placeholder="None" onChange={(event) => setDraft({ ...draft, latestBuild: event.target.value.trim() })} />
-                  <small className="muted">Older builds get a nudge.</small>
-                </label>
-              </div>
               <label className="field">
                 <span>Notes</span>
                 <textarea value={draft.notes} maxLength={500} rows={3} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
