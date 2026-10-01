@@ -49,6 +49,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [downloadingMaps, setDownloadingMaps] = useState(false);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
@@ -129,6 +130,24 @@ export function MapScreen() {
     open();
     return subscribeDownloadMapsRequest(open);
   }, []);
+
+  // The map menu closes on a tap anywhere else or on Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(".map-menu, .map-top__tools")) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
@@ -306,43 +325,54 @@ export function MapScreen() {
           </span>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
-          <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback" title="Send feedback">
-            <Icon name="feedback" size={22} />
-          </button>
           <button
-            className="tool card"
+            className={`tool card ${menuOpen ? "tool--open" : ""}`}
             onClick={() => {
               sfx.tap();
-              select(null);
-              setDownloadingMaps(true);
+              setDemoOpen(false);
+              setMenuOpen((open) => !open);
             }}
-            aria-label="Download maps"
-            title="Download maps"
+            aria-label="Menu"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            title="Menu"
           >
-            <Icon name="download" size={22} />
+            <Icon name={menuOpen ? "close" : "menu"} size={22} />
           </button>
-          {isFeatureEnabled("parkProposals") && (
-            <button
-              className="tool card"
-              onClick={() => {
-                sfx.tap();
-                select(null);
-                setProposing(true);
-              }}
-              aria-label="Propose a park"
-              title="Propose a park"
-            >
-              <Icon name="pinPlus" size={22} />
-            </button>
-          )}
-          {!FIELD && (
-            <button className="tool card" onClick={() => setDemoOpen((v) => !v)} aria-label="Demo controls">
-              <Icon name="wand" size={20} />
-            </button>
-          )}
         </motion.div>
         <ContentSyncStatus />
       </div>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            className="map-menu card"
+            role="menu"
+            aria-label="Map menu"
+            initial={{ opacity: 0, scale: 0.6, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: -10 }}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          >
+            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
+              <Icon name="feedback" size={20} /> Send feedback
+            </button>
+            <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setDownloadingMaps(true); }}>
+              <Icon name="download" size={20} /> Download maps
+            </button>
+            {isFeatureEnabled("parkProposals") && (
+              <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing(true); }}>
+                <Icon name="pinPlus" size={20} /> Propose a park
+              </button>
+            )}
+            {!FIELD && (
+              <button role="menuitem" onClick={() => { setMenuOpen(false); setDemoOpen(true); }}>
+                <Icon name="wand" size={20} /> Demo controls
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {demoOpen && (
