@@ -21,6 +21,7 @@ import {
 } from "../../lib/mapCells";
 import { mapChunkPath, setAllowedMapChunks } from "../../lib/offlineTiles";
 import { sfx } from "../../lib/feedback";
+import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../../lib/downloadPreferences";
 import "../../download-maps.css";
 
 type Props = {
@@ -58,6 +59,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [freeBytes, setFreeBytes] = useState<number | null>(null);
+  const [mobileData, setMobileData] = useState(() => readAllowMobileMapData());
   const abort = useRef<AbortController | null>(null);
   const savedRef = useRef(saved);
   savedRef.current = saved;
@@ -82,6 +84,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   }, [saved]);
 
   useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => subscribeAllowMobileMapData(setMobileData), []);
 
   // The map pans and zooms normally; a tap (not a drag) toggles the square under it.
   useEffect(() => {
@@ -303,13 +306,18 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
           <div className="dlmaps-progress" role="status">
             <span className="dlmaps-progress__bar"><span style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 100}%` }} /></span>
             <span>
-              {progress.waitingForWifi && !wifi
+              {progress.waitingForWifi && !wifi && !mobileData
                 ? "Waiting for Wi-Fi…"
                 : `Downloading ${formatMegabytes(progress.done)} of ${formatMegabytes(progress.total)}`}
             </span>
           </div>
         )}
-        {toAdd.size > 0 && !wifi && !progress && <p className="dlmaps-note">Downloads start when you're on Wi-Fi.</p>}
+        {(toAdd.size > 0 || progress) && !wifi && !mobileData && (
+          <div className="dlmaps-wifi">
+            <p className="dlmaps-note">Downloads wait for Wi-Fi.</p>
+            <button className="btn btn--paper btn--sm" onClick={() => writeAllowMobileMapData(true)}>Use mobile data</button>
+          </div>
+        )}
         {!mapReady && !loadError && <p className="dlmaps-note">Detailed maps are still getting ready. Try again in a moment.</p>}
         {error && <p className="dlmaps-error" role="alert">{error}</p>}
 

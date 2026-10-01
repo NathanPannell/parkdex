@@ -39,6 +39,13 @@ describe("ContentDownloadScheduler policy transitions", () => {
     expect(isDownloadAllowed("core", "data/parks.json", browser)).toBe(true);
   });
 
+  it("lets chosen map squares use cellular only when the visitor allows mobile data", () => {
+    expect(isDownloadAllowed("bulk", "map/island/001.bin", cellular)).toBe(false);
+    expect(isDownloadAllowed("bulk", "map/island/001.bin", { ...cellular, allowMobileMapData: true })).toBe(true);
+    // Other Wi-Fi-only map work keeps waiting for Wi-Fi.
+    expect(isDownloadAllowed("update", "map/island/001.bin", { ...cellular, allowMobileMapData: true })).toBe(false);
+  });
+
   it("allows metadata, art, glyphs and nearby detail on cellular but defers other detailed chunks", () => {
     expect(isDownloadAllowed("core", "data/parks.json", cellular)).toBe(true);
     expect(isDownloadAllowed("update", "art/badges/scenes/park.webp", cellular)).toBe(true);

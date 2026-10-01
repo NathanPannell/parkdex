@@ -208,6 +208,8 @@ export interface ContentRuntime {
   hasLocalFile?(releaseId: string, path: string): Promise<boolean>;
   /** Remove a saved detailed map chunk so a deleted map square frees its space. */
   deleteMapChunk?(releaseId: string, path: string): Promise<void>;
+  /** Let chosen map squares and the area around the visitor download on mobile data. */
+  setAllowMobileMapData?(allowed: boolean): void;
   /** Every file saved on this device, with its path in the current content when it has one. */
   listStoredFiles?(): Promise<StoredFileSummary[]>;
   /** Delete saved files the current content no longer uses. Files still referenced are kept. */

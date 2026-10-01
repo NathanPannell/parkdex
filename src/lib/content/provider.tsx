@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useSyncE
 import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
+import { readAllowMobileMapData, subscribeAllowMobileMapData } from "../downloadPreferences";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
 import { BUILD_MAP_POINTER, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
 import { useStore } from "../store";
@@ -72,6 +73,11 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   }
   const runtime = runtimeRef.current;
   const stopTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    runtime.setAllowMobileMapData?.(readAllowMobileMapData());
+    return subscribeAllowMobileMapData((allowed) => runtime.setAllowMobileMapData?.(allowed));
+  }, [runtime]);
 
   useLayoutEffect(() => {
     runtime.refreshClaimedParks();
