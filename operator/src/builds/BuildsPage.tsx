@@ -79,11 +79,8 @@ function UpdateRulesRow({ rules, onSaved }: { rules: UpdateRules; onSaved(rules:
   }
 
   return (
-    <form className={`rule-row rule-row--${rules.environment}`} onSubmit={save}>
-      <div className="rule-row__env">
-        <span className="env-dot" aria-hidden="true" />
-        <strong>{name}</strong>
-      </div>
+    <form className="rule-row" onSubmit={save}>
+      <div className="rule-row__env"><strong>{name}</strong></div>
       <label className="rule-row__field">
         <span className="sr-only">{name}: force update below build</span>
         <input className="build-input" inputMode="numeric" value={minimum} placeholder="—" onChange={(event) => setMinimum(event.target.value.trim())} />
@@ -98,6 +95,41 @@ function UpdateRulesRow({ rules, onSaved }: { rules: UpdateRules; onSaved(rules:
           : <span className="muted">{rules.updatedAt ? `Saved ${timeAgo(rules.updatedAt)}` : "Not set"}</span>}
       </div>
     </form>
+  );
+}
+
+const SERVER: Record<"production" | "staging" | "builtin", { name: string; detail: string }> = {
+  production: { name: "Production", detail: "web.parkdex.app" },
+  staging: { name: "Staging", detail: "staging.web.parkdex.app" },
+  builtin: { name: "Built-in", detail: "The server it shipped with" },
+};
+
+function BuildCard({ config, onOpen }: { config: BuildConfig; onOpen(): void }) {
+  const server = SERVER[config.apiPointer ?? "builtin"];
+  const flags = Object.entries(config.flags);
+  return (
+    <button type="button" className={`build${config.build === 0 ? " build--default" : ""}`} onClick={onOpen} aria-label={`Edit ${buildTitle(config).toLowerCase()}`}>
+      <span className="build__id">
+        <span className="build__kicker">{config.build === 0 ? "Default" : "Build"}</span>
+        <span className="build__number">{config.build === 0 ? "All" : config.build}</span>
+      </span>
+      <span className="build__main">
+        <strong className="build__title">{config.label || buildTitle(config)}</strong>
+        {config.label && <span className="build__sub">{buildTitle(config)}</span>}
+        {config.notes && <span className="build__notes">{config.notes}</span>}
+        <span className="build__flags">
+          {flags.length ? flags.map(([flag, on]) => (
+            <span key={flag} className={`flag-pill${on ? " is-on" : ""}`}><span className="flag-pill__state">{on ? "On" : "Off"}</span>{flag}</span>
+          )) : <span className="muted">No flags set</span>}
+        </span>
+        <span className="build__time">Updated {timeAgo(config.updatedAt)}</span>
+      </span>
+      <span className={`server server--${config.apiPointer ?? "builtin"}`}>
+        <span className="server__kicker">Talks to</span>
+        <span className="server__name">{server.name}</span>
+        <span className="server__detail">{server.detail}</span>
+      </span>
+    </button>
   );
 }
 
@@ -225,24 +257,8 @@ export function BuildsPage() {
       )}
       {listing && groups.filter((group) => group.rows.length).map((group) => (
         <div key={group.platform} className="build-group">
-          <div className="build-group__head"><h2 className="build-group__title">{PLATFORMS[group.platform]} builds</h2><p className="muted">Pointer and flag changes apply on the next app launch.</p></div>
-          {group.rows.map((config) => (
-            <button key={`${config.platform}:${config.build}`} type="button" className={`build${config.build === 0 ? " build--default" : ""}`} onClick={() => open(draftFrom(config))}>
-              <span className="build__number">{config.build === 0 ? "All" : config.build}</span>
-              <span className="build__main">
-                <strong>{buildTitle(config)}{config.label && <span className="build__label">{config.label}</span>}</strong>
-                <span className="build__chips">
-                  <span className={`pointer-pill pointer-pill--${config.apiPointer ?? "builtin"}`}><span className="env-dot" aria-hidden="true" />{config.apiPointer ? (config.apiPointer === "production" ? "Production API" : "Staging API") : "Built-in API"}</span>
-                  {Object.entries(config.flags).map(([flag, on]) => (
-                    <span key={flag} className={`flag-pill${on ? " is-on" : ""}`}>{flag}</span>
-                  ))}
-                </span>
-                {config.notes && <span className="build__notes">{config.notes}</span>}
-              </span>
-              <span className="build__time muted">Updated {timeAgo(config.updatedAt)}</span>
-              <Icon name="edit" size={18} className="build__edit" />
-            </button>
-          ))}
+          <div className="build-group__head"><h2 className="build-group__title">{PLATFORMS[group.platform]} builds</h2><p className="muted">Server and flag changes apply on the next app launch.</p></div>
+          {group.rows.map((config) => <BuildCard key={`${config.platform}:${config.build}`} config={config} onOpen={() => open(draftFrom(config))} />)}
         </div>
       ))}
 
