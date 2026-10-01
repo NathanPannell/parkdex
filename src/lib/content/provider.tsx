@@ -39,7 +39,7 @@ function initialConnectivity() {
   return {
     connected,
     wifi: false,
-    contentDownloadAllowed: !Capacitor.isNativePlatform() && connected,
+    contentDownloadAllowed: connected,
   };
 }
 

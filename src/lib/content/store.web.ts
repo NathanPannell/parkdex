@@ -2,7 +2,7 @@ import type { ArchivedScene, ContentChangeBatch, ContentEnvironment, ContentMapI
 import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
 
 const DATABASE = "parkdex-content-v1";
-const VERSION = 3;
+const VERSION = 4;
 const RELEASES = "releases";
 const META = "meta";
 const FILES = "files";
@@ -63,6 +63,57 @@ function assertRange(offset = 0, length?: number) {
 function assertRelease(release: StoredRelease) {
   if (!release || typeof release.id !== "string" || release.id.length === 0) {
     throw new Error("Invalid content release");
+  }
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isReadableRelease(value: unknown, id: string): value is StoredRelease {
+  if (!isObjectRecord(value) || value.id !== id || !isObjectRecord(value.channel) || !isObjectRecord(value.manifest)) return false;
+  const channel = value.channel;
+  const manifest = value.manifest;
+  const mapManifest = manifest.mapManifest;
+  return channel.releaseId === id && Number.isSafeInteger(channel.generation) && typeof channel.environment === "string" &&
+    typeof channel.manifestUrl === "string" && typeof channel.manifestSha256 === "string" &&
+    typeof manifest.version === "string" && typeof manifest.sourceCommit === "string" && typeof manifest.cdnOrigin === "string" &&
+    Array.isArray(manifest.files) && Array.isArray(manifest.parkIds) && Array.isArray(manifest.boundaryIds) &&
+    isObjectRecord(mapManifest) && Number.isSafeInteger(mapManifest.size) && Number.isSafeInteger(mapManifest.chunkBytes) && Number.isSafeInteger(mapManifest.count) &&
+    (value.readiness === "candidate" || value.readiness === "starter" || value.readiness === "complete") && typeof value.healthy === "boolean";
+}
+
+function isReadablePark(value: unknown): value is RetainedPark["park"] {
+  if (!isObjectRecord(value)) return false;
+  return typeof value.id === "string" && value.id.length > 0 && typeof value.name === "string" && typeof value.short === "string" &&
+    typeof value.category === "string" && typeof value.region === "string" && Number.isFinite(value.lat) && Number.isFinite(value.lng) &&
+    typeof value.biome === "string" && typeof value.shape === "string" && typeof value.rarity === "string" && Number.isSafeInteger(value.seed) &&
+    typeof value.blurb === "string" && (value.scene === null || typeof value.scene === "string");
+}
+
+function parseReleaseRecord(id: unknown, value: unknown): StoredRelease | undefined {
+  return typeof id === "string" && isReadableRelease(value, id) ? value : undefined;
+}
+
+function parseRetainedRecord(record: RetainedRecord): RetainedPark | undefined {
+  if (!record || !isReadablePark(record.park)) return undefined;
+  try {
+    const retained = { park: record.park, ...(record.sceneFile ? { sceneFile: record.sceneFile } : {}) };
+    assertRetainedPark(retained);
+    return retained;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseArchivedRecord(record: ArchivedSceneRecord): ArchivedScene | undefined {
+  try {
+    const { key, ...descriptor } = record;
+    assertArchivedSceneDescriptor(descriptor);
+    if (key !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) return undefined;
+    return descriptor;
+  } catch {
+    return undefined;
   }
 }
 
@@ -165,7 +216,7 @@ export class WebContentStore implements ContentStore {
     const db = await this.database();
     return waitForTransaction<StoredRelease | undefined>(db, RELEASES, "readonly", (tx, complete, fail) => {
       const request = tx.objectStore(RELEASES).get(id) as IDBRequest<StoredRelease | undefined>;
-      request.onsuccess = () => complete(request.result);
+      request.onsuccess = () => complete(parseReleaseRecord(id, request.result));
       request.onerror = () => fail(request.error);
     });
   }
@@ -174,7 +225,10 @@ export class WebContentStore implements ContentStore {
     const db = await this.database();
     return waitForTransaction<StoredRelease[]>(db, RELEASES, "readonly", (tx, complete, fail) => {
       const request = tx.objectStore(RELEASES).getAll() as IDBRequest<StoredRelease[]>;
-      request.onsuccess = () => complete(request.result);
+      request.onsuccess = () => complete(request.result.flatMap((release) => {
+        const parsed = parseReleaseRecord(release?.id, release);
+        return parsed ? [parsed] : [];
+      }));
       request.onerror = () => fail(request.error);
     });
   }
@@ -384,7 +438,10 @@ export class WebContentStore implements ContentStore {
     const db = await this.database();
     return waitForTransaction<RetainedPark[]>(db, RETAINED_PARKS, "readonly", (tx, complete, fail) => {
       const request = tx.objectStore(RETAINED_PARKS).getAll() as IDBRequest<RetainedRecord[]>;
-      request.onsuccess = () => complete(request.result.map(({ park, sceneFile }) => ({ park, sceneFile })));
+      request.onsuccess = () => complete(request.result.flatMap((record) => {
+        const retained = parseRetainedRecord(record);
+        return retained ? [retained] : [];
+      }));
       request.onerror = () => fail(request.error);
     });
   }
@@ -438,16 +495,8 @@ export class WebContentStore implements ContentStore {
     return waitForTransaction<ArchivedScene | undefined>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
       const request = tx.objectStore(ARCHIVED_SCENES).get(key) as IDBRequest<ArchivedSceneRecord | undefined>;
       request.onsuccess = () => {
-        const record = request.result;
-        if (!record) { complete(undefined); return; }
-        const { key: storedKey, ...archived } = record;
-        try {
-          assertArchivedSceneDescriptor(archived);
-          if (storedKey !== key || archived.releaseId !== releaseId || archived.scene !== scene) {
-            throw new Error("Archived scene storage key does not match its descriptor");
-          }
-          complete(archived);
-        } catch (error) { fail(error); }
+        const archived = request.result ? parseArchivedRecord(request.result) : undefined;
+        complete(archived?.releaseId === releaseId && archived.scene === scene ? archived : undefined);
       };
       request.onerror = () => fail(request.error);
     });
@@ -470,21 +519,15 @@ export class WebContentStore implements ContentStore {
     return waitForTransaction<ArchivedScene[]>(db, ARCHIVED_SCENES, "readonly", (tx, complete, fail) => {
       const request = tx.objectStore(ARCHIVED_SCENES).getAll() as IDBRequest<ArchivedSceneRecord[]>;
       request.onsuccess = () => {
-        try {
-          const descriptors = request.result.map((record) => {
-            const { key, ...descriptor } = record;
-            assertArchivedSceneDescriptor(descriptor);
-            if (key !== archivedSceneStorageKey(descriptor.releaseId, descriptor.scene)) {
-              throw new Error("Archived scene storage key does not match its descriptor");
-            }
-            return descriptor;
-          });
-          descriptors.sort((left, right) =>
-            left.releaseId < right.releaseId ? -1 : left.releaseId > right.releaseId ? 1 :
-              left.scene < right.scene ? -1 : left.scene > right.scene ? 1 : 0,
-          );
-          complete(descriptors);
-        } catch (error) { fail(error); }
+        const descriptors = request.result.flatMap((record) => {
+          const descriptor = parseArchivedRecord(record);
+          return descriptor ? [descriptor] : [];
+        });
+        descriptors.sort((left, right) =>
+          left.releaseId < right.releaseId ? -1 : left.releaseId > right.releaseId ? 1 :
+            left.scene < right.scene ? -1 : left.scene > right.scene ? 1 : 0,
+        );
+        complete(descriptors);
       };
       request.onerror = () => fail(request.error);
     });
@@ -499,13 +542,24 @@ export class WebContentStore implements ContentStore {
       let cursor: SyncCursor | undefined;
       const finish = () => {
         if (!rows || (cursor === undefined && cursorRequest.readyState !== "done")) return;
-        if (!cursor) { complete(null); return; }
-        const local = rows.filter((row) => row.environment === environment).sort((a, b) => a.entity.localeCompare(b.entity) || a.position - b.position || a.id.localeCompare(b.id));
+        if (!cursor || !Number.isSafeInteger(cursor.revision) || typeof cursor.sourceId !== "string") { complete(null); return; }
+        const knownEntities = new Set(["park", "boundary", "drive", "asset", "hubs", "map"]);
+        const local = rows.filter((row) => row?.environment === environment && knownEntities.has(row.entity));
+        if (local.some((row) => typeof row.id !== "string" || !Number.isSafeInteger(row.position) || !row.value || typeof row.value !== "object")) {
+          complete(null);
+          return;
+        }
+        local.sort((a, b) => a.entity.localeCompare(b.entity) || a.position - b.position || a.id.localeCompare(b.id));
         const parks = local.filter((row) => row.entity === "park").map((row) => row.value as ContentSyncState["parks"][number]);
         const boundaries = local.filter((row) => row.entity === "boundary").map((row) => row.value as ContentSyncState["boundaries"]["features"][number]);
         const drives = Object.fromEntries(local.filter((row) => row.entity === "drive").map((row) => [row.id, row.value as ContentSyncState["drive"]["parks"][string]]));
         const hubs = local.find((row) => row.entity === "hubs")?.value as ContentSyncState["drive"]["hubs"] | undefined;
-        if (!hubs) { complete(null); return; }
+        if (!Array.isArray(hubs) || parks.some((park) => typeof park.id !== "string") ||
+          boundaries.some((feature) => typeof feature.properties?.id !== "string") ||
+          local.some((row) => row.entity === "asset" && typeof (row.value as { path?: unknown }).path !== "string")) {
+          complete(null);
+          return;
+        }
         const assets = local.filter((row) => row.entity === "asset").map((row) => row.value as ContentSyncState["assets"][number]);
         const map = local.find((row) => row.entity === "map")?.value as ContentSyncState["map"] | undefined;
         const parkOrder = new Map(parks.map((park, index) => [park.id, index]));
@@ -544,8 +598,13 @@ export class WebContentStore implements ContentStore {
       let cursorReady = false;
       const finish = () => {
         if (!rowsReady || !cursorReady) return;
-        const current = cursorRequest.result?.revision ?? null;
-        if (current !== expectedRevision || (cursorRequest.result?.sourceId ?? null) !== expectedSourceId) {
+        const current = cursorRequest.result;
+        const cursorAbsent = current === undefined && expectedRevision === null && expectedSourceId === null;
+        const cursorMatches = current !== undefined && Number.isSafeInteger(current.revision) && typeof current.sourceId === "string" &&
+          current.revision === expectedRevision && current.sourceId === expectedSourceId;
+        const resetMalformedCursor = resetCursor && expectedRevision === null && expectedSourceId === null && current !== undefined &&
+          (!Number.isSafeInteger(current.revision) || typeof current.sourceId !== "string");
+        if (!cursorAbsent && !cursorMatches && !resetMalformedCursor) {
           fail(new Error("Content sync cursor changed before the snapshot could be committed"));
           return;
         }
@@ -573,7 +632,7 @@ export class WebContentStore implements ContentStore {
       const finish = () => {
         if (!cursorReady || !allRows) return;
         const cursor = request.result;
-        if (!cursor || cursor.revision !== expectedRevision || cursor.sourceId !== sourceId || batch.revision !== expectedRevision + 1) {
+        if (!cursor || !Number.isSafeInteger(cursor.revision) || typeof cursor.sourceId !== "string" || cursor.revision !== expectedRevision || cursor.sourceId !== sourceId || batch.revision !== expectedRevision + 1) {
           fail(new Error("Content sync cursor changed before the batch could be committed"));
           return;
         }
@@ -692,6 +751,7 @@ export class WebContentStore implements ContentStore {
         const request = indexedDB.open(DATABASE, VERSION);
         request.onupgradeneeded = () => {
           const db = request.result;
+          const tx = request.transaction;
           if (!db.objectStoreNames.contains(RELEASES)) db.createObjectStore(RELEASES, { keyPath: "id" });
           if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" });
           if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: "hash" });
@@ -701,6 +761,18 @@ export class WebContentStore implements ContentStore {
           if (!db.objectStoreNames.contains(MAP_INVENTORIES)) db.createObjectStore(MAP_INVENTORIES, { keyPath: "version" });
           if (!db.objectStoreNames.contains(CACHED_MAP_POINTERS)) db.createObjectStore(CACHED_MAP_POINTERS, { keyPath: "environment" });
           if (!db.objectStoreNames.contains(ARCHIVED_SCENES)) db.createObjectStore(ARCHIVED_SCENES, { keyPath: "key" });
+          if (tx && tx.objectStoreNames.contains(SYNC_CURSORS)) {
+            const cursorRequest = tx.objectStore(SYNC_CURSORS).openCursor();
+            cursorRequest.onsuccess = () => {
+              const cursor = cursorRequest.result;
+              if (!cursor) return;
+              const value = cursor.value as SyncCursor & { source?: unknown };
+              if (typeof value.sourceId !== "string" && typeof value.source === "string") {
+                cursor.update({ ...value, sourceId: value.source });
+              }
+              cursor.continue();
+            };
+          }
         };
         request.onsuccess = () => {
           const db = request.result;

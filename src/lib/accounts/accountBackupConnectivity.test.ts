@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  native: false,
   connectivity: { connected: true, wifi: false },
   listener: null as ((connectivity: { connected: boolean; wifi: boolean }) => void) | null,
   getConnectivity: vi.fn(async () => mocks.connectivity),
@@ -11,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => mocks.native } }));
 vi.mock("../content/transport", () => ({
   getContentConnectivity: mocks.getConnectivity,
   subscribeContentConnectivity: mocks.subscribe,
@@ -26,40 +24,32 @@ import {
 
 describe("account backup connectivity policy", () => {
   beforeEach(() => {
-    mocks.native = false;
     mocks.connectivity = { connected: true, wifi: false };
     mocks.listener = null;
     mocks.getConnectivity.mockImplementation(async () => mocks.connectivity);
     mocks.subscribe.mockClear();
   });
 
-  it("allows browser backups on any connected network, including unknown or cellular type", async () => {
-    expect(mapAccountBackupConnectivity({ connected: true, wifi: false }, false)).toEqual({ connected: true, allowed: true });
+  it("allows backup on any connected network regardless of the Wi-Fi marker", async () => {
+    expect(mapAccountBackupConnectivity({ connected: true, wifi: false })).toEqual({ connected: true, allowed: true });
+    expect(mapAccountBackupConnectivity({ connected: true, wifi: true })).toEqual({ connected: true, allowed: true });
     await expect(getAccountBackupConnectivity()).resolves.toEqual({ connected: true, allowed: true });
     await expect(isAccountBackupAvailable()).resolves.toBe(true);
   });
 
-  it("blocks browser backups while offline", async () => {
+  it("blocks backup while offline", async () => {
     mocks.connectivity = { connected: false, wifi: false };
     await expect(getAccountBackupConnectivity()).resolves.toEqual({ connected: false, allowed: false });
     await expect(isAccountBackupAvailable()).resolves.toBe(false);
   });
 
-  it("requires confirmed Wi-Fi on native platforms and reports the connected-but-paused state", async () => {
-    mocks.native = true;
-    expect(mapAccountBackupConnectivity({ connected: true, wifi: true })).toEqual({ connected: true, allowed: true });
-    expect(mapAccountBackupConnectivity({ connected: true, wifi: false })).toEqual({ connected: true, allowed: false });
-    await expect(isAccountBackupAvailable({ connected: true, wifi: false })).resolves.toBe(false);
-  });
-
-  it("notifies subscribers with the mapped native availability", () => {
-    mocks.native = true;
+  it("notifies subscribers with the mapped connected availability", () => {
     const listener = vi.fn();
     const unsubscribe = subscribeAccountBackupConnectivity(listener);
 
     mocks.listener?.({ connected: true, wifi: false });
 
-    expect(listener).toHaveBeenCalledWith({ connected: true, allowed: false });
+    expect(listener).toHaveBeenCalledWith({ connected: true, allowed: true });
     unsubscribe();
   });
 

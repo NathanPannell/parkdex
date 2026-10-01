@@ -323,6 +323,46 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 7, sourceId: SOURCE });
   });
 
+  it("repairs legacy content columns in place and only resets a malformed cursor", async () => {
+    const previous = syncState(8, "legacy-scene");
+    await store.replaceSyncState(ENVIRONMENT, null, previous, SOURCE, null);
+    await store.retainParks([{ park: park("retired-park", "Retired Park") }]);
+    const bytes = arrayBuffer("legacy archived badge");
+    const digest = await hash(bytes);
+    const archived = archivedScene("a".repeat(64), "legacy-scene", digest, bytes.byteLength);
+    await store.putFile(digest, bytes);
+    await store.retainArchivedScene(archived);
+    await store.close();
+
+    database.exec(`
+      DROP INDEX content_sync_rows_order;
+      ALTER TABLE content_sync_rows DROP COLUMN position;
+      ALTER TABLE content_sync_cursors RENAME COLUMN source_id TO source;
+      ALTER TABLE content_retained_parks DROP COLUMN scene_file_json;
+    `);
+    store = new NativeContentStore();
+    await store.initialize();
+
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 8, sourceId: SOURCE });
+    await expect(store.getSyncState(ENVIRONMENT)).resolves.toMatchObject({ revision: 8, sourceId: SOURCE, parks: previous.parks });
+    await expect(store.getRetainedParks()).resolves.toEqual([{ park: park("retired-park", "Retired Park") }]);
+    await expect(store.getArchivedScene(archived.releaseId, archived.scene)).resolves.toEqual(archived);
+    await expect(store.hasFile(digest, bytes.byteLength)).resolves.toBe(true);
+
+    database.prepare("UPDATE content_sync_cursors SET revision = ? WHERE environment = ?").run("malformed", ENVIRONMENT);
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toBeNull();
+    await expect(store.getSyncState(ENVIRONMENT)).resolves.toBeNull();
+    await store.replaceSyncState(ENVIRONMENT, null, emptyState(9, "recovered-source"), "recovered-source", null, true);
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 9, sourceId: "recovered-source" });
+
+    database.prepare("UPDATE content_sync_cursors SET revision = ?, source_id = ? WHERE environment = ?")
+      .run(10, "newer-source", ENVIRONMENT);
+    await expect(store.replaceSyncState(ENVIRONMENT, null, emptyState(11, "stale-source"), "stale-source", null, true)).rejects.toThrow();
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 10, sourceId: "newer-source" });
+    await expect(store.getArchivedScene(archived.releaseId, archived.scene)).resolves.toEqual(archived);
+    await expect(store.hasFile(digest, bytes.byteLength)).resolves.toBe(true);
+  });
+
   it("keeps an empty catalogue distinguishable from an uninitialized store after recreation", async () => {
     await store.replaceSyncState(ENVIRONMENT, null, emptyState(0), SOURCE, null);
     await store.close();

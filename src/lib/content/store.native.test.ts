@@ -19,6 +19,7 @@ const nativeMocks = vi.hoisted(() => ({
   rename: vi.fn(),
   directories: new Set<string>(),
   files: new Map<string, string>(),
+  tableColumns: new Map<string, string[]>(),
 }));
 
 vi.mock("@capacitor-community/sqlite", () => ({
@@ -46,7 +47,7 @@ vi.mock("@capacitor/filesystem", () => ({
   },
 }));
 
-import type { ArchivedScene, StoredRelease } from "./contracts";
+import type { ArchivedScene, RetainedPark, StoredRelease } from "./contracts";
 import { NativeContentStore } from "./store.native";
 
 const HASH = "b".repeat(64);
@@ -82,6 +83,24 @@ function release(files: StoredRelease["manifest"]["files"]): StoredRelease {
   };
 }
 
+function park(id: string, name: string): RetainedPark["park"] {
+  return {
+    id,
+    name,
+    short: name,
+    category: "regional",
+    region: "Victoria",
+    lat: 48.4,
+    lng: -123.3,
+    biome: "coast",
+    shape: "circle",
+    rarity: "common",
+    seed: 7,
+    blurb: "A retained test park.",
+    scene: null,
+  };
+}
+
 const sceneFile = {
   path: "art/badges/scenes/earned.webp",
   key: "scene-earned",
@@ -93,7 +112,7 @@ const sceneFile = {
 
 describe("NativeContentStore deletion guard", () => {
   let activeRelease = release([sceneFile]);
-  let retainedRows: { park_json: string; scene_file_json: string }[] = [];
+  let retainedRows: { park_json: string; scene_file_json: string | null }[] = [];
   let archivedRows: { release_id: string; scene: string; file_json: string }[] = [];
 
   beforeEach(() => {
@@ -104,6 +123,10 @@ describe("NativeContentStore deletion guard", () => {
     activeRelease = release([sceneFile]);
     retainedRows = [];
     archivedRows = [];
+    nativeMocks.tableColumns.clear();
+    nativeMocks.tableColumns.set("content_retained_parks", ["park_id", "park_json", "scene_file_json"]);
+    nativeMocks.tableColumns.set("content_sync_rows", ["environment", "entity", "row_id", "position", "value_json"]);
+    nativeMocks.tableColumns.set("content_sync_cursors", ["environment", "revision", "source_id"]);
     nativeMocks.createConnection.mockResolvedValue(nativeMocks.db);
     nativeMocks.db.open.mockResolvedValue(undefined);
     nativeMocks.db.execute.mockResolvedValue({});
@@ -116,6 +139,10 @@ describe("NativeContentStore deletion guard", () => {
       return { changes: { changes: 1 } };
     });
     nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.startsWith("PRAGMA table_info(")) {
+        const table = /^PRAGMA table_info\(([^)]+)\)$/.exec(statement)?.[1] ?? "";
+        return { values: (nativeMocks.tableColumns.get(table) ?? []).map((name) => ({ name })) };
+      }
       if (statement.includes("FROM content_archived_scenes")) {
         if (statement.includes("WHERE release_id = ? AND scene = ?")) {
           const [releaseId, scene] = values as [string, string];
@@ -124,7 +151,10 @@ describe("NativeContentStore deletion guard", () => {
         return { values: [...archivedRows].sort((left, right) => left.release_id.localeCompare(right.release_id) || left.scene.localeCompare(right.scene)) };
       }
       if (statement.includes("SELECT release_id")) return { values: [{ release_id: "release" }] };
-      if (statement.includes("SELECT release_json")) return { values: [{ release_json: JSON.stringify(activeRelease) }] };
+      if (statement.includes("content_releases")) {
+        if (statement.includes("ORDER BY")) return { values: [{ id: activeRelease.id, release_json: JSON.stringify(activeRelease) }] };
+        return { values: [{ id: activeRelease.id, release_json: JSON.stringify(activeRelease) }] };
+      }
       if (statement.includes("SELECT park_json")) return { values: retainedRows };
       return { values: [] };
     });
@@ -152,7 +182,7 @@ describe("NativeContentStore deletion guard", () => {
   it("refuses to delete a retained earned-park scene after its release is retired", async () => {
     activeRelease = release([]);
     retainedRows = [{
-      park_json: JSON.stringify({ id: "earned-park" }),
+      park_json: JSON.stringify(park("earned-park", "Earned Park")),
       scene_file_json: JSON.stringify(sceneFile),
     }];
     const store = new NativeContentStore();
@@ -205,6 +235,55 @@ describe("NativeContentStore deletion guard", () => {
       offset: 4,
       length: 3,
     });
+    await store.close();
+  });
+
+  it("migrates known older content columns without clearing content files", async () => {
+    nativeMocks.tableColumns.set("content_retained_parks", ["park_id", "park_json"]);
+    nativeMocks.tableColumns.set("content_sync_rows", ["environment", "entity", "row_id", "value_json"]);
+    nativeMocks.tableColumns.set("content_sync_cursors", ["environment", "revision", "source"]);
+    const blob = "parkdex-content-v1/blobs/aa/map.blob";
+    nativeMocks.files.set(blob, btoa("map tile"));
+    const store = new NativeContentStore();
+
+    await store.initialize();
+
+    expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_retained_parks ADD COLUMN scene_file_json TEXT NULL");
+    expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_sync_rows ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
+    expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
+    expect(nativeMocks.db.execute).toHaveBeenCalledWith("UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')");
+    expect(nativeMocks.files.has(blob)).toBe(true);
+    expect(nativeMocks.deleteFile).not.toHaveBeenCalled();
+    await store.close();
+  });
+
+  it("skips unreadable optional release and retained descriptors without deleting their stored rows", async () => {
+    retainedRows = [
+      { park_json: "{broken", scene_file_json: JSON.stringify(sceneFile) },
+      { park_json: JSON.stringify(park("retained", "Retained Park")), scene_file_json: null },
+    ];
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.startsWith("PRAGMA table_info(")) {
+        const table = /^PRAGMA table_info\(([^)]+)\)$/.exec(statement)?.[1] ?? "";
+        return { values: (nativeMocks.tableColumns.get(table) ?? []).map((name) => ({ name })) };
+      }
+      if (statement.includes("content_releases")) {
+        const releaseRows = [
+        { id: "release", release_json: JSON.stringify(activeRelease) },
+        { id: "broken", release_json: "{broken" },
+        ];
+        return { values: statement.includes("WHERE id = ?") ? releaseRows.filter((row) => row.id === values?.[0]) : releaseRows };
+      }
+      if (statement.includes("SELECT park_json")) return { values: retainedRows };
+      return { values: [] };
+    });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(await store.listReleases()).toEqual([activeRelease]);
+    expect(await store.getRelease("broken")).toBeUndefined();
+    expect(await store.getRetainedParks()).toEqual([{ park: park("retained", "Retained Park") }]);
+    expect(retainedRows).toHaveLength(2);
     await store.close();
   });
 

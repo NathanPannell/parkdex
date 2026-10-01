@@ -39,6 +39,7 @@ import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDow
 
 const API_URL = "https://staging.web.parkdex.app/api/content/current";
 const CDN_URL = "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin";
+const ART_URL = "https://kip-assets.parkdex.app/releases/v1/art/badges/scenes/park.webp";
 const browserConnection = new EventTarget() as EventTarget & { type?: string; effectiveType?: string };
 const browserWindow = new EventTarget();
 
@@ -207,7 +208,7 @@ describe("content transport", () => {
       },
     }), { headers: { "content-type": "application/octet-stream" } }));
     vi.stubGlobal("fetch", fetchMock);
-    const pending = contentFetch(CDN_URL);
+    const pending = contentFetch(ART_URL);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await bodyStarted;
@@ -358,14 +359,59 @@ describe("content transport", () => {
     expect(mocks.native.request).not.toHaveBeenCalled();
   });
 
-  it("keeps Android content downloads blocked unless native Wi-Fi is confirmed", async () => {
+  it("allows Android essential content on cellular without reporting Wi-Fi", async () => {
     mocks.capacitor.isNativePlatform.mockReturnValue(true);
     mocks.capacitor.getPlatform.mockReturnValue("android");
     mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "cellular" });
     mocks.native.getWifiStatus.mockResolvedValue({ wifi: false });
 
-    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false, contentDownloadAllowed: false });
-    await expect(isContentDownloadAvailable()).resolves.toBe(false);
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: false, contentDownloadAllowed: true });
+    await expect(isContentDownloadAvailable()).resolves.toBe(true);
+    await expect(contentFetch(API_URL)).resolves.toMatchObject({ status: 200 });
+    await expect(contentFetch(ART_URL)).resolves.toMatchObject({ status: 200 });
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("times out a stalled browser response so content recovery can retry", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
+        start(controller) {
+          init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+        },
+      }))));
+      const pending = contentFetch(ART_URL);
+      const result = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    { type: "cellular" },
+    { connectionApi: false },
+  ])("defers detailed maps without confirmed Wi-Fi while downloading art", async (network) => {
+    setBrowserNetwork({ online: true, ...network });
+    await expect(contentFetch(CDN_URL)).rejects.toMatchObject({ name: "WifiUnavailableError" });
+    await expect(contentFetch(CDN_URL.replace("map/island/", "map%2Fisland%2F"))).rejects.toMatchObject({ name: "WifiUnavailableError" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    await expect(contentFetch(ART_URL)).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("aborts detailed map streaming when Wi-Fi changes to cellular", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
+      start(controller) {
+        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+      },
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = contentFetch(CDN_URL);
+    const result = expect(pending).rejects.toMatchObject({ name: "WifiUnavailableError" });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    browserConnection.type = "cellular";
+    browserConnection.dispatchEvent(new Event("change"));
+    await result;
   });
 });

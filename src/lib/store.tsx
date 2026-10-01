@@ -3,6 +3,8 @@ import type { LngLat } from "./geo";
 import type { Park } from "./parks";
 import { loadPersonalProgress, type ProgressOwner } from "./accounts/personalStore";
 import { useAuth } from "./accounts/AuthProvider";
+import { getNativeInstallIdentity, isNative } from "./native";
+import { onboardingMatchesInstall } from "./onboardingIdentity";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
@@ -25,6 +27,11 @@ type State = {
   locationError: string | null;
   muted: boolean;
   screen: Screen;
+  startupReady: boolean;
+  onboardingBuildId: string | null;
+  onboardingPackageIdentity: string | null;
+  currentBuildId: string | null;
+  currentPackageIdentity: string | null;
   selectedId: string | null;
   tripId: string | null;
   shareClaimId: string | null;
@@ -35,6 +42,7 @@ type State = {
 
 type Action =
   | { type: "go"; screen: Screen }
+  | { type: "installReady"; buildId: string; packageInstallIdentity: string | null; native: boolean }
   | { type: "onboarded" }
   | { type: "select"; id: string | null }
   | { type: "trip"; id: string | null }
@@ -68,6 +76,11 @@ const initial: State = {
   locationError: null,
   muted: false,
   screen: "splash",
+  startupReady: false,
+  onboardingBuildId: null,
+  onboardingPackageIdentity: null,
+  currentBuildId: null,
+  currentPackageIdentity: null,
   selectedId: null,
   tripId: null,
   shareClaimId: null,
@@ -82,10 +95,34 @@ export function load(): State {
     if (!saved || typeof saved !== "object") return initial;
     // Claims and photos are migrated transactionally by personalStore. Never project
     // the legacy unpartitioned records into the UI before an owner is known.
-    const onboarded = !!saved.onboarded;
-    return { ...initial, onboarded, muted: !!saved.muted, screen: onboarded ? "map" : "splash" };
+    return {
+      ...initial,
+      onboarded: !!saved.onboarded,
+      muted: !!saved.muted,
+      onboardingBuildId: typeof saved.onboardingBuildId === "string" ? saved.onboardingBuildId : null,
+      onboardingPackageIdentity: typeof saved.onboardingPackageIdentity === "string" ? saved.onboardingPackageIdentity : null,
+    };
   } catch {
     return initial;
+  }
+}
+
+export function persistOnboardingPreferences(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  state: Pick<State, "onboarded" | "muted" | "currentBuildId" | "currentPackageIdentity">,
+) {
+  try {
+    // Preserve the legacy claims blob for transactional migration and recovery.
+    // It is never rewritten from an account-specific in-memory projection.
+    const existing = JSON.parse(storage.getItem(KEY) ?? "{}") as Record<string, unknown>;
+    const saved: Record<string, unknown> = { ...existing, onboarded: state.onboarded, muted: state.muted };
+    if (state.onboarded) {
+      saved.onboardingBuildId = state.currentBuildId;
+      saved.onboardingPackageIdentity = state.currentPackageIdentity;
+    }
+    storage.setItem(KEY, JSON.stringify(saved));
+  } catch {
+    // Storage can be unavailable in private modes; the active session still works.
   }
 }
 
@@ -93,7 +130,27 @@ export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "go":
       return { ...state, screen: action.screen };
+    case "installReady": {
+      const packageInstallIdentity = action.packageInstallIdentity;
+      const onboarded = onboardingMatchesInstall(
+        {
+          onboarded: state.onboarded,
+          buildId: state.onboardingBuildId,
+          packageInstallIdentity: state.onboardingPackageIdentity,
+        },
+        { buildId: action.buildId, packageInstallIdentity, native: action.native },
+      );
+      return {
+        ...state,
+        onboarded,
+        startupReady: true,
+        currentBuildId: action.buildId,
+        currentPackageIdentity: packageInstallIdentity,
+        screen: "splash",
+      };
+    }
     case "onboarded":
+      if (!state.startupReady) return state;
       return { ...state, onboarded: true, screen: "map" };
     case "select":
       return { ...state, selectedId: action.id };
@@ -177,7 +234,20 @@ export function reducer(state: State, action: Action): State {
     case "reset":
       // The demo reset replays onboarding, while a visitor's personal collection
       // remains in its owner partition and must not be cleared by a UI reset.
-      return { ...initial, claims: state.claims, progressReady: state.progressReady, progressError: state.progressError, progressOwnerKey: state.progressOwnerKey, claimRevision: state.claimRevision, claimRevisionByPark: state.claimRevisionByPark };
+      return {
+        ...initial,
+        startupReady: state.startupReady,
+        onboardingBuildId: state.onboardingBuildId,
+        onboardingPackageIdentity: state.onboardingPackageIdentity,
+        currentBuildId: state.currentBuildId,
+        currentPackageIdentity: state.currentPackageIdentity,
+        claims: state.claims,
+        progressReady: state.progressReady,
+        progressError: state.progressError,
+        progressOwnerKey: state.progressOwnerKey,
+        claimRevision: state.claimRevision,
+        claimRevisionByPark: state.claimRevisionByPark,
+      };
   }
 }
 
@@ -211,6 +281,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const key = progressOwnerKey(owner);
   const currentOwnerKey = useRef(key);
   currentOwnerKey.current = key;
+
+  useEffect(() => {
+    let live = true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const unavailable = new Promise<null>((resolve) => {
+      timeout = setTimeout(() => resolve(null), 1500);
+    });
+    void Promise.race([getNativeInstallIdentity(), unavailable]).then((packageInstallIdentity) => {
+      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative });
+    }).catch(() => {
+      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative });
+    }).finally(() => {
+      clearTimeout(timeout);
+    });
+    return () => {
+      live = false;
+      clearTimeout(timeout);
+    };
+  }, []);
 
   useEffect(() => {
     if (!owner || !key) {
@@ -247,17 +336,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [key, owner, auth.progressRevision, state.claimRevision]);
 
   useEffect(() => {
-    if (auth.phase === "starting" || auth.phase === "error") return;
-    const { onboarded, muted } = state;
-    try {
-      // Preserve the legacy claims blob for transactional migration and recovery.
-      // It is never rewritten from an account-specific in-memory projection.
-      const existing = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, unknown>;
-      localStorage.setItem(KEY, JSON.stringify({ ...existing, onboarded, muted }));
-    } catch {
-      // Storage can be unavailable in private modes; the active session still works.
-    }
-  }, [auth.phase, state.onboarded, state.muted]);
+    if (!state.startupReady || auth.phase === "starting" || auth.phase === "error") return;
+    persistOnboardingPreferences(localStorage, state);
+  }, [auth.phase, state.startupReady, state.onboarded, state.muted, state.currentBuildId, state.currentPackageIdentity]);
 
   const wrapped = useCallback((action: Action) => dispatch(action), []);
   const visibleState = state.progressOwnerKey === key ? state : {

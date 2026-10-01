@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { canDownloadContent, CONTENT_CDN_ORIGIN, type Connectivity } from "./contracts";
+import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity } from "./contracts";
 import { contentChannelOverride } from "../contentChannel";
 import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 
@@ -87,7 +87,7 @@ export async function getContentConnectivity(): Promise<ContentConnectivity> {
   const connected = networkResult.status === "fulfilled" && networkResult.value.connected === true;
   const wifi = wifiResult.status === "fulfilled" && wifiResult.value.wifi === true;
   const connectedOrWifi = connected || wifi;
-  return { connected: connectedOrWifi, wifi, contentDownloadAllowed: connectedOrWifi && wifi };
+  return { connected: connectedOrWifi, wifi, contentDownloadAllowed: connectedOrWifi };
 }
 
 /** Subscribe to online state and the browser's physical network type, or native network changes. */
@@ -140,7 +140,7 @@ export async function isContentDownloadAvailable(): Promise<boolean> {
   return canDownloadContent(await getContentConnectivity());
 }
 
-/** Fetch content through Android's Wi-Fi-bound network, or through any online browser connection. */
+/** Download essential content on any connection; bind detailed map chunks to Wi-Fi. */
 export async function contentFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const request = input instanceof Request ? new Request(input, init) : new Request(input, init);
   const url = new URL(request.url);
@@ -155,7 +155,7 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
 
   if (Capacitor.isNativePlatform()) {
     if (Capacitor.getPlatform() !== "android") {
-      throw new Error("Wi-Fi-only content transport is unavailable on this native platform");
+      throw new Error("Content transport is unavailable on this native platform");
     }
     return nativeFetch(request, url, apiOrigin);
   }
@@ -164,11 +164,16 @@ export async function contentFetch(input: RequestInfo | URL, init?: RequestInit)
 }
 
 async function browserFetch(request: Request, url: URL): Promise<Response> {
+  const allowed = (connectivity: ContentConnectivity) => canDownloadContent(connectivity) &&
+    (!requiresContentWifi(url.pathname) || connectivity.wifi);
   const initialConnectivity = await getContentConnectivity();
-  if (!canDownloadContent(initialConnectivity)) throw contentUnavailableError(initialConnectivity);
+  if (!allowed(initialConnectivity)) throw contentUnavailableError(initialConnectivity);
   throwIfAborted(request.signal);
 
   const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => {
+    controller.abort(new DOMException("Content download timed out. Retrying is safe.", "TimeoutError"));
+  }, 60_000);
   const abortForConnectivity = (connectivity: ContentConnectivity) => {
     if (!controller.signal.aborted) controller.abort(contentUnavailableError(connectivity));
   };
@@ -176,7 +181,7 @@ async function browserFetch(request: Request, url: URL): Promise<Response> {
     if (!controller.signal.aborted) controller.abort(abortReason(request.signal));
   };
   const onConnectivity = (connectivity: ContentConnectivity) => {
-    if (!canDownloadContent(connectivity)) abortForConnectivity(connectivity);
+    if (!allowed(connectivity)) abortForConnectivity(connectivity);
   };
   const unsubscribe = subscribeContentConnectivity(onConnectivity);
   request.signal.addEventListener("abort", abortForCaller, { once: true });
@@ -184,7 +189,7 @@ async function browserFetch(request: Request, url: URL): Promise<Response> {
   try {
     if (request.signal.aborted) abortForCaller();
     const connectivity = await getContentConnectivity();
-    if (!canDownloadContent(connectivity)) abortForConnectivity(connectivity);
+    if (!allowed(connectivity)) abortForConnectivity(connectivity);
     if (controller.signal.aborted) throw abortReason(controller.signal);
 
     const response = await globalThis.fetch(url, {
@@ -223,6 +228,7 @@ async function browserFetch(request: Request, url: URL): Promise<Response> {
     if (controller.signal.aborted) throw abortReason(controller.signal);
     throw error;
   } finally {
+    globalThis.clearTimeout(timeout);
     unsubscribe();
     request.signal.removeEventListener("abort", abortForCaller);
   }
@@ -378,7 +384,7 @@ function abortReason(signal: AbortSignal): unknown {
 }
 
 function wifiUnavailableError(): Error {
-  const error = new Error("Connect to Wi-Fi to download Parkdex content.");
+  const error = new Error("Connect to Wi-Fi to download detailed maps.");
   error.name = "WifiUnavailableError";
   return error;
 }

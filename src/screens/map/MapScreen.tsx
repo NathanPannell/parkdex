@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/Badge";
 import { ContentSyncStatus } from "../../components/ContentSyncStatus";
+import { ContentGate } from "../../components/ContentGate";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
@@ -226,7 +227,7 @@ export function MapScreen() {
     return (
       <div className="screen map-screen">
         {mapView}
-        <ContentSyncStatus />
+        <ContentGate overMap />
       </div>
     );
   }

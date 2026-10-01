@@ -88,7 +88,7 @@ export async function accountBackupFetch(
   if (body.byteLength > maxRequestBytes) throw new RangeError("The account backup request exceeds its byte limit.");
 
   if (Capacitor.isNativePlatform()) {
-    if (Capacitor.getPlatform() !== "android") throw new Error("Wi-Fi-only account backup is unavailable on this native platform.");
+    if (Capacitor.getPlatform() !== "android") throw new Error("Native account backup is unavailable on this platform.");
     return nativeAccountBackupFetch(url, method, headers, body, approvedApiOrigin, callerSignal, maxRequestBytes);
   }
   return browserAccountBackupFetch(url, method, headers, body, approvedApiOrigin, callerSignal);

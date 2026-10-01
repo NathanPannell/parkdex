@@ -7,12 +7,16 @@ const WORD = "parkdex".split("");
 
 export function Splash() {
   const { state, dispatch } = useStore();
-  const next = () => dispatch({ type: "go", screen: state.onboarded ? "map" : "onboarding" });
+  const next = () => {
+    if (!state.startupReady) return;
+    dispatch({ type: "go", screen: state.onboarded ? "map" : "onboarding" });
+  };
 
   useEffect(() => {
+    if (!state.startupReady) return;
     const t = setTimeout(next, 2600);
     return () => clearTimeout(t);
-  }, [state.onboarded]);
+  }, [state.onboarded, state.startupReady]);
 
   return (
     <motion.div

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCollectionRankProgress, getRarityProgress } from "./progression";
-import { load, reducer, type Claim } from "./store";
+import { load, persistOnboardingPreferences, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
 type StoreState = Parameters<typeof reducer>[0];
@@ -34,6 +34,11 @@ const readyState: StoreState = {
   locationError: null,
   muted: false,
   screen: "claim",
+  startupReady: true,
+  onboardingBuildId: "test-build",
+  onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+  currentBuildId: "test-build",
+  currentPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
   selectedId: null,
   tripId: park.id,
   shareClaimId: null,
@@ -58,12 +63,31 @@ function restoredClaim(id: string, rarity: Rarity): Claim {
 }
 
 describe("claim progress hydration", () => {
-  it("opens directly on the map after onboarding has already been completed", () => {
+  it("waits on the splash until the same build and package install are confirmed", () => {
     vi.stubGlobal("localStorage", {
-      getItem: () => JSON.stringify({ onboarded: true, muted: true }),
+      getItem: () => JSON.stringify({
+        onboarded: true,
+        muted: true,
+        onboardingBuildId: "source-sha",
+        onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+      }),
     });
 
-    expect(load()).toMatchObject({ onboarded: true, muted: true, screen: "map" });
+    const loaded = load();
+    expect(loaded).toMatchObject({
+      onboarded: true,
+      muted: true,
+      startupReady: false,
+      screen: "splash",
+      onboardingBuildId: "source-sha",
+      onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+    });
+    expect(reducer(loaded, {
+      type: "installReady",
+      buildId: "source-sha",
+      packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
+      native: true,
+    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("keeps the splash for a visitor who has not completed onboarding", () => {
@@ -71,7 +95,63 @@ describe("claim progress hydration", () => {
       getItem: () => JSON.stringify({ onboarded: false }),
     });
 
-    expect(load().screen).toBe("splash");
+    expect(load()).toMatchObject({ onboarded: false, startupReady: false, screen: "splash" });
+  });
+
+  it("does not let onboarding finish before package identity has been checked", () => {
+    const state = load();
+
+    expect(reducer(state, { type: "onboarded" })).toBe(state);
+  });
+
+  it("replays onboarding after a build change and keeps hydrated claims and photos", () => {
+    const state: StoreState = {
+      ...readyState,
+      screen: "map",
+      onboardingBuildId: "old-source-sha",
+      onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+      claims: { [park.id]: restoredClaim(park.id, "common") },
+      pendingPhoto: "data:image/jpeg;base64,kept-photo",
+    };
+
+    const next = reducer(state, {
+      type: "installReady",
+      buildId: "new-source-sha",
+      packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
+      native: true,
+    });
+
+    expect(next).toMatchObject({ onboarded: false, startupReady: true, screen: "splash" });
+    expect(next.claims).toEqual(state.claims);
+    expect(next.pendingPhoto).toBe(state.pendingPhoto);
+    expect(next.progressOwnerKey).toBe(state.progressOwnerKey);
+  });
+
+  it("preserves the legacy claims and other local preferences when saving onboarding identity", () => {
+    const stored = new Map([[
+      "parkdex-mockup-v1",
+      JSON.stringify({ claims: { "park-a": { at: "saved", photo: "old-photo" } }, unrelatedPreference: "keep" }),
+    ]]);
+    const storage = {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+    };
+
+    persistOnboardingPreferences(storage, {
+      onboarded: true,
+      muted: true,
+      currentBuildId: "new-source-sha",
+      currentPackageIdentity: "app.parkdex:1790000000000:1790000001000:13",
+    });
+
+    expect(JSON.parse(stored.get("parkdex-mockup-v1")!)).toEqual({
+      claims: { "park-a": { at: "saved", photo: "old-photo" } },
+      unrelatedPreference: "keep",
+      onboarded: true,
+      muted: true,
+      onboardingBuildId: "new-source-sha",
+      onboardingPackageIdentity: "app.parkdex:1790000000000:1790000001000:13",
+    });
   });
 
   it("derives the same rank after owner claims are restored", () => {

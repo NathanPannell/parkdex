@@ -39,13 +39,14 @@ describe("ContentDownloadScheduler policy transitions", () => {
     expect(isDownloadAllowed("core", "data/parks.json", browser)).toBe(true);
   });
 
-  it("keeps an Android Wi-Fi-only policy blocked when native Wi-Fi is not confirmed", () => {
-    const androidCellular: DownloadPolicy = {
-      foreground: true,
-      connectivity: { connected: true, wifi: false, contentDownloadAllowed: false },
-    };
-
-    expect(isDownloadAllowed("core", "data/parks.json", androidCellular)).toBe(false);
+  it("allows metadata, art and glyphs on cellular but defers detailed chunks for every purpose", () => {
+    expect(isDownloadAllowed("core", "data/parks.json", cellular)).toBe(true);
+    expect(isDownloadAllowed("update", "art/badges/scenes/park.webp", cellular)).toBe(true);
+    expect(isDownloadAllowed("core", "map/fonts/font/0-255.pbf", cellular)).toBe(true);
+    for (const purpose of ["core", "nearby", "bulk", "update"] as const) {
+      expect(isDownloadAllowed(purpose, "map/island/001.bin", cellular)).toBe(false);
+      expect(isDownloadAllowed(purpose, "map/island/001.bin", wifi)).toBe(true);
+    }
   });
 
   it("aborts a bulk fetch on WiFi loss, keeps deduped waiters, and restores queue priority on resume", async () => {
@@ -89,25 +90,25 @@ describe("ContentDownloadScheduler policy transitions", () => {
     expect(firstResult).toBe("pending");
     expect(dedupedResult).toBe("pending");
     expect(attempts).toHaveLength(1);
-    expect(starts).toEqual([]);
-
-    scheduler.setPolicy(wifi);
-    await flushMicrotasks();
-
-    expect(attempts).toHaveLength(2);
-    expect(attempts[1].signal.aborted).toBe(false);
-    expect(starts).toEqual([]);
-    attempts[1].gate.resolve();
-    await flushMicrotasks();
-
-    expect(firstResult).toBe("resolved");
-    expect(dedupedResult).toBe("resolved");
     expect(starts).toEqual(["queued"]);
     queuedGate.resolve();
     await flushMicrotasks();
     expect(starts).toEqual(["queued", "nearby"]);
     nearbyGate.resolve();
     await flushMicrotasks();
+
+    scheduler.setPolicy(wifi);
+    await flushMicrotasks();
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1].signal.aborted).toBe(false);
+    expect(starts).toEqual(["queued", "nearby"]);
+    attempts[1].gate.resolve();
+    await flushMicrotasks();
+
+    expect(firstResult).toBe("resolved");
+    expect(dedupedResult).toBe("resolved");
+    expect(starts).toEqual(["queued", "nearby"]);
     await Promise.all([firstWaiter, dedupedWaiter, nearby, queued]);
     expect(scheduler.pendingCount).toBe(0);
     scheduler.dispose();

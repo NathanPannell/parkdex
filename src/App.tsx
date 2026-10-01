@@ -114,8 +114,8 @@ function Screens() {
   const { screen, onboarded } = state;
 
   useEffect(() => {
-    if (auth.pendingAction) dispatch({ type: "go", screen: "account" });
-  }, [auth.pendingAction, dispatch]);
+    if (state.startupReady && auth.pendingAction) dispatch({ type: "go", screen: "account" });
+  }, [auth.pendingAction, dispatch, state.startupReady]);
 
   useEffect(() => setMuted(state.muted), [state.muted]);
   useEffect(() => {
@@ -123,7 +123,7 @@ function Screens() {
   }, [screen]);
 
   // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
-  const tracking = onboarded && (FIELD || isNative);
+  const tracking = state.startupReady && onboarded && (FIELD || isNative);
   useEffect(() => {
     if (!tracking) return;
     let stop = () => {};
@@ -157,7 +157,7 @@ function Screens() {
 
   // Mount the map behind the splash so saved pins and tiles can warm while the
   // opening animation plays. Keep the same map instance when the splash leaves.
-  const showMap = onboarded && screen !== "onboarding" && screen !== "account";
+  const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
   const showNav = showMap && (screen === "map" || screen === "collection");
 
   return (
