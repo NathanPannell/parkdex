@@ -250,6 +250,27 @@ describe("NativeContentStore deletion guard", () => {
     await store.close();
   });
 
+  it("trusts recorded files at their recorded size without rereading them", async () => {
+    const other = "c".repeat(64);
+    const query = nativeMocks.db.query.getMockImplementation()!;
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement === "SELECT hash, byte_size FROM content_files") return { values: [{ hash: HASH, byte_size: 12 }, { hash: other, byte_size: 99 }] };
+      return query(statement, values);
+    });
+    nativeMocks.stat.mockResolvedValue({ size: 12 });
+    nativeMocks.readFile.mockResolvedValue({ data: btoa("not the hash") });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(await store.hasFile(HASH, 12)).toBe(true);
+    expect(nativeMocks.readFile).not.toHaveBeenCalled();
+    // A size mismatch with the record falls back to a full hash check, which fails here.
+    nativeMocks.stat.mockResolvedValue({ size: 99 });
+    expect(await store.hasFile(HASH, 99)).toBe(false);
+    expect(nativeMocks.readFile).toHaveBeenCalledOnce();
+    await store.close();
+  });
+
   it("migrates known older content columns without clearing content files", async () => {
     nativeMocks.tableColumns.set("content_retained_parks", ["park_id", "park_json"]);
     nativeMocks.tableColumns.set("content_sync_rows", ["environment", "entity", "row_id", "value_json"]);

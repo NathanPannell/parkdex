@@ -84,6 +84,12 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   }, [saved]);
 
   useEffect(() => () => abort.current?.abort(), []);
+
+  // The picker owns the whole screen: hide the bottom navigation while it is open.
+  useEffect(() => {
+    document.body.classList.add("map-tool-open");
+    return () => document.body.classList.remove("map-tool-open");
+  }, []);
   useEffect(() => subscribeAllowMobileMapData(setMobileData), []);
 
   // The map pans and zooms normally; a tap (not a drag) toggles the square under it.
@@ -116,7 +122,11 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   }, [saved, toAdd, toRemove]);
 
   // Each square's full size and park count, shown once squares are large enough to label.
-  const labels = useMemo(() => (index ? squareLabels(index, content?.parks ?? []) : null), [index, content?.parks]);
+  // Only parks with badge art count; "coming soon" parks have no scene yet.
+  const labels = useMemo(
+    () => (index ? squareLabels(index, (content?.parks ?? []).filter((park) => park.scene)) : null),
+    [index, content?.parks],
+  );
 
   // Draw the grid above the base map and below the park pins, which are HTML markers.
   useEffect(() => {

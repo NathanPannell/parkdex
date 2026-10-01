@@ -825,7 +825,7 @@
 .locate {
   position: absolute;
   right: 14px;
-  bottom: calc(var(--safe-bottom) + 276px);
+  bottom: calc(var(--safe-bottom) + 264px);
   z-index: 10;
   width: 52px;
   height: 52px;
@@ -2278,6 +2278,8 @@
   justify-content: space-between;
   align-items: flex-end;
   padding-top: 6px;
+  /* Keeps the settings button's drop shadow clear of the rank card or case below. */
+  margin-bottom: 22px;
 }
 
 .col-head h1 {

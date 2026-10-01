@@ -209,26 +209,38 @@ describe("bundled overview PMTiles source", () => {
 });
 
 describe("detail map coverage notifications", () => {
-  it("notifies the map only when its allowed chunk set grows", () => {
+  it("rebuilds the detail source only when new coverage can fill a refused tile", async () => {
     const releaseId = "coverage-listener-test";
     const listener = vi.fn();
     resetAllowedMapChunks(releaseId);
     const unsubscribe = subscribeMapCoverage(releaseId, listener);
+    let online = true;
+    const runtime = {
+      ensureFile: vi.fn(async () => {
+        if (!online) throw Object.assign(new Error("offline"), { name: "ContentUnavailableOfflineError" });
+      }),
+      readFile: async () => new Uint8Array([1, 2]).buffer,
+    } as unknown as ContentRuntime;
+    const source = new RuntimeChunkSource(runtime, releaseId, { size: 8, chunkBytes: 2, count: 4 }, () => new Set(getAllowedMapChunks(releaseId)));
     try {
-      setAllowedMapChunks(releaseId, [1, 1]);
+      // Coverage that arrives while every tile read succeeded needs no redraw.
       setAllowedMapChunks(releaseId, [1]);
-      expect(listener).toHaveBeenCalledOnce();
+      expect(listener).not.toHaveBeenCalled();
+      // A refused read (offline, not downloaded) makes the next growth rebuild once.
+      online = false;
+      await expect(source.getBytes(4, 1)).rejects.toThrow("has not been downloaded");
+      setAllowedMapChunks(releaseId, [1]);
+      expect(listener).not.toHaveBeenCalled();
       setAllowedMapChunks(releaseId, [2]);
-      expect(listener).toHaveBeenCalledTimes(2);
-      expect(getAllowedMapChunks(releaseId)).toEqual([1, 2]);
-      unsubscribe();
+      expect(listener).toHaveBeenCalledOnce();
       setAllowedMapChunks(releaseId, [3]);
-      expect(listener).toHaveBeenCalledTimes(2);
+      expect(listener).toHaveBeenCalledOnce();
+      expect(getAllowedMapChunks(releaseId)).toEqual([1, 2, 3]);
     } finally {
       unsubscribe();
       resetAllowedMapChunks(releaseId);
     }
-  });
+  });;
 
   it("recreates the detail source through a style diff and preserves overview and live overlays", () => {
     const style: StyleSpecification = {

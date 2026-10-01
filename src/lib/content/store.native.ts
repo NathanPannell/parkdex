@@ -222,6 +222,9 @@ export class NativeContentStore implements ContentStore {
   private connection: SQLiteDBConnection | null = null;
   private initializing: Promise<void> | null = null;
   private readonly objectUrls = new Map<string, string>();
+  // Mirror of content_files, loaded once so startup checks cost one query.
+  private recordedSizes: Map<string, number> | null = null;
+  private recordedSizesLoad: Promise<Map<string, number>> | null = null;
   private readonly writeLocks = new Map<string, Promise<void>>();
   private readonly knownDirectories = new Set<string>();
   private directoryQueue: Promise<void> = Promise.resolve();
@@ -304,6 +307,9 @@ export class NativeContentStore implements ContentStore {
       throw error;
     }
     if (stat.size !== expectedSize) return false;
+    // Files recorded here were SHA-256 checked when installed, and fileUrl checks
+    // again on read, so a cold start need not rehash every badge over the bridge.
+    if ((await this.recordedFiles()).get(key) === expectedSize) return true;
     const bytes = await this.readNativeFile(blobPath(key));
     if (bytes.byteLength !== expectedSize || (await sha256(bytes)) !== key) return false;
     await this.recordFile(key, expectedSize);
@@ -418,6 +424,7 @@ export class NativeContentStore implements ContentStore {
         if (!isMissingFile(error)) throw error;
       }
       await this.db().run("DELETE FROM content_files WHERE hash = ?", [key]);
+      this.recordedSizes?.delete(key);
       this.revokeHashUrls(key);
     }));
   }
@@ -755,6 +762,16 @@ export class NativeContentStore implements ContentStore {
       "INSERT OR REPLACE INTO content_files(hash, byte_size) VALUES(?, ?)",
       [hash, size],
     );
+    this.recordedSizes?.set(hash, size);
+  }
+
+  private recordedFiles(): Promise<Map<string, number>> {
+    this.recordedSizesLoad ??= this.db().query("SELECT hash, byte_size FROM content_files", []).then((result) => {
+      const sizes = new Map((result.values ?? []).map((row) => [String(row.hash), Number(row.byte_size)]));
+      this.recordedSizes = sizes;
+      return sizes;
+    });
+    return this.recordedSizesLoad;
   }
 
   private async writeNativeFile(hash: string, bytes: ArrayBuffer) {

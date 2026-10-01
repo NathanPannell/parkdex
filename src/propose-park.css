@@ -153,3 +153,8 @@
   width: 4px;
   height: 6px;
 }
+
+.propose-top .btn--icon {
+  flex: none;
+  border-radius: 50%;
+}

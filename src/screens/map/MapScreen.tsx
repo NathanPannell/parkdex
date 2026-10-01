@@ -118,7 +118,13 @@ export function MapScreen() {
     saveLastLocation(user);
     if (hadFix.current) return;
     hadFix.current = true;
-    mapRef.current?.flyTo({ center: user, zoom: USER_ZOOM, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+    const map = mapRef.current;
+    if (!map) return;
+    // The map already opened on the last known location; only move if the visitor is
+    // somewhere else, so a cold start does not animate away from tiles already drawn.
+    const center = map.getCenter();
+    if (distanceKm([center.lng, center.lat], user) < 0.5 && Math.abs(map.getZoom() - USER_ZOOM) < 0.5) return;
+    map.flyTo({ center: user, zoom: USER_ZOOM, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }, [hasUsableGpsFix, state.accuracy, user]);
 
   // The account screen can ask to open Download maps.

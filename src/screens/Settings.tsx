@@ -45,11 +45,11 @@ export function Settings() {
 
       <div className="account-body">
         <section className="account-card card account-section" aria-label="Settings">
-          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "downloads" })}>
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
+          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "account" })}>
+            <span className="account-setting__icon" aria-hidden="true"><Icon name="link" size={20} /></span>
             <span className="account-setting__text">
-              <strong>Manage downloads</strong>
-              <span>{downloadsLine}</span>
+              <strong>Account &amp; backup</strong>
+              <span>Sign in to back up your Dex</span>
             </span>
             <Icon name="next" size={18} />
           </button>
@@ -68,11 +68,11 @@ export function Settings() {
               aria-label="Sound effects"
             />
           </label>
-          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "account" })}>
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="link" size={20} /></span>
+          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "downloads" })}>
+            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
             <span className="account-setting__text">
-              <strong>Account &amp; backup</strong>
-              <span>Sign in to back up your Dex</span>
+              <strong>Manage downloads</strong>
+              <span>{downloadsLine}</span>
             </span>
             <Icon name="next" size={18} />
           </button>
