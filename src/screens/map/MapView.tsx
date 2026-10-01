@@ -7,7 +7,7 @@ import { EarnedBadge } from "../../components/EarnedBadge";
 import { Icon } from "../../components/Icon";
 import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
-import { ISLAND_BOUNDS, mapStyle } from "../../lib/mapStyle";
+import { mapStyle } from "../../lib/mapStyle";
 import { configureMapLibreWorker } from "../../lib/mapStartup";
 import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
@@ -17,11 +17,16 @@ import type { Claim } from "../../lib/store";
 import { useContent, useContentRuntime, useMapDetailReady } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
-const tierOf = (z: number): Tier => (z < 8.6 ? "far" : z < 10.4 ? "mid" : "near");
+// Pins stay dots until the map is zoomed to a town, so dense areas stay readable.
+const tierOf = (z: number): Tier => (z < 10.5 ? "far" : z < 12 ? "mid" : "near");
 
 type Props = {
   mapRef: RefObject<MLMap | null>;
   user: LngLat;
+  /** False until a real location is known, so no pin appears at a placeholder spot. */
+  showUser: boolean;
+  /** Where the camera opens when this map instance is first created. */
+  initialView: { center: LngLat; zoom: number };
   fc: BoundaryCollection | undefined;
   /** Parks to pin: those with a badge to earn, plus any already in the Dex. */
   parks: readonly Park[];
@@ -51,7 +56,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
+export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const contentMapDetailReady = useMapDetailReady();
@@ -90,17 +95,13 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
     setUserHost(null);
     styleRelease.current = null;
     const savedCamera = camera.current;
-    const zoom = savedCamera?.zoom ?? 10.7;
+    const zoom = savedCamera?.zoom ?? initialView.zoom;
     configureMapLibreWorker();
     const map = new MLMap({
       container: container.current!,
       style: mapStyle(),
-      minZoom: 6.5,
-      maxBounds: [
-        [ISLAND_BOUNDS[0] - 1.5, ISLAND_BOUNDS[1] - 0.8],
-        [ISLAND_BOUNDS[2] + 1.5, ISLAND_BOUNDS[3] + 0.8],
-      ],
-      center: savedCamera?.center ?? user,
+      minZoom: 2.5,
+      center: savedCamera?.center ?? initialView.center,
       zoom,
       bearing: savedCamera?.bearing ?? 0,
       pitch: savedCamera?.pitch ?? 0,
@@ -324,7 +325,7 @@ export function MapView({ mapRef, user, fc, parks, claims, rarityProgress, progr
           park.id,
         ),
       )}
-      {userHost && createPortal(<UserDot moving={!!tripId} />, userHost)}
+      {userHost && showUser && createPortal(<UserDot moving={!!tripId} />, userHost)}
     </div>
   );
 }
