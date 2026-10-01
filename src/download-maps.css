@@ -190,3 +190,10 @@
   min-width: 0;
   white-space: normal;
 }
+
+.dlmaps-wifi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}

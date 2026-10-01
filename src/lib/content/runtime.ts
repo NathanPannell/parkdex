@@ -1407,8 +1407,17 @@ class ContentRuntimeController implements ContentRuntime {
 
   private policyForeground = true;
 
+  private allowMobileMapData = false;
+
   private currentPolicy(): DownloadPolicy {
-    return { foreground: this.policyForeground, connectivity: this.connectivity() };
+    return { foreground: this.policyForeground, connectivity: this.connectivity(), allowMobileMapData: this.allowMobileMapData };
+  }
+
+  /** Let chosen map squares and the area around the visitor download on mobile data. */
+  setAllowMobileMapData(allowed: boolean): void {
+    if (this.stopped || this.allowMobileMapData === allowed) return;
+    this.allowMobileMapData = allowed;
+    this.scheduler.setPolicy(this.currentPolicy());
   }
 
   private connectivity(): Connectivity {
@@ -1651,7 +1660,11 @@ class ContentRuntimeController implements ContentRuntime {
       let bytes: ArrayBuffer;
       try {
         // Nearby and streamed map detail may use mobile data; other map chunks wait for Wi-Fi.
-        const init: ContentRequestInit = { signal, cache: "force-cache", anyNetwork: purpose === "nearby" };
+        const init: ContentRequestInit = {
+          signal,
+          cache: "force-cache",
+          anyNetwork: purpose === "nearby" || (purpose === "bulk" && this.allowMobileMapData),
+        };
         const response = await this.fetcher(file.url, init);
         if (!response.ok) throw new Error(`Content file ${file.path} returned HTTP ${response.status}`);
         assertUnredirected(response, file.url, `Content file ${file.path}`);

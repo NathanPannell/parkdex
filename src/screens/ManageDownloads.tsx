@@ -18,6 +18,7 @@ import {
   type CellIndex,
 } from "../lib/mapCells";
 import { summarizeLocalStorage, type LocalStorageSummary } from "../lib/localStorageSummary";
+import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../lib/downloadPreferences";
 import { mapChunkPath } from "../lib/offlineTiles";
 import { useStore } from "../lib/store";
 import "../download-maps.css";
@@ -35,6 +36,9 @@ export function ManageDownloads() {
   const [freeBytes, setFreeBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mobileData, setMobileData] = useState(() => readAllowMobileMapData());
+
+  useEffect(() => subscribeAllowMobileMapData(setMobileData), []);
 
   const refresh = useCallback(async () => {
     setSummary(await summarizeLocalStorage(runtime));
@@ -142,6 +146,24 @@ export function ManageDownloads() {
             <div><dt>Parkdex is using</dt><dd>{summary ? formatMegabytes(summary.totalBytes) : "…"}</dd></div>
             {freeBytes !== null && <div><dt>Free space</dt><dd>{formatMegabytes(freeBytes)}</dd></div>}
           </dl>
+        </section>
+
+        <section className="account-card card account-section" aria-label="Download settings">
+          <label className="account-setting account-setting--row">
+            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
+            <span className="account-setting__text">
+              <strong>Allow downloads on mobile data</strong>
+              <span>{mobileData ? "Map squares and the area around you download on any connection" : "Map squares and the area around you wait for Wi-Fi"}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="account-switch"
+              checked={mobileData}
+              onChange={(event) => writeAllowMobileMapData(event.target.checked)}
+              aria-label="Allow downloads on mobile data"
+            />
+          </label>
         </section>
 
         <section className="account-card card account-section" aria-labelledby="downloads-squares">
