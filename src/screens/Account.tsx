@@ -6,7 +6,6 @@ import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
 import { useStore } from "../lib/store";
-import { readSavedSquares, requestDownloadMaps } from "../lib/mapCells";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
 
@@ -128,7 +127,6 @@ function GoogleSignInButton({
 export function Account({ onBack }: { onBack: () => void }) {
   const auth = useAuth();
   const { state, dispatch } = useStore();
-  const [savedSquareCount] = useState(() => readSavedSquares().length);
   const [mode, setMode] = useState<"sign_in" | "sign_up" | "reset">("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -579,34 +577,12 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-notice card is-error" role="alert"><span>{state.progressError}</span></section>
         )}
 
-        <section className="account-card card account-section" aria-labelledby="account-settings-title">
-          <span className="eyebrow" id="account-settings-title">Settings</span>
-          <label className="account-setting">
-            <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
+        <section className="account-card card account-section">
+          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "settings" })}>
+            <span className="account-setting__icon" aria-hidden="true"><Icon name="gear" size={20} /></span>
             <span className="account-setting__text">
-              <strong>Sound effects</strong>
-              <span>{state.muted ? "Off" : "On"}</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="account-switch"
-              checked={!state.muted}
-              onChange={() => dispatch({ type: "mute" })}
-              aria-label="Sound effects"
-            />
-          </label>
-          <button
-            className="account-setting account-setting--button"
-            onClick={() => {
-              dispatch({ type: "go", screen: "map" });
-              requestDownloadMaps();
-            }}
-          >
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Offline maps</strong>
-              <span>{savedSquareCount ? `${savedSquareCount} ${savedSquareCount === 1 ? "square" : "squares"} saved` : "Choose map squares to keep offline"}</span>
+              <strong>Settings</strong>
+              <span>Sound effects, downloads and offline maps</span>
             </span>
             <Icon name="next" size={18} />
           </button>

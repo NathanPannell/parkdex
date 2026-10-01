@@ -17,7 +17,7 @@ import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligib
 import { rarityLockMessage } from "../../lib/rarityUi";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
-import { useStore } from "../../lib/store";
+import { useStore, type Screen } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
 import { MapView } from "./MapView";
@@ -52,6 +52,7 @@ export function MapScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [downloadingMaps, setDownloadingMaps] = useState(false);
+  const downloadReturn = useRef<Screen | null>(null);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
   const [initialView] = useState(() => {
@@ -122,7 +123,9 @@ export function MapScreen() {
   // The account screen can ask to open Download maps.
   useEffect(() => {
     const open = () => {
-      if (!consumeDownloadMapsRequest()) return;
+      const request = consumeDownloadMapsRequest();
+      if (!request) return;
+      downloadReturn.current = request.returnTo;
       select(null);
       setProposing(false);
       setDownloadingMaps(true);
@@ -286,7 +289,17 @@ export function MapScreen() {
     return (
       <div className="screen map-screen">
         {mapView}
-        <DownloadMaps mapRef={mapRef} user={user} hasFix={hasUsableGpsFix} onClose={() => setDownloadingMaps(false)} />
+        <DownloadMaps
+          mapRef={mapRef}
+          user={user}
+          hasFix={hasUsableGpsFix}
+          onClose={() => {
+            setDownloadingMaps(false);
+            const returnTo = downloadReturn.current;
+            downloadReturn.current = null;
+            if (returnTo) dispatch({ type: "go", screen: returnTo });
+          }}
+        />
       </div>
     );
   }
@@ -357,8 +370,8 @@ export function MapScreen() {
             <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
               <Icon name="feedback" size={20} /> Send feedback
             </button>
-            <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setDownloadingMaps(true); }}>
-              <Icon name="download" size={20} /> Download maps
+            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "go", screen: "settings" }); }}>
+              <Icon name="gear" size={20} /> Settings
             </button>
             {isFeatureEnabled("parkProposals") && (
               <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing(true); }}>

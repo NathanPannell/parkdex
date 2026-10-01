@@ -18,6 +18,8 @@ import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
 import { Account } from "./screens/Account";
+import { ManageDownloads } from "./screens/ManageDownloads";
+import { Settings } from "./screens/Settings";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
@@ -149,6 +151,7 @@ function Screens() {
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
         else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "collection" : "onboarding" });
+        else if (s.screen === "downloads") dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
       }),
@@ -158,6 +161,8 @@ function Screens() {
   // Mount the map behind the splash so saved pins and tiles can warm while the
   // opening animation plays. Keep the same map instance when the splash leaves.
   const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
+  // Settings pages cover the map but keep it mounted, so its camera and tiles survive.
+  const mapCovered = screen === "claim" || screen === "settings" || screen === "downloads";
   const showNav = showMap && (screen === "map" || screen === "collection");
 
   return (
@@ -167,16 +172,18 @@ function Screens() {
           style={{
             position: "absolute",
             inset: 0,
-            visibility: screen === "claim" ? "hidden" : "visible",
+            visibility: mapCovered ? "hidden" : "visible",
           }}
-          inert={screen === "splash" || screen === "claim"}
-          aria-hidden={screen === "splash" || screen === "claim"}
+          inert={screen === "splash" || mapCovered}
+          aria-hidden={screen === "splash" || mapCovered}
         >
           <MapScreen />
         </div>
       )}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
       <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "collection" : "onboarding" })} />}</AnimatePresence>
+      <AnimatePresence>{screen === "settings" && <Settings key="settings" />}</AnimatePresence>
+      <AnimatePresence>{screen === "downloads" && <ManageDownloads key="downloads" />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
       <Presence>
         {tracking && state.locationError === "denied" && screen === "map" && (
