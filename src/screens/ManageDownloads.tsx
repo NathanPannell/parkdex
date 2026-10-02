@@ -147,7 +147,7 @@ export function ManageDownloads() {
           <ul className="downloads-list">
             <li>
               <span className="downloads-list__text">
-                <strong>Map detail around you and where you browsed</strong>
+                <strong>Map detail around you</strong>
                 <span>{summary ? formatMegabytes(summary.mapCacheBytes) : "…"} · downloads again when needed</span>
               </span>
               <button className="btn btn--paper btn--sm" disabled={!!busy || !summary?.mapCacheBytes} onClick={() => void clearMapCache()}>

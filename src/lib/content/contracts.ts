@@ -206,6 +206,10 @@ export interface ContentRuntime {
   getFileUrl(releaseId: string, path: string): Promise<string>;
   /** Whether a release file is saved and verified on this device. */
   hasLocalFile?(releaseId: string, path: string): Promise<boolean>;
+  /** Whether the device currently has a network connection. */
+  isConnected?(): boolean;
+  /** Read a saved file of a map version by path, or null when it is not on this device. */
+  readLocalMapFile?(version: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer | null>;
   /** Remove a saved detailed map chunk so a deleted map square frees its space. */
   deleteMapChunk?(releaseId: string, path: string): Promise<void>;
   /** Let chosen map squares and the area around the visitor download on mobile data. */
@@ -256,6 +260,17 @@ export const BUILD_MAP_POINTER: ContentMapPointer = {
   manifestUrl: "https://kip-assets.parkdex.app/releases/01a7e200fc12922215be78afd9800d8f9458369b077e9f7fea94b67497233f8d/map/manifest.json",
   manifestSha256: "ef99db0a47f2614f5396f042642122b7241473322d84947a8e79ae3cb0595106",
 };
+/**
+ * Layout of the archive BUILD_MAP_POINTER names, so the map can stream it from
+ * the CDN at launch without waiting for park content. Update with the pointer.
+ */
+export const BUILD_MAP_ARCHIVE = {
+  chunkBytes: 524288,
+  count: 2478,
+  size: 1298961806,
+  chunkBaseUrl: `https://kip-assets.parkdex.app/releases/${BUILD_MAP_POINTER.version}/map/island`,
+  glyphBaseUrl: "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/fonts",
+} as const;
 export const CONTENT_CDN_ORIGIN = "https://kip-assets.parkdex.app";
 
 export function isRemoteContentPath(path: string): boolean {

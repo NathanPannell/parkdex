@@ -1,11 +1,14 @@
 import { addProtocol, removeProtocol, type Map as MapLibreMap, type StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol, type RangeResponse, type Source } from "pmtiles";
-import type { ContentRuntime, ContentSnapshot, MapManifest } from "./content/contracts";
+import { BUILD_MAP_ARCHIVE, BUILD_MAP_POINTER, type ContentRuntime, type ContentSnapshot, type MapManifest } from "./content/contracts";
+import { BuildMapSource } from "./buildMapSource";
 
 const TILE_SCHEME = "pmtiles";
 const GLYPH_SCHEME = "contentglyph";
 export const BASE_OVERVIEW_KEY = "bundled-canada-overview-v1";
 export const BASE_OVERVIEW_PATH = "/map/bootstrap/canada-overview.pmtiles";
+/** Tile and glyph key for the detailed map this build pins; it needs no park content. */
+export const BUILD_MAP_KEY = `build-map-${BUILD_MAP_POINTER.version.slice(0, 16)}`;
 // 512 KB chunks: enough for a phone viewport across a few zoom levels.
 const MAX_CACHED_CHUNKS = 32;
 
@@ -27,6 +30,67 @@ let tileProtocolInstalled = false;
 let glyphProtocolInstalled = false;
 let bundledOverview: PMTiles | null = null;
 let detailedSourceRevision = 0;
+let buildMap: { runtime: ContentRuntime; references: number } | null = null;
+// Set when a detail tile could not be served, so a later retry can rebuild the source once.
+let buildMapUnavailable = false;
+
+/**
+ * Install the build's detailed map before park content is ready. Online it
+ * streams from the CDN; offline it reads downloaded map squares.
+ */
+export function registerBuildMapProtocols(runtime: ContentRuntime): () => void {
+  ensureProtocols();
+  if (buildMap) {
+    buildMap.runtime = runtime;
+    buildMap.references += 1;
+  } else {
+    buildMap = { runtime, references: 1 };
+    tileProtocol!.add(new PMTiles(createBuildMapSource()));
+  }
+  let cleaned = false;
+  return () => {
+    if (cleaned || !buildMap) return;
+    cleaned = true;
+    buildMap.references -= 1;
+    if (buildMap.references > 0) return;
+    buildMap = null;
+    buildMapUnavailable = false;
+    tileProtocol?.tiles.delete(BUILD_MAP_KEY);
+    if (registrations.size === 0) removeProtocols();
+  };
+}
+
+function createBuildMapSource(): BuildMapSource {
+  return new BuildMapSource({
+    key: BUILD_MAP_KEY,
+    archive: BUILD_MAP_ARCHIVE,
+    isConnected: buildMapConnected,
+    readLocal: async (index, offset, length) =>
+      (await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, mapChunkPath(index), offset, length)) ?? null,
+    onUnavailable: () => {
+      buildMapUnavailable = true;
+    },
+  });
+}
+
+function buildMapConnected(): boolean {
+  const connected = buildMap?.runtime.isConnected?.();
+  if (typeof connected === "boolean") return connected;
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/**
+ * Rebuild the detail source once after tiles failed and something changed that
+ * can fill them: the network came back or saved map files became readable.
+ */
+export function retryUnavailableBuildMap(): boolean {
+  if (!buildMapUnavailable || !buildMap || !tileProtocol) return false;
+  buildMapUnavailable = false;
+  // PMTiles keeps rejected header and directory promises; a new reader clears them.
+  tileProtocol.add(new PMTiles(createBuildMapSource()));
+  for (const listener of mapCoverageListeners.get(BUILD_MAP_KEY) ?? []) listener();
+  return true;
+}
 
 /**
  * Install the PMTiles and glyph handlers for a ready content snapshot.
@@ -76,7 +140,7 @@ function releaseCleanup(releaseId: string, entry: ReleaseRegistration): () => vo
 
     registrations.delete(releaseId);
     tileProtocol?.tiles.delete(releaseId);
-    if (registrations.size === 0) removeProtocols();
+    if (registrations.size === 0 && !buildMap) removeProtocols();
   };
 }
 
@@ -109,18 +173,35 @@ function removeProtocols(): void {
 async function loadGlyph(request: { url: string }, controller: AbortController): Promise<{ data: ArrayBuffer }> {
   const url = new URL(request.url);
   const releaseId = url.hostname;
-  const registration = registrations.get(releaseId);
-  if (!registration) throw new Error(`Map release ${releaseId} is no longer registered`);
-
   const match = url.pathname.match(/^\/map\/fonts\/(.+)\/([^/]+)\.pbf$/);
   if (!match) throw new Error("Invalid content glyph URL");
   const fontStack = decodeURIComponent(match[1]);
   const range = decodeURIComponent(match[2]);
   const path = `map/fonts/${fontStack}/${range}.pbf`;
+  if (releaseId === BUILD_MAP_KEY) return { data: await loadBuildGlyph(fontStack, range, path, controller.signal) };
+  const registration = registrations.get(releaseId);
+  if (!registration) throw new Error(`Map release ${releaseId} is no longer registered`);
   throwIfAborted(controller.signal);
   const bytes = await registration.runtime.readFile(releaseId, path);
   throwIfAborted(controller.signal);
   return { data: bytes };
+}
+
+/** Labels stream from the CDN like tiles; saved fonts are used only offline. */
+async function loadBuildGlyph(fontStack: string, range: string, path: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  if (buildMapConnected()) {
+    try {
+      const response = await fetch(`${BUILD_MAP_ARCHIVE.glyphBaseUrl}/${encodeURIComponent(fontStack)}/${encodeURIComponent(range)}.pbf`, { signal });
+      if (response.ok) return await response.arrayBuffer();
+    } catch (error) {
+      if (signal.aborted) throw error;
+    }
+  }
+  const local = await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, path);
+  throwIfAborted(signal);
+  if (local) return local;
+  buildMapUnavailable = true;
+  throw new Error("Map labels are not available offline");
 }
 
 /**
@@ -288,6 +369,7 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
   }
   // A rebuild redraws every detail tile, which shows as a flicker. It is only needed when
   // MapLibre is holding failed tiles that the new chunks can now fill.
+  if (changed) retryUnavailableBuildMap();
   if (changed && refusedReleases.has(releaseId)) {
     refusedReleases.delete(releaseId);
     const registration = registrations.get(releaseId);

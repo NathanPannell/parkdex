@@ -271,6 +271,21 @@ describe("NativeContentStore deletion guard", () => {
     await store.close();
   });
 
+  it("serves a recorded file from disk without copying it through the bridge", async () => {
+    const query = nativeMocks.db.query.getMockImplementation()!;
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement === "SELECT hash, byte_size FROM content_files") return { values: [{ hash: HASH, byte_size: 12 }] };
+      return query(statement, values);
+    });
+    nativeMocks.stat.mockResolvedValue({ size: 12, uri: "file:///data/blob" });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(await store.fileUrl(HASH, "image/webp")).toContain("/data/blob");
+    expect(nativeMocks.readFile).not.toHaveBeenCalled();
+    await store.close();
+  });
+
   it("migrates known older content columns without clearing content files", async () => {
     nativeMocks.tableColumns.set("content_retained_parks", ["park_id", "park_json"]);
     nativeMocks.tableColumns.set("content_sync_rows", ["environment", "entity", "row_id", "value_json"]);

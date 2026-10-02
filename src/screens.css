@@ -744,6 +744,13 @@
   }
 }
 
+/* Shown alone over the map while saved parks load, before the map controls appear. */
+.content-sync-spinner--parks {
+  top: calc(var(--safe-top) + 14px);
+  right: 18px;
+  z-index: 5;
+}
+
 .tool {
   width: 48px;
   height: 48px;
