@@ -1094,6 +1094,11 @@
   background: var(--paper);
 }
 
+.park-sheet__cta .btn--icon {
+  width: 58px;
+  height: 58px;
+}
+
 .btn--glow {
   animation: glow 1.6s ease-in-out infinite;
 }

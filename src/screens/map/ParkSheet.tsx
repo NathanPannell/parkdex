@@ -62,6 +62,18 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
   const openDirections = () => {
     if (content && !accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
+  // Without a known road route there is nothing to preview in the app, so the
+  // main button goes straight to Google Maps (the stored link, or the park pin).
+  const mapsButton = (
+    <a className="btn btn--block" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" onClick={openDirections}>
+      <Icon name="pin" /> Open in Google Maps
+    </a>
+  );
+  const directionsButton = (
+    <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
+      <Icon name="car" />
+    </a>
+  );
   const badge = claim
     ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
     : <Badge park={park} size={176} animated state="preview" />;
@@ -161,28 +173,28 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
               {rarityLockMessage(eligibility)}
             </button>
           ) : (
-            <>
-              <button className="btn btn--block" onClick={onGo}>
-                <Icon name={accessUnknown ? "pin" : "route"} /> {accessUnknown ? "View park location" : "Preview route"}
-              </button>
-              <a className="btn btn--paper btn--icon" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" aria-label={accessUnknown ? "Park location in Google Maps" : "Directions in Google Maps"} onClick={openDirections}>
-                <Icon name={accessUnknown ? "pin" : "car"} />
-              </a>
-            </>
+            accessUnknown ? mapsButton : (
+              <>
+                <button className="btn btn--block" onClick={onGo}>
+                  <Icon name="route" /> Preview route
+                </button>
+                {directionsButton}
+              </>
+            )
           )
         ) : inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
             <Icon name="camera" /> Check in &amp; claim
           </button>
         ) : (
-          <>
-            <button className="btn btn--block" onClick={onGo}>
-              <Icon name={accessUnknown ? "pin" : "route"} /> {accessUnknown ? "View park location" : "Let's go"}
-            </button>
-            <a className="btn btn--paper btn--icon" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" aria-label={accessUnknown ? "Park location in Google Maps" : "Directions in Google Maps"} onClick={openDirections}>
-              <Icon name={accessUnknown ? "pin" : "car"} />
-            </a>
-          </>
+          accessUnknown ? mapsButton : (
+            <>
+              <button className="btn btn--block" onClick={onGo}>
+                <Icon name="route" /> Let's go
+              </button>
+              {directionsButton}
+            </>
+          )
         )}
       </motion.div>
     </motion.div>
