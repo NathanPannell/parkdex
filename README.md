@@ -71,6 +71,15 @@ The app watches GPS with high accuracy. A visitor counts as inside a park when t
 its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims live in
 localStorage; photos live in IndexedDB.
 
+## Friends and the weekly leaderboard
+
+Signed-in players can add friends from Settings, then Friends. Each account has an
+8-character friend code shown as a QR code; scanning uses the in-app camera (jsQR), and
+codes added offline are queued on the phone and sent the next time the Friends screen
+opens online. The board ranks unique parks claimed since Monday 00:00 Pacific. The API
+lives under `/api/social` (`worker/social.ts`, schema `kip_social`) and the screen is
+hidden unless the remote `friends` flag is on for the build (always shown in `npm run dev`).
+
 ## End-to-end check
 
 With `npm run dev` running:

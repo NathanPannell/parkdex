@@ -96,7 +96,14 @@
 .friends-code-form .fb-input {
   flex: 1;
   min-width: 0;
+}
+
+.friends-code-form .fb-input[aria-label="Friend code"] {
   text-transform: uppercase;
+}
+
+.friends-code-form .fb-input::placeholder {
+  text-transform: none;
 }
 
 .friends-me {

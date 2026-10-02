@@ -59,7 +59,7 @@ export function Settings() {
               <span className="account-setting__icon" aria-hidden="true"><Icon name="friends" size={20} /></span>
               <span className="account-setting__text">
                 <strong>Friends</strong>
-                <span>Add friends and race them each week</span>
+                <span>Weekly race with friends</span>
               </span>
               <Icon name="next" size={18} />
             </button>

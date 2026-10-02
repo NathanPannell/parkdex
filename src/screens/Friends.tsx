@@ -247,7 +247,7 @@ export function Friends() {
                   className="fb-input"
                   value={codeInput}
                   onChange={(event) => setCodeInput(event.target.value)}
-                  placeholder="Or type a code, like ABCD-EFGH"
+                  placeholder="Or type a code"
                   autoCapitalize="characters"
                   autoComplete="off"
                   spellCheck={false}
