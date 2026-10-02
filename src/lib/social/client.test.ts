@@ -14,10 +14,12 @@ vi.mock("../accounts/authClient", async (original) => ({
 }));
 
 const {
-  flushPendingCodes, formatFriendCode, friendLink, parseFriendCode, queueFriendCode, readPendingCodes, readSocialCache, writeSocialCache,
+  GUEST_OWNER, adoptGuestFriends, flushPendingFriends, formatFriendCode, friendLink, parseFriendLink, readPendingFriends, readSocialCache,
+  saveFriend, writeSocialCache,
 } = await import("./client");
 
 const ACCOUNT = "ae172e85-a8ab-4e1d-a032-901100000001";
+const ORIGIN = "https://staging.web.parkdex.app";
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -28,53 +30,68 @@ beforeEach(() => {
   fetchAuthenticated.mockReset();
 });
 
-describe("friend codes", () => {
-  it("reads codes typed by hand or scanned from the QR link", () => {
-    expect(parseFriendCode("abcd-efgh")).toBe("ABCDEFGH");
-    expect(parseFriendCode(" ABCD EFGH ")).toBe("ABCDEFGH");
-    expect(parseFriendCode(friendLink("ABCDEFGH"))).toBe("ABCDEFGH");
-    expect(parseFriendCode("ABCDEFG1")).toBeNull();
-    expect(parseFriendCode("https://example.test/")).toBeNull();
+describe("friend links", () => {
+  it("round-trips the code and name through the QR link", () => {
+    const link = friendLink(ORIGIN, "ABCDEFGH", "Robin & Sam");
+    expect(link).toBe("https://staging.web.parkdex.app/friend/ABCDEFGH?n=Robin+%26+Sam");
+    expect(parseFriendLink(link)).toEqual({ code: "ABCDEFGH", name: "Robin & Sam" });
+    expect(parseFriendLink(friendLink(ORIGIN, "ABCDEFGH", null))).toEqual({ code: "ABCDEFGH", name: null });
+  });
+
+  it("rejects links that are not friend links", () => {
+    expect(parseFriendLink("https://staging.web.parkdex.app/account?code=ABCDEFGH")).toBeNull();
+    expect(parseFriendLink("https://example.test/")).toBeNull();
+    expect(parseFriendLink("ABCDEFG1")).toBeNull();
+    expect(parseFriendLink("abcd-efgh")).toEqual({ code: "ABCDEFGH", name: null });
     expect(formatFriendCode("ABCDEFGH")).toBe("ABCD-EFGH");
   });
 });
 
-describe("offline friend codes", () => {
-  it("queues each code once", () => {
-    queueFriendCode(ACCOUNT, "ABCDEFGH");
-    queueFriendCode(ACCOUNT, "ABCDEFGH");
-    queueFriendCode(ACCOUNT, "HGFEDCBA");
-    expect(readPendingCodes(ACCOUNT)).toEqual(["ABCDEFGH", "HGFEDCBA"]);
-    expect(readPendingCodes("someone-else")).toEqual([]);
+describe("saved friends", () => {
+  it("saves each friend once per owner", () => {
+    saveFriend(ACCOUNT, { code: "ABCDEFGH", name: "Robin" });
+    saveFriend(ACCOUNT, { code: "ABCDEFGH", name: "Robin" });
+    saveFriend(ACCOUNT, { code: "HGFEDCBA", name: null });
+    expect(readPendingFriends(ACCOUNT).map((friend) => friend.code)).toEqual(["ABCDEFGH", "HGFEDCBA"]);
+    expect(readPendingFriends("someone-else")).toEqual([]);
   });
 
-  it("adds queued friends, drops codes the server rejects, and keeps the rest when offline", async () => {
-    queueFriendCode(ACCOUNT, "AAAAAAAA");
-    queueFriendCode(ACCOUNT, "BBBBBBBB");
-    queueFriendCode(ACCOUNT, "CCCCCCCC");
+  it("hands a guest's saved friends to the account they sign in with", () => {
+    saveFriend(GUEST_OWNER, { code: "ABCDEFGH", name: "Robin" });
+    saveFriend(ACCOUNT, { code: "HGFEDCBA", name: "Sam" });
+    expect(adoptGuestFriends(ACCOUNT)).toBe(1);
+    expect(readPendingFriends(GUEST_OWNER)).toEqual([]);
+    expect(readPendingFriends(ACCOUNT).map((friend) => friend.name)).toEqual(["Sam", "Robin"]);
+    expect(adoptGuestFriends(ACCOUNT)).toBe(0);
+  });
+
+  it("sends saved friends, drops codes the server rejects, and keeps the rest when offline", async () => {
+    saveFriend(ACCOUNT, { code: "AAAAAAAA", name: "Robin" });
+    saveFriend(ACCOUNT, { code: "BBBBBBBB", name: "Old code" });
+    saveFriend(ACCOUNT, { code: "CCCCCCCC", name: "Sam" });
     fetchAuthenticated
-      .mockResolvedValueOnce(reply(201, { friend: { accountId: "f", displayName: "Robin", parksThisWeek: 0, totalParks: 3, isMe: false } }))
+      .mockResolvedValueOnce(reply(201, { friend: { accountId: "f", displayName: "Robin", parksThisMonth: 0, totalParks: 3, isMe: false } }))
       .mockResolvedValueOnce(reply(404, { code: "code_not_found", message: "No one has that friend code." }))
       .mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    const result = await flushPendingCodes(ACCOUNT);
+    const result = await flushPendingFriends(ACCOUNT);
     expect(result.added.map((friend) => friend.displayName)).toEqual(["Robin"]);
-    expect(result.rejected).toEqual([{ code: "BBBBBBBB", message: "No one has that friend code." }]);
-    expect(readPendingCodes(ACCOUNT)).toEqual(["CCCCCCCC"]);
+    expect(result.rejected.map((entry) => [entry.friend.name, entry.message])).toEqual([["Old code", "No one has that friend code."]]);
+    expect(readPendingFriends(ACCOUNT).map((friend) => friend.code)).toEqual(["CCCCCCCC"]);
     expect(fetchAuthenticated).toHaveBeenCalledWith("/api/social/friends", expect.objectContaining({ method: "POST" }), ACCOUNT);
   });
 
-  it("keeps codes when the session has expired", async () => {
-    queueFriendCode(ACCOUNT, "AAAAAAAA");
+  it("keeps saved friends when the session has expired", async () => {
+    saveFriend(ACCOUNT, { code: "AAAAAAAA", name: null });
     fetchAuthenticated.mockResolvedValueOnce(reply(401, { message: "Authentication required." }));
-    await flushPendingCodes(ACCOUNT);
-    expect(readPendingCodes(ACCOUNT)).toEqual(["AAAAAAAA"]);
+    await flushPendingFriends(ACCOUNT);
+    expect(readPendingFriends(ACCOUNT)).toHaveLength(1);
   });
 });
 
 describe("cached board", () => {
   it("survives a reload per account", () => {
-    const board = { weekStart: "2026-09-28T07:00:00Z", rows: [] };
+    const board = { monthStart: "2026-10-01T07:00:00Z", rows: [] };
     writeSocialCache(ACCOUNT, { profile: { displayName: "Nathan", friendCode: "ABCDEFGH" }, board, fetchedAt: "2026-10-02T08:00:00Z" });
     expect(readSocialCache(ACCOUNT).profile?.friendCode).toBe("ABCDEFGH");
     expect(readSocialCache("other").profile).toBeNull();

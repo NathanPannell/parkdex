@@ -237,7 +237,8 @@ async function authLinkDigest(rawUrl: string): Promise<string> {
   }
 }
 
-function getAuthLinkOrigin(): string {
+/** The https origin this build opens App Links on: the account API host. */
+export function getAuthLinkOrigin(): string {
   return getAuthApiOrigin();
 }
 

@@ -21,7 +21,7 @@ const FRIEND = "ae172e85-a8ab-4e1d-a032-901100000002";
 const STRANGER = "ae172e85-a8ab-4e1d-a032-901100000003";
 const ORIGIN = "https://api.example.test";
 
-type Claim = { parkId: string; thisWeek: boolean };
+type Claim = { parkId: string; thisMonth: boolean };
 
 class MemorySocialStore implements SocialStore {
   readonly names = new Map<string, string | null>([[ME, "Nathan"], [FRIEND, "Robin"], [STRANGER, null]]);
@@ -43,7 +43,7 @@ class MemorySocialStore implements SocialStore {
     return {
       accountId,
       displayName: this.names.get(accountId) ?? null,
-      parksThisWeek: new Set(claims.filter((claim) => claim.thisWeek).map((claim) => claim.parkId)).size,
+      parksThisMonth: new Set(claims.filter((claim) => claim.thisMonth).map((claim) => claim.parkId)).size,
       totalParks: new Set(claims.map((claim) => claim.parkId)).size,
       friendsSince: null,
     };
@@ -90,7 +90,7 @@ class MemorySocialStore implements SocialStore {
   async leaderboard(accountId: string): Promise<Leaderboard> {
     const friends = [...this.friendships].filter((pair) => pair.includes(accountId))
       .map((pair) => pair.split(":").find((id) => id !== accountId)!);
-    return { weekStart: "2026-09-28T07:00:00.000Z", rows: [accountId, ...friends].map((id) => this.row(id)) };
+    return { monthStart: "2026-10-01T07:00:00.000Z", rows: [accountId, ...friends].map((id) => this.row(id)) };
   }
 }
 
@@ -133,6 +133,7 @@ test("friend codes avoid look-alike characters and parse from links", () => {
   assert.equal(parseFriendCode("abcd-efgh"), "ABCDEFGH");
   assert.equal(parseFriendCode("https://parkdex.app/friend/ABCDEFGH"), "ABCDEFGH");
   assert.equal(parseFriendCode("https://parkdex.app/friend/ABCDEFGH/"), "ABCDEFGH");
+  assert.equal(parseFriendCode("https://web.parkdex.app/friend/ABCDEFGH?n=Robin"), "ABCDEFGH");
   assert.equal(parseFriendCode("ABCDEFG0"), null);
   assert.equal(parseFriendCode("ABC"), null);
   assert.equal(parseFriendCode(42), null);
@@ -191,19 +192,19 @@ test("adding a friend by code is mutual, idempotent and rejects your own code", 
   assert.deepEqual(theirBoard.rows.map((row: { displayName: string }) => row.displayName).sort(), ["Nathan", "Robin"]);
 });
 
-test("the leaderboard ranks unique parks this week, then all time, and marks you", async () => {
+test("the leaderboard ranks unique parks this month, then all time, and marks you", async () => {
   const store = new MemorySocialStore();
   store.codes.set(FRIEND, "FFFFFFFF");
   store.codes.set(STRANGER, "SSSSSSSS");
   await call(store, ME, "POST", "/api/social/friends", { code: "FFFFFFFF" });
   await call(store, ME, "POST", "/api/social/friends", { code: "SSSSSSSS" });
-  store.claims.set(ME, [{ parkId: "elk-lake", thisWeek: true }, { parkId: "elk-lake", thisWeek: true }, { parkId: "goldstream", thisWeek: false }]);
-  store.claims.set(FRIEND, [{ parkId: "elk-lake", thisWeek: true }, { parkId: "thetis", thisWeek: true }]);
-  store.claims.set(STRANGER, [{ parkId: "a", thisWeek: false }, { parkId: "b", thisWeek: false }, { parkId: "c", thisWeek: false }]);
+  store.claims.set(ME, [{ parkId: "elk-lake", thisMonth: true }, { parkId: "elk-lake", thisMonth: true }, { parkId: "goldstream", thisMonth: false }]);
+  store.claims.set(FRIEND, [{ parkId: "elk-lake", thisMonth: true }, { parkId: "thetis", thisMonth: true }]);
+  store.claims.set(STRANGER, [{ parkId: "a", thisMonth: false }, { parkId: "b", thisMonth: false }, { parkId: "c", thisMonth: false }]);
 
   const board = await body(await call(store, ME, "GET", "/api/social/leaderboard"));
-  assert.equal(board.weekStart, "2026-09-28T07:00:00.000Z");
-  assert.deepEqual(board.rows.map((row: Record<string, unknown>) => [row.displayName, row.parksThisWeek, row.totalParks, row.isMe]), [
+  assert.equal(board.monthStart, "2026-10-01T07:00:00.000Z");
+  assert.deepEqual(board.rows.map((row: Record<string, unknown>) => [row.displayName, row.parksThisMonth, row.totalParks, row.isMe]), [
     ["Robin", 2, 2, false],
     ["Nathan", 1, 2, true],
     ["Park explorer", 0, 3, false],

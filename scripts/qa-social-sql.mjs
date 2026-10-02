@@ -46,20 +46,20 @@ try {
   assert.equal((await store.addFriendByCode(me, otherCode, 200)).status, 'added');
   log('friend limit');
 
-  const week = (await pool.query(`SELECT (date_trunc('week', now() AT TIME ZONE 'America/Vancouver') AT TIME ZONE 'America/Vancouver') AS w`)).rows[0].w;
-  const thisWeek = new Date(new Date(week).getTime() + 60_000).toISOString();
-  const lastWeek = new Date(new Date(week).getTime() - 60_000).toISOString();
-  await claim(me, 'elk-lake', thisWeek);
-  await claim(me, 'elk-lake', thisWeek);
-  await claim(me, 'goldstream', lastWeek);
-  await claim(friend, 'elk-lake', thisWeek);
-  await claim(friend, 'thetis', thisWeek);
+  const month = (await pool.query(`SELECT (date_trunc('month', now() AT TIME ZONE 'America/Vancouver') AT TIME ZONE 'America/Vancouver') AS w`)).rows[0].w;
+  const thisMonth = new Date(new Date(month).getTime() + 60_000).toISOString();
+  const lastMonth = new Date(new Date(month).getTime() - 60_000).toISOString();
+  await claim(me, 'elk-lake', thisMonth);
+  await claim(me, 'elk-lake', thisMonth);
+  await claim(me, 'goldstream', lastMonth);
+  await claim(friend, 'elk-lake', thisMonth);
+  await claim(friend, 'thetis', thisMonth);
   const board = await store.leaderboard(me);
-  assert.equal(new Date(board.weekStart).getTime(), new Date(week).getTime());
-  const byName = Object.fromEntries(board.rows.map((row) => [row.displayName ?? '(none)', [row.parksThisWeek, row.totalParks]]));
+  assert.equal(new Date(board.monthStart).getTime(), new Date(month).getTime());
+  const byName = Object.fromEntries(board.rows.map((row) => [row.displayName ?? '(none)', [row.parksThisMonth, row.totalParks]]));
   assert.deepEqual(byName, { Nathan: [1, 2], Robin: [2, 2], '(none)': [0, 0] });
   assert.equal((await store.leaderboard(friend)).rows.length, 2, 'friends of friends are not shown');
-  log('weekly unique-park leaderboard');
+  log('monthly unique-park leaderboard');
 
   const rotated = await store.rotateCode(friend, `${code(1).slice(0, 7)}Z`);
   assert.equal(rotated.friendCode, `${code(1).slice(0, 7)}Z`);

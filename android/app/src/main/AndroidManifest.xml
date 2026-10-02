@@ -34,6 +34,16 @@
                     android:host="${authLinkHost}"
                     android:path="/account" />
             </intent-filter>
+            <!-- Friend QR codes: the phone's own camera opens Parkdex on /friend/CODE. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="${authLinkHost}"
+                    android:pathPrefix="/friend/" />
+            </intent-filter>
         </activity>
 
         <provider

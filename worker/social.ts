@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { HttpError, readJsonBody } from "./validation.js";
 
-/** Friends and the weekly friends leaderboard. Every route needs a signed-in account. */
+/** Friends and the friends leaderboard. Every route needs a signed-in account. */
 
 // No 0/O, 1/I/L: codes get read aloud and typed from a screen.
 export const FRIEND_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -20,13 +20,13 @@ export interface SocialProfile {
 export interface LeaderboardRow {
   accountId: string;
   displayName: string | null;
-  parksThisWeek: number;
+  parksThisMonth: number;
   totalParks: number;
   friendsSince: string | null;
 }
 
 export interface Leaderboard {
-  weekStart: string;
+  monthStart: string;
   rows: LeaderboardRow[];
 }
 
@@ -41,7 +41,7 @@ export interface SocialStore {
   setDisplayName(accountId: string, displayName: string): Promise<void>;
   addFriendByCode(accountId: string, code: string, limit: number): Promise<AddFriendResult>;
   removeFriend(accountId: string, friendId: string): Promise<boolean>;
-  /** The account and its friends, with unique parks claimed since the start of this week. */
+  /** The account and its friends, with unique parks claimed this month and all time. */
   leaderboard(accountId: string): Promise<Leaderboard>;
 }
 
@@ -59,10 +59,11 @@ export function generateFriendCode(): string {
   return Array.from(bytes, (byte) => FRIEND_CODE_ALPHABET[byte % FRIEND_CODE_ALPHABET.length]).join("");
 }
 
-/** Accepts a bare code or the QR link, in any case, with spaces or dashes. */
+/** Accepts a bare code or the QR link (with or without its query), in any case, with spaces or dashes. */
 export function parseFriendCode(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > 200) return null;
-  const tail = value.trim().split("/").filter(Boolean).pop() ?? "";
+  if (typeof value !== "string" || value.length > 300) return null;
+  const path = value.trim().replace(/[?#].*$/, "");
+  const tail = path.split("/").filter(Boolean).pop() ?? "";
   const code = tail.replace(/[\s-]/g, "").toUpperCase();
   return FRIEND_CODE.test(code) ? code : null;
 }
@@ -152,9 +153,9 @@ export async function handleSocialRequest(request: Request, handlers: SocialHand
   if (path === "/api/social/leaderboard") {
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
     const board = await store.leaderboard(me);
-    const rows = [...board.rows].sort((a, b) => b.parksThisWeek - a.parksThisWeek || b.totalParks - a.totalParks ||
+    const rows = [...board.rows].sort((a, b) => b.parksThisMonth - a.parksThisMonth || b.totalParks - a.totalParks ||
       (a.displayName ?? FALLBACK_NAME).localeCompare(b.displayName ?? FALLBACK_NAME));
-    return handlers.json({ weekStart: board.weekStart, rows: rows.map((row) => apiRow(row, me)) });
+    return handlers.json({ monthStart: board.monthStart, rows: rows.map((row) => apiRow(row, me)) });
   }
 
   throw new HttpError(404, "not_found", "Social API route not found.");
@@ -168,14 +169,14 @@ function rowFrom(row: Record<string, unknown>): LeaderboardRow {
   return {
     accountId: text(row.account_id).toLowerCase(),
     displayName: row.display_name === null || row.display_name === undefined ? null : text(row.display_name),
-    parksThisWeek: Number(row.parks_this_week ?? 0),
+    parksThisMonth: Number(row.parks_this_month ?? 0),
     totalParks: Number(row.total_parks ?? 0),
     friendsSince: row.friends_since === null || row.friends_since === undefined ? null : text(row.friends_since),
   };
 }
 
-// Weeks start Monday at midnight Pacific, where the parks are.
-const WEEK_START = "(date_trunc('week', now() AT TIME ZONE 'America/Vancouver') AT TIME ZONE 'America/Vancouver')";
+// Months start at midnight Pacific on the 1st, where the parks are.
+const MONTH_START = "(date_trunc('month', now() AT TIME ZONE 'America/Vancouver') AT TIME ZONE 'America/Vancouver')";
 
 export function createNeonSocialStore(databaseUrl: string): SocialStore {
   const sql = neon(databaseUrl);
@@ -192,7 +193,7 @@ export function createNeonSocialStore(databaseUrl: string): SocialStore {
   async function boardRows(accountIds: string[], friendsOf: string): Promise<LeaderboardRow[]> {
     const rows = await sql.query(`
       SELECT a.id AS account_id, a.display_name,
-        COUNT(DISTINCT c.park_id) FILTER (WHERE c.claimed_at >= ${WEEK_START}) AS parks_this_week,
+        COUNT(DISTINCT c.park_id) FILTER (WHERE c.claimed_at >= ${MONTH_START}) AS parks_this_month,
         COUNT(DISTINCT c.park_id) AS total_parks,
         f.created_at AS friends_since
       FROM kip_account.accounts a
@@ -261,8 +262,8 @@ export function createNeonSocialStore(databaseUrl: string): SocialStore {
         SELECT CASE WHEN account_low = $1::uuid THEN account_high ELSE account_low END AS friend_id
         FROM kip_social.friendships WHERE account_low = $1::uuid OR account_high = $1::uuid`, [accountId]);
       const ids = [accountId, ...friends.map((row) => text((row as Record<string, unknown>).friend_id).toLowerCase())];
-      const [week] = await sql.query(`SELECT ${WEEK_START} AS week_start`);
-      return { weekStart: text((week as Record<string, unknown>).week_start), rows: await boardRows(ids, accountId) };
+      const [month] = await sql.query(`SELECT ${MONTH_START} AS month_start`);
+      return { monthStart: text((month as Record<string, unknown>).month_start), rows: await boardRows(ids, accountId) };
     },
   };
 }

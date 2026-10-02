@@ -4,27 +4,32 @@ import { encode } from "uqr";
 import { Icon } from "../components/Icon";
 import { QrScanner } from "../components/QrScanner";
 import { useAuth } from "../lib/accounts/AuthProvider";
+import { getAuthLinkOrigin } from "../lib/accounts/nativeIdentity";
 import {
+  GUEST_OWNER,
   addFriend,
+  adoptGuestFriends,
   fetchLeaderboard,
   fetchProfile,
-  flushPendingCodes,
-  formatFriendCode,
+  flushPendingFriends,
   friendLink,
   isPermanentFriendError,
-  parseFriendCode,
-  queueFriendCode,
-  readPendingCodes,
+  parseFriendLink,
+  readPendingFriends,
   readSocialCache,
   removeFriend,
   rotateFriendCode,
   saveDisplayName,
+  saveFriend,
   writeSocialCache,
   type LeaderboardRow,
+  type PendingFriend,
   type SocialCache,
 } from "../lib/social/client";
 import { useStore } from "../lib/store";
 import "../friends.css";
+
+type Period = "month" | "all";
 
 function FriendQr({ value }: { value: string }) {
   const path = useMemo(() => {
@@ -50,44 +55,75 @@ function updatedLabel(fetchedAt: string | null): string {
   return hours < 24 ? `Updated ${hours} h ago` : `Updated ${new Date(fetchedAt).toLocaleDateString()}`;
 }
 
-function Leaderboard({ rows, onRemove }: { rows: LeaderboardRow[]; onRemove(row: LeaderboardRow): void }) {
+function monthName(monthStart: string | undefined): string {
+  const date = monthStart ? new Date(monthStart) : new Date();
+  return date.toLocaleDateString(undefined, { month: "long", timeZone: "America/Vancouver" });
+}
+
+function rank(rows: LeaderboardRow[], period: Period): LeaderboardRow[] {
+  const score = (row: LeaderboardRow) => (period === "month" ? row.parksThisMonth : row.totalParks);
+  const other = (row: LeaderboardRow) => (period === "month" ? row.totalParks : row.parksThisMonth);
+  return [...rows].sort((a, b) => score(b) - score(a) || other(b) - other(a) || a.displayName.localeCompare(b.displayName));
+}
+
+function Leaderboard({ rows, period, onRemove }: { rows: LeaderboardRow[]; period: Period; onRemove(row: LeaderboardRow): void }) {
   if (rows.length <= 1) {
-    return <p className="account-help">Add a friend to start a weekly race. Unique parks claimed since Monday count.</p>;
+    return <p className="account-help">Scan a friend's code to start comparing parks.</p>;
   }
   return (
     <ol className="friends-board">
-      {rows.map((row, index) => (
-        <li key={row.accountId} className={row.isMe ? "friends-board__row is-me" : "friends-board__row"}>
-          <span className="friends-board__rank" aria-label={`Rank ${index + 1}`}>{index + 1}</span>
-          <span className="friends-board__name">
-            <strong>{row.isMe ? `${row.displayName} (you)` : row.displayName}</strong>
-            <span>{row.totalParks} {row.totalParks === 1 ? "park" : "parks"} all time</span>
-          </span>
-          <span className="friends-board__score">
-            <strong>{row.parksThisWeek}</strong>
-            <span>this week</span>
-          </span>
-          {!row.isMe && (
-            <button className="account-text-button friends-board__remove" onClick={() => onRemove(row)} aria-label={`Remove ${row.displayName}`}>
-              <Icon name="close" size={16} />
-            </button>
-          )}
-        </li>
-      ))}
+      {rank(rows, period).map((row, index) => {
+        const score = period === "month" ? row.parksThisMonth : row.totalParks;
+        return (
+          <li key={row.accountId} className={row.isMe ? "friends-board__row is-me" : "friends-board__row"}>
+            <span className="friends-board__rank" aria-label={`Rank ${index + 1}`}>{index + 1}</span>
+            <span className="friends-board__name">
+              <strong>{row.isMe ? `${row.displayName} (you)` : row.displayName}</strong>
+              <span>{period === "month" ? `${row.totalParks} all time` : `${row.parksThisMonth} this month`}</span>
+            </span>
+            <span className="friends-board__score">
+              <strong>{score}</strong>
+              <span>{score === 1 ? "park" : "parks"}</span>
+            </span>
+            {!row.isMe && (
+              <button className="account-text-button friends-board__remove" onClick={() => onRemove(row)} aria-label={`Remove ${row.displayName}`}>
+                <Icon name="close" size={16} />
+              </button>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
-/** Friends and the weekly leaderboard. Needs an account; shows the last saved answer offline. */
+function SavedFriends({ friends, guest }: { friends: PendingFriend[]; guest: boolean }) {
+  if (!friends.length) return null;
+  return (
+    <ul className="friends-saved">
+      {friends.map((friend) => (
+        <li key={friend.code}>
+          <Icon name="friends" size={18} />
+          <span>{friend.name ?? "A Parkdex friend"}</span>
+          <span className="friends-saved__state">{guest ? "Needs your account" : "Adds when online"}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Friends and the leaderboard. Guests can scan and save friends; an account sends them. */
 export function Friends() {
   const { dispatch } = useStore();
   const auth = useAuth();
   const accountId = auth.account?.id ?? auth.ownerAccountId ?? null;
   const online = auth.phase === "authenticated";
+  const guest = !accountId;
+  const owner = accountId ?? GUEST_OWNER;
   const [cache, setCache] = useState<SocialCache>(() => (accountId ? readSocialCache(accountId) : { profile: null, board: null, fetchedAt: null }));
-  const [pending, setPending] = useState<string[]>(() => (accountId ? readPendingCodes(accountId) : []));
+  const [pending, setPending] = useState<PendingFriend[]>(() => readPendingFriends(owner));
+  const [period, setPeriod] = useState<Period>("month");
   const [scanning, setScanning] = useState(false);
-  const [codeInput, setCodeInput] = useState("");
   const [nameInput, setNameInput] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,51 +134,55 @@ export function Friends() {
   }, [accountId]);
 
   const refresh = useCallback(async () => {
+    setPending(readPendingFriends(owner));
     if (!accountId || !online) return;
     try {
-      const flushed = await flushPendingCodes(accountId);
-      setPending(readPendingCodes(accountId));
-      if (flushed.added.length) setMessage({ text: `Added ${flushed.added.map((friend) => friend.displayName).join(", ")}.` });
-      if (flushed.rejected.length) setMessage({ text: `${formatFriendCode(flushed.rejected[0].code)}: ${flushed.rejected[0].message}`, error: true });
+      adoptGuestFriends(accountId);
+      const flushed = await flushPendingFriends(accountId);
+      setPending(readPendingFriends(accountId));
+      if (flushed.rejected.length) {
+        const { friend, message: reason } = flushed.rejected[0];
+        setMessage({ text: `${friend.name ?? "A saved friend"}: ${reason}`, error: true });
+      }
       const [profile, board] = await Promise.all([fetchProfile(accountId), fetchLeaderboard(accountId)]);
       save({ profile, board, fetchedAt: new Date().toISOString() });
     } catch {
       setMessage({ text: "Couldn't reach Parkdex. Showing your last saved board.", error: true });
     }
-  }, [accountId, online, save]);
+  }, [accountId, online, owner, save]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const submitCode = async (raw: string) => {
-    if (!accountId) return;
-    const code = parseFriendCode(raw);
-    if (!code) {
-      setMessage({ text: "That doesn't look like a Parkdex friend code.", error: true });
+  const scanned = async (text: string) => {
+    setScanning(false);
+    const friend = parseFriendLink(text);
+    if (!friend) {
+      setMessage({ text: "That isn't a Parkdex friend code.", error: true });
       return;
     }
-    if (code === cache.profile?.friendCode) {
+    if (friend.code === cache.profile?.friendCode) {
       setMessage({ text: "That's your own code.", error: true });
       return;
     }
-    setCodeInput("");
-    if (!online) {
-      queueFriendCode(accountId, code);
-      setPending(readPendingCodes(accountId));
-      setMessage({ text: `Saved ${formatFriendCode(code)}. They'll be added when you're back online.` });
+    const name = friend.name ?? "your friend";
+    if (!accountId || !online) {
+      saveFriend(owner, friend);
+      setPending(readPendingFriends(owner));
+      setMessage({ text: guest ? `Saved ${name}. Make an account to become friends.` : `Saved ${name}. You'll be friends once you're back online.` });
       return;
     }
     setBusy(true);
     try {
-      const friend = await addFriend(accountId, code);
-      setMessage({ text: `${friend.displayName} is now your friend.` });
+      const added = await addFriend(accountId, friend.code);
+      setMessage({ text: `You and ${added.displayName} are now friends.` });
       await refresh();
     } catch (error) {
       if (isPermanentFriendError(error)) {
         setMessage({ text: error instanceof Error ? error.message : "That code didn't work.", error: true });
       } else {
-        queueFriendCode(accountId, code);
-        setPending(readPendingCodes(accountId));
-        setMessage({ text: `Saved ${formatFriendCode(code)}. They'll be added when you're back online.` });
+        saveFriend(owner, friend);
+        setPending(readPendingFriends(owner));
+        setMessage({ text: `Saved ${name}. You'll be friends once you're back online.` });
       }
     } finally {
       setBusy(false);
@@ -166,7 +206,7 @@ export function Friends() {
   };
 
   const newCode = async () => {
-    if (!accountId || !window.confirm("Make a new code? Your old QR code will stop working. Friends you already have stay.")) return;
+    if (!accountId || !window.confirm("Make a new QR code? Your old one will stop working. Friends you already have stay.")) return;
     setBusy(true);
     try {
       save({ ...cache, profile: await rotateFriendCode(accountId) });
@@ -187,8 +227,7 @@ export function Friends() {
     }
   };
 
-  const back = () => dispatch({ type: "go", screen: "settings" });
-  const signedOut = auth.phase === "guest" || !accountId;
+  const signIn = () => dispatch({ type: "go", screen: "account" });
 
   return (
     <motion.main
@@ -200,7 +239,7 @@ export function Friends() {
       aria-labelledby="friends-title"
     >
       <header className="account-head">
-        <button className="btn btn--paper btn--icon account-back" onClick={back} aria-label="Back">
+        <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Back">
           <Icon name="back" size={20} />
         </button>
         <div className="account-head__title">
@@ -210,91 +249,82 @@ export function Friends() {
       </header>
 
       <div className="account-body">
-        {signedOut ? (
+        {message && (
+          <div className={message.error ? "account-notice card is-error" : "account-notice card"} role="status">
+            <span>{message.text}</span>
+            <button className="account-notice__close" onClick={() => setMessage(null)} aria-label="Dismiss"><Icon name="close" size={16} /></button>
+          </div>
+        )}
+
+        {guest && (
           <section className="account-card card account-section friends-signin">
-            <strong>Sign in to add friends</strong>
-            <p className="account-help">Friends and the weekly leaderboard need a Parkdex account. You can keep exploring solo without one.</p>
-            <button className="btn btn--sun btn--block" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in</button>
+            <strong>{pending.length ? `${pending[0].name ?? "A friend"}${pending.length > 1 ? ` and ${pending.length - 1} more are` : " is"} waiting for you` : "Play with friends"}</strong>
+            <p className="account-help">
+              {pending.length
+                ? "Make a free account to become friends and see who's visited the most parks. Your Dex comes with you."
+                : "Scan a friend's code now, even offline. Make a free account when you're ready to join the board."}
+            </p>
+            <button className="btn btn--sun btn--block" onClick={signIn}>Make an account</button>
           </section>
-        ) : (
-          <>
-            {message && (
-              <div className={message.error ? "account-notice card is-error" : "account-notice card"} role="status">
-                <span>{message.text}</span>
-                <button className="account-notice__close" onClick={() => setMessage(null)} aria-label="Dismiss"><Icon name="close" size={16} /></button>
-              </div>
+        )}
+
+        {!guest && (
+          <section className="account-card card account-section" aria-labelledby="friends-board-title">
+            <div className="friends-section-head">
+              <h2 id="friends-board-title">Leaderboard</h2>
+              <span className="account-help">{updatedLabel(cache.fetchedAt)}</span>
+            </div>
+            <div className="friends-tabs" role="tablist" aria-label="Leaderboard period">
+              {(["month", "all"] as const).map((value) => (
+                <button key={value} role="tab" aria-selected={period === value} className={period === value ? "is-active" : ""} onClick={() => setPeriod(value)}>
+                  {value === "month" ? monthName(cache.board?.monthStart) : "All time"}
+                </button>
+              ))}
+            </div>
+            {cache.board ? (
+              <Leaderboard rows={cache.board.rows} period={period} onRemove={(row) => void remove(row)} />
+            ) : (
+              <p className="account-help">{online ? "Loading your board..." : "Your board shows here once you've been online."}</p>
             )}
+          </section>
+        )}
 
-            <section className="account-card card account-section" aria-labelledby="friends-board-title">
-              <div className="friends-section-head">
-                <h2 id="friends-board-title">This week</h2>
-                <span className="account-help">{updatedLabel(cache.fetchedAt)}</span>
-              </div>
-              {cache.board ? (
-                <Leaderboard rows={cache.board.rows} onRemove={(row) => void remove(row)} />
-              ) : (
-                <p className="account-help">{online ? "Loading your board..." : "Your board shows here once you've been online."}</p>
-              )}
-            </section>
+        <section className="account-card card account-section" aria-labelledby="friends-add-title">
+          <h2 id="friends-add-title">Add a friend</h2>
+          <p className="account-help">Scan the QR code on their Friends screen. Their phone camera can scan yours too.</p>
+          <button className="btn btn--sun btn--block" onClick={() => setScanning(true)} disabled={busy}>
+            <Icon name="qr" size={18} /> Scan their code
+          </button>
+          <SavedFriends friends={pending} guest={guest} />
+        </section>
 
-            <section className="account-card card account-section" aria-labelledby="friends-add-title">
-              <h2 id="friends-add-title">Add a friend</h2>
-              <button className="btn btn--sun btn--block" onClick={() => setScanning(true)} disabled={busy}>
-                <Icon name="qr" size={18} /> Scan their code
-              </button>
-              <form className="friends-code-form" onSubmit={(event) => { event.preventDefault(); void submitCode(codeInput); }}>
-                <input
-                  className="fb-input"
-                  value={codeInput}
-                  onChange={(event) => setCodeInput(event.target.value)}
-                  placeholder="Or type a code"
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-label="Friend code"
-                />
-                <button className="btn btn--paper btn--sm" type="submit" disabled={busy || !codeInput.trim()}>Add</button>
-              </form>
-              {pending.length > 0 && (
-                <p className="account-help">
-                  Waiting to add when you're online: {pending.map(formatFriendCode).join(", ")}
-                </p>
-              )}
-            </section>
-
-            <section className="account-card card account-section friends-me" aria-labelledby="friends-me-title">
-              <h2 id="friends-me-title">Your code</h2>
-              {cache.profile ? (
-                <>
-                  <FriendQr value={friendLink(cache.profile.friendCode)} />
-                  <p className="friends-me__code">{formatFriendCode(cache.profile.friendCode)}</p>
-                  {nameInput === null ? (
-                    <p className="account-help">
-                      Friends see you as <strong>{cache.profile.displayName ?? "Park explorer"}</strong>.{" "}
-                      <button className="account-text-button" onClick={() => setNameInput(cache.profile?.displayName ?? "")}>Change</button>
-                    </p>
-                  ) : (
-                    <form className="friends-code-form" onSubmit={(event) => void submitName(event)}>
-                      <input className="fb-input" value={nameInput} maxLength={40} onChange={(event) => setNameInput(event.target.value)} aria-label="Name friends see" autoFocus />
-                      <button className="btn btn--paper btn--sm" type="submit" disabled={busy || !nameInput.trim()}>Save</button>
-                    </form>
-                  )}
-                  <button className="account-text-button" onClick={() => void newCode()} disabled={busy || !online}>Make a new code</button>
-                </>
-              ) : (
-                <p className="account-help">{online ? "Loading your code..." : "Your code shows here once you've been online."}</p>
-              )}
-            </section>
-          </>
+        {!guest && (
+          <section className="account-card card account-section friends-me" aria-labelledby="friends-me-title">
+            <h2 id="friends-me-title">Your code</h2>
+            {cache.profile ? (
+              <>
+                <FriendQr value={friendLink(getAuthLinkOrigin(), cache.profile.friendCode, cache.profile.displayName)} />
+                {nameInput === null ? (
+                  <p className="account-help">
+                    Friends see you as <strong>{cache.profile.displayName ?? "Park explorer"}</strong>.{" "}
+                    <button className="account-text-button" onClick={() => setNameInput(cache.profile?.displayName ?? "")}>Change</button>
+                  </p>
+                ) : (
+                  <form className="friends-code-form" onSubmit={(event) => void submitName(event)}>
+                    <input className="fb-input" value={nameInput} maxLength={40} onChange={(event) => setNameInput(event.target.value)} aria-label="Name friends see" autoFocus />
+                    <button className="btn btn--paper btn--sm" type="submit" disabled={busy || !nameInput.trim()}>Save</button>
+                  </form>
+                )}
+                <button className="account-text-button" onClick={() => void newCode()} disabled={busy || !online}>Make a new code</button>
+              </>
+            ) : (
+              <p className="account-help">{online ? "Loading your code..." : "Your code shows here once you've been online."}</p>
+            )}
+          </section>
         )}
       </div>
 
-      {scanning && (
-        <QrScanner
-          onClose={() => setScanning(false)}
-          onResult={(text) => { setScanning(false); void submitCode(text); }}
-        />
-      )}
+      {scanning && <QrScanner onClose={() => setScanning(false)} onResult={(text) => void scanned(text)} />}
     </motion.main>
   );
 }

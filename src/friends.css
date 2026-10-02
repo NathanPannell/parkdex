@@ -98,14 +98,6 @@
   min-width: 0;
 }
 
-.friends-code-form .fb-input[aria-label="Friend code"] {
-  text-transform: uppercase;
-}
-
-.friends-code-form .fb-input::placeholder {
-  text-transform: none;
-}
-
 .friends-me {
   text-align: center;
 }
@@ -118,15 +110,6 @@
   border: 2.5px solid var(--ink);
   border-radius: 16px;
   box-shadow: var(--pop);
-}
-
-.friends-me__code {
-  margin: 12px 0 4px;
-  font-family: var(--display);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--ink) !important;
 }
 
 .friends-signin {
@@ -181,4 +164,56 @@
 
 .qr-scanner__error {
   color: var(--kip-dark);
+}
+
+.friends-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper-2);
+}
+
+.friends-tabs button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: 700 14px var(--body);
+  color: var(--ink-soft);
+}
+
+.friends-tabs button.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.friends-saved {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.friends-saved li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 2px dashed var(--ink-soft);
+  border-radius: 14px;
+}
+
+.friends-saved__state {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.friends-me .account-help {
+  margin-top: 12px;
 }

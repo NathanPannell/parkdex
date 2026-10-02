@@ -1,7 +1,7 @@
 import { AuthHttpError, fetchAuthenticated } from "../accounts/authClient";
 
 /**
- * Friends and the weekly friends leaderboard. The server owns the truth; the phone keeps the
+ * Friends and the friends leaderboard. The server owns the truth; the phone keeps the
  * last answer so the screen still shows offline, and queues friend codes scanned without signal.
  */
 
@@ -9,27 +9,52 @@ export type SocialProfile = { displayName: string | null; friendCode: string };
 export type LeaderboardRow = {
   accountId: string;
   displayName: string;
-  parksThisWeek: number;
+  parksThisMonth: number;
   totalParks: number;
   isMe: boolean;
 };
-export type Leaderboard = { weekStart: string; rows: LeaderboardRow[] };
+export type Leaderboard = { monthStart: string; rows: LeaderboardRow[] };
 export type SocialCache = { profile: SocialProfile | null; board: Leaderboard | null; fetchedAt: string | null };
 
 // Matches worker/social.ts: no 0/O or 1/I/L, so codes survive being read aloud.
 const FRIEND_CODE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
-export const FRIEND_LINK_BASE = "https://parkdex.app/friend/";
 
-export function friendLink(code: string): string {
-  return FRIEND_LINK_BASE + code;
+/** What a friend QR carries: the code, and the name to show before we're online. */
+export type FriendLink = { code: string; name: string | null };
+
+/**
+ * The QR is an https link on this build's App Link host, so the phone's own camera app
+ * opens Parkdex straight onto the Friends screen. The name is a hint for offline display only.
+ */
+export function friendLink(origin: string, code: string, name: string | null): string {
+  const url = new URL(`/friend/${code}`, origin);
+  if (name) url.searchParams.set("n", name.slice(0, 40));
+  return url.href;
 }
 
-/** Accepts a bare code or the QR link, in any case, with spaces or dashes. */
-export function parseFriendCode(value: string): string | null {
-  if (value.length > 200) return null;
-  const tail = value.trim().split("/").filter(Boolean).pop() ?? "";
+/** Reads a friend QR link, or a bare code, in any case, with spaces or dashes. */
+export function parseFriendLink(value: string): FriendLink | null {
+  if (value.length > 300) return null;
+  const trimmed = value.trim();
+  let path = trimmed;
+  let name: string | null = null;
+  if (/^https:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      if (!/^\/friend\/[^/]+\/?$/.test(url.pathname)) return null;
+      path = url.pathname;
+      name = url.searchParams.get("n")?.trim().slice(0, 40) || null;
+    } catch {
+      return null;
+    }
+  }
+  const tail = path.split("/").filter(Boolean).pop() ?? "";
   const code = tail.replace(/[\s-]/g, "").toUpperCase();
-  return FRIEND_CODE.test(code) ? code : null;
+  return FRIEND_CODE.test(code) ? { code, name } : null;
+}
+
+export function parseFriendCode(value: string): string | null {
+  return parseFriendLink(value)?.code ?? null;
 }
 
 /** Shown as ABCD-EFGH so it is easier to read out. */
@@ -65,25 +90,46 @@ export function writeSocialCache(accountId: string, cache: SocialCache): void {
   try { storage()?.setItem(cacheKey(accountId), JSON.stringify(cache)); } catch { /* The live answer still shows. */ }
 }
 
-export function readPendingCodes(accountId: string): string[] {
+/** Friends saved on this phone and not yet sent. Guests save under "guest" until they sign in. */
+export type PendingFriend = FriendLink & { savedAt: string };
+export const GUEST_OWNER = "guest";
+
+export function readPendingFriends(owner: string): PendingFriend[] {
   try {
-    const parsed = JSON.parse(storage()?.getItem(pendingKey(accountId)) ?? "[]") as unknown;
-    return Array.isArray(parsed) ? parsed.filter((code): code is string => typeof code === "string" && FRIEND_CODE.test(code)) : [];
+    const parsed = JSON.parse(storage()?.getItem(pendingKey(owner)) ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((entry): entry is PendingFriend => typeof entry === "object" && entry !== null &&
+      typeof (entry as PendingFriend).code === "string" && FRIEND_CODE.test((entry as PendingFriend).code))
+      .map((entry) => ({ code: entry.code, name: typeof entry.name === "string" ? entry.name : null, savedAt: String(entry.savedAt ?? "") }));
   } catch {
     return [];
   }
 }
 
-function writePendingCodes(accountId: string, codes: string[]): void {
-  try { storage()?.setItem(pendingKey(accountId), JSON.stringify([...new Set(codes)])); } catch { /* Best effort. */ }
+function writePendingFriends(owner: string, entries: PendingFriend[]): void {
+  const unique = new Map<string, PendingFriend>();
+  for (const entry of entries) if (!unique.has(entry.code)) unique.set(entry.code, entry);
+  try {
+    if (unique.size) storage()?.setItem(pendingKey(owner), JSON.stringify([...unique.values()]));
+    else storage()?.removeItem(pendingKey(owner));
+  } catch { /* Best effort. */ }
 }
 
-export function queueFriendCode(accountId: string, code: string): void {
-  writePendingCodes(accountId, [...readPendingCodes(accountId), code]);
+export function saveFriend(owner: string, friend: FriendLink): void {
+  writePendingFriends(owner, [...readPendingFriends(owner), { ...friend, savedAt: new Date().toISOString() }]);
 }
 
-export function dropPendingCode(accountId: string, code: string): void {
-  writePendingCodes(accountId, readPendingCodes(accountId).filter((pending) => pending !== code));
+export function dropPendingFriend(owner: string, code: string): void {
+  writePendingFriends(owner, readPendingFriends(owner).filter((pending) => pending.code !== code));
+}
+
+/** Friends a guest scanned become the new account's to send once they sign in. */
+export function adoptGuestFriends(accountId: string): number {
+  const guest = readPendingFriends(GUEST_OWNER);
+  if (!guest.length) return 0;
+  writePendingFriends(accountId, [...readPendingFriends(accountId), ...guest]);
+  writePendingFriends(GUEST_OWNER, []);
+  return guest.length;
 }
 
 async function request<T>(accountId: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -128,19 +174,19 @@ export function isPermanentFriendError(error: unknown): boolean {
   return error instanceof AuthHttpError && error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 408 && error.status !== 429;
 }
 
-export type FlushResult = { added: LeaderboardRow[]; rejected: { code: string; message: string }[] };
+export type FlushResult = { added: LeaderboardRow[]; rejected: { friend: PendingFriend; message: string }[] };
 
-/** Sends friend codes scanned offline. Codes the server rejects are dropped and reported. */
-export async function flushPendingCodes(accountId: string): Promise<FlushResult> {
+/** Sends friends saved offline or as a guest. Codes the server rejects are dropped and reported. */
+export async function flushPendingFriends(accountId: string): Promise<FlushResult> {
   const result: FlushResult = { added: [], rejected: [] };
-  for (const code of readPendingCodes(accountId)) {
+  for (const friend of readPendingFriends(accountId)) {
     try {
-      result.added.push(await addFriend(accountId, code));
-      dropPendingCode(accountId, code);
+      result.added.push(await addFriend(accountId, friend.code));
+      dropPendingFriend(accountId, friend.code);
     } catch (error) {
       if (!isPermanentFriendError(error)) break;
-      dropPendingCode(accountId, code);
-      result.rejected.push({ code, message: error instanceof Error ? error.message : "That code didn't work." });
+      dropPendingFriend(accountId, friend.code);
+      result.rejected.push({ friend, message: error instanceof Error ? error.message : "That code didn't work." });
     }
   }
   return result;

@@ -2,6 +2,7 @@ import { AnimatePresence, MotionConfig } from "motion/react";
 import { AnimatePresence as Presence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BottomNav } from "./components/BottomNav";
+import { FriendsSync } from "./components/FriendsSync";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
@@ -58,6 +59,7 @@ function Stage() {
         <div className="device">
           <ToastProvider>
             <Screens />
+            <FriendsSync />
           </ToastProvider>
         </div>
       </div>
