@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   assertParkClaimEligible,
   getCollectionRankProgress,
@@ -9,6 +9,7 @@ import {
   RANKS,
   rankUpAfter,
   RARITY_UNLOCK_PARKS,
+  setRankProgressionEnabled,
   type RarityClaim,
   type RarityCatalogue,
 } from "./progression";
@@ -36,6 +37,10 @@ function progressFor(counts: Partial<Record<Rarity, number>>) {
   const claims = claimsWith(counts);
   return getRarityProgress(claims, catalogueFor(claims));
 }
+
+// Rank progression is off by default; these tests cover the behaviour when it is switched on.
+beforeAll(() => setRankProgressionEnabled(true));
+afterAll(() => setRankProgressionEnabled(false));
 
 describe("rarity progression", () => {
   it("opens each tier after 0, 2, 5 and 10 unique parks", () => {

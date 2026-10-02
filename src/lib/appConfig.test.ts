@@ -81,7 +81,7 @@ describe("app config", () => {
   it("uses built-in defaults before the first check-in", async () => {
     const config = await initAppConfig();
     expect(config).toMatchObject({ platform: "android", build: 42, contentChannel: null, fetchedAt: null });
-    expect(isRankProgressionEnabled()).toBe(true);
+    expect(isRankProgressionEnabled()).toBe(false);
     expect(contentChannelOverride()).toBeNull();
   });
 
@@ -115,14 +115,14 @@ describe("app config", () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: 0, contentChannel: "main", flags: { rankProgression: false } }),
+      config: answer({ build: 0, contentChannel: "main", flags: { rankProgression: true } }),
       fetchedAt: "2026-09-01T00:00:00.000Z",
     }));
 
     const initial = await initAppConfig();
     expect(initial).toMatchObject({ platform: "android", build: 0, contentChannel: null, fetchedAt: null });
-    expect(initial.flags.rankProgression).toBe(true);
-    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: false }, update: "available" }));
+    expect(initial.flags.rankProgression).toBe(false);
+    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: true }, update: "available" }));
     vi.stubGlobal("fetch", fetcher);
 
     startAppConfigCheckIns();
@@ -138,11 +138,11 @@ describe("app config", () => {
 
     expect(String(vi.mocked(fetcher).mock.calls[0]?.[0])).toContain("platform=android&build=42");
     expect(currentUpdateStatus()).toBe("available");
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: true } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: false } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(42);
 
     await initAppConfig();
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { rankProgression: false } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { rankProgression: true } });
     expect(contentChannelOverride()).toBe("main");
   });
 
@@ -153,12 +153,12 @@ describe("app config", () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: cacheBuild, contentChannel: "main", flags: { rankProgression: false }, update: "required" }),
+      config: answer({ build: cacheBuild, contentChannel: "main", flags: { rankProgression: true }, update: "required" }),
       fetchedAt: "2026-09-01T00:00:00.000Z",
     }));
 
     const initial = await initAppConfig();
-    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { rankProgression: true } });
+    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { rankProgression: false } });
     expect(currentUpdateStatus()).toBe("none");
 
     const fetcher = vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch;
@@ -174,32 +174,32 @@ describe("app config", () => {
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
 
     expect(currentUpdateStatus()).toBe(expectedUpdate);
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: true } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: false } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(cacheBuild);
   });
 
   it("applies a saved check-in on the next launch, not mid-session", async () => {
     await initAppConfig();
-    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: false } }));
+    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: true } }));
     const fresh = await checkInAppConfig(fetcher);
-    expect(fresh?.flags.rankProgression).toBe(false);
+    expect(fresh?.flags.rankProgression).toBe(true);
     expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42&env=staging");
-    expect(isRankProgressionEnabled()).toBe(true);
+    expect(isRankProgressionEnabled()).toBe(false);
 
     await initAppConfig();
-    expect(activeAppConfig().flags.rankProgression).toBe(false);
-    expect(isRankProgressionEnabled()).toBe(false);
+    expect(activeAppConfig().flags.rankProgression).toBe(true);
+    expect(isRankProgressionEnabled()).toBe(true);
     // This test build is a staging build, so a main answer is a switch.
     expect(contentChannelOverride()).toBe("main");
   });
 
   it("ignores a saved answer for a different build", async () => {
     await initAppConfig();
-    await checkInAppConfig(respond(answer({ flags: { rankProgression: false } })));
+    await checkInAppConfig(respond(answer({ flags: { rankProgression: true } })));
     mocks.build = "43";
     await initAppConfig();
     expect(activeAppConfig().fetchedAt).toBeNull();
-    expect(isRankProgressionEnabled()).toBe(true);
+    expect(isRankProgressionEnabled()).toBe(false);
   });
 
   it("keeps the previous answer when the server fails or answers badly", async () => {
@@ -256,9 +256,9 @@ describe("app config", () => {
     expect(parseRemoteAppConfig(answer({ contentChannel: "production" }), { platform: "android", build: 42 })).toBeNull();
     expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
     await initAppConfig();
-    const fresh = await checkInAppConfig(respond(answer({ flags: { rankProgression: false, futureThing: true, "bad key": true } })));
-    expect(fresh?.flags).toEqual({ rankProgression: false, parkProposals: true });
-    expect(fresh?.remoteFlags).toEqual({ rankProgression: false, futureThing: true });
+    const fresh = await checkInAppConfig(respond(answer({ flags: { rankProgression: true, futureThing: true, "bad key": true } })));
+    expect(fresh?.flags).toEqual({ rankProgression: true, parkProposals: true });
+    expect(fresh?.remoteFlags).toEqual({ rankProgression: true, futureThing: true });
     await initAppConfig();
     expect(remoteFlag("futureThing")).toBe(true);
     expect(remoteFlag("missing")).toBeUndefined();
