@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
+import { backupHeadline } from "../lib/accounts/backupPresentation";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
 import { useStore } from "../lib/store";
@@ -599,13 +600,6 @@ function formatBackupTimestamp(timestamp: number | null) {
     dateTime: date.toISOString(),
     label: new Intl.DateTimeFormat(undefined, options).format(date),
   };
-}
-
-function backupHeadline(phase: BackupPhase, synced: boolean) {
-  if (phase === "syncing") return "Backing up now";
-  if (phase === "offline" || phase === "pending") return "Waiting to back up";
-  if (phase === "error") return "Backup needs attention";
-  return synced ? "Backed up" : "Not backed up yet";
 }
 
 function backupStatusText(phase: BackupPhase, message: string | null) {

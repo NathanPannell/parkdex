@@ -55,6 +55,13 @@ export function MapScreen() {
   const [proposing, setProposing] = useState(false);
   const [downloadingMaps, setDownloadingMaps] = useState(false);
   const downloadReturn = useRef<Screen | null>(null);
+  const downloadCamera = useRef<{
+    center: LngLat;
+    zoom: number;
+    bearing: number;
+    pitch: number;
+    padding: { top: number; right: number; bottom: number; left: number };
+  } | null>(null);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
   const [initialView] = useState(() => {
@@ -141,6 +148,25 @@ export function MapScreen() {
       const request = consumeDownloadMapsRequest();
       if (!request) return;
       downloadReturn.current = request.returnTo;
+      const map = mapRef.current;
+      if (map) {
+        const center = map.getCenter();
+        const padding = map.getPadding();
+        const camera: NonNullable<typeof downloadCamera.current> = {
+          center: [center.lng, center.lat],
+          zoom: map.getZoom(),
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+          padding: {
+            top: padding.top ?? 0,
+            right: padding.right ?? 0,
+            bottom: padding.bottom ?? 0,
+            left: padding.left ?? 0,
+          },
+        };
+        downloadCamera.current = camera;
+        map.jumpTo({ center: camera.center, zoom: 6.8, bearing: camera.bearing, pitch: camera.pitch, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
+      }
       select(null);
       setProposing(false);
       setDownloadingMaps(true);
@@ -323,6 +349,9 @@ export function MapScreen() {
           hasFix={hasUsableGpsFix}
           onClose={() => {
             setDownloadingMaps(false);
+            const camera = downloadCamera.current;
+            downloadCamera.current = null;
+            if (camera) mapRef.current?.jumpTo(camera);
             const returnTo = downloadReturn.current;
             downloadReturn.current = null;
             if (returnTo) dispatch({ type: "go", screen: returnTo });
