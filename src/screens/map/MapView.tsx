@@ -71,6 +71,8 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
   const [styleIsReady, setStyleIsReady] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  const pinnedIds = useRef(new Set<string>());
+  pinnedIds.current = useMemo(() => new Set(parks.map((park) => park.id)), [parks]);
   // Stable marker props let memoized pins skip re-rendering when unrelated app state changes.
   const selectMarker = useCallback((id: string) => selectRef.current(id), []);
   const eligibilityById = useMemo(() => new Map(parks.map((park) => [
@@ -116,7 +118,7 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
     map.on("zoom", () => setTier(tierOf(map.getZoom())));
     map.on("click", (e: MapMouseEvent) => {
       if ((e.originalEvent.target as HTMLElement).closest(".pm")) return;
-      selectRef.current(null);
+      selectRef.current(parkAtPoint(map, e, pinnedIds.current));
     });
     const markStyleReady = () => {
       styleReady.current = true;
@@ -298,6 +300,16 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
       {userHost && showUser && createPortal(<UserDot moving={!!tripId} />, userHost)}
     </div>
   );
+}
+
+// A tap inside a pinned park's boundary opens that park; the topmost boundary wins where they overlap.
+function parkAtPoint(map: MLMap, e: MapMouseEvent, pinned: ReadonlySet<string>): string | null {
+  if (!map.getLayer("park-fill")) return null;
+  for (const feature of map.queryRenderedFeatures(e.point, { layers: ["park-fill"] })) {
+    const id = feature.properties?.id;
+    if (typeof id === "string" && pinned.has(id)) return id;
+  }
+  return null;
 }
 
 const ParkMarker = memo(function ParkMarker({
