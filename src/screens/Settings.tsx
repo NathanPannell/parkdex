@@ -5,10 +5,13 @@ import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
 import { summarizeLocalStorage } from "../lib/localStorageSummary";
+import { useAuth } from "../lib/accounts/AuthProvider";
+import { settingsAccountSubtitle } from "../lib/accounts/backupPresentation";
 
 /** App settings, separate from the account page. */
 export function Settings() {
   const { state, dispatch } = useStore();
+  const auth = useAuth();
   const runtime = useContentRuntime();
   const [savedSquares] = useState(() => readSavedSquares().length);
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
@@ -23,6 +26,7 @@ export function Settings() {
     savedSquares ? `${savedSquares} map ${savedSquares === 1 ? "square" : "squares"} saved` : null,
     usedBytes !== null ? `${formatMegabytes(usedBytes)} on this phone` : null,
   ].filter(Boolean).join(" · ") || "Maps and park content on this phone";
+  const accountLine = settingsAccountSubtitle(auth.phase, auth.backup.phase, !!(auth.backup.lastSyncedAt ?? auth.backup.updatedAt));
 
   return (
     <motion.main
@@ -49,7 +53,7 @@ export function Settings() {
             <span className="account-setting__icon" aria-hidden="true"><Icon name="link" size={20} /></span>
             <span className="account-setting__text">
               <strong>Account &amp; backup</strong>
-              <span>Sign in to back up your Dex</span>
+              <span>{accountLine}</span>
             </span>
             <Icon name="next" size={18} />
           </button>

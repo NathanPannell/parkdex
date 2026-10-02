@@ -138,7 +138,7 @@ export function ManageDownloads() {
               dispatch({ type: "go", screen: "map" });
             }}
           >
-            <Icon name="map" size={18} /> {saved.length ? "Add or remove squares" : "Choose squares on the map"}
+            <Icon name="map" size={18} /> {saved.length ? "Add or remove squares" : "Choose map squares"}
           </button>
         </section>
 
