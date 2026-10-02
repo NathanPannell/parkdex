@@ -852,7 +852,80 @@
 }
 
 .nearby__head {
+  display: flex;
   padding: 0 18px 8px;
+  min-height: 44px;
+  align-items: center;
+}
+
+.nearby__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nearby__search-open,
+.nearby__search-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.nearby__search-open {
+  width: 32px;
+  height: 32px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.nearby__search {
+  /* Leaves room for the locate button that sits at the right edge just above. */
+  max-width: calc(100% - 64px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 6px 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.nearby__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.nearby__search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.nearby__search-close {
+  width: 28px;
+  height: 28px;
+  border-width: 0;
+  background: rgba(20, 35, 28, 0.08);
+}
+
+.nearby__empty {
+  flex: none;
+  margin: 0;
+  padding: 16px 18px;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 
 .nearby__head .eyebrow {
@@ -1092,6 +1165,11 @@
   padding: 12px 20px calc(var(--safe-bottom) + 6px);
   border-top: 2px dashed rgba(20, 35, 28, 0.15);
   background: var(--paper);
+}
+
+.park-sheet__cta .btn--icon {
+  width: 58px;
+  height: 58px;
 }
 
 .btn--glow {

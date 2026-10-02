@@ -1,7 +1,6 @@
 import type { Map as MLMap } from "maplibre-gl";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "../../components/Badge";
 import { ContentSyncStatus } from "../../components/ContentSyncStatus";
 import { ContentGate } from "../../components/ContentGate";
 import { Icon } from "../../components/Icon";
@@ -11,10 +10,9 @@ import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip } from "../../lib/drive";
-import { arcPath, arrivalPoint, distanceKm, formatDistance, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
-import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
+import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
+import { badgeTotal, isLive, mapParks } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
-import { rarityLockMessage } from "../../lib/rarityUi";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { useStore, type Screen } from "../../lib/store";
@@ -26,9 +24,12 @@ import { DownloadMaps } from "./DownloadMaps";
 import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
 import { isFeatureEnabled } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
+import { NearbyPanel } from "./NearbyPanel";
 import { ArrivalCard, TripPanel } from "./TripPanel";
 
 const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
+// Below this zoom the map shows parks as dots (see tierOf in MapView).
+const FAR_ZOOM = 10.5;
 const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
 
 // Close enough to show badges rather than dots when the map opens on the visitor.
@@ -92,6 +93,12 @@ export function MapScreen() {
         .map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]), eligibility: eligibilityFor(p) }))
         .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.km - b.km)
         .slice(0, 8),
+    [parks, user, claims, eligibilityFor],
+  );
+  const nearbyItems = useMemo(() => nearby.map(({ p, km, eligibility }) => ({ park: p, km, eligibility, claimed: false })), [nearby]);
+  // Search covers every pinned park, including ones already in the Dex.
+  const searchItems = useMemo(
+    () => parks.map((p) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), eligibility: eligibilityFor(p), claimed: !!claims[p.id] })),
     [parks, user, claims, eligibilityFor],
   );
 
@@ -179,7 +186,14 @@ export function MapScreen() {
     const p = content?.parkById.get(id);
     if (!p) return;
     if (content) void recordParkViewed({ parkId: p.id, entryPoint, contentReleaseId: content.releaseId }).catch(() => {});
-    mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
+    const map = mapRef.current;
+    const boundary = bounds?.byId.get(p.id);
+    // From a zoomed-out view, frame the whole park instead of stopping at town level.
+    if (map && boundary && map.getZoom() < FAR_ZOOM) {
+      const height = map.getContainer().clientHeight;
+      map.fitBounds(ringBounds(boundary), { padding: { ...SHEET_PAD, bottom: Math.min(SHEET_PAD.bottom, height * 0.55) }, maxZoom: 15, duration: 1100, essential: true });
+    }
+    else map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
   function startTrip() {
@@ -454,32 +468,7 @@ export function MapScreen() {
             exit={{ y: 200, opacity: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
           >
-            <div className="nearby__head">
-              <span className="eyebrow">Badges near you</span>
-            </div>
-            <div className="nearby__rail scroll">
-              {nearby.map(({ p, km, eligibility }, i) => (
-                <motion.button
-                  key={p.id}
-                  className={`nearby__card card ${eligibility.eligible ? "" : "nearby__card--locked"}`}
-                  onClick={() => select(p.id, "nearby")}
-                  aria-label={`${p.name}, ${RARITY[p.rarity].label}. ${eligibility.eligible ? `${formatDistance(km)} away` : rarityLockMessage(eligibility)}${isLive(p) ? "" : ". Badge art coming soon"}`}
-                  initial={{ y: 60, opacity: 0, rotate: 4 }}
-                  animate={{ y: 0, opacity: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 22, delay: 0.1 + i * 0.05 }}
-                  whileTap={{ scale: 0.94, rotate: -2 }}
-                >
-                  <span className="nearby__badge">
-                    <Badge park={p} size={64} showName={false} state="preview" />
-                  </span>
-                  <span className="nearby__name">{p.short}</span>
-                  <span className="nearby__meta">
-                    <i style={{ background: RARITY[p.rarity].ink }} />
-                    {eligibility.eligible ? `${formatDistance(km)} away` : eligibility.reason === "unavailable" ? "Checking" : "Locked"}
-                  </span>
-                </motion.button>
-              ))}
-            </div>
+            <NearbyPanel nearby={nearbyItems} all={searchItems} onSelect={(id) => select(id, "nearby")} />
           </motion.div>
         )}
       </AnimatePresence>

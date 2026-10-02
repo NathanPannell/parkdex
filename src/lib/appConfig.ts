@@ -16,7 +16,7 @@ import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
 
 /** Every remotely controlled feature this build reads, and its built-in default. */
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
-  rankProgression: true,
+  rankProgression: false,
   parkProposals: true,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;

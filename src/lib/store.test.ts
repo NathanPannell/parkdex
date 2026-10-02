@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCollectionRankProgress, getRarityProgress } from "./progression";
+import { getCollectionRankProgress, getRarityProgress, setRankProgressionEnabled } from "./progression";
 import { load, persistOnboardingPreferences, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
@@ -170,7 +170,10 @@ describe("claim progress hydration", () => {
       ownerKey: "guest",
       claims: restoredClaims,
     });
+    // Ranks only exist while rank progression is switched on (it is off by default).
+    setRankProgressionEnabled(true);
     const rank = getCollectionRankProgress(getRarityProgress(restored.claims, catalogue));
+    setRankProgressionEnabled(false);
 
     expect(restored.progressReady).toBe(true);
     expect(rank).toMatchObject({ available: true, visited: 6, rank: { name: "Wayfinder" } });
