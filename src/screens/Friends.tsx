@@ -113,7 +113,7 @@ function SavedFriends({ friends, guest }: { friends: PendingFriend[]; guest: boo
 }
 
 /** Friends and the leaderboard. Guests can scan and save friends; an account sends them. */
-export function Friends() {
+export function Friends({ tabbed = false }: { tabbed?: boolean }) {
   const { dispatch } = useStore();
   const auth = useAuth();
   const accountId = auth.account?.id ?? auth.ownerAccountId ?? null;
@@ -231,17 +231,20 @@ export function Friends() {
 
   return (
     <motion.main
-      className="screen account-screen scroll"
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
+      className={tabbed ? "screen account-screen account-screen--tabbed scroll" : "screen account-screen scroll"}
+      // Tabs swap in place; pages reached from elsewhere slide in.
+      initial={tabbed ? { opacity: 0 } : { x: "100%" }}
+      animate={tabbed ? { opacity: 1 } : { x: 0 }}
+      exit={tabbed ? { opacity: 0 } : { x: "100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 34 }}
       aria-labelledby="friends-title"
     >
       <header className="account-head">
-        <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Back">
-          <Icon name="back" size={20} />
-        </button>
+        {!tabbed && (
+          <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Back">
+            <Icon name="back" size={20} />
+          </button>
+        )}
         <div className="account-head__title">
           <span className="eyebrow">Parkdex</span>
           <h1 id="friends-title">Friends</h1>

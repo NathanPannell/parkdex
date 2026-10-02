@@ -1414,6 +1414,44 @@
   rotate: 10deg;
 }
 
+/* Four tabs: icons over labels, and a smaller camera so the bar blocks less of the map. */
+.nav--four {
+  height: 66px;
+}
+
+.nav--four .nav__bar {
+  grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+  padding: 6px;
+}
+
+.nav--four .nav__tab {
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  border-radius: 18px;
+}
+
+.nav--four .nav__tab:last-child {
+  grid-column: auto;
+}
+
+.nav--four .fab {
+  top: -14px;
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 4px var(--paper);
+}
+
+/* Friends and Settings pages sit above the map layer; keep the bar over them. */
+.nav--over {
+  z-index: 40;
+}
+
+.nav--four .fab__hint {
+  bottom: 84px;
+}
+
 .fab__hint {
   position: absolute;
   left: 50%;

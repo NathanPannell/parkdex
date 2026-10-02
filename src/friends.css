@@ -217,3 +217,12 @@
 .friends-me .account-help {
   margin-top: 12px;
 }
+
+/* Friends and Settings as tabs: leave room for the bar and lift it over the page. */
+.account-screen--tabbed {
+  padding-bottom: calc(var(--safe-bottom) + 110px);
+}
+
+.account-screen--tabbed .account-head__title {
+  padding-left: 4px;
+}

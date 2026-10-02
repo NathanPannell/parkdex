@@ -22,6 +22,7 @@ import { Account } from "./screens/Account";
 import { ManageDownloads } from "./screens/ManageDownloads";
 import { Settings } from "./screens/Settings";
 import { Friends } from "./screens/Friends";
+import { friendsEnabled } from "./lib/social/flag";
 import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
@@ -154,7 +155,7 @@ function Screens() {
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
         else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "collection" : "onboarding" });
-        else if (s.screen === "downloads" || s.screen === "friends") dispatch({ type: "go", screen: "settings" });
+        else if (s.screen === "downloads" || (s.screen === "friends" && !friendsEnabled())) dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
       }),
@@ -166,7 +167,9 @@ function Screens() {
   const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
   // Settings pages cover the map but keep it mounted, so its camera and tiles survive.
   const mapCovered = screen === "claim" || screen === "settings" || screen === "downloads" || screen === "friends";
-  const showNav = showMap && (screen === "map" || screen === "collection");
+  // With friends on, Friends and Settings are tabs too, so the bar stays on them.
+  const tabbed = friendsEnabled();
+  const showNav = showMap && (screen === "map" || screen === "collection" || (tabbed && (screen === "friends" || screen === "settings")));
 
   return (
     <>
@@ -185,9 +188,9 @@ function Screens() {
       )}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
       <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "collection" : "onboarding" })} />}</AnimatePresence>
-      <AnimatePresence>{screen === "settings" && <Settings key="settings" />}</AnimatePresence>
+      <AnimatePresence>{screen === "settings" && <Settings key="settings" tabbed={tabbed} />}</AnimatePresence>
       <AnimatePresence>{screen === "downloads" && <ManageDownloads key="downloads" />}</AnimatePresence>
-      <AnimatePresence>{screen === "friends" && <Friends key="friends" />}</AnimatePresence>
+      <AnimatePresence>{screen === "friends" && <Friends key="friends" tabbed={tabbed} />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
       <Presence>
         {tracking && state.locationError === "denied" && screen === "map" && (

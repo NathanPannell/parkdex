@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
+import { friendsEnabled } from "../lib/social/flag";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { EarnedBadge } from "../components/EarnedBadge";
@@ -62,9 +63,12 @@ export function Collection() {
             <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"} badges</small>
           </h1>
         </div>
-        <button className="btn btn--paper btn--icon collection-settings" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Settings" title="Settings">
-          <Icon name="gear" size={24} />
-        </button>
+        {/* Settings is a tab in the bottom bar once friends are on. */}
+        {!friendsEnabled() && (
+          <button className="btn btn--paper btn--icon collection-settings" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Settings" title="Settings">
+            <Icon name="gear" size={24} />
+          </button>
+        )}
       </header>
 
       {isRankProgressionEnabled() && <RankCard progress={rankProgress} onOpen={() => { sfx.pop(); setTrailOpen(true); }} />}
