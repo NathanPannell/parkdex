@@ -5,6 +5,7 @@ import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
 import { summarizeLocalStorage } from "../lib/localStorageSummary";
+import { friendsEnabled } from "../lib/social/flag";
 
 /** App settings, separate from the account page. */
 export function Settings() {
@@ -53,6 +54,16 @@ export function Settings() {
             </span>
             <Icon name="next" size={18} />
           </button>
+          {friendsEnabled() && (
+            <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "friends" })}>
+              <span className="account-setting__icon" aria-hidden="true"><Icon name="friends" size={20} /></span>
+              <span className="account-setting__text">
+                <strong>Friends</strong>
+                <span>Add friends and race them each week</span>
+              </span>
+              <Icon name="next" size={18} />
+            </button>
+          )}
           <label className="account-setting account-setting--row">
             <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
             <span className="account-setting__text">

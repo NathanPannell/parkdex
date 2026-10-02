@@ -49,6 +49,9 @@ const PATHS = {
   river: "M7 3c-3 4 5 6 2 10s4 6 2 8M15 3c-3 4 5 6 2 10s4 6 2 8",
   cave: "M3 20c0-8 4-15 9-15s9 7 9 15H3Zm6 0c0-4 1.3-7 3-7s3 3 3 7",
   marsh: "M4 20h16M8 20V10M12 20V6M16 20V11M8 10c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Zm4-4c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Zm4 5c-1.2-1-1.2-3 0-4 1.2 1 1.2 3 0 4Z",
+  // Friends: two people side by side.
+  friends: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0M16 11a3 3 0 1 0 0-6M17.5 14.5a5.5 5.5 0 0 1 4 5.5",
+  qr: "M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h2v2h-2v-2Zm4 0h2v2h-2zm-4 4h2v2h-2zm4 0h2v2h-2zM6.5 6.5h1v1h-1zm10 0h1v1h-1zm-10 10h1v1h-1z",
   heritage: "M3 9 12 4l9 5H3Zm2 0v9m4.7-9v9m4.6-9v9M19 9v9M3 20h18",
 } as const;
 

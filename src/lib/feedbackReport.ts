@@ -49,6 +49,7 @@ const SCREEN_LABEL: Record<Screen, string> = {
   account: "Account & backup",
   settings: "Settings",
   downloads: "Manage downloads",
+  friends: "Friends",
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.

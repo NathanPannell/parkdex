@@ -8,7 +8,7 @@ import { onboardingMatchesInstall } from "./onboardingIdentity";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
-export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share" | "account" | "settings" | "downloads";
+export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share" | "account" | "settings" | "downloads" | "friends";
 
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };

@@ -132,10 +132,12 @@ export async function handleSocialRequest(request: Request, handlers: SocialHand
     const code = parseFriendCode(body.code);
     if (!code) throw new HttpError(400, "invalid_code", "That friend code doesn't look right.");
     const result = await store.addFriendByCode(me, code, MAX_FRIENDS);
-    if (result.status === "not_found") throw new HttpError(404, "code_not_found", "No one has that friend code.");
+    if (result.status === "added" || result.status === "existing") {
+      return handlers.json({ friend: apiRow(result.friend, me) }, result.status === "added" ? 201 : 200);
+    }
     if (result.status === "self") throw new HttpError(400, "own_code", "That's your own code.");
     if (result.status === "limit") throw new HttpError(409, "friend_limit", `You can have up to ${MAX_FRIENDS} friends.`);
-    return handlers.json({ friend: apiRow(result.friend, me) }, result.status === "added" ? 201 : 200);
+    throw new HttpError(404, "code_not_found", "No one has that friend code.");
   }
 
   const friend = /^\/api\/social\/friends\/([^/]+)$/.exec(path);
