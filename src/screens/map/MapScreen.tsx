@@ -18,7 +18,7 @@ import { rarityLockMessage } from "../../lib/rarityUi";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { useStore, type Screen } from "../../lib/store";
-import { useContent } from "../../lib/content/provider";
+import { useContent, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
 import { MapView } from "./MapView";
 import { ProposePark } from "./ProposePark";
@@ -43,6 +43,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 export function MapScreen() {
   const { state, dispatch } = useStore();
   const content = useContent();
+  const contentStatus = useContentStatus();
   const mapRef = useRef<MLMap | null>(null);
   const bounds = useBoundaries();
   const [route, setRoute] = useState<LngLat[] | null>(null);
@@ -284,10 +285,14 @@ export function MapScreen() {
   );
 
   if (!content) {
+    // Saved parks load in the background over a live map; the card is only for a
+    // first download, offline with nothing saved, or an error.
     return (
       <div className="screen map-screen">
         {mapView}
-        <ContentGate overMap />
+        {contentStatus.phase === "starting"
+          ? <span className="content-sync-spinner content-sync-spinner--parks" role="status" aria-label="Loading parks" />
+          : <ContentGate overMap />}
       </div>
     );
   }

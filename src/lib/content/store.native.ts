@@ -1,4 +1,5 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
+import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
@@ -346,6 +347,13 @@ export class NativeContentStore implements ContentStore {
     const existing = this.objectUrls.get(cacheKey);
     if (existing) return existing;
     const stat = await Filesystem.stat({ path: blobPath(key), directory: Directory.Data });
+    // A file hash-checked at install is served by the WebView straight from disk,
+    // instead of copying every badge image through the bridge at launch.
+    if (stat.uri && (await this.recordedFiles()).get(key) === stat.size) {
+      const url = Capacitor.convertFileSrc(stat.uri);
+      this.objectUrls.set(cacheKey, url);
+      return url;
+    }
     const bytes = await this.readNativeFile(blobPath(key));
     if (bytes.byteLength !== stat.size || (await sha256(bytes)) !== key) {
       throw new Error(`Content file failed SHA-256 verification: ${key}`);
@@ -879,7 +887,7 @@ export class NativeContentStore implements ContentStore {
   private revokeHashUrls(hash: string) {
     for (const [key, url] of this.objectUrls) {
       if (key.startsWith(`${hash}\n`)) {
-        URL.revokeObjectURL(url);
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
         this.objectUrls.delete(key);
       }
     }

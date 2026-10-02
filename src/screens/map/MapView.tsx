@@ -9,12 +9,12 @@ import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { mapStyle } from "../../lib/mapStyle";
 import { configureMapLibreWorker } from "../../lib/mapStartup";
-import { flushPendingDetailedMapSourceRefresh, registerContentMapProtocols, subscribeMapCoverage } from "../../lib/offlineTiles";
+import { BUILD_MAP_KEY, flushPendingDetailedMapSourceRefresh, registerBuildMapProtocols, retryUnavailableBuildMap, subscribeMapCoverage } from "../../lib/offlineTiles";
 import { isLive, type Park } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
 import { rarityAccessibleStatus } from "../../lib/rarityUi";
 import type { Claim } from "../../lib/store";
-import { useContent, useContentRuntime, useMapDetailReady } from "../../lib/content/provider";
+import { useContent, useContentRuntime } from "../../lib/content/provider";
 
 type Tier = "far" | "mid" | "near";
 // Pins stay dots until the map is zoomed to a town, so dense areas stay readable.
@@ -59,21 +59,15 @@ const BIOME_FILL = [
 export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
-  const contentMapDetailReady = useMapDetailReady();
   const container = useRef<HTMLDivElement>(null);
   const userMarker = useRef<Marker | null>(null);
   const camera = useRef<{ center: LngLat; zoom: number; bearing: number; pitch: number } | null>(null);
   const parkMarkers = useRef(new Map<string, { park: Park; el: HTMLElement; marker: Marker; rank: number }>());
-  const protocolCleanups = useRef(new Map<string, () => void>());
-  const styleRelease = useRef<string | null>(null);
-  const styleGeneration = useRef(0);
   const pendingDetailReload = useRef(false);
   const styleReady = useRef(false);
   const [hosts, setHosts] = useState<{ park: Park; el: HTMLElement; rank: number }[]>([]);
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
-  const [loadedRelease, setLoadedRelease] = useState<string | null>(null);
-  const [initialStyleLoaded, setInitialStyleLoaded] = useState(false);
   const [styleIsReady, setStyleIsReady] = useState(false);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
@@ -83,23 +77,22 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
     park.id,
     progressReady ? getParkRarityEligibility(park, rarityProgress, !!claims[park.id]) : UNAVAILABLE_ELIGIBILITY,
   ])), [parks, progressReady, rarityProgress, claims]);
-  const releaseId = content?.releaseId;
-  const hasReadyMapContent = !!content && !!releaseId;
-  const mapDetailReady = !!releaseId && contentMapDetailReady;
-  const loaded = styleIsReady && (mapDetailReady ? loadedRelease === releaseId : loadedRelease === null);
+  const hasReadyMapContent = !!content?.releaseId;
+  // The style never changes after creation, so the map draws its detail once.
+  const loaded = styleIsReady;
 
   useEffect(() => {
     styleReady.current = false;
     setStyleIsReady(false);
     setHosts([]);
     setUserHost(null);
-    styleRelease.current = null;
     const savedCamera = camera.current;
     const zoom = savedCamera?.zoom ?? initialView.zoom;
     configureMapLibreWorker();
+    const cleanupBuildMap = registerBuildMapProtocols(runtime);
     const map = new MLMap({
       container: container.current!,
-      style: mapStyle(),
+      style: mapStyle(BUILD_MAP_KEY),
       minZoom: 2.5,
       center: savedCamera?.center ?? initialView.center,
       zoom,
@@ -126,14 +119,8 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
       selectRef.current(null);
     });
     const markStyleReady = () => {
-      const currentRelease = styleRelease.current;
-      const glyphs = map.getStyle().glyphs;
-      if (currentRelease && !glyphs?.includes(`${encodeURIComponent(currentRelease)}/`)) return;
-      if (!currentRelease && glyphs) return;
       styleReady.current = true;
       setStyleIsReady(true);
-      setInitialStyleLoaded(true);
-      setLoadedRelease(currentRelease);
       if (pendingDetailReload.current) flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
     };
     map.on("style.load", markStyleReady);
@@ -149,41 +136,13 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
       };
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
-      for (const cleanup of protocolCleanups.current.values()) cleanup();
-      protocolCleanups.current.clear();
+      cleanupBuildMap();
       parkMarkers.current.clear();
       userMarker.current = null;
-      styleRelease.current = null;
-      styleGeneration.current += 1;
       pendingDetailReload.current = false;
       styleReady.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!initialStyleLoaded) return;
-    const map = mapRef.current;
-    const desiredRelease = mapDetailReady ? releaseId : null;
-    if (!map || styleRelease.current === desiredRelease) return;
-
-    if (desiredRelease && content && !protocolCleanups.current.has(desiredRelease)) {
-      protocolCleanups.current.set(desiredRelease, registerContentMapProtocols(runtime, content));
-    }
-    setLoadedRelease(null);
-    setStyleIsReady(false);
-    styleRelease.current = desiredRelease;
-    const generation = ++styleGeneration.current;
-    map.once("style.load", () => {
-      if (styleGeneration.current !== generation) return;
-      for (const [registeredRelease, cleanup] of protocolCleanups.current) {
-        if (registeredRelease === desiredRelease) continue;
-        cleanup();
-        protocolCleanups.current.delete(registeredRelease);
-      }
-    });
-    styleReady.current = false;
-    map.setStyle(mapStyle(desiredRelease), { diff: true });
-  }, [releaseId, mapDetailReady, initialStyleLoaded]);
 
   useEffect(() => {
     if (!hasReadyMapContent) return;
@@ -214,15 +173,26 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
     }));
   }, [parks, hasReadyMapContent]);
 
+  useEffect(() => subscribeMapCoverage(BUILD_MAP_KEY, () => {
+    pendingDetailReload.current = true;
+    const map = mapRef.current;
+    if (!map || !styleReady.current) return;
+    flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+  }), []);
+
+  // Tiles that failed offline are retried once, when the network returns or
+  // saved map files become readable, rather than on every status change.
   useEffect(() => {
-    if (!releaseId || !mapDetailReady) return;
-    return subscribeMapCoverage(releaseId, () => {
-      pendingDetailReload.current = true;
-      const map = mapRef.current;
-      if (!map || !styleReady.current) return;
-      flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+    let connected = runtime.isConnected?.() ?? true;
+    let hasSnapshot = !!runtime.getStatus().snapshot;
+    return runtime.subscribe(() => {
+      const nowConnected = runtime.isConnected?.() ?? true;
+      const nowSnapshot = !!runtime.getStatus().snapshot;
+      if ((nowConnected && !connected) || (nowSnapshot && !hasSnapshot)) retryUnavailableBuildMap();
+      connected = nowConnected;
+      hasSnapshot = nowSnapshot;
     });
-  }, [releaseId, mapDetailReady]);
+  }, [runtime]);
 
   useEffect(() => {
     userMarker.current?.setLngLat(user);

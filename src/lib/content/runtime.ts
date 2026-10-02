@@ -183,6 +183,7 @@ class ContentRuntimeController implements ContentRuntime {
   private readonly fileUrlPromises = new Map<string, Promise<string>>();
   private readonly syncManifests = new Map<string, ContentManifest>();
   private readonly mapInventories = new Map<string, ContentMapInventory>();
+  private readonly localMapInventories = new Map<string, Promise<ContentMapInventory | null>>();
   private readonly artworkReadyReleases = new Set<string>();
   private activeDownloads = 0;
   private localFileIndexPromise: Promise<void> | null = null;
@@ -190,6 +191,10 @@ class ContentRuntimeController implements ContentRuntime {
   private startPromise: Promise<void> | null = null;
   private discoveryPromise: Promise<void> | null = null;
   private initialized = false;
+  // Saved content is still being opened; offline or settings states wait until it has been tried.
+  private startupSettled = false;
+  private markStoreOpen!: () => void;
+  private readonly storeOpen = new Promise<void>((resolve) => { this.markStoreOpen = resolve; });
   private stopped = false;
   private closePromise: Promise<void> | null = null;
   private lastDiscoveryAt = Number.NEGATIVE_INFINITY;
@@ -337,7 +342,10 @@ class ContentRuntimeController implements ContentRuntime {
     const waitingForWifi = isWaitingForContentWifi(connectivity);
     this.waitingForUpdateWifi = waitingForWifi && !this.hasSyncApi() && this.hasPendingUpdateChunks();
     this.waitingForBulkWifi = waitingForWifi && this.hasPendingBulkMap();
-    if (!connectivity.connected) {
+    if (!this.startupSettled && !this.status.snapshot) {
+      // Startup sets the phase itself once saved content has been tried.
+      this.setStatus({ waitingForWifi: false });
+    } else if (!connectivity.connected) {
       this.setStatus({ phase: "offline", error: null, syncStage: "idle", waitingForWifi: false });
     } else if (!downloadAllowed) {
       this.setStatus({
@@ -535,6 +543,37 @@ class ContentRuntimeController implements ContentRuntime {
     }
   }
 
+  isConnected(): boolean {
+    return this.connectivity().connected;
+  }
+
+  /**
+   * Offline map reads go straight to saved files of the build's map version, so
+   * the map does not wait for park content to be published.
+   */
+  async readLocalMapFile(version: string, path: string, offset?: number, length?: number): Promise<ArrayBuffer | null> {
+    // Early offline tile requests wait for the store instead of failing and redrawing later.
+    await this.storeOpen;
+    if (!this.initialized) return null;
+    let inventory = this.localMapInventories.get(version);
+    if (!inventory) {
+      inventory = this.getVerifiedMapInventory(version).catch(() => null);
+      this.localMapInventories.set(version, inventory);
+    }
+    const resolved = await inventory;
+    if (!resolved) {
+      if (this.localMapInventories.get(version) === inventory) this.localMapInventories.delete(version);
+      return null;
+    }
+    const file = resolved.files.find((entry) => entry.path === path);
+    if (!file) return null;
+    try {
+      return await this.options.store.readFile(file.sha256, offset, length);
+    } catch {
+      return null;
+    }
+  }
+
   async hasLocalFile(releaseId: string, path: string): Promise<boolean> {
     const release = await this.options.store.getRelease(releaseId);
     const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
@@ -620,8 +659,18 @@ class ContentRuntimeController implements ContentRuntime {
   private async startInternal(): Promise<void> {
     this.setStatus({ phase: "starting", error: null, waitingForWifi: false });
     try {
+      await this.startInternalSteps();
+    } finally {
+      this.startupSettled = true;
+      this.markStoreOpen();
+    }
+  }
+
+  private async startInternalSteps(): Promise<void> {
+    try {
       await this.options.store.initialize();
       this.initialized = true;
+      this.markStoreOpen();
       if (this.hasSyncApi()) {
         await this.startSyncInternal();
         return;
@@ -756,6 +805,7 @@ class ContentRuntimeController implements ContentRuntime {
       }
     }
 
+    this.startupSettled = true;
     if (this.canDownloadContent() && this.foreground) {
       await this.syncContent(true, false);
     } else {

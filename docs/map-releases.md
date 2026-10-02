@@ -1,6 +1,6 @@
 # Detailed map releases
 
-The detailed map is a Protomaps archive split into chunks on R2. New builds pin the map they use in `BUILD_MAP_POINTER` (`src/lib/content/contracts.ts`) instead of reading the map pointer from the content API. The server pointer stays on the 96 MB island archive. Builds installed before 2026-10-01 download the whole map they are given, so they must never receive the 1.3 GB BC archive.
+The detailed map is a Protomaps archive split into chunks on R2. New builds pin the map they use in `BUILD_MAP_POINTER` (`src/lib/content/contracts.ts`) instead of reading the map pointer from the content API. The app streams this archive straight from the CDN while online and reads downloaded map squares only when offline. The server pointer stays on the 96 MB island archive. Builds installed before 2026-10-01 download the whole map they are given, so they must never receive the 1.3 GB BC archive.
 
 ## Current pin
 
@@ -35,6 +35,6 @@ python scripts/build-map-inventory.py --archive .tools/bc.pmtiles --glyph-source
 python C:\Users\n8tew\.codex\private\kip-delivery\with-delivery-env.py . -- node scripts/upload-map-release.mjs --release-dir .tools/bc-map-release --version <version>
 ```
 
-4. Update `BUILD_MAP_POINTER` and `CONTENT_BOUNDS` with the printed pointer and the extract bbox, then ship a new build.
+4. Update `BUILD_MAP_POINTER` and `CONTENT_BOUNDS` with the printed pointer and the extract bbox. Update `BUILD_MAP_ARCHIVE` with the archive's `mapManifest` (`chunkBytes`, `count`, `size`) and the font folder URL from its `map/manifest.json`, because the app streams that archive from the CDN at launch before park content loads. Then ship a new build.
 
 Changing the pin changes every installed build's release ID on its next start. Nearby squares then download again from the new archive.

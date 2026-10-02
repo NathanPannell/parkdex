@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUILD_MAP_POINTER } from "./content/contracts";
+import { BUILD_MAP_ARCHIVE, BUILD_MAP_POINTER } from "./content/contracts";
 import {
   bytesForChunks,
   cellKeyAt,
@@ -32,6 +32,14 @@ describe("map squares", () => {
       expect(chunkIdsForCells(index, [cellKeyAt(place)]).size).toBeGreaterThan(0);
     }
     expect(() => parseCellIndex({ ...bundled, version: "0".repeat(64) })).toThrow("does not match");
+  });
+
+  it("streams the same archive layout the square index was built from", () => {
+    const index = parseCellIndex(bundled);
+    expect(BUILD_MAP_ARCHIVE.chunkBytes).toBe(index.chunkBytes);
+    expect(BUILD_MAP_ARCHIVE.size).toBe(index.size);
+    expect(BUILD_MAP_ARCHIVE.count).toBe(Math.ceil(index.size / index.chunkBytes));
+    expect(BUILD_MAP_ARCHIVE.chunkBaseUrl).toContain(BUILD_MAP_POINTER.version);
   });
 
   it("finds the square under a point and draws its outline around it", () => {
