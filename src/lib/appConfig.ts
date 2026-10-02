@@ -18,6 +18,8 @@ import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   rankProgression: true,
   parkProposals: true,
+  // Off until the social API is live on the server a build talks to.
+  friends: false,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;

@@ -8,6 +8,7 @@ import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccoun
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createNeonSocialStore, handleSocialRequest, type SocialStore } from "./social.js";
 import {
   HttpError,
   readJsonBody,
@@ -44,6 +45,8 @@ export interface WorkerDependencies {
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
+  createSocialStore?(env: WorkerEnvironment): SocialStore;
+  friendCode?(): string;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
@@ -282,6 +285,22 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       : await requireAccountMutation(request, env, authDependencies);
     const progressResponse = await handleProgressRequest(request, env, auth, dependencies.progress);
     if (progressResponse) return progressResponse;
+  }
+  if (path === "/api/social" || path.startsWith("/api/social/")) {
+    const auth = request.method === "GET"
+      ? await requireAccount(request, env, authDependencies)
+      : await requireAccountMutation(request, env, authDependencies);
+    const socialResponse = await handleSocialRequest(request, {
+      json,
+      accountId: auth.accountId,
+      newCode: dependencies.friendCode,
+      store: () => {
+        if (dependencies.createSocialStore) return dependencies.createSocialStore(env);
+        if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Friends are unavailable.");
+        return createNeonSocialStore(env.DATABASE_URL);
+      },
+    });
+    if (socialResponse) return socialResponse;
   }
   // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
   const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);

@@ -19,6 +19,7 @@ type Draft = {
 const FLAG_HINTS: Record<string, string> = {
   rankProgression: "Level up to unlock rarities",
   parkProposals: "Propose-a-park button on the map",
+  friends: "Friends and weekly leaderboard",
 };
 
 const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [

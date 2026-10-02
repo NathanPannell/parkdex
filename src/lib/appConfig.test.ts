@@ -257,7 +257,7 @@ describe("app config", () => {
     expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
     await initAppConfig();
     const fresh = await checkInAppConfig(respond(answer({ flags: { rankProgression: false, futureThing: true, "bad key": true } })));
-    expect(fresh?.flags).toEqual({ rankProgression: false, parkProposals: true });
+    expect(fresh?.flags).toEqual({ rankProgression: false, parkProposals: true, friends: false });
     expect(fresh?.remoteFlags).toEqual({ rankProgression: false, futureThing: true });
     await initAppConfig();
     expect(remoteFlag("futureThing")).toBe(true);

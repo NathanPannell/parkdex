@@ -90,7 +90,7 @@ test("build rows and per-environment update rules can be edited, and invalid inp
   const listing = await (await api(request("/api/builds"), env)).json() as { builds: unknown[]; rules: { environment: string }[]; knownFlags: string[] };
   assert.equal(listing.builds.length, 1);
   assert.deepEqual(listing.rules.map((rule) => rule.environment), ["production", "staging"]);
-  assert.deepEqual(listing.knownFlags, ["rankProgression", "parkProposals"]);
+  assert.deepEqual(listing.knownFlags, ["rankProgression", "parkProposals", "friends"]);
   for (const invalid of [{ apiPointer: "main" }, { flags: { "bad name": true } }, { flags: { ok: "yes" } }, { extra: 1 }, { minimumBuild: 3 }]) {
     assert.equal((await api(request("/api/builds/android/1", { method: "PUT", body: invalid }), env)).status, 400, JSON.stringify(invalid));
   }
