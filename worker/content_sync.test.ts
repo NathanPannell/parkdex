@@ -140,3 +140,56 @@ test("scene endpoint serves the exact retained descriptor and returns 404 when m
     await createSceneHandler({ repository: repository(async () => ({}), async () => null) })(req({ releaseId: release, scene: "retired-a" }), missing);
     assert.equal(missing.statusCode, 404);
 });
+
+test("content sync sends park access fields only to readers that ask for them", async () => {
+    const link = "https://maps.app.goo.gl/abc123";
+    const withAccess = { ...snapshot, parks: [{ ...park, googleMapsUrl: link, trailheadLat: 48.401, trailheadLng: -123.301 }] };
+    const strict = response();
+    await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => withAccess } })(req(), strict);
+    assert.equal(strict.statusCode, 200);
+    assert.deepEqual(Object.keys(JSON.parse(strict.body).parks[0]).sort(), Object.keys(park).sort());
+
+    const current = response();
+    await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => withAccess } })(req({ reader: "2" }), current);
+    assert.equal(current.statusCode, 200);
+    const sent = JSON.parse(current.body).parks[0];
+    assert.equal(sent.googleMapsUrl, link);
+    assert.equal(sent.trailheadLat, 48.401);
+    assert.equal(sent.trailheadLng, -123.301);
+
+    const unset = response();
+    await createSnapshotHandler({ repository: repository() })(req({ reader: "2" }), unset);
+    assert.equal(JSON.parse(unset.body).parks[0].googleMapsUrl, null);
+
+    const badReader = response();
+    await createSnapshotHandler({ repository: repository() })(req({ reader: "x" }), badReader);
+    assert.equal(badReader.statusCode, 400);
+});
+
+test("content sync strips access fields from change batches for strict readers", async () => {
+    const value = { ...park, googleMapsUrl: "https://www.google.com/maps/place/Cove", trailheadLat: null, trailheadLng: null };
+    const changes = async () => ({ headRevision: 4, retentionFloor: 0, hasMore: false, batches: [{ revision: 4, changes: [
+        { entity: "park", op: "upsert", id: park.id, value },
+        { entity: "asset", op: "upsert", id: file.path, value: file },
+    ] }] });
+    const strict = response();
+    await createChangesHandler({ repository: repository(changes) })(req({ after: "3" }), strict);
+    assert.equal(strict.statusCode, 200);
+    assert.equal(Object.hasOwn(JSON.parse(strict.body).batches[0].changes.find((c: { entity: string }) => c.entity === "park").value, "googleMapsUrl"), false);
+
+    const current = response();
+    await createChangesHandler({ repository: repository(changes) })(req({ after: "3", reader: "2" }), current);
+    assert.equal(JSON.parse(current.body).batches[0].changes.find((c: { entity: string }) => c.entity === "park").value.googleMapsUrl, value.googleMapsUrl);
+});
+
+test("content sync withholds a snapshot with a non-Google directions link or half a trailhead", async () => {
+    for (const extra of [
+        { googleMapsUrl: "https://example.com/maps", trailheadLat: null, trailheadLng: null },
+        { googleMapsUrl: null, trailheadLat: 48.4, trailheadLng: null },
+    ]) {
+        const res = response();
+        const bad = { ...snapshot, parks: [{ ...park, ...extra }] };
+        await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => bad } })(req({ reader: "2" }), res);
+        assert.equal(res.statusCode, 503);
+    }
+});
