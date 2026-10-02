@@ -35,6 +35,8 @@ const SCENE_ASSET_PATH = /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40,64}$/;
 const PARK_ID = /^[a-z0-9][a-z0-9-]*$/;
+// Matches content_parks_google_maps_url_check in content_003_park_maps_link.sql.
+const GOOGLE_MAPS_URL = /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
 
 export class ContentValidationError extends Error {
   constructor(message: string) {
@@ -329,7 +331,17 @@ function validatePark(value: unknown, index: number): Park {
     scene = string(park.scene, `${label}.scene`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(scene)) throw new ContentValidationError(`${label}.scene is invalid`);
   }
-  return { id, name, short, category, region, lat, lng, biome, shape, rarity, seed: park.seed, blurb, scene };
+  // Optional: older servers and cached rows omit it, and a bad link falls back to the pin.
+  const link = park.googleMapsUrl;
+  const googleMapsUrl = typeof link === "string" && link.length <= 2048 && GOOGLE_MAPS_URL.test(link) ? link : null;
+  const coordinate = (value: unknown, limit: number) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit ? value : null;
+  let trailheadLat = coordinate(park.trailheadLat, 90);
+  let trailheadLng = coordinate(park.trailheadLng, 180);
+  if (trailheadLat === null || trailheadLng === null) trailheadLat = trailheadLng = null;
+  const checked: Park = { id, name, short, category, region, lat, lng, biome, shape, rarity, seed: park.seed, blurb, scene };
+  if (googleMapsUrl !== null) checked.googleMapsUrl = googleMapsUrl;
+  if (trailheadLat !== null && trailheadLng !== null) Object.assign(checked, { trailheadLat, trailheadLng });
+  return checked;
 }
 
 export function validateParkRecord(value: unknown, label = "park"): Park {

@@ -850,6 +850,8 @@ class ContentRuntimeController implements ContentRuntime {
     url.pathname = `${url.pathname}/${endpoint}`;
     url.search = "";
     url.hash = "";
+    // The server sends fields newer than reader 1 only when asked, so strict older builds keep working.
+    if (endpoint !== "scene") url.searchParams.set("reader", String(CONTENT_READER_VERSION));
     return url.href;
   }
 

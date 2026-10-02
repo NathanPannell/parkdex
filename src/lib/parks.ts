@@ -18,6 +18,12 @@ export type Park = {
   blurb: string;
   // Badge art for live badges; null means "badge coming soon".
   scene: string | null;
+  // Directions target such as a trailhead or parking lot. Without it,
+  // directions go to the lat/lng pin.
+  googleMapsUrl?: string | null;
+  // End of the in-app approach line. Without it, the line ends at the boundary.
+  trailheadLat?: number | null;
+  trailheadLng?: number | null;
 };
 
 export const isLive = (park: Park) => park.scene !== null;

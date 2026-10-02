@@ -7,7 +7,7 @@ This contract describes the first Neon-backed content reader. It replaces hourly
 ## Authority and scope
 
 - Neon staging is the authoring and runtime source for the staging park catalogue. Main has its own database and revision stream. The server chooses the environment from its deployment configuration; clients cannot select a different branch with a query parameter. A native main build must use the main content API origin or fail closed when that origin is not configured; it must never pair a main local cursor with the staging API default.
-- `parks` keeps its existing **exact 13 public fields**. `scene: null` means coming soon. The client must not add source URLs, revision fields, or image URLs to a park object.
+- `parks` keeps its existing **exact 13 public fields** for reader 1. Clients that send `reader=2` on `snapshot` and `changes` also get the optional access fields below; strict builds never see them. `scene: null` means coming soon. The client must not add source URLs, revision fields, or image URLs to a park object.
 - `boundaries` keeps one GeoJSON Feature per park. Add a row per park for drive estimates and one settings row for the ordered hub list. Seed them from the existing drive file without changing baseline values. Badge asset descriptors may reuse `r2_objects`; only scene assets referenced by the active catalogue need appear in a snapshot.
 - Keep the prior immutable R2 releases and `version_manifests` for rollback and earned artwork. New catalogue edits do not create a new R2 catalogue, boundary, drive, or map object.
 - Claims, photos, and retained earned badge art are private client data. Catalogue replacement and cursor reset must not delete them.
@@ -22,6 +22,10 @@ type Park = { // exactly these 13 keys
   id: string; name: string; short: string; category: string; region: string;
   lat: number; lng: number; biome: string; shape: string; rarity: string;
   scene: string | null; seed: number; blurb: string;
+  // Only with ?reader=2 or later (content_003_park_maps_link.sql):
+  googleMapsUrl?: string | null;  // parks.google_maps_url, external directions target
+  trailheadLat?: number | null;   // parks.trailhead_lat/lng, end of the in-app approach line
+  trailheadLng?: number | null;
 };
 type ContentFile = {
   path: string; key: string; url: string; sha256: string;

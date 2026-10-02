@@ -38,11 +38,12 @@ const item = {
 };
 
 export function directionsUrl(park: Park) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
+  return park.googleMapsUrl || `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
+// A researched link is the better target even when road access is unknown.
 export function parkLocationUrl(park: Park) {
-  return `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
+  return park.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
 }
 
 export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {

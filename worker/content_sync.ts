@@ -14,6 +14,12 @@ const CATEGORIES = new Set(["national", "provincial", "regional", "municipal", "
 const BIOMES = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPES = new Set(["circle", "hex", "shield", "arch", "seal"]);
 const RARITIES = new Set(["common", "uncommon", "rare", "epic", "legendary"]);
+// Builds installed before 2026-10-01 reject unknown park fields, so optional
+// fields go only to clients that send at least this reader version.
+const MAPS_LINK_READER = 2;
+const ACCESS_FIELDS = ["googleMapsUrl", "trailheadLat", "trailheadLng"] as const;
+// Matches content_parks_google_maps_url_check in content_003_park_maps_link.sql.
+export const GOOGLE_MAPS_URL = /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
 
 type JsonRecord = Record<string, unknown>;
 type RequestLike = {
@@ -30,6 +36,9 @@ type Park = {
   id: string; name: string; short: string; category: string; region: string;
   lat: number; lng: number; biome: string; shape: string; rarity: string;
   scene: string | null; seed: number; blurb: string;
+  googleMapsUrl?: string | null;
+  trailheadLat?: number | null;
+  trailheadLng?: number | null;
 };
 type ContentFile = {
   path: string; key: string; url: string; sha256: string; byte_size: number; content_type: string;
@@ -116,9 +125,10 @@ function safeInteger(value: unknown, label: string, min = 0): number {
   return value;
 }
 
-function validatePark(value: unknown): Park {
+function validatePark(value: unknown, reader: number): Park {
   const park = record(value, "park");
-  exactKeys(park, PARK_FIELDS, "park");
+  // Change rows written before the access columns existed have only the base fields.
+  exactKeys(park, Object.hasOwn(park, "googleMapsUrl") ? [...PARK_FIELDS, ...ACCESS_FIELDS] : PARK_FIELDS, "park");
   const id = text(park.id, "park.id");
   if (!PARK_ID.test(id)) throw new Error("park.id is invalid");
   const name = nonEmptyText(park.name, "park.name");
@@ -135,13 +145,22 @@ function validatePark(value: unknown): Park {
   const scene = park.scene;
   if (scene !== null && (typeof scene !== "string" || !SCENE_SLUG.test(scene))) throw new Error(`park ${id} has an invalid scene slug`);
   if (typeof park.blurb !== "string") throw new Error(`park ${id} blurb must be a string`);
-  return {
+  const googleMapsUrl = park.googleMapsUrl ?? null;
+  if (googleMapsUrl !== null && (typeof googleMapsUrl !== "string" || googleMapsUrl.length > 2048 || !GOOGLE_MAPS_URL.test(googleMapsUrl))) {
+    throw new Error(`park ${id} has an invalid Google Maps link`);
+  }
+  const trailheadLat = park.trailheadLat === null || park.trailheadLat === undefined ? null : finiteNumber(park.trailheadLat, `park ${id} trailhead latitude`, -90, 90);
+  const trailheadLng = park.trailheadLng === null || park.trailheadLng === undefined ? null : finiteNumber(park.trailheadLng, `park ${id} trailhead longitude`, -180, 180);
+  if ((trailheadLat === null) !== (trailheadLng === null)) throw new Error(`park ${id} trailhead needs both coordinates`);
+  const checked: Park = {
     id, name, short, category, region: park.region as string,
     lat: finiteNumber(park.lat, `park ${id} latitude`, -90, 90),
     lng: finiteNumber(park.lng, `park ${id} longitude`, -180, 180),
     biome, shape, rarity, scene, seed: safeInteger(park.seed, `park ${id} seed`, -Number.MAX_SAFE_INTEGER),
     blurb: park.blurb,
   };
+  if (reader >= MAPS_LINK_READER) Object.assign(checked, { googleMapsUrl, trailheadLat, trailheadLng });
+  return checked;
 }
 
 function validateBoundary(value: unknown, expectedId?: string): JsonRecord {
@@ -240,13 +259,13 @@ function validateMapPointer(value: unknown): MapPointer | null {
   return { version: pointer.version, manifestUrl: pointer.manifestUrl, manifestSha256: pointer.manifestSha256 };
 }
 
-function validateSnapshot(value: unknown): JsonRecord {
+function validateSnapshot(value: unknown, reader: number): JsonRecord {
   const snapshot = record(value, "content snapshot");
   exactKeys(snapshot, ["schema", "revision", "parks", "boundaries", "drive", "assets", "map"], "content snapshot");
   if (snapshot.schema !== CONTENT_SYNC_SCHEMA) throw new Error("content snapshot schema is unsupported");
   safeInteger(snapshot.revision, "content revision");
   if (!Array.isArray(snapshot.parks)) throw new Error("content snapshot parks must be an array");
-  const parks = snapshot.parks.map(validatePark);
+  const parks = snapshot.parks.map((park) => validatePark(park, reader));
   const ids = parks.map((park) => park.id);
   if (new Set(ids).size !== ids.length) throw new Error("content snapshot has duplicate park ids");
   const parkById = new Map(parks.map((park) => [park.id, park]));
@@ -294,7 +313,7 @@ function validateSnapshot(value: unknown): JsonRecord {
 type Entity = "park" | "boundary" | "drive" | "asset" | "hubs" | "map";
 type Change = { entity: Entity; op: "upsert" | "delete"; id: string; value?: unknown };
 
-function validateChange(value: unknown): Change {
+function validateChange(value: unknown, reader: number): Change {
   const change = record(value, "content change");
   const entity = change.entity;
   if (!["park", "boundary", "drive", "asset", "hubs", "map"].includes(String(entity))) throw new Error("content change entity is invalid");
@@ -312,7 +331,7 @@ function validateChange(value: unknown): Change {
   exactKeys(change, ["entity", "op", "id", "value"], "content upsert change");
   let checked: unknown;
   if (entity === "park") {
-    checked = validatePark(change.value);
+    checked = validatePark(change.value, reader);
     if ((checked as Park).id !== id) throw new Error("park change id does not match its value");
   } else if (entity === "boundary") {
     checked = validateBoundary(change.value, id);
@@ -330,7 +349,7 @@ function validateChange(value: unknown): Change {
   return { entity: entity as Entity, op: "upsert", id, value: checked };
 }
 
-function validateChanges(value: unknown): JsonRecord {
+function validateChanges(value: unknown, reader: number): JsonRecord {
   const response = record(value, "content changes response");
   exactKeys(response, ["schema", "fromRevision", "throughRevision", "headRevision", "hasMore", "batches"], "content changes response");
   if (response.schema !== CONTENT_SYNC_SCHEMA) throw new Error("content changes schema is unsupported");
@@ -346,7 +365,7 @@ function validateChanges(value: unknown): JsonRecord {
     const revision = safeInteger(batch.revision, "batch revision", 1);
     if (revision !== prior + 1 || revision > headRevision || !Array.isArray(batch.changes) || batch.changes.length === 0) throw new Error("content change batch is invalid or noncontiguous");
     prior = revision;
-    const changes = batch.changes.map(validateChange);
+    const changes = batch.changes.map((change) => validateChange(change, reader));
     const keys = changes.map((change) => `${change.entity}\0${change.id}`);
     if (new Set(keys).size !== keys.length) throw new Error(`content batch ${revision} has duplicate entity keys`);
     return { revision, changes };
@@ -370,7 +389,9 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
     async snapshot() {
       const results = await sql.transaction([
         sql`SELECT revision FROM public.content_clock WHERE singleton = true`,
-        sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks ORDER BY id`,
+        sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb,
+                   google_maps_url AS "googleMapsUrl", trailhead_lat AS "trailheadLat", trailhead_lng AS "trailheadLng"
+              FROM public.parks ORDER BY id`,
         sql`SELECT park_id, feature FROM public.boundaries ORDER BY park_id`,
         sql`SELECT position, name, lng, lat FROM public.drive_hubs ORDER BY position`,
         sql`SELECT park_id, walk_m FROM public.park_drive_settings ORDER BY park_id`,
@@ -493,6 +514,13 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
   };
 }
 
+// Clients that predate the reader parameter are reader 1.
+function readerVersion(raw: string | null): number {
+  if (raw === null) return 1;
+  if (!/^\d{1,4}$/.test(raw) || Number(raw) < 1) throw new HttpError(400, "reader must be a positive integer");
+  return Number(raw);
+}
+
 function sendJson(response: ResponseLike, status: number, body: JsonRecord, head = false): void {
   const serialized = JSON.stringify(body);
   const byteLength = new TextEncoder().encode(serialized).byteLength;
@@ -537,8 +565,16 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
     }
     try {
       const repository = await repositoryFor({ ...options, env });
+      const params = new URLSearchParams();
+      const query = request.query ?? {};
+      for (const [key, value] of Object.entries(query)) {
+        if (value === undefined) continue;
+        if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
+        else params.set(key, value);
+      }
+      const reader = readerVersion(params.get("reader"));
       if (operation === "snapshot") {
-        const body = validateSnapshot(await repository.snapshot());
+        const body = validateSnapshot(await repository.snapshot(), reader);
         const serialized = JSON.stringify(body);
         if (new TextEncoder().encode(serialized).byteLength > MAX_RESPONSE_BYTES) {
           throw new HttpError(503, "snapshot exceeds supported response size");
@@ -547,13 +583,6 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         return;
       }
 
-      const params = new URLSearchParams();
-      const query = request.query ?? {};
-      for (const [key, value] of Object.entries(query)) {
-        if (value === undefined) continue;
-        if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
-        else params.set(key, value);
-      }
       const rawAfter = params.get("after");
       if (rawAfter === null || !/^\d+$/.test(rawAfter)) throw new HttpError(400, "after must be a non-negative revision");
       const after = Number(rawAfter);
@@ -574,7 +603,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         const batch = record(rawBatch, "content batch");
         return {
           revision: safeInteger(batch.revision, "batch revision", 1),
-          changes: Array.isArray(batch.changes) ? batch.changes.map(validateChange) : (() => { throw new Error("batch changes must be an array"); })(),
+          changes: Array.isArray(batch.changes) ? batch.changes.map((change) => validateChange(change, reader)) : (() => { throw new Error("batch changes must be an array"); })(),
         };
       });
       let hasMore = rawResult.hasMore;
@@ -582,7 +611,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
         throughRevision: batches.length ? batches[batches.length - 1].revision : headRevision,
         headRevision, hasMore, batches,
-      });
+      }, reader);
       while (new TextEncoder().encode(JSON.stringify(body)).byteLength > MAX_RESPONSE_BYTES) {
         if (batches.length <= 1) throw new HttpError(413, "one committed content batch exceeds supported response size; take a fresh snapshot");
         batches = batches.slice(0, -1);
@@ -591,7 +620,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
           schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
           throughRevision: batches[batches.length - 1].revision,
           headRevision, hasMore, batches,
-        });
+        }, reader);
       }
       sendJson(response, 200, body, method === "HEAD");
     } catch (error) {
