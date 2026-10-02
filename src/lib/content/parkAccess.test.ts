@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { directionsUrl } from "../../screens/map/ParkSheet";
+import { directionsUrl, parkLocationUrl } from "../../screens/map/ParkSheet";
 import { validateParkRecord } from "./manifest";
 
 const base = {
@@ -13,6 +13,7 @@ describe("park access fields", () => {
     expect(park.googleMapsUrl).toBe("https://maps.app.goo.gl/abc");
     expect([park.trailheadLat, park.trailheadLng]).toEqual([48.47, -123.46]);
     expect(directionsUrl(park)).toBe("https://maps.app.goo.gl/abc");
+    expect(parkLocationUrl(park)).toBe("https://maps.app.goo.gl/abc");
   });
 
   it("falls back to the park pin without a usable link", () => {
@@ -20,6 +21,7 @@ describe("park access fields", () => {
       const park = validateParkRecord({ ...base, ...extra });
       expect(park.googleMapsUrl).toBeUndefined();
       expect(directionsUrl(park)).toBe("https://www.google.com/maps/dir/?api=1&destination=48.46,-123.47");
+      expect(parkLocationUrl(park)).toBe("https://www.google.com/maps/search/?api=1&query=48.46,-123.47");
     }
   });
 
