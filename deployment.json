@@ -39,7 +39,8 @@
     ],
     "migrationPaths": [
       "database/migrations/content_001_sync.sql",
-      "database/migrations/content_002_authoring.sql"
+      "database/migrations/content_002_authoring.sql",
+      "database/migrations/content_003_park_maps_link.sql"
     ],
     "apiPaths": [
       "api/content/snapshot.ts",
