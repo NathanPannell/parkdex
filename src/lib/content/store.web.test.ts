@@ -142,7 +142,7 @@ describe("WebContentStore", () => {
     await expect(store.getSyncState("staging")).resolves.toBeNull();
     await expect(store.getSyncCursor("staging")).resolves.toBeNull();
     await store.replaceSyncState("staging", null, emptyState(13), "recovered-source", null, true);
-    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 13, sourceId: "recovered-source", readerVersion: 1 });
+    await expect(store.getSyncCursor("staging")).resolves.toEqual({ revision: 13, sourceId: "recovered-source", readerVersion: 2 });
 
     const concurrentDb = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(DATABASE);

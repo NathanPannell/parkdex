@@ -38,7 +38,7 @@ const item = {
 };
 
 export function directionsUrl(park: Park) {
-  return `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
+  return park.googleMapsUrl || `https://www.google.com/maps/dir/?api=1&destination=${park.lat},${park.lng}`;
 }
 
 export function parkLocationUrl(park: Park) {

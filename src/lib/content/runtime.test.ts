@@ -20,7 +20,7 @@ import type {
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
 import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
-import { CONTENT_CDN_ORIGIN } from "./contracts";
+import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION } from "./contracts";
 import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
@@ -252,7 +252,7 @@ class MemoryContentStore implements ContentStore {
   async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
     const state = this.sync.get(environment);
     const readerVersion = this.readerVersions.get(environment);
-    return state ? { revision: state.revision, sourceId: state.sourceId ?? "", ...(readerVersion === undefined ? {} : { readerVersion }) } : null;
+    return state ? { revision: state.revision, sourceId: state.sourceId ?? "", readerVersion: readerVersion ?? CONTENT_READER_VERSION } : null;
   }
   async getSyncState(environment: ContentEnvironment) { const value = this.sync.get(environment); return value ? structuredClone(value) : null; }
   async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false) {
@@ -1125,7 +1125,7 @@ describe("incremental content sync", () => {
     const server = contentSyncServer(contentSyncSnapshot(4, { ...cachedPark, name: "Snapshot name" }, []));
     const store = new MemoryContentStore();
     store.sync.set("staging", { ...cached, sourceId: "staging|https://parkdex.example.test/api/content" });
-    store.readerVersions.set("staging", 1);
+    store.readerVersions.set("staging", CONTENT_READER_VERSION);
     const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
 
     await runtime.start();

@@ -191,7 +191,9 @@ export function MapScreen() {
       sfx.pop();
     } else {
       if (!bounds) return;
-      const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
+      const target: LngLat = selected.trailheadLat != null && selected.trailheadLng != null
+        ? [selected.trailheadLng, selected.trailheadLat]
+        : arrivalPoint(bounds.byId.get(selected.id)!, user);
       const path = arcPath(user, target);
       tripStart.current = { from: user, total: tripEstimate.km };
       setRoute(path);

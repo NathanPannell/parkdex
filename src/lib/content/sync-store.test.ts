@@ -177,7 +177,7 @@ describe("WebContentStore sync persistence", () => {
     }
 
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toEqual(before);
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 5, sourceId: SOURCE, readerVersion: 1 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 5, sourceId: SOURCE, readerVersion: 2 });
   });
 
   it("rejects stale cursor revisions and source IDs without changing saved rows", async () => {
