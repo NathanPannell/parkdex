@@ -10,6 +10,7 @@ import type { LngLat } from "../../lib/geo";
 import { mapStyle } from "../../lib/mapStyle";
 import { configureMapLibreWorker } from "../../lib/mapStartup";
 import { BUILD_MAP_KEY, flushPendingDetailedMapSourceRefresh, registerBuildMapProtocols, retryUnavailableBuildMap, subscribeMapCoverage } from "../../lib/offlineTiles";
+import { createLongPress, type ScreenPoint } from "../../lib/longPress";
 import { isLive, type Park } from "../../lib/parks";
 import { UNAVAILABLE_ELIGIBILITY, getParkRarityEligibility, type ParkRarityEligibility, type RarityProgress } from "../../lib/progression";
 import { rarityAccessibleStatus } from "../../lib/rarityUi";
@@ -38,9 +39,13 @@ type Props = {
   arrivedId: string | null;
   route: LngLat[] | null;
   onSelect: (id: string | null) => void;
+  /** A press and hold on the map outside any pinned park. */
+  onLongPress?: (press: MapLongPress) => void;
   /** False while a full-screen view covers the map, so map animations pause. */
   visible: boolean;
 };
+
+export type MapLongPress = { lngLat: LngLat; point: ScreenPoint };
 
 const BIOME_FILL = [
   "match",
@@ -56,7 +61,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, visible }: Props) {
+export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims, rarityProgress, progressReady, selectedId, tripId, arrivedId, route, onSelect, onLongPress, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -69,8 +74,12 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
   const [userHost, setUserHost] = useState<HTMLElement | null>(null);
   const [tier, setTier] = useState<Tier>("near");
   const [styleIsReady, setStyleIsReady] = useState(false);
+  // Every pin is in the DOM, so pins off screen must not pull their art from the CDN.
+  const [view, setView] = useState<[number, number, number, number] | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  const longPressRef = useRef(onLongPress);
+  longPressRef.current = onLongPress;
   const pinnedIds = useRef(new Set<string>());
   pinnedIds.current = useMemo(() => new Set(parks.map((park) => park.id)), [parks]);
   // Stable marker props let memoized pins skip re-rendering when unrelated app state changes.
@@ -116,9 +125,18 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
     setUserHost(uEl);
 
     map.on("zoom", () => setTier(tierOf(map.getZoom())));
+    const updateView = () => setView(paddedView(map));
+    map.on("moveend", updateView);
+    updateView();
     map.on("click", (e: MapMouseEvent) => {
       if ((e.originalEvent.target as HTMLElement).closest(".pm")) return;
-      selectRef.current(parkAtPoint(map, e, pinnedIds.current));
+      selectRef.current(parkAtPoint(map, [e.point.x, e.point.y], pinnedIds.current));
+    });
+    const removeLongPress = listenForLongPress(map, (point) => {
+      const handler = longPressRef.current;
+      if (!handler || parkAtPoint(map, [point.x, point.y], pinnedIds.current)) return;
+      const lngLat = map.unproject([point.x, point.y]);
+      handler({ lngLat: [lngLat.lng, lngLat.lat], point });
     });
     const markStyleReady = () => {
       styleReady.current = true;
@@ -136,6 +154,7 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
         bearing: map.getBearing(),
         pitch: map.getPitch(),
       };
+      removeLongPress();
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
       cleanupBuildMap();
@@ -291,6 +310,7 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
             claim={claims[park.id]}
             eligibility={eligibilityById.get(park.id) ?? UNAVAILABLE_ELIGIBILITY}
             focused={park.id === (tripId ?? selectedId)}
+            onScreen={!!view && inView(view, park)}
             onSelect={selectMarker}
           />,
           el,
@@ -303,13 +323,77 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, claims
 }
 
 // A tap inside a pinned park's boundary opens that park; the topmost boundary wins where they overlap.
-function parkAtPoint(map: MLMap, e: MapMouseEvent, pinned: ReadonlySet<string>): string | null {
+function parkAtPoint(map: MLMap, point: [number, number], pinned: ReadonlySet<string>): string | null {
   if (!map.getLayer("park-fill")) return null;
-  for (const feature of map.queryRenderedFeatures(e.point, { layers: ["park-fill"] })) {
+  for (const feature of map.queryRenderedFeatures(point, { layers: ["park-fill"] })) {
     const id = feature.properties?.id;
     if (typeof id === "string" && pinned.has(id)) return id;
   }
   return null;
+}
+
+// The visible map plus half a screen on each side, so art is ready as the map pans.
+function paddedView(map: MLMap): [number, number, number, number] {
+  const bounds = map.getBounds();
+  const padLng = (bounds.getEast() - bounds.getWest()) / 2;
+  const padLat = (bounds.getNorth() - bounds.getSouth()) / 2;
+  return [bounds.getWest() - padLng, bounds.getSouth() - padLat, bounds.getEast() + padLng, bounds.getNorth() + padLat];
+}
+
+function inView([west, south, east, north]: [number, number, number, number], park: Park): boolean {
+  return park.lng >= west && park.lng <= east && park.lat >= south && park.lat <= north;
+}
+
+const onParkPin = (event: Event) => event.target instanceof Element && !!event.target.closest(".pm");
+
+// Touch holds use a timer; a mouse right-click opens the same menu on desktop.
+function listenForLongPress(map: MLMap, onPress: (point: ScreenPoint) => void): () => void {
+  const container = map.getCanvasContainer();
+  let lastPressAt = 0;
+  const fire = (point: ScreenPoint) => {
+    // Android can report one hold as both a touch press and a contextmenu event.
+    const now = Date.now();
+    if (now - lastPressAt < 800) return;
+    lastPressAt = now;
+    onPress(point);
+  };
+  const press = createLongPress(fire);
+  const local = (x: number, y: number): ScreenPoint => {
+    const rect = container.getBoundingClientRect();
+    return { x: x - rect.left, y: y - rect.top };
+  };
+  const touchStart = (event: TouchEvent) => {
+    if (onParkPin(event)) {
+      press.end();
+      return;
+    }
+    press.start(local(event.touches[0].clientX, event.touches[0].clientY), event.touches.length);
+  };
+  const touchMove = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (touch) press.move(local(touch.clientX, touch.clientY), event.touches.length);
+  };
+  const touchEnd = (event: TouchEvent) => {
+    // The lifted finger would otherwise send a click that closes the menu straight away.
+    if (press.end() && event.cancelable) event.preventDefault();
+  };
+  const contextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+    if (!onParkPin(event)) fire(local(event.clientX, event.clientY));
+  };
+  container.addEventListener("touchstart", touchStart, { passive: true });
+  container.addEventListener("touchmove", touchMove, { passive: true });
+  container.addEventListener("touchend", touchEnd, { passive: false });
+  container.addEventListener("touchcancel", touchEnd, { passive: false });
+  container.addEventListener("contextmenu", contextMenu);
+  return () => {
+    press.end();
+    container.removeEventListener("touchstart", touchStart);
+    container.removeEventListener("touchmove", touchMove);
+    container.removeEventListener("touchend", touchEnd);
+    container.removeEventListener("touchcancel", touchEnd);
+    container.removeEventListener("contextmenu", contextMenu);
+  };
 }
 
 const ParkMarker = memo(function ParkMarker({
@@ -319,6 +403,7 @@ const ParkMarker = memo(function ParkMarker({
   claim,
   eligibility,
   focused,
+  onScreen,
   onSelect,
 }: {
   park: Park;
@@ -327,6 +412,7 @@ const ParkMarker = memo(function ParkMarker({
   claim?: Claim;
   eligibility: ParkRarityEligibility;
   focused: boolean;
+  onScreen: boolean;
   onSelect: (id: string) => void;
 }) {
   const live = isLive(park);
@@ -358,7 +444,7 @@ const ParkMarker = memo(function ParkMarker({
           <span className="pm__badge">
             {claim
               ? <EarnedBadge park={park} claim={claim} size={size} showName={false} state="earned" />
-              : <Badge park={park} size={size} showName={false} state="preview" />}
+              : <Badge park={park} size={size} showName={false} state="preview" remoteArt={onScreen || focused} />}
           </span>
           {claimed && (
             <span className="pm__check">

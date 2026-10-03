@@ -10,6 +10,8 @@ import "../../propose-park.css";
 type Props = {
   mapRef: RefObject<MLMap | null>;
   user: LngLat;
+  /** Where the pin starts, for a proposal begun by pressing and holding the map. */
+  initialPin?: LngLat | null;
   onClose: () => void;
 };
 
@@ -29,8 +31,8 @@ function pathOf(points: ScreenPoint[], closed: boolean): string {
  * Propose a park: tap the map to drop a pin, optionally trace a rough outline with a finger,
  * then name it. Proposals go to the operator area for review.
  */
-export function ProposePark({ mapRef, user, onClose }: Props) {
-  const [pin, setPin] = useState<LngLat | null>(null);
+export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props) {
+  const [pin, setPin] = useState<LngLat | null>(initialPin);
   const [outline, setOutline] = useState<LngLat[] | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [trace, setTrace] = useState<ScreenPoint[]>([]);

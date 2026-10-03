@@ -18,7 +18,8 @@ import { FIELD, isNative } from "../../lib/native";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
-import { MapView } from "./MapView";
+import { MapView, type MapLongPress } from "./MapView";
+import { PressMenu } from "./PressMenu";
 import { ProposePark } from "./ProposePark";
 import { DownloadMaps } from "./DownloadMaps";
 import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
@@ -52,7 +53,9 @@ export function MapScreen() {
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [proposing, setProposing] = useState(false);
+  const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
+  // Truthy while proposing; holds the long-pressed spot when the proposal started there.
+  const [proposing, setProposing] = useState<{ pin: LngLat | null } | null>(null);
   const [downloadingMaps, setDownloadingMaps] = useState(false);
   const downloadReturn = useRef<Screen | null>(null);
   const downloadCamera = useRef<{
@@ -168,7 +171,8 @@ export function MapScreen() {
         map.jumpTo({ center: camera.center, zoom: 6.8, bearing: camera.bearing, pitch: camera.pitch, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
       }
       select(null);
-      setProposing(false);
+      setProposing(null);
+      setPressMenu(null);
       setDownloadingMaps(true);
     };
     open();
@@ -299,6 +303,13 @@ export function MapScreen() {
     sfx.tap();
   }
 
+  function openPressMenu(press: MapLongPress) {
+    setMenuOpen(false);
+    setDemoOpen(false);
+    setPressMenu(press);
+    buzz(20);
+  }
+
   function recenter() {
     sfx.tap();
     mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
@@ -322,19 +333,19 @@ export function MapScreen() {
       arrivedId={content ? arrivedId : null}
       route={content ? route : null}
       onSelect={content && !proposing && !downloadingMaps ? select : () => {}}
+      onLongPress={content && !proposing && !downloadingMaps && !selected && !simulating ? openPressMenu : undefined}
       visible={state.screen === "map"}
     />
   );
 
   if (!content) {
-    // Saved parks load in the background over a live map; the card is only for a
-    // first download, offline with nothing saved, or an error.
+    // Parks load and download in the background over a live map. A card appears only
+    // when there is nothing to show: offline with nothing saved, or an error.
+    const blocked = contentStatus.phase === "offline" || (contentStatus.phase !== "starting" && !!contentStatus.error);
     return (
       <div className="screen map-screen">
         {mapView}
-        {contentStatus.phase === "starting"
-          ? <span className="content-sync-spinner content-sync-spinner--parks" role="status" aria-label="Loading parks" />
-          : <ContentGate overMap />}
+        {blocked && <ContentGate overMap />}
       </div>
     );
   }
@@ -365,7 +376,7 @@ export function MapScreen() {
     return (
       <div className="screen map-screen">
         {mapView}
-        <ProposePark mapRef={mapRef} user={user} onClose={() => setProposing(false)} />
+        <ProposePark mapRef={mapRef} user={user} initialPin={proposing.pin} onClose={() => setProposing(null)} />
       </div>
     );
   }
@@ -400,6 +411,7 @@ export function MapScreen() {
             onClick={() => {
               sfx.tap();
               setDemoOpen(false);
+              setPressMenu(null);
               setMenuOpen((open) => !open);
             }}
             aria-label="Menu"
@@ -431,7 +443,7 @@ export function MapScreen() {
               <Icon name="gear" size={20} /> Settings
             </button>
             {isFeatureEnabled("parkProposals") && (
-              <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing(true); }}>
+              <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing({ pin: null }); }}>
                 <Icon name="pinPlus" size={20} /> Propose a park
               </button>
             )}
@@ -441,6 +453,27 @@ export function MapScreen() {
               </button>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pressMenu && (
+          <PressMenu
+            key={`${pressMenu.point.x},${pressMenu.point.y}`}
+            mapRef={mapRef}
+            point={pressMenu.point}
+            canPropose={isFeatureEnabled("parkProposals")}
+            onClose={() => setPressMenu(null)}
+            onFeedback={() => {
+              setPressMenu(null);
+              dispatch({ type: "feedback", open: true });
+            }}
+            onPropose={() => {
+              setPressMenu(null);
+              select(null);
+              setProposing({ pin: pressMenu.lngLat });
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -559,7 +592,6 @@ export function MapScreen() {
         )}
       </AnimatePresence>
 
-      {!bounds && <div className="map-loading">Loading parks…</div>}
       {FIELD && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
     </div>
   );

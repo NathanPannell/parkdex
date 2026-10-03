@@ -14,12 +14,7 @@ export function ContentSyncStatus() {
     </button>
   );
 
-  // A small spinner rather than a labelled card: downloads run often (streamed map
-  // detail included) and should not compete with the map.
-  return (
-    <>
-      <span className="content-sync-spinner" title="Downloading" aria-hidden="true" />
-      <span className="content-sync__sr-only" role="status" aria-live="polite" aria-atomic="true">Downloading update.</span>
-    </>
-  );
+  // Downloads run often (streamed map detail included) and work in the background, so
+  // nothing is drawn over the map; screen readers still hear that an update is underway.
+  return <span className="content-sync__sr-only" role="status" aria-live="polite" aria-atomic="true">Downloading update.</span>;
 }

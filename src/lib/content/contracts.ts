@@ -135,6 +135,8 @@ export type ContentSnapshot = {
   drive: DriveData;
   // Core asset URLs are hydrated before a snapshot can become visible.
   assetUrls: ReadonlyMap<string, string>;
+  /** CDN copies of badge art not saved on this device, shown only while online. */
+  remoteSceneUrls?: ReadonlyMap<string, string>;
   retainedSceneUrls: ReadonlyMap<string, string>;
 };
 export type ContentPhase = "starting" | "downloading" | "ready" | "updating" | "offline" | "error";
@@ -219,6 +221,8 @@ export interface ContentRuntime {
   /** Delete saved files the current content no longer uses. Files still referenced are kept. */
   deleteUnusedFiles?(): Promise<number>;
   getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null;
+  /** Save one park's badge art now, for a claim made before nearby art finished. */
+  ensureParkArt?(parkId: string): Promise<void>;
   ensureArchivedScene(releaseId: string, scene: string): Promise<string>;
   stop(): Promise<void>;
 }

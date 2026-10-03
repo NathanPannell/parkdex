@@ -1,5 +1,5 @@
 import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useTransform } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "../components/Badge";
 import { ContentGate } from "../components/ContentGate";
 import { Icon } from "../components/Icon";
@@ -49,6 +49,12 @@ export function Claim() {
     const sceneHref = content.assetUrls.get(scenePath(entry.park.scene));
     if (sceneHref) entryRef.current = { ...entry, sceneHref };
   }
+
+  // Only art near the visitor downloads automatically; fetch this park's now if it is still missing.
+  const missingArtParkId = entryRef.current?.park.scene && entryRef.current.sceneHref === null ? entryRef.current.park.id : null;
+  useEffect(() => {
+    if (missingArtParkId) void runtime.ensureParkArt?.(missingArtParkId).catch(() => {});
+  }, [missingArtParkId, runtime]);
 
   if (!state.progressReady) return <div className="screen claim-progress-wait"><div className="card"><Kip pose="think" size={72} /><strong>Opening your saved Dex…</strong><span>Your photo is still here. Kip will save this badge as soon as your Dex is ready.</span></div></div>;
   if (!entryRef.current) return <ContentGate />;

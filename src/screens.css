@@ -720,37 +720,6 @@
   pointer-events: none;
 }
 
-.content-sync-spinner {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 14px;
-  width: 20px;
-  height: 20px;
-  border: 2.5px solid color-mix(in srgb, var(--ink) 18%, transparent);
-  border-top-color: var(--ink);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--paper) 70%, transparent);
-  animation: content-sync-spin 0.9s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes content-sync-spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .content-sync-spinner {
-    animation: none;
-  }
-}
-
-/* Shown alone over the map while saved parks load, before the map controls appear. */
-.content-sync-spinner--parks {
-  top: calc(var(--safe-top) + 14px);
-  right: 18px;
-  z-index: 5;
-}
-
 .tool {
   width: 48px;
   height: 48px;
@@ -791,6 +760,49 @@
 .map-menu button:hover,
 .map-menu button:focus-visible {
   background: var(--paper-2);
+}
+
+.press-menu {
+  position: absolute;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  width: 240px;
+}
+
+.press-menu__title {
+  padding: 4px 12px 6px;
+}
+
+.press-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.press-menu button:hover,
+.press-menu button:focus-visible {
+  background: var(--paper-2);
+}
+
+/* Marks the held spot so the menu reads as being about that place. */
+.press-dot {
+  position: absolute;
+  z-index: 24;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 3px solid var(--paper);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+  pointer-events: none;
 }
 
 .tool--open {

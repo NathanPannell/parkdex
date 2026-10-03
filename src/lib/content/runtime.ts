@@ -58,6 +58,11 @@ const SYNC_BATCH_LIMIT = 50;
 const LOCATION_DEBOUNCE_MS = 800;
 // Nearby coverage is a 3x3 block of ~50 km squares, so re-anchor after about half a square.
 const LOCATION_MOVE_THRESHOLD_KM = 25;
+// Badge art downloads automatically only for parks this close to the visitor; the rest loads
+// from the art CDN when shown. Re-check after a shorter move so art stays ahead of the visitor.
+const NEARBY_ART_KM = 15;
+const NEARBY_ART_MOVE_KM = 5;
+const SCENE_PREFIX = "art/badges/scenes/";
 const EMPTY_STATUS: ContentStatus = {
   phase: "starting",
   snapshot: null,
@@ -223,6 +228,8 @@ class ContentRuntimeController implements ContentRuntime {
   private nearbyTimer: ReturnType<typeof setTimeout> | undefined;
   private nearbyAbort: AbortController | null = null;
   private nearbyPromise: Promise<unknown> | null = null;
+  private nearbyArtAnchor: MapPoint | null = null;
+  private nearbyArtPromise: Promise<void> | null = null;
   private busy = false;
   private pendingActivationId: string | null = null;
   private waitingForUpdateWifi = false;
@@ -466,6 +473,17 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.stopped) return;
     this.currentLocation = validMapPoint(point) && isPointInsideContentBounds(point) ? [point[0], point[1]] : null;
     if (this.status.snapshot) this.scheduleNearbyPrefetch(false);
+    this.scheduleNearbyArt();
+  }
+
+  /** Download one park's badge art now, for a claim made before nearby art finished. */
+  async ensureParkArt(parkId: string): Promise<void> {
+    const state = this.syncState;
+    const park = state?.parks.find((entry) => entry.id === parkId);
+    const file = park?.scene ? state?.assets.find((entry) => entry.path === `${SCENE_PREFIX}${park.scene}.webp`) : undefined;
+    if (!file) return;
+    await this.scheduleFileDownload(file, "core");
+    await this.refreshLocalSceneUrls();
   }
 
   refreshClaimedParks(): void {
@@ -1074,16 +1092,33 @@ class ContentRuntimeController implements ContentRuntime {
     }
   }
 
+  /**
+   * Files a catalogue needs on the device before it is shown: art for claimed parks and for
+   * parks near the visitor, plus any asset that is not badge art. Other art loads on demand.
+   */
+  private requiredAssets(state: ContentSyncState): ContentFile[] {
+    const claimed = new Set(this.options.claimedParkIds());
+    const near = this.currentLocation;
+    const wanted = new Set<string>();
+    for (const park of state.parks) {
+      if (!park.scene) continue;
+      if (claimed.has(park.id) || (near && distanceKm(near, [park.lng, park.lat]) <= NEARBY_ART_KM)) {
+        wanted.add(`${SCENE_PREFIX}${park.scene}.webp`);
+      }
+    }
+    return state.assets.filter((file) => !file.path.startsWith(SCENE_PREFIX) || wanted.has(file.path));
+  }
+
   private async requiredSceneAssetsAreLocal(state: ContentSyncState): Promise<boolean> {
     for (const file of state.assets) this.trackFile(file);
-    const checks = await Promise.all(state.assets.map((file) => this.hasVerifiedLocalFile(file)));
+    const checks = await Promise.all(this.requiredAssets(state).map((file) => this.hasVerifiedLocalFile(file)));
     return checks.every(Boolean);
   }
 
   private async ensureSyncAssets(state: ContentSyncState, signal: AbortSignal): Promise<void> {
+    for (const file of state.assets) this.trackFile(file);
     const missing: ContentFile[] = [];
-    for (const file of state.assets) {
-      this.trackFile(file);
+    for (const file of this.requiredAssets(state)) {
       if (!(await this.hasVerifiedLocalFile(file))) missing.push(file);
     }
     if (missing.length === 0) return;
@@ -1175,6 +1210,8 @@ class ContentRuntimeController implements ContentRuntime {
     this.syncManifests.set(releaseId, manifest);
 
     const assetUrls = new Map<string, string>();
+    const remoteSceneUrls = new Map<string, string>();
+    const required = new Set(this.requiredAssets(validated).map((file) => file.path));
     const sceneFiles = validated.parks.flatMap((park) => {
       if (!park.scene) return [];
       const path = `art/badges/scenes/${park.scene}.webp`;
@@ -1185,8 +1222,10 @@ class ContentRuntimeController implements ContentRuntime {
     // Read badge art concurrently: one at a time over the native bridge held the
     // map behind the loading card for many seconds on every cold start.
     await Promise.all(sceneFiles.map(async (file) => {
+      remoteSceneUrls.set(file.path, file.url);
       if (!(await this.hasVerifiedLocalFile(file))) {
-        throw new Error(`Required park badge art is missing: ${file.path}`);
+        if (required.has(file.path)) throw new Error(`Required park badge art is missing: ${file.path}`);
+        return;
       }
       assetUrls.set(file.path, await this.localFileUrl(file));
     }));
@@ -1229,6 +1268,7 @@ class ContentRuntimeController implements ContentRuntime {
       boundaries: validated.boundaries,
       drive: validated.drive,
       assetUrls,
+      remoteSceneUrls,
       retainedSceneUrls: publishedRetainedSceneUrls,
     };
     this.artworkReadyReleases.add(releaseId);
@@ -1254,6 +1294,47 @@ class ContentRuntimeController implements ContentRuntime {
     this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, mapDetailReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
     if (retainedProjectionRevision !== this.retainedProjectionRevision) this.refreshClaimedParks();
     void this.hydrateCachedMapChunks(validated, releaseId).catch(() => {});
+    this.scheduleNearbyArt();
+  }
+
+  /** Download badge art for parks around the visitor, then point those badges at the saved copies. */
+  private scheduleNearbyArt(): void {
+    const point = this.currentLocation;
+    const state = this.syncState;
+    if (!point || !state || !this.status.snapshot || this.nearbyArtPromise || this.stopped || !this.foreground) return;
+    if (!this.connectivity().connected || !this.canDownloadContent()) return;
+    if (this.nearbyArtAnchor && distanceKm(this.nearbyArtAnchor, point) < NEARBY_ART_MOVE_KM) return;
+    const work = (async () => {
+      const missing: ContentFile[] = [];
+      for (const file of this.requiredAssets(state)) {
+        if (!(await this.hasVerifiedLocalFile(file))) missing.push(file);
+      }
+      const results = await Promise.allSettled(missing.map((file) => this.scheduleFileDownload(file, "nearby")));
+      await this.refreshLocalSceneUrls();
+      if (results.every((result) => result.status === "fulfilled")) this.nearbyArtAnchor = point;
+    })();
+    this.nearbyArtPromise = work.catch(() => {}).finally(() => {
+      this.nearbyArtPromise = null;
+    });
+  }
+
+  /** Swap CDN art for saved copies that finished downloading after the catalogue was shown. */
+  private async refreshLocalSceneUrls(): Promise<void> {
+    const snapshot = this.status.snapshot;
+    const state = this.syncState;
+    if (!snapshot || !state) return;
+    const found: [string, string][] = [];
+    for (const file of state.assets) {
+      if (!file.path.startsWith(SCENE_PREFIX) || snapshot.assetUrls.has(file.path)) continue;
+      try {
+        if (await this.hasVerifiedLocalFile(file)) found.push([file.path, await this.localFileUrl(file)]);
+      } catch {
+        // The CDN copy keeps showing until the saved file can be read.
+      }
+    }
+    const current = this.status.snapshot;
+    if (!found.length || !current || current.releaseId !== snapshot.releaseId) return;
+    this.setStatus({ snapshot: { ...current, assetUrls: new Map([...current.assetUrls, ...found]) } });
   }
 
   private hydrateCachedSnapshotInBackground(state: ContentSyncState, releaseId: string): void {
