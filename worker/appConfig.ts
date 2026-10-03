@@ -41,7 +41,13 @@ export interface BuildConfigInput {
   notes: string;
 }
 
+export interface UpdateRules {
+  minimumBuild: number | null;
+  latestBuild: number | null;
+}
+
 export interface AppConfigStore {
+  updateRules?(environment: "production" | "staging"): Promise<UpdateRules>;
   /** The exact build row and the platform default row, when they exist. */
   resolve(platform: AppConfigPlatform, build: number): Promise<BuildConfigRecord[]>;
   list(): Promise<BuildConfigRecord[]>;
@@ -101,6 +107,13 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
         WHERE platform = ${platform} AND build IN (${build}, ${DEFAULT_BUILD})
       ` as Row[];
       return rows.map(toRecord);
+    },
+    async updateRules(environment) {
+      const rows = await sql`
+        SELECT minimum_build, latest_build FROM kip_app_config.update_rules
+        WHERE environment = ${environment}
+      ` as { minimum_build: number | null; latest_build: number | null }[];
+      return { minimumBuild: rows[0]?.minimum_build ?? null, latestBuild: rows[0]?.latest_build ?? null };
     },
     async list() {
       const rows = await sql`
@@ -205,11 +218,11 @@ function optionalBuild(value: unknown, name: string): number | null {
 }
 
 /** Merge the platform default under the exact build: build values win, flag by flag. */
-export function resolveAppConfig(platform: AppConfigPlatform, build: number, rows: BuildConfigRecord[]): AppConfigResponse {
+export function resolveAppConfig(platform: AppConfigPlatform, build: number, rows: BuildConfigRecord[], rules?: UpdateRules): AppConfigResponse {
   const fallback = rows.find((row) => row.build === DEFAULT_BUILD && row.platform === platform) ?? null;
   const exact = build === DEFAULT_BUILD ? null : rows.find((row) => row.build === build && row.platform === platform) ?? null;
-  const minimumBuild = exact?.minimumBuild ?? fallback?.minimumBuild ?? null;
-  const latestBuild = exact?.latestBuild ?? fallback?.latestBuild ?? null;
+  const minimumBuild = rules ? rules.minimumBuild : exact?.minimumBuild ?? fallback?.minimumBuild ?? null;
+  const latestBuild = rules ? rules.latestBuild : exact?.latestBuild ?? fallback?.latestBuild ?? null;
   // Build 0 is an unversioned web or development build, which never needs a store update.
   const update = build === DEFAULT_BUILD ? "none"
     : minimumBuild !== null && build < minimumBuild ? "required"
@@ -245,8 +258,15 @@ export async function handleAppConfigRequest(request: Request, handlers: AppConf
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
     const platform = parsePlatform(url.searchParams.get("platform"));
     const build = parseBuild(url.searchParams.get("build"));
-    const rows = await handlers.store().resolve(platform, build);
-    return handlers.json(resolveAppConfig(platform, build, rows));
+    const store = handlers.store();
+    const rows = await store.resolve(platform, build);
+    // The operator keeps content_channel in step with the build's API pointer.
+    const channel = resolveAppConfig(platform, build, rows).contentChannel;
+    const environment = channel === "main" ? "production"
+      : channel === "staging" ? "staging"
+        : url.searchParams.get("env") === "staging" ? "staging" : "production";
+    const rules = await store.updateRules?.(environment);
+    return handlers.json(resolveAppConfig(platform, build, rows, rules));
   }
   if (path === "/api/operator/app-config") {
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
