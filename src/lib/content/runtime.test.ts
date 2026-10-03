@@ -1185,7 +1185,7 @@ describe("incremental content sync", () => {
       if (glyphHashes.has(hash)) events.push("glyph-verified");
     };
     mapMock.onCall = (detail) => events.push(detail);
-    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }));
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }, [release.park.id]));
     const start = runtime.start();
 
     await firstArtStarted;
@@ -1703,7 +1703,7 @@ describe("incremental content sync", () => {
       }
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: false }));
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: false }, [oldRelease.park.id]));
     const start = runtime.start();
 
     await assetStarted;
@@ -1775,7 +1775,7 @@ describe("incremental content sync", () => {
       }
       return originalFileUrl(hash);
     };
-    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }));
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [release.park.id]));
 
     await runtime.start();
 
@@ -1810,6 +1810,53 @@ describe("incremental content sync", () => {
     expect((await store.getSyncCursor("staging"))?.revision).toBe(2);
     expect(runtime.getStatus().snapshot?.generation).toBe(1);
     expect(runtime.getStatus()).toMatchObject({ syncStage: "error", phase: "ready" });
+  });
+
+  it("shows far, unclaimed badges from the CDN without downloading their art", async () => {
+    const release = await makeRelease("c".repeat(64), 1, "municipal-far-art-park", "scene-far-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-far-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const requested: string[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      requested.push(String(input));
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, { connected: true, wifi: true }));
+    // Nanaimo, about 95 km from the park.
+    runtime.setLocation([-123.94, 49.17]);
+
+    await runtime.start();
+
+    const snapshot = runtime.getStatus().snapshot!;
+    expect(snapshot.parks[0]?.id).toBe(release.park.id);
+    expect(snapshot.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(snapshot.remoteSceneUrls?.get(sceneFile.path)).toBe(sceneFile.url);
+    expect(requested).not.toContain(sceneFile.url);
+  });
+
+  it("downloads art for parks near the visitor and switches their badges to the saved copy", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "municipal-near-art-park", "scene-near-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-near-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+
+    runtime.setLocation([release.park.lng + 0.01, release.park.lat]);
+
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`));
+  });
+
+  it("saves one park's art on request for a claim", async () => {
+    const release = await makeRelease("e".repeat(64), 1, "municipal-claim-art-park", "scene-claim-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-claim-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+
+    await runtime.ensureParkArt?.(release.park.id);
+
+    expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`);
   });
 
   it("restores an archived descriptor and bytes through the Wi-Fi content API", async () => {

@@ -14,6 +14,8 @@ type Props = {
   style?: CSSProperties;
   // Overrides the scene URL, e.g. with a data URL for image export.
   sceneHref?: string;
+  /** False keeps art that is not saved on this device from loading from the CDN. */
+  remoteArt?: boolean;
 };
 
 const C = 100;
@@ -101,12 +103,12 @@ function Mystery({ label }: { label: string }) {
   );
 }
 
-function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref }: Props) {
+function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref, remoteArt = true }: Props) {
   const content = useOptionalContent();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const live = park.scene !== null;
   const resolvedSceneHref = sceneHref ?? (park.scene
-    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id)
+    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id) ?? (remoteArt ? content?.remoteSceneUrls?.get(scenePath(park.scene)) : undefined)
     : undefined);
   const p = live ? PALETTES[park.biome] : MYSTERY_PALETTE;
   const shape = SHAPES[park.shape];
