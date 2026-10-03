@@ -174,3 +174,37 @@ test("unknown flags and channels are refused", async () => {
     assert.equal(response.status, 400, JSON.stringify(body));
   }
 });
+
+test("global rules override legacy per-build thresholds, including cleared rules", () => {
+  const rows: BuildConfigRecord[] = [
+    { platform: "android", build: 12, label: "", contentChannel: "staging", flags: {}, minimumBuild: 99, latestBuild: 100, notes: "", updatedAt: "" },
+  ];
+  const rules = { minimumBuild: 12, latestBuild: 13 };
+  assert.equal(resolveAppConfig("android", 11, rows, rules).update, "required");
+  assert.equal(resolveAppConfig("android", 12, rows, rules).update, "available");
+  assert.equal(resolveAppConfig("android", 13, rows, rules).update, "none");
+  assert.equal(resolveAppConfig("android", 0, rows, rules).update, "none");
+  assert.equal(resolveAppConfig("android", 12, rows, { minimumBuild: null, latestBuild: null }).update, "none");
+});
+
+test("public check-in reads global rules for the pointer or declared environment", async () => {
+  const { store, worker, env } = setup();
+  const seen: string[] = [];
+  (store as AppConfigStore).updateRules = async (environment) => {
+    seen.push(environment);
+    return { minimumBuild: 12, latestBuild: 13 };
+  };
+  for (const channel of [null, "staging", "main"] as const) {
+    store.rows.set("android:12", {
+      platform: "android", build: 12, label: "", contentChannel: channel,
+      flags: {}, minimumBuild: null, latestBuild: null, notes: "", updatedAt: "",
+    });
+    const response = await worker.fetch(request("/api/app-config?platform=android&build=12&env=staging"), env as never);
+    assert.equal(response.status, 200);
+    const body = await response.json() as { update: string; minimumBuild: number; latestBuild: number };
+    assert.equal(body.update, "available");
+    assert.equal(body.minimumBuild, 12);
+    assert.equal(body.latestBuild, 13);
+  }
+  assert.deepEqual(seen, ["staging", "staging", "production"]);
+});
