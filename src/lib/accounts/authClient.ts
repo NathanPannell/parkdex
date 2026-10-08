@@ -170,6 +170,11 @@ export function fetchAuthenticated(input: RequestInfo | URL, init?: RequestInit,
   return fetchRequest(input, init, true, expectedAccountId);
 }
 
+/** Public reads from the same account API origin, for guests and signed-in players alike. */
+export function fetchAccountApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetchRequest(input, init, false);
+}
+
 export async function fetchAuthConfig(): Promise<AuthConfig> {
   return requestJson<AuthConfig>("/api/auth/config");
 }

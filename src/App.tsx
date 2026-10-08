@@ -5,6 +5,8 @@ import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
+import { GameProvider, useGame } from "./lib/game/GameProvider";
+import { HandleSheet } from "./screens/HandleSheet";
 import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
@@ -32,12 +34,14 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
-        <StoreProvider>
-          <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
-            <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
-          </div>
-          <UpdateGate status={updateStatus} />
-        </StoreProvider>
+        <GameProvider>
+          <StoreProvider>
+            <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
+              <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+            </div>
+            <UpdateGate status={updateStatus} />
+          </StoreProvider>
+        </GameProvider>
       </AuthProvider>
     </MotionConfig>
   );
@@ -113,6 +117,7 @@ function ClaimSnapshotRestorer() {
 function Screens() {
   const { state, dispatch } = useStore();
   const auth = useAuth();
+  const game = useGame();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
 
@@ -147,11 +152,14 @@ function Screens() {
   // Android back closes the top layer first, then leaves the app from the map.
   const latest = useRef(state);
   latest.current = state;
+  const latestGame = useRef(game);
+  latestGame.current = game;
   useEffect(
     () =>
       onBackButton(() => {
         const s = latest.current;
-        if (s.feedback) dispatch({ type: "feedback", open: false });
+        if (latestGame.current.handleRequest) latestGame.current.closeHandleSheet();
+        else if (s.feedback) dispatch({ type: "feedback", open: false });
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
         else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "collection" : "onboarding" });
@@ -206,6 +214,7 @@ function Screens() {
         {screen === "share" && <Share key="share" />}
       </AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
+      <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
     </>
