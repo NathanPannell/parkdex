@@ -50,6 +50,9 @@ const SCREEN_LABEL: Record<Screen, string> = {
   account: "Account & backup",
   settings: "Settings",
   downloads: "Manage downloads",
+  plant: "Plant flag",
+  parks: "Your parks",
+  leaderboard: "Leaderboard",
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.

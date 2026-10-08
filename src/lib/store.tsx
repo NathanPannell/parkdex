@@ -9,7 +9,7 @@ import { isOverTheAirBundle } from "./ota";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
-export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share" | "account" | "settings" | "downloads";
+export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share" | "account" | "settings" | "downloads" | "plant" | "parks" | "leaderboard";
 
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };
@@ -202,7 +202,7 @@ export function reducer(state: State, action: Action): State {
         shareClaimId: null,
         pendingPhoto: null,
         focusId: null,
-        screen: ["camera", "claim", "share"].includes(state.screen) ? "map" : state.screen,
+        screen: ["camera", "claim", "share", "plant"].includes(state.screen) ? "map" : state.screen,
       };
     case "progressLoaded":
       if (state.progressOwnerKey !== action.ownerKey) return state;

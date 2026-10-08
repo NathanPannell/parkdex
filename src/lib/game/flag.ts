@@ -235,6 +235,42 @@ export function flagSvg(seed: string, options: FlagSvgOptions = {}): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${FLAG_WIDTH + 2} ${FLAG_HEIGHT + 2}" width="${FLAG_WIDTH + 2}" height="${FLAG_HEIGHT + 2}">${flagBody(seed, options)}</svg>`;
 }
 
+export const PIN_WIDTH = 48;
+export const PIN_HEIGHT = 56;
+/** Where the pole meets the ground, so the pin can stand exactly on the park's point. */
+export const PIN_POLE_X = 8;
+
+function escapeText(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+/**
+ * A flag on a pole for the map and park lists. `seed` null draws an empty, muted pole so
+ * unclaimed parks read as open. `label` is a short age tag such as "12d".
+ */
+export function flagPinSvg(seed: string | null, options: FlagSvgOptions & { label?: string; scale?: number } = {}): string {
+  const scale = options.scale ?? 1;
+  const width = PIN_WIDTH * scale;
+  const height = PIN_HEIGHT * scale;
+  const shadow = `<ellipse cx="${PIN_POLE_X}" cy="53.5" rx="7" ry="2.5" fill="#14231C" fill-opacity="0.22"/>`;
+  if (!seed) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}`
+      + `<rect x="6.75" y="5" width="2.5" height="49" rx="1.25" fill="#7D8A82"/>`
+      + `<rect x="10" y="6" width="30" height="20" rx="1.5" fill="#FFF8EC" fill-opacity="0.7" stroke="#5B6B62" stroke-width="1.5" stroke-dasharray="3.5 2.5"/>`
+      + `<circle cx="${PIN_POLE_X}" cy="4.5" r="2.6" fill="#FFF8EC" stroke="#5B6B62" stroke-width="1.3"/></svg>`;
+  }
+  const label = options.label ? escapeText(options.label.slice(0, 6)) : "";
+  const tagWidth = 8 + label.length * 6.4;
+  const tag = label
+    ? `<rect x="10.5" y="33" width="${n(tagWidth)}" height="13" rx="6.5" fill="#14231C"/>`
+      + `<text x="${n(10.5 + tagWidth / 2)}" y="42.6" font-family="system-ui, sans-serif" font-size="10" font-weight="800" fill="#FFF8EC" text-anchor="middle">${label}</text>`
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}`
+    + `<rect x="6.5" y="4" width="3" height="50" rx="1.5" fill="#14231C"/>`
+    + `<g transform="translate(9.5 5.5) scale(0.62)">${flagBody(seed, options)}</g>`
+    + `${tag}<circle cx="${PIN_POLE_X}" cy="4" r="3" fill="#FFC93C" stroke="#14231C" stroke-width="1.3"/></svg>`;
+}
+
 /** The outline shown before a player has a flag: a dashed, empty cloth. */
 export function blankFlagSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${FLAG_WIDTH + 2} ${FLAG_HEIGHT + 2}" width="${FLAG_WIDTH + 2}" height="${FLAG_HEIGHT + 2}">`

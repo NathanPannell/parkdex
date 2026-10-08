@@ -312,3 +312,12 @@ describe("claim progress hydration", () => {
     expect(afterStaleResult.progressOwnerKey).toBe("account:new-owner");
   });
 });
+
+describe("flag visits", () => {
+  it("returns a plant screen to the map when the account changes", () => {
+    const planting = { ...reducer(load(), { type: "trip", id: "blueberry" }), progressOwnerKey: "guest", screen: "plant" as const };
+    const next = reducer(planting, { type: "progressLoading", ownerKey: "account:new-owner" });
+    expect(next.screen).toBe("map");
+    expect(next.tripId).toBeNull();
+  });
+});

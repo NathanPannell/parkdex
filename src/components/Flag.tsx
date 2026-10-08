@@ -1,5 +1,5 @@
 import { useId, useMemo } from "react";
-import { blankFlagSvg, flagSvg, FLAG_HEIGHT, FLAG_WIDTH, weatherForDays } from "../lib/game/flag";
+import { blankFlagSvg, flagPinSvg, flagSvg, FLAG_HEIGHT, FLAG_WIDTH, formatFlagAge, PIN_HEIGHT, PIN_WIDTH, weatherForDays } from "../lib/game/flag";
 
 type Props = {
   /** The player's public flag seed; null draws an empty outline. */
@@ -22,6 +22,26 @@ export function Flag({ seed, size = 48, days = 0, label, className }: Props) {
     <span
       className={["flag", className].filter(Boolean).join(" ")}
       style={{ width: size, height }}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
+      dangerouslySetInnerHTML={{ __html: markup }}
+    />
+  );
+}
+
+/** A flag on its pole with an age tag, or an empty pole for a park nobody holds. */
+export function FlagPin({ seed, days = 0, size = 48, showAge = true, label, className }: Props & { showAge?: boolean }) {
+  const id = useId();
+  const weather = weatherForDays(days);
+  const markup = useMemo(
+    () => flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: seed && showAge ? formatFlagAge(days) : undefined }),
+    [seed, weather, id, showAge, days],
+  );
+  return (
+    <span
+      className={["flag", "flag-pin", className].filter(Boolean).join(" ")}
+      style={{ width: size, height: Math.round((size * PIN_HEIGHT) / PIN_WIDTH) }}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
