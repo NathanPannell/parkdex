@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import { getClientAddress, keyedHash } from "./security.js";
 import { HttpError, readJsonBody } from "./validation.js";
 
@@ -305,7 +305,7 @@ export async function handleRetentionRequest(
 }
 
 export function createNeonInteractionStore(databaseUrl: string): InteractionStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
     async consumeRateLimit(subjectHash) {
       const rows = await sql`

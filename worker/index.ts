@@ -9,6 +9,8 @@ import { deleteAccountData, handleProgressRequest, type ProgressDependencies, ty
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import { handleGameRequest, type GameDependencies, type GameEnv } from "./game.js";
+import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
+import { REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 import {
   HttpError,
   readJsonBody,
@@ -31,6 +33,9 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   RELEASE_SHA?: string;
   EMAIL_MODE?: "resend" | "disabled" | string;
   ALLOWED_ORIGINS?: string;
+  /** Public PostHog project key. Without it nothing is sent to PostHog. */
+  POSTHOG_PROJECT_KEY?: string;
+  POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
 }
 
@@ -46,6 +51,7 @@ export interface WorkerDependencies {
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
+  analytics?(env: WorkerEnvironment): AnalyticsSink | null;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
@@ -301,6 +307,10 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   }
   const appConfigResponse = await handleAppConfigRequest(request, {
     json,
+    analytics: () => {
+      const posthog = posthogConfig(env);
+      return posthog ? { posthogKey: posthog.key, posthogHost: posthog.host } : null;
+    },
     store: () => {
       if (dependencies.createAppConfigStore) return dependencies.createAppConfigStore(env);
       if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "App configuration is unavailable.");
@@ -348,7 +358,7 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-credentials", "true");
   headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", "Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256");
+  headers.set("access-control-allow-headers", `Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256, ${REQUEST_CONTEXT_HEADERS.join(", ")}`);
   headers.set("access-control-max-age", "600");
   headers.append("vary", "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -357,21 +367,32 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
-      try {
-        if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
-          return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
-        }
-        const path = new URL(request.url).pathname;
-        if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
-          const response = new Response(null, { status: 204 });
-          return withCors(request, env, response);
-        }
-        return withCors(request, env, await route(request, env, context, dependencies));
-      } catch (error) {
-        return withCors(request, env, errorResponse(error));
-      }
+      return withRequestAnalytics({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        header: (name) => request.headers.get(name),
+        env: env as Record<string, string | undefined>,
+        sink: () => dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env),
+        waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
+      }, () => handleWorkerRequest(request, env, context, dependencies));
     },
   };
+}
+
+async function handleWorkerRequest(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
+  try {
+    if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
+      return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
+    }
+    const path = new URL(request.url).pathname;
+    if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
+      const response = new Response(null, { status: 204 });
+      return withCors(request, env, response);
+    }
+    return withCors(request, env, await route(request, env, context, dependencies));
+  } catch (error) {
+    return withCors(request, env, errorResponse(error));
+  }
 }
 
 const worker = createFeedbackWorker();

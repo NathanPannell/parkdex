@@ -4,6 +4,7 @@ import { argon2id, hash as argonHash, verify as argonVerify } from "argon2";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { HttpError } from "../validation.js";
 import { getClientAddress, requestOriginAllowed } from "../security.js";
+import { setRequestAccount } from "../requestContext.js";
 import {
   createNeonAccountAuthStore,
   type AccountAuthStore,
@@ -360,6 +361,7 @@ async function lookupSession(request: Request, env: AuthEnvironment, dependencie
   const stored = await store.findSession(sha256(credential.token));
   if (!stored) return null;
   const context = sessionContext(stored, credential.transport);
+  if (context) setRequestAccount(context.accountId);
   return context ? { stored, context } : null;
 }
 
@@ -455,6 +457,7 @@ function sessionResponse(
   status = 200,
   now = Date.now(),
 ): Response {
+  setRequestAccount(account.id);
   if (transport === "native") return jsonResponse({ account, sessionToken: token, expiresAt }, status);
   if (!csrfToken) throw new Error("web session is missing a CSRF token");
   const headers = new Headers();

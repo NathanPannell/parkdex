@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import type {
   EmailAudience,
   EmailStatus,
@@ -164,7 +164,7 @@ function feedbackSelect(): string {
 }
 
 export function createNeonFeedbackStore(databaseUrl: string): FeedbackStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
 
   async function findBySubmissionId(submissionId: string) {
     const rows = await sql`SELECT id, payload_hash FROM kip_feedback.reports WHERE submission_id = ${submissionId}::uuid LIMIT 1`;

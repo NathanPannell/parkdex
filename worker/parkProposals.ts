@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import { HttpError, readJsonBody } from "./validation.js";
 
 /** A park a player proposes from the app: a pin, a name and an optional rough outline. */
@@ -120,7 +120,7 @@ function toRecord(row: Row): ParkProposalRecord {
 }
 
 export function createNeonParkProposalStore(databaseUrl: string): ParkProposalStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
     async save({ id, payloadHash, ipHash, proposal }) {
       const existing = await sql`

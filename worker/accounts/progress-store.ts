@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "../db.js";
 import type { ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./progress-types.js";
 
 export type PutClaimResult =
@@ -93,7 +93,7 @@ function rowToPhoto(row: Record<string, unknown>): PhotoMetadata {
 }
 
 export function createNeonProgressStore(databaseUrl: string): ProgressStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
 
   async function getClaim(accountId: string, claimId: string): Promise<ClaimRecord | null> {
     const rows = await sql.query(progressSelect("WHERE c.account_id = $1::uuid AND c.claim_id = $2::uuid LIMIT 1"), [accountId, claimId]);
