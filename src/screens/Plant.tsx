@@ -223,7 +223,8 @@ export function Plant() {
               </motion.div>
               {result.outcome === "took" && (
                 <motion.p className="plant__points" variants={pop}>
-                  +<RollingNumber value={points} /> {result.pointsEarned === 1 ? "point" : "points"}
+                  <span>+<RollingNumber value={points} /></span>
+                  <span>{result.pointsEarned === 1 ? "point" : "points"}</span>
                 </motion.p>
               )}
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>

@@ -43,8 +43,8 @@ describe("visit results", () => {
     expect(visitHeadline({ ...base, outcome: "planted" }, "Blueberry").title).toBe("Flag planted");
     const took = visitHeadline({ ...base, outcome: "took", pointsEarned: 12, previousHolder: { handle: "b", flagSeed: "x" } }, "Blueberry");
     expect(took.title).toBe("You took Blueberry from @b");
-    expect(took.detail).toMatch(/^\+12 points/);
-    expect(visitHeadline({ ...base, outcome: "took", pointsEarned: 1, previousHolder: null }, "Blueberry").detail).toMatch(/^\+1 point,/);
+    expect(took.detail).toMatch(/each whole day/);
+    expect(visitHeadline({ ...base, outcome: "took", pointsEarned: 1, previousHolder: null }, "Blueberry").title).toBe("You took Blueberry");
     expect(visitHeadline({ ...base, outcome: "held" }, "Blueberry").title).toBe("Your flag is still flying");
     expect(visitHeadline({ ...base, outcome: "already_today" }, "Blueberry").title).toBe("Already visited today");
   });

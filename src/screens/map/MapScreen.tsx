@@ -197,6 +197,8 @@ export function MapScreen() {
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
     if (state.focusId && content) {
+      // A park opened from elsewhere, such as after a visit, does not need the arrival card again.
+      setDismissedArrival(state.focusId);
       select(state.focusId, "collection");
       dispatch({ type: "focus", id: null });
     }

@@ -107,7 +107,7 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, onCheckIn, onD
 }) {
   const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
   const message = holder.kind === "mine"
-    ? `Your flag has flown here for ${flown}. Check in to keep it up.`
+    ? flagDays < 1 ? "You planted your flag here today. It is still flying." : `Your flag has flown here for ${flown}. Check in to keep it up.`
     : holder.kind === "other"
       ? flagDays < 1
         ? `@${holder.flag.handle} planted a flag here today. Take it for your own.`

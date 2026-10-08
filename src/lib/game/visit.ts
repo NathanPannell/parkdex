@@ -40,7 +40,7 @@ export function visitHeadline(result: VisitResult, parkName: string): VisitHeadl
       return { title: "Flag planted", detail: `Your flag is flying over ${parkName}. It earns a point for every day it stays up.` };
     case "took": {
       const from = result.previousHolder ? ` from @${result.previousHolder.handle}` : "";
-      return { title: `You took ${parkName}${from}`, detail: `+${result.pointsEarned} ${result.pointsEarned === 1 ? "point" : "points"}, one for each day their flag flew.` };
+      return { title: `You took ${parkName}${from}`, detail: "One point for each whole day their flag flew." };
     }
     case "held":
       return { title: "Your flag is still flying", detail: `${parkName} is still yours.` };

@@ -243,7 +243,7 @@
   display: flex;
   justify-content: center;
   align-items: baseline;
-  gap: 2px;
+  gap: 8px;
 }
 
 .plant__detail {
@@ -287,7 +287,7 @@
   margin: 0;
 }
 
-.game-score {
+.account-card.game-score {
   flex-direction: row;
   align-items: center;
   gap: 14px;
