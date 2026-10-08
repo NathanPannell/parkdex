@@ -1,24 +1,35 @@
-import type { VisitOutcome } from "./client";
+import type { VisitResult } from "./client";
+import { flagSpec } from "./flag";
 import type { ParkHolder } from "./visit";
 
 /**
- * The planting scene's choreography, kept apart from the animation code so the order of
- * beats per outcome is testable: knock the old flag over, drive the flag in, kick up dirt,
- * unfurl the cloth, then count the points.
+ * The planting scene's choreography, kept apart from the animation code so what each outcome
+ * plays is testable. A take yanks the rival flag out and throws it away; planting and taking
+ * slam the flag in hard and pay off with confetti and a points counter; a revisit gets a
+ * smaller re-plant; a second visit the same day settles the flag back with a wiggle and a wave from Kip.
  */
 
-export type PlantBeat = "topple" | "slam" | "dirt" | "unfurl" | "points" | "settle";
+export type PlantPlan = {
+  /** Pull the rival's flag out and toss it off screen first. */
+  yank: boolean;
+  slam: "big" | "small" | null;
+  /** Lower the flag back without planting. */
+  settle: boolean;
+  payoff: "big" | "small" | "tiny";
+  /** Points to count up on screen, or null when the outcome has no points to show. */
+  count: number | null;
+};
 
-export function plantBeats(outcome: VisitOutcome): PlantBeat[] {
-  switch (outcome) {
-    case "planted":
-      return ["slam", "dirt", "unfurl", "points"];
+export function plantPlan(visit: Pick<VisitResult, "outcome" | "pointsEarned">): PlantPlan {
+  switch (visit.outcome) {
     case "took":
-      return ["topple", "slam", "dirt", "unfurl", "points"];
+      return { yank: true, slam: "big", settle: false, payoff: "big", count: visit.pointsEarned };
+    case "planted":
+      return { yank: false, slam: "big", settle: false, payoff: "big", count: null };
     case "held":
-      return ["slam", "dirt", "unfurl"];
+      return { yank: false, slam: "small", settle: false, payoff: "small", count: null };
     case "already_today":
-      return ["settle"];
+      return { yank: false, slam: null, settle: true, payoff: "tiny", count: null };
   }
 }
 
@@ -32,12 +43,28 @@ export function standingRival(holder: ParkHolder) {
   return holder.kind === "other" ? holder.flag : null;
 }
 
-export type DirtClod = { x: number; peak: number; y: number; rotate: number; size: number; color: string; delay: number };
+/** Confetti in the player's own flag colours, with a little gold so it still sparkles. */
+export function flagConfetti(seed: string | null): string[] {
+  if (!seed) return ["#FF5A1F", "#FFC93C", "#FFF8EC"];
+  const spec = flagSpec(seed);
+  return [...new Set([spec.field, spec.accent, spec.emblemColor, "#FFC93C"])];
+}
+
+/** How long the points counter takes per step: fast for big bounties, never under a second overall. */
+export function countStepMs(points: number): number {
+  if (points <= 0) return 0;
+  return Math.max(28, Math.min(140, Math.round(1100 / points)));
+}
+
+export type DirtClod = { x: number; peak: number; land: number; hop: number; rotate: number; size: number; color: string; delay: number };
 
 const SOIL = ["#6B4423", "#8B5A2B", "#A0703F", "#5A3A1E", "#7A9A3A"];
 
-/** A fan of clods thrown up and out from the impact point. Seeded so each throw differs but tests can pin it. */
-export function dirtClods(count: number, seed: number): DirtClod[] {
+/**
+ * A fan of clods thrown up and out from the impact point. Each flies to a peak, lands, takes a
+ * small hop and settles. Seeded so each throw differs but tests can pin it.
+ */
+export function dirtClods(count: number, seed: number, power = 1): DirtClod[] {
   let state = (seed * 2654435761) >>> 0 || 1;
   const next = () => {
     state ^= state << 13;
@@ -50,18 +77,19 @@ export function dirtClods(count: number, seed: number): DirtClod[] {
   return Array.from({ length: count }, (_, index) => {
     // Spread across the upper half-circle, with a little jitter.
     const angle = Math.PI * ((index + 0.5) / count) + (next() - 0.5) * 0.35;
-    const distance = 50 + next() * 70;
+    const distance = (60 + next() * 110) * power;
     const x = Math.cos(angle) * distance;
-    const peak = -Math.sin(angle) * distance - 20 - next() * 30;
+    const peak = -Math.sin(angle) * distance - (30 + next() * 50) * power;
+    const land = 8 + next() * 34;
     return {
       x: Math.round(x),
       peak: Math.round(peak),
-      // Clods fall back below their peak, landing near the mound.
-      y: Math.round(10 + next() * 26),
-      rotate: Math.round((next() - 0.5) * 540),
-      size: Math.round(5 + next() * 8),
+      land: Math.round(land),
+      hop: Math.round(land - 8 - next() * 14),
+      rotate: Math.round((next() - 0.5) * 720),
+      size: Math.round(5 + next() * 10),
       color: SOIL[Math.floor(next() * SOIL.length)],
-      delay: Math.round(next() * 60) / 1000,
+      delay: Math.round(next() * 50) / 1000,
     };
   });
 }

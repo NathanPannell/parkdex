@@ -72,6 +72,33 @@ export const sfx = {
     noise(0.12, 0.1, 0.05, 1700, 2);
     noise(0.22, 0.16, 0.04, 1200, 2);
   },
+  // A big landing: a sub-bass drop under the thud.
+  boom: () => {
+    tone(70, 0, 0.6, "sine", 0.4, 30);
+    noise(0, 0.5, 0.18, 220, 0.6);
+  },
+  // Something heavy rushing through the air, rising or falling.
+  swish: (rising = false) => {
+    noise(0, 0.28, 0.07, rising ? 900 : 2200, 0.7);
+    tone(rising ? 260 : 900, 0, 0.26, "sawtooth", 0.02, rising ? 1200 : 180);
+  },
+  // A rival flag yanked out of the dirt.
+  yank: () => {
+    noise(0, 0.12, 0.14, 600);
+    tone(300, 0.02, 0.22, "triangle", 0.07, 1100);
+  },
+  // A small crowd cheering: layered noise swells with a bright whistle on top.
+  cheer: () => {
+    for (let i = 0; i < 6; i += 1) noise(i * 0.07, 0.9 - i * 0.08, 0.05, 900 + i * 260, 0.9);
+    tone(1500, 0.15, 0.35, "sine", 0.03, 2400);
+    tone(1800, 0.45, 0.3, "sine", 0.025, 2600);
+  },
+  // One coin per point as the counter climbs; the pitch rises with the count.
+  coin: (step = 0) => {
+    const base = 1200 + Math.min(step, 24) * 40;
+    tone(base, 0, 0.07, "square", 0.035);
+    tone(base * 1.5, 0.05, 0.12, "triangle", 0.05);
+  },
   // An old flag tipping over and hitting the ground.
   topple: () => {
     tone(320, 0, 0.32, "triangle", 0.06, 140);

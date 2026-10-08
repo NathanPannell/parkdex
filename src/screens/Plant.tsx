@@ -1,9 +1,9 @@
-import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
-import { RollingNumber, Rays } from "../components/Motion";
+import { Rays } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { useAuth } from "../lib/accounts/AuthProvider";
@@ -11,21 +11,25 @@ import { useContent } from "../lib/content/provider";
 import { createVisitId, GameError, gameErrorMessage, sendVisit, type VisitResult } from "../lib/game/client";
 import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
-import { dirtClods, plantBeats, standingRival, startsPlanted } from "../lib/game/plantScene";
+import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
 import { parkHolder, visitHeadline } from "../lib/game/visit";
 import { useStore } from "../lib/store";
 import "../game.css";
 
 const HOLD_MS = 1100;
-// How high the flag is carried above the mound before it is driven in, in pixels.
-const ALOFT = -96;
-const HOLD_LIFT = 30;
+// Where the flag is carried, how high the hold lifts it, and where it hangs before the slam.
+const ALOFT = -70;
+const HOLD_LIFT = 34;
+const HANG = -112;
 const FURLED = 0.16;
-const CARRY_X = -86;
+const CARRY_X = -74;
 const CARRY_TILT = -12;
+const ZOOM = 0.1;
+const DIM = 0.72;
 
 type Phase = "charge" | "sending" | "playing" | "done" | "failed";
 type Failure = { message: string; action: "retry" | "sign-in" | "handle" };
+type Score = { value: number; target: number; kind: "count" | "rate" };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,10 +42,21 @@ function failureFor(error: unknown): Failure {
   return { message: gameErrorMessage(error), action: "retry" };
 }
 
+/** A decaying shake: big at the moment of impact, settling to nothing. */
+function shakeFrames(amplitude: number): number[] {
+  return [0, -1, 0.85, -0.62, 0.42, -0.24, 0.1, 0].map((step) => Math.round(step * amplitude * 10) / 10);
+}
+
+function run(value: MotionValue<number>, to: number | number[], options: Parameters<typeof animate>[2]) {
+  return animate(value, to as never, options);
+}
+
 /**
- * The flag visit. Hold to lift your flag over the mound; when the server answers, an old
- * flag is knocked over, yours is driven into the dirt, soil kicks up, the cloth unfurls,
- * and the points count up.
+ * The flag visit as a reward moment. Holding dims the world, zooms toward the mound and lifts
+ * your flag high. When the server answers: a rival's flag is yanked out and thrown away, yours
+ * hangs for a beat and slams down with squash, a shockwave, a dirt explosion and a decaying
+ * camera shake, the cloth unfurls into a steady wave, confetti in your colours bursts, Kip
+ * cheers and the points slam in and count up coin by coin.
  */
 export function Plant() {
   const { state, dispatch } = useStore();
@@ -65,26 +80,33 @@ export function Plant() {
   const [holding, setHolding] = useState(false);
   const [result, setResult] = useState<VisitResult | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [points, setPoints] = useState(0);
-  const [impact, setImpact] = useState(0);
+  const [impact, setImpact] = useState<{ key: number; power: number } | null>(null);
   const [waving, setWaving] = useState(mineFirst);
+  const [cheering, setCheering] = useState(false);
+  const [score, setScore] = useState<Score | null>(null);
 
   const progress = useMotionValue(0);
   const ring = useTransform(progress, (p) => 289 * (1 - p));
-  const base = useMotionValue(mineFirst ? 0 : ALOFT);
-  const flagY = useMotionValue(mineFirst ? 0 : ALOFT);
-  const shake = useMotionValue(0);
-  // With a rival flag standing in the mound, carry yours beside it, tipped toward it.
+  const start = mineFirst ? 0 : ALOFT;
+  const base = useMotionValue(start);
+  const flagY = useMotionValue(start);
+  const tremble = useMotionValue(0);
   const flagX = useMotionValue(rival ? CARRY_X : 0);
   const tilt = useMotionValue(rival ? CARRY_TILT : 0);
-  const flagRotate = useTransform(() => tilt.get() + shake.get());
+  const flagRotate = useTransform(() => tilt.get() + tremble.get());
   const cloth = useMotionValue(mineFirst ? 1 : FURLED);
-  const rivalRotate = useMotionValue(0);
+  const poleX = useMotionValue(1);
+  const poleY = useMotionValue(1);
   const rivalX = useMotionValue(0);
-  const rivalOpacity = useMotionValue(1);
-  const sceneX = useMotionValue(0);
-  const moundScaleX = useMotionValue(1);
-  const moundScaleY = useMotionValue(1);
+  const rivalY = useMotionValue(0);
+  const rivalRotate = useMotionValue(0);
+  const camX = useMotionValue(0);
+  const camY = useMotionValue(0);
+  const camRotate = useMotionValue(0);
+  const zoom = useMotionValue(1);
+  const dim = useMotionValue(0);
+  const moundX = useMotionValue(1);
+  const moundY = useMotionValue(1);
   const anim = useRef<ReturnType<typeof animate> | null>(null);
   const lastTick = useRef(0);
   const sending = useRef(false);
@@ -99,12 +121,16 @@ export function Plant() {
     if (!parkId || !accountId) dispatch({ type: "go", screen: "map" });
   }, [accountId, dispatch, parkId]);
 
-  // While charging, the flag rises and trembles in your hands.
+  // While charging, the world dims and leans in, and the flag rises trembling in your hands.
   useAnimationFrame((t) => {
     if (!charging.current) return;
     const p = progress.get();
-    flagY.set(base.get() - p * HOLD_LIFT);
-    shake.set(reduce ? 0 : Math.sin(t / 26) * p * p * 5);
+    if (phase === "charge") {
+      flagY.set(base.get() - p * HOLD_LIFT);
+      zoom.set(1 + p * ZOOM);
+      dim.set(p * DIM);
+    }
+    tremble.set(reduce ? 0 : Math.sin(t / 24) * p * p * 5);
   });
 
   async function send() {
@@ -112,8 +138,10 @@ export function Plant() {
     sending.current = true;
     setPhase("sending");
     setFailure(null);
+    // Hang the flag high while the server decides; at least a beat, so the slam lands.
+    const hang = reduce ? Promise.resolve() : run(flagY, mineFirst ? HANG / 2 : HANG, { duration: 0.32, ease: [0.2, 0.9, 0.3, 1] }).then(() => wait(200));
     try {
-      const visit = await sendVisit(accountId, { visitId, parkId });
+      const [visit] = await Promise.all([sendVisit(accountId, { visitId, parkId }), hang]);
       charging.current = false;
       setResult(visit);
       setPhase("playing");
@@ -127,75 +155,133 @@ export function Plant() {
       setPhase("failed");
       progress.set(0);
       lastTick.current = 0;
+      void run(flagY, base.get(), { type: "spring", stiffness: 260, damping: 20 });
+      void run(zoom, 1, { duration: 0.3 });
+      void run(dim, 0, { duration: 0.3 });
       if (next.action === "handle") game.openHandleSheet({ onDone: () => void send() });
     } finally {
       sending.current = false;
     }
   }
 
+  async function countUp(target: number) {
+    setScore({ value: 0, target, kind: "count" });
+    sfx.thud();
+    buzz(40);
+    await wait(260);
+    const step = countStepMs(target);
+    for (let value = 1; value <= target; value += 1) {
+      setScore({ value, target, kind: "count" });
+      sfx.coin(value);
+      if (value % 2 === 1) buzz(6);
+      await wait(step);
+    }
+    sfx.claim();
+    buzz([30, 30, 60]);
+  }
+
   async function play(visit: VisitResult) {
-    const beats = plantBeats(visit.outcome);
-    shake.set(0);
+    const plan = plantPlan(visit);
+    tremble.set(0);
     if (reduce) {
       // Reduced motion: land on the final picture with one gentle cue.
-      if (beats.includes("topple")) rivalOpacity.set(0);
-      if (beats.includes("slam")) {
+      if (plan.yank) rivalY.set(900);
+      if (plan.slam) {
         flagY.set(0);
         flagX.set(0);
         tilt.set(0);
         cloth.set(1);
         setWaving(true);
-        sfx.pop();
-        buzz(30);
       } else {
-        flagY.set(mineFirst ? 0 : ALOFT);
+        flagY.set(start);
       }
-      setPoints(visit.pointsEarned);
+      zoom.set(1);
+      dim.set(0);
+      setCheering(true);
+      if (plan.count !== null) setScore({ value: plan.count, target: plan.count, kind: "count" });
+      else if (visit.outcome === "planted") setScore({ value: 1, target: 1, kind: "rate" });
+      sfx.pop();
+      buzz(30);
       return;
     }
-    if (beats.includes("topple")) {
-      sfx.topple();
-      await animate(rivalRotate, 86, { duration: 0.5, ease: [0.55, 0, 0.95, 0.5] });
-      buzz(45);
-      void animate(rivalX, 24, { duration: 0.2 });
-      void animate(rivalOpacity, 0, { duration: 0.5, delay: 0.35 });
+
+    if (plan.yank) {
+      // Yank the rival's flag out of the dirt and fling it off screen, spinning.
+      sfx.yank();
+      buzz(35);
+      await run(rivalY, -70, { duration: 0.14, ease: "easeOut" });
+      sfx.swish(true);
+      void run(rivalX, 360, { duration: 0.85, ease: "easeIn" });
+      void run(rivalY, [-70, -260, 700], { duration: 0.85, times: [0, 0.35, 1], ease: "easeIn" });
+      void run(rivalRotate, 900, { duration: 0.85, ease: "easeIn" });
+      setImpact({ key: Date.now(), power: 0.35 });
+      await wait(260);
     }
-    if (beats.includes("slam")) {
-      // Swing over the mound with a quick wind-up, then drive the pole home.
-      void animate(flagX, 0, { duration: 0.2, ease: "easeOut" });
-      void animate(tilt, 0, { duration: 0.2, ease: "easeOut" });
-      await animate(flagY, flagY.get() - 46, { duration: 0.2, ease: "easeOut" });
-      await animate(flagY, 0, { duration: 0.14, ease: [0.7, 0, 1, 0.6] });
+
+    if (plan.slam) {
+      const big = plan.slam === "big";
+      if (!big) await run(flagY, -64, { duration: 0.18, ease: "easeOut" });
+      // Swing over the mound, a tiny wind-up, then drive the pole home.
+      void run(flagX, 0, { duration: 0.18, ease: "easeOut" });
+      void run(tilt, 0, { duration: 0.18, ease: "easeOut" });
+      sfx.swish(false);
+      await run(flagY, flagY.get() - (big ? 26 : 12), { duration: 0.12, ease: "easeOut" });
+      await run(flagY, 0, { duration: big ? 0.13 : 0.11, ease: [0.8, 0, 1, 0.7] });
       sfx.thud();
-      buzz([80, 40, 40]);
-      setImpact((n) => n + 1);
-      void animate(sceneX, [0, -10, 8, -5, 3, 0], { duration: 0.42 });
-      void animate(moundScaleY, [1, 0.8, 1.06, 1], { duration: 0.45 });
-      void animate(moundScaleX, [1, 1.12, 0.97, 1], { duration: 0.45 });
-      await wait(140);
-    }
-    if (beats.includes("unfurl")) {
+      if (big) sfx.boom();
+      buzz(big ? [120, 40, 80, 40, 40] : [50, 30, 20]);
+      setImpact({ key: Date.now(), power: big ? 1 : 0.45 });
+      void run(poleY, [1, 0.74, 1.12, 0.95, 1.02, 1], { duration: 0.55 });
+      void run(poleX, [1, 1.22, 0.9, 1.04, 1], { duration: 0.5 });
+      void run(moundY, [1, big ? 0.74 : 0.88, 1.08, 0.98, 1], { duration: 0.5 });
+      void run(moundX, [1, big ? 1.16 : 1.07, 0.96, 1.01, 1], { duration: 0.5 });
+      void run(camX, shakeFrames(big ? 18 : 7), { duration: big ? 0.65 : 0.4 });
+      void run(camY, shakeFrames(big ? 10 : 4), { duration: big ? 0.6 : 0.35 });
+      void run(camRotate, shakeFrames(big ? 2 : 0.8), { duration: 0.6 });
+      void run(zoom, 1, { type: "spring", stiffness: 140, damping: 16 });
+      void run(dim, 0, { duration: 0.5 });
+      await wait(big ? 170 : 110);
       sfx.flap();
-      await animate(cloth, [cloth.get(), 1.1, 0.95, 1], { duration: 0.6, ease: "easeOut" });
+      await run(cloth, [cloth.get(), 1.16, 0.9, 1.05, 1], { duration: 0.7, ease: "easeOut" });
       setWaving(true);
     }
-    if (beats.includes("settle")) {
-      await animate(flagY, mineFirst ? 0 : ALOFT, { type: "spring", stiffness: 260, damping: 18 });
+
+    if (plan.settle) {
+      void run(zoom, 1, { duration: 0.4 });
+      void run(dim, 0, { duration: 0.4 });
+      await run(flagY, start, { type: "spring", stiffness: 240, damping: 16 });
       sfx.pop();
       buzz(15);
+      await run(tilt, [0, -9, 7, -4, 2, 0], { duration: 0.6 });
     }
-    if (beats.includes("points")) {
-      if (visit.outcome === "took" || visit.outcome === "planted") {
-        sfx.claim();
-        burst({ x: 0.5, y: 0.42 }, 1.1);
-        setTimeout(cannons, 300);
-        setTimeout(() => sfx.chirp(), 800);
+
+    if (plan.payoff) {
+      const colours = flagConfetti(flagSeed);
+      setCheering(true);
+      if (plan.payoff === "big") {
+        burst({ x: 0.5, y: 0.5 }, 1.4, colours);
+        setTimeout(() => cannons(colours), 260);
+        sfx.cheer();
+        setTimeout(() => sfx.chirp(), 700);
+      } else {
+        burst({ x: 0.5, y: 0.5 }, plan.payoff === "small" ? 0.55 : 0.22, colours);
+        sfx.chirp();
       }
-      setTimeout(() => setPoints(visit.pointsEarned), 450);
+    }
+
+    if (plan.count !== null) {
+      await wait(250);
+      await countUp(plan.count);
+    } else if (visit.outcome === "planted") {
+      await wait(250);
+      setScore({ value: 1, target: 1, kind: "rate" });
+      sfx.thud();
+      sfx.coin(4);
+      buzz(40);
     }
   }
 
-  const start = (event: React.PointerEvent) => {
+  const begin = (event: React.PointerEvent) => {
     if (phase !== "charge" || sending.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     setHolding(true);
@@ -242,11 +328,13 @@ export function Plant() {
   const won = !!result && (result.outcome === "planted" || result.outcome === "took");
   const headline = result ? visitHeadline(result, parkName) : null;
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
-  const clods = impact > 0 && !reduce ? dirtClods(16, impact) : [];
+  const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
+  const puffs = impact && !reduce ? [-1, -0.55, -0.15, 0.2, 0.6, 1].map((side) => side * 120 * Math.max(impact.power, 0.5)) : [];
 
   return (
     <motion.div className="screen claim plant" exit={{ opacity: 0, transition: { duration: 0.3 } }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <motion.div className="claim__glow" style={{ opacity: won && phase === "done" ? 1 : 0.45, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }} />
+      <motion.div className="plant-vignette" style={{ opacity: dim }} aria-hidden="true" />
 
       <div className="claim__head">
         <AnimatePresence mode="wait">
@@ -264,83 +352,119 @@ export function Plant() {
       </div>
 
       <div className="claim__stage">
-        {won && phase === "done" && (
+        {won && (phase === "done" || score) && (
           <div className="claim__rays">
             <Rays color="#FFE27A" size={620} opacity={0.4} speed={20} />
           </div>
         )}
-        <motion.div className="plant-scene" style={{ x: sceneX }}>
-          {rival && (
-            <motion.div className="plant-flag plant-flag--rival" style={{ rotate: rivalRotate, x: rivalX, opacity: rivalOpacity }} aria-label={`Flag of @${rival.handle}`} role="img">
-              <span className="plant-flag__pole" />
-              <span className="plant-flag__cloth plant-flag__cloth--wave">
-                <Flag seed={rival.flagSeed} size={124} days={rivalDays} />
-              </span>
-            </motion.div>
-          )}
-          {flagSeed && (
-            <motion.div className="plant-flag" style={{ x: flagX, y: flagY, rotate: flagRotate }} aria-label="Your flag" role="img">
-              <span className="plant-flag__pole" />
-              <motion.span className={`plant-flag__cloth ${waving ? "plant-flag__cloth--wave" : ""}`} style={{ scaleX: cloth }}>
-                <Flag seed={flagSeed} size={124} days={flagDays} />
-              </motion.span>
-            </motion.div>
-          )}
-          <motion.svg className="plant-mound" viewBox="0 0 260 90" style={{ scaleX: moundScaleX, scaleY: moundScaleY }} aria-hidden="true">
-            <ellipse cx="130" cy="82" rx="122" ry="8" fill="rgba(0,0,0,.35)" />
-            <path d="M8 80 C 40 30, 90 14, 130 14 C 170 14, 220 30, 252 80 Z" fill="#6B4423" />
-            <path d="M30 62 C 60 30, 100 22, 130 22 C 160 22, 200 30, 230 62 C 190 50, 70 50, 30 62 Z" fill="#8B5A2B" />
-            <path d="M120 16 l4 -10 l3 10 M136 17 l5 -9 l1 10 M96 22 l2 -8 l4 8 M160 22 l4 -8 l2 9" stroke="#7A9A3A" strokeWidth="3" strokeLinecap="round" fill="none" />
-            <path d="M60 70 q6 -3 12 0 M180 66 q6 -3 12 0 M120 54 q5 -3 10 0" stroke="#5A3A1E" strokeWidth="3" strokeLinecap="round" fill="none" />
-          </motion.svg>
-          <div className="plant-dirt" aria-hidden="true">
+        <motion.div className="plant-camera" style={{ x: camX, y: camY, rotate: camRotate, scale: zoom }}>
+          <div className="plant-scene">
             <AnimatePresence>
-              {impact > 0 && !reduce && (
+              {impact && !reduce && (
                 <motion.span
-                  key={`puff-${impact}`}
-                  className="plant-dirt__puff"
-                  initial={{ scale: 0.3, opacity: 0.75 }}
-                  animate={{ scale: 2.4, opacity: 0 }}
-                  transition={{ duration: 0.7, ease: "easeOut" }}
+                  key={`ring-${impact.key}`}
+                  className="plant-ring"
+                  initial={{ scale: 0.2, opacity: 0.95 }}
+                  animate={{ scale: 2.8 * Math.max(impact.power, 0.5), opacity: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
                 />
               )}
             </AnimatePresence>
-            {clods.map((clod, index) => (
-              <motion.span
-                key={`${impact}-${index}`}
-                className="plant-dirt__clod"
-                style={{ width: clod.size, height: clod.size, background: clod.color }}
-                initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
-                animate={{ x: clod.x, y: [0, clod.peak, clod.y], opacity: [1, 1, 0], rotate: clod.rotate }}
-                transition={{ duration: 0.8, delay: clod.delay, times: [0, 0.45, 1], ease: "easeOut" }}
-              />
-            ))}
+            {rival && (
+              <motion.div className="plant-flag plant-flag--rival" style={{ x: rivalX, y: rivalY, rotate: rivalRotate }} aria-label={`Flag of @${rival.handle}`} role="img">
+                <span className="plant-flag__pole" />
+                <span className="plant-flag__cloth plant-flag__cloth--wave">
+                  <Flag seed={rival.flagSeed} size={124} days={rivalDays} />
+                </span>
+              </motion.div>
+            )}
+            {flagSeed && (
+              <motion.div className="plant-flag" style={{ x: flagX, y: flagY, rotate: flagRotate }} aria-label="Your flag" role="img">
+                <motion.span className="plant-flag__pole" style={{ scaleX: poleX, scaleY: poleY }} />
+                <motion.span className={`plant-flag__cloth ${waving ? "plant-flag__cloth--wave" : ""}`} style={{ scaleX: cloth }}>
+                  <Flag seed={flagSeed} size={124} days={flagDays} />
+                </motion.span>
+              </motion.div>
+            )}
+            <motion.svg className="plant-mound" viewBox="0 0 260 90" style={{ scaleX: moundX, scaleY: moundY }} aria-hidden="true">
+              <ellipse cx="130" cy="82" rx="122" ry="8" fill="rgba(0,0,0,.35)" />
+              <path d="M8 80 C 40 30, 90 14, 130 14 C 170 14, 220 30, 252 80 Z" fill="#6B4423" />
+              <path d="M30 62 C 60 30, 100 22, 130 22 C 160 22, 200 30, 230 62 C 190 50, 70 50, 30 62 Z" fill="#8B5A2B" />
+              <path d="M120 16 l4 -10 l3 10 M136 17 l5 -9 l1 10 M96 22 l2 -8 l4 8 M160 22 l4 -8 l2 9" stroke="#7A9A3A" strokeWidth="3" strokeLinecap="round" fill="none" />
+              <path d="M60 70 q6 -3 12 0 M180 66 q6 -3 12 0 M120 54 q5 -3 10 0" stroke="#5A3A1E" strokeWidth="3" strokeLinecap="round" fill="none" />
+            </motion.svg>
+            <div className="plant-dirt" aria-hidden="true">
+              {puffs.map((dx, index) => (
+                <motion.span
+                  key={`puff-${impact?.key}-${index}`}
+                  className="plant-dirt__puff"
+                  initial={{ x: 0, y: 0, scale: 0.3, opacity: 0.8 }}
+                  animate={{ x: dx, y: -20 - Math.abs(dx) * 0.15, scale: 1.6 + Math.abs(dx) / 160, opacity: 0 }}
+                  transition={{ duration: 1.1, ease: "easeOut", delay: index * 0.02 }}
+                />
+              ))}
+              {clods.map((clod, index) => (
+                <motion.span
+                  key={`${impact?.key}-${index}`}
+                  className="plant-dirt__clod"
+                  style={{ width: clod.size, height: clod.size, background: clod.color }}
+                  initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
+                  animate={{ x: [0, clod.x * 0.7, clod.x, clod.x * 1.06, clod.x * 1.08], y: [0, clod.peak, clod.land, clod.hop, clod.land], rotate: clod.rotate, opacity: [1, 1, 1, 1, 0] }}
+                  transition={{
+                    default: { duration: 1.05, delay: clod.delay, times: [0, 0.38, 0.72, 0.86, 1], ease: "easeOut" },
+                    opacity: { duration: 2.6, delay: clod.delay, times: [0, 0.4, 0.6, 0.8, 1] },
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </motion.div>
+
+        <AnimatePresence>
+          {impact && !reduce && impact.power >= 1 && (
+            <motion.div key={`flash-${impact.key}`} className="claim__flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }} />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {score && (
+            <motion.div
+              key="score"
+              className="plant-score"
+              initial={{ scale: 3, opacity: 0, rotate: -12 }}
+              animate={{ scale: 1, opacity: 1, rotate: -4 }}
+              transition={{ type: "spring", stiffness: 520, damping: 14 }}
+              aria-live="polite"
+            >
+              <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
+                +{score.value}
+              </motion.strong>
+              <span>{score.kind === "rate" ? "point a day" : score.target === 1 ? "point" : "points"}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {cheering && (
+            <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
+              <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
+                <Kip pose={won ? "celebrate" : "cheer"} size={112} flip />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="claim__foot">
         <AnimatePresence mode="wait">
           {phase === "done" && result && headline ? (
-            <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } }}>
-              <motion.div className="claim__kip" variants={pop}>
-                <Bubble side="to-right" style={{ position: "relative", marginBottom: 22 }}>
-                  {result.outcome === "took" ? "KLEEP! It's yours now!" : result.outcome === "planted" ? "KLEEP! Flag's up!" : result.outcome === "held" ? "Still flying!" : "See you tomorrow!"}
+            <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
+              <motion.div className="claim__kip plant__bubble" variants={pop}>
+                <Bubble side="to-right" style={{ position: "relative" }}>
+                  {result.outcome === "took" ? `KLEEP! +${result.pointsEarned} for ${result.pointsEarned === 1 ? "that day" : `those ${result.pointsEarned} days`}!` : result.outcome === "planted" ? "KLEEP! Flag's up!" : result.outcome === "held" ? "Still flying!" : "See you tomorrow!"}
                 </Bubble>
-                <Kip pose={won ? "celebrate" : "cheer"} size={84} flip />
               </motion.div>
-              {result.outcome === "took" && (
-                <motion.p className="plant__points" variants={pop}>
-                  <span>+<RollingNumber value={points} /></span>
-                  <span>{result.pointsEarned === 1 ? "point" : "points"}</span>
-                </motion.p>
-              )}
-              {result.outcome === "planted" && (
-                <motion.p className="plant__points plant__points--rate" variants={pop}>
-                  <span>+1</span>
-                  <span>point a day</span>
-                </motion.p>
-              )}
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>
               <motion.div variants={pop} className="claim__row">
                 <button className="btn btn--sm btn--sun" onClick={() => leave("parks")}>
@@ -375,7 +499,7 @@ export function Plant() {
                 <>
                   <motion.button
                     className="hold__btn"
-                    onPointerDown={start}
+                    onPointerDown={begin}
                     onPointerUp={release}
                     onPointerCancel={release}
                     onContextMenu={(event) => event.preventDefault()}
@@ -393,7 +517,7 @@ export function Plant() {
                     </span>
                   </motion.button>
                   <motion.p className="hold__label" animate={{ opacity: holding ? 0.5 : 1 }}>
-                    {phase === "sending" ? "Planting…" : holding ? "Keep holding…" : `Press and hold to ${verb}`}
+                    {phase === "sending" ? "Here it comes…" : holding ? "Keep holding…" : `Press and hold to ${verb}`}
                   </motion.p>
                 </>
               )}

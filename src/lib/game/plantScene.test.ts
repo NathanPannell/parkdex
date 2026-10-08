@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { dirtClods, plantBeats, standingRival, startsPlanted } from "./plantScene";
+import { flagSpec } from "./flag";
+import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "./plantScene";
 
 const flag = { parkId: "p", handle: "sam", flagSeed: "s", since: "2026-10-01T00:00:00Z" };
 
 describe("plant scene", () => {
-  it("knocks the old flag over before a take and only counts points when something was won", () => {
-    expect(plantBeats("took")).toEqual(["topple", "slam", "dirt", "unfurl", "points"]);
-    expect(plantBeats("planted")).toEqual(["slam", "dirt", "unfurl", "points"]);
-    expect(plantBeats("held")).toEqual(["slam", "dirt", "unfurl"]);
-    expect(plantBeats("already_today")).toEqual(["settle"]);
+  it("yanks the rival out before a take and counts the bounty", () => {
+    expect(plantPlan({ outcome: "took", pointsEarned: 12 })).toEqual({ yank: true, slam: "big", settle: false, payoff: "big", count: 12 });
+    expect(plantPlan({ outcome: "planted", pointsEarned: 0 })).toEqual({ yank: false, slam: "big", settle: false, payoff: "big", count: null });
+  });
+
+  it("gives revisits a smaller version and leaves a second visit today unplanted", () => {
+    expect(plantPlan({ outcome: "held", pointsEarned: 0 })).toMatchObject({ slam: "small", payoff: "small", count: null });
+    expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({ yank: false, slam: null, settle: true, payoff: "tiny", count: null });
   });
 
   it("starts from the mound only for the player's own park", () => {
@@ -19,13 +23,32 @@ describe("plant scene", () => {
     expect(standingRival({ kind: "mine", flag })).toBeNull();
   });
 
-  it("throws dirt up and out on both sides, the same way for the same seed", () => {
-    const clods = dirtClods(14, 3);
-    expect(clods).toHaveLength(14);
-    expect(dirtClods(14, 3)).toEqual(clods);
-    expect(dirtClods(14, 4)).not.toEqual(clods);
+  it("throws confetti in the player's own flag colours", () => {
+    const spec = flagSpec("player-1");
+    const colours = flagConfetti("player-1");
+    expect(colours).toContain(spec.field);
+    expect(colours).toContain(spec.accent);
+    expect(colours).toContain("#FFC93C");
+    expect(new Set(colours).size).toBe(colours.length);
+    expect(flagConfetti(null).length).toBeGreaterThan(0);
+  });
+
+  it("counts small bounties slowly and big ones fast", () => {
+    expect(countStepMs(0)).toBe(0);
+    expect(countStepMs(3)).toBe(140);
+    expect(countStepMs(20)).toBe(55);
+    expect(countStepMs(400)).toBe(28);
+  });
+
+  it("throws dirt up and out on both sides, landing and hopping, the same way for the same seed", () => {
+    const clods = dirtClods(28, 3);
+    expect(clods).toHaveLength(28);
+    expect(dirtClods(28, 3)).toEqual(clods);
+    expect(dirtClods(28, 4)).not.toEqual(clods);
     expect(clods.some((clod) => clod.x < 0)).toBe(true);
     expect(clods.some((clod) => clod.x > 0)).toBe(true);
-    expect(clods.every((clod) => clod.peak < 0 && clod.y > 0)).toBe(true);
+    expect(clods.every((clod) => clod.peak < 0 && clod.land > 0 && clod.hop < clod.land)).toBe(true);
+    const small = dirtClods(28, 3, 0.4);
+    expect(Math.max(...small.map((clod) => Math.abs(clod.x)))).toBeLessThan(Math.max(...clods.map((clod) => Math.abs(clod.x))));
   });
 });

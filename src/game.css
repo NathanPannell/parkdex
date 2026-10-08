@@ -587,8 +587,10 @@ button.game-row:active {
   transform-origin: left center;
 }
 
+/* A rival flag spins about its middle when it is thrown away. */
 .plant-flag--rival {
   z-index: 0;
+  transform-origin: 40% 60%;
 }
 
 .plant-mound {
@@ -634,4 +636,86 @@ button.game-row:active {
   .plant-flag__cloth--wave .flag {
     animation: none;
   }
+}
+
+/* ---------- Planting as a reward moment ---------- */
+
+/* The world dims around the mound while you hold. */
+.plant-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(60% 45% at 50% 52%, transparent 0%, rgba(5, 10, 8, 0.85) 75%);
+}
+
+.plant-camera {
+  position: relative;
+  z-index: 2;
+  transform-origin: 50% 80%;
+}
+
+.plant-ring {
+  position: absolute;
+  left: 70px;
+  bottom: 52px;
+  width: 140px;
+  height: 46px;
+  border-radius: 50%;
+  border: 5px solid #ffe7a8;
+  box-shadow: 0 0 18px rgba(255, 201, 60, 0.7);
+  pointer-events: none;
+}
+
+/* The points land to the left of the pole, clear of the cloth and the headline. */
+.plant-score {
+  position: absolute;
+  z-index: 6;
+  top: 16%;
+  left: 2%;
+  width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.plant-score strong {
+  font-family: var(--display);
+  font-size: 84px;
+  font-weight: 800;
+  line-height: 0.95;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 var(--ink), 0 0 30px rgba(255, 201, 60, 0.6);
+}
+
+.plant-score span {
+  margin-top: 4px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.plant-kip {
+  position: absolute;
+  z-index: 5;
+  right: 6px;
+  bottom: -6px;
+  pointer-events: none;
+}
+
+.plant__bubble {
+  justify-content: center;
+  margin: 0;
+}
+
+.plant__bubble .bubble {
+  white-space: normal;
+  text-align: center;
 }

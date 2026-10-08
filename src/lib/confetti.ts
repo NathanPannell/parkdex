@@ -31,16 +31,16 @@ export function clearConfetti() {
   fire?.reset();
 }
 
-export function burst(origin = { x: 0.5, y: 0.45 }, power = 1) {
+export function burst(origin = { x: 0.5, y: 0.45 }, power = 1, colors: string[] = COLORS) {
   const f = instance();
-  const base = { origin, colors: COLORS, shapes: shapes ?? undefined, scalar: 1.1, ticks: 260, gravity: 0.9 };
+  const base = { origin, colors, shapes: shapes ?? undefined, scalar: 1.1, ticks: 260, gravity: 0.9 };
   void f({ ...base, particleCount: Math.round(90 * power), spread: 80, startVelocity: 42 * power });
   void f({ ...base, particleCount: Math.round(50 * power), spread: 140, startVelocity: 28 * power, decay: 0.92, scalar: 0.8 });
 }
 
-export function cannons() {
+export function cannons(colors: string[] = COLORS) {
   const f = instance();
-  const base = { colors: COLORS, shapes: shapes ?? undefined, ticks: 300, scalar: 1.05 };
+  const base = { colors, shapes: shapes ?? undefined, ticks: 300, scalar: 1.05 };
   void f({ ...base, particleCount: 70, angle: 60, spread: 55, origin: { x: 0, y: 0.8 }, startVelocity: 62 });
   void f({ ...base, particleCount: 70, angle: 120, spread: 55, origin: { x: 1, y: 0.8 }, startVelocity: 62 });
 }
