@@ -20,12 +20,14 @@ const LONG_BACKGROUND_MS = 30 * 60_000;
 const APPLY_TIMEOUT_MS = 5_000;
 const BUILTIN = "builtin";
 
-let updater: Promise<Updater | null> | null = null;
+// The plugin is a Capacitor proxy that answers every property, including `then`, so it is kept
+// inside a plain object: resolving a promise with the proxy itself would call `proxy.then()`.
+let updater: Promise<{ plugin: Updater } | null> | null = null;
 let current: BundleSummary | null = null;
 
-function loadUpdater(): Promise<Updater | null> {
+function loadUpdater(): Promise<{ plugin: Updater } | null> {
   if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable("CapacitorUpdater")) return Promise.resolve(null);
-  updater ??= import("@capgo/capacitor-updater").then((module) => module.CapacitorUpdater as Updater).catch(() => null);
+  updater ??= import("@capgo/capacitor-updater").then((module) => ({ plugin: module.CapacitorUpdater as Updater })).catch(() => null);
   return updater;
 }
 
@@ -68,7 +70,7 @@ async function applyPending(plugin: Updater): Promise<void> {
 /** Runs before the first render. Never throws; on the web it does nothing. */
 export async function startOverTheAirUpdates(plugin?: Updater | null): Promise<void> {
   try {
-    const active = plugin === undefined ? await loadUpdater() : plugin;
+    const active = plugin === undefined ? (await loadUpdater())?.plugin : plugin;
     if (!active) return;
     current = (await active.current()).bundle;
     await applyPending(active);
@@ -90,7 +92,7 @@ export async function startOverTheAirUpdates(plugin?: Updater | null): Promise<v
  * cannot render is rolled back, and a good one is never rolled back by the 15 s timeout.
  */
 export function notifyOverTheAirReady(): void {
-  void loadUpdater().then((plugin) => plugin?.notifyAppReady()).catch(() => undefined);
+  void loadUpdater().then((loaded) => loaded?.plugin.notifyAppReady()).catch(() => undefined);
 }
 
 /** True when this page runs a downloaded bundle rather than the one inside the APK. */

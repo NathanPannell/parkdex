@@ -22,7 +22,29 @@ vi.mock("@capacitor/app", () => ({
   },
 }));
 
-import { bundleToApply, isOverTheAirBundle, overTheAirBundleLabel, resetOverTheAirForTests, startOverTheAirUpdates } from "./ota";
+// Capacitor plugins are proxies that answer every property; `then` rejects, as on a device.
+const proxyPlugin = vi.hoisted(() => {
+  const calls: string[] = [];
+  const methods: Record<string, (...args: unknown[]) => Promise<unknown>> = {
+    current: async () => ({ bundle: { id: "builtin", version: "1.0.0", status: "success", downloaded: "", checksum: "" }, native: "1.0.0" }),
+    list: async () => ({ bundles: [] }),
+    set: async () => undefined,
+    notifyAppReady: async () => ({}),
+    addListener: async () => ({ remove: async () => undefined }),
+  };
+  const plugin = new Proxy({}, {
+    get: (_target, name) => {
+      calls.push(String(name));
+      if (name === "then") return () => { throw new Error('"CapacitorUpdater.then()" is not implemented on android'); };
+      return methods[String(name)];
+    },
+  });
+  return { plugin, calls };
+});
+
+vi.mock("@capgo/capacitor-updater", () => ({ CapacitorUpdater: proxyPlugin.plugin }));
+
+import { bundleToApply, isOverTheAirBundle, notifyOverTheAirReady, overTheAirBundleLabel, resetOverTheAirForTests, startOverTheAirUpdates } from "./ota";
 
 type Bundle = { id: string; version: string; status: "success" | "error" | "pending" | "downloading" | "deleted" | "deleting"; downloaded: string; checksum: string };
 
@@ -129,6 +151,17 @@ describe("startup", () => {
     vi.advanceTimersByTime(31 * 60_000);
     mocks.appListeners.get("resume")!();
     await vi.waitFor(() => expect(plugin.set).toHaveBeenCalledWith({ id: "b1" }));
+  });
+
+  it("loads the real plugin proxy without treating it as a promise", async () => {
+    proxyPlugin.calls.length = 0;
+    await startOverTheAirUpdates();
+    expect(proxyPlugin.calls).toContain("current");
+    expect(proxyPlugin.calls).toContain("addListener");
+    expect(mocks.appListeners.has("resume")).toBe(true);
+    notifyOverTheAirReady();
+    await vi.waitFor(() => expect(proxyPlugin.calls).toContain("notifyAppReady"));
+    expect(proxyPlugin.calls).not.toContain("then");
   });
 
   it("does nothing on the web", async () => {
