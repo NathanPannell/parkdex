@@ -14,6 +14,7 @@ import type { ParkHolder } from "../../lib/game/visit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
+import { SHOW_BADGE_ART } from "../../lib/parks";
 
 type Props = {
   park: Park;
@@ -166,9 +167,11 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           </div>
         </motion.div>
 
-        <motion.p variants={item} className="park-sheet__blurb">
-          {park.blurb}
-        </motion.p>
+        {SHOW_BADGE_ART && (
+          <motion.p variants={item} className="park-sheet__blurb">
+            {park.blurb}
+          </motion.p>
+        )}
 
         <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
           <Icon name="chat" size={16} /> Something wrong with this park? Tell us

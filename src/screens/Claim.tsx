@@ -7,7 +7,7 @@ import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber, Rays, Tilt } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
-import { badgeTotal, PALETTES, RARITY, scenePath, type Park } from "../lib/parks";
+import { badgeTotal, PALETTES, RARITY, scenePath, SHOW_BADGE_ART, type Park } from "../lib/parks";
 import { assertParkClaimEligible, getRarityProgress, ParkAlreadyClaimedError, ParkClaimEligibilityError, rankUpAfter, type Rank } from "../lib/progression";
 import { RankUp } from "../components/Rank";
 import { progressOwnerKey, useStore } from "../lib/store";
@@ -51,7 +51,7 @@ export function Claim() {
   }
 
   // Only art near the visitor downloads automatically; fetch this park's now if it is still missing.
-  const missingArtParkId = entryRef.current?.park.scene && entryRef.current.sceneHref === null ? entryRef.current.park.id : null;
+  const missingArtParkId = SHOW_BADGE_ART && entryRef.current?.park.scene && entryRef.current.sceneHref === null ? entryRef.current.park.id : null;
   useEffect(() => {
     if (missingArtParkId) void runtime.ensureParkArt?.(missingArtParkId).catch(() => {});
   }, [missingArtParkId, runtime]);

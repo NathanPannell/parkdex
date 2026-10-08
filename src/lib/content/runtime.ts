@@ -30,7 +30,9 @@ import {
 import {
   ContentValidationError,
   applyContentChangeBatch,
+  assembleCatalogueSnapshot,
   assertFileBytes,
+  catalogueIndexFile,
   coreFiles,
   fileByPath,
   mapChunkFiles,
@@ -38,6 +40,9 @@ import {
   parseContentChanges,
   parseContentMapInventory,
   parseContentManifest,
+  parseCatalogueChunk,
+  parseCatalogueIndex,
+  parseCatalogueSnapshotPointer,
   parseContentSnapshot,
   parseJsonBytes,
   remoteFiles,
@@ -63,6 +68,8 @@ const LOCATION_MOVE_THRESHOLD_KM = 25;
 const NEARBY_ART_KM = 15;
 const NEARBY_ART_MOVE_KM = 5;
 const SCENE_PREFIX = "art/badges/scenes/";
+// Catalogue chunks are small immutable files; a few at a time keeps a phone responsive.
+const CATALOGUE_CHUNK_CONCURRENCY = 4;
 const EMPTY_STATUS: ContentStatus = {
   phase: "starting",
   snapshot: null,
@@ -1015,9 +1022,7 @@ class ContentRuntimeController implements ContentRuntime {
       resetCursor = true;
     }
     if (!state) {
-      const snapshotResponse = await this.requestContent(this.contentApiUrl("snapshot"), signal);
-      if (!snapshotResponse.ok) throw new Error(`Content snapshot returned HTTP ${snapshotResponse.status}`);
-      state = { ...parseContentSnapshot(await snapshotResponse.json()), sourceId };
+      state = await this.fetchFullSnapshot(sourceId, signal);
       if (!previous) previous = this.syncPreviousState ?? state;
     }
 
@@ -1030,9 +1035,7 @@ class ContentRuntimeController implements ContentRuntime {
       if (response.status === 410 || response.status === 413 || response.status === 400) {
         if (fullSnapshotFallbacks >= 1) throw new Error("Content changes repeatedly require a fresh snapshot; retrying shortly");
         fullSnapshotFallbacks += 1;
-        const fullResponse = await this.requestContent(this.contentApiUrl("snapshot"), signal);
-        if (!fullResponse.ok) throw new Error(`Content snapshot returned HTTP ${fullResponse.status}`);
-        const replacement = { ...parseContentSnapshot(await fullResponse.json()), sourceId };
+        const replacement = await this.fetchFullSnapshot(sourceId, signal);
         resetCursor ||= response.status === 400;
         state = replacement;
         continue;
@@ -1057,6 +1060,44 @@ class ContentRuntimeController implements ContentRuntime {
     });
     if (this.hasSyncApi()) this.startMapSync();
     else if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+  }
+
+  /**
+   * One complete catalogue: the API snapshot, or, when the API names a CDN catalogue
+   * release, its index and every boundary chunk, checked exactly like an API snapshot.
+   */
+  private async fetchFullSnapshot(sourceId: string, signal: AbortSignal): Promise<ContentSyncState> {
+    const response = await this.requestContent(this.contentApiUrl("snapshot"), signal);
+    if (!response.ok) throw new Error(`Content snapshot returned HTTP ${response.status}`);
+    const body: unknown = await response.json();
+    const pointer = parseCatalogueSnapshotPointer(body);
+    if (!pointer) return { ...parseContentSnapshot(body), sourceId };
+    this.setStatus({ syncStage: "downloading" });
+    const index = parseCatalogueIndex(parseJsonBytes(await this.fetchCatalogueFile(catalogueIndexFile(pointer), signal)), pointer);
+    const features: unknown[][] = new Array(index.chunks.length);
+    let next = 0;
+    const worker = async () => {
+      while (next < index.chunks.length) {
+        const position = next++;
+        const chunk = index.chunks[position]!;
+        features[position] = parseCatalogueChunk(parseJsonBytes(await this.fetchCatalogueFile(chunk, signal)), chunk);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CATALOGUE_CHUNK_CONCURRENCY, index.chunks.length) }, worker));
+    return { ...assembleCatalogueSnapshot(index, features), sourceId };
+  }
+
+  private async fetchCatalogueFile(file: ContentFile, signal: AbortSignal): Promise<ArrayBuffer> {
+    if (!this.canDownloadContent()) throw this.contentUnavailableError();
+    if (signal.aborted) throw signal.reason ?? new DOMException("Content sync cancelled", "AbortError");
+    // The catalogue is essential content, so it uses any connection, like the API snapshot.
+    const init: ContentRequestInit = { signal, cache: "force-cache", anyNetwork: true };
+    const response = await this.fetcher(file.url, init);
+    if (!response.ok) throw new Error(`Content catalogue file ${file.path} returned HTTP ${response.status}`);
+    assertUnredirected(response, file.url, `Content catalogue file ${file.path}`);
+    const bytes = await response.arrayBuffer();
+    await assertFileBytes(file, bytes);
+    return bytes;
   }
 
   private async commitContentSnapshot(next: ContentSyncState, previous: ContentSyncState | null, expectedCursor: ContentSyncCursor | null, signal: AbortSignal, resetCursor = false): Promise<void> {
@@ -1101,7 +1142,7 @@ class ContentRuntimeController implements ContentRuntime {
     const near = this.currentLocation;
     const wanted = new Set<string>();
     for (const park of state.parks) {
-      if (!park.scene) continue;
+      if (!park.scene || this.options.badgeArt === false) continue;
       if (claimed.has(park.id) || (near && distanceKm(near, [park.lng, park.lat]) <= NEARBY_ART_KM)) {
         wanted.add(`${SCENE_PREFIX}${park.scene}.webp`);
       }

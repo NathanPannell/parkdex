@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { ContentGate } from "../components/ContentGate";
 import { buzz, sfx } from "../lib/feedback";
-import { scenePath, type Park } from "../lib/parks";
+import { scenePath, SHOW_BADGE_ART, type Park } from "../lib/parks";
 import { FIELD } from "../lib/native";
 import { useStore } from "../lib/store";
 import { useContent, useContentRuntime } from "../lib/content/provider";
@@ -53,7 +53,7 @@ export function Camera() {
   const eligibility = park ? getParkRarityEligibility(park, rarityProgress, !!state.claims[park.id]) : null;
   const canClaim = !!park && state.progressReady && !state.claims[park.id] && !!eligibility?.eligible && eligibility.reason === "unlocked";
   const runtime = useContentRuntime();
-  const artParkId = park?.scene && !content?.assetUrls.has(scenePath(park.scene)) ? park.id : null;
+  const artParkId = SHOW_BADGE_ART && park?.scene && !content?.assetUrls.has(scenePath(park.scene)) ? park.id : null;
 
   // Start saving this park's badge art while the photo is taken, so the claim does not wait for it.
   useEffect(() => {

@@ -26,14 +26,21 @@ export type Park = {
   trailheadLng?: number | null;
 };
 
-export const isLive = (park: Park) => park.scene !== null;
+// Per-park badge art and descriptions are retired for the flag game. The
+// catalogue keeps scene and blurb and the CDN keeps the images, so turning this
+// back on needs no content change.
+export const SHOW_BADGE_ART = false;
+
+// Without per-park art every park is a full park; with it, a park without art
+// was "coming soon".
+export const isLive = (park: Pick<Park, "scene">) => !SHOW_BADGE_ART || park.scene !== null;
 export const scenePath = (scene: string) => `art/badges/scenes/${scene}.webp`;
 // Kept as a path helper for callers that also have to resolve the active release URL.
 export const sceneUrl = (scene: string) => `/${scenePath(scene)}`;
 
-// The map shows only parks with a badge to earn, plus any park already in the Dex.
+// The map shows every live park, plus any park already in the Dex.
 export function mapParks<T extends Pick<Park, "id" | "scene">>(parks: readonly T[], claimed: Readonly<Record<string, unknown>>): T[] {
-  return parks.filter((park) => park.scene !== null || Object.hasOwn(claimed, park.id));
+  return parks.filter((park) => isLive(park) || Object.hasOwn(claimed, park.id));
 }
 
 // Keep earned retired badges in the visitor's lifetime collection denominator.

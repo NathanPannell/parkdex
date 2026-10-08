@@ -118,6 +118,7 @@ Read the matching file before you change these areas. Format and how to add one:
 | Claims, accounts, progress sync | `docs/learnings/signed-in-claim-verification.md` |
 | Catalogue cutovers and new park fields | `docs/learnings/catalogue-cutover-validation.md` |
 | Park boundary imports | `docs/learnings/park-boundary-import-completeness.md` |
+| Catalogue size, imports and new parks | `docs/learnings/content-snapshot-size.md` |
 | Browser sync and backup | `docs/learnings/browser-sync-connectivity.md` |
 | Map downloads and packaging | `docs/learnings/map-first-launch.md` |
 | Android orientation and launcher icons | `docs/learnings/android-orientation-and-icons.md` |

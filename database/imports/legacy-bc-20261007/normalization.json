@@ -1,0 +1,488 @@
+{
+  "method": "planar-face-even-odd-ring-union",
+  "parks": [
+    {
+      "parkId": "national-gulf-islands-national-park-reserve",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "052940cc4b774bd36bbee1b348f89e633f52ceee31d492fc276ce07951bdb22a",
+      "normalizedGeometrySha256": "615d5f7deb3cb51a9db1ea4fda41737d68e2bba9797991a6980cf51fc4f822d7",
+      "sourceCounts": {
+        "polygons": 80,
+        "holes": 7,
+        "rings": 87,
+        "positions": 2273
+      },
+      "normalizedCounts": {
+        "polygons": 79,
+        "holes": 8,
+        "rings": 87,
+        "positions": 2275
+      },
+      "planarFaces": 90,
+      "includedFaces": 82,
+      "normalizedArea": 0.004307818665553072,
+      "independentMakeValidArea": 0.004307817881106045,
+      "independentMakeValidSymmetricDifferenceRatio": 1.82098432768562e-07
+    },
+    {
+      "parkId": "provincial-bromley-rock-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "66938adcd57e559ced75b2b1236f94583faff9eb4a7be8c9d9a544352ea201a0",
+      "normalizedGeometrySha256": "375b1ebea50a71bf2c2e888ca822f7c4234d897f6d95b79e082f0bf8ef5b15d4",
+      "sourceCounts": {
+        "polygons": 8,
+        "holes": 1,
+        "rings": 9,
+        "positions": 168
+      },
+      "normalizedCounts": {
+        "polygons": 9,
+        "holes": 1,
+        "rings": 10,
+        "positions": 171
+      },
+      "planarFaces": 10,
+      "includedFaces": 9,
+      "normalizedArea": 0.00018701435677670483,
+      "independentMakeValidArea": 0.00018701435677670477,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-cape-scott-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "e962c4b33c4bf9acfeb8dd19939988743e348de1af9c6f2b4d7eee0d39c127c4",
+      "normalizedGeometrySha256": "77a105b0c0f7feeee75ed4d6c13d490f65eef0dd8b72507860241e2b99a9165b",
+      "sourceCounts": {
+        "polygons": 1,
+        "holes": 10,
+        "rings": 11,
+        "positions": 1216
+      },
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 10,
+        "rings": 11,
+        "positions": 1215
+      },
+      "planarFaces": 11,
+      "includedFaces": 1,
+      "normalizedArea": 0.028427669449997493,
+      "independentMakeValidArea": 0.028427669449997448,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-kiskatinaw-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "1391d68edb79b2ca0dc6d5a2900560af5d5152e57f90199eaf16862832eca747",
+      "normalizedGeometrySha256": "41c71f63c82e896b07cd900c5fa3b4e10aa4a202127b3bc9d82dcf393d258375",
+      "sourceCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 53
+      },
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 55
+      },
+      "planarFaces": 4,
+      "includedFaces": 4,
+      "normalizedArea": 7.868135000003521e-05,
+      "independentMakeValidArea": 7.868135000003522e-05,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-myra-bellevue-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "56ed348e530ce937f2a3fee29c2aad588fc43f61327dc1f0547eac3c5654757e",
+      "normalizedGeometrySha256": "bc911f257285f20a547fc0f90282b9832b876c9d03282d2c2abcd2d77d1454f2",
+      "sourceCounts": {
+        "polygons": 7,
+        "holes": 1,
+        "rings": 8,
+        "positions": 1294
+      },
+      "normalizedCounts": {
+        "polygons": 8,
+        "holes": 1,
+        "rings": 9,
+        "positions": 1297
+      },
+      "planarFaces": 9,
+      "includedFaces": 8,
+      "normalizedArea": 0.009766861482119051,
+      "independentMakeValidArea": 0.009766861482119051,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-naikoon-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "a3c9d3d8ceb10cc5eea8a08bdcf1e7b64ffeeef302fb9adb214842afb858d6bf",
+      "normalizedGeometrySha256": "1fe5fa97c2fd41e87e8bcaa4fc216047ef0b39b4826016c2cd5183be64d63ce0",
+      "sourceCounts": {
+        "polygons": 2,
+        "holes": 8,
+        "rings": 10,
+        "positions": 1227
+      },
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 8,
+        "rings": 12,
+        "positions": 1233
+      },
+      "planarFaces": 12,
+      "includedFaces": 4,
+      "normalizedArea": 0.09467108255937054,
+      "independentMakeValidArea": 0.0946710825593705,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-sooke-potholes-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "cb10884d0cdb7271b5d57186b35c16399d57474466f25c167e23b5922168a555",
+      "normalizedGeometrySha256": "838dc2e38ab612abf031ea8bdd7650309008666108d74f77dd3070d085bea083",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 51
+      },
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 54
+      },
+      "planarFaces": 4,
+      "includedFaces": 4,
+      "normalizedArea": 6.579417926554276e-06,
+      "independentMakeValidArea": 6.579417926554277e-06,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-syringa-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "4ccabcd66ca05477114fa37c4c5e1a9fe9d175135cefc29006359e24d84a982d",
+      "normalizedGeometrySha256": "c07bb689c48bf6b89f5da8c3854d2a974b4d6e1f28f4b03d948a7ad824587814",
+      "sourceCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 495
+      },
+      "normalizedCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 501
+      },
+      "planarFaces": 6,
+      "includedFaces": 6,
+      "normalizedArea": 0.005614905734563678,
+      "independentMakeValidArea": 0.005614905734563679,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-wakes-cove-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "fbb87339ec0076c453cefd5910903833316543d9379bc6a39ae7c8b606e9dbaf",
+      "normalizedGeometrySha256": "568e77c9845a84468c46ad50281d01186264430834db7f07dc9a72cc79a2c829",
+      "sourceCounts": {
+        "polygons": 1,
+        "holes": 4,
+        "rings": 5,
+        "positions": 107
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 4,
+        "rings": 6,
+        "positions": 110
+      },
+      "planarFaces": 6,
+      "includedFaces": 2,
+      "normalizedArea": 0.00025166398258576867,
+      "independentMakeValidArea": 0.0002516639825857688,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "provincial-wells-gray-park",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "63158ab0446be72d95600444031b5ebda7dffb1d9a7762c9b13de102abc42c35",
+      "normalizedGeometrySha256": "316e74428e93740a113abad5ca87e9866e00142f9dedd1d87951649ade08fe13",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 8,
+        "rings": 14,
+        "positions": 5080
+      },
+      "normalizedCounts": {
+        "polygons": 7,
+        "holes": 8,
+        "rings": 15,
+        "positions": 5083
+      },
+      "planarFaces": 15,
+      "includedFaces": 7,
+      "normalizedArea": 0.7119456013121207,
+      "independentMakeValidArea": 0.7119456013121217,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "regional-greenspaces-comox-valley-driftwood-marine-park-4853",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "ecf1cd3a75992aa012accd9a817b681271bd4f2f160b89e845f14bbc5d9aaf4c",
+      "normalizedGeometrySha256": "104702ee6f423af7afb413df9888dff39a08da7aadcfe97829bbe9761bbf9f65",
+      "sourceCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 68
+      },
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 0,
+        "rings": 1,
+        "positions": 34
+      },
+      "planarFaces": 1,
+      "includedFaces": 1,
+      "normalizedArea": 6.312249999996106e-06,
+      "independentMakeValidArea": 6.312249999996105e-06,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "regional-greenspaces-comox-valley-seal-bay-nature-park-4840",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "6d5927bdf40d9cc132e19e39f6c4eaf0c1e4d53e3912a612d71e14bc63774f21",
+      "normalizedGeometrySha256": "c9a444b8159e7f6b2c91963271ad8dd1647c229c1047cdaca1b903916ff4099c",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 80
+      },
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 0,
+        "rings": 5,
+        "positions": 74
+      },
+      "planarFaces": 7,
+      "includedFaces": 7,
+      "normalizedArea": 0.0008480838489445506,
+      "independentMakeValidArea": 0.0008480753978890323,
+      "independentMakeValidSymmetricDifferenceRatio": 9.964882043857187e-06
+    },
+    {
+      "parkId": "regional-greenspaces-fraser-valley-ridgedale-bar-park-4357",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "e40ef2c8c5cc48e7661adfd84fc6ff1775bce6276ae97abd38e14580f0052ba5",
+      "normalizedGeometrySha256": "e0f3eff377894f86fb2e20646d00bc3aee1161df6bf7917640e24976d3ee4637",
+      "sourceCounts": {
+        "polygons": 16,
+        "holes": 1,
+        "rings": 17,
+        "positions": 262
+      },
+      "normalizedCounts": {
+        "polygons": 15,
+        "holes": 1,
+        "rings": 16,
+        "positions": 260
+      },
+      "planarFaces": 18,
+      "includedFaces": 17,
+      "normalizedArea": 0.0006458725642979989,
+      "independentMakeValidArea": 0.0006458453285960713,
+      "independentMakeValidSymmetricDifferenceRatio": 4.216884790153351e-05
+    },
+    {
+      "parkId": "regional-greenspaces-strathcona-siskin-forest-park-5255",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "8938139a0dd33fa0612fe9ebb0a565621101f134239f7fa76475c95bf91bd1a3",
+      "normalizedGeometrySha256": "9954346d14207a42b6277f60b309d0d68e01b16ab3cf8db6e87b55c48794da20",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 1,
+        "rings": 4,
+        "positions": 174
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 172
+      },
+      "planarFaces": 5,
+      "includedFaces": 4,
+      "normalizedArea": 1.8987644808279697e-05,
+      "independentMakeValidArea": 1.8987639616586363e-05,
+      "independentMakeValidSymmetricDifferenceRatio": 2.734248183617375e-07
+    },
+    {
+      "parkId": "regional-greenspaces-strathcona-whaletown-commons-park-5296",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "2efe13baf3075211d0a65c1815b687961852996eefc4978469dcf705787cc79d",
+      "normalizedGeometrySha256": "456a35c8132853f95d8131224afc1c4cc84fd6b8398943ba588dfb717187990e",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 19
+      },
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 18
+      },
+      "planarFaces": 4,
+      "includedFaces": 4,
+      "normalizedArea": 4.014629694992498e-05,
+      "independentMakeValidArea": 4.01352438998327e-05,
+      "independentMakeValidSymmetricDifferenceRatio": 0.00027531929298645904
+    },
+    {
+      "parkId": "regional-metro-vancouver-bel",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "5fba5f415b7cb7a894d30de7f28a2ef5df32f3471bb3c245f1fbded4d3b4493b",
+      "normalizedGeometrySha256": "20f0da0a48cf1f3932006e8d42c3a58eddc7ab161a7c5c7912b320bd987d7ef4",
+      "sourceCounts": {
+        "polygons": 11,
+        "holes": 0,
+        "rings": 11,
+        "positions": 495
+      },
+      "normalizedCounts": {
+        "polygons": 10,
+        "holes": 0,
+        "rings": 10,
+        "positions": 484
+      },
+      "planarFaces": 11,
+      "includedFaces": 11,
+      "normalizedArea": 0.0012801150499999769,
+      "independentMakeValidArea": 0.0012798958499999728,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0001712346089552456
+    },
+    {
+      "parkId": "regional-metro-vancouver-bur",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "5d06d0f56f2c1fd29260321da185ab5e2db759b1642120e29ed0637d194039aa",
+      "normalizedGeometrySha256": "04371122b37887f5e907b23dcc56934c3784fae555f562994903a3f631197428",
+      "sourceCounts": {
+        "polygons": 12,
+        "holes": 0,
+        "rings": 12,
+        "positions": 286
+      },
+      "normalizedCounts": {
+        "polygons": 11,
+        "holes": 0,
+        "rings": 11,
+        "positions": 279
+      },
+      "planarFaces": 12,
+      "includedFaces": 12,
+      "normalizedArea": 0.0001891867499999912,
+      "independentMakeValidArea": 0.0001882341999999988,
+      "independentMakeValidSymmetricDifferenceRatio": 0.005034972057992825
+    },
+    {
+      "parkId": "regional-metro-vancouver-cri",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "ff0172d369cfd4527ab06dfc5c39990f7a88c61422714b4e1660e404547d4b9e",
+      "normalizedGeometrySha256": "1863e1fcb4f1f7312fdc6623e8a5468e037b307751703ab90f6fee6035df4c3b",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 309
+      },
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 0,
+        "rings": 5,
+        "positions": 239
+      },
+      "planarFaces": 6,
+      "includedFaces": 6,
+      "normalizedArea": 0.00030165159999997896,
+      "independentMakeValidArea": 0.00027607809999996336,
+      "independentMakeValidSymmetricDifferenceRatio": 0.08477826737871551
+    },
+    {
+      "parkId": "regional-metro-vancouver-kan",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "c5faf7e3396b264984390e1fcc0f53a2c7ed12c2622a410a34e044076ff01237",
+      "normalizedGeometrySha256": "a73a38d8d9adec3611df7e1c20257e2a8db2b7999052eeba8c8685e26956d13a",
+      "sourceCounts": {
+        "polygons": 12,
+        "holes": 0,
+        "rings": 12,
+        "positions": 1704
+      },
+      "normalizedCounts": {
+        "polygons": 12,
+        "holes": 1,
+        "rings": 13,
+        "positions": 1705
+      },
+      "planarFaces": 13,
+      "includedFaces": 12,
+      "normalizedArea": 0.0006024335000000051,
+      "independentMakeValidArea": 0.000602433500000005,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    },
+    {
+      "parkId": "regional-metro-vancouver-wid",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "d4918642f9d7c7055b8bc1b9480a445bd8a11328e4d1a448514c570292223274",
+      "normalizedGeometrySha256": "40da1347cb746ddf761365b8f5f58c6d2c12a53630ff2ace504d5c7d873b24e5",
+      "sourceCounts": {
+        "polygons": 7,
+        "holes": 0,
+        "rings": 7,
+        "positions": 462
+      },
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 1,
+        "rings": 6,
+        "positions": 447
+      },
+      "planarFaces": 8,
+      "includedFaces": 7,
+      "normalizedArea": 0.0007905756499999967,
+      "independentMakeValidArea": 0.0007903456944999964,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0002908709621909923
+    },
+    {
+      "parkId": "regional-rdco-24",
+      "method": "planar-face-even-odd-ring-union",
+      "sourceGeometrySha256": "6f102ed30b4470e912b3cfe8acae256fa4528fc89a76c7d88192f8d4090c0fae",
+      "normalizedGeometrySha256": "57d2cab984ec57d11158ba9f8f59b5da15fc6f1fa43b475a1136105071ba675b",
+      "sourceCounts": {
+        "polygons": 9,
+        "holes": 1,
+        "rings": 10,
+        "positions": 650
+      },
+      "normalizedCounts": {
+        "polygons": 9,
+        "holes": 2,
+        "rings": 11,
+        "positions": 653
+      },
+      "planarFaces": 11,
+      "includedFaces": 9,
+      "normalizedArea": 4.1502069511144e-05,
+      "independentMakeValidArea": 4.1502069511143854e-05,
+      "independentMakeValidSymmetricDifferenceRatio": 0.0
+    }
+  ]
+}

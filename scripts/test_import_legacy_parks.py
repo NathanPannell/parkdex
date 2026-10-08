@@ -283,6 +283,50 @@ class ImportPlanTests(unittest.TestCase):
         self.assertEqual(plan["changes"][0]["targetBeforeHash"], None)
         self.assertEqual(plan["planSha256"], importer.plan_digest(plan))
 
+    def test_gzipped_source_files_are_read_and_pinned_as_stored(self):
+        import gzip
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "boundaries.geojson.gz"
+            stored = gzip.compress(b'{"type":"FeatureCollection","features":[]}', mtime=0)
+            path.write_bytes(stored)
+            raw, reference = importer.read_source(str(path), "boundary")
+            self.assertEqual(raw, b'{"type":"FeatureCollection","features":[]}')
+            self.assertEqual(reference["sha256"], importer.sha256(stored))
+
+    def test_park_id_file_lists_ids_in_order_and_rejects_bad_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ids.txt"
+            path.write_text("# phase 1\nregional-a-1\n\n  municipal-b-2  \n", encoding="utf-8")
+            self.assertEqual(importer.read_park_id_file(path), ["regional-a-1", "municipal-b-2"])
+            path.write_text("regional-a-1\nNot An Id\n", encoding="utf-8")
+            with self.assertRaisesRegex(importer.ParkImportError, "invalid stable ID"):
+                importer.read_park_id_file(path)
+            path.write_text("# nothing\n", encoding="utf-8")
+            with self.assertRaisesRegex(importer.ParkImportError, "no park IDs"):
+                importer.read_park_id_file(path)
+        self.assertEqual(importer.read_park_id_file(None), [])
+
+    def test_minimum_reader_is_recorded_on_new_parks_only(self):
+        features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("regional-new-1"), source_feature("regional-old-1")]})
+        target = {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"}
+        place = {"id": "regional-new-1", "name": "New Park", "category": "regional", "region": "Island", "latitude": 48.42, "longitude": -123.32}
+        existing = {"regional-old-1": {"id": "regional-old-1", "biome": "coast", "rarity": "common"}}
+        hubs = [{"position": 0, "name": "One", "lng": -123.3, "lat": 48.4}, {"position": 1, "name": "Two", "lng": -123.4, "lat": 48.5}]
+        source = {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64}
+        plan = importer.build_plan(
+            features, source, ["regional-new-1", "regional-old-1"], {}, target, existing, {},
+            {"regional-new-1": place}, source, {"regional-new-1": review_item()}, source, hubs, minimum_reader=3,
+        )
+        self.assertEqual(plan["minimumReader"], 3)
+        self.assertEqual([change.get("minimumReader") for change in plan["changes"]], [3, None])
+        without = importer.build_plan(
+            features, source, ["regional-new-1"], {}, target, {}, {}, {"regional-new-1": place}, source, {"regional-new-1": review_item()}, source, hubs,
+        )
+        self.assertNotIn("minimumReader", without)
+        with self.assertRaisesRegex(importer.ParkImportError, "minimum-reader"):
+            importer.build_plan(features, source, ["regional-new-1"], {}, target, {}, {}, minimum_reader=1)
+
     def test_mapped_target_ids_match_the_account_id_pattern(self):
         features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("park-one")]})
         target = {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"}
@@ -313,6 +357,8 @@ class PostgreSQLImportTests(unittest.TestCase):
                     cls.root / "database/001_cloud_content.sql",
                     cls.root / "database/migrations/content_001_sync.sql",
                     cls.root / "database/migrations/content_002_authoring.sql",
+                    cls.root / "database/migrations/content_003_park_maps_link.sql",
+                    cls.root / "database/migrations/content_004_catalogue_release.sql",
                 ):
                     cursor.execute(migration.read_text(encoding="utf-8"), prepare=False)
                 cursor.execute("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (0, 'One', -123.3, 48.4), (1, 'Two', -123.4, 48.5)")
@@ -373,7 +419,7 @@ class PostgreSQLImportTests(unittest.TestCase):
                     (json.dumps(frozen_research), json.dumps(selected_art)),
                 )
 
-    def _plan(self, temp: Path, features: list[dict], ids: list[str], catalogue: dict | None = None, review: dict | None = None, rarity: dict | None = None) -> tuple[dict, Path]:
+    def _plan(self, temp: Path, features: list[dict], ids: list[str], catalogue: dict | None = None, review: dict | None = None, rarity: dict | None = None, minimum_reader: int | None = None) -> tuple[dict, Path]:
         boundary_file = temp / "legacy.geojson"
         boundary_file.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
         catalogue_file = None
@@ -402,6 +448,7 @@ class PostgreSQLImportTests(unittest.TestCase):
             "target_host": host,
             "target_environment": "local-qa",
             "out": output_file,
+            "minimum_reader": minimum_reader,
         })()
         with patch.dict(os.environ, {"DATABASE_URL": self.dsn}):
             importer.run_plan(args)
@@ -498,6 +545,27 @@ class PostgreSQLImportTests(unittest.TestCase):
                         "UPDATE public.boundaries SET feature = %s::jsonb WHERE park_id = %s",
                         (json.dumps(importer._public_feature(park_id, "coast", square(-2))), park_id),
                     )
+
+    def test_new_park_reader_floor_is_written_in_the_same_transaction_and_replays(self):
+        import psycopg
+
+        park_id = "regional-floor-1"
+        place = {"places": [{"id": park_id, "name": "Floor Park", "category": "regional", "region": "Island", "latitude": 48.44, "longitude": -123.34}]}
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            plan, path = self._plan(temp, [source_feature(park_id, square(40))], [park_id], place, {"parks": {park_id: review_item()}}, minimum_reader=3)
+            result = self._apply(plan, path)
+            self.assertEqual(result["result"], "applied")
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT minimum_reader FROM public.content_park_reader_floor WHERE park_id = %s", (park_id,))
+                    self.assertEqual(cursor.fetchone(), (3,))
+            self.assertEqual(self._apply(plan, path)["result"], "already-current")
+            with psycopg.connect(self.dsn) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("DELETE FROM public.parks WHERE id = %s", (park_id,))
+                    cursor.execute("SELECT count(*) FROM public.content_park_reader_floor WHERE park_id = %s", (park_id,))
+                    self.assertEqual(cursor.fetchone(), (0,))
 
     def test_real_update_insert_replay_drift_and_rollback(self):
         import psycopg

@@ -10,6 +10,7 @@ import { BUILD_MAP_POINTER, type ContentEnvironment, type ContentRuntime, type C
 import { useStore } from "../store";
 import { useAuth } from "../accounts/AuthProvider";
 import { isUsableGpsAccuracy } from "../geo";
+import { SHOW_BADGE_ART } from "../parks";
 
 const EMPTY_STATUS: ContentStatus = {
   phase: "starting",
@@ -66,6 +67,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
       claimedParkIds: () => claimsReadyRef.current ? Object.keys(claimsRef.current) : [],
+      badgeArt: SHOW_BADGE_ART,
       connectivity: initialConnectivity(),
       fetch: contentFetch,
       mapPointer: BUILD_MAP_POINTER,

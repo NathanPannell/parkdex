@@ -1,0 +1,27 @@
+{
+  "duplicateThreshold": 0.5,
+  "reportFloor": 0.01,
+  "overlaps": [
+    {
+      "newId": "municipal-city-of-langford-698",
+      "existingId": "regional-mill-hill-regional-park",
+      "shareOfNewPark": 0.038418,
+      "shareOfExistingPark": 2e-06,
+      "duplicate": false
+    },
+    {
+      "newId": "national-gulf-islands-national-park-reserve",
+      "existingId": "regional-east-point-regional-park",
+      "shareOfNewPark": 3.6e-05,
+      "shareOfExistingPark": 0.144108,
+      "duplicate": false
+    },
+    {
+      "newId": "national-pacific-rim-national-park-reserve",
+      "existingId": "provincial-hitchie-creek-park",
+      "shareOfNewPark": 0.000167,
+      "shareOfExistingPark": 0.036206,
+      "duplicate": false
+    }
+  ]
+}
