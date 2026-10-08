@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { buzz, sfx } from "../lib/feedback";
 import { isNative } from "../lib/native";
+import { overTheAirBundleLabel } from "../lib/ota";
 import {
   clearFeedbackScreenshot,
   createFeedbackDraftGeneration,
@@ -124,9 +125,13 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
     void App.getInfo()
       .then((info) => {
         if (!current) return;
+        // Reports from an over-the-air bundle name it, since the native build alone no longer says which code ran.
+        const bundle = overTheAirBundleLabel();
+        const build = info.build?.trim() || "unavailable";
         setNativeAppVersion({
           version: info.version?.trim() || "unavailable",
-          build: info.build?.trim() || "unavailable",
+          // The server accepts at most 80 characters here.
+          build: bundle ? `${build} bundle ${bundle}`.slice(0, 80) : build,
         });
       })
       .catch(() => {

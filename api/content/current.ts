@@ -48,7 +48,8 @@ function header(request: RequestLike, name: string): string | undefined {
 function setCors(request: RequestLike, response: ResponseLike): void {
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "If-None-Match");
+  // The app sends its analytics labels on every API call, so preflights must allow them.
+  response.setHeader("Access-Control-Allow-Headers", "If-None-Match, X-Kip-Installation-Id, X-Kip-App-Version, X-Kip-Bundle-Id");
   response.setHeader("Access-Control-Expose-Headers", "Cache-Control, ETag, Last-Modified");
   const origin = header(request, "origin");
   if (origin && ALLOWED_ORIGINS.has(origin)) {

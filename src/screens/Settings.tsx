@@ -1,6 +1,10 @@
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
+import { useGame } from "../lib/game/GameProvider";
+import { listItem, listParent, press, tabPage } from "../lib/motion";
+import "../game-ui.css";
 import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
@@ -9,9 +13,11 @@ import { useAuth } from "../lib/accounts/AuthProvider";
 import { settingsAccountSubtitle } from "../lib/accounts/backupPresentation";
 
 /** App settings, separate from the account page. */
-export function Settings() {
+export function Settings({ tabbed = false }: { tabbed?: boolean }) {
   const { state, dispatch } = useStore();
   const auth = useAuth();
+  const game = useGame();
+  const player = game.me?.player ?? null;
   const runtime = useContentRuntime();
   const [savedSquares] = useState(() => readSavedSquares().length);
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
@@ -30,17 +36,17 @@ export function Settings() {
 
   return (
     <motion.main
-      className="screen account-screen scroll"
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
-      transition={{ type: "spring", stiffness: 300, damping: 34 }}
+      className={tabbed ? "screen account-screen account-screen--tabbed scroll" : "screen account-screen scroll"}
+      // Tabs swap in place; pages reached from elsewhere slide in.
+      {...(tabbed ? tabPage : { initial: { x: "100%" }, animate: { x: 0 }, exit: { x: "100%" }, transition: { type: "spring", stiffness: 300, damping: 34 } })}
       aria-labelledby="settings-title"
     >
       <header className="account-head">
-        <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "map" })} aria-label="Back">
-          <Icon name="back" size={20} />
-        </button>
+        {!tabbed && (
+          <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "map" })} aria-label="Back">
+            <Icon name="back" size={20} />
+          </button>
+        )}
         <div className="account-head__title">
           <span className="eyebrow">Parkdex</span>
           <h1 id="settings-title">Settings</h1>
@@ -48,16 +54,32 @@ export function Settings() {
       </header>
 
       <div className="account-body">
-        <section className="account-card card account-section" aria-label="Settings">
-          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "account" })}>
+        <motion.button
+          whileTap={press}
+          className="account-card card settings-flag"
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          onClick={() => (player ? dispatch({ type: "go", screen: "parks" }) : auth.phase === "authenticated" ? game.openHandleSheet() : dispatch({ type: "go", screen: "account" }))}
+        >
+          <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} className="is-waving" />
+          <span className="settings-flag__text">
+            <strong>{player ? `@${player.handle}` : "Your flag"}</strong>
+            <span>{player ? `${game.me?.score ?? 0} ${game.me?.score === 1 ? "point" : "points"} · see your parks` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
+          </span>
+          <Icon name="next" size={18} />
+        </motion.button>
+
+        <motion.section className="account-card card account-section" aria-label="Settings" variants={listParent} initial="hidden" animate="show">
+          <motion.button variants={listItem} whileTap={press} className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "account" })}>
             <span className="account-setting__icon" aria-hidden="true"><Icon name="link" size={20} /></span>
             <span className="account-setting__text">
               <strong>Account &amp; backup</strong>
               <span>{accountLine}</span>
             </span>
             <Icon name="next" size={18} />
-          </button>
-          <label className="account-setting account-setting--row">
+          </motion.button>
+          <motion.label variants={listItem} className="account-setting account-setting--row">
             <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
             <span className="account-setting__text">
               <strong>Sound effects</strong>
@@ -71,16 +93,16 @@ export function Settings() {
               onChange={() => dispatch({ type: "mute" })}
               aria-label="Sound effects"
             />
-          </label>
-          <button className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "downloads" })}>
+          </motion.label>
+          <motion.button variants={listItem} whileTap={press} className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "downloads" })}>
             <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
             <span className="account-setting__text">
               <strong>Manage downloads</strong>
               <span>{downloadsLine}</span>
             </span>
             <Icon name="next" size={18} />
-          </button>
-        </section>
+          </motion.button>
+        </motion.section>
 
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
       </div>

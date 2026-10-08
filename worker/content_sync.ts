@@ -1,4 +1,6 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
+import { createAnalyticsSink, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
+import { REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 
 export const CONTENT_SYNC_SCHEMA = "parkdex.content-sync/v1" as const;
 const CDN_ORIGIN = "https://kip-assets.parkdex.app";
@@ -53,7 +55,11 @@ type SyncRepository = {
 type HandlerOptions = {
   env?: Record<string, string | undefined>;
   repository?: SyncRepository;
+  /** Keeps the function alive for the analytics write after the response (Vercel waitUntil). */
+  waitUntil?: (promise: Promise<unknown>) => void;
+  analytics?: () => AnalyticsSink | null;
 };
+type NodeHandler = (request: RequestLike, response: ResponseLike) => Promise<void>;
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -86,7 +92,7 @@ function allowedOrigins(env: Record<string, string | undefined>): Set<string> {
 function setCors(request: RequestLike, response: ResponseLike, env: Record<string, string | undefined>) {
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Accept");
+  response.setHeader("Access-Control-Allow-Headers", ["Accept", ...REQUEST_CONTEXT_HEADERS].join(", "));
   response.setHeader("Access-Control-Expose-Headers", "Cache-Control");
   const origin = header(request, "origin");
   if (origin && allowedOrigins(env).has(origin)) response.setHeader("Access-Control-Allow-Origin", origin);
@@ -384,7 +390,7 @@ function numericDatabaseValue(value: unknown, label: string): number {
 }
 
 function createNeonRepository(databaseUrl: string): SyncRepository {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
     async snapshot() {
       const results = await sql.transaction([
@@ -547,9 +553,22 @@ async function repositoryFor(options: HandlerOptions): Promise<SyncRepository> {
   return createNeonRepository(databaseUrl);
 }
 
+/** Run a content handler inside a request analytics context, as the main API router does. */
+function instrumented(options: HandlerOptions, path: string, handler: NodeHandler): NodeHandler {
+  const env = options.env ?? process.env;
+  return (request, response) => withRequestAnalytics({
+    method: request.method,
+    path,
+    header: (name) => header(request, name) ?? null,
+    env,
+    sink: () => options.analytics ? options.analytics() : createAnalyticsSink(env),
+    waitUntil: options.waitUntil,
+  }, () => handler(request, response));
+}
+
 function createHandler(options: HandlerOptions, operation: "snapshot" | "changes") {
   const env = options.env ?? process.env;
-  return async (request: RequestLike, response: ResponseLike): Promise<void> => {
+  return instrumented(options, `/api/content/${operation}`, async (request: RequestLike, response: ResponseLike): Promise<void> => {
     setCors(request, response, env);
     const method = (request.method ?? "GET").toUpperCase();
     if (method === "OPTIONS") {
@@ -626,7 +645,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
     } catch (error) {
       sendFailure(response, error, method === "HEAD");
     }
-  };
+  });
 }
 
 export function createSnapshotHandler(options: HandlerOptions = {}) {
@@ -639,7 +658,7 @@ export function createChangesHandler(options: HandlerOptions = {}) {
 
 export function createSceneHandler(options: HandlerOptions = {}) {
   const env = options.env ?? process.env;
-  return async (request: RequestLike, response: ResponseLike): Promise<void> => {
+  return instrumented(options, "/api/content/scene", async (request: RequestLike, response: ResponseLike): Promise<void> => {
     setCors(request, response, env);
     const method = (request.method ?? "GET").toUpperCase();
     if (method === "OPTIONS") {
@@ -675,5 +694,5 @@ export function createSceneHandler(options: HandlerOptions = {}) {
     } catch (error) {
       sendFailure(response, error, method === "HEAD");
     }
-  };
+  });
 }

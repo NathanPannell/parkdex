@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { Network } from "@capacitor/network";
 import { InteractionOutbox } from "./outbox";
 import { resolveUserDataApiOrigin } from "../userDataDestination";
+import { requestContextHeaders } from "../requestContext";
 import type {
   InteractionBase,
   InteractionEntryPoint,
@@ -226,7 +227,7 @@ export class InteractionClient {
     try {
       const response = await this.fetcher(`${apiBaseUrl}/api/interactions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...requestContextHeaders() },
         credentials: "omit",
         cache: "no-store",
         redirect: "error",

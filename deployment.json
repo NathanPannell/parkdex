@@ -24,7 +24,8 @@
   "optionalMigrationPaths": [
     "database/migrations/accounts_001_init.sql",
     "database/migrations/progress_001_init.sql",
-    "database/migrations/interactions_001_init.sql"
+    "database/migrations/interactions_001_init.sql",
+    "database/migrations/interactions_002_db_events.sql"
   ],
   "independentMigrationPaths": [
     "database/migrations/app_config_001_init.sql",

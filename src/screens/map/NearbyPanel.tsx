@@ -1,14 +1,14 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "../../components/Badge";
+import { FlagPin } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { formatDistance } from "../../lib/geo";
-import { isLive, RARITY, type Park } from "../../lib/parks";
+import type { Park } from "../../lib/parks";
 import { searchParks } from "../../lib/parkSearch";
-import type { ParkRarityEligibility } from "../../lib/progression";
-import { rarityLockMessage } from "../../lib/rarityUi";
+import { formatFlagAge } from "../../lib/game/flag";
+import type { ParkHolder } from "../../lib/game/visit";
 
-type Item = { park: Park; km: number; eligibility: ParkRarityEligibility; claimed: boolean };
+type Item = { park: Park; km: number; holder: ParkHolder; days: number };
 
 type Props = {
   nearby: Item[];
@@ -64,7 +64,7 @@ export function NearbyPanel({ nearby, all, onSelect }: Props) {
             </motion.label>
           ) : (
             <motion.div key="label" className="nearby__label" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={spring}>
-              <span className="eyebrow">Badges near you</span>
+              <span className="eyebrow">Parks near you</span>
               <motion.button className="nearby__search-open" onClick={() => setSearching(true)} aria-label="Search parks" whileTap={{ scale: 0.88 }}>
                 <Icon name="search" size={16} stroke={2.8} />
               </motion.button>
@@ -88,14 +88,16 @@ export function NearbyPanel({ nearby, all, onSelect }: Props) {
 }
 
 function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSelect: (id: string) => void }) {
-  const { park, km, eligibility, claimed } = item;
-  const status = claimed ? "In your Dex" : eligibility.eligible ? `${formatDistance(km)} away` : eligibility.reason === "unavailable" ? "Checking" : "Locked";
+  const { park, km, holder, days } = item;
+  const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
+  const owner = holder.kind === "mine" ? "Yours" : flag ? `@${flag.handle}` : holder.kind === "empty" ? "No flag" : null;
+  const status = owner ? `${owner} · ${formatDistance(km)}` : `${formatDistance(km)} away`;
   return (
     <motion.button
       layout
-      className={`nearby__card card ${eligibility.eligible || claimed ? "" : "nearby__card--locked"}`}
+      className={`nearby__card card ${holder.kind === "mine" ? "is-mine" : ""}`}
       onClick={() => onSelect(park.id)}
-      aria-label={`${park.name}, ${RARITY[park.rarity].label}. ${claimed || eligibility.eligible ? status : rarityLockMessage(eligibility)}${isLive(park) ? "" : ". Badge art coming soon"}`}
+      aria-label={`${park.name}. ${flag ? `${holder.kind === "mine" ? "Your flag" : `Flag of @${flag.handle}`}, ${formatFlagAge(days)}` : holder.kind === "empty" ? "No flag yet" : "Flag unknown"}. ${formatDistance(km)} away`}
       initial={{ y: 60, opacity: 0, rotate: 4 }}
       animate={{ y: 0, opacity: 1, rotate: 0 }}
       exit={{ y: 40, opacity: 0, transition: { duration: 0.15 } }}
@@ -103,13 +105,10 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
       whileTap={{ scale: 0.94, rotate: -2 }}
     >
       <span className="nearby__badge">
-        <Badge park={park} size={64} showName={false} state="preview" />
+        <FlagPin seed={flag?.flagSeed ?? null} days={days} size={52} />
       </span>
       <span className="nearby__name">{park.short}</span>
-      <span className="nearby__meta">
-        <i style={{ background: RARITY[park.rarity].ink }} />
-        {status}
-      </span>
+      <span className="nearby__meta">{status}</span>
     </motion.button>
   );
 }

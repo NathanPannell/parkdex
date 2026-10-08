@@ -3,6 +3,7 @@ import { Network } from "@capacitor/network";
 import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity, type ContentRequestInit } from "./contracts";
 import { contentChannelOverride } from "../contentChannel";
 import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
+import { withRequestContext } from "../requestContext";
 
 const DEFAULT_API_URL = "https://staging.web.parkdex.app/api/content/current";
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -150,6 +151,8 @@ export async function contentFetch(input: RequestInfo | URL, init?: ContentReque
   const apiOrigin = getContentApiOrigin();
   if (!apiOrigin) throw new Error("The content API is not configured for this environment.");
   assertApprovedContentUrl(url, apiOrigin, CONTENT_CDN_ORIGIN);
+  // Only our API gets the labels; the CDN's CORS rules do not allow extra headers.
+  if (url.origin === apiOrigin) withRequestContext(request.headers);
   if (request.method !== "GET" && request.method !== "HEAD") {
     throw new TypeError("Content transport only permits GET and HEAD requests");
   }

@@ -90,7 +90,7 @@ class AccountReleaseGates(unittest.TestCase):
         for name in self.config["independentMigrationPaths"]:
             self.touch(name)
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
             "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
             "game_001_init.sql",
         ])
@@ -112,7 +112,7 @@ class AccountReleaseGates(unittest.TestCase):
     def test_complete_migrations_keep_foreign_key_order(self):
         self.account_files()
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
         ])
 
     def test_content_sync_markers_are_all_or_none_and_append_only_allowlisted_migrations(self):
@@ -169,6 +169,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/accounts_001_init.sql",
             "database/migrations/progress_001_init.sql",
             "database/migrations/interactions_001_init.sql",
+            "database/migrations/interactions_002_db_events.sql",
             "database/migrations/content_001_sync.sql",
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
@@ -626,6 +627,37 @@ class AccountReleaseGates(unittest.TestCase):
             with self.assertRaises(delivery.DeliveryError):
                 delivery.attest_preview_browser(argparse.Namespace(pr=12, deployment_id="dpl_wrong"))
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
+
+
+class MigrationLockRetry(unittest.TestCase):
+    url = "postgresql://kip:secret@ep-test.us-west-2.aws.neon.tech/parkdex_kip"
+
+    def migrate(self, outcomes):
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(kwargs["env"].get("PGOPTIONS"))
+            outcome = outcomes.pop(0)
+            if outcome:
+                raise delivery.DeliveryError(f"database migration x.sql failed with exit code 3: {outcome}")
+            return ""
+
+        with patch.object(delivery, "run", side_effect=fake_run), \
+             patch.object(delivery, "psql_executable", return_value="psql"):
+            delivery.run_migration(self.url, delivery.ROOT / "x.sql", sleep=lambda seconds: None)
+        return calls
+
+    def test_retries_a_deadlock_then_succeeds_with_a_lock_timeout(self):
+        calls = self.migrate(["ERROR:  deadlock detected", "ERROR:  canceling statement due to lock timeout", None])
+        self.assertEqual(calls, ["-c lock_timeout=5s"] * 3)
+
+    def test_other_errors_fail_immediately(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "syntax error"):
+            self.migrate(["ERROR:  syntax error at or near", None])
+
+    def test_gives_up_after_the_last_attempt(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "deadlock"):
+            self.migrate(["ERROR:  deadlock detected"] * delivery.MIGRATION_ATTEMPTS)
 
 
 if __name__ == "__main__":

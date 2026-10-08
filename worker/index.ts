@@ -8,7 +8,10 @@ import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccoun
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
-import { handleGameRequest, type GameDependencies, type GameEnv } from "./game.js";
+import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
+import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
+import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
+import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 import {
   HttpError,
   readJsonBody,
@@ -29,8 +32,13 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   PUBLIC_APP_URL?: string;
   SESSION_SECRET?: string;
   RELEASE_SHA?: string;
+  /** Local QA only: serves over-the-air bundle pointers instead of the public asset CDN. */
+  APP_BUNDLE_ORIGIN?: string;
   EMAIL_MODE?: "resend" | "disabled" | string;
   ALLOWED_ORIGINS?: string;
+  /** Public PostHog project key. Without it nothing is sent to PostHog. */
+  POSTHOG_PROJECT_KEY?: string;
+  POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
 }
 
@@ -46,6 +54,7 @@ export interface WorkerDependencies {
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
+  analytics?(env: WorkerEnvironment): AnalyticsSink | null;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
@@ -68,6 +77,11 @@ function errorResponse(error: unknown): Response {
     return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
   return json({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+}
+
+/** Game outcomes become analytics events on the request that caused them. */
+function recordGameEvent(event: GameEvent): void {
+  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned });
 }
 
 function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): FeedbackStore {
@@ -259,6 +273,12 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/api/health" && request.method === "GET") return json({ ok: true, releaseSha: env.RELEASE_SHA ?? null });
+  const updateResponse = await handleAppUpdateRequest(request, {
+    json,
+    fetch: (input, init) => (dependencies.fetch ?? globalThis.fetch)(input, init),
+    origin: appBundleOrigin(env.APP_BUNDLE_ORIGIN),
+  });
+  if (updateResponse) return updateResponse;
   const interactionResponse = await handleInteractionRequest(request, env, dependencies.interactions);
   if (interactionResponse) return interactionResponse;
   const retentionResponse = await handleRetentionRequest(request, env, dependencies.interactions);
@@ -288,7 +308,7 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const gameResponse = await handleGameRequest(request, env, {
     account: () => requireAccount(request, env, authDependencies),
     mutation: () => requireAccountMutation(request, env, authDependencies),
-  }, { fetch: dependencies.fetch, now: dependencies.now, ...dependencies.game });
+  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, ...dependencies.game });
   if (gameResponse) return gameResponse;
   // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
   const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
@@ -301,6 +321,10 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   }
   const appConfigResponse = await handleAppConfigRequest(request, {
     json,
+    analytics: () => {
+      const posthog = posthogConfig(env);
+      return posthog ? { posthogKey: posthog.key, posthogHost: posthog.host } : null;
+    },
     store: () => {
       if (dependencies.createAppConfigStore) return dependencies.createAppConfigStore(env);
       if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "App configuration is unavailable.");
@@ -348,7 +372,7 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-credentials", "true");
   headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", "Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256");
+  headers.set("access-control-allow-headers", `Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256, ${REQUEST_CONTEXT_HEADERS.join(", ")}`);
   headers.set("access-control-max-age", "600");
   headers.append("vary", "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -357,21 +381,32 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
-      try {
-        if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
-          return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
-        }
-        const path = new URL(request.url).pathname;
-        if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
-          const response = new Response(null, { status: 204 });
-          return withCors(request, env, response);
-        }
-        return withCors(request, env, await route(request, env, context, dependencies));
-      } catch (error) {
-        return withCors(request, env, errorResponse(error));
-      }
+      return withRequestAnalytics({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        header: (name) => request.headers.get(name),
+        env: env as Record<string, string | undefined>,
+        sink: () => dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env),
+        waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
+      }, () => handleWorkerRequest(request, env, context, dependencies));
     },
   };
+}
+
+async function handleWorkerRequest(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
+  try {
+    if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
+      return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
+    }
+    const path = new URL(request.url).pathname;
+    if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
+      const response = new Response(null, { status: 204 });
+      return withCors(request, env, response);
+    }
+    return withCors(request, env, await route(request, env, context, dependencies));
+  } catch (error) {
+    return withCors(request, env, errorResponse(error));
+  }
 }
 
 const worker = createFeedbackWorker();

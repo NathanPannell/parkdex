@@ -104,3 +104,23 @@ describe("native auth session renewal", () => {
     expect(nativeMocks.activeToken).toBe("old-token");
   });
 });
+
+describe("public account API reads", () => {
+  it("send the analytics request labels like every other account call", async () => {
+    const { fetchAccountApi } = await import("./authClient");
+    const { setRequestBundleId, resetRequestContextForTests } = await import("../requestContext");
+    setRequestBundleId("qa-bundle");
+    const fetchSpy = vi.fn(async () => jsonResponse({ flags: [] }));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await fetchAccountApi("/api/game/flags");
+      const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+      expect(String(url)).toBe("https://staging.web.parkdex.app/api/game/flags");
+      expect(new Headers(init.headers).get("X-Kip-Bundle-Id")).toBe("qa-bundle");
+      expect(init.credentials).toBe("omit");
+    } finally {
+      vi.unstubAllGlobals();
+      resetRequestContextForTests();
+    }
+  });
+});

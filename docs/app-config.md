@@ -9,6 +9,7 @@ Every app build checks in with the production API on launch. The tables live in 
 - **The API pointer and flags are set per build** (`kip_app_config.builds`). Build `0` is the default for every build of a platform; a specific build overrides it, flag by flag. A null pointer on a build's own row keeps the server it was built for.
 - The pointer moves a native build's whole backend, not only content: accounts, backups, feedback, interactions and park content all use `web.parkdex.app` or `staging.web.parkdex.app`. It takes effect on the next launch. When it changes, the app signs the player out of the old server first, because accounts belong to one server; progress saved on the device is kept. Web pages ignore it and always use their own host.
 - Flags are free-form: any name of letters, digits and underscores starting with a letter, up to 64 per build. The server stores and sends them all. Builds keep every flag they receive (`remoteFlag(name)`), and read the ones they know: `rankProgression` (default on; off opens every rarity and hides rank UI) and `parkProposals` (default on; off hides the "Propose a park" button).
+- Responses carry `analytics: { posthogKey, posthogHost }` when the server has `POSTHOG_PROJECT_KEY`, else `null`. The app starts PostHog as soon as it sees a key ([analytics.md](analytics.md)).
 - Responses still carry `contentChannel` (`main` for a production pointer, `staging` for staging), which is all builds 8 and earlier understand. Those builds switch only park content, as before.
 
 ## Operator dashboard
@@ -24,6 +25,7 @@ Players tap the pin button next to feedback on the map, drop a pin (or use their
 - `npm run android:aab` builds a staging build (`.env.field`): content and accounts on staging.
 - `npm run android:aab:production` builds a production build (`.env.production-field`): content and accounts on production.
 - Set `PARKDEX_ANDROID_VERSION_CODE` for each release; that number is the `build` the page refers to.
+- Web bundle updates between Play releases go over the air on the build's channel and never change its version code, so update rules still apply to the native build. See [ota-updates.md](ota-updates.md).
 
 ## Adding a flag
 

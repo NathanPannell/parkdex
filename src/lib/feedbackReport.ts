@@ -4,6 +4,7 @@ import type { FeedbackOrigin, Screen } from "./store";
 import { createFeedbackDraftGeneration, getFeedbackSubmissionAttempt } from "./feedbackDraft";
 import { resolveUserDataApiOrigin } from "./userDataDestination";
 import { apiEnvironment, apiUrl } from "./apiPointer";
+import { requestContextHeaders } from "./requestContext";
 
 export type FeedbackKind = "bug" | "idea" | "general";
 
@@ -49,6 +50,9 @@ const SCREEN_LABEL: Record<Screen, string> = {
   account: "Account & backup",
   settings: "Settings",
   downloads: "Manage downloads",
+  plant: "Plant flag",
+  parks: "Your parks",
+  leaderboard: "Leaderboard",
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.
@@ -186,7 +190,7 @@ export async function submitFeedback(report: FeedbackReport, generation: string)
     try {
       response = await fetch(`${baseUrl}/api/feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...requestContextHeaders() },
         body: JSON.stringify({ ...attempt.report, submissionId: attempt.id }),
         credentials: "omit",
         cache: "no-store",

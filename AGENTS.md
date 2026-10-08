@@ -40,6 +40,7 @@ npm run build
 npm run android:apk         # debug APK (app.parkdex.debug)
 npm run android:aab:production
 npm run local:api           # real API on 127.0.0.1:8787 against loopback PostgreSQL; see docs/local-stack.md
+node scripts/publish-app-bundle.mjs --channel staging --min-native-build <n>   # over-the-air web bundle, dry run (docs/ota-updates.md)
 ```
 
 For signed-in QA without a hosted environment, run `npm run local:api` and then `KIP_LOCAL_API=http://127.0.0.1:8787 npm run dev`. Test accounts come from `scripts/local-stack.seed.json`.
@@ -105,6 +106,7 @@ Signed-in journeys on preview, staging and production hosts need the operator. D
 - Never print, log or commit credentials, database URLs or tokens. Delivery credentials load through the operator's local loader only.
 - Never copy personal data into a preview.
 - Do not rename `kip` identifiers as part of a copy change.
+- API stores query through `database()` from `worker/db.ts`, never `neon()` directly, so every read and write is recorded. Game events go through `emitEvent()`. See `docs/analytics.md`.
 - Put task scratch files under the workspace `.codex/` and remove them when you finish.
 
 ## Learnings
@@ -125,4 +127,5 @@ Read the matching file before you change these areas. Format and how to add one:
 | Badge art retries | `docs/learnings/badge-retry-accounting.md` |
 | Access surveys and product journeys | `docs/learnings/access-fieldwork-wording.md` |
 | Status answers and planning | `docs/learnings/fetch-before-describing-state.md` |
+| Deploy migrations | `docs/learnings/migration-replay-lock-conflicts.md` |
 | Previews for PRs that add a migration | `docs/learnings/preview-new-migrations.md` |

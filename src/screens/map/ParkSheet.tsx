@@ -1,6 +1,7 @@
 import { motion, type PanInfo } from "motion/react";
 import { Badge } from "../../components/Badge";
 import { EarnedBadge } from "../../components/EarnedBadge";
+import { FlagPin } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
 import { boundaryAreaKm2, formatArea } from "../../lib/area";
@@ -9,9 +10,7 @@ import { estimateTrip } from "../../lib/drive";
 import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
-import type { ParkRarityEligibility } from "../../lib/progression";
-import { RarityGuide } from "../../components/RarityGuide";
-import { rarityLockMessage } from "../../lib/rarityUi";
+import type { ParkHolder } from "../../lib/game/visit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -21,12 +20,14 @@ type Props = {
   user: LngLat;
   claim?: Claim;
   inside: boolean;
-  eligibility: ParkRarityEligibility;
-  progressReady: boolean;
+  /** Who holds the park's flag right now. */
+  holder: ParkHolder;
+  flagDays: number;
+  /** Plant, take or visit, or sign in first. */
+  visitLabel: string;
   onClose: () => void;
   onGo: () => void;
   onCheckIn: () => void;
-  onViewCase: () => void;
   onFeedback: () => void;
   entryPoint: "map" | "nearby" | "collection";
 };
@@ -46,7 +47,7 @@ export function parkLocationUrl(park: Park) {
   return park.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, eligibility, progressReady, onClose, onGo, onCheckIn, onViewCase, onFeedback, entryPoint }: Props) {
+export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLabel, onClose, onGo, onCheckIn, onFeedback, entryPoint }: Props) {
   const content = useContent();
   const trip = estimateTrip(user, park, content?.drive);
   const accessUnknown = trip.mode === "unknown";
@@ -56,20 +57,19 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
   const landscape = landscapeOf(park);
   const tint = LANDSCAPE_TINT[landscape];
   const live = isLive(park);
-  const locked = eligibility.reason === "locked" || eligibility.reason === "unsupported-rarity";
+  const holderLine = flagStatus(holder, flagDays);
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
     if (content && !accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
-  // Without a known road route there is nothing to preview in the app, so the
-  // main button goes straight to Google Maps (the stored link, or the park pin).
-  const mapsButton = (
-    <a className="btn btn--block" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" onClick={openDirections}>
-      <Icon name="pin" /> Open in Google Maps
+  // Every park gets the same primary button, the in-app trip. Maps is the secondary action:
+  // driving directions when a road route is known, otherwise the park's location.
+  const mapsButton = accessUnknown ? (
+    <a className="btn btn--paper btn--icon" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" aria-label="Open the park in Google Maps" onClick={openDirections}>
+      <Icon name="pin" />
     </a>
-  );
-  const directionsButton = (
+  ) : (
     <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
       <Icon name="car" />
     </a>
@@ -113,7 +113,7 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
           {isNative ? badge : <Tilt>{badge}</Tilt>}
         </motion.div>
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {claim ? "In your Dex" : eligibility.reason === "unavailable" ? "Checking rarity" : locked ? `${rarity.label} · Locked` : live ? "You can claim this" : "Claimable · art coming soon"}
+          {holder.kind === "mine" ? "Your flag flies here" : holder.kind === "other" ? `@${holder.flag.handle}'s park` : holder.kind === "empty" ? "No flag yet" : "Flags need a connection"}
         </motion.div>
       </div>
 
@@ -130,7 +130,24 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
         <motion.p variants={item} className="park-sheet__meta">
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
-        <RarityGuide rarity={park.rarity} eligibility={eligibility} />
+        <motion.div variants={item} className={`park-sheet__holder is-${holder.kind}`}>
+          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} className="is-waving-pin" />
+          <span>
+            <strong>{holderLine.title}</strong>
+            <em>{holderLine.detail}</em>
+          </span>
+          {holder.kind === "other" && flagDays > 0 && (
+            <motion.span
+              className="park-sheet__bounty"
+              initial={{ scale: 0, rotate: -12 }}
+              animate={{ scale: [1, 1.08, 1], rotate: -4 }}
+              transition={{ scale: { duration: 1.6, repeat: Infinity, delay: 0.6 }, rotate: { type: "spring", stiffness: 500, damping: 14 } }}
+              aria-label={`Worth ${flagDays} points`}
+            >
+              +{flagDays}
+            </motion.span>
+          )}
+        </motion.div>
 
         <motion.div variants={item} className="stats">
           <div className="stat">
@@ -159,44 +176,33 @@ export function ParkSheet({ park, user, claim, inside, eligibility, progressRead
       </motion.div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
-        {claim ? (
-          <button className="btn btn--block btn--ink" onClick={onViewCase}>
-            <Icon name="case" /> View in your Dex
-          </button>
-        ) : !eligibility.eligible ? (
-          eligibility.reason === "unavailable" || !progressReady ? (
-            <button className="btn btn--block btn--paper" disabled>
-              Checking saved progress
-            </button>
-          ) : inside ? (
-            <button className="btn btn--block btn--paper" disabled aria-label={rarityLockMessage(eligibility)}>
-              {rarityLockMessage(eligibility)}
-            </button>
-          ) : (
-            accessUnknown ? mapsButton : (
-              <>
-                <button className="btn btn--block" onClick={onGo}>
-                  <Icon name="route" /> Preview route
-                </button>
-                {directionsButton}
-              </>
-            )
-          )
-        ) : inside ? (
+        {inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
-            <Icon name="camera" /> Check in &amp; claim
+            <Icon name="flag" /> {visitLabel}
           </button>
         ) : (
-          accessUnknown ? mapsButton : (
-            <>
-              <button className="btn btn--block" onClick={onGo}>
-                <Icon name="route" /> Let's go
-              </button>
-              {directionsButton}
-            </>
-          )
+          <>
+            <button className="btn btn--block" onClick={onGo}>
+              <Icon name="route" /> Let's go
+            </button>
+            {mapsButton}
+          </>
         )}
       </motion.div>
     </motion.div>
   );
+}
+
+function flagStatus(holder: ParkHolder, days: number): { title: string; detail: string } {
+  const flown = days === 1 ? "1 day" : `${days} days`;
+  switch (holder.kind) {
+    case "mine":
+      return { title: "Your flag", detail: days < 1 ? "Planted today" : `Flying for ${flown}` };
+    case "other":
+      return { title: `@${holder.flag.handle}`, detail: days < 1 ? "Planted today." : `Flying for ${flown}. Take it for +${days} ${days === 1 ? "point" : "points"}.` };
+    case "empty":
+      return { title: "No flag yet", detail: "Get inside the boundary to plant yours." };
+    case "unknown":
+      return { title: "Flag unknown", detail: "Connect to the internet to see who holds this park." };
+  }
 }
