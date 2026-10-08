@@ -60,58 +60,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
-      - name: Install, check, and build
-        shell: bash
-        run: |
-          python scripts/kip-delivery.py write-release --environment production --sha "$GITHUB_SHA"
-          npm ci
-          npm run typecheck
-          npm test --if-present
-          python -m unittest discover -s scripts -p "test_kip*.py"
-          npm run build
+      - name: Write release identity
+        run: python scripts/kip-delivery.py write-release --environment production --sha "$GITHUB_SHA"
 
-      - name: Verify optional content sync Python assets
-        shell: bash
-        run: |
-          content_markers=(
-            database/migrations/content_001_sync.sql
-            api/content/snapshot.ts
-            api/content/changes.ts
-            api/content/scene.ts
-            scripts/bootstrap-content.py
-            scripts/qa-content-sync.sql
-          )
-          content_present=false
-          for marker in "${content_markers[@]}"; do
-            if test -f "$marker"; then content_present=true; fi
-          done
-          if test "$content_present" = true; then
-            for marker in "${content_markers[@]}"; do test -f "$marker"; done
-            test -f database/001_cloud_content.sql
-            test -f scripts/test_bootstrap_content.py
-            test -f scripts/test_map_only_manifest.py
-            test -f scripts/test_publish_content.py
-            test -f scripts/test_publish_park_update.py
-            test -f database/delivery-test-requirements.txt
-            python -m pip install --disable-pip-version-check -r database/delivery-test-requirements.txt
-            python scripts/test_bootstrap_content.py
-            python scripts/test_map_only_manifest.py
-            python scripts/test_publish_content.py
-            python scripts/test_publish_park_update.py
-            python scripts/test_downshift_park_rarities.py
-          fi
-
-      - name: Verify optional SQL against owned PostgreSQL
+      # Same command as the PR check and the local pre-push check.
+      - name: Release checks
         env:
           PGHOST: 127.0.0.1
           PGPORT: 5432
           PGUSER: kip_qa
           PGPASSWORD: kip_owned_ci_only
           PGDATABASE: kip_qa_ci
-        shell: bash
-        run: |
-          if test -f scripts/qa-content-sync.sql; then python scripts/kip-delivery.py qa-content-sync; fi
-          if test -f scripts/qa-account-sql.mjs; then npm run test:sql; fi
+        run: python scripts/kip-delivery.py ci-checks
 
       - name: Verify the production content channel
         run: python scripts/kip-delivery.py verify-main-content
