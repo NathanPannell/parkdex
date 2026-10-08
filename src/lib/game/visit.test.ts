@@ -4,7 +4,7 @@ import { latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, visitHeadli
 
 const flag = (parkId: string, handle: string): ParkFlag => ({ parkId, handle, flagSeed: `${handle}-seed`, since: "2026-10-01T00:00:00Z" });
 const flags = new Map([["blueberry", flag("blueberry", "sam")], ["beacon", flag("beacon", "robin")]]);
-const me = (player: GameMe["player"]): GameMe => ({ player, score: 0, parks: [], takeovers: [] });
+const me = (player: GameMe["player"]): GameMe => ({ player, score: 0, parks: [], takeovers: [], flagSeed: player?.flagSeed ?? null });
 
 describe("park holder", () => {
   it("tells empty, mine and someone else's parks apart", () => {
