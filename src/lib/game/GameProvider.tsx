@@ -100,7 +100,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!owner) throw new Error("Sign in to pick a handle.");
     const player = await sendHandle(owner, handle);
     if (currentAccount.current === owner) {
-      setMe((current) => ({ ...(current ?? { score: 0, parks: [], takeovers: [] }), player }));
+      setMe((current) => ({ ...(current ?? { score: 0, parks: [], takeovers: [] }), player, flagSeed: player.flagSeed }));
       setStatus("ready");
     }
     return player;

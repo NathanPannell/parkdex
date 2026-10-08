@@ -14,6 +14,8 @@ function saveErrorMessage(error: unknown, handle: string): string {
       return `Someone already has @${handle}. Try another.`;
     case "handle_rejected":
       return "That handle can't be used. Try another.";
+    case "invalid_handle":
+      return "Use 3 to 20 letters, numbers or underscores.";
     case "offline":
       return "You need a connection to pick a handle. Try again when you're back online.";
     case "unauthenticated":
@@ -28,6 +30,8 @@ export function HandleSheet() {
   const game = useGame();
   const request = game.handleRequest;
   const existing = game.me?.player ?? null;
+  // The server sends the account's flag seed before a handle exists, so the flag can show now.
+  const previewSeed = existing?.flagSeed ?? game.me?.flagSeed ?? null;
   const [value, setValue] = useState(existing?.handle ?? "");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -107,10 +111,10 @@ export function HandleSheet() {
               <span className="eyebrow">{existing ? "Your handle" : "Before you plant"}</span>
               <h2 id="handle-title">{existing ? "Change your handle" : "Pick your handle"}</h2>
               <div className="handle-sheet__preview">
-                <Flag seed={existing?.flagSeed ?? null} size={84} label={existing ? `Flag of @${existing.handle}` : undefined} />
+                <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} />
                 <span>
                   <strong>@{handle || "yourname"}</strong>
-                  <em>{existing ? "Your flag stays the same." : "Your flag comes with it."}</em>
+                  <em>{existing ? "Your flag stays the same." : previewSeed ? "This flag comes with it." : "Your flag comes with it."}</em>
                 </span>
               </div>
               <label className="fb-label" htmlFor="handle-input">Handle</label>

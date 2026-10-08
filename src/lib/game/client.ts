@@ -9,7 +9,14 @@ import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
 export type GamePlayer = { handle: string; flagSeed: string };
 export type HeldPark = { parkId: string; since: string; days: number };
 export type Takeover = { parkId: string; byHandle: string; byFlagSeed: string; at: string };
-export type GameMe = { player: GamePlayer | null; score: number; parks: HeldPark[]; takeovers: Takeover[] };
+export type GameMe = {
+  player: GamePlayer | null;
+  score: number;
+  parks: HeldPark[];
+  takeovers: Takeover[];
+  /** The account's flag seed, sent even before a handle exists (additive to the #76 contract). */
+  flagSeed: string | null;
+};
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
 export type VisitResult = {
@@ -26,9 +33,9 @@ export type FlagsResponse = { flags: ParkFlag[]; serverTime: string };
 export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number };
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
-export type GameErrorCode = "handle_taken" | "handle_rejected" | "handle_required" | "invalid_request" | "unauthenticated" | "unavailable" | "offline";
+export type GameErrorCode = "handle_taken" | "handle_rejected" | "handle_required" | "invalid_handle" | "park_not_found" | "visit_id_reused" | "invalid_request" | "unauthenticated" | "unavailable" | "offline";
 
-const KNOWN_CODES = new Set<GameErrorCode>(["handle_taken", "handle_rejected", "handle_required", "invalid_request", "unauthenticated", "unavailable", "offline"]);
+const KNOWN_CODES = new Set<GameErrorCode>(["handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request", "unauthenticated", "unavailable", "offline"]);
 const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "already_today"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -112,6 +119,7 @@ export function parseMe(body: unknown): GameMe {
       const at = text(takeover.at);
       return parkId && byHandle && byFlagSeed && at ? { parkId, byHandle, byFlagSeed, at } : null;
     }),
+    flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
   };
 }
 
@@ -173,6 +181,9 @@ const MESSAGES: Record<GameErrorCode, string> = {
   handle_taken: "Someone already has that handle. Try another.",
   handle_rejected: "That handle can't be used. Try another.",
   handle_required: "Pick a handle before you plant your flag.",
+  invalid_handle: "Use 3 to 20 letters, numbers or underscores.",
+  park_not_found: "Parkdex doesn't know this park yet. Update the app and try again.",
+  visit_id_reused: "That visit was already used for another park. Try again.",
   invalid_request: "Parkdex couldn't use that request.",
   unauthenticated: "Sign in again to keep playing.",
   unavailable: "Parkdex is unavailable right now. Try again shortly.",

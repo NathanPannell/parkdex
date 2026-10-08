@@ -13,7 +13,7 @@ export function GameIdentityCard() {
     <section className="account-card card account-section" aria-labelledby="game-identity-title">
       <span className="eyebrow" id="game-identity-title">Your flag</span>
       <div className="game-identity">
-        <Flag seed={player?.flagSeed ?? null} size={72} label={player ? `Flag of @${player.handle}` : undefined} />
+        <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={72} label={player ? `Flag of @${player.handle}` : undefined} />
         <div className="game-identity__text">
           <strong>{player ? `@${player.handle}` : game.status === "loading" ? "Loading…" : "No handle yet"}</strong>
           <span>

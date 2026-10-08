@@ -68,13 +68,21 @@ describe("player state", () => {
       score: 12,
       parks: [{ parkId: "beacon-hill", since: "2026-10-01T00:00:00Z", days: 6 }],
       takeovers: [{ parkId: "blueberry", byHandle: "sam", byFlagSeed: "def", at: "2026-10-06T00:00:00Z" }],
+      flagSeed: "abc",
     });
     expect(fetchAuthenticated).toHaveBeenCalledWith("/api/game/me", expect.anything(), ACCOUNT);
   });
 
-  it("treats a missing player as no handle yet", async () => {
+  it("treats a missing player as no handle yet, keeping the flag seed if the server sends it", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, { player: null, score: 0, parks: [], takeovers: [] }));
-    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ player: null, score: 0 });
+    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ player: null, score: 0, flagSeed: null });
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { player: null, flagSeed: "early", score: 0, parks: [], takeovers: [] }));
+    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ player: null, flagSeed: "early" });
+  });
+
+  it("reads the server's shape for an invalid handle", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(400, { error: { code: "invalid_handle", message: "x" }, code: "invalid_handle", message: "x" }));
+    await expect(saveHandle(ACCOUNT, "a")).rejects.toMatchObject({ code: "invalid_handle", status: 400 });
   });
 
   it("marks takeovers seen up to a time", async () => {
