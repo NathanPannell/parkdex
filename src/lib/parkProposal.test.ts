@@ -35,6 +35,18 @@ describe("submitParkProposal", () => {
     expect(Object.keys(body.context).sort()).toEqual(["build", "platform", "version"]);
   });
 
+  it("sends the analytics labels with the request", async () => {
+    vi.stubGlobal("__APP_BUILD__", "abc1234");
+    try {
+      const fetcher = vi.fn(async () => new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      await submitParkProposal(proposal, fetcher as unknown as typeof fetch);
+      const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+      expect((init.headers as Record<string, string>)["X-Kip-Bundle-Id"]).toBe("abc1234");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("explains rate limits and server messages", async () => {
     const limited = vi.fn(async () => new Response("{}", { status: 429 }));
     await expect(submitParkProposal(proposal, limited as unknown as typeof fetch)).rejects.toThrow(/a lot of parks/);

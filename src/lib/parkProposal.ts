@@ -1,6 +1,7 @@
 import type { LngLat } from "./geo";
 import { activeAppConfig } from "./appConfig";
 import { feedbackApiOrigin } from "./feedbackReport";
+import { requestContextHeaders } from "./requestContext";
 
 /** A park the player wants added: a pin, a name and an optional rough outline. */
 export type ParkProposal = {
@@ -35,7 +36,7 @@ export async function submitParkProposal(proposal: ParkProposal, fetcher: typeof
   try {
     response = await fetcher(`${origin}/api/park-proposals`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...requestContextHeaders() },
       body: JSON.stringify({
         ...proposal,
         context: { platform: config.platform, version: typeof __APP_VERSION__ === "undefined" ? "unknown" : __APP_VERSION__, build: String(config.build) },

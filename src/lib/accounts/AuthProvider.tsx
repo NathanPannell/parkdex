@@ -11,6 +11,7 @@ import {
   setLastSuccessfulBackupAt,
   setLastCompleteSyncAt,
 } from "./personalStore";
+import { setProductAnalyticsAccount } from "../productAnalytics";
 import { coalesceProgressSync, persistLastCompleteSyncTimestamp, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
 import {
   AuthHttpError,
@@ -591,6 +592,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.phase === "authenticated" && state.account) void syncBackup();
   }, [state.phase, state.account?.id, syncBackup]);
+
+  // Product analytics follows the signed-in account; starting and error phases leave it as is.
+  useEffect(() => {
+    if (state.phase === "authenticated") setProductAnalyticsAccount(state.account?.id ?? null);
+    else if (state.phase === "offline-account") setProductAnalyticsAccount(state.offlineAccountId);
+    else if (state.phase === "guest") setProductAnalyticsAccount(null);
+  }, [state.phase, state.account?.id, state.offlineAccountId]);
 
   useEffect(() => {
     let live = true;
