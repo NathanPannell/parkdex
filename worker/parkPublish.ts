@@ -135,6 +135,8 @@ function acceptStatement(proposalId: string, parkId: string) {
  * reported as done, and anything else already using the id blocks publication.
  */
 export async function publishProposalPark(db: SqlRunner, park: PublishablePark, proposalId: string): Promise<PublishOutcome> {
+  // Claim backups reject a park with an empty region, name or blurb, so never publish one.
+  if (![park.name, park.short, park.region, park.blurb].every((text) => text.trim().length > 0)) throw new Error("park_incomplete");
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const { draft, live } = await draftState(db, park.id);
     const ours = draft?.proposal_id === proposalId;

@@ -58,6 +58,7 @@ class FakeSql implements SqlRunner {
   parks = new Set<string>();
   accepted = new Map<string, string>();
   transactions: { text: string; params: unknown[] }[][] = [];
+  inserted: unknown[][] = [];
   failTransaction: Error | null = null;
 
   async query(text: string, params: unknown[] = []) {
@@ -68,6 +69,7 @@ class FakeSql implements SqlRunner {
     }
     if (text.includes("INSERT INTO kip_park_drafts.drafts")) {
       if (this.drafts.has(id) || this.parks.has(id)) return [];
+      this.inserted.push(params);
       const source = JSON.parse(String(params[1])) as { proposal: { id: string } };
       const draft = { status: "draft", updated_at: "2026-10-07T12:00:01.234Z", proposal_id: source.proposal.id };
       this.drafts.set(id, draft);
@@ -263,6 +265,31 @@ test("park fields use installed-build enum values, a stable id and seed, and no 
   assert.equal(categoryFor({ name: "Thetis Lake Regional Park", tags: { boundary: "protected_area" } }), "regional");
   assert.equal(categoryFor({ name: "Goldstream Provincial Park", tags: { leisure: "park" } }), "provincial");
   assert.equal(categoryFor({ name: null, tags: { leisure: "nature_reserve" } }), "community");
+});
+
+test("a published park never has an empty region, even when the nearest park has none", async () => {
+  const { store, deps } = setup();
+  // Like proposed-bell-park-2f66 on staging: a nearby park whose region was left empty.
+  store.nearby = [
+    { id: "proposed-bell-park-2f66", name: "Bell Park", region: "  ", lat: 48.45, lng: -123.35, boundary: null },
+    { id: "regional-thetis-lake", name: "Thetis Lake", region: "Capital Region", lat: 48.47, lng: -123.46, boundary: null },
+  ];
+  assert.equal((await reviewProposal(PROPOSAL, deps)).decision, "approved");
+  assert.equal(store.db.inserted[0][7], "Capital Region");
+
+  const alone = setup();
+  alone.store.nearby = [{ id: "proposed-bell-park-2f66", name: "Bell Park", region: "", lat: 48.45, lng: -123.35, boundary: null }];
+  assert.equal((await reviewProposal(PROPOSAL, alone.deps)).decision, "approved");
+  assert.equal(alone.store.db.inserted[0][7], "British Columbia");
+
+  for (const region of ["", "   ", "\u0007\u0008"]) {
+    const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, region, PROPOSAL.point);
+    assert.equal(park.region, "British Columbia", JSON.stringify(region));
+  }
+  const db = new FakeSql();
+  const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
+  await assert.rejects(publishProposalPark(db, { ...park, region: " " }, PROPOSAL.id), /park_incomplete/);
+  assert.equal(db.inserted.length, 0);
 });
 
 test("decide() approves only when every answer clears the threshold", () => {
