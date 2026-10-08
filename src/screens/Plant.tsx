@@ -142,8 +142,9 @@ export function Plant() {
   const won = result && (result.outcome === "planted" || result.outcome === "took");
   const flying: { seed: string; days: number; key: string } | null = won && me
     ? { seed: me.flagSeed, days: 0, key: "mine" }
-    : result && me && (result.outcome === "held" || result.outcome === "already_today")
+    : result && me && result.outcome === "held"
       ? { seed: me.flagSeed, days: result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : beforeDays, key: "mine" }
+      // A second visit today changes nothing, so whoever held the park still does.
       : before
         ? { seed: before.flagSeed, days: beforeDays, key: "before" }
         : null;
