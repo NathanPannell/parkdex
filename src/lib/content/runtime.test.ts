@@ -1847,6 +1847,70 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`));
   });
 
+  async function catalogueRelease(revision: number, parks: TestSyncPark[]) {
+    const json = (value: unknown) => toBytes(JSON.stringify(value));
+    const features = parks.map((park, index) => ({
+      type: "Feature",
+      properties: { id: park.id, biome: park.biome },
+      geometry: { type: "MultiPolygon", coordinates: [[[[index, 0], [index + 1, 0], [index + 1, 1], [index, 0]]]] },
+    }));
+    const chunkBytes = [json({ schema: "parkdex.content-boundaries/v1", features: features.slice(0, 1) }), json({ schema: "parkdex.content-boundaries/v1", features: features.slice(1) })];
+    const boundaryChunks = await Promise.all(chunkBytes.map(async (bytes, index) => ({
+      path: `catalogue/boundaries/00${index}.json`, sha256: await sha256Hex(bytes), byte_size: bytes.byteLength,
+      parkIds: (index === 0 ? parks.slice(0, 1) : parks.slice(1)).map((park) => park.id), bbox: [0, 0, 1, 1],
+    })));
+    const indexBytes = json({
+      schema: "parkdex.content-catalogue/v1", revision, parks,
+      drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: Object.fromEntries(parks.map((park) => [park.id, { drive: [null], walkM: 0 }])) },
+      assets: [], map: null, boundaryChunks,
+    });
+    const version = await sha256Hex(indexBytes);
+    const base = `https://kip-assets.parkdex.app/releases/${version}/`;
+    const files = new Map<string, ArrayBuffer>([[`${base}catalogue/index.json`, indexBytes]]);
+    boundaryChunks.forEach((chunk, index) => files.set(`${base}${chunk.path}`, chunkBytes[index]!));
+    const pointer = {
+      schema: "parkdex.content-sync/v1", revision,
+      catalogue: { schema: "parkdex.content-catalogue/v1", version, indexUrl: `${base}catalogue/index.json`, indexSha256: version, indexBytes: indexBytes.byteLength, parkCount: parks.length },
+    };
+    return { pointer, files, base, boundaryChunks };
+  }
+
+  it("loads the whole catalogue from a CDN release when the snapshot API names one, then applies later changes", async () => {
+    const first = await makeRelease("a".repeat(64), 1, "municipal-cdn-one", "scene-cdn-one");
+    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-two", name: "Two", short: "Two", scene: null }];
+    const { pointer, files } = await catalogueRelease(7, parks);
+    const renamed = { ...parks[1]!, name: "Two renamed" };
+    const deltas = new Map<number, unknown>([[7, {
+      schema: "parkdex.content-sync/v1", fromRevision: 7, throughRevision: 8, headRevision: 8, hasMore: false,
+      batches: [{ revision: 8, changes: [{ entity: "park", op: "upsert", id: renamed.id, value: renamed }] }],
+    }]]);
+    const server = contentSyncServer(pointer as unknown as ReturnType<typeof contentSyncSnapshot>, deltas, new Map(), files);
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: false }));
+    await runtime.start();
+
+    const snapshot = runtime.getStatus().snapshot;
+    expect(runtime.getStatus().error).toBeNull();
+    expect(snapshot?.parks.map((park) => park.id)).toEqual(["municipal-cdn-one", "provincial-cdn-two"]);
+    expect(snapshot?.parkById.get("provincial-cdn-two")?.name).toBe("Two renamed");
+    expect(snapshot?.boundaries.features).toHaveLength(2);
+    expect(server.calls.filter((url) => url.includes("/catalogue/"))).toHaveLength(3);
+  });
+
+  it("does not commit a CDN catalogue whose chunk fails its hash", async () => {
+    const first = await makeRelease("b".repeat(64), 1, "municipal-cdn-bad", "scene-cdn-bad");
+    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-bad-two", scene: null }];
+    const { pointer, files, base, boundaryChunks } = await catalogueRelease(3, parks);
+    files.set(`${base}${boundaryChunks[1]!.path}`, toBytes("tampered"));
+    const store = new MemoryContentStore();
+    const server = contentSyncServer(pointer as unknown as ReturnType<typeof contentSyncSnapshot>, new Map(), new Map(), files);
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+
+    expect(runtime.getStatus().snapshot).toBeNull();
+    expect(runtime.getStatus().error).toMatch(/byte length|SHA-256/);
+    await expect(store.getSyncState("staging")).resolves.toBeNull();
+  });
+
   it("fetches no badge art near the visitor or for claims when the build does not show it", async () => {
     const release = await makeRelease("f".repeat(64), 1, "municipal-hidden-art-park", "scene-hidden-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-hidden-art.webp")!;

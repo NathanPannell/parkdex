@@ -3,10 +3,10 @@
 
 The bundle selects every legacy web Parkdex park that is not already in the
 staging or production catalogue, keeps its complete displayed geometry and
-source grouping, compares every park by stable ID, and writes importer inputs
-in two phases. Phase 1 (Vancouver Island and the Gulf Islands) fits the
-content sync response limit. Phase 2 (the rest of BC) does not yet; see the
-bundle README.
+source grouping, compares every park by stable ID, and writes importer inputs.
+Every new park gets content reader floor 3: builds installed today keep their
+small API snapshot, and newer builds load the whole catalogue from a CDN
+release (docs/content-catalogue.md).
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import re
 import sys
 from typing import Any
 
+import content_catalogue
 import import_legacy_parks as importer
 
 SCHEMA = "parkdex.legacy-bc-import-bundle.v1"
@@ -38,10 +39,10 @@ EXPECTED_LEGACY_PLACES = 1656
 # Islands are geographic check-offs in the legacy app, not parks, and no
 # installed build accepts an island category.
 EXCLUDED_CATEGORY = "island"
-# Phase 1 is where the Victoria field test plays; it keeps the full snapshot
-# under the 4 MiB content sync limit that installed builds enforce.
-PHASE_1_REGIONS = ("Southern Vancouver Island",)
-PHASE_1_EXTRA_IDS = ("national-gulf-islands-national-park-reserve", "national-pacific-rim-national-park-reserve")
+# Older app builds never receive the new parks; see content_004_catalogue_release.sql.
+MINIMUM_READER = 3
+BOUNDARIES_FILE = "boundaries.geojson.gz"
+MAX_CHUNK_BYTES = 1024 * 1024
 MAX_SYNC_RESPONSE_BYTES = 4 * 1024 * 1024
 # Current readers (reader=2) also receive googleMapsUrl and trailhead fields.
 # Measured on staging revision 158: 1,752,260 bytes at reader 2 against
@@ -396,7 +397,76 @@ def existing_comparison(legacy_geometry: dict[str, Any], target_feature: dict[st
     }
 
 
-def build_bundle(bundle_dir: Path, include_phase_2_boundaries: bool = False) -> dict[str, Any]:
+def access_fields(park: dict[str, Any]) -> dict[str, Any]:
+    """The reader 3 park shape; staging rev 158 was fetched at reader 1 without these fields."""
+    return {**park, "googleMapsUrl": park.get("googleMapsUrl"), "trailheadLat": park.get("trailheadLat"), "trailheadLng": park.get("trailheadLng")}
+
+
+def release_size(snapshot: dict[str, Any], additions: list[tuple[list, list, dict]]) -> dict[str, Any]:
+    """Build the CDN catalogue release a database in this state would publish, and measure it."""
+    parks = [access_fields(park) for park in snapshot["parks"]] + [access_fields(park) for group in additions for park in group[0]]
+    features = snapshot["boundaries"]["features"] + [feature for group in additions for feature in group[1]]
+    drive = {**snapshot["drive"]["parks"], **{key: value for group in additions for key, value in group[2].items()}}
+    full = {**snapshot, "parks": sorted(parks, key=lambda park: park["id"]),
+            "boundaries": {"type": "FeatureCollection", "features": sorted(features, key=lambda feature: feature["properties"]["id"])},
+            "drive": {"hubs": snapshot["drive"]["hubs"], "parks": dict(sorted(drive.items()))}}
+    release = content_catalogue.build_release(full)
+    sizes = [item["byte_size"] for item in release["manifest"]["files"][1:]]
+    return {
+        "parks": len(parks),
+        "indexBytes": release["pointer"]["indexBytes"],
+        "chunkCount": len(sizes),
+        "chunkBytesTotal": sum(sizes),
+        "largestChunkBytes": max(sizes),
+        "smallestChunkBytes": min(sizes),
+    }
+
+
+def legacy_size(snapshot: dict[str, Any], additions: list[tuple[list, list, dict]], staging_parks: int) -> dict[str, Any]:
+    parks = [park for group in additions for park in group[0]]
+    features = [feature for group in additions for feature in group[1]]
+    drive = {key: value for group in additions for key, value in group[2].items()}
+    size = projected_snapshot_bytes(snapshot, parks, features, drive)
+    # Production has no researched map links yet, so the staging figure is an upper bound.
+    reader_2 = size + STAGING_READER_2_EXTRA_BYTES + READER_2_NULL_FIELDS_BYTES * (len(snapshot["parks"]) + len(parks) - staging_parks)
+    return {
+        "parks": len(snapshot["parks"]) + len(parks),
+        "snapshotBytes": size,
+        "reader2SnapshotBytesEstimate": reader_2,
+        "headroomBytes": MAX_SYNC_RESPONSE_BYTES - max(size, reader_2),
+    }
+
+
+def size_projections(raw, staging, production, wire, selected, hub_count) -> dict[str, Any]:
+    new = wire_records([wire[park_id] for park_id in selected], hub_count)
+    island = island_projection(raw, hub_count)
+    return {
+        "limitBytes": MAX_SYNC_RESPONSE_BYTES,
+        # Readers 1 and 2 never receive the new parks, so their snapshot does not grow.
+        "legacySnapshot": {
+            "staging": legacy_size(staging, [], len(staging["parks"])),
+            "productionAfterIslandBundle": legacy_size(production, [island], len(staging["parks"])),
+        },
+        "catalogueRelease": {
+            "staging": release_size(staging, [new]),
+            "productionAfterIslandBundle": release_size(production, [island, new]),
+        },
+        "importChangeBatchBytes": compact_size([{"entity": kind, "op": "upsert", "id": park_id, "value": value}
+                                                for park_id, park, feature in (wire[item] for item in selected)
+                                                for kind, value in (("park", park), ("boundary", feature), ("drive", {"drive": [None] * hub_count, "walkM": 0}))]),
+    }
+
+
+def check_projections(projections: dict[str, Any]) -> None:
+    for label, entry in projections["legacySnapshot"].items():
+        if entry["headroomBytes"] < MIN_SNAPSHOT_HEADROOM_BYTES:
+            raise importer.ParkImportError(f"The {label} legacy snapshot leaves too little content sync headroom")
+    for label, entry in projections["catalogueRelease"].items():
+        if entry["indexBytes"] > MAX_SYNC_RESPONSE_BYTES - MIN_SNAPSHOT_HEADROOM_BYTES or entry["largestChunkBytes"] > MAX_CHUNK_BYTES:
+            raise importer.ParkImportError(f"The {label} catalogue release has a file that is too large")
+
+
+def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     raw = read_sources(bundle_dir)
     places_value = importer.parse_json(raw["legacy-places.json"], "legacy places")
     places_list = places_value["places"]
@@ -436,9 +506,6 @@ def build_bundle(bundle_dir: Path, include_phase_2_boundaries: bool = False) -> 
     overlap_report = overlaps({park_id: normalized[park_id] for park_id in candidates}, existing_features)
     duplicates = {item["newId"] for item in overlap_report if item["duplicate"]}
     selected = [park_id for park_id in candidates if park_id not in duplicates]
-    phase_1 = [park_id for park_id in selected if places[park_id]["region"] in PHASE_1_REGIONS or park_id in PHASE_1_EXTRA_IDS]
-    phase_1_set = set(phase_1)
-    phase_2 = [park_id for park_id in selected if park_id not in phase_1_set]
 
     records = importer.parse_boundary_source({"type": "FeatureCollection", "features": [normalized[park_id] for park_id in selected]})
     reviews: dict[str, dict[str, Any]] = {}
@@ -451,23 +518,18 @@ def build_bundle(bundle_dir: Path, include_phase_2_boundaries: bool = False) -> 
         feature = {"type": "Feature", "properties": {"id": park_id, "biome": park["biome"]}, "geometry": records[park_id]["geometry"]}
         wire[park_id] = (park_id, park, feature)
 
-    comparison = comparison_rows(places_list, legacy_features, normalized, records, selected, phase_1_set,
+    comparison = comparison_rows(places_list, legacy_features, normalized, records, set(selected),
                                  staging_ids, production_ids, removed_ids, duplicates, existing_features)
-    projections = size_projections(raw, staging, production, wire, phase_1, phase_2, hub_count)
-    if projections["staging"]["phase1"]["headroomBytes"] < MIN_SNAPSHOT_HEADROOM_BYTES:
-        raise importer.ParkImportError("Phase 1 leaves too little content sync headroom on staging")
-    if projections["production"]["islandThenPhase1"]["headroomBytes"] < MIN_SNAPSHOT_HEADROOM_BYTES:
-        raise importer.ParkImportError("Phase 1 leaves too little content sync headroom on production")
+    projections = size_projections(raw, staging, production, wire, selected, hub_count)
+    check_projections(projections)
 
     selection = {
-        "schema": "parkdex.legacy-bc-import-selection.v1",
+        "schema": "parkdex.legacy-bc-import-selection.v2",
         "legacyPlaceCount": len(places),
         "candidateCount": len(candidates),
         "selectedCount": len(selected),
-        "phases": {
-            "1": {"scope": "Vancouver Island and the Gulf Islands (legacy region Southern Vancouver Island, plus the Gulf Islands and Pacific Rim national park reserves)", "count": len(phase_1), "status": "ready"},
-            "2": {"scope": "The rest of British Columbia", "count": len(phase_2), "status": "blocked-by-content-sync-size"},
-        },
+        "minimumReader": MINIMUM_READER,
+        "delivery": "Every new park gets reader floor 3: readers 1 and 2 keep today's snapshot, and reader 3 loads the whole catalogue from a CDN release.",
         "excluded": {
             "islands": {"reason": "Legacy island check-offs are not parks, and installed builds reject an island category.", "ids": sorted(park_id for park_id in places if places[park_id]["category"] == EXCLUDED_CATEGORY)},
             "operatorRemovals": {"reason": removals["note"], "ids": sorted(removed_ids)},
@@ -477,15 +539,15 @@ def build_bundle(bundle_dir: Path, include_phase_2_boundaries: bool = False) -> 
         },
     }
     sources = {park_id: normalized[park_id] for park_id in selected}
-    outputs = write_outputs(bundle_dir, places, selected, phase_1, phase_2, reviews, sources, selection, comparison,
-                            normalization_reports, overlap_report, include_phase_2_boundaries)
-    phase_2_boundaries = boundary_bytes(sources, phase_2)
+    outputs, boundaries_raw = write_outputs(bundle_dir, places, selected, reviews, sources, selection, comparison,
+                                            normalization_reports, overlap_report)
     manifest = {
         "schema": SCHEMA,
         "sources": {name: {"sha256": sha256(data), "bytes": len(data)} for name, data in raw.items()},
         "outputs": {name: {"sha256": sha256(data), "bytes": len(data)} for name, data in outputs.items()},
-        "phase2BoundariesNotCommitted": {"file": "phase-2/boundaries.geojson", "sha256": sha256(phase_2_boundaries), "bytes": len(phase_2_boundaries)},
-        "counts": summary_counts(places, selected, phase_1, phase_2, reviews, records, normalization_reports, comparison, duplicates),
+        # The gzip bytes can differ between zlib builds; the decompressed bytes cannot.
+        "boundaries": {"file": BOUNDARIES_FILE, "decompressedSha256": sha256(boundaries_raw), "decompressedBytes": len(boundaries_raw)},
+        "counts": summary_counts(places, selected, reviews, records, normalization_reports, comparison, duplicates),
         "contentSyncProjection": projections,
         "presentationRules": {
             "short": "Legacy name without a trailing park-type phrase such as Park, Regional Park or National Park Reserve.",
@@ -504,17 +566,15 @@ def build_bundle(bundle_dir: Path, include_phase_2_boundaries: bool = False) -> 
     return {
         "bundleDir": str(bundle_dir.resolve()),
         "selected": len(selected),
-        "phase1": len(phase_1),
-        "phase2": len(phase_2),
         "manifestSha256": sha256(manifest_raw),
         "outputs": {name: sha256(data) for name, data in outputs.items()},
+        "boundariesDecompressedSha256": sha256(boundaries_raw),
         "contentSyncProjection": projections,
     }
 
 
-def comparison_rows(places_list, legacy_features, normalized, records, selected, phase_1_set, staging_ids,
+def comparison_rows(places_list, legacy_features, normalized, records, selected_set, staging_ids,
                     production_ids, removed_ids, duplicates, existing_features) -> list[dict[str, Any]]:
-    selected_set = set(selected)
     rows: list[dict[str, Any]] = []
     for place in places_list:
         park_id = place["id"]
@@ -536,7 +596,7 @@ def comparison_rows(places_list, legacy_features, normalized, records, selected,
             output = records[park_id]["geometry"]
             output_counts = counts(output)
             row.update({
-                "status": "new-phase-1" if park_id in phase_1_set else "new-phase-2",
+                "status": "new",
                 "outputSourceFeatureIds": [str(item) for item in records[park_id]["sourceFeatureIds"]],
                 "outputCounts": output_counts,
                 "polygonsMatch": output_counts["polygons"] == row["sourceCounts"]["polygons"],
@@ -556,57 +616,20 @@ def comparison_rows(places_list, legacy_features, normalized, records, selected,
     return rows
 
 
-def size_projections(raw, staging, production, wire, phase_1, phase_2, hub_count) -> dict[str, Any]:
-    def entry(snapshot, adds):
-        parks = [record for group in adds for record in group[0]]
-        features = [record for group in adds for record in group[1]]
-        drive = {key: value for group in adds for key, value in group[2].items()}
-        size = projected_snapshot_bytes(snapshot, parks, features, drive)
-        # Production has no researched map links yet, so the staging figure is an upper bound.
-        reader_2 = size + STAGING_READER_2_EXTRA_BYTES + READER_2_NULL_FIELDS_BYTES * (len(snapshot["parks"]) + len(parks) - len(staging["parks"]))
-        return {
-            "parks": len(snapshot["parks"]) + len(parks),
-            "snapshotBytes": size,
-            "reader2SnapshotBytesEstimate": reader_2,
-            "headroomBytes": MAX_SYNC_RESPONSE_BYTES - max(size, reader_2),
-        }
-
-    first = wire_records([wire[park_id] for park_id in phase_1], hub_count)
-    second = wire_records([wire[park_id] for park_id in phase_2], hub_count)
-    island = island_projection(raw, hub_count)
-    return {
-        "limitBytes": MAX_SYNC_RESPONSE_BYTES,
-        "staging": {
-            "current": entry(staging, []),
-            "phase1": entry(staging, [first]),
-            "phase1And2": entry(staging, [first, second]),
-        },
-        "production": {
-            "current": entry(production, []),
-            "islandThenPhase1": entry(production, [island, first]),
-            "islandThenPhase1And2": entry(production, [island, first, second]),
-        },
-        "phase1ChangeBatchBytes": compact_size([{"entity": kind, "op": "upsert", "id": park_id, "value": value}
-                                                for park_id, park, feature in (wire[item] for item in phase_1)
-                                                for kind, value in (("park", park), ("boundary", feature), ("drive", {"drive": [None] * hub_count, "walkM": 0}))]),
-    }
-
-
-def summary_counts(places, selected, phase_1, phase_2, reviews, records, normalization_reports, comparison, duplicates) -> dict[str, Any]:
+def summary_counts(places, selected, reviews, records, normalization_reports, comparison, duplicates) -> dict[str, Any]:
     def by(field_values):
         result: dict[str, int] = {}
         for value in field_values:
             result[value] = result.get(value, 0) + 1
         return dict(sorted(result.items()))
 
-    new_rows = [row for row in comparison if row["status"].startswith("new-")]
+    new_rows = [row for row in comparison if row["status"] == "new"]
     existing_rows = [row for row in comparison if row["status"].startswith("existing-")]
     return {
         "selected": len(selected),
-        "phase1": len(phase_1),
-        "phase2": len(phase_2),
         "duplicatesExcluded": len(duplicates),
-        "categories": {"phase1": by(places[i]["category"] for i in phase_1), "phase2": by(places[i]["category"] for i in phase_2)},
+        "categories": by(places[i]["category"] for i in selected),
+        "regions": by(places[i]["region"] for i in selected),
         "biomes": by(reviews[i]["presentation"]["biome"] for i in selected),
         "normalizedInvalidSources": len(normalization_reports),
         "normalizedSelected": sum(1 for report in normalization_reports if report["parkId"] in records),
@@ -623,48 +646,37 @@ def summary_counts(places, selected, phase_1, phase_2, reviews, records, normali
             "holesMatch": sum(row["existing"].get("holesMatch", False) for row in existing_rows),
             "sameArea": sum(row["existing"].get("symmetricDifferenceRatio", 1) < 0.001 for row in existing_rows),
         },
-        "geometryTotals": {
-            "phase1": {key: sum(records[i]["summary"][key] for i in phase_1) for key in ("polygonCount", "holeCount", "positionCount")},
-            "phase2": {key: sum(records[i]["summary"][key] for i in phase_2) for key in ("polygonCount", "holeCount", "positionCount")},
-        },
+        "geometryTotals": {key: sum(records[i]["summary"][key] for i in selected) for key in ("polygonCount", "holeCount", "positionCount")},
     }
 
 
-def boundary_bytes(sources: dict[str, dict[str, Any]], ids: list[str]) -> bytes:
-    """Importer input: legacy features with their source properties, invalid rings normalized."""
-    return json_bytes({"type": "FeatureCollection", "features": [sources[park_id] for park_id in ids]}, compact=True)
-
-
-def write_outputs(bundle_dir, places, selected, phase_1, phase_2, reviews, sources, selection, comparison,
-                  normalization_reports, overlap_report, include_phase_2_boundaries) -> dict[str, bytes]:
+def write_outputs(bundle_dir, places, selected, reviews, sources, selection, comparison,
+                  normalization_reports, overlap_report) -> tuple[dict[str, bytes], bytes]:
     files: dict[str, bytes] = {
         "selection.json": json_bytes(selection),
         "catalogue.json": json_bytes([places[park_id] for park_id in selected]),
         "comparison-report.json": json_bytes({"schema": "parkdex.legacy-bc-boundary-comparison.v1", "parks": comparison}),
         "normalization.json": json_bytes({"method": "planar-face-even-odd-ring-union", "parks": normalization_reports}),
         "overlaps.json": json_bytes({"duplicateThreshold": DUPLICATE_OVERLAP, "reportFloor": OVERLAP_REPORT_FLOOR, "overlaps": overlap_report}),
+        "park-ids.txt": ("\n".join(selected) + "\n").encode("utf-8"),
+        "new-park-review.json": json_bytes({"parks": {park_id: reviews[park_id] for park_id in selected}}),
     }
-    for phase, ids in (("phase-1", phase_1), ("phase-2", phase_2)):
-        files[f"{phase}/park-ids.txt"] = ("\n".join(ids) + "\n").encode("utf-8")
-        files[f"{phase}/new-park-review.json"] = json_bytes({"parks": {park_id: reviews[park_id] for park_id in ids}})
-    files["phase-1/boundaries.geojson"] = boundary_bytes(sources, phase_1)
+    # Importer input: legacy features with their source properties, invalid rings normalized.
+    boundaries_raw = json_bytes({"type": "FeatureCollection", "features": [sources[park_id] for park_id in selected]}, compact=True)
     for name, data in files.items():
         path = bundle_dir / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    if include_phase_2_boundaries:
-        (bundle_dir / "phase-2" / "boundaries.geojson").write_bytes(boundary_bytes(sources, phase_2))
-    return files
+    (bundle_dir / BOUNDARIES_FILE).write_bytes(gzip.compress(boundaries_raw, compresslevel=9, mtime=0))
+    return files, boundaries_raw
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle-dir", type=Path, default=DEFAULT_BUNDLE)
-    parser.add_argument("--include-phase-2-boundaries", action="store_true",
-                        help="also write phase-2/boundaries.geojson, which is not committed")
     args = parser.parse_args(argv)
     try:
-        result = build_bundle(args.bundle_dir.resolve(), args.include_phase_2_boundaries)
+        result = build_bundle(args.bundle_dir.resolve())
     except importer.ParkImportError as exc:
         print(f"legacy BC import bundle: {exc}", file=sys.stderr)
         return 2

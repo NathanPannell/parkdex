@@ -40,16 +40,16 @@
   },
   "outputs": {
     "selection.json": {
-      "sha256": "80b59ac2c357a008df9904ded2f59dd9d5e5d3064c9108bb737c4e4c710efc8c",
-      "bytes": 3137
+      "sha256": "02af9c245082c3e198c05af5b738e43dd24c73b417477f6cfc237064c639c9b0",
+      "bytes": 2938
     },
     "catalogue.json": {
       "sha256": "be6150763acb4d6a53bfc724f7252ec5e979bd12bc07c0aaa4d451821a3a8966",
       "bytes": 687403
     },
     "comparison-report.json": {
-      "sha256": "0bcd98c0ca27c25211be16b0efb8db1234ea7de9742b01528f84c94662f9816d",
-      "bytes": 1256482
+      "sha256": "1a6dc18d1b3b7e12d93689075be6a035b09a03b0aa6862af65175ee81c776524",
+      "bytes": 1246298
     },
     "normalization.json": {
       "sha256": "0ed0887b30719dd3dcb0933f464f6c1034226f2ca9652b70bb54d3314adad2b4",
@@ -59,48 +59,43 @@
       "sha256": "79e59e2a29a531c24b1e74ba3b58a9e6d3e44c9ac67ac1c8f825485e12be4ab0",
       "bytes": 742
     },
-    "phase-1/park-ids.txt": {
-      "sha256": "aa121de351f7b236758ddd9cf3038d88694e415d191fe91696bc2d994b239c05",
-      "bytes": 20204
+    "park-ids.txt": {
+      "sha256": "0355cd1f6a07bc9ec68631791c6adf8727232508e0150e882482195b0b0f3136",
+      "bytes": 46117
     },
-    "phase-1/new-park-review.json": {
-      "sha256": "0dcb72b86e99b52ed5951daf169eadcfae4895e4e25ecb3e30ae19878de078a0",
-      "bytes": 273400
-    },
-    "phase-2/park-ids.txt": {
-      "sha256": "6a5a91e529eee54527b72bdb02629daedfad9177f1ffedd56f7d784ddd102218",
-      "bytes": 25913
-    },
-    "phase-2/new-park-review.json": {
-      "sha256": "27c672802f22bea5dcaa411bf9d09e8c94d19481e606fc43687e0ce2803ddc16",
-      "bytes": 353421
-    },
-    "phase-1/boundaries.geojson": {
-      "sha256": "314c0f260eef292b24e3618453d4d6a7a8b4be151bbde25fcd8891d90bd96079",
-      "bytes": 1765845
+    "new-park-review.json": {
+      "sha256": "85a184dc1462ceb8e33c06ca0afbae017aac5dd1ee619a2b1a7a108e970a2d62",
+      "bytes": 626801
     }
   },
-  "phase2BoundariesNotCommitted": {
-    "file": "phase-2/boundaries.geojson",
-    "sha256": "17e6dce0de838a5d104b3ae86d600fdf9e2e9d565bb3a09b672d2b00231daba7",
-    "bytes": 6219063
+  "boundaries": {
+    "file": "boundaries.geojson.gz",
+    "decompressedSha256": "6a9f88a0d37e288ebd63054ed847a64d1b79be65a2607019fe1bad14755d7409",
+    "decompressedBytes": 7984866
   },
   "counts": {
     "selected": 1273,
-    "phase1": 552,
-    "phase2": 721,
     "duplicatesExcluded": 0,
     "categories": {
-      "phase1": {
-        "community": 77,
-        "municipal": 473,
-        "national": 2
-      },
-      "phase2": {
-        "national": 5,
-        "provincial": 559,
-        "regional": 157
-      }
+      "community": 77,
+      "municipal": 473,
+      "national": 7,
+      "provincial": 559,
+      "regional": 157
+    },
+    "regions": {
+      "Cariboo & Central Interior": 91,
+      "Central Coast": 7,
+      "Gulf Islands": 1,
+      "Kootenays": 99,
+      "Nechako": 67,
+      "North Coast & Haida Gwaii": 52,
+      "Northeast": 46,
+      "Northern Vancouver Island": 1,
+      "South Coast": 144,
+      "Southern Vancouver Island": 550,
+      "Thompson & Okanagan": 214,
+      "West Coast": 1
     },
     "biomes": {
       "cave": 2,
@@ -129,61 +124,46 @@
       "sameArea": 331
     },
     "geometryTotals": {
-      "phase1": {
-        "polygonCount": 721,
-        "holeCount": 37,
-        "positionCount": 40100
-      },
-      "phase2": {
-        "polygonCount": 1642,
-        "holeCount": 135,
-        "positionCount": 268009
-      }
+      "polygonCount": 2363,
+      "holeCount": 172,
+      "positionCount": 308109
     }
   },
   "contentSyncProjection": {
     "limitBytes": 4194304,
-    "staging": {
-      "current": {
+    "legacySnapshot": {
+      "staging": {
         "parks": 334,
         "snapshotBytes": 1705889,
         "reader2SnapshotBytesEstimate": 1752260,
         "headroomBytes": 2442044
       },
-      "phase1": {
-        "parks": 886,
-        "snapshotBytes": 3529667,
-        "reader2SnapshotBytesEstimate": 3609710,
-        "headroomBytes": 584594
-      },
-      "phase1And2": {
+      "productionAfterIslandBundle": {
+        "parks": 344,
+        "snapshotBytes": 1641815,
+        "reader2SnapshotBytesEstimate": 1688796,
+        "headroomBytes": 2505508
+      }
+    },
+    "catalogueRelease": {
+      "staging": {
         "parks": 1607,
-        "snapshotBytes": 9892845,
-        "reader2SnapshotBytesEstimate": 10016869,
-        "headroomBytes": -5822565
-      }
-    },
-    "production": {
-      "current": {
-        "parks": 100,
-        "snapshotBytes": 855833,
-        "reader2SnapshotBytesEstimate": 887930,
-        "headroomBytes": 3306374
+        "indexBytes": 921278,
+        "chunkCount": 19,
+        "chunkBytesTotal": 9136957,
+        "largestChunkBytes": 524253,
+        "smallestChunkBytes": 67808
       },
-      "islandThenPhase1": {
-        "parks": 896,
-        "snapshotBytes": 3465593,
-        "reader2SnapshotBytesEstimate": 3546246,
-        "headroomBytes": 648058
-      },
-      "islandThenPhase1And2": {
+      "productionAfterIslandBundle": {
         "parks": 1617,
-        "snapshotBytes": 9828771,
-        "reader2SnapshotBytesEstimate": 9953405,
-        "headroomBytes": -5759101
+        "indexBytes": 875301,
+        "chunkCount": 19,
+        "chunkBytesTotal": 9119843,
+        "largestChunkBytes": 524329,
+        "smallestChunkBytes": 67808
       }
     },
-    "phase1ChangeBatchBytes": 1943675
+    "importChangeBatchBytes": 8462503
   },
   "presentationRules": {
     "short": "Legacy name without a trailing park-type phrase such as Park, Regional Park or National Park Reserve.",

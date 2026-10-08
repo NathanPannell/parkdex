@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -79,7 +80,16 @@ def read_source(locator: str, label: str) -> tuple[bytes, dict[str, str]]:
         raise
     except OSError as exc:
         raise ParkImportError(f"Could not read {label} source ({type(exc).__name__})") from None
-    return raw, {"kind": "file", "locator": str(path), "sha256": sha256(raw)}
+    reference = {"kind": "file", "locator": str(path), "sha256": sha256(raw)}
+    if path.suffix == ".gz":
+        # Large committed inputs are gzipped; the plan pins the file exactly as stored.
+        try:
+            raw = gzip.decompress(raw)
+        except (OSError, EOFError) as exc:
+            raise ParkImportError(f"Could not decompress {label} source ({type(exc).__name__})") from None
+        if len(raw) > MAX_SOURCE_BYTES:
+            raise ParkImportError(f"{label} source exceeds the 128 MiB limit")
+    return raw, reference
 
 
 def parse_json(raw: bytes, label: str) -> Any:

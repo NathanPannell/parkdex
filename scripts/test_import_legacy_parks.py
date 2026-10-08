@@ -283,6 +283,17 @@ class ImportPlanTests(unittest.TestCase):
         self.assertEqual(plan["changes"][0]["targetBeforeHash"], None)
         self.assertEqual(plan["planSha256"], importer.plan_digest(plan))
 
+    def test_gzipped_source_files_are_read_and_pinned_as_stored(self):
+        import gzip
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "boundaries.geojson.gz"
+            stored = gzip.compress(b'{"type":"FeatureCollection","features":[]}', mtime=0)
+            path.write_bytes(stored)
+            raw, reference = importer.read_source(str(path), "boundary")
+            self.assertEqual(raw, b'{"type":"FeatureCollection","features":[]}')
+            self.assertEqual(reference["sha256"], importer.sha256(stored))
+
     def test_park_id_file_lists_ids_in_order_and_rejects_bad_lines(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ids.txt"

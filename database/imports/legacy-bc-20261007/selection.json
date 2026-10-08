@@ -1,20 +1,10 @@
 {
-  "schema": "parkdex.legacy-bc-import-selection.v1",
+  "schema": "parkdex.legacy-bc-import-selection.v2",
   "legacyPlaceCount": 1656,
   "candidateCount": 1273,
   "selectedCount": 1273,
-  "phases": {
-    "1": {
-      "scope": "Vancouver Island and the Gulf Islands (legacy region Southern Vancouver Island, plus the Gulf Islands and Pacific Rim national park reserves)",
-      "count": 552,
-      "status": "ready"
-    },
-    "2": {
-      "scope": "The rest of British Columbia",
-      "count": 721,
-      "status": "blocked-by-content-sync-size"
-    }
-  },
+  "minimumReader": 3,
+  "delivery": "Every new park gets reader floor 3: readers 1 and 2 keep today's snapshot, and reader 3 loads the whole catalogue from a CDN release.",
   "excluded": {
     "islands": {
       "reason": "Legacy island check-offs are not parks, and installed builds reject an island category.",
