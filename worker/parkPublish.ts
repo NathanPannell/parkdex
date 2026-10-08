@@ -1,0 +1,175 @@
+// The operator dashboard owns the draft table and its publish transaction. Instant publishing
+// reuses that exact transaction so a park approved by the model reaches phones the same way.
+import { guessBiome, publishStatements, SHAPE_FOR_CATEGORY, shortName, type SqlRunner } from "../operator/server/drafts.js";
+import type { MultiPolygon, OsmFeature } from "./osmParks.js";
+
+export type { SqlRunner };
+
+export const FALLBACK_REGION = "British Columbia";
+const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+
+/** A stable, unique park id for an OpenStreetMap feature, valid for content and claim backups. */
+export function osmParkId(feature: { type: string; id: number }): string {
+  return `osm-${feature.type}-${feature.id}`;
+}
+
+/** The same 0 to 1,000,000 range the dashboard draws from, derived from the id so retries agree. */
+export function seedFor(id: string): number {
+  let hash = 2166136261;
+  for (const char of id) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  return hash % 1_000_001;
+}
+
+/** Only categories every installed build accepts (docs/content-compatibility.md). */
+export function categoryFor(feature: Pick<OsmFeature, "name" | "tags">): string {
+  const text = `${feature.name ?? ""} ${feature.tags.protection_title ?? ""} ${feature.tags.operator ?? ""}`.toLowerCase();
+  if (feature.tags.boundary === "national_park" || /\bnational park\b|parks canada/.test(text)) return "national";
+  if (/\bprovincial park\b|\becological reserve\b|bc parks/.test(text)) return "provincial";
+  if (/\bregional park\b|\bregional district\b|\bcrd\b/.test(text)) return "regional";
+  if (feature.tags.leisure === "park" || feature.tags.leisure === "garden" || feature.tags.leisure === "dog_park") return "municipal";
+  return "community";
+}
+
+export function biomeFor(feature: Pick<OsmFeature, "tags">, name: string): string {
+  const guess = guessBiome(name);
+  if (guess !== "forest") return guess;
+  if (feature.tags.natural === "wetland") return "marsh";
+  if (feature.tags.natural === "beach" || feature.tags.natural === "coastline") return "coast";
+  return guess;
+}
+
+function blurbFor(feature: Pick<OsmFeature, "tags">): string {
+  if (feature.tags.leisure === "nature_reserve") return "A nature reserve added to Parkdex by a player.";
+  if (feature.tags.leisure === "garden") return "A public garden added to Parkdex by a player.";
+  if (feature.tags.leisure === "common") return "A shared green space added to Parkdex by a player.";
+  if (feature.tags.boundary) return "A protected area added to Parkdex by a player.";
+  return "A local park added to Parkdex by a player.";
+}
+
+function plainText(value: string, max: number): string {
+  return value.replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max).trim();
+}
+
+export interface ProposalProvenance {
+  id: string;
+  name: string;
+  note: string;
+  point: [number, number];
+  createdAt: string;
+}
+
+export interface PublishablePark {
+  id: string;
+  name: string;
+  short: string;
+  category: string;
+  region: string;
+  lat: number;
+  lng: number;
+  biome: string;
+  shape: string;
+  rarity: string;
+  seed: number;
+  blurb: string;
+  geometry: MultiPolygon;
+  source: Record<string, unknown>;
+}
+
+/**
+ * Every field the claim snapshot and account contract validators need: text within limits and
+ * free of control characters, a nonempty region and blurb, known enum values and no scene.
+ */
+export function parkFromProposal(feature: OsmFeature, proposal: ProposalProvenance, region: string, pin: [number, number]): PublishablePark {
+  const id = osmParkId(feature);
+  const name = plainText(feature.name ?? proposal.name, 140) || plainText(proposal.name, 140) || "Unnamed park";
+  const category = categoryFor({ name, tags: feature.tags });
+  return {
+    id,
+    name,
+    short: plainText(shortName(name), 140) || name,
+    category,
+    region: plainText(region, 140) || FALLBACK_REGION,
+    // The proposer's pin is where they stood or tapped, so it makes a sensible marker.
+    lat: pin[1],
+    lng: pin[0],
+    biome: biomeFor(feature, name),
+    shape: SHAPE_FOR_CATEGORY[category] ?? "circle",
+    rarity: "common",
+    seed: seedFor(id),
+    blurb: blurbFor(feature),
+    geometry: feature.geometry,
+    source: { proposal, osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, tags: feature.tags, areaM2: feature.areaM2 } },
+  };
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+export type PublishOutcome =
+  | { status: "published"; parkId: string; revision: number | null }
+  | { status: "already_published"; parkId: string }
+  | { status: "blocked"; reason: "park_exists" | "draft_conflict" };
+
+type DraftState = { status: string; updated_at: unknown; proposal_id: string | null } | undefined;
+
+async function draftState(db: SqlRunner, parkId: string): Promise<{ draft: DraftState; live: boolean }> {
+  const [drafts, parks] = await Promise.all([
+    db.query("SELECT status, updated_at, source->'proposal'->>'id' AS proposal_id FROM kip_park_drafts.drafts WHERE id = $1", [parkId]),
+    db.query("SELECT 1 FROM public.parks WHERE id = $1", [parkId]),
+  ]);
+  return { draft: drafts[0] as DraftState, live: parks.length > 0 };
+}
+
+function acceptStatement(proposalId: string, parkId: string) {
+  return {
+    text: `UPDATE kip_proposals.parks SET status = 'accepted', published_park_id = $2, updated_at = now() WHERE id = $1::uuid`,
+    params: [proposalId, parkId],
+  };
+}
+
+/**
+ * Writes the park as a draft, then publishes it with the dashboard's transaction plus the
+ * proposal's acceptance. Safe to retry: a park already published from this proposal is
+ * reported as done, and anything else already using the id blocks publication.
+ */
+export async function publishProposalPark(db: SqlRunner, park: PublishablePark, proposalId: string): Promise<PublishOutcome> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { draft, live } = await draftState(db, park.id);
+    const ours = draft?.proposal_id === proposalId;
+    if (live) {
+      if (draft?.status === "published" && ours) {
+        await db.query(acceptStatement(proposalId, park.id).text, acceptStatement(proposalId, park.id).params);
+        return { status: "already_published", parkId: park.id };
+      }
+      return { status: "blocked", reason: "park_exists" };
+    }
+    if (draft && !ours) return { status: "blocked", reason: "draft_conflict" };
+    let updatedAt = draft ? new Date(draft.updated_at as string).toISOString() : null;
+    if (!draft) {
+      const sourceSha256 = await sha256Hex(JSON.stringify(park.source));
+      const inserted = await db.query(
+        `INSERT INTO kip_park_drafts.drafts (id, source, source_sha256, geometry, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb)
+         SELECT $1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+         WHERE NOT EXISTS (SELECT 1 FROM public.parks WHERE id = $1)
+         ON CONFLICT (id) DO NOTHING RETURNING updated_at`,
+        [park.id, JSON.stringify(park.source), sourceSha256, JSON.stringify(park.geometry), park.name, park.short, park.category, park.region,
+          park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb],
+      );
+      // Someone else wrote the draft between our read and insert; look again.
+      if (!inserted.length) continue;
+      updatedAt = new Date(inserted[0].updated_at as string).toISOString();
+    }
+    try {
+      const results = await db.transaction([...publishStatements(park.id, updatedAt!, null), acceptStatement(proposalId, park.id)]);
+      const revision = results[results.length - 2]?.[0]?.published_revision;
+      return { status: "published", parkId: park.id, revision: revision === null || revision === undefined ? null : Number(revision) };
+    } catch (error) {
+      // A concurrent retry may have published first; the next pass reports that as done.
+      if (attempt === 0 && error instanceof Error && /park_exists|draft_changed/.test(error.message)) continue;
+      throw error;
+    }
+  }
+  return { status: "blocked", reason: "draft_conflict" };
+}
