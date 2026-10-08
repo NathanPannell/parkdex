@@ -64,7 +64,9 @@ Before completing review, confirm /release.json reports the PR head SHA and prev
 
 ## Staging release and teardown
 
-Merging to staging starts .github/workflows/deploy-staging.yml. The workflow validates the full pushed SHA, runs local checks, applies each additive migration atomically with psql, then dispatches all required services concurrently. It does not assign an alias or wait for provider readiness.
+Run `python scripts/kip-delivery.py ci-checks` locally before every push; it is the same check list the preview harness and both push workflows run. When a PR is marked ready, .github/workflows/pr-checks.yml runs it once more on the merge result. Draft pushes and docs-only changes do not start it. Merge only when it is green on the current head.
+
+Merging to staging starts .github/workflows/deploy-staging.yml. The workflow validates the full pushed SHA, runs the same release checks, applies each additive migration atomically with psql, then dispatches all required services concurrently. It does not assign an alias or wait for provider readiness.
 
 After the workflow succeeds, verify the deployment’s Vercel metadata and /release.json against the exact merge SHA. Confirm /api/health and the feedback API, then assign the stable staging alias only to that verified deployment:
 
