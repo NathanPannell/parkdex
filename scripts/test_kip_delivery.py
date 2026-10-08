@@ -90,7 +90,7 @@ class AccountReleaseGates(unittest.TestCase):
         for name in self.config["independentMigrationPaths"]:
             self.touch(name)
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
             "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
             "game_001_init.sql",
         ])
@@ -112,7 +112,7 @@ class AccountReleaseGates(unittest.TestCase):
     def test_complete_migrations_keep_foreign_key_order(self):
         self.account_files()
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
         ])
 
     def test_content_sync_markers_are_all_or_none_and_append_only_allowlisted_migrations(self):
@@ -169,6 +169,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/accounts_001_init.sql",
             "database/migrations/progress_001_init.sql",
             "database/migrations/interactions_001_init.sql",
+            "database/migrations/interactions_002_db_events.sql",
             "database/migrations/content_001_sync.sql",
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
