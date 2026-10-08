@@ -88,6 +88,8 @@ export function Plant() {
   const anim = useRef<ReturnType<typeof animate> | null>(null);
   const lastTick = useRef(0);
   const sending = useRef(false);
+  // Read by the frame loop, which can run once more before React re-renders with a new phase.
+  const charging = useRef(true);
 
   const title = holder.kind === "other" ? `Take it from @${holder.flag.handle}` : holder.kind === "mine" ? "Visit your flag" : "Plant your flag";
   const verb = holder.kind === "other" ? "take it" : holder.kind === "mine" ? "visit" : "plant";
@@ -99,7 +101,7 @@ export function Plant() {
 
   // While charging, the flag rises and trembles in your hands.
   useAnimationFrame((t) => {
-    if (phase !== "charge" && phase !== "sending") return;
+    if (!charging.current) return;
     const p = progress.get();
     flagY.set(base.get() - p * HOLD_LIFT);
     shake.set(reduce ? 0 : Math.sin(t / 26) * p * p * 5);
@@ -112,6 +114,7 @@ export function Plant() {
     setFailure(null);
     try {
       const visit = await sendVisit(accountId, { visitId, parkId });
+      charging.current = false;
       setResult(visit);
       setPhase("playing");
       await play(visit);
@@ -224,6 +227,7 @@ export function Plant() {
   };
 
   const retry = () => {
+    charging.current = true;
     progress.set(0);
     flagY.set(base.get());
     void send();
