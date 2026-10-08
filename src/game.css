@@ -152,57 +152,6 @@
 
 /* ---------- Plant, take and visit ---------- */
 
-.plant__pole-wrap {
-  position: relative;
-  z-index: 2;
-  width: 190px;
-  height: 260px;
-}
-
-.plant__pole {
-  position: absolute;
-  left: 18px;
-  top: 8px;
-  bottom: 0;
-  width: 9px;
-  border-radius: 5px;
-  background: linear-gradient(90deg, #f7ead2, #c9b48f);
-  box-shadow: 0 0 0 2.5px var(--ink);
-}
-
-.plant__finial {
-  position: absolute;
-  left: 13px;
-  top: 0;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: var(--sun);
-  border: 2.5px solid var(--ink);
-}
-
-.plant__cloth {
-  position: absolute;
-  inset: 0;
-}
-
-.plant__flag {
-  position: absolute;
-  left: 26px;
-  top: 14px;
-  transform-origin: left center;
-  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
-}
-
-.plant__flag--wave .flag {
-  animation: flag-wave 2.6s ease-in-out infinite;
-  transform-origin: left center;
-}
-
-.plant__flag--empty {
-  opacity: 0.85;
-}
-
 @keyframes flag-wave {
   0%,
   100% {
@@ -210,12 +159,6 @@
   }
   50% {
     transform: skewY(-3deg) scaleX(0.97);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .plant__flag--wave .flag {
-    animation: none;
   }
 }
 
@@ -587,4 +530,108 @@ button.game-row:active {
   font-style: normal;
   font-size: 14px;
   color: var(--ink-soft);
+}
+
+/* ---------- Planting scene: a flag driven into a mound of dirt ---------- */
+
+.plant-scene {
+  position: relative;
+  z-index: 2;
+  width: 280px;
+  height: 330px;
+}
+
+/* The pole's foot sits 22px inside the mound, so the mound hides it once planted. */
+.plant-flag {
+  position: absolute;
+  left: 116px;
+  bottom: 52px;
+  width: 140px;
+  height: 236px;
+  transform-origin: 6px 100%;
+}
+
+.plant-flag__pole {
+  position: absolute;
+  left: 2px;
+  top: 10px;
+  bottom: 0;
+  width: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #f7ead2, #c9b48f);
+  box-shadow: 0 0 0 2.5px var(--ink);
+}
+
+.plant-flag__pole::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -12px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 2.5px solid var(--ink);
+}
+
+.plant-flag__cloth {
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  transform-origin: left center;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.35));
+}
+
+.plant-flag__cloth--wave .flag {
+  animation: flag-wave 2.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+.plant-flag--rival {
+  z-index: 0;
+}
+
+.plant-mound {
+  position: absolute;
+  left: 10px;
+  bottom: 0;
+  width: 260px;
+  height: 90px;
+  transform-origin: 50% 100%;
+  overflow: visible;
+}
+
+.plant-dirt {
+  position: absolute;
+  left: 122px;
+  bottom: 70px;
+  width: 0;
+  height: 0;
+}
+
+.plant-dirt__clod {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  border-radius: 40%;
+}
+
+.plant-dirt__puff {
+  position: absolute;
+  left: -60px;
+  top: -26px;
+  width: 120px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(196, 160, 112, 0.85), rgba(196, 160, 112, 0));
+}
+
+.plant__points--rate {
+  font-size: 26px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-flag__cloth--wave .flag {
+    animation: none;
+  }
 }
