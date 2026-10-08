@@ -703,3 +703,11 @@ a { color: inherit; }
 .finder__tabs { display: flex; gap: 6px; }
 .finder .chip-toggle { border-color: var(--edge); background: var(--card); color: var(--ink-soft); }
 .finder .chip-toggle.is-on { background: var(--ink); color: var(--paper); }
+
+.model-check { display: grid; gap: 8px; padding: 14px 16px; border: 2px solid var(--line); border-radius: var(--r-md); background: var(--card); }
+.model-check h3 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.model-check p { margin: 0; }
+.model-check__headline { font-weight: 800; }
+.model-check__reasons { margin: 0; padding-left: 18px; font-weight: 600; }
+.model-check__meta { font-size: 12px; }
+.model-check__empty { margin: 0; }

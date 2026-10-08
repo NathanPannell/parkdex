@@ -40,6 +40,25 @@ export type Proposal = {
   status: ProposalStatus;
   createdAt: string;
   updatedAt: string;
+  /** Moderation fields; absent until the park_proposals_002 migration has run. */
+  osm?: { type: "way" | "relation"; id: number } | null;
+  decision?: ProposalDecision | null;
+  moderation?: ProposalModeration | null;
+  decidedAt?: string | null;
+  publishedParkId?: string | null;
+};
+
+export type ProposalDecision = "approved" | "rejected" | "unsure" | "skipped";
+export type ProposalChoice = { choice: string | null; probabilities: Record<string, number> };
+export type ProposalModeration = {
+  checkedAt: string;
+  model: string | null;
+  threshold: number | null;
+  answers: Record<string, ProposalChoice> | null;
+  reasons: string[];
+  osm: { type: string; id: number; name: string | null; kind: string; areaM2: number; distanceM: number; containsPin: boolean } | null;
+  nearby: { id: string; name: string; distanceM: number; overlaps: boolean }[];
+  publishError?: string;
 };
 
 export type Platform = "android" | "web";

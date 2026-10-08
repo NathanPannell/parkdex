@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, errorText, type Proposal, type ProposalStatus } from "../api";
+import { api, errorText, type Proposal, type ProposalChoice, type ProposalStatus } from "../api";
 import { ParkMap } from "../components/ParkMap";
 import { navigate } from "../router";
 import { Drawer, fullDate, Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
@@ -97,6 +97,23 @@ export function ProposalsPage() {
     }
   }, [place, toast]);
 
+  const publish = useCallback(async (proposal: Proposal) => {
+    setSaving((current) => new Set(current).add(proposal.id));
+    try {
+      const { proposal: saved, parkId } = await api<{ proposal: Proposal; parkId: string }>(`/api/proposals/${proposal.id}/publish`, { method: "POST", body: "{}" });
+      place(saved);
+      toast.show(`Published as ${parkId}. It's on the map.`);
+    } catch (reason) {
+      toast.show(errorText(reason, "Could not publish that proposal."), { tone: "error" });
+    } finally {
+      setSaving((current) => {
+        const next = new Set(current);
+        next.delete(proposal.id);
+        return next;
+      });
+    }
+  }, [place, toast]);
+
   function onDragEnd(event: DragEndEvent) {
     setActiveId(null);
     const proposal = proposalsRef.current?.find((item) => item.id === String(event.active.id));
@@ -153,7 +170,14 @@ export function ProposalsPage() {
         </DragOverlay>
       </DndContext>
 
-      <ProposalDrawer proposal={selected ?? null} open={Boolean(selectedId)} onClose={() => setSelectedId(null)} onMove={(proposal, status) => void move(proposal, status)} />
+      <ProposalDrawer
+        proposal={selected ?? null}
+        open={Boolean(selectedId)}
+        publishing={Boolean(selected && saving.has(selected.id))}
+        onClose={() => setSelectedId(null)}
+        onMove={(proposal, status) => void move(proposal, status)}
+        onPublish={(proposal) => void publish(proposal)}
+      />
     </section>
   );
 }
@@ -208,14 +232,78 @@ function ProposalCard({ proposal, saving, lifted }: { proposal: Proposal; saving
       </div>
       {proposal.note && <p className="card__message">{proposal.note}</p>}
       <div className="card__meta">
-        <span className="meta-pill"><Icon name="pin" size={13} /> {proposal.outline ? "Pin and outline" : "Pin only"}</span>
+        <span className="meta-pill"><Icon name="pin" size={13} /> {proposal.osm ? "OpenStreetMap outline" : proposal.outline ? "Pin and outline" : "Pin only"}</span>
+        <DecisionPill proposal={proposal} />
         <span className="card__icons">{saving && <Spinner small />}</span>
       </div>
     </article>
   );
 }
 
-function ProposalDrawer({ proposal, open, onClose, onMove }: { proposal: Proposal | null; open: boolean; onClose(): void; onMove(proposal: Proposal, status: ProposalStatus): void }) {
+const DECISION_PILLS: Record<string, [string, string]> = {
+  approved: ["Model approved", "meta-pill--on"],
+  unsure: ["Model unsure", "meta-pill--staging"],
+  rejected: ["Model rejected", "meta-pill--warn"],
+  skipped: ["Not checked", "meta-pill--off"],
+};
+
+function DecisionPill({ proposal }: { proposal: Proposal }) {
+  if (proposal.publishedParkId) return <span className="meta-pill meta-pill--on">Live</span>;
+  const pill = proposal.decision ? DECISION_PILLS[proposal.decision] : undefined;
+  return pill ? <span className={`meta-pill ${pill[1]}`}>{pill[0]}</span> : null;
+}
+
+const QUESTION_LABELS: Record<string, string> = { park: "Public park?", name: "Name fits?", duplicate: "Already in Parkdex?" };
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function answerText(answer: ProposalChoice): string {
+  return Object.entries(answer.probabilities).sort((a, b) => b[1] - a[1]).map(([label, value]) => `${label} ${percent(value)}`).join(", ") || answer.choice || "No answer";
+}
+
+function ModelCheck({ proposal }: { proposal: Proposal }) {
+  const moderation = proposal.moderation;
+  if (!moderation) {
+    return <p className="muted model-check__empty">{proposal.decision === undefined ? "Model checks appear here once this database has the moderation migration." : "Not checked by the model yet."}</p>;
+  }
+  const headline = proposal.publishedParkId
+    ? `Published as ${proposal.publishedParkId}.`
+    : proposal.decision === "approved"
+      ? `Approved, but publishing failed${moderation.publishError ? `: ${moderation.publishError}` : "."}`
+      : proposal.decision === "skipped"
+        ? "Not checked by the model."
+        : proposal.decision === "rejected" ? "The model would not add this." : "The model was not sure.";
+  return (
+    <section className="model-check" aria-label="Model check">
+      <h3>Model check</h3>
+      <p className="model-check__headline">{headline}</p>
+      {moderation.reasons.length > 0 && <ul className="model-check__reasons">{moderation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+      {moderation.answers && (
+        <dl className="facts">
+          {Object.entries(moderation.answers).map(([name, answer]) => (
+            <div key={name}><dt>{QUESTION_LABELS[name] ?? name}</dt><dd>{answerText(answer)}</dd></div>
+          ))}
+        </dl>
+      )}
+      {moderation.osm && (
+        <p className="muted">
+          OpenStreetMap: <a href={`https://www.openstreetmap.org/${moderation.osm.type}/${moderation.osm.id}`} target="_blank" rel="noreferrer">{moderation.osm.name ?? `${moderation.osm.type} ${moderation.osm.id}`}</a>
+          {` (${moderation.osm.kind}, ${(moderation.osm.areaM2 / 10_000).toFixed(1)} ha, ${moderation.osm.containsPin ? "pin inside" : `${moderation.osm.distanceM} m from the pin`})`}
+        </p>
+      )}
+      {moderation.nearby.length > 0 && (
+        <p className="muted">Nearby in Parkdex: {moderation.nearby.slice(0, 5).map((park) => `${park.name} (${park.distanceM} m${park.overlaps ? ", overlaps" : ""})`).join(", ")}</p>
+      )}
+      <p className="muted model-check__meta">{moderation.model ? `${moderation.model}, ` : ""}{moderation.threshold ? `approves at ${percent(moderation.threshold)}, ` : ""}checked {fullDate(moderation.checkedAt)}</p>
+    </section>
+  );
+}
+
+function ProposalDrawer({ proposal, open, publishing, onClose, onMove, onPublish }: {
+  proposal: Proposal | null; open: boolean; publishing: boolean; onClose(): void; onMove(proposal: Proposal, status: ProposalStatus): void; onPublish(proposal: Proposal): void;
+}) {
   return (
     <Drawer open={open} onClose={onClose} label="Park proposal">
       <div className="drawer__head">
@@ -225,8 +313,13 @@ function ProposalDrawer({ proposal, open, onClose, onMove }: { proposal: Proposa
           {proposal && <p className="muted drawer__received">Reported {fullDate(proposal.createdAt)}</p>}
         </div>
         <div className="drawer__actions">
-          {proposal && (
-            <button type="button" className="button button--primary button--small" onClick={() => navigate(`/proposals/import?proposal=${proposal.id}`)}>
+          {proposal?.osm && !proposal.publishedParkId && (
+            <button type="button" className="button button--primary button--small" disabled={publishing} onClick={() => onPublish(proposal)}>
+              {publishing ? <Spinner small /> : <Icon name="check" size={15} />} Approve and publish
+            </button>
+          )}
+          {proposal && !proposal.publishedParkId && (
+            <button type="button" className={`button button--small${proposal.osm ? "" : " button--primary"}`} onClick={() => navigate(`/proposals/import?proposal=${proposal.id}`)}>
               <Icon name="plus" size={15} /> Create draft
             </button>
           )}
@@ -245,6 +338,7 @@ function ProposalDrawer({ proposal, open, onClose, onMove }: { proposal: Proposa
               </button>
             ))}
           </div>
+          <ModelCheck proposal={proposal} />
           <div className="map-frame">
             <ParkMap pin={proposal.point} sketch={proposal.outline} fitKey={proposal.id} pinZoom={15} />
           </div>
