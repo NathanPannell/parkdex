@@ -13,6 +13,7 @@ import { FIELD } from "../lib/native";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
+import "../onboarding.css";
 
 /**
  * Five short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
