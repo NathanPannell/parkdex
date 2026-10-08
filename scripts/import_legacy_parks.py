@@ -786,11 +786,28 @@ def _write_plan(path: Path, plan: dict[str, Any]) -> None:
     path.write_text(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
 
 
+def read_park_id_file(path: Path | None) -> list[str]:
+    """One stable ID per line, so batch imports avoid command-line length limits."""
+    if path is None:
+        return []
+    try:
+        text = path.expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ParkImportError(f"Could not read park ID file ({type(exc).__name__})") from None
+    ids = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if not ids:
+        raise ParkImportError("Park ID file lists no park IDs")
+    invalid = [item for item in ids if not ID_RE.fullmatch(item)]
+    if invalid:
+        raise ParkImportError("Park ID file has an invalid stable ID: " + invalid[0])
+    return ids
+
+
 def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", args.target_environment):
         raise ParkImportError("Target environment must be a lowercase label such as staging or local-qa")
     raw, boundary_source = read_source(args.source, "boundary")
-    source_ids = args.park_id
+    source_ids = [*(args.park_id or []), *read_park_id_file(getattr(args, "park_id_file", None))]
     features = parse_boundary_source(parse_json(raw, "boundary source"), set(source_ids))
     mapping = _parse_mappings(args.id_map)
     catalogue = None
@@ -841,7 +858,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     planning = commands.add_parser("plan", help="create a read-only, hash-pinned import plan")
     planning.add_argument("--source", default=DEFAULT_BOUNDARY_URL, help="legacy FeatureCollection file or HTTPS URL")
-    planning.add_argument("--park-id", action="append", required=True, help="exact legacy stable ID to include; repeat as needed")
+    planning.add_argument("--park-id", action="append", default=[], help="exact legacy stable ID to include; repeat as needed")
+    planning.add_argument("--park-id-file", type=Path, help="file with one legacy stable ID per line, added after any --park-id values")
     planning.add_argument("--id-map", action="append", default=[], help="explicit old-id:new-id rename; repeat as needed")
     planning.add_argument("--catalogue-source", default=None, help="legacy places JSON file or HTTPS URL, required when adding a park")
     planning.add_argument("--new-park-review", type=Path, help="review JSON with presentation, walkM, and drive for new parks")

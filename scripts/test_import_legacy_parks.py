@@ -283,6 +283,19 @@ class ImportPlanTests(unittest.TestCase):
         self.assertEqual(plan["changes"][0]["targetBeforeHash"], None)
         self.assertEqual(plan["planSha256"], importer.plan_digest(plan))
 
+    def test_park_id_file_lists_ids_in_order_and_rejects_bad_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ids.txt"
+            path.write_text("# phase 1\nregional-a-1\n\n  municipal-b-2  \n", encoding="utf-8")
+            self.assertEqual(importer.read_park_id_file(path), ["regional-a-1", "municipal-b-2"])
+            path.write_text("regional-a-1\nNot An Id\n", encoding="utf-8")
+            with self.assertRaisesRegex(importer.ParkImportError, "invalid stable ID"):
+                importer.read_park_id_file(path)
+            path.write_text("# nothing\n", encoding="utf-8")
+            with self.assertRaisesRegex(importer.ParkImportError, "no park IDs"):
+                importer.read_park_id_file(path)
+        self.assertEqual(importer.read_park_id_file(None), [])
+
     def test_mapped_target_ids_match_the_account_id_pattern(self):
         features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("park-one")]})
         target = {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"}
