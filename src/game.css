@@ -149,3 +149,441 @@
   color: var(--ink-soft);
   font-size: 14px;
 }
+
+/* ---------- Plant, take and visit ---------- */
+
+.plant__pole-wrap {
+  position: relative;
+  z-index: 2;
+  width: 190px;
+  height: 260px;
+}
+
+.plant__pole {
+  position: absolute;
+  left: 18px;
+  top: 8px;
+  bottom: 0;
+  width: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #f7ead2, #c9b48f);
+  box-shadow: 0 0 0 2.5px var(--ink);
+}
+
+.plant__finial {
+  position: absolute;
+  left: 13px;
+  top: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 2.5px solid var(--ink);
+}
+
+.plant__cloth {
+  position: absolute;
+  inset: 0;
+}
+
+.plant__flag {
+  position: absolute;
+  left: 26px;
+  top: 14px;
+  transform-origin: left center;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.35));
+}
+
+.plant__flag--wave .flag {
+  animation: flag-wave 2.6s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+.plant__flag--empty {
+  opacity: 0.85;
+}
+
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: skewY(0deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(-3deg) scaleX(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant__flag--wave .flag {
+    animation: none;
+  }
+}
+
+.plant__stamp {
+  font-size: 26px;
+  line-height: 1.15;
+  max-width: 330px;
+  text-transform: none;
+}
+
+.plant__stamp--quiet {
+  color: var(--paper);
+  border-color: rgba(255, 248, 236, 0.7);
+  text-shadow: none;
+  box-shadow: none;
+}
+
+.plant__points {
+  margin: 0;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 34px;
+  color: var(--sun);
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.plant__detail {
+  margin: 0;
+  text-align: center;
+  font-size: 15.5px;
+  line-height: 1.4;
+  color: rgba(255, 248, 236, 0.85);
+}
+
+.plant__error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  text-align: center;
+}
+
+.plant__error p {
+  margin: 0;
+}
+
+/* ---------- Your parks and leaderboard ---------- */
+
+/* Tabbed pages leave room for the bottom bar. */
+.account-screen--tabbed {
+  padding-bottom: calc(var(--safe-bottom) + 110px);
+}
+
+.account-screen--tabbed .account-head__title {
+  padding-left: 4px;
+  flex: 1;
+}
+
+.game-empty {
+  align-items: center;
+  text-align: center;
+}
+
+.game-empty h2 {
+  margin: 0;
+}
+
+.game-score {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  background: var(--sun);
+}
+
+.game-score__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.game-score__text strong {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.game-score__text span,
+.game-score__points span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.game-score__points {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.game-score__points strong {
+  display: flex;
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.game-stale {
+  margin: -4px 4px 0;
+}
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.game-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+button.game-row:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.game-row.is-me {
+  background: var(--sun);
+}
+
+.game-row__rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper-2);
+  font-family: var(--display);
+  font-weight: 800;
+}
+
+.game-board li:first-child .game-row__rank {
+  background: var(--kip);
+  color: var(--paper);
+}
+
+.game-row__name,
+.game-row__score {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.game-row__name {
+  flex: 1;
+}
+
+.game-row__name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-row__name span,
+.game-row__score span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.game-row__score {
+  align-items: flex-end;
+}
+
+.game-row__score strong {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.game-old-badges {
+  align-self: center;
+  margin-top: 6px;
+}
+
+/* ---------- Takeover messages ---------- */
+
+.takeover-scrim {
+  z-index: 70;
+}
+
+.takeover-sheet {
+  z-index: 71;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 0 var(--safe-bottom);
+}
+
+.takeover-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px 12px;
+}
+
+.takeover-sheet__head h2 {
+  margin: 2px 0 0;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.takeover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px;
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.takeover-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.takeover-row > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.takeover-row strong {
+  font-size: 16px;
+}
+
+.takeover-row em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.takeover-sheet__foot {
+  display: grid;
+  gap: 8px;
+  padding: 14px 20px 6px;
+}
+
+.takeover-sheet__foot .account-help {
+  margin: 0;
+  text-align: center;
+}
+
+/* ---------- Map ---------- */
+
+.flags-note {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: calc(var(--safe-top) + 74px);
+  translate: -50% 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  border-radius: 99px;
+}
+
+.score-chip__flag {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+}
+
+/* ---------- Bottom bar: four tabs around the flag button ---------- */
+
+.nav--four {
+  height: 66px;
+}
+
+.nav--four .nav__bar {
+  grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+  padding: 6px;
+}
+
+.nav--four .nav__tab {
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  border-radius: 18px;
+}
+
+.nav--four .nav__tab:last-child {
+  grid-column: auto;
+}
+
+.nav--four .fab {
+  top: -14px;
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 4px var(--paper);
+}
+
+.nav--four .fab__hint {
+  bottom: 84px;
+}
+
+/* Tab pages sit above the map layer; keep the bar over them. */
+.nav--over {
+  z-index: 40;
+}
+
+.fab__hint[data-reason="outside-flag"]::before {
+  content: "Get inside a park boundary to plant your flag";
+}
+
+/* ---------- Park sheet: who holds the park ---------- */
+
+.park-sheet__holder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+
+.park-sheet__holder > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.park-sheet__holder strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.park-sheet__holder em {
+  font-style: normal;
+  font-size: 14px;
+  color: var(--ink-soft);
+}

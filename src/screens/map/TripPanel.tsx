@@ -1,19 +1,24 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Badge } from "../../components/Badge";
+import { FlagPin } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
 import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
-import { RARITY, type Park } from "../../lib/parks";
-import type { ParkRarityEligibility } from "../../lib/progression";
-import { rarityLockMessage } from "../../lib/rarityUi";
+import type { Park } from "../../lib/parks";
+import type { ParkHolder } from "../../lib/game/visit";
 import { FIELD } from "../../lib/native";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
 
+function holderSeed(holder: ParkHolder): string | null {
+  return holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null;
+}
+
 type TripProps = {
   park: Park;
+  holder: ParkHolder;
+  flagDays: number;
   remaining: Trip;
   totalKm: number;
   simulating: boolean;
@@ -24,7 +29,7 @@ type TripProps = {
   contentReleaseId: string;
 };
 
-export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
+export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
   const accessUnknown = remaining.mode === "unknown";
   const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
@@ -39,7 +44,7 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
       <div className="trip__row">
         <button className="trip__badge" onClick={onOpen} aria-label="Park details">
           <motion.div animate={{ rotate: [0, -6, 6, 0] }} transition={{ duration: 2.4, repeat: Infinity }}>
-            <Badge park={park} size={58} showName={false} state="preview" />
+            <FlagPin seed={holderSeed(holder)} days={flagDays} size={50} />
           </motion.div>
         </button>
         <div className="trip__text">
@@ -92,15 +97,24 @@ export function TripPanel({ park, remaining, totalKm, simulating, onSimulate, on
   );
 }
 
-export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onShowRequirements, onDismiss }: {
+export function ArrivalCard({ park, holder, flagDays, visitLabel, onCheckIn, onDismiss }: {
   park: Park;
-  eligibility: ParkRarityEligibility;
-  artComingSoon: boolean;
+  holder: ParkHolder;
+  flagDays: number;
+  visitLabel: string;
   onCheckIn: () => void;
-  onShowRequirements: () => void;
   onDismiss: () => void;
 }) {
-  const canCheckIn = eligibility.eligible && eligibility.reason !== "already-earned";
+  const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
+  const message = holder.kind === "mine"
+    ? `Your flag has flown here for ${flown}. Check in to keep it up.`
+    : holder.kind === "other"
+      ? flagDays < 1
+        ? `@${holder.flag.handle} planted a flag here today. Take it for your own.`
+        : `@${holder.flag.handle}'s flag has flown here for ${flown}. Take it for +${flagDays} ${flagDays === 1 ? "point" : "points"}.`
+      : holder.kind === "empty"
+        ? "Nobody holds this park yet. Plant your flag and earn a point every day it flies."
+        : "Plant your flag here. You need a connection to see who holds it.";
   return (
     <motion.div
       className="arrival"
@@ -127,23 +141,11 @@ export function ArrivalCard({ park, eligibility, artComingSoon, onCheckIn, onSho
           <br />
           {park.short}
         </h2>
-        <p>
-          {canCheckIn
-            ? `Snap a photo of where you're standing to claim your badge${artComingSoon ? ". Badge art is coming soon, but your visit counts now" : ""}.`
-            : eligibility.reason === "unavailable"
-              ? "Checking your saved rarity progress before check-in."
-              : `${RARITY[park.rarity].label} parks are locked. ${rarityLockMessage(eligibility)}.`}
-        </p>
+        <p>{message}</p>
         <AnimatePresence>
-          {canCheckIn ? (
-            <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-              <Icon name="camera" /> Check in &amp; snap
-            </motion.button>
-          ) : (
-            <motion.button className="btn btn--block btn--paper" onClick={onShowRequirements} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-              <Icon name="book" /> How to unlock it
-            </motion.button>
-          )}
+          <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+            <Icon name="flag" /> {visitLabel}
+          </motion.button>
         </AnimatePresence>
         <button className="arrival__later" onClick={onDismiss}>
           Look around first

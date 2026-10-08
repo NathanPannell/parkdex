@@ -39,6 +39,8 @@ const PATHS = {
   // Propose a park: a map pin with a plus.
   pinPlus: "M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Zm0-14.5v5m-2.5-2.5h5",
   flagPlus: "M5 21V4h10l-1.5 3.5L15 11H5m13 3v6m-3-3h6",
+  flag: "M5 21V4h13l-2.5 4 2.5 4H5",
+  trophy: "M8 4h8v5a4 4 0 0 1-8 0V4Zm0 1.5H4.5A3.5 3.5 0 0 0 8 10m8-4.5h3.5A3.5 3.5 0 0 1 16 10m-4 3v4m-4 3.5h8m-6-3.5h4",
   draw: "M4 18c3-5 6 1 9-4s4-7 7-6M15 5l4 4",
   // Park area: the four corners of a square, like a "fit to screen" glyph.
   corners: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
