@@ -360,6 +360,34 @@ def set_release_file(root: Path, sha: str, environment: str) -> None:
 
 
 def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
+    state["validation"] = []
+
+    def starting(name: str) -> None:
+        state["status"] = f"validating-{name}"
+        save_json(path, state)
+
+    def passed(name: str) -> None:
+        state["validation"].append({"check": name, "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+
+    release_checks(candidate_root, accounts=bool(state.get("accountsPresent")), starting=starting, passed=passed)
+
+
+def ci_checks() -> None:
+    """Run the same release checks as previews and push workflows, so local, PR and release results agree."""
+    accounts = accounts_present(load_config(), ROOT)
+
+    def starting(name: str) -> None:
+        print(f"RUN  {name}", flush=True)
+
+    def passed(name: str) -> None:
+        print(f"PASS {name}", flush=True)
+
+    release_checks(ROOT, accounts=accounts, starting=starting, passed=passed)
+    print("All release checks passed.", flush=True)
+
+
+def release_checks(candidate_root: Path, *, accounts: bool, starting, passed) -> None:
     commands = [
         ("install", ["ci"]),
         ("typecheck", ["run", "typecheck"]),
@@ -368,16 +396,12 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
     ]
     env = safe_env()
     npm = npm_args()
-    state["validation"] = []
     for name, args in commands:
-        state["status"] = f"validating-{name}"
-        save_json(path, state)
+        starting(name)
         run([*npm, *args], cwd=candidate_root, env=env, label=f"candidate npm {name}")
-        state["validation"].append({"check": name, "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed(name)
     run([sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_kip*.py"], cwd=candidate_root, env=env, label="candidate delivery tests")
-    state["validation"].append({"check": "delivery-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-    save_json(path, state)
+    passed("delivery-tests")
     if content_sync_present(load_config(), candidate_root):
         feature = load_config()["contentSync"]
         requirements = candidate_root / feature["pythonRequirementsPath"]
@@ -388,8 +412,7 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
             label="candidate content Python dependencies",
         )
         run_content_sync_sql_qa(load_config(), candidate_root)
-        state["validation"].append({"check": "postgresql-content-sync-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-content-sync-integration")
         for name in feature["pythonTestPaths"]:
             run(
                 [sys.executable, str(candidate_root / name)],
@@ -397,30 +420,25 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
                 env=env,
                 label=f"candidate content Python test {Path(name).name}",
             )
-        state["validation"].append({"check": "content-python-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("content-python-tests")
         run(
             [sys.executable, str(candidate_root / feature["legacyImporterTestPath"]), "ImportPlanTests"],
             cwd=candidate_root,
             env=env,
             label="candidate legacy import unit tests",
         )
-        state["validation"].append({"check": "legacy-import-unit-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("legacy-import-unit-tests")
         run_legacy_import_postgres_qa(load_config(), candidate_root)
-        state["validation"].append({"check": "postgresql-legacy-import-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-legacy-import-integration")
 
     account_sql = candidate_root / "scripts" / "qa-account-sql.mjs"
     if account_sql.is_file():
         run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
-        state["validation"].append({"check": "postgresql-account-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-account-integration")
 
-    if state.get("accountsPresent"):
+    if accounts:
         photo_provider().validate_candidate(sys.modules[__name__], load_config(), candidate_root)
-        state["validation"].append({"check": "private-photo-worker-bundle", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("private-photo-worker-bundle")
 
 
 def candidate_sql_env() -> dict[str, str]:
@@ -2467,6 +2485,7 @@ def build_parser() -> argparse.ArgumentParser:
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
     sub.add_parser("verify-main-content")
+    sub.add_parser("ci-checks")
     sub.add_parser("qa-content-sync")
     sub.add_parser("qa-legacy-import")
     item = sub.add_parser("deploy-staging")
@@ -2521,6 +2540,8 @@ def main() -> int:
             migration_main(args)
         elif args.command == "verify-main-content":
             verify_main_content_channel()
+        elif args.command == "ci-checks":
+            ci_checks()
         elif args.command == "qa-content-sync":
             qa_content_sync()
         elif args.command == "qa-legacy-import":

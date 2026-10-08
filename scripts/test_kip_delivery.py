@@ -62,6 +62,26 @@ class AccountReleaseGates(unittest.TestCase):
             "EMAIL_FROM": "Kip <kip@example.test>",
         }
 
+    def test_release_checks_run_in_order_and_report_each_check(self):
+        commands, started, passed = [], [], []
+        with patch.object(delivery, "npm_args", return_value=["npm"]), \
+             patch.object(delivery, "run", side_effect=lambda args, **_kwargs: commands.append(args) or ""):
+            delivery.release_checks(self.root, accounts=False, starting=started.append, passed=passed.append)
+        self.assertEqual(started, ["install", "typecheck", "tests", "build"])
+        self.assertEqual(passed, ["install", "typecheck", "tests", "build", "delivery-tests"])
+        self.assertEqual(commands[0], ["npm", "ci"])
+        self.assertIn("unittest", commands[-1])
+
+    def test_candidate_checks_still_journal_every_passed_check(self):
+        path = self.root / "journal.json"
+        state = {"accountsPresent": False}
+        with patch.object(delivery, "npm_args", return_value=["npm"]), \
+             patch.object(delivery, "run", return_value=""):
+            delivery.candidate_checks(self.root, state, path)
+        self.assertEqual([item["check"] for item in state["validation"]], ["install", "typecheck", "tests", "build", "delivery-tests"])
+        self.assertEqual(state["status"], "validating-build")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["validation"], state["validation"])
+
     def test_bootstrap_runs_existing_migration_only(self):
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], ["feedback_001_init.sql"])
 
