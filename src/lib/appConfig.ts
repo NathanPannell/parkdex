@@ -5,6 +5,8 @@ import { setContentChannelOverride, type ContentChannel } from "./contentChannel
 import { getNativePackageInstallInfo } from "./native";
 import { setRankProgressionEnabled } from "./progression";
 import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
+import { bakedAnalyticsConfig, parseRemoteAnalytics, startProductAnalytics, type ProductAnalyticsConfig } from "./productAnalytics";
+import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./requestContext";
 
 /**
  * Remote per-build configuration. Every build checks in with the production API
@@ -37,6 +39,8 @@ export type AppConfig = {
   /** Every flag the server sent, including ones this build does not read yet. */
   remoteFlags: Record<string, boolean>;
   update: UpdateStatus;
+  /** PostHog settings from the server; null keeps analytics off unless the build has its own key. */
+  analytics: ProductAnalyticsConfig | null;
   /** When this configuration was fetched; null for built-in defaults. */
   fetchedAt: string | null;
 };
@@ -49,6 +53,7 @@ type RemoteAppConfig = {
   contentChannel: ContentChannel | null;
   flags: Record<string, boolean>;
   update: UpdateStatus;
+  analytics: ProductAnalyticsConfig | null;
 };
 
 const CACHE_KEY = "parkdex.app-config.v1";
@@ -57,6 +62,8 @@ const APPLIED_SERVER_KEY = "parkdex.api-pointer.applied";
 const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 const CHECK_IN_TIMEOUT_MS = 8_000;
 const BUILD_INFO_TIMEOUT_MS = 1_500;
+// Long enough for the IndexedDB read on a warm start, short enough not to delay first paint.
+const INSTALLATION_WAIT_MS = 250;
 
 type BuildInfo = { platform: AppPlatform; build: number };
 
@@ -82,7 +89,7 @@ export function subscribeUpdateStatus(listener: () => void): () => void {
 }
 
 function defaults(info: { platform: AppPlatform; build: number }): AppConfig {
-  return { ...info, apiPointer: null, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, remoteFlags: {}, update: "none", fetchedAt: null };
+  return { ...info, apiPointer: null, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, remoteFlags: {}, update: "none", analytics: null, fetchedAt: null };
 }
 
 /** The content database this build was made for. */
@@ -115,6 +122,8 @@ export function parseRemoteAppConfig(value: unknown, expected: { platform: AppPl
     contentChannel: channel,
     flags,
     update,
+    // Older servers send no analytics block, which keeps the app's analytics off.
+    analytics: parseRemoteAnalytics(body.analytics),
   };
 }
 
@@ -131,6 +140,7 @@ function toAppConfig(remote: RemoteAppConfig, fetchedAt: string): AppConfig {
     flags,
     remoteFlags: { ...remote.flags },
     update: remote.update,
+    analytics: remote.analytics,
     fetchedAt,
   };
 }
@@ -225,9 +235,21 @@ async function signOutIfServerChanged(server: ApiPointer): Promise<void> {
   }
 }
 
+/** Wait for work up to a limit without leaving a timer behind. */
+async function settleWithin(work: Promise<unknown>, ms: number): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([work, new Promise((resolve) => { timeout = setTimeout(resolve, ms); })]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
 /** Apply the saved configuration for this build before the app renders. Never throws. */
 export async function initAppConfig(): Promise<AppConfig> {
+  const installation = loadInstallationId();
   buildInfo = await readBuildInfo();
+  setNativeBuild(buildInfo?.platform === "android" ? buildInfo.build : null);
   const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
   active = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
   // Only native production and staging builds switch servers; web pages always use their own host.
@@ -240,6 +262,8 @@ export async function initAppConfig(): Promise<AppConfig> {
   setContentChannelOverride(pointer === "production" ? "main" : pointer === "staging" ? "staging" : null);
   setRankProgressionEnabled(active.flags.rankProgression);
   setUpdateStatus(active.platform === "android" ? active.update : "none");
+  await settleWithin(installation, INSTALLATION_WAIT_MS);
+  void startProductAnalytics(active.analytics ?? bakedAnalyticsConfig());
   return active;
 }
 
@@ -280,6 +304,7 @@ export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch)
     const recovered = await readBuildInfo();
     if (!recovered) return null;
     buildInfo = recovered;
+    setNativeBuild(recovered.platform === "android" ? recovered.build : null);
     // A late device-info recovery may update build identity and the update gate only.
     active = { ...active, platform: recovered.platform, build: recovered.build };
     const cached = readCache(recovered);
@@ -295,13 +320,19 @@ export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch)
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CHECK_IN_TIMEOUT_MS);
   try {
-    const response = await fetcher(url.href, { credentials: "omit", cache: "no-store", redirect: "error", signal: controller.signal });
+    // Labels go only to the page's own host: a cross-origin check-in (native builds ask
+    // production) would need a CORS preflight that servers older than these labels reject.
+    const sameOrigin = typeof location !== "undefined" && location.origin === origin;
+    const headers = sameOrigin ? requestContextHeaders() : undefined;
+    const response = await fetcher(url.href, { credentials: "omit", cache: "no-store", redirect: "error", signal: controller.signal, headers });
     if (!response.ok) return null;
     const remote = parseRemoteAppConfig(await response.json(), currentBuildInfo);
     if (!remote) return null;
     const fetchedAt = new Date().toISOString();
     writeCache(remote, fetchedAt);
     if (currentBuildInfo.platform === "android") setUpdateStatus(remote.update);
+    // Analytics may start as soon as a key is known; it never switches servers mid-session.
+    if (remote.analytics) void startProductAnalytics(remote.analytics);
     return toAppConfig(remote, fetchedAt);
   } catch {
     return null;

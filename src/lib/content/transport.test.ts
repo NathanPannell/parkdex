@@ -439,4 +439,15 @@ describe("content transport", () => {
     browserConnection.dispatchEvent(new Event("change"));
     await result;
   });
+
+  it("labels content API requests for analytics but leaves CDN requests untouched", async () => {
+    vi.stubGlobal("__APP_BUILD__", "abc1234");
+    const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    await contentFetch(API_URL);
+    await contentFetch(CDN_URL, { anyNetwork: true });
+    const [apiInit, cdnInit] = fetcher.mock.calls.map((call) => (call as unknown as [URL, RequestInit])[1]);
+    expect(new Headers(apiInit.headers).get("X-Kip-Bundle-Id")).toBe("abc1234");
+    expect(new Headers(cdnInit.headers).get("X-Kip-Bundle-Id")).toBeNull();
+  });
 });
