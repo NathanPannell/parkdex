@@ -21,6 +21,8 @@ const HOLD_MS = 1100;
 const ALOFT = -96;
 const HOLD_LIFT = 30;
 const FURLED = 0.16;
+const CARRY_X = -86;
+const CARRY_TILT = -12;
 
 type Phase = "charge" | "sending" | "playing" | "done" | "failed";
 type Failure = { message: string; action: "retry" | "sign-in" | "handle" };
@@ -72,6 +74,10 @@ export function Plant() {
   const base = useMotionValue(mineFirst ? 0 : ALOFT);
   const flagY = useMotionValue(mineFirst ? 0 : ALOFT);
   const shake = useMotionValue(0);
+  // With a rival flag standing in the mound, carry yours beside it, tipped toward it.
+  const flagX = useMotionValue(rival ? CARRY_X : 0);
+  const tilt = useMotionValue(rival ? CARRY_TILT : 0);
+  const flagRotate = useTransform(() => tilt.get() + shake.get());
   const cloth = useMotionValue(mineFirst ? 1 : FURLED);
   const rivalRotate = useMotionValue(0);
   const rivalX = useMotionValue(0);
@@ -132,6 +138,8 @@ export function Plant() {
       if (beats.includes("topple")) rivalOpacity.set(0);
       if (beats.includes("slam")) {
         flagY.set(0);
+        flagX.set(0);
+        tilt.set(0);
         cloth.set(1);
         setWaving(true);
         sfx.pop();
@@ -150,8 +158,10 @@ export function Plant() {
       void animate(rivalOpacity, 0, { duration: 0.5, delay: 0.35 });
     }
     if (beats.includes("slam")) {
-      // A quick wind-up, then the pole is driven home.
-      await animate(flagY, flagY.get() - 46, { duration: 0.16, ease: "easeOut" });
+      // Swing over the mound with a quick wind-up, then drive the pole home.
+      void animate(flagX, 0, { duration: 0.2, ease: "easeOut" });
+      void animate(tilt, 0, { duration: 0.2, ease: "easeOut" });
+      await animate(flagY, flagY.get() - 46, { duration: 0.2, ease: "easeOut" });
       await animate(flagY, 0, { duration: 0.14, ease: [0.7, 0, 1, 0.6] });
       sfx.thud();
       buzz([80, 40, 40]);
@@ -265,7 +275,7 @@ export function Plant() {
             </motion.div>
           )}
           {flagSeed && (
-            <motion.div className="plant-flag" style={{ y: flagY, rotate: shake }} aria-label="Your flag" role="img">
+            <motion.div className="plant-flag" style={{ x: flagX, y: flagY, rotate: flagRotate }} aria-label="Your flag" role="img">
               <span className="plant-flag__pole" />
               <motion.span className={`plant-flag__cloth ${waving ? "plant-flag__cloth--wave" : ""}`} style={{ scaleX: cloth }}>
                 <Flag seed={flagSeed} size={124} days={flagDays} />
