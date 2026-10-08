@@ -37,7 +37,8 @@ BEGIN
     ALTER TABLE kip_analytics.events ADD CONSTRAINT events_event_type_v2_check CHECK (event_type IN (
       'park_viewed', 'directions_opened', 'park_claimed',
       'db_read', 'db_write',
-      'flag_planted', 'flag_taken', 'flag_fell', 'leaderboard_viewed', 'takeover_message_seen'
+      'flag_planted', 'flag_taken', 'flag_held', 'visit_already_today', 'flag_fell',
+      'leaderboard_viewed', 'takeover_message_seen', 'handle_set'
     ));
   END IF;
 
@@ -72,7 +73,8 @@ BEGIN
         AND properties IS NULL
         AND entry_point IS NULL AND provider IS NULL AND travel_mode IS NULL AND claim_id IS NULL AND claim_status IS NULL)
       OR
-      (event_type IN ('flag_planted', 'flag_taken', 'flag_fell', 'leaderboard_viewed', 'takeover_message_seen')
+      (event_type IN ('flag_planted', 'flag_taken', 'flag_held', 'visit_already_today', 'flag_fell',
+          'leaderboard_viewed', 'takeover_message_seen', 'handle_set')
         AND route IS NOT NULL AND request_id IS NOT NULL AND occurred_at IS NOT NULL
         AND operation IS NULL AND tables IS NULL AND duration_ms IS NULL AND result IS NULL
         AND entry_point IS NULL AND provider IS NULL AND travel_mode IS NULL AND claim_id IS NULL AND claim_status IS NULL)

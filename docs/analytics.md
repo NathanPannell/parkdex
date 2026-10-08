@@ -5,9 +5,9 @@ Every API database query and a few named game events are stored in `kip_analytic
 ## How events are recorded
 
 - Every store uses `database(url)` from `worker/db.ts` instead of `neon(url)`. It behaves the same and records one `db_read` or `db_write` per query, and one per transaction. New stores must use it too.
-- Read or write comes from the SQL text: `INSERT`, `UPDATE`, `DELETE`, `MERGE`, DDL, `nextval`, and calls to functions in `kip_*` schemas count as writes. Tables are the schema-qualified names the SQL mentions (`kip_*` and `public`). SQL text and parameters are never stored.
+- Read or write comes from the SQL text: `INSERT`, `UPDATE`, `DELETE`, `MERGE`, DDL and `nextval` are writes, and so are calls to the database functions listed in `WRITE_FUNCTIONS` in `worker/db.ts` (today `kip_game.record_visit`). Add a function there when it changes data. `tables` holds the schema-qualified tables and functions the SQL mentions (`kip_*` and `public`). SQL text and parameters are never stored.
 - The API router and the content sync functions run each request inside a context (`worker/requestContext.ts`). It holds the route, account, installation, app version and bundle ID. After the response, `waitUntil` writes all of the request's events in one insert. Analytics failures never affect the request, and the insert itself is not recorded.
-- Game code calls `emitEvent(type, properties)` from `worker/requestContext.ts`. Types: `flag_planted`, `flag_taken`, `flag_fell`, `leaderboard_viewed`, `takeover_message_seen`. A `parkId` property fills `park_id`; other properties are small scalars stored in `properties` with snake_case names.
+- Game code calls `emitEvent(type, properties)` from `worker/requestContext.ts`. Types: `flag_planted`, `flag_taken`, `flag_held`, `visit_already_today`, `flag_fell`, `leaderboard_viewed`, `takeover_message_seen` and `handle_set`. Every counted visit emits exactly one of the first four outcomes. A `parkId` property fills `park_id`; other properties are small scalars stored in `properties` with snake_case names.
 
 ## Request labels
 
@@ -47,7 +47,7 @@ GROUP BY route ORDER BY p95_ms DESC LIMIT 20;
 
 -- Share of visits that are takeovers.
 SELECT count(*) FILTER (WHERE event_type = 'flag_taken')::float
-     / NULLIF(count(*) FILTER (WHERE event_type IN ('flag_planted', 'flag_taken')), 0) AS takeover_share
+     / NULLIF(count(*) FILTER (WHERE event_type IN ('flag_planted', 'flag_taken', 'flag_held', 'visit_already_today')), 0) AS takeover_share
 FROM kip_analytics.events WHERE received_at > now() - interval '14 days';
 
 -- Failed queries by table.
