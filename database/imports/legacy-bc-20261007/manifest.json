@@ -1,0 +1,203 @@
+{
+  "schema": "parkdex.legacy-bc-import-bundle.v1",
+  "sources": {
+    "legacy-places.json": {
+      "sha256": "f93058cc0e0df94412c1045f649aed38ede37d8076637944b5d2b958adbf4d6a",
+      "bytes": 806531
+    },
+    "legacy-boundaries.geojson.gz": {
+      "sha256": "c9be9a8a8813ad0147692bcd99fc14a22300ac037c34906b127031c740846cc8",
+      "bytes": 13003941
+    },
+    "staging-rev158-snapshot.json.gz": {
+      "sha256": "a333ad619079744e29a44c92b99118981101e5e350f3527a7471b7e905f5d750",
+      "bytes": 1705889
+    },
+    "staging-removals-20260930.json": {
+      "sha256": "a78655112b6e7a9c9e78f3baf8a9e5c96628f927b0649107e174111cab60137f",
+      "bytes": 2380
+    },
+    "fetch-record.json": {
+      "sha256": "8462bbf89ce3e20e04e4a3b30342d08a1193803e842351dbf3def4f19856c8e1",
+      "bytes": 1973
+    },
+    "production": {
+      "sha256": "6c181f43a031bd587f5c54a9c54f554c762a76ef8443466c90ce963bbbbcf4a1",
+      "bytes": 855833
+    },
+    "island/new-park-review.json": {
+      "sha256": "9db12865aebcd79fc28e2109e1563c6902cedd79960231382ae0965ef3ecdc52",
+      "bytes": 164017
+    },
+    "island/boundaries.geojson": {
+      "sha256": "0a9719fe2733a298f0c881863ceeb91163bdee00e44f27029c5a8835676bd2bf",
+      "bytes": 2868280
+    },
+    "island/catalogue.json": {
+      "sha256": "8940794a679fe43a65b649412bdc603f52699a1f6433723e5d349e6bc0710933",
+      "bytes": 173455
+    }
+  },
+  "outputs": {
+    "selection.json": {
+      "sha256": "80b59ac2c357a008df9904ded2f59dd9d5e5d3064c9108bb737c4e4c710efc8c",
+      "bytes": 3137
+    },
+    "catalogue.json": {
+      "sha256": "be6150763acb4d6a53bfc724f7252ec5e979bd12bc07c0aaa4d451821a3a8966",
+      "bytes": 687403
+    },
+    "comparison-report.json": {
+      "sha256": "0bcd98c0ca27c25211be16b0efb8db1234ea7de9742b01528f84c94662f9816d",
+      "bytes": 1256482
+    },
+    "normalization.json": {
+      "sha256": "0ed0887b30719dd3dcb0933f464f6c1034226f2ca9652b70bb54d3314adad2b4",
+      "bytes": 16568
+    },
+    "overlaps.json": {
+      "sha256": "79e59e2a29a531c24b1e74ba3b58a9e6d3e44c9ac67ac1c8f825485e12be4ab0",
+      "bytes": 742
+    },
+    "phase-1/park-ids.txt": {
+      "sha256": "aa121de351f7b236758ddd9cf3038d88694e415d191fe91696bc2d994b239c05",
+      "bytes": 20204
+    },
+    "phase-1/new-park-review.json": {
+      "sha256": "0dcb72b86e99b52ed5951daf169eadcfae4895e4e25ecb3e30ae19878de078a0",
+      "bytes": 273400
+    },
+    "phase-2/park-ids.txt": {
+      "sha256": "6a5a91e529eee54527b72bdb02629daedfad9177f1ffedd56f7d784ddd102218",
+      "bytes": 25913
+    },
+    "phase-2/new-park-review.json": {
+      "sha256": "27c672802f22bea5dcaa411bf9d09e8c94d19481e606fc43687e0ce2803ddc16",
+      "bytes": 353421
+    },
+    "phase-1/boundaries.geojson": {
+      "sha256": "314c0f260eef292b24e3618453d4d6a7a8b4be151bbde25fcd8891d90bd96079",
+      "bytes": 1765845
+    }
+  },
+  "phase2BoundariesNotCommitted": {
+    "file": "phase-2/boundaries.geojson",
+    "sha256": "17e6dce0de838a5d104b3ae86d600fdf9e2e9d565bb3a09b672d2b00231daba7",
+    "bytes": 6219063
+  },
+  "counts": {
+    "selected": 1273,
+    "phase1": 552,
+    "phase2": 721,
+    "duplicatesExcluded": 0,
+    "categories": {
+      "phase1": {
+        "community": 77,
+        "municipal": 473,
+        "national": 2
+      },
+      "phase2": {
+        "national": 5,
+        "provincial": 559,
+        "regional": 157
+      }
+    },
+    "biomes": {
+      "cave": 2,
+      "coast": 114,
+      "forest": 717,
+      "heritage": 15,
+      "lake": 203,
+      "marsh": 3,
+      "mountain": 93,
+      "river": 114,
+      "waterfall": 12
+    },
+    "normalizedInvalidSources": 21,
+    "normalizedSelected": 14,
+    "newParkComparison": {
+      "sourceFeatureIdsMatch": 1273,
+      "polygonsMatch": 1261,
+      "holesMatch": 1269,
+      "fullCoverage": 1273,
+      "total": 1273
+    },
+    "existingParkComparison": {
+      "total": 332,
+      "polygonsMatch": 332,
+      "holesMatch": 332,
+      "sameArea": 331
+    },
+    "geometryTotals": {
+      "phase1": {
+        "polygonCount": 721,
+        "holeCount": 37,
+        "positionCount": 40100
+      },
+      "phase2": {
+        "polygonCount": 1642,
+        "holeCount": 135,
+        "positionCount": 268009
+      }
+    }
+  },
+  "contentSyncProjection": {
+    "limitBytes": 4194304,
+    "staging": {
+      "current": {
+        "parks": 334,
+        "snapshotBytes": 1705889,
+        "reader2SnapshotBytesEstimate": 1752260,
+        "headroomBytes": 2442044
+      },
+      "phase1": {
+        "parks": 886,
+        "snapshotBytes": 3529667,
+        "reader2SnapshotBytesEstimate": 3609710,
+        "headroomBytes": 584594
+      },
+      "phase1And2": {
+        "parks": 1607,
+        "snapshotBytes": 9892845,
+        "reader2SnapshotBytesEstimate": 10016869,
+        "headroomBytes": -5822565
+      }
+    },
+    "production": {
+      "current": {
+        "parks": 100,
+        "snapshotBytes": 855833,
+        "reader2SnapshotBytesEstimate": 887930,
+        "headroomBytes": 3306374
+      },
+      "islandThenPhase1": {
+        "parks": 896,
+        "snapshotBytes": 3465593,
+        "reader2SnapshotBytesEstimate": 3546246,
+        "headroomBytes": 648058
+      },
+      "islandThenPhase1And2": {
+        "parks": 1617,
+        "snapshotBytes": 9828771,
+        "reader2SnapshotBytesEstimate": 9953405,
+        "headroomBytes": -5759101
+      }
+    },
+    "phase1ChangeBatchBytes": 1943675
+  },
+  "presentationRules": {
+    "short": "Legacy name without a trailing park-type phrase such as Park, Regional Park or National Park Reserve.",
+    "biome": "First matching name keyword in BIOME_RULES of scripts/build_bc_import.py, otherwise forest.",
+    "shape": "circle",
+    "rarity": "common",
+    "seed": "First 8 bytes of SHA-256 of the park ID, modulo 1,000,001.",
+    "blurb": "A factual line: 'A <category> park in the <jurisdiction>', or in <region> when the source has no jurisdiction.",
+    "scene": null,
+    "access": "accessUnknown true, walkM 0 and null for every drive hub."
+  },
+  "publication": {
+    "providerActions": false,
+    "databaseWrites": false,
+    "badgeArtworkIncluded": false
+  }
+}
