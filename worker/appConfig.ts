@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import { HttpError } from "./validation.js";
 
 /**
@@ -121,7 +121,7 @@ function toRules(environment: ApiPointer, row: RulesRow | undefined): UpdateRule
 const BUILD_COLUMNS = "platform, build, label, api_pointer, flags, notes, updated_at";
 
 export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
     async resolve(platform, build) {
       const rows = await sql.query(`SELECT ${BUILD_COLUMNS} FROM kip_app_config.builds WHERE platform = $1 AND build IN ($2, $3)`, [platform, build, DEFAULT_BUILD]) as BuildRow[];
@@ -283,9 +283,14 @@ export function resolveAppConfig(platform: AppConfigPlatform, build: number, row
   };
 }
 
+/** Public product analytics settings, delivered at runtime so they can change without a build. */
+export type AppAnalyticsConfig = { posthogKey: string; posthogHost: string };
+
 export interface AppConfigHandlers {
   json(data: unknown, status?: number): Response;
   store(): AppConfigStore;
+  /** Null when no PostHog project key is configured; the app then loads no analytics SDK. */
+  analytics?(): AppAnalyticsConfig | null;
 }
 
 /**
@@ -301,5 +306,5 @@ export async function handleAppConfigRequest(request: Request, handlers: AppConf
   const store = handlers.store();
   const rows = await store.resolve(platform, build);
   const rules = await store.updateRules(updateEnvironment(rows, platform, build, url.searchParams.get("env")));
-  return handlers.json(resolveAppConfig(platform, build, rows, rules));
+  return handlers.json({ ...resolveAppConfig(platform, build, rows, rules), analytics: handlers.analytics?.() ?? null });
 }
