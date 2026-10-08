@@ -15,6 +15,11 @@ type Updater = Pick<CapacitorUpdaterPlugin, "current" | "list" | "set" | "notify
 type BundleSummary = Pick<BundleInfo, "id" | "version" | "status">;
 
 const PENDING_KEY = "parkdex.ota.pending-bundle";
+/** The version being switched to, so the next start can tell whether it came up. */
+const APPLYING_KEY = "parkdex.ota.applying-version";
+/** Versions that were rolled back. The plugin downloads them again under new ids, so skip them. */
+const FAILED_KEY = "parkdex.ota.failed-versions";
+const MAX_FAILED = 20;
 /** Long enough that a camera or sign-in round trip has finished. */
 const LONG_BACKGROUND_MS = 30 * 60_000;
 const APPLY_TIMEOUT_MS = 5_000;
@@ -31,40 +36,60 @@ function loadUpdater(): Promise<{ plugin: Updater } | null> {
   return updater;
 }
 
-function readPending(): string | null {
+function read(key: string): string | null {
   try {
-    return globalThis.localStorage?.getItem(PENDING_KEY) ?? null;
+    return globalThis.localStorage?.getItem(key) ?? null;
   } catch {
     return null;
   }
 }
 
-function writePending(id: string | null): void {
+function write(key: string, value: string | null): void {
   try {
-    if (id) globalThis.localStorage?.setItem(PENDING_KEY, id);
-    else globalThis.localStorage?.removeItem(PENDING_KEY);
+    if (value) globalThis.localStorage?.setItem(key, value);
+    else globalThis.localStorage?.removeItem(key);
   } catch {
     // Without storage a downloaded bundle waits for the plugin to offer it again.
   }
 }
 
-/** Which downloaded bundle to switch to now, if any. Error or missing bundles are dropped. */
-export function bundleToApply(pendingId: string | null, currentId: string | null, bundles: BundleSummary[]): string | null {
+function failedVersions(): string[] {
+  try {
+    const list = JSON.parse(read(FAILED_KEY) ?? "[]") as unknown;
+    return Array.isArray(list) ? list.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** A switch recorded last time that did not end up running was rolled back by the plugin. */
+function recordLastSwitch(running: BundleSummary): void {
+  const applying = read(APPLYING_KEY);
+  if (!applying) return;
+  write(APPLYING_KEY, null);
+  if (applying === running.version) return;
+  const failed = [...failedVersions().filter((version) => version !== applying), applying].slice(-MAX_FAILED);
+  write(FAILED_KEY, JSON.stringify(failed));
+}
+
+/** Which downloaded bundle to switch to now, if any. Error, missing or rolled back bundles are dropped. */
+export function bundleToApply(pendingId: string | null, currentId: string | null, bundles: BundleSummary[], failed: string[] = []): BundleSummary | null {
   if (!pendingId || pendingId === BUILTIN || pendingId === currentId) return null;
   const bundle = bundles.find((candidate) => candidate.id === pendingId);
-  return bundle && (bundle.status === "pending" || bundle.status === "success") ? bundle.id : null;
+  if (!bundle || failed.includes(bundle.version)) return null;
+  return bundle.status === "pending" || bundle.status === "success" ? bundle : null;
 }
 
 async function applyPending(plugin: Updater): Promise<void> {
-  const pendingId = readPending();
+  const pendingId = read(PENDING_KEY);
   if (!pendingId) return;
   const { bundles } = await plugin.list();
-  const id = bundleToApply(pendingId, current?.id ?? null, bundles);
-  // Clear first: a bundle that fails to start is rolled back by the plugin and marked as error.
-  writePending(null);
-  if (!id) return;
+  const bundle = bundleToApply(pendingId, current?.id ?? null, bundles, failedVersions());
+  write(PENDING_KEY, null);
+  if (!bundle) return;
+  write(APPLYING_KEY, bundle.version);
   // `set` reloads the web view into the new bundle; the timeout only guards a reload that never comes.
-  await Promise.race([plugin.set({ id }), new Promise((resolve) => setTimeout(resolve, APPLY_TIMEOUT_MS))]);
+  await Promise.race([plugin.set({ id: bundle.id }), new Promise((resolve) => setTimeout(resolve, APPLY_TIMEOUT_MS))]);
 }
 
 /** Runs before the first render. Never throws; on the web it does nothing. */
@@ -73,8 +98,11 @@ export async function startOverTheAirUpdates(plugin?: Updater | null): Promise<v
     const active = plugin === undefined ? (await loadUpdater())?.plugin : plugin;
     if (!active) return;
     current = (await active.current()).bundle;
+    recordLastSwitch(current);
     await applyPending(active);
-    await active.addListener("updateAvailable", (event) => writePending(event.bundle.id));
+    await active.addListener("updateAvailable", (event) => {
+      if (!failedVersions().includes(event.bundle.version)) write(PENDING_KEY, event.bundle.id);
+    });
     let backgroundedAt: number | null = null;
     await App.addListener("pause", () => { backgroundedAt = Date.now(); });
     await App.addListener("resume", () => {

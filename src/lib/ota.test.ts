@@ -87,8 +87,8 @@ afterEach(() => {
 
 describe("over-the-air bundle choice", () => {
   it("applies only a downloaded bundle that is not already running", () => {
-    expect(bundleToApply("b1", "builtin", [bundle("b1", "pending")])).toBe("b1");
-    expect(bundleToApply("b1", "builtin", [bundle("b1", "success")])).toBe("b1");
+    expect(bundleToApply("b1", "builtin", [bundle("b1", "pending")])?.id).toBe("b1");
+    expect(bundleToApply("b1", "builtin", [bundle("b1", "success")])?.id).toBe("b1");
     expect(bundleToApply("b1", "b1", [bundle("b1", "success")])).toBeNull();
     expect(bundleToApply(null, "builtin", [bundle("b1")])).toBeNull();
     expect(bundleToApply("builtin", "b1", [bundle("builtin", "success")])).toBeNull();
@@ -99,6 +99,7 @@ describe("over-the-air bundle choice", () => {
       expect(bundleToApply("b1", "builtin", [bundle("b1", status)])).toBeNull();
     }
     expect(bundleToApply("gone", "builtin", [bundle("b1")])).toBeNull();
+    expect(bundleToApply("b1", "builtin", [bundle("b1")], ["v-b1"])).toBeNull();
   });
 });
 
@@ -114,7 +115,8 @@ describe("startup", () => {
     const second = fakeUpdater(bundle("builtin", "success"), [bundle("b1")]);
     await startOverTheAirUpdates(second as never);
     expect(second.set).toHaveBeenCalledWith({ id: "b1" });
-    expect(mocks.storage.size).toBe(0);
+    expect(mocks.storage.has("parkdex.ota.pending-bundle")).toBe(false);
+    expect(mocks.storage.get("parkdex.ota.applying-version")).toBe("v-b1");
   });
 
   it("reports the running bundle once the new bundle has started", async () => {
@@ -132,6 +134,35 @@ describe("startup", () => {
     const plugin = fakeUpdater(bundle("builtin", "success"), [bundle("b1", "error")]);
     await startOverTheAirUpdates(plugin as never);
     expect(plugin.set).not.toHaveBeenCalled();
+    expect(mocks.storage.size).toBe(0);
+  });
+
+  it("remembers a rolled back version and never switches to it again, even under a new id", async () => {
+    mocks.storage.set("parkdex.ota.pending-bundle", "b1");
+    const first = fakeUpdater(bundle("builtin", "success"), [bundle("b1")]);
+    await startOverTheAirUpdates(first as never);
+    expect(first.set).toHaveBeenCalledWith({ id: "b1" });
+
+    // The bundle never called notifyAppReady, so the plugin reloaded the previous bundle.
+    resetOverTheAirForTests();
+    const rolledBack = fakeUpdater(bundle("builtin", "success"), [bundle("b1", "error")]);
+    await startOverTheAirUpdates(rolledBack as never);
+    expect(JSON.parse(mocks.storage.get("parkdex.ota.failed-versions")!)).toEqual(["v-b1"]);
+
+    // The pointer still names it, so the plugin downloads it again with a fresh id.
+    rolledBack.emitUpdateAvailable({ ...bundle("b2"), version: "v-b1" });
+    expect(mocks.storage.has("parkdex.ota.pending-bundle")).toBe(false);
+    mocks.storage.set("parkdex.ota.pending-bundle", "b2");
+    resetOverTheAirForTests();
+    const again = fakeUpdater(bundle("builtin", "success"), [{ ...bundle("b2"), version: "v-b1" }]);
+    await startOverTheAirUpdates(again as never);
+    expect(again.set).not.toHaveBeenCalled();
+  });
+
+  it("clears the switch record once the new bundle is running", async () => {
+    mocks.storage.set("parkdex.ota.applying-version", "v-b1");
+    const plugin = fakeUpdater(bundle("b1", "pending"), [bundle("b1")]);
+    await startOverTheAirUpdates(plugin as never);
     expect(mocks.storage.size).toBe(0);
   });
 
