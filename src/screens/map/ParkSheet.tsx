@@ -63,14 +63,13 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const openDirections = () => {
     if (content && !accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
   };
-  // Without a known road route there is nothing to preview in the app, so the
-  // main button goes straight to Google Maps (the stored link, or the park pin).
-  const mapsButton = (
-    <a className="btn btn--block" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" onClick={openDirections}>
-      <Icon name="pin" /> Open in Google Maps
+  // Every park gets the same primary button, the in-app trip. Maps is the secondary action:
+  // driving directions when a road route is known, otherwise the park's location.
+  const mapsButton = accessUnknown ? (
+    <a className="btn btn--paper btn--icon" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" aria-label="Open the park in Google Maps" onClick={openDirections}>
+      <Icon name="pin" />
     </a>
-  );
-  const directionsButton = (
+  ) : (
     <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
       <Icon name="car" />
     </a>
@@ -131,12 +130,23 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
         <motion.p variants={item} className="park-sheet__meta">
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
-        <motion.div variants={item} className="park-sheet__holder">
-          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} />
+        <motion.div variants={item} className={`park-sheet__holder is-${holder.kind}`}>
+          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} className="is-waving-pin" />
           <span>
             <strong>{holderLine.title}</strong>
             <em>{holderLine.detail}</em>
           </span>
+          {holder.kind === "other" && flagDays > 0 && (
+            <motion.span
+              className="park-sheet__bounty"
+              initial={{ scale: 0, rotate: -12 }}
+              animate={{ scale: [1, 1.08, 1], rotate: -4 }}
+              transition={{ scale: { duration: 1.6, repeat: Infinity, delay: 0.6 }, rotate: { type: "spring", stiffness: 500, damping: 14 } }}
+              aria-label={`Worth ${flagDays} points`}
+            >
+              +{flagDays}
+            </motion.span>
+          )}
         </motion.div>
 
         <motion.div variants={item} className="stats">
@@ -171,14 +181,12 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
             <Icon name="flag" /> {visitLabel}
           </button>
         ) : (
-          accessUnknown ? mapsButton : (
-            <>
-              <button className="btn btn--block" onClick={onGo}>
-                <Icon name="route" /> Let's go
-              </button>
-              {directionsButton}
-            </>
-          )
+          <>
+            <button className="btn btn--block" onClick={onGo}>
+              <Icon name="route" /> Let's go
+            </button>
+            {mapsButton}
+          </>
         )}
       </motion.div>
     </motion.div>
