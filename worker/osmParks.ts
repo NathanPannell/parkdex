@@ -13,7 +13,7 @@ export const OSM_ATTRIBUTION = "© OpenStreetMap contributors";
 const SEARCH_RADIUS_M = 250;
 const MAX_CANDIDATES = 6;
 const MAX_BBOX_DIAGONAL_M = 20_000;
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 const CACHE_MS = 10 * 60 * 1000;
 const CACHE_ENTRIES = 200;
 const MAX_CONCURRENT = 2;
@@ -321,8 +321,9 @@ function bboxDistanceM(bounds: NonNullable<OverpassElement["bounds"]>, lat: numb
 }
 
 /** Overpass client with a short in-memory cache and at most two requests in flight per instance. */
-export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: { now?: () => number; timeoutMs?: number } = {}): OsmClient {
+export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: { now?: () => number; timeoutMs?: number; retryDelayMs?: number } = {}): OsmClient {
   const now = options.now ?? Date.now;
+  const retryDelayMs = options.retryDelayMs ?? 1_000;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const endpoint = env.OVERPASS_URL?.trim() || DEFAULT_OVERPASS_URL;
   const cache = new Map<string, { at: number; value: unknown }>();
@@ -343,7 +344,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   async function run(query: string): Promise<OverpassElement[]> {
     const hit = cache.get(query);
     if (hit && now() - hit.at < CACHE_MS) return hit.value as OverpassElement[];
-    const elements = await slot(async () => {
+    const attempt = () => slot(async () => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let response: Response;
@@ -359,7 +360,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       } finally {
         clearTimeout(timer);
       }
-      if (!response.ok) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
+      if (!response.ok) throw new HttpError(503, response.status === 429 || response.status >= 500 ? "osm_busy" : "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
       let body: { elements?: unknown; remark?: unknown };
       try {
         body = await response.json() as typeof body;
@@ -368,10 +369,23 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       }
       // Overpass reports its own timeouts as a remark on an otherwise successful response.
       if (typeof body.remark === "string" && /runtime error|timed out|out of memory/i.test(body.remark)) {
-        throw new HttpError(503, "osm_unavailable", "OpenStreetMap took too long to answer. Try again.");
+        throw new HttpError(503, "osm_busy", "OpenStreetMap took too long to answer. Try again.");
       }
       return Array.isArray(body.elements) ? body.elements as OverpassElement[] : [];
     });
+    let elements: OverpassElement[];
+    try {
+      elements = await attempt();
+    } catch (error) {
+      // The public instance often turns a request away while busy; one quick retry usually lands.
+      if (!(error instanceof HttpError) || error.code !== "osm_busy") throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      try {
+        elements = await attempt();
+      } catch (retryError) {
+        throw retryError instanceof HttpError ? new HttpError(503, "osm_unavailable", retryError.message) : retryError;
+      }
+    }
     if (cache.size >= CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
     cache.set(query, { at: now(), value: elements });
     return elements;

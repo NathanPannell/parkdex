@@ -112,11 +112,31 @@ test("a slow Overpass answer times out cleanly", async () => {
   await assert.rejects(client.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
 });
 
-test("Overpass runtime errors and busy responses become a retryable 503", async () => {
-  const remark = createOsmClient({}, overpass(() => ({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 10 seconds." })));
+test("Overpass runtime errors and busy responses become a retryable 503 after one retry", async () => {
+  const calls: Call[] = [];
+  const remark = createOsmClient({}, overpass(() => ({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 10 seconds." }), calls), { retryDelayMs: 0 });
   await assert.rejects(remark.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
-  const busy = createOsmClient({}, (async () => new Response("Too many requests", { status: 429 })) as typeof fetch);
-  await assert.rejects(busy.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503);
+  assert.equal(calls.length, 2);
+  let busyCalls = 0;
+  const busy = createOsmClient({}, (async () => {
+    busyCalls += 1;
+    return new Response("Too many requests", { status: 429 });
+  }) as typeof fetch, { retryDelayMs: 0 });
+  await assert.rejects(busy.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
+  assert.equal(busyCalls, 2);
+});
+
+test("a busy answer followed by a good one succeeds", async () => {
+  let first = true;
+  const flaky = (async (url: string, init?: RequestInit) => {
+    if (first) {
+      first = false;
+      return new Response("<html>dispatcher timeout</html>", { status: 504 });
+    }
+    return overpass(parkFixture)(url, init);
+  }) as typeof fetch;
+  const parks = await createOsmClient({}, flaky, { retryDelayMs: 0 }).search(48.451, -123.359);
+  assert.equal(parks.length, 2);
 });
 
 test("repeat searches near the same spot use the cache", async () => {
