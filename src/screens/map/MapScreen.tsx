@@ -99,6 +99,18 @@ export function MapScreen() {
   const arrivedId = here ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const player = game.me?.player ?? null;
+  // A score that went up since the last read floats a "+N" off the score chip.
+  const lastScore = useRef<number | null>(null);
+  const [scoreBump, setScoreBump] = useState<{ key: number; delta: number } | null>(null);
+  useEffect(() => {
+    const score = player ? game.me?.score ?? null : null;
+    if (score === null) {
+      lastScore.current = null;
+      return;
+    }
+    if (lastScore.current !== null && score > lastScore.current) setScoreBump({ key: Date.now(), delta: score - lastScore.current });
+    lastScore.current = score;
+  }, [player, game.me?.score]);
 
   // Straight-line distance ranks every park, including ones without a drive estimate.
   const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id) }), [user, visit.holderOf, flagDays]);
@@ -395,7 +407,7 @@ export function MapScreen() {
           aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your parks` : "Your parks"}
         >
           <span className="counter__kip">
-            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={44} /></span> : <Kip pose="avatar" size={48} />}
+            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={44} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}
           </span>
           <span className="counter__text">
             {player && game.me ? (
@@ -413,6 +425,20 @@ export function MapScreen() {
               </>
             )}
           </span>
+          <AnimatePresence>
+            {scoreBump && (
+              <motion.span
+                key={scoreBump.key}
+                className="score-chip__bump"
+                initial={{ y: 6, opacity: 0, scale: 0.6 }}
+                animate={{ y: -26, opacity: [0, 1, 1, 0], scale: 1 }}
+                transition={{ duration: 1.6, times: [0, 0.15, 0.7, 1] }}
+                onAnimationComplete={() => setScoreBump(null)}
+              >
+                +{scoreBump.delta}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
           <button
@@ -434,11 +460,22 @@ export function MapScreen() {
         <ContentSyncStatus />
       </div>
 
-      {(game.flagsStatus === "offline" || game.flagsStatus === "error") && !selected && (
-        <button className="flags-note card" onClick={() => void game.refreshFlags()}>
-          {game.flagsStatus === "offline" ? "Flags need a connection" : "Flags didn't load. Tap to retry"}
-        </button>
-      )}
+      <AnimatePresence>
+        {(game.flagsStatus === "offline" || game.flagsStatus === "error") && !selected && (
+          <motion.button
+            key="flags-note"
+            className="flags-note card"
+            onClick={() => void game.refreshFlags()}
+            initial={{ y: -20, opacity: 0, x: "-50%" }}
+            animate={{ y: 0, opacity: 1, x: "-50%" }}
+            exit={{ y: -20, opacity: 0, x: "-50%" }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+            whileTap={{ scale: 0.95, x: "-50%" }}
+          >
+            <Icon name="refresh" size={14} /> {game.flagsStatus === "offline" ? "Flags need a connection" : "Flags didn't load. Tap to retry"}
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {menuOpen && (

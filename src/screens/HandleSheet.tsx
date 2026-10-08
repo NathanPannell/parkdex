@@ -1,11 +1,13 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useAnimationControls } from "motion/react";
 import { useState, type FormEvent } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { buzz, sfx } from "../lib/feedback";
 import { GameError, handleProblem, normalizeHandle, type GamePlayer } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
+import { press, shake } from "../lib/motion";
 import "../game.css";
+import "../game-ui.css";
 
 function saveErrorMessage(error: unknown, handle: string): string {
   if (!(error instanceof GameError)) return "Your handle couldn't be saved. Try again.";
@@ -36,6 +38,7 @@ export function HandleSheet() {
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const field = useAnimationControls();
   const [revealed, setRevealed] = useState<GamePlayer | null>(null);
   const handle = normalizeHandle(value);
   const problem = handleProblem(handle);
@@ -55,7 +58,10 @@ export function HandleSheet() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setTouched(true);
-    if (problem || busy) return;
+    if (problem || busy) {
+      if (problem) void field.start(shake);
+      return;
+    }
     if (unchanged && existing) {
       finish(existing);
       return;
@@ -71,6 +77,8 @@ export function HandleSheet() {
       else setRevealed(player);
     } catch (caught) {
       setError(saveErrorMessage(caught, handle));
+      void field.start(shake);
+      buzz([20, 30, 20]);
     } finally {
       setBusy(false);
     }
@@ -111,14 +119,14 @@ export function HandleSheet() {
               <span className="eyebrow">{existing ? "Your handle" : "Before you plant"}</span>
               <h2 id="handle-title">{existing ? "Change your handle" : "Pick your handle"}</h2>
               <div className="handle-sheet__preview">
-                <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} />
+                <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} className={previewSeed ? "is-waving" : undefined} />
                 <span>
-                  <strong>@{handle || "yourname"}</strong>
+                  <motion.strong key={handle.length} initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 600, damping: 20 }}>@{handle || "yourname"}</motion.strong>
                   <em>{existing ? "Your flag stays the same." : previewSeed ? "This flag comes with it." : "Your flag comes with it."}</em>
                 </span>
               </div>
               <label className="fb-label" htmlFor="handle-input">Handle</label>
-              <div className="handle-input">
+              <motion.div className="handle-input" animate={field}>
                 <span aria-hidden="true">@</span>
                 <input
                   id="handle-input"
@@ -137,14 +145,14 @@ export function HandleSheet() {
                   placeholder="yourname"
                   autoFocus
                 />
-              </div>
+              </motion.div>
               <p id="handle-help" className={`handle-sheet__help ${touched && problem ? "is-error" : ""}`}>
                 {touched && problem ? problem : "3 to 20 letters, numbers or underscores. Friends see it on the map and the leaderboard."}
               </p>
               {error && <p className="handle-sheet__error" role="alert">{error}</p>}
-              <button className="btn btn--sun btn--block" type="submit" disabled={busy || (touched && !!problem)}>
+              <motion.button whileTap={press} className="btn btn--sun btn--block" type="submit" disabled={busy || (touched && !!problem)}>
                 {busy ? "Saving…" : existing ? "Save handle" : "Claim this handle"}
-              </button>
+              </motion.button>
             </motion.form>
           )}
         </AnimatePresence>
