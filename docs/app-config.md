@@ -24,6 +24,7 @@ Players tap the pin button next to feedback on the map, drop a pin (or use their
 - `npm run android:aab` builds a staging build (`.env.field`): content and accounts on staging.
 - `npm run android:aab:production` builds a production build (`.env.production-field`): content and accounts on production.
 - Set `PARKDEX_ANDROID_VERSION_CODE` for each release; that number is the `build` the page refers to.
+- Web bundle updates between Play releases go over the air on the build's channel and never change its version code, so update rules still apply to the native build. See [ota-updates.md](ota-updates.md).
 
 ## Adding a flag
 

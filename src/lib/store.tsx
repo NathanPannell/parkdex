@@ -5,6 +5,7 @@ import { loadPersonalProgress, type ProgressOwner } from "./accounts/personalSto
 import { useAuth } from "./accounts/AuthProvider";
 import { getNativeInstallIdentity, isNative } from "./native";
 import { onboardingMatchesInstall } from "./onboardingIdentity";
+import { isOverTheAirBundle } from "./ota";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
@@ -42,7 +43,7 @@ type State = {
 
 type Action =
   | { type: "go"; screen: Screen }
-  | { type: "installReady"; buildId: string; packageInstallIdentity: string | null; native: boolean }
+  | { type: "installReady"; buildId: string; packageInstallIdentity: string | null; native: boolean; overTheAir?: boolean }
   | { type: "onboarded" }
   | { type: "select"; id: string | null }
   | { type: "trip"; id: string | null }
@@ -138,7 +139,7 @@ export function reducer(state: State, action: Action): State {
           buildId: state.onboardingBuildId,
           packageInstallIdentity: state.onboardingPackageIdentity,
         },
-        { buildId: action.buildId, packageInstallIdentity, native: action.native },
+        { buildId: action.buildId, packageInstallIdentity, native: action.native, overTheAir: action.overTheAir },
       );
       return {
         ...state,
@@ -289,9 +290,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       timeout = setTimeout(() => resolve(null), 1500);
     });
     void Promise.race([getNativeInstallIdentity(), unavailable]).then((packageInstallIdentity) => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative });
+      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative, overTheAir: isOverTheAirBundle() });
     }).catch(() => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative });
+      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative, overTheAir: isOverTheAirBundle() });
     }).finally(() => {
       clearTimeout(timeout);
     });
