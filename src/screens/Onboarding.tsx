@@ -28,7 +28,7 @@ const SLIDES = [
   },
   {
     eyebrow: "Step 1 · Go",
-    title: ["Go to a park.", "Your flag goes up."],
+    title: ["Go to a park.", "Up goes your flag."],
     body: "Head to any park on the map. Once you're inside the boundary, hold the button and plant your flag.",
     tint: "#D6F0DF",
   },
@@ -40,13 +40,13 @@ const SLIDES = [
   },
   {
     eyebrow: "Step 3 · Take",
-    title: ["Take their parks.", "Win their days."],
+    title: ["Take parks.", "Win their days."],
     body: "Plant on someone else's park and it's yours, plus a point for every day their flag was up. They keep what they earned.",
     tint: "#FFD6DE",
   },
   {
     eyebrow: "Step 4 · You",
-    title: ["Pick your @handle.", "Meet your flag."],
+    title: ["Your @handle.", "Your flag."],
     body: "Every player gets a one-of-a-kind flag. Everyone sees it, and your handle, on the parks you hold.",
     tint: "#DCEBFF",
   },
@@ -393,6 +393,19 @@ export function Onboarding() {
           </AnimatePresence>
         </div>
       </motion.div>
+      <AnimatePresence>
+        {last && canPickHandle && (
+          <motion.button
+            className="btn btn--paper btn--block ob-handle-btn"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+            onClick={() => game.openHandleSheet()}
+          >
+            <Icon name="flag" /> Pick your handle
+          </motion.button>
+        )}
+      </AnimatePresence>
       <div className="onboarding__foot">
         <div className="dots">
           {SLIDES.map((_, i) => (
@@ -406,11 +419,6 @@ export function Onboarding() {
             />
           ))}
         </div>
-        {last && canPickHandle && (
-          <motion.button className="btn btn--paper ob-handle-btn" initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={() => game.openHandleSheet()}>
-            Pick your handle
-          </motion.button>
-        )}
         <motion.button
           className="btn"
           layout
