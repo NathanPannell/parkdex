@@ -23,7 +23,7 @@ python scripts/import_legacy_parks.py plan `
   --out .codex\legacy-park-import\review-plan.json
 ```
 
-Repeat `--park-id` for each selected source feature. Add `--id-map old-id:new-id` only for an explicit source to target ID mapping. Mapping changes the boundary feature ID; it never renames a database park.
+Repeat `--park-id` for each selected source feature, or pass `--park-id-file` with one stable ID per line for large batches (blank lines and `#` comments are ignored). Add `--id-map old-id:new-id` only for an explicit source to target ID mapping. Mapping changes the boundary feature ID; it never renames a database park.
 
 The plan output reports its SHA, target identity, selected count, readiness, and blockers. The JSON plan records the full desired public feature, legacy source feature IDs and provenance, polygon and hole counts, position count, bounding box, prior target geometry summary and hash, source SHA values, target database identity, and synchronized content revision. The desired public feature contains exactly `properties.id` and `properties.biome`. Source provenance remains in the plan.
 
