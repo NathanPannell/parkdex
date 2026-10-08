@@ -715,11 +715,17 @@ export function parseCatalogueChunk(value: unknown, chunk: ContentCatalogueChunk
 
 /** The catalogue as one snapshot, checked exactly as an API snapshot would be. */
 export function assembleCatalogueSnapshot(index: ContentCatalogueIndex, chunkFeatures: unknown[][]): ContentSyncState {
+  // Chunks group boundaries by area; a snapshot lists them in park order.
+  const features = chunkFeatures.flat();
+  const byId = new Map(features.map((feature) => [(feature as { properties: { id: string } }).properties.id, feature]));
+  const ordered = (index.body.parks as unknown[]).map((park) => byId.get(String(record(park, "catalogue park").id)));
+  const used = new Set(ordered);
+  const leftover = features.filter((feature) => !used.has(feature));
   return parseContentSnapshot({
     schema: "parkdex.content-sync/v1",
     revision: index.pointer.revision,
     parks: index.body.parks,
-    boundaries: { type: "FeatureCollection", features: chunkFeatures.flat() },
+    boundaries: { type: "FeatureCollection", features: [...ordered.filter((feature) => feature !== undefined), ...leftover] },
     drive: index.body.drive,
     assets: index.body.assets,
     map: index.body.map,

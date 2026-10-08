@@ -146,7 +146,8 @@ describe.each(FULL_RELEASES)("reader 3 catalogue: $name", ({ snapshot }) => {
     const parks: Json[] = snapshot.parks.map((park) => ({ ...accessFields, ...park }));
     const version = "a".repeat(64);
     const pointer = { revision: snapshot.revision, version, indexUrl: `https://kip-assets.parkdex.app/releases/${version}/catalogue/index.json`, indexSha256: version, indexBytes: 1000, parkCount: parks.length };
-    const ids = parks.map((park) => String(park.id));
+    // Releases group boundaries by area, so chunk order is not park order.
+    const ids = parks.map((park) => String(park.id)).reverse();
     const chunkIds = Array.from({ length: Math.ceil(ids.length / 100) }, (_, index) => ids.slice(index * 100, index * 100 + 100));
     const index = currentReader.parseCatalogueIndex({
       schema: "parkdex.content-catalogue/v1", revision: snapshot.revision, parks, drive: snapshot.drive, assets: snapshot.assets, map: snapshot.map,
