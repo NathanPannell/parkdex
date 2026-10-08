@@ -2181,6 +2181,8 @@ def vercel_release_target_args(environment: str) -> list[str]:
 
 def dispatch_release(args, environment: str) -> None:
     config = load_config()
+    if environment == "production":
+        config["vercelProjectIdEnvironment"] = config["productionVercelProjectIdEnvironment"]
     verify_git_sha(args.sha, staging_only=environment == "staging", production_only=environment == "production", clean=False)
     if os.environ.get("GITHUB_RUN_ATTEMPT", "1") != "1":
         raise DeliveryError(f"{environment.capitalize()} release dispatch is first-attempt only.")
@@ -2421,6 +2423,8 @@ def verified_photo_source(config: dict, pr: int, base_sha: str, *, require_attes
 
 def assign_release(args, environment: str) -> None:
     config = load_config()
+    if environment == "production":
+        config["vercelProjectIdEnvironment"] = config["productionVercelProjectIdEnvironment"]
     if not re.fullmatch(r"dpl_[A-Za-z0-9]+", args.deployment_id):
         raise DeliveryError("Deployment ID must be a full Vercel dpl_ identifier.")
     if not SHA_RE.fullmatch(args.sha or ""):
