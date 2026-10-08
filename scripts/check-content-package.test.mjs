@@ -32,12 +32,11 @@ test("requires the bundled overview in every app package", async (t) => {
 
 test("requires every onboarding illustration and Kip pose in the app package", async (t) => {
   const outputDirectory = await packageFixture(t);
-  const scenePath = join(outputDirectory, "assets", "onboarding-scene-goldstream-testhash.webp");
-  await rm(scenePath);
+  await rm(join(outputDirectory, "art", "kip", "kip-wave.webp"));
 
   const result = checkPackage(outputDirectory);
   assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /assets\/onboarding-scene-goldstream-: required bundled onboarding artwork is missing/);
+  assert.match(result.output, /art\/kip\/kip-wave\.webp: required bundled onboarding artwork is missing/);
 });
 
 test("requires the onboarding map illustration in the app package", async (t) => {
@@ -99,7 +98,7 @@ async function packageFixture(t) {
   await writeFile(join(mapLibre, "maplibre-gl-shared.mjs"), "export {};\n");
   const bundledAssets = join(outputDirectory, "assets");
   await mkdir(bundledAssets, { recursive: true });
-  for (const name of ["onboarding-go-map", "onboarding-scene-beacon-hill", "onboarding-scene-goldstream", "onboarding-scene-wittys-lagoon"]) {
+  for (const name of ["onboarding-go-map"]) {
     await writeFile(join(bundledAssets, `${name}-testhash.webp`), "bundled onboarding art");
   }
   const kipArt = join(outputDirectory, "art", "kip");
