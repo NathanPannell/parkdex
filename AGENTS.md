@@ -40,6 +40,7 @@ npm run build
 npm run android:apk         # debug APK (app.parkdex.debug)
 npm run android:aab:production
 npm run local:api           # real API on 127.0.0.1:8787 against loopback PostgreSQL; see docs/local-stack.md
+node scripts/publish-app-bundle.mjs --channel staging --min-native-build <n>   # over-the-air web bundle, dry run (docs/ota-updates.md)
 ```
 
 For signed-in QA without a hosted environment, run `npm run local:api` and then `KIP_LOCAL_API=http://127.0.0.1:8787 npm run dev`. Test accounts come from `scripts/local-stack.seed.json`.
