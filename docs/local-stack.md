@@ -17,7 +17,7 @@ Or point it at a cluster you already started, with `PGHOST`, `PGPORT`, `PGUSER`,
 On start it:
 
 1. applies the feedback, account, progress and interaction migrations, `database/001_cloud_content.sql` (for `public.parks`) and every `independentMigrationPaths` migration, including `game_001_init.sql`
-2. loads the 122 bundled parks from `src/data/parks.json` into `public.parks`
+2. loads the staging catalogue's parks (the same IDs the dev app reads) into `public.parks`, or the bundled `src/data/parks.json` when staging is unreachable. `--catalogue <url>` points at another content snapshot
 3. seeds the test-only accounts in `scripts/local-stack.seed.json` (`tester1@example.test` to `tester3@example.test`, all `@example.test`). The first two already have handles; `tester3` has none, for the handle setup screen. The shared test password is in that file.
 
 Options: `--port` (default 8787), `--app-origin` (default `http://localhost:5190`), `--pgdata`, `--pg-port` (default 55510). `PG_BIN` overrides the PostgreSQL binaries folder (default `C:/Program Files/PostgreSQL/18/bin`). `OPENROUTER_API_KEY` and `OPENROUTER_MODERATION_MODEL` pass through when set; without a key, handles use the blocklist only.
@@ -32,7 +32,7 @@ Stop the API with Ctrl+C. The script prints the `pg_ctl stop` command for a clus
 KIP_LOCAL_API=http://127.0.0.1:8787 npm run dev
 ```
 
-Open `http://localhost:5190`. The dev server proxies `/api` to the local API with the page's Host header, so session and CSRF cookies stay same-origin. Development builds accept this loopback `http` origin for account requests (`isDevLoopbackHttp` in `src/lib/userDataDestination.ts`); production and field builds still require HTTPS. `KIP_LOCAL_API` must be a loopback `http` URL.
+Open `http://localhost:5190`. Keep the Vite dev server on port 5190: the staging content API only allows that local origin, so on another port no parks load. The dev server proxies `/api` to the local API with the page's Host header, so session and CSRF cookies stay same-origin. Development builds accept this loopback `http` origin for account requests (`isDevLoopbackHttp` in `src/lib/userDataDestination.ts`); production and field builds still require HTTPS. `KIP_LOCAL_API` must be a loopback `http` URL.
 
 The native Android build does not use the local stack yet: its account API must be the staging or production origin.
 

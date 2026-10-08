@@ -125,3 +125,4 @@ Read the matching file before you change these areas. Format and how to add one:
 | Badge art retries | `docs/learnings/badge-retry-accounting.md` |
 | Access surveys and product journeys | `docs/learnings/access-fieldwork-wording.md` |
 | Status answers and planning | `docs/learnings/fetch-before-describing-state.md` |
+| Previews for PRs that add a migration | `docs/learnings/preview-new-migrations.md` |

@@ -62,8 +62,25 @@ async function migrate() {
   for (const path of paths) await applyMigration(join(ROOT, path));
 }
 
+// The dev app reads the staging catalogue, so seed the same park IDs or most visits return
+// park_not_found. The bundled list is the offline fallback.
+const CATALOGUE_URL = option('catalogue', process.env.LOCAL_CATALOGUE_URL ?? 'https://staging.web.parkdex.app/api/content/snapshot');
+
+async function catalogueParks() {
+  try {
+    const response = await fetch(CATALOGUE_URL, { signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const parks = (await response.json()).parks;
+    if (!Array.isArray(parks) || parks.length === 0) throw new Error('no parks');
+    return parks;
+  } catch (error) {
+    console.warn(`Catalogue fetch failed (${error.message}); using the bundled parks.`);
+    return JSON.parse(readFileSync(join(ROOT, 'src', 'data', 'parks.json'), 'utf8'));
+  }
+}
+
 async function seedParks() {
-  const parks = JSON.parse(readFileSync(join(ROOT, 'src', 'data', 'parks.json'), 'utf8'));
+  const parks = await catalogueParks();
   for (const park of parks) {
     await pool.query(`
       INSERT INTO public.parks (id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb)
@@ -80,7 +97,8 @@ async function seedAccounts() {
     if (!email.endsWith('@example.test')) throw new Error('Local stack seed accounts must use @example.test addresses.');
     await pool.query(`
       INSERT INTO kip_account.accounts (id, normalized_email, password_hash, display_name, email_verified_at)
-      VALUES (md5('kip-local-stack:' || $1)::uuid, $1, $2, $3, now())
+      -- Stable per email, with the version 4 and variant bits set: the app rejects other UUID shapes.
+      VALUES (overlay(overlay(md5('kip-local-stack:' || $1) placing '4' from 13) placing '8' from 17)::uuid, $1, $2, $3, now())
       ON CONFLICT (normalized_email) DO UPDATE SET password_hash = EXCLUDED.password_hash, deletion_state = 'active'`,
     [email, passwordHash, account.displayName]);
     if (account.handle) {
