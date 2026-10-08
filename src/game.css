@@ -308,8 +308,9 @@
   overflow-wrap: anywhere;
 }
 
-.game-score__text span,
-.game-score__points span {
+/* Direct children only: the rolling score digits are spans too. */
+.game-score__text > span,
+.game-score__points > span {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-2);
@@ -396,8 +397,8 @@ button.game-row:active {
   white-space: nowrap;
 }
 
-.game-row__name span,
-.game-row__score span {
+.game-row__name > span,
+.game-row__score > span {
   font-size: 12px;
   color: var(--ink-soft);
 }
