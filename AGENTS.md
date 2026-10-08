@@ -106,6 +106,7 @@ Signed-in journeys on preview, staging and production hosts need the operator. D
 - Never print, log or commit credentials, database URLs or tokens. Delivery credentials load through the operator's local loader only.
 - Never copy personal data into a preview.
 - Do not rename `kip` identifiers as part of a copy change.
+- API stores query through `database()` from `worker/db.ts`, never `neon()` directly, so every read and write is recorded. Game events go through `emitEvent()`. See `docs/analytics.md`.
 - Put task scratch files under the workspace `.codex/` and remove them when you finish.
 
 ## Learnings
