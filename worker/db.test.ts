@@ -55,9 +55,13 @@ test("keywords inside literals and comments are ignored", () => {
   assert.deepEqual(result, { operation: "read", tables: ["kip_account.sessions"] });
 });
 
-test("calls to kip_* database functions count as writes", () => {
-  const result = classifySql("SELECT * FROM kip_game.record_visit($1::uuid, $2, $3)");
+test("calls to listed write functions count as writes, other functions as reads", () => {
+  const result = classifySql("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result");
   assert.deepEqual(result, { operation: "write", tables: ["kip_game.record_visit"] });
+  assert.deepEqual(classifySql("SELECT rank, handle FROM kip_game.leaderboard($1::timestamptz)"), { operation: "read", tables: ["kip_game.leaderboard"] });
+  assert.deepEqual(classifySql(`SELECT t.park_id, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
+    FROM kip_game.tenures t WHERE kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)`).operation, "read");
+  assert.equal(classifySql("INSERT INTO kip_game.players (account_id, flag_seed) SELECT a.id, kip_game.flag_seed(a.id) FROM kip_account.accounts a").operation, "write");
   assert.equal(classifySql("SELECT hashtextextended($1, 0), jsonb_to_recordset($2::jsonb)").operation, "read");
 });
 

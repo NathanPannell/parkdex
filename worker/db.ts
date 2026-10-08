@@ -24,6 +24,11 @@ const WRITE_STATEMENTS = [
   /(?<!\bfor )(?<!\bdo )(?<!\bkey )\bupdate (?:only )?(?!set\b)[a-z_]/,
   /\b(?:nextval|setval)\s*\(/,
 ];
+/**
+ * Database functions that change data. Other function calls (scores, flags, leaderboards) are
+ * reads. Add a function here when it writes, or its calls will be counted as reads.
+ */
+export const WRITE_FUNCTIONS = new Set(["kip_game.record_visit"]);
 const MAX_TABLES = 16;
 const CACHE_LIMIT = 500;
 const classificationCache = new Map<string, SqlClassification>();
@@ -41,8 +46,8 @@ function stripSql(text: string): string {
 }
 
 /**
- * Read or write, plus the schema-qualified tables a statement names. A call to a function in a
- * kip_* schema counts as a write, because game rules run as database functions.
+ * Read or write, plus the schema-qualified tables and functions a statement names. A call to a
+ * function in WRITE_FUNCTIONS counts as a write, because game rules run as database functions.
  */
 export function classifySql(text: string): SqlClassification {
   const cached = classificationCache.get(text);
@@ -55,7 +60,7 @@ export function classifySql(text: string): SqlClassification {
     // "INSERT INTO kip_x.t (" is a column list, not a function call.
     const before = sql.slice(Math.max(0, (match.index ?? 0) - 6), match.index);
     const isCall = Boolean(match[2]) && !/\b(?:into|table) $/.test(before);
-    if (isCall && name.startsWith("kip_")) write = true;
+    if (isCall && WRITE_FUNCTIONS.has(name)) write = true;
     if (tables.size < MAX_TABLES) tables.add(name);
   }
   const result: SqlClassification = { operation: write ? "write" : "read", tables: [...tables].sort() };

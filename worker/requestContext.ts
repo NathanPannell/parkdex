@@ -11,12 +11,16 @@ export const APP_VERSION_HEADER = "X-Kip-App-Version";
 export const BUNDLE_ID_HEADER = "X-Kip-Bundle-Id";
 export const REQUEST_CONTEXT_HEADERS = [INSTALLATION_HEADER, APP_VERSION_HEADER, BUNDLE_ID_HEADER] as const;
 
+// flag_held and visit_already_today complete the visit outcomes, so takeover share can be measured.
 export const GAME_EVENT_TYPES = [
   "flag_planted",
   "flag_taken",
+  "flag_held",
+  "visit_already_today",
   "flag_fell",
   "leaderboard_viewed",
   "takeover_message_seen",
+  "handle_set",
 ] as const;
 export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 export type DbEventType = "db_read" | "db_write";
