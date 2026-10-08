@@ -8,6 +8,7 @@ import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccoun
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { handleGameRequest, type GameDependencies, type GameEnv } from "./game.js";
 import {
   HttpError,
   readJsonBody,
@@ -17,7 +18,7 @@ import {
   type ValidatedFeedback,
 } from "./validation.js";
 
-export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv {
+export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv, GameEnv {
   DATABASE_URL?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
@@ -41,6 +42,7 @@ export interface WorkerDependencies {
   auth?: AuthDependencies;
   progress?: ProgressDependencies;
   interactions?: InteractionDependencies;
+  game?: GameDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
@@ -283,6 +285,11 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     const progressResponse = await handleProgressRequest(request, env, auth, dependencies.progress);
     if (progressResponse) return progressResponse;
   }
+  const gameResponse = await handleGameRequest(request, env, {
+    account: () => requireAccount(request, env, authDependencies),
+    mutation: () => requireAccountMutation(request, env, authDependencies),
+  }, { fetch: dependencies.fetch, now: dependencies.now, ...dependencies.game });
+  if (gameResponse) return gameResponse;
   // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
   const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
   if (deletionResume && request.method === "POST") {

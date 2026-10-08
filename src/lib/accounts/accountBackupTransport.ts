@@ -6,6 +6,7 @@ import {
   subscribeContentConnectivity,
 } from "../content/transport";
 import { isAccountBackupAvailable, mapAccountBackupConnectivity } from "./accountBackupConnectivity";
+import { isDevLoopbackHttp } from "../userDataDestination";
 
 const MAX_ACCOUNT_BACKUP_BYTES = 2_621_440;
 const MAX_CLAIM_JSON_BYTES = 16 * 1024;
@@ -27,17 +28,19 @@ export function isAccountBackupPath(url: URL): boolean {
 /** Validate the small set of account endpoints permitted to use the account backup transport. */
 export function assertAccountBackupRequest(url: URL, method: string, approvedApiOrigin: string): RouteKind {
   let apiOrigin: string;
+  let devLoopback = false;
   try {
     const configured = new URL(approvedApiOrigin);
-    if (configured.protocol !== "https:" || configured.username || configured.password || configured.search || configured.hash ||
-        (configured.port && configured.port !== "443") || !["", "/"].includes(configured.pathname)) throw new Error();
+    devLoopback = isDevLoopbackHttp(configured) && !configured.search && !configured.hash && ["", "/"].includes(configured.pathname);
+    if ((configured.protocol !== "https:" && !devLoopback) || configured.username || configured.password || configured.search || configured.hash ||
+        (configured.port && configured.port !== "443" && !devLoopback) || !["", "/"].includes(configured.pathname)) throw new Error();
     apiOrigin = configured.origin;
   } catch {
     throw new Error("Account backup requires a configured HTTPS API origin.");
   }
 
-  if (url.protocol !== "https:" || url.origin !== apiOrigin || url.username || url.password || url.href.includes("#") ||
-      (url.port && url.port !== "443")) {
+  if ((url.protocol !== "https:" && !devLoopback) || url.origin !== apiOrigin || url.username || url.password || url.href.includes("#") ||
+      (url.port && url.port !== "443" && !devLoopback)) {
     throw new Error("Account backup must use the configured HTTPS account API.");
   }
 
