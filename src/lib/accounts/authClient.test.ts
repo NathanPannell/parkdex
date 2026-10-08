@@ -49,6 +49,14 @@ describe("account transport", () => {
     expect(() => assertSecureAccountRequest(new URL("https://staging.web.parkdex.app/api/auth/login"), origin)).not.toThrow();
   });
 
+  it("accepts the loopback local stack only in development builds", () => {
+    const local = "http://localhost:5190";
+    expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, true)).not.toThrow();
+    expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, false)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("http://127.0.0.1:8787/api/auth/login"), local, true)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("http://staging.web.parkdex.app/api/auth/login"), "http://staging.web.parkdex.app", true)).toThrow("HTTPS account API");
+  });
+
   it("blocks redirects on native authenticated requests", async () => {
     nativeMocks.responses.push(jsonResponse({ account: { id: "a", email: "a@example.test" } }));
     await getCurrentAccount("a");
