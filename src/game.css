@@ -588,3 +588,224 @@ button.game-row:active {
   font-size: 14px;
   color: var(--ink-soft);
 }
+
+/* ---------- Onboarding: the flag game ---------- */
+
+.ob-mound {
+  display: block;
+  overflow: visible;
+}
+
+.ob-planted {
+  position: relative;
+}
+
+.ob-planted__pole {
+  position: absolute;
+  top: 8px;
+  width: 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f7ead2, #c9b48f);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.ob-planted__pole::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -9px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 2px solid var(--ink);
+}
+
+.ob-planted__cloth {
+  position: absolute;
+  top: 10px;
+  transform-origin: left center;
+  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.16));
+}
+
+.ob-planted .ob-mound {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+
+.ob-hills,
+.ob-days,
+.ob-take,
+.ob-you {
+  position: relative;
+  width: 320px;
+  height: 340px;
+  display: grid;
+  place-items: center;
+}
+
+.ob-hills__flag {
+  position: absolute;
+}
+
+.ob-guide {
+  position: absolute;
+  bottom: -6px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ob-guide--left {
+  left: 0;
+}
+
+.ob-guide--right {
+  right: 0;
+}
+
+.ob-go__flag {
+  position: absolute;
+  left: 189px;
+  top: 89px;
+  transform-origin: 11px 100%;
+  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.2));
+}
+
+.ob-days__flag {
+  margin-top: -40px;
+}
+
+.ob-days__chip {
+  position: absolute;
+  top: 6px;
+  left: 18px;
+  padding: 6px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 99px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.ob-days__score {
+  position: absolute;
+  top: 0;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--sun);
+}
+
+.ob-days__score strong {
+  display: flex;
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ob-days__score > span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ob-take__ground {
+  position: absolute;
+  left: 50%;
+  top: 214px;
+  translate: -50% 0;
+  z-index: 1;
+}
+
+.ob-take__flag {
+  position: absolute;
+  left: 152px;
+  top: 82px;
+  width: 120px;
+  height: 140px;
+  transform-origin: 3px 100%;
+}
+
+.ob-take__pole {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f7ead2, #c9b48f);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.ob-take__cloth {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  transform-origin: left center;
+}
+
+.ob-take__tag {
+  position: absolute;
+  left: 12px;
+  top: 82px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ob-take__points {
+  position: absolute;
+  right: 18px;
+  top: 40px;
+  font-family: var(--display);
+  font-size: 46px;
+  font-weight: 800;
+  color: var(--kip);
+  -webkit-text-stroke: 2px var(--ink);
+  text-shadow: 0 4px 0 var(--ink);
+}
+
+.ob-you__flag {
+  position: relative;
+  z-index: 1;
+  margin-top: -40px;
+  filter: drop-shadow(0 8px 0 rgba(20, 35, 28, 0.18));
+}
+
+.ob-you__handle {
+  position: absolute;
+  z-index: 2;
+  top: 214px;
+  padding: 6px 16px;
+  border: 2.5px solid var(--ink);
+  border-radius: 99px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.ob-handle-btn {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* The handle sheet can open from onboarding, which sits above every other screen. */
+.handle-scrim {
+  z-index: 95;
+}
+
+.handle-sheet {
+  z-index: 96;
+}
