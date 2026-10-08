@@ -9,6 +9,7 @@ import { deleteAccountData, handleProgressRequest, type ProgressDependencies, ty
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import { handleGameRequest, type GameDependencies, type GameEnv } from "./game.js";
+import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import {
   HttpError,
   readJsonBody,
@@ -29,6 +30,8 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   PUBLIC_APP_URL?: string;
   SESSION_SECRET?: string;
   RELEASE_SHA?: string;
+  /** Local QA only: serves over-the-air bundle pointers instead of the public asset CDN. */
+  APP_BUNDLE_ORIGIN?: string;
   EMAIL_MODE?: "resend" | "disabled" | string;
   ALLOWED_ORIGINS?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
@@ -259,6 +262,12 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/api/health" && request.method === "GET") return json({ ok: true, releaseSha: env.RELEASE_SHA ?? null });
+  const updateResponse = await handleAppUpdateRequest(request, {
+    json,
+    fetch: (input, init) => (dependencies.fetch ?? globalThis.fetch)(input, init),
+    origin: appBundleOrigin(env.APP_BUNDLE_ORIGIN),
+  });
+  if (updateResponse) return updateResponse;
   const interactionResponse = await handleInteractionRequest(request, env, dependencies.interactions);
   if (interactionResponse) return interactionResponse;
   const retentionResponse = await handleRetentionRequest(request, env, dependencies.interactions);
