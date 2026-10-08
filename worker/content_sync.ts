@@ -1,4 +1,6 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
+import { createAnalyticsSink, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
+import { REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 
 export const CONTENT_SYNC_SCHEMA = "parkdex.content-sync/v1" as const;
 const CDN_ORIGIN = "https://kip-assets.parkdex.app";
@@ -14,6 +16,16 @@ const CATEGORIES = new Set(["national", "provincial", "regional", "municipal", "
 const BIOMES = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPES = new Set(["circle", "hex", "shield", "arch", "seal"]);
 const RARITIES = new Set(["common", "uncommon", "rare", "epic", "legendary"]);
+// Builds installed before 2026-10-01 reject unknown park fields, so optional
+// fields go only to clients that send at least this reader version.
+const MAPS_LINK_READER = 2;
+// Readers from this version load the full catalogue from an immutable CDN
+// release (see content_004_catalogue_release.sql) instead of one snapshot body.
+export const CATALOGUE_READER = 3;
+export const CONTENT_CATALOGUE_SCHEMA = "parkdex.content-catalogue/v1" as const;
+const ACCESS_FIELDS = ["googleMapsUrl", "trailheadLat", "trailheadLng"] as const;
+// Matches content_parks_google_maps_url_check in content_003_park_maps_link.sql.
+export const GOOGLE_MAPS_URL = /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
 
 type JsonRecord = Record<string, unknown>;
 type RequestLike = {
@@ -30,21 +42,35 @@ type Park = {
   id: string; name: string; short: string; category: string; region: string;
   lat: number; lng: number; biome: string; shape: string; rarity: string;
   scene: string | null; seed: number; blurb: string;
+  googleMapsUrl?: string | null;
+  trailheadLat?: number | null;
+  trailheadLng?: number | null;
 };
 type ContentFile = {
   path: string; key: string; url: string; sha256: string; byte_size: number; content_type: string;
 };
 type DriveEntry = { drive: ([number, number] | null)[]; walkM: number };
 type MapPointer = { version: string; manifestUrl: string; manifestSha256: string };
-type SyncRepository = {
-  snapshot(): Promise<unknown>;
-  changes(after: number, limit: number): Promise<unknown>;
+export type CataloguePointer = {
+  version: string; revision: number; minimumReader: number;
+  indexUrl: string; indexSha256: string; indexBytes: number; parkCount: number;
+};
+export type SyncRepository = {
+  /** Parks whose reader floor is above `reader` are left out, with their boundaries and drive rows. */
+  snapshot(reader?: number): Promise<unknown>;
+  changes(after: number, limit: number, reader?: number): Promise<unknown>;
   scene(releaseId: string, scene: string): Promise<unknown | null>;
+  /** The published CDN catalogue, with the clock range the changes feed still covers. */
+  catalogue?(): Promise<{ pointer: unknown | null; headRevision: unknown; retentionFloor: unknown }>;
 };
 type HandlerOptions = {
   env?: Record<string, string | undefined>;
   repository?: SyncRepository;
+  /** Keeps the function alive for the analytics write after the response (Vercel waitUntil). */
+  waitUntil?: (promise: Promise<unknown>) => void;
+  analytics?: () => AnalyticsSink | null;
 };
+type NodeHandler = (request: RequestLike, response: ResponseLike) => Promise<void>;
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -77,7 +103,7 @@ function allowedOrigins(env: Record<string, string | undefined>): Set<string> {
 function setCors(request: RequestLike, response: ResponseLike, env: Record<string, string | undefined>) {
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Accept");
+  response.setHeader("Access-Control-Allow-Headers", ["Accept", ...REQUEST_CONTEXT_HEADERS].join(", "));
   response.setHeader("Access-Control-Expose-Headers", "Cache-Control");
   const origin = header(request, "origin");
   if (origin && allowedOrigins(env).has(origin)) response.setHeader("Access-Control-Allow-Origin", origin);
@@ -116,9 +142,10 @@ function safeInteger(value: unknown, label: string, min = 0): number {
   return value;
 }
 
-function validatePark(value: unknown): Park {
+function validatePark(value: unknown, reader: number): Park {
   const park = record(value, "park");
-  exactKeys(park, PARK_FIELDS, "park");
+  // Change rows written before the access columns existed have only the base fields.
+  exactKeys(park, Object.hasOwn(park, "googleMapsUrl") ? [...PARK_FIELDS, ...ACCESS_FIELDS] : PARK_FIELDS, "park");
   const id = text(park.id, "park.id");
   if (!PARK_ID.test(id)) throw new Error("park.id is invalid");
   const name = nonEmptyText(park.name, "park.name");
@@ -135,13 +162,22 @@ function validatePark(value: unknown): Park {
   const scene = park.scene;
   if (scene !== null && (typeof scene !== "string" || !SCENE_SLUG.test(scene))) throw new Error(`park ${id} has an invalid scene slug`);
   if (typeof park.blurb !== "string") throw new Error(`park ${id} blurb must be a string`);
-  return {
+  const googleMapsUrl = park.googleMapsUrl ?? null;
+  if (googleMapsUrl !== null && (typeof googleMapsUrl !== "string" || googleMapsUrl.length > 2048 || !GOOGLE_MAPS_URL.test(googleMapsUrl))) {
+    throw new Error(`park ${id} has an invalid Google Maps link`);
+  }
+  const trailheadLat = park.trailheadLat === null || park.trailheadLat === undefined ? null : finiteNumber(park.trailheadLat, `park ${id} trailhead latitude`, -90, 90);
+  const trailheadLng = park.trailheadLng === null || park.trailheadLng === undefined ? null : finiteNumber(park.trailheadLng, `park ${id} trailhead longitude`, -180, 180);
+  if ((trailheadLat === null) !== (trailheadLng === null)) throw new Error(`park ${id} trailhead needs both coordinates`);
+  const checked: Park = {
     id, name, short, category, region: park.region as string,
     lat: finiteNumber(park.lat, `park ${id} latitude`, -90, 90),
     lng: finiteNumber(park.lng, `park ${id} longitude`, -180, 180),
     biome, shape, rarity, scene, seed: safeInteger(park.seed, `park ${id} seed`, -Number.MAX_SAFE_INTEGER),
     blurb: park.blurb,
   };
+  if (reader >= MAPS_LINK_READER) Object.assign(checked, { googleMapsUrl, trailheadLat, trailheadLng });
+  return checked;
 }
 
 function validateBoundary(value: unknown, expectedId?: string): JsonRecord {
@@ -240,13 +276,13 @@ function validateMapPointer(value: unknown): MapPointer | null {
   return { version: pointer.version, manifestUrl: pointer.manifestUrl, manifestSha256: pointer.manifestSha256 };
 }
 
-function validateSnapshot(value: unknown): JsonRecord {
+function validateSnapshot(value: unknown, reader: number): JsonRecord {
   const snapshot = record(value, "content snapshot");
   exactKeys(snapshot, ["schema", "revision", "parks", "boundaries", "drive", "assets", "map"], "content snapshot");
   if (snapshot.schema !== CONTENT_SYNC_SCHEMA) throw new Error("content snapshot schema is unsupported");
   safeInteger(snapshot.revision, "content revision");
   if (!Array.isArray(snapshot.parks)) throw new Error("content snapshot parks must be an array");
-  const parks = snapshot.parks.map(validatePark);
+  const parks = snapshot.parks.map((park) => validatePark(park, reader));
   const ids = parks.map((park) => park.id);
   if (new Set(ids).size !== ids.length) throw new Error("content snapshot has duplicate park ids");
   const parkById = new Map(parks.map((park) => [park.id, park]));
@@ -294,7 +330,7 @@ function validateSnapshot(value: unknown): JsonRecord {
 type Entity = "park" | "boundary" | "drive" | "asset" | "hubs" | "map";
 type Change = { entity: Entity; op: "upsert" | "delete"; id: string; value?: unknown };
 
-function validateChange(value: unknown): Change {
+function validateChange(value: unknown, reader: number): Change {
   const change = record(value, "content change");
   const entity = change.entity;
   if (!["park", "boundary", "drive", "asset", "hubs", "map"].includes(String(entity))) throw new Error("content change entity is invalid");
@@ -312,7 +348,7 @@ function validateChange(value: unknown): Change {
   exactKeys(change, ["entity", "op", "id", "value"], "content upsert change");
   let checked: unknown;
   if (entity === "park") {
-    checked = validatePark(change.value);
+    checked = validatePark(change.value, reader);
     if ((checked as Park).id !== id) throw new Error("park change id does not match its value");
   } else if (entity === "boundary") {
     checked = validateBoundary(change.value, id);
@@ -330,7 +366,7 @@ function validateChange(value: unknown): Change {
   return { entity: entity as Entity, op: "upsert", id, value: checked };
 }
 
-function validateChanges(value: unknown): JsonRecord {
+function validateChanges(value: unknown, reader: number): JsonRecord {
   const response = record(value, "content changes response");
   exactKeys(response, ["schema", "fromRevision", "throughRevision", "headRevision", "hasMore", "batches"], "content changes response");
   if (response.schema !== CONTENT_SYNC_SCHEMA) throw new Error("content changes schema is unsupported");
@@ -346,7 +382,7 @@ function validateChanges(value: unknown): JsonRecord {
     const revision = safeInteger(batch.revision, "batch revision", 1);
     if (revision !== prior + 1 || revision > headRevision || !Array.isArray(batch.changes) || batch.changes.length === 0) throw new Error("content change batch is invalid or noncontiguous");
     prior = revision;
-    const changes = batch.changes.map(validateChange);
+    const changes = batch.changes.map((change) => validateChange(change, reader));
     const keys = changes.map((change) => `${change.entity}\0${change.id}`);
     if (new Set(keys).size !== keys.length) throw new Error(`content batch ${revision} has duplicate entity keys`);
     return { revision, changes };
@@ -365,20 +401,31 @@ function numericDatabaseValue(value: unknown, label: string): number {
 }
 
 function createNeonRepository(databaseUrl: string): SyncRepository {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
-    async snapshot() {
+    async snapshot(reader = 1) {
       const results = await sql.transaction([
         sql`SELECT revision FROM public.content_clock WHERE singleton = true`,
-        sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks ORDER BY id`,
-        sql`SELECT park_id, feature FROM public.boundaries ORDER BY park_id`,
+        sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb,
+                   google_maps_url AS "googleMapsUrl", trailhead_lat AS "trailheadLat", trailhead_lng AS "trailheadLng"
+              FROM public.parks AS park
+             WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
+             ORDER BY id`,
+        sql`SELECT park_id, feature FROM public.boundaries AS boundary
+             WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = boundary.park_id AND floor.minimum_reader > ${reader})
+             ORDER BY park_id`,
         sql`SELECT position, name, lng, lat FROM public.drive_hubs ORDER BY position`,
-        sql`SELECT park_id, walk_m FROM public.park_drive_settings ORDER BY park_id`,
-        sql`SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive ORDER BY park_id, hub_position`,
+        sql`SELECT park_id, walk_m FROM public.park_drive_settings AS setting
+             WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = setting.park_id AND floor.minimum_reader > ${reader})
+             ORDER BY park_id`,
+        sql`SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive AS route
+             WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = route.park_id AND floor.minimum_reader > ${reader})
+             ORDER BY park_id, hub_position`,
         sql`SELECT DISTINCT asset.logical_path AS path, asset.object_key AS key, asset.url, asset.sha256, asset.byte_size, asset.content_type
               FROM public.parks AS park
               JOIN public.r2_objects AS asset ON asset.logical_path = 'art/badges/scenes/' || park.scene || '.webp'
              WHERE park.scene IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
              ORDER BY asset.logical_path`,
         sql`SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true`,
       ], { isolationLevel: "RepeatableRead", readOnly: true });
@@ -429,10 +476,10 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
         map: mapRow ? { version: mapRow.version, manifestUrl: mapRow.manifest_url, manifestSha256: mapRow.manifest_sha256 } : null,
       };
     },
-    async changes(after, limit) {
+    async changes(after, limit, reader = 1) {
       const rows = await sql.query(
         `WITH state AS MATERIALIZED (
-           SELECT revision, retention_floor FROM public.content_clock WHERE singleton = true
+           SELECT revision, retention_floor, public.content_hubs_json() AS hubs FROM public.content_clock WHERE singleton = true
          ), selected AS MATERIALIZED (
            SELECT batch.revision
              FROM public.content_change_batches AS batch CROSS JOIN state
@@ -446,15 +493,18 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
                 AND batch.revision <= state.revision
            ) AS has_more
          )
-         SELECT state.revision AS head_revision, state.retention_floor,
+         SELECT state.revision AS head_revision, state.retention_floor, state.hubs,
                 selected.revision AS batch_revision,
                 change.entity, change.entity_id, change.operation, change.value,
                 more.has_more
            FROM state CROSS JOIN more
            LEFT JOIN selected ON true
            LEFT JOIN public.content_changes AS change ON change.revision = selected.revision
+                AND NOT (change.entity IN ('park', 'boundary', 'drive') AND EXISTS (
+                  SELECT 1 FROM public.content_park_reader_floor AS floor
+                   WHERE floor.park_id = change.entity_id AND floor.minimum_reader > $3))
           ORDER BY selected.revision, change.entity, change.entity_id`,
-        [after, limit],
+        [after, limit, reader],
       ) as Record<string, unknown>[];
       if (!rows.length) throw new Error("content clock is not initialized");
       const headRevision = numericDatabaseValue(rows[0].head_revision, "head revision");
@@ -468,13 +518,36 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
           batch = { revision, changes: [] };
           batches.push(batch);
         }
+        // Every change in this batch is for parks this reader may not see.
+        if (row.entity === null || row.entity === undefined) continue;
         const entity = text(row.entity, "change entity") as Entity;
         const id = text(row.entity_id, "change id");
         const op = text(row.operation, "change operation") as "upsert" | "delete";
         batch.changes.push(op === "delete" ? { entity, op, id } : { entity, op, id, value: row.value });
       }
       const hasMore = rows[0].has_more === true;
-      return { headRevision, retentionFloor, batches, hasMore };
+      return { headRevision, retentionFloor, batches, hasMore, hubs: rows[0].hubs };
+    },
+    async catalogue() {
+      const rows = await sql`
+        SELECT clock.revision AS head_revision, clock.retention_floor,
+               catalogue.version, catalogue.revision, catalogue.minimum_reader, catalogue.index_url,
+               catalogue.index_sha256, catalogue.index_bytes, catalogue.park_count
+          FROM public.content_clock AS clock
+          LEFT JOIN public.content_catalogue AS catalogue ON catalogue.singleton = true
+         WHERE clock.singleton = true`;
+      const row = rows[0] as Record<string, unknown> | undefined;
+      if (!row) throw new Error("content clock is not initialized");
+      const pointer = row.version === null || row.version === undefined ? null : {
+        version: row.version,
+        revision: numericDatabaseValue(row.revision, "catalogue revision"),
+        minimumReader: numericDatabaseValue(row.minimum_reader, "catalogue minimum reader"),
+        indexUrl: row.index_url,
+        indexSha256: row.index_sha256,
+        indexBytes: numericDatabaseValue(row.index_bytes, "catalogue index bytes"),
+        parkCount: numericDatabaseValue(row.park_count, "catalogue park count"),
+      };
+      return { pointer, headRevision: row.head_revision, retentionFloor: row.retention_floor };
     },
     async scene(releaseId, scene) {
       const rows = await sql`
@@ -491,6 +564,58 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
       };
     },
   };
+}
+
+function validateCataloguePointer(value: unknown): CataloguePointer {
+  const pointer = record(value, "catalogue pointer");
+  exactKeys(pointer, ["version", "revision", "minimumReader", "indexUrl", "indexSha256", "indexBytes", "parkCount"], "catalogue pointer");
+  if (typeof pointer.version !== "string" || !SHA256.test(pointer.version)) throw new Error("catalogue version is invalid");
+  if (pointer.indexUrl !== `${CDN_ORIGIN}/releases/${pointer.version}/catalogue/index.json`) throw new Error("catalogue index URL does not match its version");
+  if (typeof pointer.indexSha256 !== "string" || !SHA256.test(pointer.indexSha256)) throw new Error("catalogue index SHA-256 is invalid");
+  const indexBytes = safeInteger(pointer.indexBytes, "catalogue index bytes", 1);
+  if (indexBytes > MAX_RESPONSE_BYTES) throw new Error("catalogue index exceeds the supported response size");
+  return {
+    version: pointer.version,
+    revision: safeInteger(pointer.revision, "catalogue revision"),
+    minimumReader: safeInteger(pointer.minimumReader, "catalogue minimum reader", 2),
+    indexUrl: pointer.indexUrl,
+    indexSha256: pointer.indexSha256,
+    indexBytes,
+    parkCount: safeInteger(pointer.parkCount, "catalogue park count"),
+  };
+}
+
+/**
+ * The catalogue release a newer reader should load, or null to fall back to one snapshot body.
+ * It is used only while the changes feed still covers everything after its revision.
+ */
+async function publishedCatalogue(repository: SyncRepository, reader: number): Promise<JsonRecord | null> {
+  if (!repository.catalogue) return null;
+  const state = record(await repository.catalogue(), "content catalogue query result");
+  if (state.pointer === null || state.pointer === undefined) return null;
+  const pointer = validateCataloguePointer(state.pointer);
+  const headRevision = numericDatabaseValue(state.headRevision, "head revision");
+  const retentionFloor = numericDatabaseValue(state.retentionFloor, "retention floor");
+  if (pointer.minimumReader > reader || pointer.revision > headRevision || pointer.revision < retentionFloor) return null;
+  return {
+    schema: CONTENT_SYNC_SCHEMA,
+    revision: pointer.revision,
+    catalogue: {
+      schema: CONTENT_CATALOGUE_SCHEMA,
+      version: pointer.version,
+      indexUrl: pointer.indexUrl,
+      indexSha256: pointer.indexSha256,
+      indexBytes: pointer.indexBytes,
+      parkCount: pointer.parkCount,
+    },
+  };
+}
+
+// Clients that predate the reader parameter are reader 1.
+function readerVersion(raw: string | null): number {
+  if (raw === null) return 1;
+  if (!/^\d{1,4}$/.test(raw) || Number(raw) < 1) throw new HttpError(400, "reader must be a positive integer");
+  return Number(raw);
 }
 
 function sendJson(response: ResponseLike, status: number, body: JsonRecord, head = false): void {
@@ -519,9 +644,22 @@ async function repositoryFor(options: HandlerOptions): Promise<SyncRepository> {
   return createNeonRepository(databaseUrl);
 }
 
+/** Run a content handler inside a request analytics context, as the main API router does. */
+function instrumented(options: HandlerOptions, path: string, handler: NodeHandler): NodeHandler {
+  const env = options.env ?? process.env;
+  return (request, response) => withRequestAnalytics({
+    method: request.method,
+    path,
+    header: (name) => header(request, name) ?? null,
+    env,
+    sink: () => options.analytics ? options.analytics() : createAnalyticsSink(env),
+    waitUntil: options.waitUntil,
+  }, () => handler(request, response));
+}
+
 function createHandler(options: HandlerOptions, operation: "snapshot" | "changes") {
   const env = options.env ?? process.env;
-  return async (request: RequestLike, response: ResponseLike): Promise<void> => {
+  return instrumented(options, `/api/content/${operation}`, async (request: RequestLike, response: ResponseLike): Promise<void> => {
     setCors(request, response, env);
     const method = (request.method ?? "GET").toUpperCase();
     if (method === "OPTIONS") {
@@ -537,8 +675,21 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
     }
     try {
       const repository = await repositoryFor({ ...options, env });
+      const params = new URLSearchParams();
+      const query = request.query ?? {};
+      for (const [key, value] of Object.entries(query)) {
+        if (value === undefined) continue;
+        if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
+        else params.set(key, value);
+      }
+      const reader = readerVersion(params.get("reader"));
       if (operation === "snapshot") {
-        const body = validateSnapshot(await repository.snapshot());
+        const catalogue = reader >= CATALOGUE_READER ? await publishedCatalogue(repository, reader) : null;
+        if (catalogue) {
+          sendJson(response, 200, catalogue, method === "HEAD");
+          return;
+        }
+        const body = validateSnapshot(await repository.snapshot(reader), reader);
         const serialized = JSON.stringify(body);
         if (new TextEncoder().encode(serialized).byteLength > MAX_RESPONSE_BYTES) {
           throw new HttpError(503, "snapshot exceeds supported response size");
@@ -547,13 +698,6 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         return;
       }
 
-      const params = new URLSearchParams();
-      const query = request.query ?? {};
-      for (const [key, value] of Object.entries(query)) {
-        if (value === undefined) continue;
-        if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
-        else params.set(key, value);
-      }
       const rawAfter = params.get("after");
       if (rawAfter === null || !/^\d+$/.test(rawAfter)) throw new HttpError(400, "after must be a non-negative revision");
       const after = Number(rawAfter);
@@ -562,7 +706,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
       if (!/^\d+$/.test(rawLimit) || Number(rawLimit) < 1 || Number(rawLimit) > 50) {
         throw new HttpError(400, "limit must be between 1 and 50");
       }
-      const rawResult = record(await repository.changes(after, Number(rawLimit)), "content changes query result");
+      const rawResult = record(await repository.changes(after, Number(rawLimit), reader), "content changes query result");
       const headRevision = safeInteger(rawResult.headRevision, "head revision");
       const retentionFloor = safeInteger(rawResult.retentionFloor, "retention floor");
       if (after > headRevision) throw new HttpError(400, "after is newer than the content revision");
@@ -572,9 +716,12 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
       if (!Array.isArray(rawResult.batches) || typeof rawResult.hasMore !== "boolean") throw new Error("content changes query result is malformed");
       let batches = rawResult.batches.map((rawBatch) => {
         const batch = record(rawBatch, "content batch");
+        const changes = Array.isArray(batch.changes) ? batch.changes.map((change) => validateChange(change, reader)) : (() => { throw new Error("batch changes must be an array"); })();
         return {
           revision: safeInteger(batch.revision, "batch revision", 1),
-          changes: Array.isArray(batch.changes) ? batch.changes.map(validateChange) : (() => { throw new Error("batch changes must be an array"); })(),
+          // Readers reject empty batches, so a batch with only parks this reader may not see
+          // carries the unchanged hub list instead, which every reader applies as a no-op.
+          changes: changes.length ? changes : [{ entity: "hubs" as const, op: "upsert" as const, id: "default", value: validateHubs(rawResult.hubs) }],
         };
       });
       let hasMore = rawResult.hasMore;
@@ -582,7 +729,7 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
         throughRevision: batches.length ? batches[batches.length - 1].revision : headRevision,
         headRevision, hasMore, batches,
-      });
+      }, reader);
       while (new TextEncoder().encode(JSON.stringify(body)).byteLength > MAX_RESPONSE_BYTES) {
         if (batches.length <= 1) throw new HttpError(413, "one committed content batch exceeds supported response size; take a fresh snapshot");
         batches = batches.slice(0, -1);
@@ -591,13 +738,13 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
           schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
           throughRevision: batches[batches.length - 1].revision,
           headRevision, hasMore, batches,
-        });
+        }, reader);
       }
       sendJson(response, 200, body, method === "HEAD");
     } catch (error) {
       sendFailure(response, error, method === "HEAD");
     }
-  };
+  });
 }
 
 export function createSnapshotHandler(options: HandlerOptions = {}) {
@@ -610,7 +757,7 @@ export function createChangesHandler(options: HandlerOptions = {}) {
 
 export function createSceneHandler(options: HandlerOptions = {}) {
   const env = options.env ?? process.env;
-  return async (request: RequestLike, response: ResponseLike): Promise<void> => {
+  return instrumented(options, "/api/content/scene", async (request: RequestLike, response: ResponseLike): Promise<void> => {
     setCors(request, response, env);
     const method = (request.method ?? "GET").toUpperCase();
     if (method === "OPTIONS") {
@@ -646,5 +793,5 @@ export function createSceneHandler(options: HandlerOptions = {}) {
     } catch (error) {
       sendFailure(response, error, method === "HEAD");
     }
-  };
+  });
 }

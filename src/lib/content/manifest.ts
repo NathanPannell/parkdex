@@ -35,6 +35,8 @@ const SCENE_ASSET_PATH = /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMMIT = /^[0-9a-f]{40,64}$/;
 const PARK_ID = /^[a-z0-9][a-z0-9-]*$/;
+// Matches content_parks_google_maps_url_check in content_003_park_maps_link.sql.
+const GOOGLE_MAPS_URL = /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
 
 export class ContentValidationError extends Error {
   constructor(message: string) {
@@ -329,7 +331,17 @@ function validatePark(value: unknown, index: number): Park {
     scene = string(park.scene, `${label}.scene`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(scene)) throw new ContentValidationError(`${label}.scene is invalid`);
   }
-  return { id, name, short, category, region, lat, lng, biome, shape, rarity, seed: park.seed, blurb, scene };
+  // Optional: older servers and cached rows omit it, and a bad link falls back to the pin.
+  const link = park.googleMapsUrl;
+  const googleMapsUrl = typeof link === "string" && link.length <= 2048 && GOOGLE_MAPS_URL.test(link) ? link : null;
+  const coordinate = (value: unknown, limit: number) => typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit ? value : null;
+  let trailheadLat = coordinate(park.trailheadLat, 90);
+  let trailheadLng = coordinate(park.trailheadLng, 180);
+  if (trailheadLat === null || trailheadLng === null) trailheadLat = trailheadLng = null;
+  const checked: Park = { id, name, short, category, region, lat, lng, biome, shape, rarity, seed: park.seed, blurb, scene };
+  if (googleMapsUrl !== null) checked.googleMapsUrl = googleMapsUrl;
+  if (trailheadLat !== null && trailheadLng !== null) Object.assign(checked, { trailheadLat, trailheadLng });
+  return checked;
 }
 
 export function validateParkRecord(value: unknown, label = "park"): Park {
@@ -599,6 +611,125 @@ export function parseContentSnapshot(value: unknown): ContentSyncState {
     map: parseMapPointer(snapshot.map),
   };
   return validateContentSyncState(state);
+}
+
+const CATALOGUE_SCHEMA = "parkdex.content-catalogue/v1";
+const BOUNDARY_CHUNK_SCHEMA = "parkdex.content-boundaries/v1";
+const CATALOGUE_CHUNK_PATH = /^catalogue\/boundaries\/[a-z0-9-]+\.json$/;
+const MAX_CATALOGUE_FILE_BYTES = 4 * 1024 * 1024;
+
+/** A CDN catalogue release named by a reader 3 snapshot response. */
+export type ContentCataloguePointer = {
+  revision: number;
+  version: string;
+  indexUrl: string;
+  indexSha256: string;
+  indexBytes: number;
+  parkCount: number;
+};
+export type ContentCatalogueChunk = ContentFile & { parkIds: string[] };
+export type ContentCatalogueIndex = {
+  pointer: ContentCataloguePointer;
+  body: Record<string, unknown>;
+  chunks: ContentCatalogueChunk[];
+};
+
+/**
+ * Newer readers may get a pointer to an immutable CDN catalogue instead of parks,
+ * because the full catalogue is larger than one API response. Null means the
+ * body is an ordinary snapshot.
+ */
+export function parseCatalogueSnapshotPointer(value: unknown): ContentCataloguePointer | null {
+  const body = record(value, "content snapshot");
+  if (!Object.hasOwn(body, "catalogue")) return null;
+  if (body.schema !== "parkdex.content-sync/v1") throw new ContentValidationError("content snapshot schema is unsupported");
+  const revision = nonNegativeSafeInteger(body.revision, "snapshot.revision");
+  const catalogue = record(body.catalogue, "snapshot.catalogue");
+  requireKeys(catalogue, ["schema", "version", "indexUrl", "indexSha256", "indexBytes", "parkCount"], "snapshot.catalogue");
+  if (catalogue.schema !== CATALOGUE_SCHEMA) throw new ContentValidationError("content catalogue schema is unsupported");
+  const version = string(catalogue.version, "snapshot.catalogue.version");
+  if (!SHA256.test(version)) throw new ContentValidationError("snapshot.catalogue.version is invalid");
+  const indexUrl = `${CONTENT_CDN_ORIGIN}/releases/${version}/catalogue/index.json`;
+  if (catalogue.indexUrl !== indexUrl) throw new ContentValidationError("snapshot.catalogue.indexUrl is not the release index");
+  const indexSha256 = string(catalogue.indexSha256, "snapshot.catalogue.indexSha256");
+  if (!SHA256.test(indexSha256)) throw new ContentValidationError("snapshot.catalogue.indexSha256 is invalid");
+  const indexBytes = positiveInteger(catalogue.indexBytes, "snapshot.catalogue.indexBytes");
+  if (indexBytes > MAX_CATALOGUE_FILE_BYTES) throw new ContentValidationError("snapshot.catalogue index is too large");
+  const parkCount = nonNegativeSafeInteger(catalogue.parkCount, "snapshot.catalogue.parkCount");
+  return { revision, version, indexUrl, indexSha256, indexBytes, parkCount };
+}
+
+export function catalogueIndexFile(pointer: ContentCataloguePointer): ContentFile {
+  return {
+    path: "catalogue/index.json",
+    key: `releases/${pointer.version}/catalogue/index.json`,
+    url: pointer.indexUrl,
+    sha256: pointer.indexSha256,
+    byte_size: pointer.indexBytes,
+    content_type: "application/json",
+  };
+}
+
+export function parseCatalogueIndex(value: unknown, pointer: ContentCataloguePointer): ContentCatalogueIndex {
+  const body = record(value, "catalogue index");
+  requireKeys(body, ["schema", "revision", "parks", "drive", "assets", "map", "boundaryChunks"], "catalogue index");
+  if (body.schema !== CATALOGUE_SCHEMA) throw new ContentValidationError("catalogue index schema is unsupported");
+  if (body.revision !== pointer.revision) throw new ContentValidationError("catalogue index revision does not match its pointer");
+  if (!Array.isArray(body.parks) || body.parks.length !== pointer.parkCount) throw new ContentValidationError("catalogue index park count does not match its pointer");
+  if (!Array.isArray(body.boundaryChunks) || body.boundaryChunks.length === 0) throw new ContentValidationError("catalogue index has no boundary chunks");
+  const seen = new Set<string>();
+  const chunks = body.boundaryChunks.map((raw, index): ContentCatalogueChunk => {
+    const label = `catalogue.boundaryChunks[${index}]`;
+    const chunk = record(raw, label);
+    requireKeys(chunk, ["path", "sha256", "byte_size", "parkIds"], label);
+    const path = string(chunk.path, `${label}.path`);
+    assertSafeLogicalPath(path);
+    if (!CATALOGUE_CHUNK_PATH.test(path)) throw new ContentValidationError(`${label}.path is not a boundary chunk`);
+    const sha256 = string(chunk.sha256, `${label}.sha256`);
+    if (!SHA256.test(sha256)) throw new ContentValidationError(`${label}.sha256 is invalid`);
+    const byteSize = positiveInteger(chunk.byte_size, `${label}.byte_size`);
+    if (byteSize > MAX_CATALOGUE_FILE_BYTES) throw new ContentValidationError(`${label} is too large`);
+    const parkIds = uniqueStringArray(chunk.parkIds, `${label}.parkIds`, PARK_ID);
+    for (const id of parkIds) {
+      if (seen.has(id)) throw new ContentValidationError(`catalogue boundary ${id} is in more than one chunk`);
+      seen.add(id);
+    }
+    const key = `releases/${pointer.version}/${path}`;
+    return { path, key, url: `${CONTENT_CDN_ORIGIN}/${encodeLogicalPath(key)}`, sha256, byte_size: byteSize, content_type: "application/json", parkIds };
+  });
+  return { pointer, body, chunks };
+}
+
+export function parseCatalogueChunk(value: unknown, chunk: ContentCatalogueChunk): unknown[] {
+  const body = record(value, chunk.path);
+  requireKeys(body, ["schema", "features"], chunk.path);
+  if (body.schema !== BOUNDARY_CHUNK_SCHEMA) throw new ContentValidationError(`${chunk.path} schema is unsupported`);
+  if (!Array.isArray(body.features) || body.features.length !== chunk.parkIds.length) throw new ContentValidationError(`${chunk.path} does not match its park list`);
+  const expected = new Set(chunk.parkIds);
+  for (const feature of body.features) {
+    const id = record(record(feature, `${chunk.path} feature`).properties, `${chunk.path} feature properties`).id;
+    if (typeof id !== "string" || !expected.delete(id)) throw new ContentValidationError(`${chunk.path} has an unexpected boundary`);
+  }
+  return body.features;
+}
+
+/** The catalogue as one snapshot, checked exactly as an API snapshot would be. */
+export function assembleCatalogueSnapshot(index: ContentCatalogueIndex, chunkFeatures: unknown[][]): ContentSyncState {
+  // Chunks group boundaries by area; a snapshot lists them in park order.
+  const features = chunkFeatures.flat();
+  const byId = new Map(features.map((feature) => [(feature as { properties: { id: string } }).properties.id, feature]));
+  const ordered = (index.body.parks as unknown[]).map((park) => byId.get(String(record(park, "catalogue park").id)));
+  const used = new Set(ordered);
+  const leftover = features.filter((feature) => !used.has(feature));
+  return parseContentSnapshot({
+    schema: "parkdex.content-sync/v1",
+    revision: index.pointer.revision,
+    parks: index.body.parks,
+    boundaries: { type: "FeatureCollection", features: [...ordered.filter((feature) => feature !== undefined), ...leftover] },
+    drive: index.body.drive,
+    assets: index.body.assets,
+    map: index.body.map,
+  });
 }
 
 export function parseContentMapInventory(value: unknown, expectedVersion: string): ContentMapInventory {

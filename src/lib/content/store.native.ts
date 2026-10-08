@@ -1,4 +1,5 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
+import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
@@ -8,6 +9,9 @@ const ROOT = "parkdex-content-v1";
 const BLOBS = `${ROOT}/blobs`;
 const TEMP = `${ROOT}/tmp`;
 const ACTIVE_POINTER = "1";
+
+// Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
+const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
 
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
@@ -219,6 +223,9 @@ export class NativeContentStore implements ContentStore {
   private connection: SQLiteDBConnection | null = null;
   private initializing: Promise<void> | null = null;
   private readonly objectUrls = new Map<string, string>();
+  // Mirror of content_files, loaded once so startup checks cost one query.
+  private recordedSizes: Map<string, number> | null = null;
+  private recordedSizesLoad: Promise<Map<string, number>> | null = null;
   private readonly writeLocks = new Map<string, Promise<void>>();
   private readonly knownDirectories = new Set<string>();
   private directoryQueue: Promise<void> = Promise.resolve();
@@ -301,6 +308,9 @@ export class NativeContentStore implements ContentStore {
       throw error;
     }
     if (stat.size !== expectedSize) return false;
+    // Files recorded here were SHA-256 checked when installed, and fileUrl checks
+    // again on read, so a cold start need not rehash every badge over the bridge.
+    if ((await this.recordedFiles()).get(key) === expectedSize) return true;
     const bytes = await this.readNativeFile(blobPath(key));
     if (bytes.byteLength !== expectedSize || (await sha256(bytes)) !== key) return false;
     await this.recordFile(key, expectedSize);
@@ -337,6 +347,13 @@ export class NativeContentStore implements ContentStore {
     const existing = this.objectUrls.get(cacheKey);
     if (existing) return existing;
     const stat = await Filesystem.stat({ path: blobPath(key), directory: Directory.Data });
+    // A file hash-checked at install is served by the WebView straight from disk,
+    // instead of copying every badge image through the bridge at launch.
+    if (stat.uri && (await this.recordedFiles()).get(key) === stat.size) {
+      const url = Capacitor.convertFileSrc(stat.uri);
+      this.objectUrls.set(cacheKey, url);
+      return url;
+    }
     const bytes = await this.readNativeFile(blobPath(key));
     if (bytes.byteLength !== stat.size || (await sha256(bytes)) !== key) {
       throw new Error(`Content file failed SHA-256 verification: ${key}`);
@@ -374,13 +391,14 @@ export class NativeContentStore implements ContentStore {
     return output.sort((a, b) => a.hash.localeCompare(b.hash));
   }
 
-  async deleteFile(hash: string): Promise<void> {
+  async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
     const key = assertHash(hash);
+    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
     await this.withFileLock(key, () => this.exclusive(async () => {
       const activeId = await this.getActiveId();
       const active = activeId ? await this.getRelease(activeId) : undefined;
       if (activeId && !active) throw new Error("Cannot collect content while the active release metadata is unreadable");
-      const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
+      const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key && required(file.path)) ?? false;
       const retainedRows = (await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks", [])).values ?? [];
       const retainedParks = retainedRows.map(parseRetainedParkRow);
       if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
@@ -402,7 +420,7 @@ export class NativeContentStore implements ContentStore {
       const mapReferencesFile = inventories.some((row) => {
         if (!currentMapVersions.has(String(row.version))) return false;
         const inventory = JSON.parse(String(row.inventory_json)) as ContentMapInventory;
-        return inventory.files.some((file) => file.sha256 === key);
+        return inventory.files.some((file) => file.sha256 === key && required(file.path));
       });
       if (activeReferencesFile || retainedReferencesFile || syncReferencesFile || archivedReferencesFile || mapReferencesFile) {
         throw new Error(`Cannot delete content file referenced by active or retained content: ${key}`);
@@ -414,6 +432,7 @@ export class NativeContentStore implements ContentStore {
         if (!isMissingFile(error)) throw error;
       }
       await this.db().run("DELETE FROM content_files WHERE hash = ?", [key]);
+      this.recordedSizes?.delete(key);
       this.revokeHashUrls(key);
     }));
   }
@@ -751,6 +770,16 @@ export class NativeContentStore implements ContentStore {
       "INSERT OR REPLACE INTO content_files(hash, byte_size) VALUES(?, ?)",
       [hash, size],
     );
+    this.recordedSizes?.set(hash, size);
+  }
+
+  private recordedFiles(): Promise<Map<string, number>> {
+    this.recordedSizesLoad ??= this.db().query("SELECT hash, byte_size FROM content_files", []).then((result) => {
+      const sizes = new Map((result.values ?? []).map((row) => [String(row.hash), Number(row.byte_size)]));
+      this.recordedSizes = sizes;
+      return sizes;
+    });
+    return this.recordedSizesLoad;
   }
 
   private async writeNativeFile(hash: string, bytes: ArrayBuffer) {
@@ -858,7 +887,7 @@ export class NativeContentStore implements ContentStore {
   private revokeHashUrls(hash: string) {
     for (const [key, url] of this.objectUrls) {
       if (key.startsWith(`${hash}\n`)) {
-        URL.revokeObjectURL(url);
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
         this.objectUrls.delete(key);
       }
     }

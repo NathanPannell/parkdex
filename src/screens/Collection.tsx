@@ -62,8 +62,8 @@ export function Collection() {
             <small> / {totalBadges?.toLocaleString("en-CA") ?? "…"} badges</small>
           </h1>
         </div>
-        <button className="btn btn--paper btn--sm collection-account" onClick={() => dispatch({ type: "go", screen: "account" })}>
-          <Icon name="link" size={17} /> Account
+        <button className="btn btn--paper btn--icon collection-settings" onClick={() => dispatch({ type: "go", screen: "settings" })} aria-label="Settings" title="Settings">
+          <Icon name="gear" size={24} />
         </button>
       </header>
 

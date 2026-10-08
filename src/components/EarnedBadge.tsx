@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Badge, type BadgeState } from "./Badge";
-import { scenePath, type Park } from "../lib/parks";
+import { scenePath, SHOW_BADGE_ART, type Park } from "../lib/parks";
 import { resolveEarnedParkDisplay } from "../lib/earnedParkDisplay";
 import type { Claim } from "../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../lib/content/provider";
@@ -74,7 +74,8 @@ function useEarnedScene(park: Park, claim: Claim) {
 
   useEffect(() => {
     let live = true;
-    if (!earnedPark.scene || !claim.contentReleaseId) {
+    // Nothing shows badge art, so do not fetch or restore archived scenes.
+    if (!SHOW_BADGE_ART || !earnedPark.scene || !claim.contentReleaseId) {
       setArchivedScene(null);
       return () => { live = false; };
     }
@@ -106,6 +107,7 @@ export function useEarnedSceneHref(park: Park, claim: Claim) {
 export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
   const { displayPark, sceneHref, contentDownloadAvailable, matchesActiveArt, adoptedCurrentArt } = useEarnedSceneAsset(park, claim);
   const earnedPark = claim.parkSnapshot ?? park;
+  if (!SHOW_BADGE_ART) return <Badge park={displayPark} {...badgeProps} />;
   const needsExactScene = displayPark.scene !== null && (!matchesActiveArt || !sceneHref);
   if (needsExactScene && !sceneHref) {
     const size = badgeProps.size ?? 120;

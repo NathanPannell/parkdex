@@ -1,12 +1,16 @@
 import { addProtocol, removeProtocol, type Map as MapLibreMap, type StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol, type RangeResponse, type Source } from "pmtiles";
-import type { ContentRuntime, ContentSnapshot, MapManifest } from "./content/contracts";
+import { BUILD_MAP_ARCHIVE, BUILD_MAP_POINTER, type ContentRuntime, type ContentSnapshot, type MapManifest } from "./content/contracts";
+import { BuildMapSource } from "./buildMapSource";
 
 const TILE_SCHEME = "pmtiles";
 const GLYPH_SCHEME = "contentglyph";
-export const ISLAND_OVERVIEW_KEY = "bundled-island-overview-v1";
-export const ISLAND_OVERVIEW_PATH = "/map/bootstrap/island-overview.pmtiles";
-const MAX_CACHED_CHUNKS = 12;
+export const BASE_OVERVIEW_KEY = "bundled-canada-overview-v1";
+export const BASE_OVERVIEW_PATH = "/map/bootstrap/canada-overview.pmtiles";
+/** Tile and glyph key for the detailed map this build pins; it needs no park content. */
+export const BUILD_MAP_KEY = `build-map-${BUILD_MAP_POINTER.version.slice(0, 16)}`;
+// 512 KB chunks: enough for a phone viewport across a few zoom levels.
+const MAX_CACHED_CHUNKS = 32;
 
 type ReleaseRegistration = {
   runtime: ContentRuntime;
@@ -18,11 +22,75 @@ type ReleaseRegistration = {
 const registrations = new Map<string, ReleaseRegistration>();
 const allowedChunkIds = new Map<string, Set<number>>();
 const mapCoverageListeners = new Map<string, Set<() => void>>();
+// Releases with a tile request refused since their detail source was last rebuilt.
+// Only those need a rebuild when coverage grows; otherwise new chunks are read on demand.
+const refusedReleases = new Set<string>();
 let tileProtocol: Protocol | null = null;
 let tileProtocolInstalled = false;
 let glyphProtocolInstalled = false;
 let bundledOverview: PMTiles | null = null;
 let detailedSourceRevision = 0;
+let buildMap: { runtime: ContentRuntime; references: number } | null = null;
+// Set when a detail tile could not be served, so a later retry can rebuild the source once.
+let buildMapUnavailable = false;
+
+/**
+ * Install the build's detailed map before park content is ready. Online it
+ * streams from the CDN; offline it reads downloaded map squares.
+ */
+export function registerBuildMapProtocols(runtime: ContentRuntime): () => void {
+  ensureProtocols();
+  if (buildMap) {
+    buildMap.runtime = runtime;
+    buildMap.references += 1;
+  } else {
+    buildMap = { runtime, references: 1 };
+    tileProtocol!.add(new PMTiles(createBuildMapSource()));
+  }
+  let cleaned = false;
+  return () => {
+    if (cleaned || !buildMap) return;
+    cleaned = true;
+    buildMap.references -= 1;
+    if (buildMap.references > 0) return;
+    buildMap = null;
+    buildMapUnavailable = false;
+    tileProtocol?.tiles.delete(BUILD_MAP_KEY);
+    if (registrations.size === 0) removeProtocols();
+  };
+}
+
+function createBuildMapSource(): BuildMapSource {
+  return new BuildMapSource({
+    key: BUILD_MAP_KEY,
+    archive: BUILD_MAP_ARCHIVE,
+    isConnected: buildMapConnected,
+    readLocal: async (index, offset, length) =>
+      (await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, mapChunkPath(index), offset, length)) ?? null,
+    onUnavailable: () => {
+      buildMapUnavailable = true;
+    },
+  });
+}
+
+function buildMapConnected(): boolean {
+  const connected = buildMap?.runtime.isConnected?.();
+  if (typeof connected === "boolean") return connected;
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/**
+ * Rebuild the detail source once after tiles failed and something changed that
+ * can fill them: the network came back or saved map files became readable.
+ */
+export function retryUnavailableBuildMap(): boolean {
+  if (!buildMapUnavailable || !buildMap || !tileProtocol) return false;
+  buildMapUnavailable = false;
+  // PMTiles keeps rejected header and directory promises; a new reader clears them.
+  tileProtocol.add(new PMTiles(createBuildMapSource()));
+  for (const listener of mapCoverageListeners.get(BUILD_MAP_KEY) ?? []) listener();
+  return true;
+}
 
 /**
  * Install the PMTiles and glyph handlers for a ready content snapshot.
@@ -72,14 +140,14 @@ function releaseCleanup(releaseId: string, entry: ReleaseRegistration): () => vo
 
     registrations.delete(releaseId);
     tileProtocol?.tiles.delete(releaseId);
-    if (registrations.size === 0) removeProtocols();
+    if (registrations.size === 0 && !buildMap) removeProtocols();
   };
 }
 
 function ensureProtocols(): void {
   if (!tileProtocol) tileProtocol = new Protocol();
   if (!bundledOverview) bundledOverview = new PMTiles(bundledOverviewSource);
-  if (!tileProtocol.tiles.has(ISLAND_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
+  if (!tileProtocol.tiles.has(BASE_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
   if (!tileProtocolInstalled) {
     addProtocol(TILE_SCHEME, tileProtocol.tile);
     tileProtocolInstalled = true;
@@ -105,18 +173,35 @@ function removeProtocols(): void {
 async function loadGlyph(request: { url: string }, controller: AbortController): Promise<{ data: ArrayBuffer }> {
   const url = new URL(request.url);
   const releaseId = url.hostname;
-  const registration = registrations.get(releaseId);
-  if (!registration) throw new Error(`Map release ${releaseId} is no longer registered`);
-
   const match = url.pathname.match(/^\/map\/fonts\/(.+)\/([^/]+)\.pbf$/);
   if (!match) throw new Error("Invalid content glyph URL");
   const fontStack = decodeURIComponent(match[1]);
   const range = decodeURIComponent(match[2]);
   const path = `map/fonts/${fontStack}/${range}.pbf`;
+  if (releaseId === BUILD_MAP_KEY) return { data: await loadBuildGlyph(fontStack, range, path, controller.signal) };
+  const registration = registrations.get(releaseId);
+  if (!registration) throw new Error(`Map release ${releaseId} is no longer registered`);
   throwIfAborted(controller.signal);
   const bytes = await registration.runtime.readFile(releaseId, path);
   throwIfAborted(controller.signal);
   return { data: bytes };
+}
+
+/** Labels stream from the CDN like tiles; saved fonts are used only offline. */
+async function loadBuildGlyph(fontStack: string, range: string, path: string, signal: AbortSignal): Promise<ArrayBuffer> {
+  if (buildMapConnected()) {
+    try {
+      const response = await fetch(`${BUILD_MAP_ARCHIVE.glyphBaseUrl}/${encodeURIComponent(fontStack)}/${encodeURIComponent(range)}.pbf`, { signal });
+      if (response.ok) return await response.arrayBuffer();
+    } catch (error) {
+      if (signal.aborted) throw error;
+    }
+  }
+  const local = await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, path);
+  throwIfAborted(signal);
+  if (local) return local;
+  buildMapUnavailable = true;
+  throw new Error("Map labels are not available offline");
 }
 
 /**
@@ -153,9 +238,8 @@ export class RuntimeChunkSource implements Source {
     const lastChunk = Math.floor((end - 1) / this.manifest.chunkBytes);
     const indices = Array.from({ length: lastChunk - firstChunk + 1 }, (_, i) => firstChunk + i);
     const allowed = this.allowed();
-    if (!this.bypassAllowlist && (!allowed || indices.some((index) => !allowed.has(index)))) {
-      throw new Error("Map area has not been downloaded. Expand nearby map coverage before panning there.");
-    }
+    const missing = this.bypassAllowlist ? [] : indices.filter((index) => !allowed?.has(index));
+    if (missing.length) await this.streamChunks(missing, requestSignal);
 
     const parts: ArrayBuffer[] = [];
     for (const index of indices) parts.push(await this.readChunk(index, requestSignal));
@@ -170,6 +254,21 @@ export class RuntimeChunkSource implements Source {
       result.set(chunk.subarray(from, to), chunkStart + from - offset);
     }
     return { data: result.buffer };
+  }
+
+  /**
+   * Online visitors stream detail for areas they have not downloaded, on any
+   * connection. Offline, the request fails and the bundled base map stays visible.
+   */
+  private async streamChunks(indices: number[], signal?: AbortSignal): Promise<void> {
+    try {
+      for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index), "nearby", signal);
+    } catch (error) {
+      if (signal?.aborted || (error as Error)?.name === "AbortError") throw error;
+      refusedReleases.add(this.releaseId);
+      throw new Error("Map area has not been downloaded. Connect to the internet to load detail here.");
+    }
+    markStreamedMapChunks(this.releaseId, indices);
   }
 
   private async readChunk(index: number, signal?: AbortSignal): Promise<ArrayBuffer> {
@@ -205,7 +304,7 @@ export class BundledOverviewSource implements Source {
 
   constructor(
     private readonly loadArchive: () => Promise<ArrayBuffer> = () => fetchBundledOverview(),
-    private readonly key = ISLAND_OVERVIEW_KEY,
+    private readonly key = BASE_OVERVIEW_KEY,
   ) {}
 
   getKey(): string {
@@ -268,7 +367,11 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     allowed.add(id);
     changed = true;
   }
-  if (changed) {
+  // A rebuild redraws every detail tile, which shows as a flicker. It is only needed when
+  // MapLibre is holding failed tiles that the new chunks can now fill.
+  if (changed) retryUnavailableBuildMap();
+  if (changed && refusedReleases.has(releaseId)) {
+    refusedReleases.delete(releaseId);
     const registration = registrations.get(releaseId);
     if (registration && tileProtocol) {
       // PMTiles v4.5 keeps rejected header and directory promises in its shared
@@ -278,6 +381,26 @@ export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number
     }
     for (const listener of mapCoverageListeners.get(releaseId) ?? []) listener();
   }
+}
+
+/**
+ * Record chunks a tile request has already read. Unlike setAllowedMapChunks this
+ * does not reload the detail source, because the requesting reader succeeded.
+ */
+function markStreamedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
+  let allowed = allowedChunkIds.get(releaseId);
+  if (!allowed) {
+    allowed = new Set<number>();
+    allowedChunkIds.set(releaseId, allowed);
+  }
+  for (const id of chunkIds) allowed.add(id);
+}
+
+/** Forget chunks whose files were removed, so offline reads fall back to the base map. */
+export function removeAllowedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
+  const allowed = allowedChunkIds.get(releaseId);
+  if (!allowed) return;
+  for (const id of chunkIds) allowed.delete(id);
 }
 
 export function getAllowedMapChunks(releaseId: string): readonly number[] {
@@ -363,7 +486,7 @@ function validateMapManifest(manifest: MapManifest): void {
 
 async function fetchBundledOverview(): Promise<ArrayBuffer> {
   const base = typeof document === "undefined" ? "http://localhost/" : document.baseURI;
-  const response = await fetch(new URL(ISLAND_OVERVIEW_PATH, base));
+  const response = await fetch(new URL(BASE_OVERVIEW_PATH, base));
   if (!response.ok) throw new Error(`Bundled map overview failed to load (${response.status})`);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength === 0) throw new Error("Bundled map overview is empty");

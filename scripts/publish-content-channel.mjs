@@ -247,6 +247,8 @@ export function signR2Put({
   sessionToken,
   condition,
   now = new Date(),
+  contentType = "application/json",
+  cacheControl = POINTER_CACHE_CONTROL,
 }) {
   if (!condition || (condition.type !== "if-match" && condition.type !== "if-none-match")) {
     throw new Error("R2 pointer write requires an If-Match or If-None-Match condition");
@@ -266,8 +268,8 @@ export function signR2Put({
     condition.type === "if-match" ? "if-match" : "if-none-match";
   const conditionalValue = condition.type === "if-match" ? condition.etag : "*";
   const canonicalHeaders = {
-    "cache-control": POINTER_CACHE_CONTROL,
-    "content-type": "application/json",
+    "cache-control": cacheControl,
+    "content-type": contentType,
     host: requestUrl.host,
     [conditionalHeader]: conditionalValue,
     "x-amz-content-sha256": payloadHash,
@@ -307,8 +309,8 @@ export function signR2Put({
     ", Signature=" +
     signature;
   const headers = {
-    "Cache-Control": POINTER_CACHE_CONTROL,
-    "Content-Type": "application/json",
+    "Cache-Control": cacheControl,
+    "Content-Type": contentType,
     [conditionalHeader === "if-match" ? "If-Match" : "If-None-Match"]: conditionalValue,
     "x-amz-content-sha256": payloadHash,
     "x-amz-date": amzDate,
@@ -318,7 +320,7 @@ export function signR2Put({
   return headers;
 }
 
-function r2ObjectUrl(accountId, bucket, key) {
+export function r2ObjectUrl(accountId, bucket, key) {
   return (
     "https://" +
     accountId +

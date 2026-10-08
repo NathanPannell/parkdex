@@ -20,6 +20,9 @@ type RetainedRecord = { parkId: string; park: RetainedPark["park"]; sceneFile?: 
 type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | "boundary" | "drive" | "asset" | "hubs" | "map"; id: string; value: unknown; position: number };
 type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string; readerVersion?: number };
 
+// Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
+const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
+
 // Incremental batches keep the version of the reader that wrote the full cache.
 function storedReaderVersion(cursor: SyncCursor): number {
   return Number.isSafeInteger(cursor.readerVersion) && cursor.readerVersion! > 0 ? cursor.readerVersion! : 1;
@@ -358,8 +361,9 @@ export class WebContentStore implements ContentStore {
     });
   }
 
-  async deleteFile(hash: string): Promise<void> {
+  async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
     const key = assertHash(hash);
+    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
     const db = await this.database();
     await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES, SYNC_ROWS, MAP_INVENTORIES, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
       const activeRequest = tx.objectStore(META).get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;
@@ -378,7 +382,7 @@ export class WebContentStore implements ContentStore {
       let cachedPointers: CachedMapPointer[] = [];
       const finish = () => {
         if (ready !== 6) return;
-        const activeReferencesFile = activeRelease?.manifest.files.some((file) => file.sha256.toLowerCase() === key) ?? false;
+        const activeReferencesFile = activeRelease?.manifest.files.some((file) => file.sha256.toLowerCase() === key && required(file.path)) ?? false;
         const retainedReferencesFile = retainedParks.some((park) => park.sceneFile?.sha256.toLowerCase() === key);
         try {
           for (const archived of archivedScenes) {
@@ -396,7 +400,7 @@ export class WebContentStore implements ContentStore {
         const syncReferencesFile = syncRows.some((row) => row.entity === "asset" && (row.value as { sha256?: unknown }).sha256 === key);
         const currentMapVersions = new Set(cachedPointers.map((entry) => entry.pointer.version));
         for (const row of syncRows) if (row.entity === "map" && row.value) currentMapVersions.add((row.value as ContentMapPointer).version);
-        const mapReferencesFile = inventories.some((entry) => currentMapVersions.has(entry.version) && entry.inventory.files.some((file) => file.sha256 === key));
+        const mapReferencesFile = inventories.some((entry) => currentMapVersions.has(entry.version) && entry.inventory.files.some((file) => file.sha256 === key && required(file.path)));
         if (activeReferencesFile || retainedReferencesFile || archivedReferencesFile || syncReferencesFile || mapReferencesFile) {
           fail(new Error(`Cannot delete content file referenced by active or retained content: ${key}`));
           return;

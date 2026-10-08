@@ -140,3 +140,151 @@ test("scene endpoint serves the exact retained descriptor and returns 404 when m
     await createSceneHandler({ repository: repository(async () => ({}), async () => null) })(req({ releaseId: release, scene: "retired-a" }), missing);
     assert.equal(missing.statusCode, 404);
 });
+
+test("content sync sends park access fields only to readers that ask for them", async () => {
+    const link = "https://maps.app.goo.gl/abc123";
+    const withAccess = { ...snapshot, parks: [{ ...park, googleMapsUrl: link, trailheadLat: 48.401, trailheadLng: -123.301 }] };
+    const strict = response();
+    await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => withAccess } })(req(), strict);
+    assert.equal(strict.statusCode, 200);
+    assert.deepEqual(Object.keys(JSON.parse(strict.body).parks[0]).sort(), Object.keys(park).sort());
+
+    const current = response();
+    await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => withAccess } })(req({ reader: "2" }), current);
+    assert.equal(current.statusCode, 200);
+    const sent = JSON.parse(current.body).parks[0];
+    assert.equal(sent.googleMapsUrl, link);
+    assert.equal(sent.trailheadLat, 48.401);
+    assert.equal(sent.trailheadLng, -123.301);
+
+    const unset = response();
+    await createSnapshotHandler({ repository: repository() })(req({ reader: "2" }), unset);
+    assert.equal(JSON.parse(unset.body).parks[0].googleMapsUrl, null);
+
+    const badReader = response();
+    await createSnapshotHandler({ repository: repository() })(req({ reader: "x" }), badReader);
+    assert.equal(badReader.statusCode, 400);
+});
+
+test("content sync strips access fields from change batches for strict readers", async () => {
+    const value = { ...park, googleMapsUrl: "https://www.google.com/maps/place/Cove", trailheadLat: null, trailheadLng: null };
+    const changes = async () => ({ headRevision: 4, retentionFloor: 0, hasMore: false, batches: [{ revision: 4, changes: [
+        { entity: "park", op: "upsert", id: park.id, value },
+        { entity: "asset", op: "upsert", id: file.path, value: file },
+    ] }] });
+    const strict = response();
+    await createChangesHandler({ repository: repository(changes) })(req({ after: "3" }), strict);
+    assert.equal(strict.statusCode, 200);
+    assert.equal(Object.hasOwn(JSON.parse(strict.body).batches[0].changes.find((c: { entity: string }) => c.entity === "park").value, "googleMapsUrl"), false);
+
+    const current = response();
+    await createChangesHandler({ repository: repository(changes) })(req({ after: "3", reader: "2" }), current);
+    assert.equal(JSON.parse(current.body).batches[0].changes.find((c: { entity: string }) => c.entity === "park").value.googleMapsUrl, value.googleMapsUrl);
+});
+
+test("content sync withholds a snapshot with a non-Google directions link or half a trailhead", async () => {
+    for (const extra of [
+        { googleMapsUrl: "https://example.com/maps", trailheadLat: null, trailheadLng: null },
+        { googleMapsUrl: null, trailheadLat: 48.4, trailheadLng: null },
+    ]) {
+        const res = response();
+        const bad = { ...snapshot, parks: [{ ...park, ...extra }] };
+        await createSnapshotHandler({ repository: { ...repository(), snapshot: async () => bad } })(req({ reader: "2" }), res);
+        assert.equal(res.statusCode, 503);
+    }
+});
+
+test("content sync preflights allow the app's analytics labels", async () => {
+    const res = response();
+    await createSnapshotHandler({ repository: repository() })(req({}, "OPTIONS", "https://localhost"), res);
+    assert.equal(res.statusCode, 204);
+    for (const name of ["X-Kip-Installation-Id", "X-Kip-App-Version", "X-Kip-Bundle-Id"]) {
+        assert.match(res.headers.get("access-control-allow-headers") ?? "", new RegExp(name));
+    }
+});
+
+test("content sync records its repository reads under the content route", async () => {
+    const written: Array<{ route: string; installationId: string | null }> = [];
+    const pending: Promise<unknown>[] = [];
+    const { recordDbQuery } = await import("./requestContext.js");
+    const recording = { ...repository(), snapshot: async () => {
+        recordDbQuery({ operation: "read", tables: ["public.parks"], durationMs: 1, result: "ok", startedAt: Date.now() });
+        return snapshot;
+    } };
+    const handler = createSnapshotHandler({
+        repository: recording,
+        analytics: () => ({ async write(context) { written.push(context); } }),
+        waitUntil: (promise) => { pending.push(promise); },
+    });
+    const request = { method: "GET", query: {}, headers: { "x-kip-installation-id": "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b" } };
+    await handler(request, response());
+    await Promise.all(pending);
+    assert.equal(written.length, 1);
+    assert.equal(written[0].route, "GET /api/content/snapshot");
+    assert.equal(written[0].installationId, "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b");
+});
+
+const catalogueVersion = "4".repeat(64);
+const pointer = {
+    version: catalogueVersion, revision: 3, minimumReader: 3,
+    indexUrl: `${cdn}/releases/${catalogueVersion}/catalogue/index.json`,
+    indexSha256: catalogueVersion, indexBytes: 1200, parkCount: 1608,
+};
+const withCatalogue = (state: { pointer: unknown; headRevision: number; retentionFloor: number }) => ({
+    ...repository(), snapshot: async (reader?: number) => ({ ...snapshot, revision: reader ?? 1 }), catalogue: async () => state,
+});
+
+test("content sync names the CDN catalogue for newer readers and keeps one snapshot body for older ones", async () => {
+    const repo = withCatalogue({ pointer, headRevision: 9, retentionFloor: 0 });
+    const newer = response();
+    await createSnapshotHandler({ repository: repo })(req({ reader: "3" }), newer);
+    assert.equal(newer.statusCode, 200);
+    assert.deepEqual(JSON.parse(newer.body), {
+        schema: "parkdex.content-sync/v1",
+        revision: 3,
+        catalogue: { schema: "parkdex.content-catalogue/v1", version: catalogueVersion, indexUrl: pointer.indexUrl, indexSha256: catalogueVersion, indexBytes: 1200, parkCount: 1608 },
+    });
+
+    // The repository leaves out parks above the reader's floor; the handler asks with the reader.
+    for (const reader of ["1", "2"]) {
+        const older = response();
+        await createSnapshotHandler({ repository: repo })(req({ reader }), older);
+        assert.equal(older.statusCode, 200);
+        assert.equal(JSON.parse(older.body).revision, Number(reader));
+        assert.equal(Object.hasOwn(JSON.parse(older.body), "catalogue"), false);
+    }
+});
+
+test("content sync falls back to one snapshot body when the catalogue is missing, too new or no longer replayable", async () => {
+    for (const state of [
+        { pointer: null, headRevision: 9, retentionFloor: 0 },
+        { pointer: { ...pointer, revision: 10 }, headRevision: 9, retentionFloor: 0 },
+        { pointer, headRevision: 9, retentionFloor: 4 },
+        { pointer: { ...pointer, minimumReader: 4 }, headRevision: 9, retentionFloor: 0 },
+    ]) {
+        const res = response();
+        await createSnapshotHandler({ repository: withCatalogue(state) })(req({ reader: "3" }), res);
+        assert.equal(res.statusCode, 200);
+        assert.equal(JSON.parse(res.body).revision, 3);
+        assert.ok(Array.isArray(JSON.parse(res.body).parks));
+    }
+
+    const forged = response();
+    await createSnapshotHandler({ repository: withCatalogue({ pointer: { ...pointer, indexUrl: `${cdn}/elsewhere/index.json` }, headRevision: 9, retentionFloor: 0 }) })(req({ reader: "3" }), forged);
+    assert.equal(forged.statusCode, 503);
+});
+
+test("content changes replace a batch with only hidden parks by the unchanged hub list", async () => {
+    let askedReader: number | undefined;
+    const hidden = { headRevision: 5, retentionFloor: 0, hasMore: false, hubs: snapshot.drive.hubs, batches: [
+        { revision: 4, changes: [] },
+        { revision: 5, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] },
+    ] };
+    const res = response();
+    await createChangesHandler({ repository: { ...repository(async (...args: unknown[]) => { askedReader = args[2] as number; return hidden; }) } })(req({ after: "3", reader: "2" }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(askedReader, 2);
+    const body = JSON.parse(res.body);
+    assert.deepEqual(body.batches[0], { revision: 4, changes: [{ entity: "hubs", op: "upsert", id: "default", value: snapshot.drive.hubs }] });
+    assert.equal(body.batches[1].changes[0].entity, "park");
+});

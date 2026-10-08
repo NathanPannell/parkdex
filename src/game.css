@@ -1,0 +1,721 @@
+/* ================= Flag game ================= */
+
+.flag {
+  display: inline-block;
+  flex: none;
+  line-height: 0;
+}
+
+.flag svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Handle setup sits above the map, tabs and park sheets. */
+.handle-scrim {
+  z-index: 72;
+}
+
+.handle-sheet {
+  z-index: 73;
+  max-height: 92%;
+  padding: 26px 0 var(--safe-bottom);
+  overflow-y: auto;
+}
+
+.handle-sheet__close {
+  top: 16px;
+}
+
+.handle-sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 20px 8px;
+}
+
+.handle-sheet__body h2 {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: -4px 52px 4px 0;
+}
+
+.handle-sheet__preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+}
+
+.handle-sheet__preview > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.handle-sheet__preview strong {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.handle-sheet__preview em {
+  font-style: normal;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.handle-input {
+  position: relative;
+}
+
+.handle-input > span {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  translate: 0 -50%;
+  font-weight: 800;
+  font-size: 17px;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.handle-input .fb-input {
+  padding-left: 32px;
+}
+
+.handle-sheet__help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.handle-sheet__help.is-error,
+.handle-sheet__error {
+  color: #b3264f;
+  font-weight: 700;
+}
+
+.handle-sheet__error {
+  margin: 0;
+  font-size: 14px;
+}
+
+.handle-reveal {
+  align-items: center;
+  text-align: center;
+}
+
+.handle-reveal h2 {
+  margin: 0;
+}
+
+.handle-reveal__flag {
+  padding: 18px 0 6px;
+  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.18));
+}
+
+/* Account screen: the player's flag and handle. */
+.game-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.game-identity__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.game-identity__text strong {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.game-identity__text span {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+/* ---------- Plant, take and visit ---------- */
+
+@keyframes flag-wave {
+  0%,
+  100% {
+    transform: skewY(0deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(-3deg) scaleX(0.97);
+  }
+}
+
+.plant__stamp {
+  font-size: 26px;
+  line-height: 1.15;
+  max-width: 330px;
+  text-transform: none;
+}
+
+.plant__stamp--quiet {
+  color: var(--paper);
+  border-color: rgba(255, 248, 236, 0.7);
+  text-shadow: none;
+  box-shadow: none;
+}
+
+.plant__points {
+  margin: 0;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 34px;
+  color: var(--sun);
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.plant__detail {
+  margin: 0;
+  text-align: center;
+  font-size: 15.5px;
+  line-height: 1.4;
+  color: rgba(255, 248, 236, 0.85);
+}
+
+.plant__error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  text-align: center;
+}
+
+.plant__error p {
+  margin: 0;
+}
+
+/* ---------- Your parks and leaderboard ---------- */
+
+/* Tabbed pages leave room for the bottom bar. */
+.account-screen--tabbed {
+  padding-bottom: calc(var(--safe-bottom) + 110px);
+}
+
+.account-screen--tabbed .account-head__title {
+  padding-left: 4px;
+  flex: 1;
+}
+
+.game-empty {
+  align-items: center;
+  text-align: center;
+}
+
+.game-empty h2 {
+  margin: 0;
+}
+
+.account-card.game-score {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  background: var(--sun);
+}
+
+.game-score__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.game-score__text strong {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+/* Direct children only: the rolling score digits are spans too. */
+.game-score__text > span,
+.game-score__points > span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.game-score__points {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.game-score__points strong {
+  display: flex;
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.game-stale {
+  margin: -4px 4px 0;
+}
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.game-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+button.game-row:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.game-row.is-me {
+  background: var(--sun);
+}
+
+.game-row__rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper-2);
+  font-family: var(--display);
+  font-weight: 800;
+}
+
+.game-board li:first-child .game-row__rank {
+  background: var(--kip);
+  color: var(--paper);
+}
+
+.game-row__name,
+.game-row__score {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.game-row__name {
+  flex: 1;
+}
+
+.game-row__name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-row__name > span,
+.game-row__score > span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.game-row__score {
+  align-items: flex-end;
+}
+
+.game-row__score strong {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.game-old-badges {
+  align-self: center;
+  margin-top: 6px;
+}
+
+/* ---------- Takeover messages ---------- */
+
+.takeover-scrim {
+  z-index: 70;
+}
+
+.takeover-sheet {
+  z-index: 71;
+  max-height: 80%;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 0 var(--safe-bottom);
+}
+
+.takeover-sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px 12px;
+}
+
+.takeover-sheet__head h2 {
+  margin: 2px 0 0;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.takeover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px;
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.takeover-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.takeover-row > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.takeover-row strong {
+  font-size: 16px;
+}
+
+.takeover-row em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.takeover-sheet__foot {
+  display: grid;
+  gap: 8px;
+  padding: 14px 20px 6px;
+}
+
+.takeover-sheet__foot .account-help {
+  margin: 0;
+  text-align: center;
+}
+
+/* ---------- Map ---------- */
+
+.flags-note {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: calc(var(--safe-top) + 74px);
+  translate: -50% 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  border-radius: 99px;
+}
+
+.score-chip__flag {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+}
+
+/* ---------- Bottom bar: four tabs around the flag button ---------- */
+
+.nav--four {
+  height: 66px;
+}
+
+.nav--four .nav__bar {
+  grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+  padding: 6px;
+}
+
+.nav--four .nav__tab {
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  border-radius: 18px;
+}
+
+.nav--four .nav__tab:last-child {
+  grid-column: auto;
+}
+
+.nav--four .fab {
+  top: -14px;
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  box-shadow: 0 4px 0 var(--ink), 0 0 0 4px var(--paper);
+}
+
+.nav--four .fab__hint {
+  bottom: 84px;
+}
+
+/* Tab pages sit above the map layer; keep the bar over them. */
+.nav--over {
+  z-index: 40;
+}
+
+.fab__hint[data-reason="outside-flag"]::before {
+  content: "Get inside a park boundary to plant your flag";
+}
+
+/* ---------- Park sheet: who holds the park ---------- */
+
+.park-sheet__holder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+
+.park-sheet__holder > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.park-sheet__holder strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.park-sheet__holder em {
+  font-style: normal;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Planting scene: a flag driven into a mound of dirt ---------- */
+
+.plant-scene {
+  position: relative;
+  z-index: 2;
+  width: 280px;
+  height: 330px;
+}
+
+/* The pole's foot sits 22px inside the mound, so the mound hides it once planted. */
+.plant-flag {
+  position: absolute;
+  left: 116px;
+  bottom: 52px;
+  width: 140px;
+  height: 236px;
+  transform-origin: 6px 100%;
+}
+
+.plant-flag__pole {
+  position: absolute;
+  left: 2px;
+  top: 10px;
+  bottom: 0;
+  width: 9px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #f7ead2, #c9b48f);
+  box-shadow: 0 0 0 2.5px var(--ink);
+}
+
+.plant-flag__pole::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -12px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 2.5px solid var(--ink);
+}
+
+.plant-flag__cloth {
+  position: absolute;
+  left: 10px;
+  top: 14px;
+  transform-origin: left center;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.35));
+}
+
+.plant-flag__cloth--wave .flag {
+  animation: flag-wave 2.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* A rival flag spins about its middle when it is thrown away. */
+.plant-flag--rival {
+  z-index: 0;
+  transform-origin: 40% 60%;
+}
+
+.plant-mound {
+  position: absolute;
+  left: 10px;
+  bottom: 0;
+  width: 260px;
+  height: 90px;
+  transform-origin: 50% 100%;
+  overflow: visible;
+}
+
+.plant-dirt {
+  position: absolute;
+  left: 122px;
+  bottom: 70px;
+  width: 0;
+  height: 0;
+}
+
+.plant-dirt__clod {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  border-radius: 40%;
+}
+
+.plant-dirt__puff {
+  position: absolute;
+  left: -60px;
+  top: -26px;
+  width: 120px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(196, 160, 112, 0.85), rgba(196, 160, 112, 0));
+}
+
+.plant__points--rate {
+  font-size: 26px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-flag__cloth--wave .flag {
+    animation: none;
+  }
+}
+
+/* ---------- Planting as a reward moment ---------- */
+
+/* The world dims around the mound while you hold. */
+.plant-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(60% 45% at 50% 52%, transparent 0%, rgba(5, 10, 8, 0.85) 75%);
+}
+
+.plant-camera {
+  position: relative;
+  z-index: 2;
+  transform-origin: 50% 80%;
+}
+
+.plant-ring {
+  position: absolute;
+  left: 70px;
+  bottom: 52px;
+  width: 140px;
+  height: 46px;
+  border-radius: 50%;
+  border: 5px solid #ffe7a8;
+  box-shadow: 0 0 18px rgba(255, 201, 60, 0.7);
+  pointer-events: none;
+}
+
+/* The points land to the left of the pole, clear of the cloth and the headline. */
+.plant-score {
+  position: absolute;
+  z-index: 6;
+  top: 16%;
+  left: 2%;
+  width: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.plant-score strong {
+  font-family: var(--display);
+  font-size: 84px;
+  font-weight: 800;
+  line-height: 0.95;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 var(--ink), 0 0 30px rgba(255, 201, 60, 0.6);
+}
+
+.plant-score span {
+  margin-top: 4px;
+  padding: 4px 12px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.plant-kip {
+  position: absolute;
+  z-index: 5;
+  right: 6px;
+  bottom: -6px;
+  pointer-events: none;
+}
+
+.plant__bubble {
+  justify-content: center;
+  margin: 0;
+}
+
+.plant__bubble .bubble {
+  white-space: normal;
+  text-align: center;
+}

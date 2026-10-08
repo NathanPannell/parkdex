@@ -153,3 +153,84 @@
   width: 4px;
   height: 6px;
 }
+
+.propose-top .btn--icon {
+  flex: none;
+  border-radius: 50%;
+}
+
+.propose-osm {
+  display: grid;
+  gap: 6px;
+}
+
+.propose-osm__title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.propose-osm__status {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.propose-osm__retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pine);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.propose-osm__list {
+  display: grid;
+  gap: 6px;
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.propose-candidate {
+  display: grid;
+  gap: 1px;
+  padding: 8px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.propose-candidate.is-on {
+  background: color-mix(in srgb, var(--kip) 16%, var(--paper));
+  border-color: var(--kip-dark, var(--kip));
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.propose-candidate__name {
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.propose-candidate__detail {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.propose-candidate--none {
+  border-style: dashed;
+}
+
+.propose-osm__credit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}

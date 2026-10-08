@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -79,7 +80,16 @@ def read_source(locator: str, label: str) -> tuple[bytes, dict[str, str]]:
         raise
     except OSError as exc:
         raise ParkImportError(f"Could not read {label} source ({type(exc).__name__})") from None
-    return raw, {"kind": "file", "locator": str(path), "sha256": sha256(raw)}
+    reference = {"kind": "file", "locator": str(path), "sha256": sha256(raw)}
+    if path.suffix == ".gz":
+        # Large committed inputs are gzipped; the plan pins the file exactly as stored.
+        try:
+            raw = gzip.decompress(raw)
+        except (OSError, EOFError) as exc:
+            raise ParkImportError(f"Could not decompress {label} source ({type(exc).__name__})") from None
+        if len(raw) > MAX_SOURCE_BYTES:
+            raise ParkImportError(f"{label} source exceeds the 128 MiB limit")
+    return raw, reference
 
 
 def parse_json(raw: bytes, label: str) -> Any:
@@ -378,7 +388,10 @@ def build_plan(
     hubs: list[dict[str, Any]] | None = None,
     rarity_review: dict[str, dict[str, str | None]] | None = None,
     rarity_review_source: dict[str, str] | None = None,
+    minimum_reader: int | None = None,
 ) -> dict[str, Any]:
+    if minimum_reader is not None and (isinstance(minimum_reader, bool) or not 2 <= minimum_reader <= 9999):
+        raise ParkImportError("--minimum-reader must be a content reader version from 2 to 9999")
     if not selected_source_ids or len(selected_source_ids) != len(set(selected_source_ids)):
         raise ParkImportError("Select one or more unique source park IDs with --park-id")
     unknown = set(selected_source_ids) - set(boundary_features)
@@ -442,6 +455,9 @@ def build_plan(
                 change.update({"desiredPark": park, "desiredDrive": drive_record, "desiredFeature": desired})
                 if review[source_id].get("accessUnknown") is True:
                     change["accessUnknown"] = True
+                if minimum_reader is not None:
+                    # Older app builds never receive this park; see content_004_catalogue_release.sql.
+                    change["minimumReader"] = minimum_reader
         else:
             biome = current_park.get("biome")
             if not isinstance(biome, str) or biome not in BIOMES:
@@ -485,6 +501,8 @@ def build_plan(
         "blockers": blockers,
         "changes": change_set,
     }
+    if minimum_reader is not None:
+        plan["minimumReader"] = minimum_reader
     plan["planSha256"] = plan_digest(plan)
     return plan
 
@@ -616,6 +634,19 @@ def _drive_matches(cursor, park_id: str, desired: dict[str, Any]) -> bool:
     return True
 
 
+def _reader_floor_table(cursor) -> bool:
+    cursor.execute("SELECT to_regclass('public.content_park_reader_floor')")
+    return cursor.fetchone()[0] is not None
+
+
+def _floor_matches(cursor, park_id: str, minimum_reader: int) -> bool:
+    if not _reader_floor_table(cursor):
+        return False
+    cursor.execute("SELECT minimum_reader FROM public.content_park_reader_floor WHERE park_id = %s", (park_id,))
+    row = cursor.fetchone()
+    return row is not None and row[0] == minimum_reader
+
+
 def _matches_all(cursor, plan: dict[str, Any], parks: dict[str, dict[str, Any]], boundaries: dict[str, Any], hubs: list[dict[str, Any]]) -> bool:
     for change in plan["changes"]:
         park_id = change["targetId"]
@@ -627,6 +658,8 @@ def _matches_all(cursor, plan: dict[str, Any], parks: dict[str, dict[str, Any]],
                 return False
             desired_hubs = change["desiredDrive"]["hubs"]
             if hubs != desired_hubs or not _drive_matches(cursor, park_id, change["desiredDrive"]):
+                return False
+            if "minimumReader" in change and not _floor_matches(cursor, park_id, change["minimumReader"]):
                 return False
         else:
             current_park = parks.get(park_id)
@@ -709,6 +742,8 @@ def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_env
                 if _matches_all(cursor, plan, parks, boundaries, hubs):
                     return {"result": "already-current", "revision": revision, "changed": []}
                 _guard_target(plan, revision, parks, boundaries)
+                if any("minimumReader" in change for change in plan["changes"]) and not _reader_floor_table(cursor):
+                    raise ParkImportError("Reader floors need the content_004_catalogue_release migration on the target")
                 if rarity_changes:
                     _guard_unpublished_selected_art(cursor, rarity_changes)
                 changed: list[dict[str, str]] = []
@@ -729,6 +764,11 @@ def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_env
                             cursor.execute(
                                 "INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) VALUES (%s, %s, %s, %s)",
                                 (park_id, position, distance, duration),
+                            )
+                        if "minimumReader" in change:
+                            cursor.execute(
+                                "INSERT INTO public.content_park_reader_floor (park_id, minimum_reader) VALUES (%s, %s)",
+                                (park_id, change["minimumReader"]),
                             )
                     elif change.get("desiredRarity") != change.get("expectedRarity"):
                         cursor.execute(
@@ -786,11 +826,28 @@ def _write_plan(path: Path, plan: dict[str, Any]) -> None:
     path.write_text(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
 
 
+def read_park_id_file(path: Path | None) -> list[str]:
+    """One stable ID per line, so batch imports avoid command-line length limits."""
+    if path is None:
+        return []
+    try:
+        text = path.expanduser().read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ParkImportError(f"Could not read park ID file ({type(exc).__name__})") from None
+    ids = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if not ids:
+        raise ParkImportError("Park ID file lists no park IDs")
+    invalid = [item for item in ids if not ID_RE.fullmatch(item)]
+    if invalid:
+        raise ParkImportError("Park ID file has an invalid stable ID: " + invalid[0])
+    return ids
+
+
 def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", args.target_environment):
         raise ParkImportError("Target environment must be a lowercase label such as staging or local-qa")
     raw, boundary_source = read_source(args.source, "boundary")
-    source_ids = args.park_id
+    source_ids = [*(args.park_id or []), *read_park_id_file(getattr(args, "park_id_file", None))]
     features = parse_boundary_source(parse_json(raw, "boundary source"), set(source_ids))
     mapping = _parse_mappings(args.id_map)
     catalogue = None
@@ -818,7 +875,7 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     plan = build_plan(
         features, boundary_source, source_ids, mapping, target, parks, boundaries,
         catalogue, catalogue_source, review, review_source, hubs,
-        rarity_review, rarity_review_source,
+        rarity_review, rarity_review_source, getattr(args, "minimum_reader", None),
     )
     _write_plan(args.out, plan)
     return {"planSha256": plan["planSha256"], "status": plan["status"], "target": plan["target"], "changeCount": len(plan["changes"]), "blockers": plan["blockers"], "planPath": str(args.out.expanduser().resolve())}
@@ -841,11 +898,13 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     planning = commands.add_parser("plan", help="create a read-only, hash-pinned import plan")
     planning.add_argument("--source", default=DEFAULT_BOUNDARY_URL, help="legacy FeatureCollection file or HTTPS URL")
-    planning.add_argument("--park-id", action="append", required=True, help="exact legacy stable ID to include; repeat as needed")
+    planning.add_argument("--park-id", action="append", default=[], help="exact legacy stable ID to include; repeat as needed")
+    planning.add_argument("--park-id-file", type=Path, help="file with one legacy stable ID per line, added after any --park-id values")
     planning.add_argument("--id-map", action="append", default=[], help="explicit old-id:new-id rename; repeat as needed")
     planning.add_argument("--catalogue-source", default=None, help="legacy places JSON file or HTTPS URL, required when adding a park")
     planning.add_argument("--new-park-review", type=Path, help="review JSON with presentation, walkM, and drive for new parks")
     planning.add_argument("--rarity-review", type=Path, help="hash-pinned review JSON for rarity changes to existing parks")
+    planning.add_argument("--minimum-reader", type=int, help="serve new parks only to content readers from this version (content_004)")
     planning.add_argument("--target-host", required=True, help="host expected from DATABASE_URL")
     planning.add_argument("--target-environment", required=True, help="explicit label recorded in the plan")
     planning.add_argument("--out", required=True, type=Path, help="path for the frozen JSON review plan")

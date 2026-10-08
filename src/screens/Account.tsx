@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
+import { GameIdentityCard } from "../components/GameIdentityCard";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
+import { backupHeadline } from "../lib/accounts/backupPresentation";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
 import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
 import { useStore } from "../lib/store";
@@ -397,6 +399,8 @@ export function Account({ onBack }: { onBack: () => void }) {
               </div>
             </section>
 
+            <GameIdentityCard />
+
             <section className="account-card card account-section" aria-labelledby="account-backup-title" aria-live="polite">
               <span className="eyebrow" id="account-backup-title">Backup</span>
               <div className={`account-backup-row is-${auth.backup.phase}`}>
@@ -577,25 +581,6 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-notice card is-error" role="alert"><span>{state.progressError}</span></section>
         )}
 
-        <section className="account-card card account-section" aria-labelledby="account-settings-title">
-          <span className="eyebrow" id="account-settings-title">Settings</span>
-          <label className="account-setting">
-            <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Sound effects</strong>
-              <span>{state.muted ? "Off" : "On"}</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="account-switch"
-              checked={!state.muted}
-              onChange={() => dispatch({ type: "mute" })}
-              aria-label="Sound effects"
-            />
-          </label>
-        </section>
-
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
 
       </div>
@@ -618,13 +603,6 @@ function formatBackupTimestamp(timestamp: number | null) {
     dateTime: date.toISOString(),
     label: new Intl.DateTimeFormat(undefined, options).format(date),
   };
-}
-
-function backupHeadline(phase: BackupPhase, synced: boolean) {
-  if (phase === "syncing") return "Backing up now";
-  if (phase === "offline" || phase === "pending") return "Waiting to back up";
-  if (phase === "error") return "Backup needs attention";
-  return synced ? "Backed up" : "Not backed up yet";
 }
 
 function backupStatusText(phase: BackupPhase, message: string | null) {

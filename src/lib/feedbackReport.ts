@@ -3,6 +3,8 @@ import type { Park } from "./parks";
 import type { FeedbackOrigin, Screen } from "./store";
 import { createFeedbackDraftGeneration, getFeedbackSubmissionAttempt } from "./feedbackDraft";
 import { resolveUserDataApiOrigin } from "./userDataDestination";
+import { apiEnvironment, apiUrl } from "./apiPointer";
+import { requestContextHeaders } from "./requestContext";
 
 export type FeedbackKind = "bug" | "idea" | "general";
 
@@ -46,6 +48,11 @@ const SCREEN_LABEL: Record<Screen, string> = {
   claim: "Claim",
   share: "Share",
   account: "Account & backup",
+  settings: "Settings",
+  downloads: "Manage downloads",
+  plant: "Plant flag",
+  parks: "Your parks",
+  leaderboard: "Leaderboard",
 };
 
 // Only coarse app state: precise location, photos and logs are never collected automatically.
@@ -109,7 +116,7 @@ export function clearDraft(nextGeneration: string) {
 /** The API origin for feedback and other anonymous reports from this build. */
 export function feedbackApiOrigin(): string {
   const native = Capacitor.isNativePlatform();
-  const configured = import.meta.env.VITE_FEEDBACK_API_URL;
+  const configured = apiUrl(import.meta.env.VITE_FEEDBACK_API_URL);
   const previewOrigin = import.meta.env.VITE_PREVIEW_API_ORIGIN;
   if (native && !configured?.trim() && !(import.meta.env.VITE_CONTENT_ENV === "preview" && previewOrigin?.trim())) {
     throw new Error("Feedback is unavailable in this app build because its feedback service URL is not configured.");
@@ -118,7 +125,7 @@ export function feedbackApiOrigin(): string {
     native,
     webOrigin: typeof location === "undefined" ? undefined : location.origin,
     allowLoopbackHttp: import.meta.env.DEV,
-    environment: import.meta.env.VITE_CONTENT_ENV,
+    environment: apiEnvironment(),
     previewOrigin,
   });
 }
@@ -183,7 +190,7 @@ export async function submitFeedback(report: FeedbackReport, generation: string)
     try {
       response = await fetch(`${baseUrl}/api/feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...requestContextHeaders() },
         body: JSON.stringify({ ...attempt.report, submissionId: attempt.id }),
         credentials: "omit",
         cache: "no-store",

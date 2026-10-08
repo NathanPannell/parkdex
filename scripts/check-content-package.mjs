@@ -12,14 +12,11 @@ if (process.argv.length > 3 || outputArg === "--help" || outputArg === "-h") {
 
 const outputDirectory = resolve(outputArg ?? resolve(projectRoot, "dist"));
 const parkCatalogPath = resolve(projectRoot, "src/data/parks.json");
-const OVERVIEW_PATH = "map/bootstrap/island-overview.pmtiles";
-const OVERVIEW_PROVENANCE_PATH = resolve(projectRoot, "public/map/bootstrap/island-overview.provenance.json");
-const MAX_BUNDLED_OVERVIEW_BYTES = 2_000_000;
+const OVERVIEW_PATH = "map/bootstrap/canada-overview.pmtiles";
+const OVERVIEW_PROVENANCE_PATH = resolve(projectRoot, "public/map/bootstrap/canada-overview.provenance.json");
+const MAX_BUNDLED_OVERVIEW_BYTES = 12_000_000;
 const REQUIRED_BUNDLED_ONBOARDING_ASSETS = [
   "assets/onboarding-go-map-",
-  "assets/onboarding-scene-beacon-hill-",
-  "assets/onboarding-scene-goldstream-",
-  "assets/onboarding-scene-wittys-lagoon-",
   "art/kip/kip-wave.webp",
   "art/kip/kip-point.webp",
   "art/kip/kip-think.webp",
@@ -38,13 +35,13 @@ const REQUIRED_BUNDLED_ONBOARDING_ASSETS = [
 try {
   const overviewProvenance = JSON.parse(await readFile(OVERVIEW_PROVENANCE_PATH, "utf8"));
   const pinnedOverview = overviewProvenance?.artifact;
-  if (overviewProvenance?.schema !== "parkdex.bundled-map-overview/v1"
+  if (overviewProvenance?.schema !== "parkdex.bundled-map-overview/v2"
     || pinnedOverview?.path !== `public/${OVERVIEW_PATH}`
     || !/^[a-f0-9]{64}$/.test(pinnedOverview?.sha256 ?? "")
     || !Number.isSafeInteger(pinnedOverview?.bytes)
     || pinnedOverview.bytes <= 0
     || pinnedOverview.bytes > MAX_BUNDLED_OVERVIEW_BYTES) {
-    throw new Error("Pinned bundled island overview provenance is invalid or exceeds its size budget");
+    throw new Error("Pinned bundled Canada overview provenance is invalid or exceeds its size budget");
   }
 
   const outputStat = await stat(outputDirectory).catch((error) => {
@@ -70,17 +67,17 @@ try {
   for (const required of ["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs"]) {
     if (!packagedPaths.has(required)) failures.push({ path: required, reason: "required MapLibre runtime module is missing" });
   }
-  if (!packagedPaths.has(OVERVIEW_PATH)) failures.push({ path: OVERVIEW_PATH, reason: "required bundled island overview is missing" });
+  if (!packagedPaths.has(OVERVIEW_PATH)) failures.push({ path: OVERVIEW_PATH, reason: "required bundled Canada overview is missing" });
   const overviewFile = files.find((file) => toPosix(relative(outputDirectory, file)) === OVERVIEW_PATH);
   if (overviewFile) {
     const overviewStat = await stat(overviewFile);
     if (overviewStat.size > MAX_BUNDLED_OVERVIEW_BYTES) {
-      failures.push({ path: OVERVIEW_PATH, reason: `bundled island overview exceeds ${MAX_BUNDLED_OVERVIEW_BYTES} bytes` });
+      failures.push({ path: OVERVIEW_PATH, reason: `bundled Canada overview exceeds ${MAX_BUNDLED_OVERVIEW_BYTES} bytes` });
     } else if (overviewStat.size !== pinnedOverview.bytes) {
-      failures.push({ path: OVERVIEW_PATH, reason: `bundled island overview has ${overviewStat.size} bytes; expected pinned size ${pinnedOverview.bytes}` });
+      failures.push({ path: OVERVIEW_PATH, reason: `bundled Canada overview has ${overviewStat.size} bytes; expected pinned size ${pinnedOverview.bytes}` });
     } else {
       const digest = createHash("sha256").update(await readFile(overviewFile)).digest("hex");
-      if (digest !== pinnedOverview.sha256) failures.push({ path: OVERVIEW_PATH, reason: "bundled island overview does not match its pinned SHA-256" });
+      if (digest !== pinnedOverview.sha256) failures.push({ path: OVERVIEW_PATH, reason: "bundled Canada overview does not match its pinned SHA-256" });
     }
   }
   for (const file of files) {

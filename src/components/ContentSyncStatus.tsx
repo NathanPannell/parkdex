@@ -14,17 +14,7 @@ export function ContentSyncStatus() {
     </button>
   );
 
-  return (
-    <>
-      <div className="content-sync content-sync--downloading">
-        <span className="content-sync__icon" aria-hidden="true">
-          <span className="content-sync__wheel content-sync__wheel--active">
-            <Icon name="refresh" size={18} />
-          </span>
-        </span>
-        <span className="content-sync__label" aria-hidden="true">Downloading update</span>
-      </div>
-      <span className="content-sync__sr-only" role="status" aria-live="polite" aria-atomic="true">Downloading update.</span>
-    </>
-  );
+  // Downloads run often (streamed map detail included) and work in the background, so
+  // nothing is drawn over the map; screen readers still hear that an update is underway.
+  return <span className="content-sync__sr-only" role="status" aria-live="polite" aria-atomic="true">Downloading update.</span>;
 }

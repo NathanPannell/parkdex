@@ -18,16 +18,29 @@ export type Park = {
   blurb: string;
   // Badge art for live badges; null means "badge coming soon".
   scene: string | null;
+  // Directions target such as a trailhead or parking lot. Without it,
+  // directions go to the lat/lng pin.
+  googleMapsUrl?: string | null;
+  // End of the in-app approach line. Without it, the line ends at the boundary.
+  trailheadLat?: number | null;
+  trailheadLng?: number | null;
 };
 
-export const isLive = (park: Park) => park.scene !== null;
+// Per-park badge art and descriptions are retired for the flag game. The
+// catalogue keeps scene and blurb and the CDN keeps the images, so turning this
+// back on needs no content change.
+export const SHOW_BADGE_ART = false;
+
+// Without per-park art every park is a full park; with it, a park without art
+// was "coming soon".
+export const isLive = (park: Pick<Park, "scene">) => !SHOW_BADGE_ART || park.scene !== null;
 export const scenePath = (scene: string) => `art/badges/scenes/${scene}.webp`;
 // Kept as a path helper for callers that also have to resolve the active release URL.
 export const sceneUrl = (scene: string) => `/${scenePath(scene)}`;
 
-// The map shows only parks with a badge to earn, plus any park already in the Dex.
+// The map shows every live park, plus any park already in the Dex.
 export function mapParks<T extends Pick<Park, "id" | "scene">>(parks: readonly T[], claimed: Readonly<Record<string, unknown>>): T[] {
-  return parks.filter((park) => park.scene !== null || Object.hasOwn(claimed, park.id));
+  return parks.filter((park) => isLive(park) || Object.hasOwn(claimed, park.id));
 }
 
 // Keep earned retired badges in the visitor's lifetime collection denominator.
@@ -81,12 +94,33 @@ export const BIOME_LABEL: Record<Biome, string> = {
   heritage: "Heritage",
 };
 
-// The landscape label follows the badge art when a park has it.
-export function landscapeLabel(park: Park) {
+export type Landscape = Biome | "legendary";
+
+// The landscape follows the badge art when a park has it.
+export function landscapeOf(park: Park): Landscape {
   const kind = park.scene?.split("-")[0];
-  if (kind === "legendary") return "Legendary vista";
-  return BIOME_LABEL[(kind as Biome) ?? park.biome] ?? BIOME_LABEL[park.biome];
+  if (kind === "legendary") return "legendary";
+  return kind && kind in BIOME_LABEL ? (kind as Biome) : park.biome;
 }
+
+export function landscapeLabel(park: Park) {
+  const kind = landscapeOf(park);
+  return kind === "legendary" ? "Legendary vista" : BIOME_LABEL[kind];
+}
+
+// Light card tints with a readable ink; the badge palettes are too dark for some biomes (cave).
+export const LANDSCAPE_TINT: Record<Landscape, { bg: string; ink: string }> = {
+  coast: { bg: "#DDF1F7", ink: "#0E6E86" },
+  forest: { bg: "#DFF3E4", ink: "#1C5B43" },
+  mountain: { bg: "#E3E8FF", ink: "#39479F" },
+  lake: { bg: "#DCEFFA", ink: "#1F7FA8" },
+  waterfall: { bg: "#E6E1FA", ink: "#4B3C9E" },
+  river: { bg: "#E4F3DC", ink: "#3F8F48" },
+  cave: { bg: "#E4DFF5", ink: "#2A1F57" },
+  marsh: { bg: "#EAF0D8", ink: "#5B7A2E" },
+  heritage: { bg: "#F8E6D6", ink: "#8C4A2F" },
+  legendary: { bg: "#FFE9A8", ink: "#8A5A00" },
+};
 
 export const CATEGORY_LABEL: Record<ParkCategory, string> = {
   national: "National Park",

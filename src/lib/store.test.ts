@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCollectionRankProgress, getRarityProgress } from "./progression";
+import { getCollectionRankProgress, getRarityProgress, setRankProgressionEnabled } from "./progression";
 import { load, persistOnboardingPreferences, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
@@ -170,7 +170,10 @@ describe("claim progress hydration", () => {
       ownerKey: "guest",
       claims: restoredClaims,
     });
+    // Ranks only exist while rank progression is switched on (it is off by default).
+    setRankProgressionEnabled(true);
     const rank = getCollectionRankProgress(getRarityProgress(restored.claims, catalogue));
+    setRankProgressionEnabled(false);
 
     expect(restored.progressReady).toBe(true);
     expect(rank).toMatchObject({ available: true, visited: 6, rank: { name: "Wayfinder" } });
@@ -307,5 +310,14 @@ describe("claim progress hydration", () => {
     expect(afterStaleResult.claims).toEqual({});
     expect(afterStaleResult.pendingPhoto).toBeNull();
     expect(afterStaleResult.progressOwnerKey).toBe("account:new-owner");
+  });
+});
+
+describe("flag visits", () => {
+  it("returns a plant screen to the map when the account changes", () => {
+    const planting = { ...reducer(load(), { type: "trip", id: "blueberry" }), progressOwnerKey: "guest", screen: "plant" as const };
+    const next = reducer(planting, { type: "progressLoading", ownerKey: "account:new-owner" });
+    expect(next.screen).toBe("map");
+    expect(next.tripId).toBeNull();
   });
 });

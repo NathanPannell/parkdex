@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import type {
   EmailAudience,
   EmailStatus,
@@ -91,7 +91,6 @@ export interface FeedbackStore {
   claimEmail(id: string, audience: EmailAudience, leaseToken: string, confirmAmbiguousAfter24h: boolean): Promise<ClaimEmailResult>;
   markEmailDisabled(id: string, audience: EmailAudience): Promise<void>;
   finishEmail(id: string, audience: EmailAudience, leaseToken: string, state: "sent" | "failed" | "ambiguous", error: string | null, providerMessageId?: string | null): Promise<void>;
-  consumeLoginRateLimit(ipHash: string): Promise<boolean>;
 }
 
 function stringValue(value: unknown): string {
@@ -165,7 +164,7 @@ function feedbackSelect(): string {
 }
 
 export function createNeonFeedbackStore(databaseUrl: string): FeedbackStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
 
   async function findBySubmissionId(submissionId: string) {
     const rows = await sql`SELECT id, payload_hash FROM kip_feedback.reports WHERE submission_id = ${submissionId}::uuid LIMIT 1`;
@@ -387,23 +386,6 @@ export function createNeonFeedbackStore(databaseUrl: string): FeedbackStore {
           provider_message_id = CASE WHEN ${state} = 'sent' THEN ${providerMessageId} ELSE provider_message_id END,
           updated_at = now()
         WHERE report_id = ${id}::uuid AND audience = ${audience} AND status = 'sending' AND lease_token = ${leaseToken}::uuid`;
-    },
-    async consumeLoginRateLimit(ipHash) {
-      const rows = await sql`
-        INSERT INTO kip_feedback.rate_limits (bucket, subject_hash, window_started_at, hit_count)
-        VALUES ('operator_login_ip', ${ipHash}, now(), 1)
-        ON CONFLICT (bucket, subject_hash) DO UPDATE SET
-          window_started_at = CASE
-            WHEN kip_feedback.rate_limits.window_started_at <= now() - interval '15 minutes' THEN now()
-            ELSE kip_feedback.rate_limits.window_started_at
-          END,
-          hit_count = CASE
-            WHEN kip_feedback.rate_limits.window_started_at <= now() - interval '15 minutes' THEN 1
-            ELSE kip_feedback.rate_limits.hit_count + 1
-          END,
-          updated_at = now()
-        RETURNING hit_count <= 8 AS allowed`;
-      return rows[0]?.allowed === true;
     },
   };
 }

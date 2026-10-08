@@ -1,0 +1,83 @@
+{
+  "schema": "parkdex.legacy-bc-import-selection.v2",
+  "legacyPlaceCount": 1656,
+  "candidateCount": 1273,
+  "selectedCount": 1273,
+  "minimumReader": 3,
+  "delivery": "Every new park gets reader floor 3: readers 1 and 2 keep today's snapshot, and reader 3 loads the whole catalogue from a CDN release.",
+  "excluded": {
+    "islands": {
+      "reason": "Legacy island check-offs are not parks, and installed builds reject an island category.",
+      "ids": [
+        "island-banks-island",
+        "island-bowen-island",
+        "island-calvert-island",
+        "island-campbell-island",
+        "island-cormorant-island",
+        "island-cortes-island",
+        "island-denman-island",
+        "island-denny-island",
+        "island-flores-island",
+        "island-gabriola-island",
+        "island-galiano-island",
+        "island-graham-island",
+        "island-hornby-island",
+        "island-kaien-island",
+        "island-lasqueti-island",
+        "island-malcolm-island",
+        "island-maurelle-island",
+        "island-mayne-island",
+        "island-meares-island",
+        "island-moresby-island",
+        "island-nootka-island",
+        "island-north-pender-island",
+        "island-penelakut-island",
+        "island-pitt-island",
+        "island-porcher-island",
+        "island-princess-royal-island",
+        "island-quadra-island",
+        "island-read-island",
+        "island-saltspring-island",
+        "island-saturna-island",
+        "island-sonora-island",
+        "island-south-pender-island",
+        "island-swindle-island",
+        "island-texada-island",
+        "island-thetis-island",
+        "island-valdes-island",
+        "island-vargas-island"
+      ]
+    },
+    "operatorRemovals": {
+      "reason": "Operator review of the Victoria 100 removed these parks from the staging catalogue. The production catalogue at revision 26 still contains them. This import never re-adds them.",
+      "ids": [
+        "municipal-city-of-langford-622",
+        "municipal-city-of-langford-692",
+        "municipal-city-of-victoria-801",
+        "municipal-city-of-victoria-825",
+        "municipal-city-of-victoria-871",
+        "municipal-city-of-victoria-893",
+        "municipal-district-of-central-saanich-1073",
+        "municipal-district-of-oak-bay-906",
+        "municipal-district-of-oak-bay-913",
+        "municipal-district-of-oak-bay-929",
+        "municipal-district-of-saanich-159",
+        "municipal-district-of-saanich-343",
+        "municipal-district-of-saanich-54",
+        "municipal-town-of-view-royal-1500"
+      ]
+    },
+    "existingStaging": {
+      "reason": "Already in the staging catalogue at revision 158.",
+      "count": 332
+    },
+    "existingProductionOnly": {
+      "reason": "Already in the production catalogue at revision 26.",
+      "ids": []
+    },
+    "duplicates": {
+      "reason": "At least 50% of both footprints overlap an existing park.",
+      "ids": []
+    }
+  }
+}

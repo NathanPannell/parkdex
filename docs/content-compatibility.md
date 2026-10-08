@@ -13,6 +13,10 @@ It must not rename, remove, or retype a field, or change what a field means. A b
 
 **Builds installed before 2026-10-01 are strict.** They reject any field, enum value (category, biome, shape, rarity), change entity or asset kind they do not know. Until those builds are retired, the server must not send any of these to them. New fields and values need to wait, or be served only to clients that ask for a newer reader.
 
+## Catalogues larger than one response
+
+The API and every installed build reject a content response over 4 MiB. Parks that would push the snapshot past that get a reader floor (`public.content_park_reader_floor`): readers below the floor never receive them in `snapshot` or `changes`, and a batch with only such parks reaches them as an unchanged hub list. Reader 3 builds load the whole catalogue from an immutable CDN release instead. See `docs/content-catalogue.md`.
+
 ## What builds from 2026-10-01 do
 
 - They ignore fields added after they shipped.

@@ -700,31 +700,11 @@
   pointer-events: none;
 }
 
-.content-sync__icon,
-.content-sync__wheel {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-}
-
 .content-sync--retry {
   min-height: 44px;
   white-space: normal;
   pointer-events: auto;
   cursor: pointer;
-}
-
-.content-sync__wheel--active svg {
-  animation: content-sync-spin 1.15s linear infinite;
-}
-
-.content-sync__progress {
-  padding-left: 7px;
-  border-left: 1px solid var(--paper-3);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 
 .content-sync__sr-only {
@@ -740,16 +720,6 @@
   pointer-events: none;
 }
 
-@keyframes content-sync-spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .content-sync__wheel--active svg {
-    animation: none;
-  }
-}
-
 .tool {
   width: 48px;
   height: 48px;
@@ -762,6 +732,82 @@
 .locate:active {
   transform: translateY(3px);
   box-shadow: 0 1px 0 var(--ink);
+}
+
+.map-menu {
+  position: absolute;
+  top: calc(var(--safe-top) + 60px);
+  right: 14px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  min-width: 220px;
+  transform-origin: top right;
+}
+
+.map-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.map-menu button:hover,
+.map-menu button:focus-visible {
+  background: var(--paper-2);
+}
+
+.press-menu {
+  position: absolute;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  width: 240px;
+}
+
+.press-menu__title {
+  padding: 4px 12px 6px;
+}
+
+.press-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.press-menu button:hover,
+.press-menu button:focus-visible {
+  background: var(--paper-2);
+}
+
+/* Marks the held spot so the menu reads as being about that place. */
+.press-dot {
+  position: absolute;
+  z-index: 24;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 3px solid var(--paper);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--ink);
+  pointer-events: none;
+}
+
+.tool--open {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .demo {
@@ -798,7 +844,7 @@
 .locate {
   position: absolute;
   right: 14px;
-  bottom: calc(var(--safe-bottom) + 262px);
+  bottom: calc(var(--safe-bottom) + 264px);
   z-index: 10;
   width: 52px;
   height: 52px;
@@ -818,7 +864,80 @@
 }
 
 .nearby__head {
+  display: flex;
   padding: 0 18px 8px;
+  min-height: 44px;
+  align-items: center;
+}
+
+.nearby__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nearby__search-open,
+.nearby__search-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.nearby__search-open {
+  width: 32px;
+  height: 32px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.nearby__search {
+  /* Leaves room for the locate button that sits at the right edge just above. */
+  max-width: calc(100% - 64px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 6px 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.nearby__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.nearby__search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.nearby__search-close {
+  width: 28px;
+  height: 28px;
+  border-width: 0;
+  background: rgba(20, 35, 28, 0.08);
+}
+
+.nearby__empty {
+  flex: none;
+  margin: 0;
+  padding: 16px 18px;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 
 .nearby__head .eyebrow {
@@ -1041,39 +1160,14 @@
   color: var(--ink-soft);
 }
 
+.stat--landscape svg {
+  color: inherit;
+}
+
 .park-sheet__blurb {
   font-size: 16px;
   line-height: 1.5;
   color: var(--ink-2);
-}
-
-.park-sheet__how {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 16px;
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--ink-soft);
-}
-
-.park-sheet__how-step {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 11px;
-}
-
-.park-sheet__how-dash {
-  width: 10px;
-  height: 2px;
-  background: currentColor;
-  opacity: 0.4;
 }
 
 .park-sheet__cta {
@@ -1083,6 +1177,11 @@
   padding: 12px 20px calc(var(--safe-bottom) + 6px);
   border-top: 2px dashed rgba(20, 35, 28, 0.15);
   background: var(--paper);
+}
+
+.park-sheet__cta .btn--icon {
+  width: 58px;
+  height: 58px;
 }
 
 .btn--glow {
@@ -2276,6 +2375,8 @@
   justify-content: space-between;
   align-items: flex-end;
   padding-top: 6px;
+  /* Keeps the settings button's drop shadow clear of the rank card or case below. */
+  margin-bottom: 22px;
 }
 
 .col-head h1 {

@@ -24,12 +24,17 @@
   "optionalMigrationPaths": [
     "database/migrations/accounts_001_init.sql",
     "database/migrations/progress_001_init.sql",
-    "database/migrations/interactions_001_init.sql"
+    "database/migrations/interactions_001_init.sql",
+    "database/migrations/interactions_002_db_events.sql"
   ],
   "independentMigrationPaths": [
     "database/migrations/app_config_001_init.sql",
     "database/migrations/park_proposals_001_init.sql",
-    "database/migrations/app_config_002_global_rules.sql"
+    "database/migrations/park_drafts_001_init.sql",
+    "database/migrations/app_config_002_global_rules.sql",
+    "database/migrations/park_drafts_002_proposals.sql",
+    "database/migrations/game_001_init.sql",
+    "database/migrations/park_proposals_002_moderation.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -37,7 +42,9 @@
     ],
     "migrationPaths": [
       "database/migrations/content_001_sync.sql",
-      "database/migrations/content_002_authoring.sql"
+      "database/migrations/content_002_authoring.sql",
+      "database/migrations/content_003_park_maps_link.sql",
+      "database/migrations/content_004_catalogue_release.sql"
     ],
     "apiPaths": [
       "api/content/snapshot.ts",
@@ -53,7 +60,9 @@
       "scripts/test_publish_park_update.py",
       "scripts/test_reset_victoria_100.py",
       "scripts/test_authoring_queue.py",
-      "scripts/test_downshift_park_rarities.py"
+      "scripts/test_downshift_park_rarities.py",
+      "scripts/test_build_bc_import.py",
+      "scripts/test_content_catalogue.py"
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
@@ -61,8 +70,11 @@
     "previewClockTable": "content_clock"
   },
   "runtimeOptionalKeys": [
+    "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
     "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
-    "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"
+    "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET",
+    "OPERATOR_DASHBOARD_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODERATION_MODEL",
+    "POSTHOG_PROJECT_KEY", "POSTHOG_HOST"
   ],
   "privatePhotos": {
     "accountId": "6f0eb57971124f41fadc7897ace74dac",
@@ -85,6 +97,8 @@
   "productionEmailMode": "resend",
   "runtimeSecretBundleEnvironment": "KIP_STAGING_RUNTIME_JSON",
   "productionRuntimeSecretBundleEnvironment": "KIP_PRODUCTION_RUNTIME_JSON",
+  "runtimeExtraBundleEnvironment": "KIP_STAGING_EXTRA_RUNTIME_JSON",
+  "productionRuntimeExtraBundleEnvironment": "KIP_PRODUCTION_EXTRA_RUNTIME_JSON",
   "runtimeSecretBundleKeys": [
     "DATABASE_URL",
     "RESEND_API_KEY",

@@ -410,6 +410,21 @@ describe("content transport", () => {
     await expect(contentFetch(ART_URL)).resolves.toMatchObject({ status: 200 });
   });
 
+  it("lets nearby map detail use cellular when the request allows any network", async () => {
+    setBrowserNetwork({ online: true, type: "cellular" });
+    await expect(contentFetch(CDN_URL, { anyNetwork: true })).resolves.toMatchObject({ status: 200 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the any-network allowance to the Android plugin only when requested", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    await contentFetch(CDN_URL);
+    await contentFetch(CDN_URL, { anyNetwork: true });
+    expect(mocks.native.request).toHaveBeenNthCalledWith(1, expect.objectContaining({ anyNetwork: false }));
+    expect(mocks.native.request).toHaveBeenNthCalledWith(2, expect.objectContaining({ anyNetwork: true }));
+  });
+
   it("aborts detailed map streaming when Wi-Fi changes to cellular", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
       start(controller) {
@@ -423,5 +438,16 @@ describe("content transport", () => {
     browserConnection.type = "cellular";
     browserConnection.dispatchEvent(new Event("change"));
     await result;
+  });
+
+  it("labels content API requests for analytics but leaves CDN requests untouched", async () => {
+    vi.stubGlobal("__APP_BUILD__", "abc1234");
+    const fetcher = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    await contentFetch(API_URL);
+    await contentFetch(CDN_URL, { anyNetwork: true });
+    const [apiInit, cdnInit] = fetcher.mock.calls.map((call) => (call as unknown as [URL, RequestInit])[1]);
+    expect(new Headers(apiInit.headers).get("X-Kip-Bundle-Id")).toBe("abc1234");
+    expect(new Headers(cdnInit.headers).get("X-Kip-Bundle-Id")).toBeNull();
   });
 });

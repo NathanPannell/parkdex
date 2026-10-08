@@ -1,32 +1,31 @@
 # Build configuration and feature flags
 
-Every app build checks in with the production API to learn which content database it reads and which features are on. The table lives in Neon main, so production is the single source of truth.
+Every app build checks in with the production API on launch. The tables live in Neon main, so production is the single source of truth.
 
 ## How it works
 
-- `GET https://web.parkdex.app/api/app-config?platform=android&build=<versionCode>` returns `{ contentChannel, flags }` for that build. Build `0` is the platform default; a specific build overrides it flag by flag. No row means the build keeps its built-in defaults.
-- The app reads its saved answer before it renders (`src/lib/appConfig.ts`), then checks in again at startup and on resume. A fresh answer takes effect on the next launch, so content and flags never switch mid-session. Offline or on first launch, the build uses its own defaults.
-- `contentChannel` switches only park content (catalogue, art, change feed) between `staging.web.parkdex.app` and `web.parkdex.app`. Accounts, backups, feedback and photos always stay on the server the build was made for. Web pages ignore it and always read their own host.
-- Flags: `rankProgression` (default on). Off opens every rarity and hides the rank card, map rank line, park-sheet rarity guide and onboarding rank step.
-- `parkProposals` (default on). Off hides the "Propose a park" map button.
+- `GET https://web.parkdex.app/api/app-config?platform=android&build=<versionCode>&env=<production|staging>` returns the build's `apiPointer`, `flags` and update status. Builds 9 and newer send `env`, the server they were built for. Builds 8 and earlier send none and count as production.
+- **Update rules are global per environment** (`kip_app_config.update_rules`). A build below its environment's minimum gets a blocking "Update on Google Play" screen; below the latest it gets a dismissable nudge. A build's environment is its API pointer if one is set, otherwise the server it was built for. Update prompts apply as soon as the check-in answers, and a required update is remembered offline. Unversioned web builds (build 0) never get one.
+- **The API pointer and flags are set per build** (`kip_app_config.builds`). Build `0` is the default for every build of a platform; a specific build overrides it, flag by flag. A null pointer on a build's own row keeps the server it was built for.
+- The pointer moves a native build's whole backend, not only content: accounts, backups, feedback, interactions and park content all use `web.parkdex.app` or `staging.web.parkdex.app`. It takes effect on the next launch. When it changes, the app signs the player out of the old server first, because accounts belong to one server; progress saved on the device is kept. Web pages ignore it and always use their own host.
+- Flags are free-form: any name of letters, digits and underscores starting with a letter, up to 64 per build. The server stores and sends them all. Builds keep every flag they receive (`remoteFlag(name)`), and read the ones they know: `rankProgression` (default on; off opens every rarity and hides rank UI) and `parkProposals` (default on; off hides the "Propose a park" button).
+- Responses carry `analytics: { posthogKey, posthogHost }` when the server has `POSTHOG_PROJECT_KEY`, else `null`. The app starts PostHog as soon as it sees a key ([analytics.md](analytics.md)).
+- Responses still carry `contentChannel` (`main` for a production pointer, `staging` for staging), which is all builds 8 and earlier understand. Those builds switch only park content, as before.
 
-## Update prompts
+## Operator dashboard
 
-Set `minimumBuild` and `latestBuild` on the default row (or a specific build). An Android build below the minimum gets a blocking "Update on Google Play" screen; below the latest it gets a dismissable nudge. Unlike content and flags, these apply as soon as the check-in answers, and a required update is remembered offline. Raise the minimum only before shipping an API change older builds can't handle.
-
-## Operator page
-
-Sign in at `https://web.parkdex.app/operator/builds` with the operator password to add, edit or remove build rows. The same page on the staging host edits the staging table, which native builds do not read.
+Edit the update rules and build rows on the Builds page of the operator dashboard ([operator/README.md](../operator/README.md)). Native builds read production's tables, so keep the dashboard's database toggle on Production when changing them.
 
 ## Park proposals
 
-Players tap the pin button next to feedback on the map, drop a pin (or use their location), optionally trace a rough outline with a finger, and name the park. `POST /api/park-proposals` stores it in `kip_proposals.parks` on the server the build talks to, limited to 10 per hour per network. Proposals never touch park content responses, so installed builds are unaffected. Review them at `/operator/proposals` (same operator sign-in): filter by status, open the pin in Google Maps, download the pin and outline as GeoJSON, and mark each one reviewing, accepted or declined.
+Players tap the pin button next to feedback on the map, drop a pin (or use their location), optionally trace a rough outline with a finger, and name the park. `POST /api/park-proposals` stores it in `kip_proposals.parks` on the server the build talks to, limited to 10 per hour per network. Proposals never touch park content responses, so installed builds are unaffected. Review them on the Proposals page of the operator dashboard: filter by status, open the pin in Google Maps, download the pin and outline as GeoJSON, and mark each one reviewing, accepted or declined.
 
 ## Builds
 
 - `npm run android:aab` builds a staging build (`.env.field`): content and accounts on staging.
 - `npm run android:aab:production` builds a production build (`.env.production-field`): content and accounts on production.
 - Set `PARKDEX_ANDROID_VERSION_CODE` for each release; that number is the `build` the page refers to.
+- Web bundle updates between Play releases go over the air on the build's channel and never change its version code, so update rules still apply to the native build. See [ota-updates.md](ota-updates.md).
 
 ## Adding a flag
 

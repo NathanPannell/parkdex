@@ -12,6 +12,7 @@ Configure the GitHub staging environment with:
 
 - Secret VERCEL_TOKEN_STAGING, scoped to the Parkdex Vercel team and project.
 - Secret KIP_STAGING_RUNTIME_JSON, containing exactly the staging runtime values DATABASE_URL, RESEND_API_KEY, EMAIL_FROM, EMAIL_REPLY_TO, OPERATOR_EMAIL, OPERATOR_PASSWORD_HASH, and SESSION_SECRET. An optional MIGRATION_DATABASE_URL can supply a direct Neon connection for psql; otherwise DATABASE_URL is used for the bounded migration step.
+- Optional secret KIP_STAGING_EXTRA_RUNTIME_JSON (and KIP_PRODUCTION_EXTRA_RUNTIME_JSON for production), a JSON object that adds optional runtime keys listed in `runtimeOptionalKeys`, such as OPENROUTER_API_KEY, OPENROUTER_MODERATION_MODEL, POSTHOG_PROJECT_KEY and POSTHOG_HOST. It may not repeat a key from the main bundle. Adding an optional key never requires rewriting the main bundle.
 - Secret NEON_API_KEY_STAGING, scoped to read the staging branch endpoint inventory. The workflow checks DATABASE_URL and optional MIGRATION_DATABASE_URL against the staging child before migration or service dispatch.
 - Variables VERCEL_ORG_ID and VERCEL_STAGING_PROJECT_ID.
 
@@ -64,7 +65,9 @@ Before completing review, confirm /release.json reports the PR head SHA and prev
 
 ## Staging release and teardown
 
-Merging to staging starts .github/workflows/deploy-staging.yml. The workflow validates the full pushed SHA, runs local checks, applies each additive migration atomically with psql, then dispatches all required services concurrently. It does not assign an alias or wait for provider readiness.
+Run `python scripts/kip-delivery.py ci-checks` locally before every push; it is the same check list the preview harness and both push workflows run. When a PR is marked ready, .github/workflows/pr-checks.yml runs it once more on the merge result. Draft pushes and docs-only changes do not start it. Merge only when it is green on the current head.
+
+Merging to staging starts .github/workflows/deploy-staging.yml. The workflow validates the full pushed SHA, runs the same release checks, applies each additive migration atomically with psql, then dispatches all required services concurrently. It does not assign an alias or wait for provider readiness.
 
 After the workflow succeeds, verify the deployment’s Vercel metadata and /release.json against the exact merge SHA. Confirm /api/health and the feedback API, then assign the stable staging alias only to that verified deployment:
 

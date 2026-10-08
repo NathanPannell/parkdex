@@ -186,6 +186,7 @@ p {
   transition: transform 0.12s cubic-bezier(0.3, 1.6, 0.6, 1), box-shadow 0.12s;
   user-select: none;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .btn:active {
@@ -230,6 +231,8 @@ p {
 }
 
 .btn--icon {
+  /* Never shrink beside a full-width button, or the circle squashes into an oval. */
+  flex: none;
   width: 48px;
   height: 48px;
   padding: 0;

@@ -1,0 +1,183 @@
+{
+  "schema": "parkdex.legacy-bc-import-bundle.v1",
+  "sources": {
+    "legacy-places.json": {
+      "sha256": "f93058cc0e0df94412c1045f649aed38ede37d8076637944b5d2b958adbf4d6a",
+      "bytes": 806531
+    },
+    "legacy-boundaries.geojson.gz": {
+      "sha256": "c9be9a8a8813ad0147692bcd99fc14a22300ac037c34906b127031c740846cc8",
+      "bytes": 13003941
+    },
+    "staging-rev158-snapshot.json.gz": {
+      "sha256": "a333ad619079744e29a44c92b99118981101e5e350f3527a7471b7e905f5d750",
+      "bytes": 1705889
+    },
+    "staging-removals-20260930.json": {
+      "sha256": "a78655112b6e7a9c9e78f3baf8a9e5c96628f927b0649107e174111cab60137f",
+      "bytes": 2380
+    },
+    "fetch-record.json": {
+      "sha256": "8462bbf89ce3e20e04e4a3b30342d08a1193803e842351dbf3def4f19856c8e1",
+      "bytes": 1973
+    },
+    "production": {
+      "sha256": "6c181f43a031bd587f5c54a9c54f554c762a76ef8443466c90ce963bbbbcf4a1",
+      "bytes": 855833
+    },
+    "island/new-park-review.json": {
+      "sha256": "9db12865aebcd79fc28e2109e1563c6902cedd79960231382ae0965ef3ecdc52",
+      "bytes": 164017
+    },
+    "island/boundaries.geojson": {
+      "sha256": "0a9719fe2733a298f0c881863ceeb91163bdee00e44f27029c5a8835676bd2bf",
+      "bytes": 2868280
+    },
+    "island/catalogue.json": {
+      "sha256": "8940794a679fe43a65b649412bdc603f52699a1f6433723e5d349e6bc0710933",
+      "bytes": 173455
+    }
+  },
+  "outputs": {
+    "selection.json": {
+      "sha256": "02af9c245082c3e198c05af5b738e43dd24c73b417477f6cfc237064c639c9b0",
+      "bytes": 2938
+    },
+    "catalogue.json": {
+      "sha256": "be6150763acb4d6a53bfc724f7252ec5e979bd12bc07c0aaa4d451821a3a8966",
+      "bytes": 687403
+    },
+    "comparison-report.json": {
+      "sha256": "1a6dc18d1b3b7e12d93689075be6a035b09a03b0aa6862af65175ee81c776524",
+      "bytes": 1246298
+    },
+    "normalization.json": {
+      "sha256": "0ed0887b30719dd3dcb0933f464f6c1034226f2ca9652b70bb54d3314adad2b4",
+      "bytes": 16568
+    },
+    "overlaps.json": {
+      "sha256": "79e59e2a29a531c24b1e74ba3b58a9e6d3e44c9ac67ac1c8f825485e12be4ab0",
+      "bytes": 742
+    },
+    "park-ids.txt": {
+      "sha256": "0355cd1f6a07bc9ec68631791c6adf8727232508e0150e882482195b0b0f3136",
+      "bytes": 46117
+    },
+    "new-park-review.json": {
+      "sha256": "85a184dc1462ceb8e33c06ca0afbae017aac5dd1ee619a2b1a7a108e970a2d62",
+      "bytes": 626801
+    }
+  },
+  "boundaries": {
+    "file": "boundaries.geojson.gz",
+    "decompressedSha256": "6a9f88a0d37e288ebd63054ed847a64d1b79be65a2607019fe1bad14755d7409",
+    "decompressedBytes": 7984866
+  },
+  "counts": {
+    "selected": 1273,
+    "duplicatesExcluded": 0,
+    "categories": {
+      "community": 77,
+      "municipal": 473,
+      "national": 7,
+      "provincial": 559,
+      "regional": 157
+    },
+    "regions": {
+      "Cariboo & Central Interior": 91,
+      "Central Coast": 7,
+      "Gulf Islands": 1,
+      "Kootenays": 99,
+      "Nechako": 67,
+      "North Coast & Haida Gwaii": 52,
+      "Northeast": 46,
+      "Northern Vancouver Island": 1,
+      "South Coast": 144,
+      "Southern Vancouver Island": 550,
+      "Thompson & Okanagan": 214,
+      "West Coast": 1
+    },
+    "biomes": {
+      "cave": 2,
+      "coast": 114,
+      "forest": 717,
+      "heritage": 15,
+      "lake": 203,
+      "marsh": 3,
+      "mountain": 93,
+      "river": 114,
+      "waterfall": 12
+    },
+    "normalizedInvalidSources": 21,
+    "normalizedSelected": 14,
+    "newParkComparison": {
+      "sourceFeatureIdsMatch": 1273,
+      "polygonsMatch": 1261,
+      "holesMatch": 1269,
+      "fullCoverage": 1273,
+      "total": 1273
+    },
+    "existingParkComparison": {
+      "total": 332,
+      "polygonsMatch": 332,
+      "holesMatch": 332,
+      "sameArea": 331
+    },
+    "geometryTotals": {
+      "polygonCount": 2363,
+      "holeCount": 172,
+      "positionCount": 308109
+    }
+  },
+  "contentSyncProjection": {
+    "limitBytes": 4194304,
+    "legacySnapshot": {
+      "staging": {
+        "parks": 334,
+        "snapshotBytes": 1705889,
+        "reader2SnapshotBytesEstimate": 1752260,
+        "headroomBytes": 2442044
+      },
+      "productionAfterIslandBundle": {
+        "parks": 344,
+        "snapshotBytes": 1641815,
+        "reader2SnapshotBytesEstimate": 1688796,
+        "headroomBytes": 2505508
+      }
+    },
+    "catalogueRelease": {
+      "staging": {
+        "parks": 1607,
+        "indexBytes": 921278,
+        "chunkCount": 19,
+        "chunkBytesTotal": 9136957,
+        "largestChunkBytes": 524253,
+        "smallestChunkBytes": 67808
+      },
+      "productionAfterIslandBundle": {
+        "parks": 1617,
+        "indexBytes": 875301,
+        "chunkCount": 19,
+        "chunkBytesTotal": 9119843,
+        "largestChunkBytes": 524329,
+        "smallestChunkBytes": 67808
+      }
+    },
+    "importChangeBatchBytes": 8462503
+  },
+  "presentationRules": {
+    "short": "Legacy name without a trailing park-type phrase such as Park, Regional Park or National Park Reserve.",
+    "biome": "First matching name keyword in BIOME_RULES of scripts/build_bc_import.py, otherwise forest.",
+    "shape": "circle",
+    "rarity": "common",
+    "seed": "First 8 bytes of SHA-256 of the park ID, modulo 1,000,001.",
+    "blurb": "A factual line: 'A <category> park in the <jurisdiction>', or in <region> when the source has no jurisdiction.",
+    "scene": null,
+    "access": "accessUnknown true, walkM 0 and null for every drive hub."
+  },
+  "publication": {
+    "providerActions": false,
+    "databaseWrites": false,
+    "badgeArtworkIncluded": false
+  }
+}

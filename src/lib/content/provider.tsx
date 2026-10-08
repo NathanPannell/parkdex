@@ -4,11 +4,13 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useSyncE
 import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
+import { readAllowMobileMapData, subscribeAllowMobileMapData } from "../downloadPreferences";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
-import type { ContentEnvironment, ContentRuntime, ContentStatus } from "./contracts";
+import { BUILD_MAP_POINTER, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
 import { useStore } from "../store";
 import { useAuth } from "../accounts/AuthProvider";
 import { isUsableGpsAccuracy } from "../geo";
+import { SHOW_BADGE_ART } from "../parks";
 
 const EMPTY_STATUS: ContentStatus = {
   phase: "starting",
@@ -65,12 +67,19 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
       claimedParkIds: () => claimsReadyRef.current ? Object.keys(claimsRef.current) : [],
+      badgeArt: SHOW_BADGE_ART,
       connectivity: initialConnectivity(),
       fetch: contentFetch,
+      mapPointer: BUILD_MAP_POINTER,
     });
   }
   const runtime = runtimeRef.current;
   const stopTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    runtime.setAllowMobileMapData?.(readAllowMobileMapData());
+    return subscribeAllowMobileMapData((allowed) => runtime.setAllowMobileMapData?.(allowed));
+  }, [runtime]);
 
   useLayoutEffect(() => {
     runtime.refreshClaimedParks();

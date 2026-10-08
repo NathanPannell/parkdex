@@ -62,6 +62,26 @@ class AccountReleaseGates(unittest.TestCase):
             "EMAIL_FROM": "Kip <kip@example.test>",
         }
 
+    def test_release_checks_run_in_order_and_report_each_check(self):
+        commands, started, passed = [], [], []
+        with patch.object(delivery, "npm_args", return_value=["npm"]), \
+             patch.object(delivery, "run", side_effect=lambda args, **_kwargs: commands.append(args) or ""):
+            delivery.release_checks(self.root, accounts=False, starting=started.append, passed=passed.append)
+        self.assertEqual(started, ["install", "typecheck", "tests", "build"])
+        self.assertEqual(passed, ["install", "typecheck", "tests", "build", "delivery-tests"])
+        self.assertEqual(commands[0], ["npm", "ci"])
+        self.assertIn("unittest", commands[-1])
+
+    def test_candidate_checks_still_journal_every_passed_check(self):
+        path = self.root / "journal.json"
+        state = {"accountsPresent": False}
+        with patch.object(delivery, "npm_args", return_value=["npm"]), \
+             patch.object(delivery, "run", return_value=""):
+            delivery.candidate_checks(self.root, state, path)
+        self.assertEqual([item["check"] for item in state["validation"]], ["install", "typecheck", "tests", "build", "delivery-tests"])
+        self.assertEqual(state["status"], "validating-build")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["validation"], state["validation"])
+
     def test_bootstrap_runs_existing_migration_only(self):
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], ["feedback_001_init.sql"])
 
@@ -70,8 +90,10 @@ class AccountReleaseGates(unittest.TestCase):
         for name in self.config["independentMigrationPaths"]:
             self.touch(name)
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
-            "app_config_001_init.sql", "park_proposals_001_init.sql", "app_config_002_global_rules.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
+            "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
+            "game_001_init.sql",
+            "park_proposals_002_moderation.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
@@ -91,7 +113,7 @@ class AccountReleaseGates(unittest.TestCase):
     def test_complete_migrations_keep_foreign_key_order(self):
         self.account_files()
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql",
+            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
         ])
 
     def test_content_sync_markers_are_all_or_none_and_append_only_allowlisted_migrations(self):
@@ -107,6 +129,8 @@ class AccountReleaseGates(unittest.TestCase):
             "database/001_cloud_content.sql",
             "database/migrations/content_001_sync.sql",
             "database/migrations/content_002_authoring.sql",
+            "database/migrations/content_003_park_maps_link.sql",
+            "database/migrations/content_004_catalogue_release.sql",
         ])
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
@@ -147,8 +171,11 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/accounts_001_init.sql",
             "database/migrations/progress_001_init.sql",
             "database/migrations/interactions_001_init.sql",
+            "database/migrations/interactions_002_db_events.sql",
             "database/migrations/content_001_sync.sql",
             "database/migrations/content_002_authoring.sql",
+            "database/migrations/content_003_park_maps_link.sql",
+            "database/migrations/content_004_catalogue_release.sql",
         ])
 
     def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):
@@ -444,6 +471,16 @@ class AccountReleaseGates(unittest.TestCase):
              self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_RUNTIME_JSON"):
             delivery.read_runtime_bundle(self.config, environment="production")
 
+        extra = {"OPENROUTER_API_KEY": "or-secret", "POSTHOG_PROJECT_KEY": "phc_public"}
+        with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(extra)}, clear=True):
+            merged = delivery.read_runtime_bundle(self.config, environment="production")
+        self.assertEqual(merged, bundle | extra)
+        self.assertEqual(delivery.production_runtime_env(self.config, merged, "a" * 40, api_present=True)["OPENROUTER_API_KEY"], "or-secret")
+        for invalid in ({"DATABASE_URL": "postgresql://other"}, {"UNDOCUMENTED_KEY": "x"}, {"OPENROUTER_API_KEY": ""}):
+            with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(invalid)}, clear=True), \
+                 self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_EXTRA_RUNTIME_JSON"):
+                delivery.read_runtime_bundle(self.config, environment="production")
+
         self.account_files()
         production = self.runtime() | {
             "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-production.owned.workers.dev",
@@ -593,6 +630,37 @@ class AccountReleaseGates(unittest.TestCase):
             with self.assertRaises(delivery.DeliveryError):
                 delivery.attest_preview_browser(argparse.Namespace(pr=12, deployment_id="dpl_wrong"))
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
+
+
+class MigrationLockRetry(unittest.TestCase):
+    url = "postgresql://kip:secret@ep-test.us-west-2.aws.neon.tech/parkdex_kip"
+
+    def migrate(self, outcomes):
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(kwargs["env"].get("PGOPTIONS"))
+            outcome = outcomes.pop(0)
+            if outcome:
+                raise delivery.DeliveryError(f"database migration x.sql failed with exit code 3: {outcome}")
+            return ""
+
+        with patch.object(delivery, "run", side_effect=fake_run), \
+             patch.object(delivery, "psql_executable", return_value="psql"):
+            delivery.run_migration(self.url, delivery.ROOT / "x.sql", sleep=lambda seconds: None)
+        return calls
+
+    def test_retries_a_deadlock_then_succeeds_with_a_lock_timeout(self):
+        calls = self.migrate(["ERROR:  deadlock detected", "ERROR:  canceling statement due to lock timeout", None])
+        self.assertEqual(calls, ["-c lock_timeout=5s"] * 3)
+
+    def test_other_errors_fail_immediately(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "syntax error"):
+            self.migrate(["ERROR:  syntax error at or near", None])
+
+    def test_gives_up_after_the_last_attempt(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "deadlock"):
+            self.migrate(["ERROR:  deadlock detected"] * delivery.MIGRATION_ATTEMPTS)
 
 
 if __name__ == "__main__":

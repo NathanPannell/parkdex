@@ -360,6 +360,34 @@ def set_release_file(root: Path, sha: str, environment: str) -> None:
 
 
 def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
+    state["validation"] = []
+
+    def starting(name: str) -> None:
+        state["status"] = f"validating-{name}"
+        save_json(path, state)
+
+    def passed(name: str) -> None:
+        state["validation"].append({"check": name, "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
+        save_json(path, state)
+
+    release_checks(candidate_root, accounts=bool(state.get("accountsPresent")), starting=starting, passed=passed)
+
+
+def ci_checks() -> None:
+    """Run the same release checks as previews and push workflows, so local, PR and release results agree."""
+    accounts = accounts_present(load_config(), ROOT)
+
+    def starting(name: str) -> None:
+        print(f"RUN  {name}", flush=True)
+
+    def passed(name: str) -> None:
+        print(f"PASS {name}", flush=True)
+
+    release_checks(ROOT, accounts=accounts, starting=starting, passed=passed)
+    print("All release checks passed.", flush=True)
+
+
+def release_checks(candidate_root: Path, *, accounts: bool, starting, passed) -> None:
     commands = [
         ("install", ["ci"]),
         ("typecheck", ["run", "typecheck"]),
@@ -368,16 +396,12 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
     ]
     env = safe_env()
     npm = npm_args()
-    state["validation"] = []
     for name, args in commands:
-        state["status"] = f"validating-{name}"
-        save_json(path, state)
+        starting(name)
         run([*npm, *args], cwd=candidate_root, env=env, label=f"candidate npm {name}")
-        state["validation"].append({"check": name, "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed(name)
     run([sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_kip*.py"], cwd=candidate_root, env=env, label="candidate delivery tests")
-    state["validation"].append({"check": "delivery-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-    save_json(path, state)
+    passed("delivery-tests")
     if content_sync_present(load_config(), candidate_root):
         feature = load_config()["contentSync"]
         requirements = candidate_root / feature["pythonRequirementsPath"]
@@ -388,8 +412,7 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
             label="candidate content Python dependencies",
         )
         run_content_sync_sql_qa(load_config(), candidate_root)
-        state["validation"].append({"check": "postgresql-content-sync-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-content-sync-integration")
         for name in feature["pythonTestPaths"]:
             run(
                 [sys.executable, str(candidate_root / name)],
@@ -397,30 +420,25 @@ def candidate_checks(candidate_root: Path, state: dict, path: Path) -> None:
                 env=env,
                 label=f"candidate content Python test {Path(name).name}",
             )
-        state["validation"].append({"check": "content-python-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("content-python-tests")
         run(
             [sys.executable, str(candidate_root / feature["legacyImporterTestPath"]), "ImportPlanTests"],
             cwd=candidate_root,
             env=env,
             label="candidate legacy import unit tests",
         )
-        state["validation"].append({"check": "legacy-import-unit-tests", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("legacy-import-unit-tests")
         run_legacy_import_postgres_qa(load_config(), candidate_root)
-        state["validation"].append({"check": "postgresql-legacy-import-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-legacy-import-integration")
 
     account_sql = candidate_root / "scripts" / "qa-account-sql.mjs"
     if account_sql.is_file():
         run([*npm, "run", "test:sql"], cwd=candidate_root, env=candidate_sql_env(), label="candidate PostgreSQL integration tests")
-        state["validation"].append({"check": "postgresql-account-integration", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("postgresql-account-integration")
 
-    if state.get("accountsPresent"):
+    if accounts:
         photo_provider().validate_candidate(sys.modules[__name__], load_config(), candidate_root)
-        state["validation"].append({"check": "private-photo-worker-bundle", "status": "passed", "at": datetime.now(timezone.utc).isoformat()})
-        save_json(path, state)
+        passed("private-photo-worker-bundle")
 
 
 def candidate_sql_env() -> dict[str, str]:
@@ -966,11 +984,26 @@ def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> li
     ]
 
 
-def run_migration(database_url: str, migration: Path) -> None:
+MIGRATION_ATTEMPTS = 4
+MIGRATION_LOCK_CONFLICT = re.compile(r"deadlock detected|canceling statement due to lock timeout", re.IGNORECASE)
+
+
+def run_migration(database_url: str, migration: Path, *, sleep=time.sleep) -> None:
     uri, username, password = parse_database_url(database_url)
-    env = safe_env(extra={"PGPASSWORD": password, "PGSSLMODE": "require"})
-    run([*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-1", "-f", str(migration)],
-        cwd=ROOT, env=env, label=f"database migration {migration.name}")
+    # Migrations replay on every deploy and recreate triggers on live tables. A short lock
+    # timeout fails fast instead of queueing behind traffic, and because each migration is
+    # idempotent and runs in one transaction, a lock conflict can simply be retried.
+    env = safe_env(extra={"PGPASSWORD": password, "PGSSLMODE": "require", "PGOPTIONS": "-c lock_timeout=5s"})
+    args = [*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-1", "-f", str(migration)]
+    for attempt in range(1, MIGRATION_ATTEMPTS + 1):
+        try:
+            run(args, cwd=ROOT, env=env, label=f"database migration {migration.name}")
+            return
+        except DeliveryError as exc:
+            if attempt == MIGRATION_ATTEMPTS or not MIGRATION_LOCK_CONFLICT.search(str(exc)):
+                raise
+            print(f"migration-retry={migration.name} attempt={attempt} reason=lock-conflict", flush=True)
+            sleep(2 * attempt)
 
 
 def preview_psql_query(database_url: str, sql: str) -> str:
@@ -1072,7 +1105,31 @@ def read_runtime_bundle(config: dict, *, environment: str = "staging", optional:
         if not isinstance(value, str) or not value:
             raise DeliveryError(f"{env_name} contains a missing or invalid value.")
         register_secret(value)
-    return bundle
+    return bundle | read_extra_runtime_bundle(config, bundle, environment=environment)
+
+
+def read_extra_runtime_bundle(config: dict, bundle: dict, *, environment: str) -> dict:
+    """Optional keys live in their own secret so adding one never means rewriting the main bundle."""
+    env_key = "productionRuntimeExtraBundleEnvironment" if environment == "production" else "runtimeExtraBundleEnvironment"
+    env_name = config.get(env_key)
+    raw = os.environ.get(env_name, "") if env_name else ""
+    if not raw:
+        return {}
+    register_secret(raw)
+    try:
+        extra = json.loads(raw)
+    except ValueError as exc:
+        raise DeliveryError(f"{env_name} must contain a JSON object.") from exc
+    if not isinstance(extra, dict):
+        raise DeliveryError(f"{env_name} must contain a JSON object.")
+    optional = set(config.get("runtimeOptionalKeys", []))
+    if set(extra) - optional or set(extra) & set(bundle):
+        raise DeliveryError(f"{env_name} may only add documented optional keys that the main bundle does not set.")
+    for value in extra.values():
+        if not isinstance(value, str) or not value:
+            raise DeliveryError(f"{env_name} contains a missing or invalid value.")
+        register_secret(value)
+    return extra
 
 
 def verify_runtime_bundle(bundle: dict, config: dict, *, environment: str = "staging") -> None:
@@ -2471,6 +2528,7 @@ def build_parser() -> argparse.ArgumentParser:
     item.add_argument("--sha", required=True)
     item.add_argument("--apply", action="store_true")
     sub.add_parser("verify-main-content")
+    sub.add_parser("ci-checks")
     sub.add_parser("qa-content-sync")
     sub.add_parser("qa-legacy-import")
     item = sub.add_parser("deploy-staging")
@@ -2525,6 +2583,8 @@ def main() -> int:
             migration_main(args)
         elif args.command == "verify-main-content":
             verify_main_content_channel()
+        elif args.command == "ci-checks":
+            ci_checks()
         elif args.command == "qa-content-sync":
             qa_content_sync()
         elif args.command == "qa-legacy-import":

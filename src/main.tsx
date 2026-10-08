@@ -8,11 +8,13 @@ import "./screens.css";
 import { App } from "./App";
 import { initAppConfig, startAppConfigCheckIns } from "./lib/appConfig";
 import { prewarmMapStartup } from "./lib/mapStartup";
+import { startOverTheAirUpdates } from "./lib/ota";
 
 prewarmMapStartup();
 
 // Apply this build's saved remote configuration before anything reads content or flags.
-void initAppConfig().finally(() => {
+// A downloaded web bundle is switched to here, before the first render, so nothing reloads later.
+void Promise.allSettled([initAppConfig(), startOverTheAirUpdates()]).finally(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <App />

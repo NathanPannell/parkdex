@@ -21,13 +21,19 @@ function response(status, body = null, headers = new Headers()) {
 
 function channelKeyFromPath(pathname) {
   const match = /^\/channels\/(staging|main)\/current\.json$/.exec(pathname);
-  return match ? "channels/" + match[1] + "/current.json" : null;
+  if (match) return "channels/" + match[1] + "/current.json";
+  // Over-the-air app bundle pointers move like content pointers, on their own channel names.
+  const bundle = /^\/app-bundles\/channels\/(staging|production)\/current\.json$/.exec(pathname);
+  return bundle ? "app-bundles/channels/" + bundle[1] + "/current.json" : null;
 }
 
 function keyFromPath(pathname) {
   const channelKey = channelKeyFromPath(pathname);
   if (channelKey) return channelKey;
   if (pathname === "/") return null;
+  // Over-the-air app bundles are immutable and named by the SHA-256 of their bytes.
+  const bundle = /^\/app-bundles\/([a-f0-9]{64})\.zip$/.exec(pathname);
+  if (bundle) return "app-bundles/" + bundle[1] + ".zip";
 
   const parts = pathname.slice(1).split("/");
   if (parts.some((part) => part === "")) return null;

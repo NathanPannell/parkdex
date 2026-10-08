@@ -1,7 +1,12 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import { HttpError, readJsonBody } from "./validation.js";
+import type { OsmRef } from "./osmParks.js";
+import type { Decision, ModerationRecord, ReviewInput, ReviewOutcome } from "./proposalReview.js";
 
-/** A park a player proposes from the app: a pin, a name and an optional rough outline. */
+/**
+ * A park a player proposes from the app: a pin, a name and either an OpenStreetMap outline
+ * they picked or an optional rough outline they drew.
+ */
 
 export type LngLat = [number, number];
 export const PROPOSAL_STATUSES = ["new", "reviewing", "accepted", "declined"] as const;
@@ -17,6 +22,7 @@ export interface ValidatedProposal {
   note: string;
   point: LngLat;
   outline: LngLat[] | null;
+  osm: OsmRef | null;
   context: Partial<Record<(typeof CONTEXT_KEYS)[number], string>>;
 }
 
@@ -30,6 +36,12 @@ export interface ParkProposalRecord {
   status: ProposalStatus;
   createdAt: string;
   updatedAt: string;
+  /** Present once park_proposals_002_moderation.sql has run. */
+  osm?: OsmRef | null;
+  decision?: Decision | null;
+  moderation?: ModerationRecord | null;
+  decidedAt?: string | null;
+  publishedParkId?: string | null;
 }
 
 export type SaveProposalResult =
@@ -57,7 +69,7 @@ function coordinate(value: unknown, label: string): LngLat {
 export function validateProposalBody(body: unknown): ValidatedProposal {
   if (typeof body !== "object" || body === null || Array.isArray(body)) throw new HttpError(400, "invalid_request", "Invalid park proposal.");
   const input = body as Record<string, unknown>;
-  const allowed = new Set(["submissionId", "name", "note", "point", "outline", "context"]);
+  const allowed = new Set(["submissionId", "name", "note", "point", "outline", "osm", "context"]);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new HttpError(400, "invalid_request", "Invalid park proposal.");
   if (typeof input.submissionId !== "string" || !UUID.test(input.submissionId)) throw new HttpError(400, "invalid_request", "Invalid park proposal.");
   const name = typeof input.name === "string" ? input.name.trim() : "";
@@ -72,6 +84,7 @@ export function validateProposalBody(body: unknown): ValidatedProposal {
     }
     outline = input.outline.map((value) => coordinate(value, "An outline point"));
   }
+  const osm = input.osm === undefined || input.osm === null ? null : osmRef(input.osm);
   const context: ValidatedProposal["context"] = {};
   if (input.context !== undefined) {
     if (typeof input.context !== "object" || input.context === null || Array.isArray(input.context)) {
@@ -82,11 +95,23 @@ export function validateProposalBody(body: unknown): ValidatedProposal {
       if (typeof value === "string" && value.length <= 40) context[key] = value;
     }
   }
-  return { submissionId: input.submissionId.toLowerCase(), name, note, point, outline, context };
+  return { submissionId: input.submissionId.toLowerCase(), name, note, point, outline, osm, context };
+}
+
+function osmRef(value: unknown): OsmRef {
+  const input = value as Record<string, unknown>;
+  if (typeof value !== "object" || value === null || Array.isArray(value) || Object.keys(input).some((key) => key !== "type" && key !== "id") ||
+      (input.type !== "way" && input.type !== "relation") || typeof input.id !== "number" || !Number.isSafeInteger(input.id) || input.id <= 0) {
+    throw new HttpError(400, "invalid_osm", "Unknown OpenStreetMap park.");
+  }
+  return { type: input.type, id: input.id };
 }
 
 export async function proposalHash(proposal: ValidatedProposal): Promise<string> {
-  const canonical = JSON.stringify([proposal.submissionId, proposal.name, proposal.note, proposal.point, proposal.outline, proposal.context]);
+  // Proposals without an OpenStreetMap pick hash exactly as before, so older retries still match.
+  const fields: unknown[] = [proposal.submissionId, proposal.name, proposal.note, proposal.point, proposal.outline, proposal.context];
+  if (proposal.osm) fields.push(proposal.osm);
+  const canonical = JSON.stringify(fields);
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
@@ -103,6 +128,12 @@ type Row = {
   created_at: string | Date;
   updated_at: string | Date;
   payload_hash?: string;
+  osm_type?: string | null;
+  osm_id?: string | number | null;
+  decision?: string | null;
+  moderation?: unknown;
+  decided_at?: string | Date | null;
+  published_park_id?: string | null;
 };
 
 function toRecord(row: Row): ParkProposalRecord {
@@ -116,17 +147,21 @@ function toRecord(row: Row): ParkProposalRecord {
     status: row.status as ProposalStatus,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
+    ...("decision" in row ? {
+      osm: row.osm_type && row.osm_id ? { type: row.osm_type as OsmRef["type"], id: Number(row.osm_id) } : null,
+      decision: (row.decision as Decision | null) ?? null,
+      moderation: typeof row.moderation === "object" && row.moderation !== null ? row.moderation as ModerationRecord : null,
+      decidedAt: row.decided_at ? new Date(row.decided_at).toISOString() : null,
+      publishedParkId: row.published_park_id ?? null,
+    } : {}),
   };
 }
 
 export function createNeonParkProposalStore(databaseUrl: string): ParkProposalStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return {
     async save({ id, payloadHash, ipHash, proposal }) {
-      const existing = await sql`
-        SELECT id, name, note, longitude, latitude, outline, context, status, created_at, updated_at, payload_hash
-        FROM kip_proposals.parks WHERE submission_id = ${proposal.submissionId}::uuid
-      ` as Row[];
+      const existing = await sql`SELECT * FROM kip_proposals.parks WHERE submission_id = ${proposal.submissionId}::uuid` as Row[];
       if (existing[0]) {
         return existing[0].payload_hash === payloadHash ? { status: "duplicate", proposal: toRecord(existing[0]) } : { status: "conflict" };
       }
@@ -141,84 +176,92 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
       ` as Array<{ allowed: boolean }>;
       if (limit[0]?.allowed !== true) return { status: "rate_limited" };
       const rows = await sql`
-        INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, note, longitude, latitude, outline, context)
+        INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, note, longitude, latitude, outline, context, osm_type, osm_id)
         VALUES (${id}::uuid, ${proposal.submissionId}::uuid, ${payloadHash}, ${proposal.name}, ${proposal.note},
           ${proposal.point[0]}, ${proposal.point[1]}, ${proposal.outline ? JSON.stringify(proposal.outline) : null}::jsonb,
-          ${JSON.stringify(proposal.context)}::jsonb)
+          ${JSON.stringify(proposal.context)}::jsonb, ${proposal.osm?.type ?? null}, ${proposal.osm?.id ?? null})
         ON CONFLICT (submission_id) DO NOTHING
-        RETURNING id, name, note, longitude, latitude, outline, context, status, created_at, updated_at
+        RETURNING *
       ` as Row[];
       if (rows[0]) return { status: "created", proposal: toRecord(rows[0]) };
       // A concurrent retry won the insert; report it like any other retry.
       return this.save({ id, payloadHash, ipHash, proposal });
     },
     async list(status) {
+      // Every column, so the dashboard keeps working whether or not the moderation migration has run.
       const rows = (status
-        ? await sql`SELECT id, name, note, longitude, latitude, outline, context, status, created_at, updated_at FROM kip_proposals.parks WHERE status = ${status} ORDER BY created_at DESC LIMIT 200`
-        : await sql`SELECT id, name, note, longitude, latitude, outline, context, status, created_at, updated_at FROM kip_proposals.parks ORDER BY created_at DESC LIMIT 200`) as Row[];
+        ? await sql`SELECT * FROM kip_proposals.parks WHERE status = ${status} ORDER BY created_at DESC LIMIT 200`
+        : await sql`SELECT * FROM kip_proposals.parks ORDER BY created_at DESC LIMIT 200`) as Row[];
       return rows.map(toRecord);
     },
     async updateStatus(id, status) {
       const rows = await sql`
         UPDATE kip_proposals.parks SET status = ${status}, updated_at = now() WHERE id = ${id}::uuid
-        RETURNING id, name, note, longitude, latitude, outline, context, status, created_at, updated_at
+        RETURNING *
       ` as Row[];
       return rows[0] ? toRecord(rows[0]) : null;
     },
   };
 }
 
+/**
+ * Map searches share the proposal rate limit table under their own keyed hashes: 30 searches
+ * per client every 10 minutes keeps Parkdex well inside the Overpass usage policy.
+ */
+export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: string) => Promise<boolean> {
+  const sql = database(databaseUrl);
+  return async (subjectHash) => {
+    const rows = await sql`
+      INSERT INTO kip_proposals.rate_limits (subject_hash, window_started_at, hit_count)
+      VALUES (${subjectHash}, now(), 1)
+      ON CONFLICT (subject_hash) DO UPDATE SET
+        window_started_at = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '10 minutes' THEN now() ELSE kip_proposals.rate_limits.window_started_at END,
+        hit_count = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '10 minutes' THEN 1 ELSE kip_proposals.rate_limits.hit_count + 1 END,
+        updated_at = now()
+      RETURNING hit_count <= 30 AS allowed
+    ` as Array<{ allowed: boolean }>;
+    return rows[0]?.allowed === true;
+  };
+}
+
 export interface ParkProposalHandlers {
   json(data: unknown, status?: number): Response;
-  requireOperator(): Promise<void>;
-  sameOriginRequired(): void;
   ipHash(): Promise<string>;
   newId(): string;
   store(): ParkProposalStore;
+  /** Model check and instant publish. Absent where proposals are only saved. */
+  review?(proposal: ReviewInput): Promise<ReviewOutcome>;
 }
 
-const OPERATOR_ROW = /^\/api\/operator\/park-proposals\/([^/]+)$/;
-
-function parseStatus(value: unknown): ProposalStatus {
+export function parseProposalStatus(value: unknown): ProposalStatus {
   if (typeof value === "string" && (PROPOSAL_STATUSES as readonly string[]).includes(value)) return value as ProposalStatus;
   throw new HttpError(400, "invalid_status", "Unknown proposal status.");
 }
 
-/** Routes `/api/park-proposals` (public submit) and `/api/operator/park-proposals` (review). Null for other paths. */
+/**
+ * Routes the public `/api/park-proposals` submit. Null for other paths.
+ * Reviewing proposals belongs to the separately deployed operator dashboard.
+ */
 export async function handleParkProposalRequest(request: Request, handlers: ParkProposalHandlers): Promise<Response | null> {
-  const url = new URL(request.url);
-  const path = url.pathname;
-  if (path === "/api/park-proposals") {
-    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
-    const proposal = validateProposalBody(await readJsonBody(request, 32 * 1024));
-    const result = await handlers.store().save({
-      id: handlers.newId(),
-      payloadHash: await proposalHash(proposal),
-      ipHash: await handlers.ipHash(),
-      proposal,
-    });
-    if (result.status === "conflict") throw new HttpError(409, "submission_id_reused", "This submission ID was already used for a different proposal.");
-    if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before proposing more parks.");
-    return handlers.json({ id: result.proposal.id }, result.status === "created" ? 201 : 200);
+  if (new URL(request.url).pathname !== "/api/park-proposals") return null;
+  if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+  const proposal = validateProposalBody(await readJsonBody(request, 32 * 1024));
+  const result = await handlers.store().save({
+    id: handlers.newId(),
+    payloadHash: await proposalHash(proposal),
+    ipHash: await handlers.ipHash(),
+    proposal,
+  });
+  if (result.status === "conflict") throw new HttpError(409, "submission_id_reused", "This submission ID was already used for a different proposal.");
+  if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before proposing more parks.");
+  let review: ReviewOutcome = { decision: "pending" };
+  if (handlers.review) {
+    const saved = result.proposal;
+    try {
+      review = await handlers.review({ id: saved.id, name: saved.name, note: saved.note, point: saved.point, osm: proposal.osm, createdAt: saved.createdAt });
+    } catch {
+      // The proposal is saved; a failed check leaves it waiting for the operator.
+    }
   }
-  if (path === "/api/operator/park-proposals") {
-    if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
-    await handlers.requireOperator();
-    const statusValue = url.searchParams.get("status");
-    const status = !statusValue || statusValue === "all" ? null : parseStatus(statusValue);
-    return handlers.json({ proposals: await handlers.store().list(status), statuses: PROPOSAL_STATUSES });
-  }
-  const row = OPERATOR_ROW.exec(path);
-  if (!row) return null;
-  if (request.method !== "PATCH") throw new HttpError(405, "method_not_allowed", "Use PATCH.");
-  handlers.sameOriginRequired();
-  await handlers.requireOperator();
-  if (!UUID.test(row[1])) throw new HttpError(404, "not_found", "Proposal not found.");
-  const body = await readJsonBody(request, 4096);
-  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some((key) => key !== "status")) {
-    throw new HttpError(400, "invalid_request", "Invalid proposal update.");
-  }
-  const proposal = await handlers.store().updateStatus(row[1].toLowerCase(), parseStatus((body as Record<string, unknown>).status));
-  if (!proposal) throw new HttpError(404, "not_found", "Proposal not found.");
-  return handlers.json({ proposal });
+  return handlers.json({ id: result.proposal.id, review }, result.status === "created" ? 201 : 200);
 }

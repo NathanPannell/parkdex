@@ -20,7 +20,7 @@ import type {
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
 import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
-import { CONTENT_CDN_ORIGIN } from "./contracts";
+import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION } from "./contracts";
 import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
@@ -252,7 +252,7 @@ class MemoryContentStore implements ContentStore {
   async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
     const state = this.sync.get(environment);
     const readerVersion = this.readerVersions.get(environment);
-    return state ? { revision: state.revision, sourceId: state.sourceId ?? "", ...(readerVersion === undefined ? {} : { readerVersion }) } : null;
+    return state ? { revision: state.revision, sourceId: state.sourceId ?? "", readerVersion: readerVersion ?? CONTENT_READER_VERSION } : null;
   }
   async getSyncState(environment: ContentEnvironment) { const value = this.sync.get(environment); return value ? structuredClone(value) : null; }
   async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false) {
@@ -405,6 +405,7 @@ function createSyncRuntime(
   claimedParkIds: string[] = [],
   apiUrl: string | null = "https://parkdex.example.test/api/content/current",
   environment: ContentEnvironment = "staging",
+  mapPointer?: ContentMapPointer,
 ) {
   return createContentRuntime({
     store,
@@ -413,6 +414,7 @@ function createSyncRuntime(
     environment,
     claimedParkIds: () => claimedParkIds,
     connectivity,
+    ...(mapPointer ? { mapPointer } : {}),
   } satisfies ContentRuntimeOptions);
 }
 
@@ -692,7 +694,45 @@ describe("content runtime", () => {
     expect(runtime.getStatus().error).toMatch(/compare-and-swap/);
   });
 
-  it("keeps detailed map chunks queued while backgrounded and resumes them on Wi-Fi", async () => {
+  it("uses the build's pinned map instead of the server's map pointer", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "provincial-pinned-map-park", "scene-pinned");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-pinned.webp")!;
+    const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+    const inventory: ContentMapInventory = {
+      schema: "parkdex.content-map/v1",
+      version: release.channel.releaseId,
+      mapManifest: release.rawManifest.mapManifest,
+      files: mapFiles,
+    };
+    const inventoryBytes = toBytes(inventory);
+    const pinned: ContentMapPointer = {
+      version: release.channel.releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+      manifestSha256: await sha256Hex(inventoryBytes),
+    };
+    const serverVersion = "e".repeat(64);
+    const serverPointer: ContentMapPointer = {
+      version: serverVersion,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${serverVersion}/map/manifest.json`,
+      manifestSha256: "f".repeat(64),
+    };
+    const snapshot = { ...contentSyncSnapshot(9, release.park, [sceneFile]), map: serverPointer };
+    const remoteFiles = new Map<string, ArrayBuffer>([[pinned.manifestUrl, inventoryBytes]]);
+    for (const file of mapFiles) remoteFiles.set(file.url, release.content.get(file.url)!.slice(0));
+    remoteFiles.set(sceneFile.url, release.content.get(sceneFile.url)!.slice(0));
+    const server = contentSyncServer(snapshot, new Map(), new Map(), remoteFiles);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [], undefined, "staging", pinned));
+    await runtime.start();
+
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    expect(runtime.getStatus().snapshot?.releaseId).toBe(`sync-staging-9-${pinned.version}`);
+    expect(server.calls).toContain(pinned.manifestUrl);
+    expect(server.calls).not.toContain(serverPointer.manifestUrl);
+    expect((await store.getSyncState("staging"))?.map).toEqual(pinned);
+  });
+
+  it("downloads nearby detail on mobile data and never fetches the whole map", async () => {
     const release = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-a.webp")!;
     const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
@@ -717,19 +757,18 @@ describe("content runtime", () => {
     store.files.set(sceneFile.sha256, release.content.get(sceneFile.url)!.slice(0));
     const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }));
     await runtime.start();
+    const firstChunk = mapFiles.find((file) => file.path === "map/island/000.bin")!;
     const secondChunkUrl = mapFiles.find((file) => file.path === "map/island/001.bin")!.url;
-    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
+    await vi.waitFor(async () => expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(true));
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
 
-    runtime.setForeground(false);
     runtime.setConnectivity({ connected: true, wifi: true });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(server.calls).not.toContain(secondChunkUrl);
-
+    runtime.setForeground(false);
     runtime.setForeground(true);
-    await vi.waitFor(() => expect(server.calls).toContain(secondChunkUrl));
-    const secondChunk = mapFiles.find((file) => file.path === "map/island/001.bin")!;
-    await vi.waitFor(async () => expect(await store.hasFile(secondChunk.sha256, 4)).toBe(true));
-  });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.calls).not.toContain(secondChunkUrl);
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
+  });;
 });
 
 describe("legacy archived art compatibility", () => {
@@ -1086,7 +1125,7 @@ describe("incremental content sync", () => {
     const server = contentSyncServer(contentSyncSnapshot(4, { ...cachedPark, name: "Snapshot name" }, []));
     const store = new MemoryContentStore();
     store.sync.set("staging", { ...cached, sourceId: "staging|https://parkdex.example.test/api/content" });
-    store.readerVersions.set("staging", 1);
+    store.readerVersions.set("staging", CONTENT_READER_VERSION);
     const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
 
     await runtime.start();
@@ -1146,7 +1185,7 @@ describe("incremental content sync", () => {
       if (glyphHashes.has(hash)) events.push("glyph-verified");
     };
     mapMock.onCall = (detail) => events.push(detail);
-    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }));
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: true }, [release.park.id]));
     const start = runtime.start();
 
     await firstArtStarted;
@@ -1162,8 +1201,8 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe(release.park.id), { timeout: 4_000 });
     expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`);
     expect(runtime.getStatus().error).toBeNull();
-    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true), { timeout: 4_000 });
-    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true), { timeout: 4_000 });
+    await vi.waitFor(() => expect(events).toContain("starter"));
     const artVerifiedIndex = events.indexOf("art-verified");
     const inventoryIndex = events.indexOf("inventory");
     const glyphIndex = events.indexOf("glyph-verified");
@@ -1454,13 +1493,12 @@ describe("incremental content sync", () => {
     await start;
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(`sync-staging-31-${release.channel.releaseId}`));
     await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
-    await vi.waitFor(() => expect(runtime.getStatus().waitingForWifi).toBe(true));
-    expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([]);
-    runtime.setConnectivity({ connected: true, wifi: true, contentDownloadAllowed: true });
-    await vi.waitFor(() => expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([0, 1]));
+    // Starter coverage downloads on mobile data; the rest of the archive is never fetched automatically.
+    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: runtime.getStatus().snapshot!.releaseId, detail: "starter" }));
+    await vi.waitFor(() => expect(getAllowedMapChunks(runtime.getStatus().snapshot!.releaseId)).toEqual([0]));
+    expect(runtime.getStatus().waitingForWifi).toBe(false);
     expect(runtime.getStatus().snapshot?.manifest.mapManifest).toEqual(release.rawManifest.mapManifest);
-    expect(mapMock.calls).toContainEqual({ releaseId: runtime.getStatus().snapshot!.releaseId, detail: "starter" });
-    await vi.waitFor(() => expect(runtime.getStatus().fullMapReady).toBe(true));
+    expect(runtime.getStatus().fullMapReady).toBe(false);
   });
 
   it("syncs content over an online browser connection without a physical Wi-Fi signal", async () => {
@@ -1665,7 +1703,7 @@ describe("incremental content sync", () => {
       }
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: false }));
+    const runtime = track(createSyncRuntime(store, fetcher, { connected: true, wifi: false }, [oldRelease.park.id]));
     const start = runtime.start();
 
     await assetStarted;
@@ -1737,7 +1775,7 @@ describe("incremental content sync", () => {
       }
       return originalFileUrl(hash);
     };
-    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }));
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [release.park.id]));
 
     await runtime.start();
 
@@ -1772,6 +1810,139 @@ describe("incremental content sync", () => {
     expect((await store.getSyncCursor("staging"))?.revision).toBe(2);
     expect(runtime.getStatus().snapshot?.generation).toBe(1);
     expect(runtime.getStatus()).toMatchObject({ syncStage: "error", phase: "ready" });
+  });
+
+  it("shows far, unclaimed badges from the CDN without downloading their art", async () => {
+    const release = await makeRelease("c".repeat(64), 1, "municipal-far-art-park", "scene-far-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-far-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const requested: string[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      requested.push(String(input));
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, { connected: true, wifi: true }));
+    // Nanaimo, about 95 km from the park.
+    runtime.setLocation([-123.94, 49.17]);
+
+    await runtime.start();
+
+    const snapshot = runtime.getStatus().snapshot!;
+    expect(snapshot.parks[0]?.id).toBe(release.park.id);
+    expect(snapshot.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(snapshot.remoteSceneUrls?.get(sceneFile.path)).toBe(sceneFile.url);
+    expect(requested).not.toContain(sceneFile.url);
+  });
+
+  it("downloads art for parks near the visitor and switches their badges to the saved copy", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "municipal-near-art-park", "scene-near-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-near-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+
+    runtime.setLocation([release.park.lng + 0.01, release.park.lat]);
+
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`));
+  });
+
+  async function catalogueRelease(revision: number, parks: TestSyncPark[]) {
+    const json = (value: unknown) => toBytes(JSON.stringify(value));
+    const features = parks.map((park, index) => ({
+      type: "Feature",
+      properties: { id: park.id, biome: park.biome },
+      geometry: { type: "MultiPolygon", coordinates: [[[[index, 0], [index + 1, 0], [index + 1, 1], [index, 0]]]] },
+    }));
+    const chunkBytes = [json({ schema: "parkdex.content-boundaries/v1", features: features.slice(0, 1) }), json({ schema: "parkdex.content-boundaries/v1", features: features.slice(1) })];
+    const boundaryChunks = await Promise.all(chunkBytes.map(async (bytes, index) => ({
+      path: `catalogue/boundaries/00${index}.json`, sha256: await sha256Hex(bytes), byte_size: bytes.byteLength,
+      parkIds: (index === 0 ? parks.slice(0, 1) : parks.slice(1)).map((park) => park.id), bbox: [0, 0, 1, 1],
+    })));
+    const indexBytes = json({
+      schema: "parkdex.content-catalogue/v1", revision, parks,
+      drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: Object.fromEntries(parks.map((park) => [park.id, { drive: [null], walkM: 0 }])) },
+      assets: [], map: null, boundaryChunks,
+    });
+    const version = await sha256Hex(indexBytes);
+    const base = `https://kip-assets.parkdex.app/releases/${version}/`;
+    const files = new Map<string, ArrayBuffer>([[`${base}catalogue/index.json`, indexBytes]]);
+    boundaryChunks.forEach((chunk, index) => files.set(`${base}${chunk.path}`, chunkBytes[index]!));
+    const pointer = {
+      schema: "parkdex.content-sync/v1", revision,
+      catalogue: { schema: "parkdex.content-catalogue/v1", version, indexUrl: `${base}catalogue/index.json`, indexSha256: version, indexBytes: indexBytes.byteLength, parkCount: parks.length },
+    };
+    return { pointer, files, base, boundaryChunks };
+  }
+
+  it("loads the whole catalogue from a CDN release when the snapshot API names one, then applies later changes", async () => {
+    const first = await makeRelease("a".repeat(64), 1, "municipal-cdn-one", "scene-cdn-one");
+    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-two", name: "Two", short: "Two", scene: null }];
+    const { pointer, files } = await catalogueRelease(7, parks);
+    const renamed = { ...parks[1]!, name: "Two renamed" };
+    const deltas = new Map<number, unknown>([[7, {
+      schema: "parkdex.content-sync/v1", fromRevision: 7, throughRevision: 8, headRevision: 8, hasMore: false,
+      batches: [{ revision: 8, changes: [{ entity: "park", op: "upsert", id: renamed.id, value: renamed }] }],
+    }]]);
+    const server = contentSyncServer(pointer as unknown as ReturnType<typeof contentSyncSnapshot>, deltas, new Map(), files);
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: false }));
+    await runtime.start();
+
+    const snapshot = runtime.getStatus().snapshot;
+    expect(runtime.getStatus().error).toBeNull();
+    expect(snapshot?.parks.map((park) => park.id)).toEqual(["municipal-cdn-one", "provincial-cdn-two"]);
+    expect(snapshot?.parkById.get("provincial-cdn-two")?.name).toBe("Two renamed");
+    expect(snapshot?.boundaries.features).toHaveLength(2);
+    expect(server.calls.filter((url) => url.includes("/catalogue/"))).toHaveLength(3);
+  });
+
+  it("does not commit a CDN catalogue whose chunk fails its hash", async () => {
+    const first = await makeRelease("b".repeat(64), 1, "municipal-cdn-bad", "scene-cdn-bad");
+    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-bad-two", scene: null }];
+    const { pointer, files, base, boundaryChunks } = await catalogueRelease(3, parks);
+    files.set(`${base}${boundaryChunks[1]!.path}`, toBytes("tampered"));
+    const store = new MemoryContentStore();
+    const server = contentSyncServer(pointer as unknown as ReturnType<typeof contentSyncSnapshot>, new Map(), new Map(), files);
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+
+    expect(runtime.getStatus().snapshot).toBeNull();
+    expect(runtime.getStatus().error).toMatch(/byte length|SHA-256/);
+    await expect(store.getSyncState("staging")).resolves.toBeNull();
+  });
+
+  it("fetches no badge art near the visitor or for claims when the build does not show it", async () => {
+    const release = await makeRelease("f".repeat(64), 1, "municipal-hidden-art-park", "scene-hidden-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-hidden-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createContentRuntime({
+      store: new MemoryContentStore(),
+      fetch: server.fetcher,
+      apiUrl: "https://parkdex.example.test/api/content/current",
+      environment: "staging",
+      claimedParkIds: () => [release.park.id],
+      connectivity: { connected: true, wifi: true },
+      badgeArt: false,
+    }));
+    await runtime.start();
+    runtime.setLocation([release.park.lng + 0.01, release.park.lat]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(runtime.getStatus().snapshot?.parks.map((park) => park.id)).toEqual([release.park.id]);
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(server.calls).not.toContain(sceneFile.url);
+  });
+
+  it("saves one park's art on request for a claim", async () => {
+    const release = await makeRelease("e".repeat(64), 1, "municipal-claim-art-park", "scene-claim-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-claim-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    await runtime.start();
+
+    await runtime.ensureParkArt?.(release.park.id);
+
+    expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`);
   });
 
   it("restores an archived descriptor and bytes through the Wi-Fi content API", async () => {

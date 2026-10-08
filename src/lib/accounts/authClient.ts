@@ -6,7 +6,9 @@ import {
   type NativeAccountSession,
   type ServerAccountSession,
 } from "./nativeIdentity";
-import { hasUrlCredentials, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
+import { hasUrlCredentials, isDevLoopbackHttp, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
+import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
+import { withRequestContext } from "../requestContext";
 
 export type AccountProfile = {
   id: string;
@@ -50,14 +52,14 @@ export class AuthHttpError extends Error {
 const isNative = Capacitor.isNativePlatform();
 
 function accountApiOrigin(): string {
-  const configured = [import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
+  const configured = pointedApiUrl([import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
     .map((value) => (value ?? "").trim())
-    .find(Boolean) ?? "";
+    .find(Boolean) ?? "") ?? "";
   return resolveUserDataApiOrigin(configured, {
     native: isNative,
     webOrigin: isNative ? undefined : (typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin),
     allowLoopbackHttp: import.meta.env.DEV,
-    environment: import.meta.env.VITE_CONTENT_ENV,
+    environment: apiEnvironment(),
     previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
   }) || KIP_STAGING_ORIGIN;
 }
@@ -85,8 +87,9 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
 }
 
 /** Credentials and session headers may only go to the configured TLS account API. */
-export function assertSecureAccountRequest(url: URL, accountOrigin: string): void {
+export function assertSecureAccountRequest(url: URL, accountOrigin: string, allowDevLoopback = isDevLoopbackHttp(new URL(accountOrigin))): void {
   const origin = new URL(accountOrigin);
+  if (allowDevLoopback && isDevLoopbackHttp(origin, true) && url.origin === origin.origin && !hasUrlCredentials(url) && !url.hash) return;
   if (origin.protocol !== "https:" || hasUrlCredentials(origin) || origin.search || origin.hash ||
       !["", "/"].includes(origin.pathname) || (origin.port && origin.port !== "443") ||
       url.protocol !== "https:" || url.origin !== origin.origin ||
@@ -110,6 +113,7 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
   const headers = new Headers(typeof Request !== "undefined" && pathOrInput instanceof Request ? pathOrInput.headers : undefined);
   new Headers(init.headers).forEach((value, name) => headers.set(name, value));
   if (expectedAccountId) headers.set("X-Kip-Account-ID", expectedAccountId);
+  withRequestContext(headers);
 
   const requestUrl = new URL(typeof Request !== "undefined" && url instanceof Request ? url.url : String(url), apiUrl("/"));
   const accountOrigin = new URL(apiUrl("/")).origin;
@@ -164,6 +168,11 @@ async function requestJson<T>(path: string, init: RequestInit = {}, authenticate
 
 export function fetchAuthenticated(input: RequestInfo | URL, init?: RequestInit, expectedAccountId?: string): Promise<Response> {
   return fetchRequest(input, init, true, expectedAccountId);
+}
+
+/** Public reads from the same account API origin, for guests and signed-in players alike. */
+export function fetchAccountApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetchRequest(input, init, false);
 }
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {

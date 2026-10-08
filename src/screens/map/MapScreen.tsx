@@ -1,51 +1,92 @@
 import type { Map as MLMap } from "maplibre-gl";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "../../components/Badge";
 import { ContentSyncStatus } from "../../components/ContentSyncStatus";
 import { ContentGate } from "../../components/ContentGate";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
+import { Flag } from "../../components/Flag";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
-import { estimateTrip, formatTrip } from "../../lib/drive";
+import { estimateTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
-import { badgeTotal, isLive, mapParks, RARITY } from "../../lib/parks";
-import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
-import { rarityLockMessage } from "../../lib/rarityUi";
-import { ISLAND_BOUNDS } from "../../lib/mapStyle";
-import { FIELD } from "../../lib/native";
-import { useStore } from "../../lib/store";
-import { useContent } from "../../lib/content/provider";
+import { useGame } from "../../lib/game/GameProvider";
+import { useVisit } from "../../lib/game/useVisit";
+import { flagAgeDays } from "../../lib/game/flag";
+import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
+import { FIELD, isNative } from "../../lib/native";
+import { useStore, type Screen } from "../../lib/store";
+import { useContent, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
-import { MapView } from "./MapView";
+import { MapView, type MapLongPress } from "./MapView";
+import { PressMenu } from "./PressMenu";
 import { ProposePark } from "./ProposePark";
+import { DownloadMaps } from "./DownloadMaps";
+import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
 import { isFeatureEnabled } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
+import { NearbyPanel } from "./NearbyPanel";
 import { ArrivalCard, TripPanel } from "./TripPanel";
 
 const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
+// Below this zoom the map shows parks as dots (see tierOf in MapView).
+const FAR_ZOOM = 10.5;
 const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
+
+// Close enough to show badges rather than dots when the map opens on the visitor.
+const USER_ZOOM = 12.5;
+// Without any known location, frame British Columbia rather than a placeholder town.
+const BC_VIEW = { center: [-125.5, 53.8] as LngLat, zoom: 4.6 };
+// Devices with real GPS never open on the demo starting point.
+const TRACKS_REAL_LOCATION = FIELD || isNative;
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 export function MapScreen() {
   const { state, dispatch } = useStore();
   const content = useContent();
+  const contentStatus = useContentStatus();
   const mapRef = useRef<MLMap | null>(null);
   const bounds = useBoundaries();
   const [route, setRoute] = useState<LngLat[] | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
-  const [proposing, setProposing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
+  // Truthy while proposing; holds the long-pressed spot when the proposal started there.
+  const [proposing, setProposing] = useState<{ pin: LngLat | null } | null>(null);
+  const [downloadingMaps, setDownloadingMaps] = useState(false);
+  const downloadReturn = useRef<Screen | null>(null);
+  const downloadCamera = useRef<{
+    center: LngLat;
+    zoom: number;
+    bearing: number;
+    pitch: number;
+    padding: { top: number; right: number; bottom: number; left: number };
+  } | null>(null);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
+  const [initialView] = useState(() => {
+    if (!TRACKS_REAL_LOCATION) return { center: state.user, zoom: 12 };
+    const last = readLastLocation();
+    return last ? { center: last, zoom: USER_ZOOM } : BC_VIEW;
+  });
 
-  const { user, claims, selectedId, tripId } = state;
-  const parks = useMemo(() => mapParks(content?.parks ?? [], claims), [content?.parks, claims]);
+  const game = useGame();
+  const visit = useVisit();
+  const { user, selectedId, tripId } = state;
+  // Every park in the catalogue can carry a flag, with or without badge art.
+  const parks = useMemo(() => content?.parks ?? [], [content?.parks]);
+  const flags = game.flags?.byPark ?? null;
+  // Flag ages are counted against the server's clock as of the last flag read.
+  const flagsNow = useMemo(() => game.serverNow(), [game.flags]);
+  const flagDays = useCallback((parkId: string) => {
+    const flag = flags?.get(parkId);
+    return flag ? flagAgeDays(flag.since, flagsNow) : 0;
+  }, [flags, flagsNow]);
   const visibleFc = useMemo(() => {
     if (!bounds) return undefined;
     const ids = new Set(parks.map((park) => park.id));
@@ -53,30 +94,34 @@ export function MapScreen() {
   }, [bounds, parks]);
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
-  const rarityProgress = useMemo(() => getRarityProgress(claims, content?.parkById), [claims, content?.parkById]);
-  const eligibilityFor = useCallback((park: (typeof parks)[number]): ParkRarityEligibility => {
-    if (!state.progressReady) return UNAVAILABLE_ELIGIBILITY;
-    return getParkRarityEligibility(park, rarityProgress, !!claims[park.id]);
-  }, [claims, rarityProgress, state.progressReady]);
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
   const here = useMemo(() => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? state.accuracy ?? 0 : 0), [user, parks, bounds, state.accuracy, hasUsableGpsFix]);
-  const arrivedId = here && !claims[here.id] ? here.id : null;
+  const arrivedId = here ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
-  const claimedCount = Object.keys(claims).length;
-  const rank = state.progressReady && isRankProgressionEnabled() ? getCollectionRankProgress(rarityProgress) : null;
-  const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
-  const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
+  const player = game.me?.player ?? null;
+  // A score that went up since the last read floats a "+N" off the score chip.
+  const lastScore = useRef<number | null>(null);
+  const [scoreBump, setScoreBump] = useState<{ key: number; delta: number } | null>(null);
+  useEffect(() => {
+    const score = player ? game.me?.score ?? null : null;
+    if (score === null) {
+      lastScore.current = null;
+      return;
+    }
+    if (lastScore.current !== null && score > lastScore.current) setScoreBump({ key: Date.now(), delta: score - lastScore.current });
+    lastScore.current = score;
+  }, [player, game.me?.score]);
 
+  // Straight-line distance ranks every park, including ones without a drive estimate.
+  const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id) }), [user, visit.holderOf, flagDays]);
   const nearby = useMemo(
-    () =>
-      parks.filter((p) => !claims[p.id])
-        .map((p) => ({ p, trip: estimateTrip(user, p, content?.drive), eligibility: eligibilityFor(p) }))
-        .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.trip.minutes - b.trip.minutes)
-        .slice(0, 8),
-    [parks, content?.drive, user, claims, eligibilityFor],
+    () => parks.map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) })).sort((a, b) => a.km - b.km).slice(0, 8),
+    [parks, user],
   );
+  const nearbyItems = useMemo(() => nearby.map(({ p }) => listItem(p)), [nearby, listItem]);
+  const searchItems = useMemo(() => parks.map(listItem), [parks, listItem]);
 
-  // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
+  // Arrival moment: celebrate once each time the visitor crosses into a park.
   const lastArrived = useRef<string | null>(null);
   useEffect(() => {
     if (state.screen === "splash") return;
@@ -93,20 +138,79 @@ export function MapScreen() {
     lastArrived.current = arrivedId;
   }, [arrivedId, state.screen]);
 
-  // Jump to the visitor the first time a real GPS fix lands.
+  // Jump to the visitor the first time a real GPS fix lands, wherever they are.
   const hadFix = useRef(false);
   useEffect(() => {
-    if (!hasUsableGpsFix || hadFix.current) return;
+    if (!hasUsableGpsFix) return;
+    saveLastLocation(user);
+    if (hadFix.current) return;
     hadFix.current = true;
-    // Visitors off the island keep the island in view instead of an empty ocean.
-    const [w, s, e, n] = ISLAND_BOUNDS;
-    if (user[0] < w || user[0] > e || user[1] < s || user[1] > n) return;
-    mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
-  }, [hasUsableGpsFix, state.accuracy]);
+    const map = mapRef.current;
+    if (!map) return;
+    // The map already opened on the last known location; only move if the visitor is
+    // somewhere else, so a cold start does not animate away from tiles already drawn.
+    const center = map.getCenter();
+    if (distanceKm([center.lng, center.lat], user) < 0.5 && Math.abs(map.getZoom() - USER_ZOOM) < 0.5) return;
+    map.flyTo({ center: user, zoom: USER_ZOOM, duration: 1200, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+  }, [hasUsableGpsFix, state.accuracy, user]);
+
+  // The account screen can ask to open Download maps.
+  useEffect(() => {
+    const open = () => {
+      const request = consumeDownloadMapsRequest();
+      if (!request) return;
+      downloadReturn.current = request.returnTo;
+      const map = mapRef.current;
+      if (map) {
+        const center = map.getCenter();
+        const padding = map.getPadding();
+        const camera: NonNullable<typeof downloadCamera.current> = {
+          center: [center.lng, center.lat],
+          zoom: map.getZoom(),
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+          padding: {
+            top: padding.top ?? 0,
+            right: padding.right ?? 0,
+            bottom: padding.bottom ?? 0,
+            left: padding.left ?? 0,
+          },
+        };
+        downloadCamera.current = camera;
+        map.jumpTo({ center: camera.center, zoom: 6.8, bearing: camera.bearing, pitch: camera.pitch, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
+      }
+      select(null);
+      setProposing(null);
+      setPressMenu(null);
+      setDownloadingMaps(true);
+    };
+    open();
+    return subscribeDownloadMapsRequest(open);
+  }, []);
+
+  // The map menu closes on a tap anywhere else or on Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest(".map-menu, .map-top__tools")) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [menuOpen]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
     if (state.focusId && content) {
+      // A park opened from elsewhere, such as after a visit, does not need the arrival card again.
+      setDismissedArrival(state.focusId);
       select(state.focusId, "collection");
       dispatch({ type: "focus", id: null });
     }
@@ -123,7 +227,14 @@ export function MapScreen() {
     const p = content?.parkById.get(id);
     if (!p) return;
     if (content) void recordParkViewed({ parkId: p.id, entryPoint, contentReleaseId: content.releaseId }).catch(() => {});
-    mapRef.current?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(mapRef.current.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
+    const map = mapRef.current;
+    const boundary = bounds?.byId.get(p.id);
+    // From a zoomed-out view, frame the whole park instead of stopping at town level.
+    if (map && boundary && map.getZoom() < FAR_ZOOM) {
+      const height = map.getContainer().clientHeight;
+      map.fitBounds(ringBounds(boundary), { padding: { ...SHEET_PAD, bottom: Math.min(SHEET_PAD.bottom, height * 0.55) }, maxZoom: 15, duration: 1100, essential: true });
+    }
+    else map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
   function startTrip() {
@@ -133,9 +244,13 @@ export function MapScreen() {
       tripStart.current = null;
       setRoute(null);
       sfx.pop();
+      // No road route to draw, so frame the park itself for the trip panel.
+      mapRef.current?.flyTo({ center: [selected.lng, selected.lat], zoom: Math.max(mapRef.current.getZoom(), 14), padding: TRIP_PAD, duration: 1100, essential: true });
     } else {
       if (!bounds) return;
-      const target = arrivalPoint(bounds.byId.get(selected.id)!, user);
+      const target: LngLat = selected.trailheadLat != null && selected.trailheadLng != null
+        ? [selected.trailheadLng, selected.trailheadLat]
+        : arrivalPoint(bounds.byId.get(selected.id)!, user);
       const path = arcPath(user, target);
       tripStart.current = { from: user, total: tripEstimate.km };
       setRoute(path);
@@ -192,13 +307,19 @@ export function MapScreen() {
     dispatch({ type: "move", user: point, accuracy: null });
   }
 
+  // Checking in inside a boundary is now a flag visit: plant, take or visit. Older claim
+  // screens stay in the app for history, but the check-in no longer routes into them.
   function checkIn(id: string) {
-    const park = content?.parkById.get(id);
-    if (!park || !state.progressReady || claims[id] || !eligibilityFor(park).eligible) return;
-    dispatch({ type: "trip", id });
-    dispatch({ type: "select", id: null });
-    dispatch({ type: "go", screen: "camera" });
+    if (!content?.parkById.get(id)) return;
     sfx.tap();
+    visit.start(id);
+  }
+
+  function openPressMenu(press: MapLongPress) {
+    setMenuOpen(false);
+    setDemoOpen(false);
+    setPressMenu(press);
+    buzz(20);
   }
 
   function recenter() {
@@ -212,25 +333,52 @@ export function MapScreen() {
     <MapView
       mapRef={mapRef}
       user={user}
+      showUser={!TRACKS_REAL_LOCATION || hasUsableGpsFix}
+      initialView={initialView}
       fc={content ? visibleFc : undefined}
       parks={content ? parks : []}
-      claims={claims}
-      rarityProgress={rarityProgress}
-      progressReady={state.progressReady}
+      flags={flags}
+      flagsNow={flagsNow}
       selectedId={content ? selectedId : null}
       tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
       route={content ? route : null}
-      onSelect={content && !proposing ? select : () => {}}
+      onSelect={content && !proposing && !downloadingMaps ? select : () => {}}
+      onLongPress={content && !proposing && !downloadingMaps && !selected && !simulating ? openPressMenu : undefined}
       visible={state.screen === "map"}
     />
   );
 
   if (!content) {
+    // Parks load and download in the background over a live map. A card appears only
+    // when there is nothing to show: offline with nothing saved, or an error.
+    const blocked = contentStatus.phase === "offline" || (contentStatus.phase !== "starting" && !!contentStatus.error);
     return (
       <div className="screen map-screen">
         {mapView}
-        <ContentGate overMap />
+        {blocked && <ContentGate overMap />}
+      </div>
+    );
+  }
+
+  if (downloadingMaps) {
+    return (
+      <div className="screen map-screen">
+        {mapView}
+        <DownloadMaps
+          mapRef={mapRef}
+          user={user}
+          hasFix={hasUsableGpsFix}
+          onClose={() => {
+            setDownloadingMaps(false);
+            const camera = downloadCamera.current;
+            downloadCamera.current = null;
+            if (camera) mapRef.current?.jumpTo(camera);
+            const returnTo = downloadReturn.current;
+            downloadReturn.current = null;
+            if (returnTo) dispatch({ type: "go", screen: returnTo });
+          }}
+        />
       </div>
     );
   }
@@ -239,7 +387,7 @@ export function MapScreen() {
     return (
       <div className="screen map-screen">
         {mapView}
-        <ProposePark mapRef={mapRef} user={user} onClose={() => setProposing(false)} />
+        <ProposePark mapRef={mapRef} user={user} initialPin={proposing.pin} onClose={() => setProposing(null)} />
       </div>
     );
   }
@@ -251,49 +399,135 @@ export function MapScreen() {
       <div className="map-top">
         <motion.button
           className="counter card"
-          onClick={() => dispatch({ type: "go", screen: "collection" })}
+          onClick={() => dispatch({ type: "go", screen: "parks" })}
           initial={{ y: -80 }}
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}
           whileTap={{ scale: 0.95 }}
+          aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your parks` : "Your parks"}
         >
           <span className="counter__kip">
-            <Kip pose="avatar" size={48} />
+            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={44} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}
           </span>
           <span className="counter__text">
-            <strong>
-              <RollingNumber value={claimedCount} />
-              <em> / {totalBadges.toLocaleString("en-CA")}</em>
-            </strong>
-            <span>{rankLine}</span>
+            {player && game.me ? (
+              <>
+                <strong>
+                  <RollingNumber value={game.me.score} />
+                  <em> {game.me.score === 1 ? "point" : "points"}</em>
+                </strong>
+                <span>@{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}</span>
+              </>
+            ) : (
+              <>
+                <strong>Plant your flag</strong>
+                <span>{visit.signedIn ? (game.me ? "Pick a handle to start" : "Go to any park") : "Sign in to play"}</span>
+              </>
+            )}
           </span>
+          <AnimatePresence>
+            {scoreBump && (
+              <motion.span
+                key={scoreBump.key}
+                className="score-chip__bump"
+                initial={{ y: 6, opacity: 0, scale: 0.6 }}
+                animate={{ y: -26, opacity: [0, 1, 1, 0], scale: 1 }}
+                transition={{ duration: 1.6, times: [0, 0.15, 0.7, 1] }}
+                onAnimationComplete={() => setScoreBump(null)}
+              >
+                +{scoreBump.delta}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
-          <button className="tool card" onClick={() => dispatch({ type: "feedback", open: true })} aria-label="Send feedback" title="Send feedback">
-            <Icon name="feedback" size={22} />
+          <button
+            className={`tool card ${menuOpen ? "tool--open" : ""}`}
+            onClick={() => {
+              sfx.tap();
+              setDemoOpen(false);
+              setPressMenu(null);
+              setMenuOpen((open) => !open);
+            }}
+            aria-label="Menu"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            title="Menu"
+          >
+            <Icon name={menuOpen ? "close" : "menu"} size={22} />
           </button>
-          {isFeatureEnabled("parkProposals") && (
-            <button
-              className="tool card"
-              onClick={() => {
-                sfx.tap();
-                select(null);
-                setProposing(true);
-              }}
-              aria-label="Propose a park"
-              title="Propose a park"
-            >
-              <Icon name="pinPlus" size={22} />
-            </button>
-          )}
-          {!FIELD && (
-            <button className="tool card" onClick={() => setDemoOpen((v) => !v)} aria-label="Demo controls">
-              <Icon name="wand" size={20} />
-            </button>
-          )}
         </motion.div>
         <ContentSyncStatus />
       </div>
+
+      <AnimatePresence>
+        {(game.flagsStatus === "offline" || game.flagsStatus === "error") && !selected && (
+          <motion.button
+            key="flags-note"
+            className="flags-note card"
+            onClick={() => void game.refreshFlags()}
+            initial={{ y: -20, opacity: 0, x: "-50%" }}
+            animate={{ y: 0, opacity: 1, x: "-50%" }}
+            exit={{ y: -20, opacity: 0, x: "-50%" }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+            whileTap={{ scale: 0.95, x: "-50%" }}
+          >
+            <Icon name="refresh" size={14} /> {game.flagsStatus === "offline" ? "Flags need a connection" : "Flags didn't load. Tap to retry"}
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            className="map-menu card"
+            role="menu"
+            aria-label="Map menu"
+            initial={{ opacity: 0, scale: 0.6, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: -10 }}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          >
+            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
+              <Icon name="feedback" size={20} /> Send feedback
+            </button>
+            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "go", screen: "settings" }); }}>
+              <Icon name="gear" size={20} /> Settings
+            </button>
+            {isFeatureEnabled("parkProposals") && (
+              <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing({ pin: null }); }}>
+                <Icon name="pinPlus" size={20} /> Propose a park
+              </button>
+            )}
+            {!FIELD && (
+              <button role="menuitem" onClick={() => { setMenuOpen(false); setDemoOpen(true); }}>
+                <Icon name="wand" size={20} /> Demo controls
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pressMenu && (
+          <PressMenu
+            key={`${pressMenu.point.x},${pressMenu.point.y}`}
+            mapRef={mapRef}
+            point={pressMenu.point}
+            canPropose={isFeatureEnabled("parkProposals")}
+            onClose={() => setPressMenu(null)}
+            onFeedback={() => {
+              setPressMenu(null);
+              dispatch({ type: "feedback", open: true });
+            }}
+            onPropose={() => {
+              setPressMenu(null);
+              select(null);
+              setProposing({ pin: pressMenu.lngLat });
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {demoOpen && (
@@ -348,32 +582,7 @@ export function MapScreen() {
             exit={{ y: 200, opacity: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
           >
-            <div className="nearby__head">
-              <span className="eyebrow">Badges near you</span>
-            </div>
-            <div className="nearby__rail scroll">
-              {nearby.map(({ p, trip: est, eligibility }, i) => (
-                <motion.button
-                  key={p.id}
-                  className={`nearby__card card ${eligibility.eligible ? "" : "nearby__card--locked"}`}
-                  onClick={() => select(p.id, "nearby")}
-                  aria-label={`${p.name}, ${RARITY[p.rarity].label}. ${eligibility.eligible ? formatTrip(est) : rarityLockMessage(eligibility)}${isLive(p) ? "" : ". Badge art coming soon"}`}
-                  initial={{ y: 60, opacity: 0, rotate: 4 }}
-                  animate={{ y: 0, opacity: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 22, delay: 0.1 + i * 0.05 }}
-                  whileTap={{ scale: 0.94, rotate: -2 }}
-                >
-                  <span className="nearby__badge">
-                    <Badge park={p} size={64} showName={false} state="preview" />
-                  </span>
-                  <span className="nearby__name">{p.short}</span>
-                  <span className="nearby__meta">
-                    <i style={{ background: RARITY[p.rarity].ink }} />
-                    {eligibility.eligible ? formatTrip(est) : eligibility.reason === "unavailable" ? "Checking" : "Locked"}
-                  </span>
-                </motion.button>
-              ))}
-            </div>
+            <NearbyPanel nearby={nearbyItems} all={searchItems} onSelect={(id) => select(id, "nearby")} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -383,6 +592,8 @@ export function MapScreen() {
           <TripPanel
             key="trip"
             park={trip}
+            holder={visit.holderOf(trip.id)}
+            flagDays={flagDays(trip.id)}
             remaining={here?.id === trip.id ? { mode: "walk", km: 0, minutes: 0 } : remaining!}
             totalKm={tripStart.current?.total ?? remaining!.km}
             simulating={simulating}
@@ -400,10 +611,10 @@ export function MapScreen() {
           <ArrivalCard
             key={here.id}
             park={here}
-            eligibility={eligibilityFor(here)}
-            artComingSoon={!isLive(here)}
+            holder={visit.holderOf(here.id)}
+            flagDays={flagDays(here.id)}
+            visitLabel={visit.labelFor(here.id)}
             onCheckIn={() => checkIn(here.id)}
-            onShowRequirements={() => select(here.id, "map")}
             onDismiss={() => setDismissedArrival(here.id)}
           />
         )}
@@ -418,24 +629,20 @@ export function MapScreen() {
               park={selected}
               entryPoint={selectedEntryPoint}
               user={user}
-              claim={claims[selected.id]}
+              claim={state.claims[selected.id]}
               inside={here?.id === selected.id}
-              eligibility={eligibilityFor(selected)}
-              progressReady={state.progressReady}
+              holder={visit.holderOf(selected.id)}
+              flagDays={flagDays(selected.id)}
+              visitLabel={visit.labelFor(selected.id)}
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}
               onFeedback={() => dispatch({ type: "feedback", open: true, parkId: selected.id })}
-              onViewCase={() => {
-                dispatch({ type: "select", id: null });
-                dispatch({ type: "go", screen: "collection" });
-              }}
             />
           </>
         )}
       </AnimatePresence>
 
-      {!bounds && <div className="map-loading">Loading parks…</div>}
       {FIELD && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
     </div>
   );

@@ -56,7 +56,7 @@ function boundedText(value: unknown, label: string, max: number): string {
   return normalized;
 }
 
-function validateParkSnapshot(value: unknown, parkId: string): ParkSnapshot {
+export function validateParkSnapshot(value: unknown, parkId: string): ParkSnapshot {
   if (!record(value) || !hasExactKeys(value, PARK_KEYS)) throw new HttpError(400, "invalid_request", "Invalid park snapshot.");
   const id = boundedText(value.id, "park id", 160);
   if (!PARK_ID.test(id) || id !== parkId) throw new HttpError(400, "invalid_request", "Park snapshot ID must match the claim park ID.");

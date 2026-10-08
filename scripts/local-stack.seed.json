@@ -1,0 +1,11 @@
+{
+  "_note": "TEST-ONLY fixture for scripts/local-stack.mjs. These accounts exist only in a throwaway loopback kip_qa_* database. Never use these values anywhere else.",
+  "password": "local-stack-test-only-1",
+  "authSessionSecret": "local-stack-test-only-auth-session-secret-0001",
+  "sessionSecret": "local-stack-test-only-feedback-session-secret-01",
+  "accounts": [
+    { "email": "tester1@example.test", "displayName": "Tester One", "handle": "tester_one" },
+    { "email": "tester2@example.test", "displayName": "Tester Two", "handle": "tester_two" },
+    { "email": "tester3@example.test", "displayName": "Tester Three", "handle": null }
+  ]
+}

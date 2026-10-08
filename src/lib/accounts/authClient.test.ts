@@ -49,6 +49,14 @@ describe("account transport", () => {
     expect(() => assertSecureAccountRequest(new URL("https://staging.web.parkdex.app/api/auth/login"), origin)).not.toThrow();
   });
 
+  it("accepts the loopback local stack only in development builds", () => {
+    const local = "http://localhost:5190";
+    expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, true)).not.toThrow();
+    expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, false)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("http://127.0.0.1:8787/api/auth/login"), local, true)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("http://staging.web.parkdex.app/api/auth/login"), "http://staging.web.parkdex.app", true)).toThrow("HTTPS account API");
+  });
+
   it("blocks redirects on native authenticated requests", async () => {
     nativeMocks.responses.push(jsonResponse({ account: { id: "a", email: "a@example.test" } }));
     await getCurrentAccount("a");
@@ -94,5 +102,25 @@ describe("native auth session renewal", () => {
     expect(result.renewed).toBe(false);
     expect(nativeMocks.persist).not.toHaveBeenCalled();
     expect(nativeMocks.activeToken).toBe("old-token");
+  });
+});
+
+describe("public account API reads", () => {
+  it("send the analytics request labels like every other account call", async () => {
+    const { fetchAccountApi } = await import("./authClient");
+    const { setRequestBundleId, resetRequestContextForTests } = await import("../requestContext");
+    setRequestBundleId("qa-bundle");
+    const fetchSpy = vi.fn(async () => jsonResponse({ flags: [] }));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      await fetchAccountApi("/api/game/flags");
+      const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+      expect(String(url)).toBe("https://staging.web.parkdex.app/api/game/flags");
+      expect(new Headers(init.headers).get("X-Kip-Bundle-Id")).toBe("qa-bundle");
+      expect(init.credentials).toBe("omit");
+    } finally {
+      vi.unstubAllGlobals();
+      resetRequestContextForTests();
+    }
   });
 });

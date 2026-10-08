@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { badgeTotal, mapParks } from "./parks";
+import { badgeTotal, isLive, mapParks, SHOW_BADGE_ART } from "./parks";
 
 describe("badgeTotal", () => {
   it("keeps earned retired badges in the collection total", () => {
@@ -20,11 +20,9 @@ describe("mapParks", () => {
     { id: "no-art-earned", scene: null },
   ];
 
-  it("hides parks that have no badge art yet", () => {
-    expect(mapParks(parks, {}).map((park) => park.id)).toEqual(["with-art"]);
-  });
-
-  it("keeps a park already in the Dex even when its art is withdrawn", () => {
-    expect(mapParks(parks, { "no-art-earned": {} }).map((park) => park.id)).toEqual(["with-art", "no-art-earned"]);
+  it("pins every park, with or without badge art, now that per-park art is retired", () => {
+    expect(SHOW_BADGE_ART).toBe(false);
+    expect(mapParks(parks, {}).map((park) => park.id)).toEqual(["with-art", "no-art", "no-art-earned"]);
+    expect(parks.every((park) => isLive(park))).toBe(true);
   });
 });

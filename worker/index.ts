@@ -1,36 +1,53 @@
 import { renderOperatorEmail, renderReceiptEmail } from "./emails.js";
-import { createSessionToken, getClientAddress, isSameOriginWrite, keyedHash, readSessionCookie, requestOriginAllowed, sessionCookie, clearSessionCookie, verifyOperatorPassword, verifySessionToken } from "./security.js";
+import { getClientAddress, keyedHash, requestOriginAllowed } from "./security.js";
 import { createNeonFeedbackStore } from "./store.js";
-import type { FeedbackCursor, FeedbackStore, MailIntent, ResendPayload } from "./store.js";
-import { handleInteractionRequest, handleRetentionRequest, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
+import type { FeedbackStore, MailIntent, ResendPayload } from "./store.js";
+import { sendEmail } from "./feedbackDelivery.js";
+import { handleInteractionRequest, handleRetentionRequest, retentionAuthorized, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
 import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
-import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
+import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
+import { createProposalModerator } from "./proposalModeration.js";
+import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
+import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
+import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
+import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 import {
   HttpError,
   readJsonBody,
   validateFeedbackBody,
-  validateRetryBody,
-  validateStatus,
   type EmailAudience,
   type FeedbackEmailReport,
   type ValidatedFeedback,
 } from "./validation.js";
 
-export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv {
+export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv, GameEnv {
   DATABASE_URL?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;
   OPERATOR_EMAIL?: string;
+  /** Base URL of the operator dashboard deployment, used for links in operator emails. */
+  OPERATOR_DASHBOARD_URL?: string;
   PUBLIC_APP_URL?: string;
   SESSION_SECRET?: string;
-  OPERATOR_PASSWORD_HASH?: string;
   RELEASE_SHA?: string;
+  /** Local QA only: serves over-the-air bundle pointers instead of the public asset CDN. */
+  APP_BUNDLE_ORIGIN?: string;
   EMAIL_MODE?: "resend" | "disabled" | string;
   ALLOWED_ORIGINS?: string;
+  /** Public PostHog project key. Without it nothing is sent to PostHog. */
+  POSTHOG_PROJECT_KEY?: string;
+  POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
+  /** Park proposals: the model's approval threshold and the Overpass endpoint. */
+  PARK_PROPOSAL_APPROVE_THRESHOLD?: string;
+  OVERPASS_URLS?: string;
+  OVERPASS_URL?: string;
+  NOMINATIM_URL?: string;
 }
 
 export interface WorkerExecutionContext {
@@ -41,18 +58,24 @@ export interface WorkerDependencies {
   auth?: AuthDependencies;
   progress?: ProgressDependencies;
   interactions?: InteractionDependencies;
+  game?: GameDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
+  analytics?(env: WorkerEnvironment): AnalyticsSink | null;
+  createProposalReviewStore?(env: WorkerEnvironment): ProposalReviewStore;
+  /** Undefined uses the shared moderation module; null turns the model off. */
+  proposalModerator?: ProposalModerator | null;
+  osmClient?: OsmClient;
+  osmSearchAllowed?(subjectHash: string): Promise<boolean>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BASIC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RESEND_URL = "https://api.resend.com/emails";
-const RESPONSE_TIMEOUT_MS = 8_000;
+// Three questions about one proposal; the proposer waits on a spinner with a 30 second budget.
+const PROPOSAL_MODERATION_TIMEOUT_MS = 8_000;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -69,6 +92,11 @@ function errorResponse(error: unknown): Response {
     return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
   return json({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+}
+
+/** Game outcomes become analytics events on the request that caused them. */
+function recordGameEvent(event: GameEvent): void {
+  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned });
 }
 
 function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): FeedbackStore {
@@ -118,6 +146,18 @@ function appUrl(env: WorkerEnvironment, request: Request): string {
   }
 }
 
+// A malformed dashboard URL must not turn every operator email into a render failure.
+function dashboardUrl(env: WorkerEnvironment): string | undefined {
+  const value = env.OPERATOR_DASHBOARD_URL?.trim();
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function validEmail(value: string | undefined): string | null {
   if (!value) return null;
   const normalized = value.trim();
@@ -126,17 +166,6 @@ function validEmail(value: string | undefined): string | null {
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
-}
-
-async function readProviderMessageId(response: Response): Promise<string | null> {
-  try {
-    const body: unknown = await response.json();
-    if (typeof body !== "object" || body === null || !("id" in body)) return null;
-    const id = (body as { id?: unknown }).id;
-    return typeof id === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(id) ? id : null;
-  } catch {
-    return null;
-  }
 }
 
 function fallbackEmail(report: FeedbackEmailReport, audience: EmailAudience): { subject: string; html: string; text: string } {
@@ -163,7 +192,7 @@ function buildMailIntent(
   let renderError: string | null = null;
   try {
     rendered = audience === "operator"
-      ? renderOperatorEmail(report, { appUrl: appUrl(env, request) })
+      ? renderOperatorEmail(report, { appUrl: appUrl(env, request), reviewUrl: dashboardUrl(env) })
       : renderReceiptEmail(report, { appUrl: appUrl(env, request) });
   } catch {
     rendered = fallbackEmail(report, audience);
@@ -203,100 +232,6 @@ function mailReport(feedback: ValidatedFeedback, id: string, createdAt: string):
     createdAt,
     hasScreenshot: feedback.screenshot !== null,
   };
-}
-
-async function markEmailFailure(
-  store: FeedbackStore,
-  reportId: string,
-  audience: EmailAudience,
-  leaseToken: string,
-  state: "failed" | "ambiguous",
-  message: string,
-): Promise<boolean> {
-  try {
-    await store.finishEmail(reportId, audience, leaseToken, state, message);
-    return true;
-  } catch {
-    // A still-leased row is recovered safely by the next explicit retry.
-    return false;
-  }
-}
-
-async function sendEmail(
-  store: FeedbackStore,
-  env: WorkerEnvironment,
-  dependencies: WorkerDependencies,
-  reportId: string,
-  audience: EmailAudience,
-  confirmAmbiguousAfter24h: boolean,
-  onlyIfPending = false,
-): Promise<{ audience: EmailAudience; status: string; error?: string }> {
-  const before = await store.getEmailDelivery(reportId, audience);
-  if (!before) return { audience, status: "skipped" };
-  if (before.status === "sent" || before.status === "disabled") return { audience, status: "skipped" };
-  if (onlyIfPending && before.status !== "pending") return { audience, status: "skipped" };
-  if (env.EMAIL_MODE === "disabled") {
-    await store.markEmailDisabled(reportId, audience);
-    return { audience, status: "disabled" };
-  }
-  if (before.lastError === "Email template could not be rendered.") {
-    return { audience, status: "failed", error: "Email template could not be rendered; this saved message cannot be retried." };
-  }
-
-  const leaseToken = requestUuid(dependencies);
-  const claim = await store.claimEmail(reportId, audience, leaseToken, confirmAmbiguousAfter24h);
-  if (claim.status !== "claimed") {
-    if (claim.status === "ambiguous" && before.lastAttemptAt && requestNow(dependencies) - Date.parse(before.lastAttemptAt) >= 24 * 60 * 60 * 1000 && !confirmAmbiguousAfter24h) {
-      return { audience, status: "requires_confirmation", error: "Provider outcome is unknown; confirm before retrying after 24 hours." };
-    }
-    return { audience, status: "skipped" };
-  }
-  const email = claim.email;
-  if (!env.RESEND_API_KEY) {
-    const persisted = await markEmailFailure(store, reportId, audience, leaseToken, "failed", "Email provider is not configured.");
-    return { audience, status: persisted ? "failed" : "ambiguous", error: "Email provider is not configured." };
-  }
-  if (!email.recipient || !email.payload.from || email.payload.to.length === 0) {
-    const persisted = await markEmailFailure(store, reportId, audience, leaseToken, "failed", "Email recipient or sender is not configured.");
-    return { audience, status: persisted ? "failed" : "ambiguous", error: "Email recipient or sender is not configured." };
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RESPONSE_TIMEOUT_MS);
-  try {
-    const response = await (dependencies.fetch ?? fetch)(RESEND_URL, {
-      method: "POST",
-      redirect: "error",
-      headers: {
-        authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "content-type": "application/json",
-        "idempotency-key": email.idempotencyKey,
-      },
-      body: JSON.stringify(email.payload),
-      signal: controller.signal,
-    });
-    if (response.ok) {
-      const providerMessageId = await readProviderMessageId(response);
-      try {
-        await store.finishEmail(reportId, audience, leaseToken, "sent", null, providerMessageId);
-        return { audience, status: "sent" };
-      } catch {
-        return { audience, status: "ambiguous", error: "Provider accepted the message, but its saved status is pending recovery." };
-      }
-    }
-    const ambiguous = response.status === 408 || response.status === 409 || response.status >= 500;
-    const message = ambiguous
-      ? `Email provider returned HTTP ${response.status}; delivery outcome is uncertain.`
-      : `Email provider rejected the message (HTTP ${response.status}).`;
-    const persisted = await markEmailFailure(store, reportId, audience, leaseToken, ambiguous ? "ambiguous" : "failed", message);
-    return { audience, status: ambiguous || !persisted ? "ambiguous" : "failed", error: message };
-  } catch {
-    const message = "Email delivery outcome is uncertain after a network failure.";
-    await markEmailFailure(store, reportId, audience, leaseToken, "ambiguous", message);
-    return { audience, status: "ambiguous", error: message };
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function submitFeedback(request: Request, env: WorkerEnvironment, dependencies: WorkerDependencies): Promise<Response> {
@@ -349,55 +284,16 @@ function notificationFromReport(report: { emails: Array<{ audience: EmailAudienc
   return result;
 }
 
-function sameOriginRequired(request: Request): void {
-  if (!isSameOriginWrite(request)) throw new HttpError(403, "forbidden", "This write must come from the same origin.");
-}
-
-async function requireOperator(request: Request, env: WorkerEnvironment): Promise<void> {
-  if (!await verifySessionToken(readSessionCookie(request), env.SESSION_SECRET)) {
-    throw new HttpError(401, "unauthorized", "Operator sign-in is required.");
-  }
-}
-
-async function login(request: Request, env: WorkerEnvironment, dependencies: WorkerDependencies): Promise<Response> {
-  sameOriginRequired(request);
-  const store = getStore(env, dependencies);
-  if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
-    throw new HttpError(503, "service_unavailable", "Operator sign-in is unavailable.");
-  }
-  const ipHash = await keyedHash(env.SESSION_SECRET, "operator-login-ip", getClientAddress(request));
-  if (!await store.consumeLoginRateLimit(ipHash)) {
-    return json({ error: { code: "rate_limited", message: "Too many sign-in attempts. Try again later." }, code: "rate_limited", message: "Too many sign-in attempts. Try again later." }, 429, { "retry-after": "900" });
-  }
-  const body = await readJsonBody(request, 4096);
-  if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some((key) => key !== "password")) {
-    throw new HttpError(400, "invalid_request", "Invalid sign-in request.");
-  }
-  const password = (body as Record<string, unknown>).password;
-  const valid = typeof password === "string" && await verifyOperatorPassword(password, env.OPERATOR_PASSWORD_HASH);
-  if (!valid) throw new HttpError(401, "invalid_credentials", "Email or password is incorrect.");
-  const token = await createSessionToken(env.SESSION_SECRET, requestNow(dependencies));
-  return json({ ok: true }, 200, { "set-cookie": sessionCookie(token) });
-}
-
-function clearLogin(request: Request): Response {
-  sameOriginRequired(request);
-  return json({ ok: true }, 200, { "set-cookie": clearSessionCookie() });
-}
-
-function validReportId(value: string): boolean {
-  return UUID.test(value);
-}
-
-function parseAttachmentBase64(base64: string): Uint8Array {
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
 async function routeApi(request: Request, env: WorkerEnvironment, dependencies: WorkerDependencies, context: WorkerExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/api/health" && request.method === "GET") return json({ ok: true, releaseSha: env.RELEASE_SHA ?? null });
+  const updateResponse = await handleAppUpdateRequest(request, {
+    json,
+    fetch: (input, init) => (dependencies.fetch ?? globalThis.fetch)(input, init),
+    origin: appBundleOrigin(env.APP_BUNDLE_ORIGIN),
+  });
+  if (updateResponse) return updateResponse;
   const interactionResponse = await handleInteractionRequest(request, env, dependencies.interactions);
   if (interactionResponse) return interactionResponse;
   const retentionResponse = await handleRetentionRequest(request, env, dependencies.interactions);
@@ -424,17 +320,26 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     const progressResponse = await handleProgressRequest(request, env, auth, dependencies.progress);
     if (progressResponse) return progressResponse;
   }
-  const deletionResume = /^\/api\/operator\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
+  const gameResponse = await handleGameRequest(request, env, {
+    account: () => requireAccount(request, env, authDependencies),
+    mutation: () => requireAccountMutation(request, env, authDependencies),
+  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, ...dependencies.game });
+  if (gameResponse) return gameResponse;
+  // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
+  const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
   if (deletionResume && request.method === "POST") {
-    sameOriginRequired(request);
-    await requireOperator(request, env);
+    if (!env.KIP_RETENTION_SECRET || !retentionAuthorized(request, env.KIP_RETENTION_SECRET)) {
+      throw new HttpError(401, "unauthorized", "Recovery authorization is required.");
+    }
     const result = await resumeAccountDeletion(deletionResume[1], env, authDependencies);
     return json(result, result.complete ? 200 : 202);
   }
   const appConfigResponse = await handleAppConfigRequest(request, {
     json,
-    requireOperator: () => requireOperator(request, env),
-    sameOriginRequired: () => sameOriginRequired(request),
+    analytics: () => {
+      const posthog = posthogConfig(env);
+      return posthog ? { posthogKey: posthog.key, posthogHost: posthog.host } : null;
+    },
     store: () => {
       if (dependencies.createAppConfigStore) return dependencies.createAppConfigStore(env);
       if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "App configuration is unavailable.");
@@ -442,132 +347,47 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     },
   });
   if (appConfigResponse) return appConfigResponse;
+  const sessionSecret = () => {
+    if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
+      throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
+    }
+    return env.SESSION_SECRET;
+  };
+  const osmResponse = await handleOsmParksRequest(request, {
+    json,
+    allow: async () => {
+      const subject = await keyedHash(sessionSecret(), "osm-ip", getClientAddress(request));
+      if (dependencies.osmSearchAllowed) return dependencies.osmSearchAllowed(subject);
+      if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park search is unavailable.");
+      return createNeonOsmSearchLimiter(env.DATABASE_URL)(subject);
+    },
+    osm: () => dependencies.osmClient!,
+  });
+  if (osmResponse) return osmResponse;
   const proposalResponse = await handleParkProposalRequest(request, {
     json,
-    requireOperator: () => requireOperator(request, env),
-    sameOriginRequired: () => sameOriginRequired(request),
-    ipHash: async () => {
-      if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
-        throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
-      }
-      return keyedHash(env.SESSION_SECRET, "proposal-ip", getClientAddress(request));
-    },
+    ipHash: async () => keyedHash(sessionSecret(), "proposal-ip", getClientAddress(request)),
     newId: () => requestUuid(dependencies),
     store: () => {
       if (dependencies.createParkProposalStore) return dependencies.createParkProposalStore(env);
       if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
       return createNeonParkProposalStore(env.DATABASE_URL);
     },
+    review: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (proposal) => reviewProposal(proposal, {
+      store: dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!)),
+      osm: dependencies.osmClient!,
+      moderate: dependencies.proposalModerator === undefined
+        ? createProposalModerator(env, dependencies.fetch, PROPOSAL_MODERATION_TIMEOUT_MS)
+        : dependencies.proposalModerator,
+      threshold: approveThreshold(env.PARK_PROPOSAL_APPROVE_THRESHOLD),
+      now: () => new Date(requestNow(dependencies)),
+    }),
   });
   if (proposalResponse) return proposalResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
-  if (path === "/api/operator/login" && request.method === "POST") return login(request, env, dependencies);
-  if (path === "/api/operator/logout" && request.method === "POST") return clearLogin(request);
-  if (path === "/api/operator/session" && request.method === "GET") {
-    return json({ authenticated: await verifySessionToken(readSessionCookie(request), env.SESSION_SECRET) });
-  }
-
-  if (path === "/api/operator/feedback" && request.method === "GET") {
-    await requireOperator(request, env);
-    const store = getStore(env, dependencies);
-    const statuses = ["all", "new", "reviewing", "planned", "closed"] as const;
-    const statusValue = url.searchParams.get("status") ?? "all";
-    if (!statuses.includes(statusValue as (typeof statuses)[number]) || url.searchParams.getAll("status").length > 1 || url.searchParams.getAll("cursor").length > 1) {
-      throw new HttpError(400, "invalid_query", "Invalid feedback list query.");
-    }
-    const statusFilter = statusValue === "all" ? null : validateStatus(statusValue);
-    const cursorToken = url.searchParams.get("cursor");
-    const cursor = cursorToken ? decodeListCursor(cursorToken, statusValue) : null;
-    const reports = await store.listReports(31, statusFilter, cursor);
-    const page = reports.slice(0, 30);
-    const nextCursor = reports.length > 30 && page.length > 0
-      ? encodeListCursor(page[page.length - 1], statusValue)
-      : null;
-    return json({ reports: page, nextCursor });
-  }
-
-  const detailMatch = /^\/api\/operator\/feedback\/([^/]+)$/.exec(path);
-  const attachmentMatch = /^\/api\/operator\/feedback\/([^/]+)\/attachment$/.exec(path);
-  const retryMatch = /^\/api\/operator\/feedback\/([^/]+)\/retry-emails$/.exec(path);
-  if (attachmentMatch && request.method === "GET") {
-    await requireOperator(request, env);
-    const id = attachmentMatch[1];
-    if (!validReportId(id)) throw new HttpError(404, "not_found", "Feedback report not found.");
-    const store = getStore(env, dependencies);
-    const attachment = await store.getAttachment(id);
-    if (!attachment) throw new HttpError(404, "not_found", "Screenshot not found.");
-    const bytes = parseAttachmentBase64(attachment.base64);
-    return new Response(bytes.buffer as ArrayBuffer, {
-      status: 200,
-      headers: {
-        "content-type": attachment.contentType,
-        "content-length": String(bytes.byteLength),
-        "content-disposition": `inline; filename="feedback-${id}-attachment"`,
-        "cache-control": "no-store",
-        "x-content-type-options": "nosniff",
-      },
-    });
-  }
-  if (retryMatch && request.method === "POST") {
-    sameOriginRequired(request);
-    await requireOperator(request, env);
-    const id = retryMatch[1];
-    if (!validReportId(id)) throw new HttpError(404, "not_found", "Feedback report not found.");
-    const store = getStore(env, dependencies);
-    const report = await store.getReport(id);
-    if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
-    const retryBody = request.body ? validateRetryBody(await readJsonBody(request, 4096)) : { audiences: null, confirmAmbiguousAfter24h: false };
-    const selected = retryBody.audiences ?? report.emails.map((email) => email.audience);
-    const results = await Promise.all(selected.map((audience) => sendEmail(store, env, dependencies, id, audience, retryBody.confirmAmbiguousAfter24h)));
-    return json({ results });
-  }
-  if (detailMatch && (request.method === "GET" || request.method === "PATCH")) {
-    if (request.method === "PATCH") sameOriginRequired(request);
-    await requireOperator(request, env);
-    const id = detailMatch[1];
-    if (!validReportId(id)) throw new HttpError(404, "not_found", "Feedback report not found.");
-    const store = getStore(env, dependencies);
-    if (request.method === "GET") {
-      const report = await store.getReport(id);
-      if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
-      return json({ report });
-    }
-    const body = await readJsonBody(request, 4096);
-    if (typeof body !== "object" || body === null || Array.isArray(body) || Object.keys(body).some((key) => key !== "status")) {
-      throw new HttpError(400, "invalid_request", "Invalid feedback update.");
-    }
-    const status = validateStatus((body as Record<string, unknown>).status);
-    const report = await store.updateStatus(id, status);
-    if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
-    return json({ report });
-  }
 
   if (path === "/api" || path.startsWith("/api/")) return json({ error: { code: "not_found", message: "API route not found." }, code: "not_found", message: "API route not found." }, 404);
   return json({ error: { code: "not_found", message: "API route not found." } }, 404);
-}
-
-function encodeListCursor(report: { id: string; createdAt: string }, status: string): string {
-  const binary = new TextEncoder().encode(JSON.stringify({ id: report.id, createdAt: report.createdAt, status }));
-  let raw = "";
-  for (const byte of binary) raw += String.fromCharCode(byte);
-  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function decodeListCursor(value: string, expectedStatus: string): FeedbackCursor {
-  if (value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new HttpError(400, "invalid_cursor", "Invalid feedback cursor.");
-  try {
-    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-    const raw = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
-    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
-    const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as Record<string, unknown>;
-    if (Object.keys(parsed).length !== 3 || typeof parsed.id !== "string" || !UUID.test(parsed.id) ||
-      typeof parsed.createdAt !== "string" || !Number.isFinite(Date.parse(parsed.createdAt)) || parsed.status !== expectedStatus) {
-      throw new Error("invalid cursor");
-    }
-    return { id: parsed.id.toLowerCase(), createdAt: new Date(parsed.createdAt).toISOString() };
-  } catch {
-    throw new HttpError(400, "invalid_cursor", "Invalid feedback cursor.");
-  }
 }
 
 async function route(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
@@ -588,30 +408,45 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-credentials", "true");
   headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", "Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256");
+  headers.set("access-control-allow-headers", `Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256, ${REQUEST_CONTEXT_HEADERS.join(", ")}`);
   headers.set("access-control-max-age", "600");
   headers.append("vary", "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
+  // One client per instance so its short cache and concurrency cap span requests.
+  let osm = dependencies.osmClient ?? null;
+  const withOsm = (env: WorkerEnvironment): WorkerDependencies =>
+    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined) });
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
-      try {
-        if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
-          return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
-        }
-        const path = new URL(request.url).pathname;
-        if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
-          const response = new Response(null, { status: 204 });
-          return withCors(request, env, response);
-        }
-        return withCors(request, env, await route(request, env, context, dependencies));
-      } catch (error) {
-        return withCors(request, env, errorResponse(error));
-      }
+      return withRequestAnalytics({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        header: (name) => request.headers.get(name),
+        env: env as Record<string, string | undefined>,
+        sink: () => dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env),
+        waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
+      }, () => handleWorkerRequest(request, env, context, withOsm(env)));
     },
   };
+}
+
+async function handleWorkerRequest(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
+  try {
+    if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
+      return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);
+    }
+    const path = new URL(request.url).pathname;
+    if ((path === "/api" || path.startsWith("/api/")) && request.method === "OPTIONS") {
+      const response = new Response(null, { status: 204 });
+      return withCors(request, env, response);
+    }
+    return withCors(request, env, await route(request, env, context, dependencies));
+  } catch (error) {
+    return withCors(request, env, errorResponse(error));
+  }
 }
 
 const worker = createFeedbackWorker();

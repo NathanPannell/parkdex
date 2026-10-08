@@ -10,7 +10,9 @@ the badge, and share it. No accounts and no network sync: everything stays on th
   parks. See `docs/rarity-progression.md`.
 - Older installed builds keep reading new content. Content API changes must be additive;
   see `docs/content-compatibility.md`.
-- Offline basemap: a bundled Protomaps archive for the island (zoom 0 to 14) plus fonts.
+- Maps: a bundled low-detail Protomaps base map of Canada (zoom 0 to 6). Detailed tiles
+  (zoom 0 to 14) download for the area around the visitor, stream while online, and stay
+  available offline once saved. See `docs/content-sync.md`.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 
 ## Setup
@@ -33,7 +35,8 @@ npm run map
 splits it into 46 chunk files under `public/map/island/`, and fetches the glyph fonts
 (not committed). Capacitor's local server ignores byte-range offsets, so
 `src/lib/offlineTiles.ts` reads the archive by loading whole chunks; this keeps the APK
-build to a few dozen files instead of tens of thousands of tiles. `npm run data` rebuilds
+build to a few dozen files instead of tens of thousands of tiles. The bundled Canada base
+map is rebuilt and checked against its pin with `scripts/build-map-overview.ps1`. `npm run data` rebuilds
 `src/data/parks.json` and `public/boundaries.geojson` from `../parkdex/data`. `npm run drive`
 precomputes driving routes (OSRM) from eight origin hubs around Victoria, Duncan and Nanaimo
 to every park into `src/data/drive.json`; the app scales the nearest hub's route to the

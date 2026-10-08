@@ -1,10 +1,13 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
-import { ISLAND_OVERVIEW_KEY } from "./offlineTiles";
+import { BASE_OVERVIEW_KEY } from "./offlineTiles";
+import { CONTENT_BOUNDS } from "./content/contracts";
 
-// Must match the extract bounds in scripts/fetch-map.mjs.
-export const ISLAND_BOUNDS: [number, number, number, number] = [-128.45, 48.28, -123.25, 50.92];
-export const ISLAND_OVERVIEW_MAX_ZOOM = 7;
+// Detailed tiles cover the archive named by BUILD_MAP_POINTER.
+export const DETAIL_BOUNDS = CONTENT_BOUNDS;
+// The bundled low-detail base map; must match canada-overview.provenance.json.
+export const BASE_OVERVIEW_BOUNDS: [number, number, number, number] = [-141.0, 41.6, -52.6, 83.2];
+export const BASE_OVERVIEW_MAX_ZOOM = 6;
 
 // Storybook palette over the bundled Protomaps tiles: warm paper land,
 // candy water, soft greens and quiet roads.
@@ -77,9 +80,9 @@ export function mapStyle(releaseId?: string | null): StyleSpecification {
       const { ["icon-image"]: _icon, ...layout } = l.layout;
       return { ...l, layout };
     });
-  const overview = (layers("island-overview", FLAVOR, { lang: "en" }) as LayerSpecification[])
+  const overview = (layers("base-overview", FLAVOR, { lang: "en" }) as LayerSpecification[])
     .filter((layer) => layer.type !== "symbol" && layer.type !== "background")
-    .map((layer) => ({ ...layer, id: `overview-${layer.id}`, source: "islandOverview" }));
+    .map((layer) => ({ ...layer, id: `overview-${layer.id}`, source: "baseOverview" }));
   const backgroundIndex = base.findIndex((layer) => layer.type === "background");
   const withOverview = backgroundIndex < 0
     ? [...overview, ...base]
@@ -108,16 +111,16 @@ export function mapStyle(releaseId?: string | null): StyleSpecification {
           tiles: [`pmtiles://${encodeURIComponent(releaseId!)}/{z}/{x}/{y}`],
           minzoom: 0,
           maxzoom: 14,
-          bounds: ISLAND_BOUNDS,
+          bounds: DETAIL_BOUNDS,
           attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
         },
       } : {}),
-      islandOverview: {
+      baseOverview: {
         type: "vector",
-        tiles: [`pmtiles://${ISLAND_OVERVIEW_KEY}/{z}/{x}/{y}`],
+        tiles: [`pmtiles://${BASE_OVERVIEW_KEY}/{z}/{x}/{y}`],
         minzoom: 0,
-        maxzoom: ISLAND_OVERVIEW_MAX_ZOOM,
-        bounds: ISLAND_BOUNDS,
+        maxzoom: BASE_OVERVIEW_MAX_ZOOM,
+        bounds: BASE_OVERVIEW_BOUNDS,
         attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
       },
     },

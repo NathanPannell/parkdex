@@ -73,8 +73,17 @@ test('a stale tab cannot read or upload one account partition through another ac
 
 test('purge and manual deletion recovery remain protected independently of account login', async () => {
   const worker = createFeedbackWorker();
-  for (const path of ['/api/retention/interactions/purge', '/api/operator/account-deletions/33333333-3333-4333-8333-333333333333/resume']) {
+  for (const path of ['/api/retention/interactions/purge', '/api/recovery/account-deletions/33333333-3333-4333-8333-333333333333/resume']) {
     const response = await worker.fetch(new Request(origin + path, { method: 'POST', headers: { origin } }), env);
     assert.equal(response.status, 401);
   }
+});
+
+test('manual deletion recovery accepts the retention secret', async () => {
+  const store = { findDeletionReceipt: async () => ({ accountId: 'a', status: 'complete' }) } as unknown as AccountAuthStore;
+  const worker = createFeedbackWorker({ auth: { createStore: () => store } });
+  const path = '/api/recovery/account-deletions/33333333-3333-4333-8333-333333333333/resume';
+  const response = await worker.fetch(new Request(origin + path, { method: 'POST', headers: { authorization: `Bearer ${env.KIP_RETENTION_SECRET}` } }), env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { receiptId: '33333333-3333-4333-8333-333333333333', status: 'complete', complete: true });
 });

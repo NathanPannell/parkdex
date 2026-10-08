@@ -1,8 +1,10 @@
-import { canDownloadContent, requiresContentWifi, type Connectivity, type DownloadPurpose } from "./contracts";
+import { canDownloadContent, requiresContentWifiFor, type Connectivity, type DownloadPurpose } from "./contracts";
 
 export type DownloadPolicy = {
   foreground: boolean;
   connectivity: Connectivity;
+  /** The visitor allowed chosen map squares and nearby detail to download without Wi-Fi. */
+  allowMobileMapData?: boolean;
 };
 
 export type ScheduledDownload = {
@@ -35,9 +37,9 @@ function abortError() {
   return error;
 }
 
-export function isDownloadAllowed(_purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
-  return policy.foreground && canDownloadContent(policy.connectivity) &&
-    (!requiresContentWifi(path) || policy.connectivity.wifi);
+export function isDownloadAllowed(purpose: DownloadPurpose, path: string, policy: DownloadPolicy): boolean {
+  const wifiRequired = requiresContentWifiFor(purpose, path) && !(policy.allowMobileMapData && purpose === "bulk");
+  return policy.foreground && canDownloadContent(policy.connectivity) && (!wifiRequired || policy.connectivity.wifi);
 }
 
 function isMapWork(task: Pick<ScheduledDownload, "path" | "purpose">): boolean {

@@ -179,6 +179,18 @@ describe("NativeContentStore deletion guard", () => {
     await store.close();
   });
 
+  it("deletes a detailed map chunk the active release lists only as optional coverage", async () => {
+    activeRelease = release([{ ...sceneFile, path: "map/island/0123.bin", content_type: "application/octet-stream" }]);
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    await expect(store.deleteFile(HASH)).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(HASH, { optionalMapChunk: true });
+    expect(nativeMocks.deleteFile).toHaveBeenCalledOnce();
+    expect(nativeMocks.db.run).toHaveBeenCalledWith("DELETE FROM content_files WHERE hash = ?", [HASH]);
+    await store.close();
+  });
+
   it("refuses to delete a retained earned-park scene after its release is retired", async () => {
     activeRelease = release([]);
     retainedRows = [{
@@ -235,6 +247,42 @@ describe("NativeContentStore deletion guard", () => {
       offset: 4,
       length: 3,
     });
+    await store.close();
+  });
+
+  it("trusts recorded files at their recorded size without rereading them", async () => {
+    const other = "c".repeat(64);
+    const query = nativeMocks.db.query.getMockImplementation()!;
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement === "SELECT hash, byte_size FROM content_files") return { values: [{ hash: HASH, byte_size: 12 }, { hash: other, byte_size: 99 }] };
+      return query(statement, values);
+    });
+    nativeMocks.stat.mockResolvedValue({ size: 12 });
+    nativeMocks.readFile.mockResolvedValue({ data: btoa("not the hash") });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(await store.hasFile(HASH, 12)).toBe(true);
+    expect(nativeMocks.readFile).not.toHaveBeenCalled();
+    // A size mismatch with the record falls back to a full hash check, which fails here.
+    nativeMocks.stat.mockResolvedValue({ size: 99 });
+    expect(await store.hasFile(HASH, 99)).toBe(false);
+    expect(nativeMocks.readFile).toHaveBeenCalledOnce();
+    await store.close();
+  });
+
+  it("serves a recorded file from disk without copying it through the bridge", async () => {
+    const query = nativeMocks.db.query.getMockImplementation()!;
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement === "SELECT hash, byte_size FROM content_files") return { values: [{ hash: HASH, byte_size: 12 }] };
+      return query(statement, values);
+    });
+    nativeMocks.stat.mockResolvedValue({ size: 12, uri: "file:///data/blob" });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(await store.fileUrl(HASH, "image/webp")).toContain("/data/blob");
+    expect(nativeMocks.readFile).not.toHaveBeenCalled();
     await store.close();
   });
 

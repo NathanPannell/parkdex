@@ -1,0 +1,40 @@
+{
+  "schema": "parkdex.legacy-source-fetch.v1",
+  "fetchedAt": "2026-10-08T05:20:00Z",
+  "sources": {
+    "legacy-places.json": {
+      "url": "https://api-production-e72df.up.railway.app/api/places",
+      "role": "Legacy production places API, guest request with no visits",
+      "bytes": 806531,
+      "sha256": "f93058cc0e0df94412c1045f649aed38ede37d8076637944b5d2b958adbf4d6a",
+      "equivalentSources": [
+        {
+          "url": "https://api-staging-882c.up.railway.app/api/places",
+          "sha256": "672de82ba44ebb06bcbe723f16dfe7f5f4ea63b43b7784620aecf0e9aedd639e",
+          "note": "Same 1,656 place records in a different byte order; this is the legacy-catalogue.json hash pinned by the 2026-09-29 island bundle audit."
+        }
+      ]
+    },
+    "legacy-boundaries.geojson.gz": {
+      "url": "https://parkdex-production.pages.dev/data/boundaries.v1.geojson",
+      "role": "Legacy production displayed boundary file, one feature per place with grouped source features",
+      "decompressedBytes": 13003941,
+      "decompressedSha256": "c9be9a8a8813ad0147692bcd99fc14a22300ac037c34906b127031c740846cc8",
+      "note": "Same bytes as the full legacy boundary file pinned by the issue 20 repair and the island bundle."
+    },
+    "staging-rev158-snapshot.json.gz": {
+      "url": "https://staging.web.parkdex.app/api/content/snapshot",
+      "role": "Parkdex staging content snapshot used for identity and size review",
+      "decompressedBytes": 1705889,
+      "decompressedSha256": "a333ad619079744e29a44c92b99118981101e5e350f3527a7471b7e905f5d750",
+      "revision": 158
+    },
+    "../provincial-regional-20260929/sources/baseline-snapshot.json": {
+      "url": "https://web.parkdex.app/api/content/snapshot",
+      "role": "Parkdex production content snapshot; byte-identical to the island bundle baseline",
+      "bytes": 855833,
+      "sha256": "6c181f43a031bd587f5c54a9c54f554c762a76ef8443466c90ce963bbbbcf4a1",
+      "revision": 26
+    }
+  }
+}

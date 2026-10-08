@@ -1,0 +1,82 @@
+{
+  "schema": "parkdex.operator-park-removals.v1",
+  "environment": "staging",
+  "decidedOn": "2026-09-30",
+  "appliedAtRevision": 110,
+  "worklistSha256": "fd060e84eca8c9e30f4dc800d68ef0ba7f5c4ff63aed3bcf121c5f149a97c9e0",
+  "removalReceiptSha256": "bfd27ee94c92366eb06d48e5013d7fd73804a06a555b78dd11867dc21c3f38a6",
+  "removalPlanSha256": "10cb101a2165ecfc1c7de5c0bed5c0c0816b007a4b5711d4dd2ca20f8a6bf7c0",
+  "note": "Operator review of the Victoria 100 removed these parks from the staging catalogue. The production catalogue at revision 26 still contains them. This import never re-adds them.",
+  "removed": [
+    {
+      "id": "municipal-city-of-victoria-825",
+      "name": "Fisherman's Wharf Park",
+      "note": "This is not a park, remove it completely"
+    },
+    {
+      "id": "municipal-city-of-langford-622",
+      "name": "Jordie Lunn Bike Park",
+      "note": "Remove this park"
+    },
+    {
+      "id": "municipal-city-of-victoria-871",
+      "name": "Topaz Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-saanich-54",
+      "name": "Cedar Hill Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-central-saanich-1073",
+      "name": "HEL,HILEȻ",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-town-of-view-royal-1500",
+      "name": "Helmcken Centennial Park",
+      "note": "Remove Helmcken Centennial Park (operator clarification, 2026-09-30)"
+    },
+    {
+      "id": "municipal-city-of-langford-692",
+      "name": "Veteran's Memorial Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-saanich-343",
+      "name": "Beckwith Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-saanich-159",
+      "name": "Rutledge Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-oak-bay-913",
+      "name": "Carnarvon Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-oak-bay-906",
+      "name": "Windsor Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-district-of-oak-bay-929",
+      "name": "Henderson Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-city-of-victoria-801",
+      "name": "Victoria West Park",
+      "note": "remove"
+    },
+    {
+      "id": "municipal-city-of-victoria-893",
+      "name": "Stadacona Park",
+      "note": "remove"
+    }
+  ]
+}

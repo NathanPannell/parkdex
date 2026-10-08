@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 
 const PUBLIC_ROOT = resolve("public");
 const PUBLIC_DIRS = ["art/kip", "art/products"];
-const PUBLIC_FILES = new Set(["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png", ".well-known/assetlinks.json", "map/bootstrap/island-overview.pmtiles"]);
+const PUBLIC_FILES = new Set(["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png", ".well-known/assetlinks.json", "map/bootstrap/canada-overview.pmtiles", "map/cells.json"]);
 
 function allowedPublicPath(path: string) {
   return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`));
@@ -86,9 +86,20 @@ function sourceRevision() {
   catch { return 'local'; }
 }
 
+// Only a loopback HTTP API may be proxied, so a stray variable cannot route dev traffic elsewhere.
+function localApiTarget(value: string | undefined) {
+  if (!value) return undefined;
+  const url = new URL(value);
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
+    throw new Error("KIP_LOCAL_API must be a loopback http URL such as http://127.0.0.1:8787.");
+  }
+  return url.origin;
+}
+
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, process.cwd(), "VITE_");
   assertUserDataApiBuildConfiguration(environment, { mode, vercelUrl: process.env.VERCEL_URL });
+  const localApi = mode === "development" ? localApiTarget(process.env.KIP_LOCAL_API) : undefined;
 
   return {
     // Source artwork, catalogs, scenes, glyphs, boundaries, and map chunks stay in
@@ -101,7 +112,12 @@ export default defineConfig(({ mode }) => {
       __APP_BUILD__: JSON.stringify(sourceRevision()),
     },
     // 59k offline tile files: watching them makes dev startup crawl.
-    server: { host: true, watch: { ignored: ["**/public/map/**"] } },
+    server: {
+      host: true,
+      watch: { ignored: ["**/public/map/**"] },
+      // `npm run local:api` serves the real API locally; proxying keeps account cookies same-origin.
+      proxy: localApi ? { "/api": { target: localApi, changeOrigin: false } } : undefined,
+    },
     // MapLibre loads ./maplibre-gl-worker.mjs next to itself; pre-bundling would move it away.
     optimizeDeps: { exclude: ["maplibre-gl"] },
   };

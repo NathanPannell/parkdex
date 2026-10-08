@@ -1,5 +1,5 @@
 import { memo, useId, type CSSProperties, type ReactNode } from "react";
-import { PALETTES, RARITY, scenePath, type Park, type Palette, type Shape } from "../lib/parks";
+import { isLive, PALETTES, RARITY, scenePath, SHOW_BADGE_ART, type Park, type Palette, type Shape } from "../lib/parks";
 import { useOptionalContent } from "../lib/content/provider";
 
 export type BadgeState = "earned" | "preview" | "silhouette";
@@ -14,6 +14,8 @@ type Props = {
   style?: CSSProperties;
   // Overrides the scene URL, e.g. with a data URL for image export.
   sceneHref?: string;
+  /** False keeps art that is not saved on this device from loading from the CDN. */
+  remoteArt?: boolean;
 };
 
 const C = 100;
@@ -101,12 +103,26 @@ function Mystery({ label }: { label: string }) {
   );
 }
 
-function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref }: Props) {
+// Stands in for per-park art: the park's biome colours as a simple hill scene.
+function Landscape({ p }: { p: Palette }) {
+  return (
+    <g>
+      <rect x={-10} y={-10} width={220} height={220} fill={p.skyBottom} />
+      <rect x={-10} y={-10} width={220} height={110} fill={p.skyTop} opacity={0.7} />
+      <circle cx={142} cy={70} r={22} fill={p.sun} />
+      <path d="M-10 120 Q40 72 92 112 Q138 80 210 108 L210 210 L-10 210Z" fill={p.far} />
+      <path d="M-10 146 Q56 110 112 140 Q160 120 210 138 L210 210 L-10 210Z" fill={p.mid} />
+      <path d="M-10 176 Q70 150 130 172 Q172 160 210 168 L210 210 L-10 210Z" fill={p.near} />
+    </g>
+  );
+}
+
+function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref, remoteArt = true }: Props) {
   const content = useOptionalContent();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const live = park.scene !== null;
-  const resolvedSceneHref = sceneHref ?? (park.scene
-    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id)
+  const live = isLive(park);
+  const resolvedSceneHref = !SHOW_BADGE_ART ? undefined : sceneHref ?? (park.scene
+    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id) ?? (remoteArt ? content?.remoteSceneUrls?.get(scenePath(park.scene)) : undefined)
     : undefined);
   const p = live ? PALETTES[park.biome] : MYSTERY_PALETTE;
   const shape = SHAPES[park.shape];
@@ -159,7 +175,9 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
       {defs}
       <path d={shape} fill={`url(#r${uid})`} stroke="#14231C" strokeWidth={4} transform="translate(0 3)" opacity={0.25} />
       <g clipPath={`url(#c${uid})`}>
-        {park.scene && resolvedSceneHref ? (
+        {!SHOW_BADGE_ART ? (
+          <Landscape p={p} />
+        ) : park.scene && resolvedSceneHref ? (
           <image href={resolvedSceneHref} x={-4} y={-4} width={208} height={208} preserveAspectRatio="xMidYMid slice" />
         ) : (
           <Mystery label={live ? "ART PENDING" : "COMING SOON"} />

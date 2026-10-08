@@ -22,6 +22,14 @@ function isLoopback(hostname: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
+/**
+ * Development builds only: an http loopback origin, such as the Vite dev server proxying to
+ * `npm run local:api`. Production and field builds compile this to false.
+ */
+export function isDevLoopbackHttp(url: URL, dev: boolean = Boolean(import.meta.env?.DEV)): boolean {
+  return dev && url.protocol === "http:" && isLoopback(url.hostname) && !hasUrlCredentials(url);
+}
+
 export function hasUrlCredentials(url: URL): boolean {
   const authority = url.href.slice(url.protocol.length + 2).split(/[/?#]/, 1)[0];
   return Boolean(url.username || url.password || authority.includes("@"));

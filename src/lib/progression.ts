@@ -13,7 +13,7 @@ export const RANKS = Object.freeze([
 ] as const);
 
 // Remote feature flag `rankProgression`. When off, every rarity is open and rank UI is hidden.
-let rankProgressionEnabled = true;
+let rankProgressionEnabled = false;
 
 export function setRankProgressionEnabled(enabled: boolean): void {
   rankProgressionEnabled = enabled;

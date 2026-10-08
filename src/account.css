@@ -376,6 +376,18 @@
   margin-top: 4px;
 }
 
+.collection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-settings {
+  width: 54px;
+  height: 54px;
+  margin-bottom: 6px;
+}
+
 .collection-account {
   height: 38px;
   gap: 6px;
@@ -532,4 +544,22 @@
 .account-switch:focus-visible {
   outline: 3px solid var(--kip-dark);
   outline-offset: 2px;
+}
+
+.account-setting + .account-setting {
+  margin-top: 14px;
+}
+
+.account-setting--button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.account-setting--button .account-setting__text {
+  flex: 1 1 auto;
 }
