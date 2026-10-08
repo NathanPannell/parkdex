@@ -6,7 +6,7 @@ import {
   type NativeAccountSession,
   type ServerAccountSession,
 } from "./nativeIdentity";
-import { hasUrlCredentials, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
+import { hasUrlCredentials, isDevLoopbackHttp, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
 import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
 
 export type AccountProfile = {
@@ -86,8 +86,9 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
 }
 
 /** Credentials and session headers may only go to the configured TLS account API. */
-export function assertSecureAccountRequest(url: URL, accountOrigin: string): void {
+export function assertSecureAccountRequest(url: URL, accountOrigin: string, allowDevLoopback = isDevLoopbackHttp(new URL(accountOrigin))): void {
   const origin = new URL(accountOrigin);
+  if (allowDevLoopback && isDevLoopbackHttp(origin, true) && url.origin === origin.origin && !hasUrlCredentials(url) && !url.hash) return;
   if (origin.protocol !== "https:" || hasUrlCredentials(origin) || origin.search || origin.hash ||
       !["", "/"].includes(origin.pathname) || (origin.port && origin.port !== "443") ||
       url.protocol !== "https:" || url.origin !== origin.origin ||
