@@ -66,7 +66,8 @@
   "runtimeOptionalKeys": [
     "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
     "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET",
-    "OPERATOR_DASHBOARD_URL"
+    "OPERATOR_DASHBOARD_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODERATION_MODEL",
+    "POSTHOG_PROJECT_KEY", "POSTHOG_HOST"
   ],
   "privatePhotos": {
     "accountId": "6f0eb57971124f41fadc7897ace74dac",
@@ -89,6 +90,8 @@
   "productionEmailMode": "resend",
   "runtimeSecretBundleEnvironment": "KIP_STAGING_RUNTIME_JSON",
   "productionRuntimeSecretBundleEnvironment": "KIP_PRODUCTION_RUNTIME_JSON",
+  "runtimeExtraBundleEnvironment": "KIP_STAGING_EXTRA_RUNTIME_JSON",
+  "productionRuntimeExtraBundleEnvironment": "KIP_PRODUCTION_EXTRA_RUNTIME_JSON",
   "runtimeSecretBundleKeys": [
     "DATABASE_URL",
     "RESEND_API_KEY",
