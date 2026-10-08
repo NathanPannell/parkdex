@@ -1090,7 +1090,31 @@ def read_runtime_bundle(config: dict, *, environment: str = "staging", optional:
         if not isinstance(value, str) or not value:
             raise DeliveryError(f"{env_name} contains a missing or invalid value.")
         register_secret(value)
-    return bundle
+    return bundle | read_extra_runtime_bundle(config, bundle, environment=environment)
+
+
+def read_extra_runtime_bundle(config: dict, bundle: dict, *, environment: str) -> dict:
+    """Optional keys live in their own secret so adding one never means rewriting the main bundle."""
+    env_key = "productionRuntimeExtraBundleEnvironment" if environment == "production" else "runtimeExtraBundleEnvironment"
+    env_name = config.get(env_key)
+    raw = os.environ.get(env_name, "") if env_name else ""
+    if not raw:
+        return {}
+    register_secret(raw)
+    try:
+        extra = json.loads(raw)
+    except ValueError as exc:
+        raise DeliveryError(f"{env_name} must contain a JSON object.") from exc
+    if not isinstance(extra, dict):
+        raise DeliveryError(f"{env_name} must contain a JSON object.")
+    optional = set(config.get("runtimeOptionalKeys", []))
+    if set(extra) - optional or set(extra) & set(bundle):
+        raise DeliveryError(f"{env_name} may only add documented optional keys that the main bundle does not set.")
+    for value in extra.values():
+        if not isinstance(value, str) or not value:
+            raise DeliveryError(f"{env_name} contains a missing or invalid value.")
+        register_secret(value)
+    return extra
 
 
 def verify_runtime_bundle(bundle: dict, config: dict, *, environment: str = "staging") -> None:

@@ -76,6 +76,7 @@ jobs:
       - name: Apply ordered additive migrations
         env:
           KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
+          KIP_STAGING_EXTRA_RUNTIME_JSON: ${{ secrets.KIP_STAGING_EXTRA_RUNTIME_JSON }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY_STAGING }}
         run: python scripts/kip-delivery.py migrate-staging --sha "$GITHUB_SHA" --apply
 
@@ -85,6 +86,7 @@ jobs:
       - name: Queue exact staging services concurrently
         env:
           KIP_STAGING_RUNTIME_JSON: ${{ secrets.KIP_STAGING_RUNTIME_JSON }}
+          KIP_STAGING_EXTRA_RUNTIME_JSON: ${{ secrets.KIP_STAGING_EXTRA_RUNTIME_JSON }}
           VERCEL_STAGING_PROJECT_ID: ${{ vars.VERCEL_STAGING_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_STAGING }}

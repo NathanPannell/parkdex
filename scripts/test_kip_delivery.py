@@ -466,6 +466,16 @@ class AccountReleaseGates(unittest.TestCase):
              self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_RUNTIME_JSON"):
             delivery.read_runtime_bundle(self.config, environment="production")
 
+        extra = {"OPENROUTER_API_KEY": "or-secret", "POSTHOG_PROJECT_KEY": "phc_public"}
+        with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(extra)}, clear=True):
+            merged = delivery.read_runtime_bundle(self.config, environment="production")
+        self.assertEqual(merged, bundle | extra)
+        self.assertEqual(delivery.production_runtime_env(self.config, merged, "a" * 40, api_present=True)["OPENROUTER_API_KEY"], "or-secret")
+        for invalid in ({"DATABASE_URL": "postgresql://other"}, {"UNDOCUMENTED_KEY": "x"}, {"OPENROUTER_API_KEY": ""}):
+            with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(invalid)}, clear=True), \
+                 self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_EXTRA_RUNTIME_JSON"):
+                delivery.read_runtime_bundle(self.config, environment="production")
+
         self.account_files()
         production = self.runtime() | {
             "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-production.owned.workers.dev",
