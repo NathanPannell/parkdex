@@ -1,167 +1,114 @@
-import { AnimatePresence, motion, type PanInfo } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Badge } from "../components/Badge";
+import { Flag, FlagPin } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
+import { RollingNumber } from "../components/Motion";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../lib/accounts/AuthProvider";
 import { buzz, sfx } from "../lib/feedback";
+import { useGame } from "../lib/game/GameProvider";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
-import type { Park } from "../lib/parks";
 import { DEMO_START, useStore } from "../lib/store";
-import { RARITY } from "../lib/parks";
-import { RANKS, isRankProgressionEnabled } from "../lib/progression";
-import { parksLabel } from "../lib/rarityUi";
-import { RankEmblem } from "../components/Rank";
 import goMap from "../assets/onboarding-go-map.webp";
-import beaconHillScene from "../assets/onboarding-scene-beacon-hill.webp";
-import goldstreamScene from "../assets/onboarding-scene-goldstream.webp";
-import wittysLagoonScene from "../assets/onboarding-scene-wittys-lagoon.webp";
+import "../game.css";
+import "../onboarding.css";
 
+/**
+ * Five short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
+ * park, earn a point a day while it flies, take other players' parks for their flag's age, and
+ * get your own @handle and flag. How flags eventually fall is left for players to discover.
+ */
 const SLIDES = [
   {
-    eyebrow: "Step 1 · Explore",
-    title: ["Every park", "has a badge."],
-    body: "Parks all over Vancouver Island, each with its own one-of-a-kind badge. Find one you want.",
+    eyebrow: "Parkdex",
+    title: ["Plant your flag", "in real parks."],
+    body: "Like capture the flag, for every park around you. Play with your friends.",
     tint: "#FFE2C2",
   },
   {
-    eyebrow: "Step 2 · Go",
-    title: ["Go there.", "For real."],
-    body: "Pick a park on the map and head over. The badge unlocks once you're standing inside the park boundary.",
+    eyebrow: "Step 1 · Go",
+    title: ["Go to a park.", "Up goes your flag."],
+    body: "Head to any park on the map. Once you're inside the boundary, hold the button and plant your flag.",
     tint: "#D6F0DF",
   },
   {
-    eyebrow: "Step 3 · Collect",
-    title: ["Snap it.", "Claim it. Keep it."],
-    body: "Take a photo, claim the badge and build a collection worth putting on a shelf.",
+    eyebrow: "Step 2 · Hold",
+    title: ["A point a day", "while it flies."],
+    body: "Your flag earns 1 point for every day it stays up. The longer it flies, the more it's worth.",
+    tint: "#FFF1B8",
+  },
+  {
+    eyebrow: "Step 3 · Take",
+    title: ["Take parks.", "Win their days."],
+    body: "Plant on someone else's park and it's yours, plus a point for every day their flag was up. They keep what they earned.",
+    tint: "#FFD6DE",
+  },
+  {
+    eyebrow: "Step 4 · You",
+    title: ["Your @handle.", "Your flag."],
+    body: "Every player gets a one-of-a-kind flag. Everyone sees it, and your handle, on the parks you hold.",
     tint: "#DCEBFF",
   },
-  {
-    eyebrow: "Step 4 · Rank up",
-    title: ["Visit more.", "Rank up."],
-    body: "Every new park counts. Visit 2, 5 and 10 parks to rank up and open Uncommon, Rare and Legendary badges. Track your rank in My Dex.",
-    tint: "#E8E2FF",
-  },
 ];
 
-const ONBOARDING_PARKS: readonly Park[] = [
-  {
-    id: "onboarding-beacon-hill",
-    name: "Beacon Hill Park",
-    short: "Beacon Hill",
-    category: "municipal",
-    region: "Southern Vancouver Island",
-    lat: 48.4119,
-    lng: -123.36334,
-    biome: "forest",
-    shape: "circle",
-    rarity: "common",
-    seed: 135,
-    blurb: "Garden paths, roaming peacocks and the stone bridge over Goodacre Lake make Beacon Hill a place to wander. Garry oak meadows shelter sensitive native plants, while the park's southern edge opens onto the Strait of Juan de Fuca. Nearby Mile Zero marks the western end of the Trans-Canada Highway.",
-    scene: "onboarding-beacon-hill",
-  },
-  {
-    id: "onboarding-goldstream",
-    name: "Goldstream Park",
-    short: "Goldstream",
-    category: "provincial",
-    region: "South Island",
-    lat: 48.47556,
-    lng: -123.54243,
-    biome: "river",
-    shape: "shield",
-    rarity: "uncommon",
-    seed: 372,
-    blurb: "Each autumn, salmon return to the Goldstream River beneath old-growth firs and cedars, drawing bald eagles to this South Island park.",
-    scene: "onboarding-goldstream",
-  },
-  {
-    id: "onboarding-wittys-lagoon",
-    name: "Witty's Lagoon Regional Park",
-    short: "Witty's Lagoon",
-    category: "regional",
-    region: "Capital Region",
-    lat: 48.38571,
-    lng: -123.51755,
-    biome: "coast",
-    shape: "circle",
-    rarity: "common",
-    seed: 592,
-    blurb: "A forest trail passes Sitting Lady Falls and reaches a broad tidal beach, one of the few sandy shores with significant tides on southern Vancouver Island. Witty's Lagoon also shelters more than 160 recorded bird species.",
-    scene: "onboarding-wittys-lagoon",
-  },
-];
+const SAMPLE_SEEDS = ["onboard-fern", "onboard-tide", "onboard-moss"];
+const RIVAL_SEED = "onboard-rival";
+const YOU_SEED = "onboard-you";
 
-const ONBOARDING_SCENES: Readonly<Record<string, string>> = {
-  "onboarding-beacon-hill": beaconHillScene,
-  "onboarding-goldstream": goldstreamScene,
-  "onboarding-wittys-lagoon": wittysLagoonScene,
-};
-
-function SampleBadge({ park, size, animated = false, state = "earned", showName = true }: {
-  park: Park;
-  size: number;
-  animated?: boolean;
-  state?: "earned" | "preview" | "silhouette";
-  showName?: boolean;
-}) {
-  return <Badge park={park} size={size} animated={animated} state={state} showName={showName} sceneHref={ONBOARDING_SCENES[park.id]} />;
+function Mound({ width = 150 }: { width?: number }) {
+  return (
+    <svg className="ob-mound" viewBox="0 0 150 46" width={width} aria-hidden="true">
+      <ellipse cx="75" cy="42" rx="70" ry="4" fill="rgba(20,35,28,.18)" />
+      <path d="M6 42 C 24 12, 52 4, 75 4 C 98 4, 126 12, 144 42 Z" fill="#8B5A2B" />
+      <path d="M22 30 C 40 14, 60 10, 75 10 C 92 10, 112 14, 128 30 C 104 24, 46 24, 22 30 Z" fill="#A0703F" />
+      <path d="M68 6 l3 -7 l2 7 M80 7 l4 -6 l1 7" stroke="#5E9A3A" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+    </svg>
+  );
 }
 
-function RankRoadmap() {
+/** A flag on a pole standing in a mound, for the slides. */
+function PlantedFlag({ seed, size = 92, days = 0, wave = true }: { seed: string | null; size?: number; days?: number; wave?: boolean }) {
+  const width = size * 1.5;
+  const poleHeight = size * 1.25;
+  const moundHeight = (width * 46) / 150;
+  const poleLeft = width * 0.32;
   return (
-    <div className="ob-ranks" aria-label="Collector ranks and the rarities they unlock">
-      {RANKS.map((rank, index) => (
-        <motion.div
-          key={rank.name}
-          className="ob-ranks__row"
-          initial={{ x: 24, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ delay: 0.1 + index * 0.1, type: "spring", stiffness: 320, damping: 24 }}
-        >
-          <RankEmblem rank={rank} size={50} />
-          <span className="ob-ranks__text">
-            <strong>{rank.name}</strong>
-            <span>{rank.parks === 0 ? "Where you start" : `Visit ${parksLabel(rank.parks)}`}</span>
-          </span>
-          <span className="ob-ranks__opens" style={{ background: RARITY[rank.rarity].color, color: RARITY[rank.rarity].ink }}>
-            {RARITY[rank.rarity].label}
-          </span>
-        </motion.div>
-      ))}
+    <div className="ob-planted" style={{ width, height: poleHeight + moundHeight - 12 }}>
+      <span className="ob-planted__pole" style={{ left: poleLeft, height: poleHeight }} />
+      <span className={`ob-planted__cloth ${wave ? "plant-flag__cloth--wave" : ""}`} style={{ left: poleLeft + 5 }}>
+        <Flag seed={seed} size={size} days={days} />
+      </span>
+      <Mound width={width} />
     </div>
   );
 }
 
-function BadgeFan() {
-  const fan = ONBOARDING_PARKS;
-  const pos = [
-    { x: -92, y: -8, r: -14, s: 0.78, d: 0.1 },
-    { x: 0, y: -42, r: 0, s: 1, d: 0 },
-    { x: 92, y: -8, r: 14, s: 0.78, d: 0.2 },
+function FlagHills() {
+  const spots = [
+    { x: -104, y: 34, s: 0.7, d: 0.25 },
+    { x: 0, y: -8, s: 1, d: 0 },
+    { x: 104, y: 34, s: 0.7, d: 0.4 },
   ];
   return (
-    <div className="ob-fan">
+    <div className="ob-hills">
       <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-      {fan.map((park, i) => (
+      {SAMPLE_SEEDS.map((seed, index) => (
         <motion.div
-          key={park.id}
-          className="ob-fan__item"
-          style={{ zIndex: i === 1 ? 2 : 1 }}
-          initial={{ x: 0, y: 120, scale: 0.2, rotate: 0, opacity: 0 }}
-          animate={{ x: pos[i].x, y: pos[i].y, scale: pos[i].s, rotate: pos[i].r, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 240, damping: 16, delay: 0.15 + pos[i].d }}
+          key={seed}
+          className="ob-hills__flag"
+          style={{ zIndex: index === 1 ? 2 : 1 }}
+          initial={{ x: spots[index].x, y: -260, scale: spots[index].s, opacity: 0 }}
+          animate={{ x: spots[index].x, y: spots[index].y, scale: spots[index].s, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.15 + spots[index].d }}
         >
-          <motion.div animate={{ y: [0, -8, 0], rotate: [0, i === 1 ? 2 : -2, 0] }} transition={{ duration: 3 + i * 0.4, repeat: Infinity, ease: "easeInOut" }}>
-            <SampleBadge park={park} size={170} animated />
-          </motion.div>
+          <PlantedFlag seed={seed} size={96} />
         </motion.div>
       ))}
-      {/* Kip stands below the fan with his bubble beside him, clear of every badge ribbon. */}
-      <motion.div className="ob-fan__kip" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.6, stiffness: 200, damping: 14 }}>
-        <Kip pose="wave" size={92} />
-        <Bubble side="to-left" style={{ position: "relative", marginBottom: 26, whiteSpace: "nowrap" }}>
+      <motion.div className="ob-guide ob-guide--left" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.7, stiffness: 200, damping: 14 }}>
+        <Kip pose="wave" size={84} />
+        <Bubble side="to-left" style={{ position: "relative", marginBottom: 24, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
         </Bubble>
       </motion.div>
@@ -169,12 +116,10 @@ function BadgeFan() {
   );
 }
 
-// A real render of the Parkdex map around a fixed sample badge park.
+// A real render of the Parkdex map with a walk into a park.
 const ROUTE = "M62 118 C 92 100, 124 98, 148 112 S 186 142, 200 166";
 
 function GoThere() {
-  const park = ONBOARDING_PARKS[0]!;
-  const dur = "4.2s";
   const loop = { duration: 4.2, repeat: Infinity, ease: "linear" as const };
   const keys = { keyTimes: "0;0.6;1", keyPoints: "0;1;1", calcMode: "linear" as const };
   return (
@@ -188,83 +133,164 @@ function GoThere() {
             <animate attributeName="r" values="10;20;10" dur="1.4s" repeatCount="indefinite" />
           </circle>
           <circle r="9" fill="#2F7BFF" stroke="#FFF8EC" strokeWidth="3.5" />
-          <animateMotion path={ROUTE} dur={dur} repeatCount="indefinite" {...keys} />
+          <animateMotion path={ROUTE} dur="4.2s" repeatCount="indefinite" {...keys} />
         </g>
       </svg>
-      <motion.span
-        className="ob-go__in"
-        animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }}
-        transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}
-      >
+      <motion.span className="ob-go__in" animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }} transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}>
         You're in!
       </motion.span>
-      {park && (
-        <motion.div
-          className="ob-go__badge"
-          animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.2, 0.2, 1.15, 1, 1], rotate: [-30, -30, 6, 0, 0] }}
-          transition={{ ...loop, times: [0, 0.62, 0.7, 0.95, 1] }}
-        >
-          <SampleBadge park={park} size={92} />
-        </motion.div>
-      )}
+      <motion.div
+        className="ob-go__flag"
+        animate={{ opacity: [0, 0, 1, 1, 0], y: [-120, -120, 6, 0, 0], scaleY: [1, 1, 0.86, 1, 1] }}
+        transition={{ ...loop, times: [0, 0.64, 0.7, 0.76, 1] }}
+      >
+        <FlagPin seed={YOU_SEED} size={66} showAge={false} />
+      </motion.div>
       <motion.div className="ob-go__kip" animate={{ rotate: [0, -6, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-        <Kip pose="point" size={96} />
+        <Kip pose="point" size={90} />
       </motion.div>
     </div>
   );
 }
 
-function SnapClaimKeep() {
-  const park = ONBOARDING_PARKS[0]!;
-  const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.6 };
-  const cells = ONBOARDING_PARKS.slice(1, 4);
+function PointsPerDay() {
+  const reduce = useReducedMotion();
+  const [day, setDay] = useState(reduce ? 3 : 1);
+  useEffect(() => {
+    if (reduce) return;
+    // Days tick by, the score climbs, and the flag weathers as it would over a month.
+    const timer = window.setInterval(() => setDay((current) => (current >= 9 ? 1 : current + 1)), 750);
+    return () => window.clearInterval(timer);
+  }, [reduce]);
+  const days = day === 1 ? 0 : day * 3;
   return (
-    <div className="ob-snap">
+    <div className="ob-days">
+      <motion.span key={day} className="ob-days__chip" initial={{ y: -14, opacity: 0, rotate: -8 }} animate={{ y: 0, opacity: 1, rotate: -4 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+        Day {day}
+      </motion.span>
+      <div className="ob-days__flag">
+        <PlantedFlag seed={YOU_SEED} size={118} days={days} />
+      </div>
+      <div className="ob-days__score card">
+        <strong><RollingNumber value={day - 1} /></strong>
+        <span>{day - 1 === 1 ? "point" : "points"}</span>
+      </div>
+      <div className="ob-guide ob-guide--right">
+        <Bubble side="to-right" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
+          Tick, tick, points!
+        </Bubble>
+        <Kip pose="cheer" size={76} flip />
+      </div>
+    </div>
+  );
+}
+
+function TakeOver() {
+  const loop = { duration: 4.6, repeat: Infinity, repeatDelay: 0.4 };
+  return (
+    <div className="ob-take">
+      <div className="ob-take__ground"><Mound width={190} /></div>
       <motion.div
-        className="ob-polaroid"
-        animate={{ y: [140, 0, 0, 0, -40], rotate: [-18, -6, -6, -6, -2], opacity: [0, 1, 1, 1, 0], scale: [0.8, 1, 1, 1, 0.6] }}
-        transition={{ ...loop, times: [0, 0.15, 0.5, 0.72, 0.85], ease: "easeOut" }}
+        className="ob-take__flag ob-take__flag--rival"
+        animate={{ rotate: [0, 0, 84, 84, 0], x: [0, 0, 18, 18, 0], opacity: [1, 1, 1, 0, 0] }}
+        transition={{ ...loop, times: [0, 0.3, 0.42, 0.6, 1], ease: "easeIn" }}
       >
-        <div className="ob-polaroid__img">
-          <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
-            <rect width="200" height="150" fill="#FFD9A8" />
-            <circle cx="140" cy="46" r="18" fill="#FFF4D6" />
-            <path d="M0 90 Q50 70 100 88 T200 80 L200 150 L0 150Z" fill="#27A9C4" />
-            <path d="M0 120 Q60 104 120 122 T200 112 L200 150 L0 150Z" fill="#1C5B43" />
-            <path d="M30 108 l10 -30 l10 30Z M52 110 l8 -24 l8 24Z" fill="#14231C" />
-          </svg>
-          <motion.div className="ob-flash" animate={{ opacity: [0, 0, 1, 0, 0] }} transition={{ ...loop, times: [0, 0.14, 0.16, 0.26, 1] }} />
-        </div>
-        <span>{park?.short ?? "Your park"}</span>
+        <span className="ob-take__pole" />
+        <span className="ob-take__cloth"><Flag seed={RIVAL_SEED} size={100} days={12} /></span>
+        <span className="ob-take__tag">@sam · 12d</span>
       </motion.div>
       <motion.div
-        className="ob-stamp"
-        animate={{ scale: [3, 3, 0.9, 1.05, 1, 1, 0.34], opacity: [0, 0, 1, 1, 1, 1, 1], rotate: [30, 30, -8, 4, 0, 0, 0], x: [0, 0, 60, 60, 60, 60, -58], y: [0, 0, 4, 4, 4, 4, 118] }}
-        transition={{ ...loop, times: [0, 0.3, 0.4, 0.46, 0.5, 0.72, 0.86], ease: "easeOut" }}
+        className="ob-take__flag"
+        animate={{ y: [-220, -220, -220, 0, 0, 0], opacity: [0, 0, 1, 1, 1, 0] }}
+        transition={{ ...loop, times: [0, 0.4, 0.46, 0.56, 0.95, 1], ease: "easeIn" }}
       >
-        {park ? <SampleBadge park={park} size={120} /> : <Kip pose="think" size={100} />}
+        <span className="ob-take__pole" />
+        <span className="ob-take__cloth plant-flag__cloth--wave"><Flag seed={YOU_SEED} size={100} /></span>
       </motion.div>
-      <div className="ob-case">
-        {cells.map((item) => (
-          <div key={item.id} className="ob-case__cell">
-            <SampleBadge park={item} size={32} showName={false} state="earned" />
-          </div>
-        ))}
-        <motion.div className="ob-case__cell ob-case__cell--new" animate={{ boxShadow: ["0 0 0 0 #FFC93C00", "0 0 0 0 #FFC93C00", "0 0 0 6px #FFC93Cff", "0 0 0 0 #FFC93C00"] }} transition={{ ...loop, times: [0, 0.84, 0.9, 1] }} />
+      <motion.span
+        className="ob-take__points"
+        animate={{ scale: [0, 0, 1.3, 1, 1, 0], opacity: [0, 0, 1, 1, 1, 0], y: [10, 10, -6, 0, 0, 0] }}
+        transition={{ ...loop, times: [0, 0.6, 0.66, 0.72, 0.94, 1] }}
+      >
+        +12
+      </motion.span>
+      <div className="ob-guide ob-guide--left">
+        <Kip pose="point" size={76} />
+        <Bubble side="to-left" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
+          Sorry, Sam!
+        </Bubble>
+      </div>
+    </div>
+  );
+}
+
+function YourFlag() {
+  const reduce = useReducedMotion();
+  const auth = useAuth();
+  const game = useGame();
+  const signedIn = auth.phase === "authenticated";
+  const player = game.me?.player ?? null;
+  const ownSeed = player?.flagSeed ?? game.me?.flagSeed ?? null;
+  const finalSeed = ownSeed ?? YOU_SEED;
+  const [shuffle, setShuffle] = useState(reduce ? -1 : 0);
+  useEffect(() => {
+    if (reduce) return;
+    // A quick shuffle through flags, landing on yours.
+    let step = 0;
+    const timer = window.setInterval(() => {
+      step += 1;
+      if (step > 9) {
+        window.clearInterval(timer);
+        setShuffle(-1);
+        sfx.pop();
+        buzz(15);
+      } else {
+        setShuffle(step);
+      }
+    }, 140);
+    return () => window.clearInterval(timer);
+  }, [reduce]);
+  const seed = shuffle < 0 ? finalSeed : `onboard-shuffle-${shuffle}`;
+  return (
+    <div className="ob-you">
+      <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
+      <motion.div
+        key={shuffle < 0 ? "final" : "shuffle"}
+        className="ob-you__flag"
+        initial={shuffle < 0 ? { scale: 0.6, rotate: -10 } : false}
+        animate={{ scale: 1, rotate: -3 }}
+        transition={{ type: "spring", stiffness: 320, damping: 12 }}
+      >
+        <Flag seed={seed} size={170} label={shuffle < 0 ? "Your flag" : undefined} />
+      </motion.div>
+      <AnimatePresence>
+        {shuffle < 0 && (
+          <motion.span className="ob-you__handle" initial={{ y: 16, opacity: 0, scale: 0.8 }} animate={{ y: 0, opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.1 }}>
+            @{player?.handle ?? "you"}
+          </motion.span>
+        )}
+      </AnimatePresence>
+      <div className="ob-guide ob-guide--right">
+        <Bubble side="to-right" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
+          {player ? "Looking sharp!" : signedIn ? "Pick a handle!" : "Yours is waiting!"}
+        </Bubble>
+        <Kip pose="celebrate" size={76} flip />
       </div>
     </div>
   );
 }
 
 export function Onboarding() {
-  // The rank-up step only appears while rank progression is switched on for this build.
-  const slides = isRankProgressionEnabled() ? SLIDES : SLIDES.slice(0, 3);
   const { dispatch } = useStore();
   const toast = useToast();
+  const auth = useAuth();
+  const game = useGame();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const [asking, setAsking] = useState(false);
-  const slide = slides[index];
+  const slide = SLIDES[index];
+  const last = index === SLIDES.length - 1;
+  const canPickHandle = auth.phase === "authenticated" && game.status === "ready" && !game.me?.player;
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -276,7 +302,7 @@ export function Onboarding() {
     return () => ro.disconnect();
   }, []);
   const goTo = (i: number) => {
-    if (i < 0 || i >= slides.length) return;
+    if (i < 0 || i >= SLIDES.length) return;
     sfx.tap();
     buzz(8);
     setDir(i > index ? 1 : -1);
@@ -319,8 +345,8 @@ export function Onboarding() {
     >
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
-        {index < slides.length - 1 && (
-          <button className="onboarding__skip" onClick={() => goTo(slides.length - 1)}>
+        {!last && (
+          <button className="onboarding__skip" onClick={() => goTo(SLIDES.length - 1)}>
             Skip
           </button>
         )}
@@ -343,7 +369,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <BadgeFan /> : index === 1 ? <GoThere /> : index === 2 ? <SnapClaimKeep /> : <RankRoadmap />}
+                {index === 0 ? <FlagHills /> : index === 1 ? <GoThere /> : index === 2 ? <PointsPerDay /> : index === 3 ? <TakeOver /> : <YourFlag />}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -362,15 +388,28 @@ export function Onboarding() {
                 ))}
               </h1>
               <motion.p className="onboarding__body" variants={rise}>
-                {slide.body}
+                {last && !game.me?.player && auth.phase !== "authenticated" ? `${slide.body} Sign in when you plant your first one.` : slide.body}
               </motion.p>
             </motion.div>
           </AnimatePresence>
         </div>
       </motion.div>
+      <AnimatePresence>
+        {last && canPickHandle && (
+          <motion.button
+            className="btn btn--paper btn--block ob-handle-btn"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+            onClick={() => game.openHandleSheet()}
+          >
+            <Icon name="flag" /> Pick your handle
+          </motion.button>
+        )}
+      </AnimatePresence>
       <div className="onboarding__foot">
         <div className="dots">
-          {slides.map((_, i) => (
+          {SLIDES.map((_, i) => (
             <motion.button
               key={i}
               className="dot"
@@ -384,13 +423,13 @@ export function Onboarding() {
         <motion.button
           className="btn"
           layout
-          onClick={() => (index < slides.length - 1 ? goTo(index + 1) : setAsking(true))}
+          onClick={() => (!last ? goTo(index + 1) : setAsking(true))}
           whileTap={{ scale: 0.96 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
           <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={index < slides.length - 1 ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
-              {index < slides.length - 1 ? "Next" : "Let's go!"}
+            <motion.span key={!last ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
+              {!last ? "Next" : "Let's go!"}
             </motion.span>
           </AnimatePresence>
           <Icon name="next" />
@@ -411,7 +450,7 @@ export function Onboarding() {
               <div className="permission__kip">
                 <Kip pose="talk" size={110} />
               </div>
-              <h2>Kip needs to know when you've arrived.</h2>
+              <h2>Kip needs to know when you're in a park.</h2>
               <p>Your location is only used to check you in inside a park boundary. It never leaves your phone.</p>
               <button className="btn btn--block" onClick={() => finish(true)}>
                 <Icon name="locate" /> Allow location

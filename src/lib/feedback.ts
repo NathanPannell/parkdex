@@ -37,7 +37,74 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType = "
   osc.stop(t + dur + 0.02);
 }
 
+// A short burst of filtered noise: dirt, wind and cloth have no pitch.
+function noise(start: number, dur: number, gain: number, frequency: number, q = 0.8) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + start;
+  const buffer = a.createBuffer(1, Math.max(1, Math.floor(a.sampleRate * dur)), a.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+  const source = a.createBufferSource();
+  source.buffer = buffer;
+  const filter = a.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(frequency, t);
+  filter.Q.value = q;
+  const amp = a.createGain();
+  amp.gain.setValueAtTime(gain, t);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  source.connect(filter).connect(amp).connect(a.destination);
+  source.start(t);
+  source.stop(t + dur + 0.02);
+}
+
 export const sfx = {
+  // A flag pole driven into dirt: a low knock with a scatter of soil.
+  thud: () => {
+    tone(110, 0, 0.28, "sine", 0.32, 42);
+    noise(0, 0.22, 0.22, 700);
+    noise(0.05, 0.35, 0.08, 2400, 1.4);
+  },
+  // Cloth catching the wind as the flag unfurls.
+  flap: () => {
+    noise(0, 0.12, 0.06, 1400, 2);
+    noise(0.12, 0.1, 0.05, 1700, 2);
+    noise(0.22, 0.16, 0.04, 1200, 2);
+  },
+  // A big landing: a sub-bass drop under the thud.
+  boom: () => {
+    tone(70, 0, 0.6, "sine", 0.4, 30);
+    noise(0, 0.5, 0.18, 220, 0.6);
+  },
+  // Something heavy rushing through the air, rising or falling.
+  swish: (rising = false) => {
+    noise(0, 0.28, 0.07, rising ? 900 : 2200, 0.7);
+    tone(rising ? 260 : 900, 0, 0.26, "sawtooth", 0.02, rising ? 1200 : 180);
+  },
+  // A rival flag yanked out of the dirt.
+  yank: () => {
+    noise(0, 0.12, 0.14, 600);
+    tone(300, 0.02, 0.22, "triangle", 0.07, 1100);
+  },
+  // A small crowd cheering: layered noise swells with a bright whistle on top.
+  cheer: () => {
+    for (let i = 0; i < 6; i += 1) noise(i * 0.07, 0.9 - i * 0.08, 0.05, 900 + i * 260, 0.9);
+    tone(1500, 0.15, 0.35, "sine", 0.03, 2400);
+    tone(1800, 0.45, 0.3, "sine", 0.025, 2600);
+  },
+  // One coin per point as the counter climbs; the pitch rises with the count.
+  coin: (step = 0) => {
+    const base = 1200 + Math.min(step, 24) * 40;
+    tone(base, 0, 0.07, "square", 0.035);
+    tone(base * 1.5, 0.05, 0.12, "triangle", 0.05);
+  },
+  // An old flag tipping over and hitting the ground.
+  topple: () => {
+    tone(320, 0, 0.32, "triangle", 0.06, 140);
+    tone(90, 0.3, 0.2, "sine", 0.18, 50);
+    noise(0.3, 0.16, 0.1, 500);
+  },
   tap: () => tone(660, 0, 0.07, "triangle", 0.06, 880),
   pop: () => tone(420, 0, 0.12, "sine", 0.12, 980),
   whoosh: () => tone(220, 0, 0.25, "sawtooth", 0.025, 900),

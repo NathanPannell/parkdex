@@ -17,9 +17,6 @@ const OVERVIEW_PROVENANCE_PATH = resolve(projectRoot, "public/map/bootstrap/cana
 const MAX_BUNDLED_OVERVIEW_BYTES = 12_000_000;
 const REQUIRED_BUNDLED_ONBOARDING_ASSETS = [
   "assets/onboarding-go-map-",
-  "assets/onboarding-scene-beacon-hill-",
-  "assets/onboarding-scene-goldstream-",
-  "assets/onboarding-scene-wittys-lagoon-",
   "art/kip/kip-wave.webp",
   "art/kip/kip-point.webp",
   "art/kip/kip-think.webp",
