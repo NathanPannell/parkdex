@@ -95,7 +95,7 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
   return (
     <motion.button
       layout
-      className="nearby__card card"
+      className={`nearby__card card ${holder.kind === "mine" ? "is-mine" : ""}`}
       onClick={() => onSelect(park.id)}
       aria-label={`${park.name}. ${flag ? `${holder.kind === "mine" ? "Your flag" : `Flag of @${flag.handle}`}, ${formatFlagAge(days)}` : holder.kind === "empty" ? "No flag yet" : "Flag unknown"}. ${formatDistance(km)} away`}
       initial={{ y: 60, opacity: 0, rotate: 4 }}

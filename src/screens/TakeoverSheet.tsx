@@ -1,13 +1,17 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { Flag } from "../components/Flag";
+import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useContent } from "../lib/content/provider";
 import { buzz } from "../lib/feedback";
 import { markTakeoversSeen } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
 import { latestTakeoverAt } from "../lib/game/visit";
+import { listItem, listParent, press } from "../lib/motion";
+import { useStore } from "../lib/store";
 import "../game.css";
+import "../game-ui.css";
 
 function timeAgo(at: string, now: number): string {
   const minutes = Math.max(0, Math.round((now - Date.parse(at)) / 60_000));
@@ -24,6 +28,7 @@ function timeAgo(at: string, now: number): string {
 export function TakeoverMessages({ allowed }: { allowed: boolean }) {
   const game = useGame();
   const content = useContent();
+  const { dispatch } = useStore();
   const takeovers = game.me?.takeovers ?? [];
   const latest = latestTakeoverAt(takeovers);
   // Hidden locally at once; the server catches up when the seen call lands.
@@ -40,6 +45,13 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
   };
 
   const sorted = [...takeovers].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+  // Seeing a lost park is the nudge to go and take it back, so open it on the map.
+  const takeBack = (parkId: string) => {
+    dismiss();
+    dispatch({ type: "focus", id: parkId });
+    dispatch({ type: "go", screen: "map" });
+  };
 
   return (
     <AnimatePresence>
@@ -59,29 +71,36 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
           >
             <div className="sheet__handle" />
             <div className="takeover-sheet__head">
-              <Kip pose="think" size={56} />
+              <motion.div initial={{ rotate: -20, scale: 0.6 }} animate={{ rotate: [0, -8, 8, 0], scale: 1 }} transition={{ duration: 0.6, delay: 0.2 }}>
+                <Kip pose="think" size={56} />
+              </motion.div>
               <div>
                 <span className="eyebrow">While you were away</span>
                 <h2 id="takeover-title">{sorted.length === 1 ? "A park was taken" : `${sorted.length} parks were taken`}</h2>
               </div>
             </div>
-            <ul className="takeover-list scroll">
+            <motion.ul className="takeover-list scroll" variants={listParent} initial="hidden" animate="show">
               {sorted.map((takeover) => {
                 const park = content?.parkById.get(takeover.parkId);
                 return (
-                  <li key={`${takeover.parkId}:${takeover.at}`} className="takeover-row">
-                    <Flag seed={takeover.byFlagSeed} size={44} />
+                  <motion.li key={`${takeover.parkId}:${takeover.at}`} className="takeover-row" variants={listItem}>
+                    <Flag seed={takeover.byFlagSeed} size={44} className="is-waving" />
                     <span>
                       <strong>@{takeover.byHandle} took {park?.short ?? park?.name ?? "one of your parks"}</strong>
                       <em>{timeAgo(takeover.at, game.serverNow())}</em>
                     </span>
-                  </li>
+                    {park && (
+                      <motion.button whileTap={press} className="btn btn--sm btn--paper takeover-row__go" onClick={() => takeBack(takeover.parkId)} aria-label={`Show ${park.short} on the map`}>
+                        <Icon name="map" size={16} />
+                      </motion.button>
+                    )}
+                  </motion.li>
                 );
               })}
-            </ul>
+            </motion.ul>
             <div className="takeover-sheet__foot">
               <p className="account-help">Visit a park again to take it back.</p>
-              <button className="btn btn--sun btn--block" onClick={dismiss}>Got it</button>
+              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>Got it</motion.button>
             </div>
           </motion.div>
         </>

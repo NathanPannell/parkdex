@@ -131,12 +131,23 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
         <motion.p variants={item} className="park-sheet__meta">
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
-        <motion.div variants={item} className="park-sheet__holder">
-          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} />
+        <motion.div variants={item} className={`park-sheet__holder is-${holder.kind}`}>
+          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} className="is-waving-pin" />
           <span>
             <strong>{holderLine.title}</strong>
             <em>{holderLine.detail}</em>
           </span>
+          {holder.kind === "other" && flagDays > 0 && (
+            <motion.span
+              className="park-sheet__bounty"
+              initial={{ scale: 0, rotate: -12 }}
+              animate={{ scale: [1, 1.08, 1], rotate: -4 }}
+              transition={{ scale: { duration: 1.6, repeat: Infinity, delay: 0.6 }, rotate: { type: "spring", stiffness: 500, damping: 14 } }}
+              aria-label={`Worth ${flagDays} points`}
+            >
+              +{flagDays}
+            </motion.span>
+          )}
         </motion.div>
 
         <motion.div variants={item} className="stats">
