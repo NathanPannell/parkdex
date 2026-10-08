@@ -1,10 +1,16 @@
 import { HttpError } from "./validation.js";
 
 /**
- * Park outlines from OpenStreetMap through the Overpass API, for the "propose a park" flow.
- * Searching asks Overpass twice: once for tags and bounding boxes, which is cheap and lets us
- * skip huge protected areas, then for the full geometry of the few candidates we keep.
- * Usage policy: https://dev.overpass-api.de/overpass-doc/en/preface/commons.html
+ * Park outlines from OpenStreetMap for the "propose a park" flow.
+ *
+ * Overpass comes first: one tag-and-bounding-box query finds every park-like area the pin is
+ * inside or near (including unnamed ones and gardens), then a second query fetches the full
+ * geometry of the few we keep. Public Overpass instances are often overloaded, so an endpoint
+ * that just failed is skipped for a couple of minutes, and Nominatim is the last fallback: a
+ * name search for "park" in a small box around the pin plus /lookup for outlines. Nominatim
+ * misses unnamed places and gardens that do not match "park", which is why it is not first.
+ * Usage policies: https://dev.overpass-api.de/overpass-doc/en/preface/commons.html and
+ * https://operations.osmfoundation.org/policies/nominatim/
  */
 
 /** Tried in order; a busy or slow instance hands the request to the next. */
@@ -19,6 +25,13 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const CACHE_MS = 10 * 60 * 1000;
 const CACHE_ENTRIES = 200;
 const MAX_CONCURRENT = 2;
+// An endpoint that timed out or refused is skipped for this long, so searches do not wait on it.
+const ENDPOINT_COOLDOWN_MS = 2 * 60 * 1000;
+export const DEFAULT_NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+// Nominatim allows at most one request per second; requests are serialised and spaced.
+const NOMINATIM_SPACING_MS = 1_100;
+const NOMINATIM_BOX_M = 600;
+const NOMINATIM_OUTLINES = 4;
 
 const LEISURE = ["park", "nature_reserve", "garden", "common", "dog_park"] as const;
 const BOUNDARY = ["protected_area", "national_park"] as const;
@@ -303,6 +316,8 @@ out geom qt;`;
 }
 
 export interface OverpassEnv {
+  /** Nominatim base URL for the last fallback, or "off". */
+  NOMINATIM_URL?: string;
   /** Comma-separated endpoints, tried in order. */
   OVERPASS_URLS?: string;
   /** A single endpoint, kept for older configuration. OVERPASS_URLS wins when both are set. */
@@ -319,6 +334,66 @@ export function overpassEndpoints(env: OverpassEnv): string[] {
     }
   });
   return configured.length ? [...new Set(configured)] : [...DEFAULT_OVERPASS_URLS];
+}
+
+// One queue for every client in this function instance, so Nominatim sees at most ~1 request per second.
+let nominatimQueue: Promise<void> = Promise.resolve();
+let nominatimLastStart = 0;
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** The Nominatim base URL, or null when set to "off" or not https. */
+export function nominatimBase(env: OverpassEnv): string | null {
+  const value = env.NOMINATIM_URL?.trim();
+  if (value === "off") return null;
+  try {
+    const url = new URL(value || DEFAULT_NOMINATIM_URL);
+    return url.protocol === "https:" ? url.origin + url.pathname.replace(/\/+$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
+function ring(value: unknown): Position[] | null {
+  if (!Array.isArray(value) || value.length < 4) return null;
+  const positions: Position[] = [];
+  for (const point of value) {
+    if (!Array.isArray(point) || !Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+    positions.push([round7(point[0]), round7(point[1])]);
+  }
+  return samePosition(positions[0], positions[positions.length - 1]) ? positions : null;
+}
+
+/** A Nominatim GeoJSON feature as an OsmFeature: Polygon or MultiPolygon, every part and hole kept. */
+function nominatimFeature(value: unknown, toleranceM: number): OsmFeature | null {
+  const feature = value as { properties?: Record<string, unknown>; geometry?: { type?: unknown; coordinates?: unknown } } | null;
+  const properties = feature?.properties ?? {};
+  const type = properties.osm_type, id = Number(properties.osm_id);
+  if ((type !== "way" && type !== "relation") || !Number.isSafeInteger(id) || id <= 0) return null;
+  const extratags = properties.extratags && typeof properties.extratags === "object" ? properties.extratags as Record<string, string> : {};
+  const name = typeof properties.name === "string" && properties.name.trim() ? properties.name.trim() : null;
+  const tags: Record<string, string> = { ...extratags, [String(properties.category)]: String(properties.type), ...(name ? { name } : {}) };
+  const kind = parkKind(tags);
+  if (!kind || !publicPlace(tags)) return null;
+  const geometry = feature?.geometry;
+  const polygons = geometry?.type === "Polygon" ? [geometry.coordinates] : geometry?.type === "MultiPolygon" ? geometry.coordinates : null;
+  if (!Array.isArray(polygons) || !polygons.length) return null;
+  const coordinates: Position[][][] = [];
+  for (const polygon of polygons) {
+    if (!Array.isArray(polygon) || !polygon.length) return null;
+    const rings = polygon.map(ring);
+    if (rings.some((item) => item === null)) return null;
+    coordinates.push(rings as Position[][]);
+  }
+  const raw: MultiPolygon = { type: "MultiPolygon", coordinates };
+  return { type, id, name: name?.slice(0, 140) ?? null, kind, tags: keptTags(tags), geometry: simplifyMultiPolygon(raw, toleranceM), areaM2: Math.round(multiPolygonArea(raw)) };
+}
+
+/** Inside first, then nearest, then the smaller (more specific) place. */
+function withPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate[] {
+  const pin: Position = [lng, lat];
+  return features
+    .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
+    .sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
 }
 
 /** Worth trying the next endpoint: timeouts, network errors, 429, 5xx, unreadable answers and Overpass runtime errors. */
@@ -341,10 +416,20 @@ function bboxDistanceM(bounds: NonNullable<OverpassElement["bounds"]>, lat: numb
 }
 
 /** Overpass client with a short in-memory cache and at most two requests in flight per instance. */
-export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: { now?: () => number; timeoutMs?: number } = {}): OsmClient {
+export interface OsmClientOptions {
+  now?: () => number;
+  timeoutMs?: number;
+  /** Gap between Nominatim requests; tests set 0. */
+  nominatimSpacingMs?: number;
+}
+
+export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: OsmClientOptions = {}): OsmClient {
   const now = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const endpoints = overpassEndpoints(env);
+  const nominatim = nominatimBase(env);
+  const nominatimSpacingMs = options.nominatimSpacingMs ?? NOMINATIM_SPACING_MS;
+  const coolUntil = new Map<string, number>();
   const cache = new Map<string, { at: number; value: OverpassElement[] }>();
   let active = 0;
   const waiting: (() => void)[] = [];
@@ -398,22 +483,79 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   async function run(query: string, first = endpoints[0]): Promise<{ elements: OverpassElement[]; endpoint: string }> {
     const hit = cache.get(query);
     if (hit && now() - hit.at < CACHE_MS) return { elements: hit.value, endpoint: first };
-    const order = [first, ...endpoints.filter((endpoint) => endpoint !== first)];
+    const order = [first, ...endpoints.filter((endpoint) => endpoint !== first)].filter((endpoint) => (coolUntil.get(endpoint) ?? 0) <= now());
     for (const endpoint of order) {
       try {
         const elements = await attempt(endpoint, query);
-        if (cache.size >= CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-        cache.set(query, { at: now(), value: elements });
+        remember(query, elements);
         return { elements, endpoint };
       } catch (error) {
         if (!(error instanceof OverpassAttemptError)) throw error;
+        coolUntil.set(endpoint, now() + ENDPOINT_COOLDOWN_MS);
       }
     }
     throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
   }
 
-  return {
-    async search(lat, lng) {
+  function remember(key: string, value: OverpassElement[]) {
+    if (cache.size >= CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+    cache.set(key, { at: now(), value });
+  }
+
+  /** One Nominatim GET, queued behind the previous one and spaced to the usage policy. Null when it fails. */
+  async function nominatimGet(url: string): Promise<unknown> {
+    const hit = cache.get(url);
+    if (hit && now() - hit.at < CACHE_MS) return hit.value;
+    const turn = nominatimQueue.then(async () => {
+      await wait(Math.max(0, nominatimLastStart + nominatimSpacingMs - Date.now()));
+      nominatimLastStart = Date.now();
+    });
+    nominatimQueue = turn.catch(() => undefined);
+    await turn;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher(url, { headers: { accept: "application/json", "user-agent": OSM_USER_AGENT }, signal: controller.signal });
+      if (!response.ok) return null;
+      const body = await response.json() as unknown;
+      remember(url, body as OverpassElement[]);
+      return body;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Outlines for up to a few OSM ids through /lookup, as features. */
+  async function nominatimOutlines(refs: OsmRef[], toleranceM: number): Promise<OsmFeature[] | null> {
+    if (!nominatim || !refs.length) return refs.length ? null : [];
+    const ids = refs.map((ref) => `${ref.type === "way" ? "W" : "R"}${ref.id}`).join(",");
+    const body = await nominatimGet(`${nominatim}/lookup?osm_ids=${ids}&format=geojson&polygon_geojson=1&extratags=1`) as { features?: unknown } | null;
+    if (!body || !Array.isArray(body.features)) return null;
+    return body.features.map((item) => nominatimFeature(item, toleranceM)).filter((feature): feature is OsmFeature => feature !== null);
+  }
+
+  async function nominatimSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
+    if (!nominatim) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
+    const dLat = NOMINATIM_BOX_M / M_PER_DEG_LAT, dLng = NOMINATIM_BOX_M / mPerDegLng(lat);
+    const viewbox = [lng - dLng, lat + dLat, lng + dLng, lat - dLat].map((value) => value.toFixed(5)).join(",");
+    const results = await nominatimGet(`${nominatim}/search?q=park&viewbox=${viewbox}&bounded=1&format=jsonv2&limit=10&extratags=1`);
+    if (!Array.isArray(results)) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
+    const refs: OsmRef[] = [];
+    for (const item of results as Record<string, unknown>[]) {
+      const tags = { [String(item.category)]: String(item.type), ...(item.extratags && typeof item.extratags === "object" ? item.extratags as Record<string, string> : {}) };
+      const id = Number(item.osm_id);
+      if ((item.osm_type !== "way" && item.osm_type !== "relation") || !Number.isSafeInteger(id) || id <= 0 || !parkKind(tags) || !publicPlace(tags)) continue;
+      if (!refs.some((ref) => ref.type === item.osm_type && ref.id === id)) refs.push({ type: item.osm_type, id });
+    }
+    if (!refs.length) return [];
+    const features = await nominatimOutlines(refs.slice(0, NOMINATIM_OUTLINES), 3);
+    if (!features) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
+    return withPin(features, lat, lng);
+  }
+
+  async function overpassSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
       // About 10 m of rounding lets nearby retries share the cache.
       const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
       const found = await run(searchQuery(rlat, rlng));
@@ -424,20 +566,31 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
         .sort((a, b) => bboxDistanceM(a.bounds!, rlat, rlng) - bboxDistanceM(b.bounds!, rlat, rlng) || bboxDiagonalM(a.bounds!) - bboxDiagonalM(b.bounds!))
         .slice(0, MAX_CANDIDATES);
       if (!unique.length) return [];
-      const pin: Position = [lng, lat];
       // The instance that answered the search has the same data, so ask it for the geometry first.
       const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
-      return detailed.elements
-        .map((element) => featureFrom(element, 3))
-        .filter((feature): feature is OsmFeature => feature !== null)
-        .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
-        // Inside first, then nearest, then the smaller (more specific) place.
-        .sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
+      return withPin(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng);
+  }
+
+  return {
+    async search(lat, lng) {
+      try {
+        return await overpassSearch(lat, lng);
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.code !== "osm_unavailable") throw error;
+        return nominatimSearch(lat, lng);
+      }
     },
     async feature(ref) {
-      const [element] = (await run(geometryQuery([ref]))).elements.filter((item) => item.type === ref.type && item.id === ref.id);
       // About 1 m keeps the boundary faithful for check-ins while trimming redundant nodes.
-      return element ? featureFrom(element, 1) : null;
+      try {
+        const [element] = (await run(geometryQuery([ref]))).elements.filter((item) => item.type === ref.type && item.id === ref.id);
+        return element ? featureFrom(element, 1) : null;
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.code !== "osm_unavailable") throw error;
+        const features = await nominatimOutlines([ref], 1);
+        if (!features) throw error;
+        return features.find((feature) => feature.type === ref.type && feature.id === ref.id) ?? null;
+      }
     },
   };
 }

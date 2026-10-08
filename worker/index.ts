@@ -47,6 +47,7 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   PARK_PROPOSAL_APPROVE_THRESHOLD?: string;
   OVERPASS_URLS?: string;
   OVERPASS_URL?: string;
+  NOMINATIM_URL?: string;
 }
 
 export interface WorkerExecutionContext {
