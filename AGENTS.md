@@ -19,7 +19,7 @@ A Capacitor 8 Android app (React 19, Vite, TypeScript) for collecting parks on V
 | --- | --- |
 | `src/` | The app. `screens/` are full screens, `components/` shared UI, `lib/` logic with colocated `*.test.ts`, `data/` bundled data. |
 | `api/` | Vercel function entrypoints. `feedback-api.ts` routes into `worker/`; `api/content/*` serves the content sync API. |
-| `worker/` | API logic: feedback, accounts (`worker/accounts/`), progress sync, interactions, app config, park proposals. Tests sit beside each module. |
+| `worker/` | API logic: feedback, accounts (`worker/accounts/`), progress sync, interactions, app config, park proposals, the flag game (`game.ts`) and shared moderation (`moderation.ts`). Tests sit beside each module. |
 | `database/` | `001_cloud_content.sql`, ordered migrations in `migrations/`, catalogue, imports and seeds. |
 | `cloudflare/` | Private photo Worker and public asset config. |
 | `operator/` | The operator dashboard, a separate Vite app with its own `package.json`. |
@@ -39,7 +39,10 @@ npm test                    # vitest, node:test and worker tests
 npm run build
 npm run android:apk         # debug APK (app.parkdex.debug)
 npm run android:aab:production
+npm run local:api           # real API on 127.0.0.1:8787 against loopback PostgreSQL; see docs/local-stack.md
 ```
+
+For signed-in QA without a hosted environment, run `npm run local:api` and then `KIP_LOCAL_API=http://127.0.0.1:8787 npm run dev`. Test accounts come from `scripts/local-stack.seed.json`.
 
 ### Release checks (run before every push)
 
