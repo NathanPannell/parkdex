@@ -250,7 +250,7 @@ export type ContentRuntimeOptions = {
  * snapshot (while still showing their cache) so the new field is filled in.
  * The server's minimumReaderVersion compares against the same number.
  */
-export const CONTENT_READER_VERSION = 2;
+export const CONTENT_READER_VERSION = 3;
 export const VICTORIA: MapPoint = [-123.3656, 48.4284];
 /** Bounds of the detailed map archive this build uses (the --bbox of its Protomaps extract). */
 export const CONTENT_BOUNDS: [number, number, number, number] = [-139.1, 48.2, -114.0, 60.0];

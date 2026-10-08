@@ -260,7 +260,7 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     };
 
     await store.applySyncBatch(ENVIRONMENT, 10, batch, SOURCE);
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 11, sourceId: SOURCE, readerVersion: 2 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 11, sourceId: SOURCE, readerVersion: 3 });
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toMatchObject({
       revision: 11,
       sourceId: SOURCE,
@@ -303,7 +303,7 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     await expect(store.applySyncBatch(ENVIRONMENT, 20, batch, SOURCE)).rejects.toThrow(/injected SQLite row failure/);
 
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toEqual(before);
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 20, sourceId: SOURCE, readerVersion: 2 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 20, sourceId: SOURCE, readerVersion: 3 });
   });
 
   it("rejects stale revision and source compare-and-swap attempts without changing rows", async () => {
@@ -320,7 +320,7 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     await expect(store.replaceSyncState(ENVIRONMENT, 7, syncState(8, "uncommitted-scene", "other-source"), "other-source", "stale-source", true)).rejects.toThrow();
 
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toEqual(before);
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 7, sourceId: SOURCE, readerVersion: 2 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 7, sourceId: SOURCE, readerVersion: 3 });
   });
 
   it("repairs legacy content columns in place and only resets a malformed cursor", async () => {
@@ -356,12 +356,12 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toBeNull();
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toBeNull();
     await store.replaceSyncState(ENVIRONMENT, null, emptyState(9, "recovered-source"), "recovered-source", null, true);
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 9, sourceId: "recovered-source", readerVersion: 2 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 9, sourceId: "recovered-source", readerVersion: 3 });
 
     database.prepare("UPDATE content_sync_cursors SET revision = ?, source_id = ? WHERE environment = ?")
       .run(10, "newer-source", ENVIRONMENT);
     await expect(store.replaceSyncState(ENVIRONMENT, null, emptyState(11, "stale-source"), "stale-source", null, true)).rejects.toThrow();
-    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 10, sourceId: "newer-source", readerVersion: 2 });
+    await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 10, sourceId: "newer-source", readerVersion: 3 });
     await expect(store.getArchivedScene(archived.releaseId, archived.scene)).resolves.toEqual(archived);
     await expect(store.hasFile(digest, bytes.byteLength)).resolves.toBe(true);
   });
