@@ -8,10 +8,10 @@ import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccoun
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
-import { handleGameRequest, type GameDependencies, type GameEnv } from "./game.js";
+import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
-import { REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
+import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
 import {
   HttpError,
   readJsonBody,
@@ -77,6 +77,11 @@ function errorResponse(error: unknown): Response {
     return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
   return json({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+}
+
+/** Game outcomes become analytics events on the request that caused them. */
+function recordGameEvent(event: GameEvent): void {
+  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned });
 }
 
 function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): FeedbackStore {
@@ -303,7 +308,7 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const gameResponse = await handleGameRequest(request, env, {
     account: () => requireAccount(request, env, authDependencies),
     mutation: () => requireAccountMutation(request, env, authDependencies),
-  }, { fetch: dependencies.fetch, now: dependencies.now, ...dependencies.game });
+  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, ...dependencies.game });
   if (gameResponse) return gameResponse;
   // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
   const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
