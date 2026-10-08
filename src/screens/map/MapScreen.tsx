@@ -232,6 +232,8 @@ export function MapScreen() {
       tripStart.current = null;
       setRoute(null);
       sfx.pop();
+      // No road route to draw, so frame the park itself for the trip panel.
+      mapRef.current?.flyTo({ center: [selected.lng, selected.lat], zoom: Math.max(mapRef.current.getZoom(), 14), padding: TRIP_PAD, duration: 1100, essential: true });
     } else {
       if (!bounds) return;
       const target: LngLat = selected.trailheadLat != null && selected.trailheadLng != null
