@@ -1,0 +1,71 @@
+name: PR checks
+
+# Runs once a PR is ready for review, not on every draft push. Agents run the same
+# command locally before each push, so this is the only paid run per PR head.
+on:
+  pull_request:
+    branches:
+      - staging
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+concurrency:
+  group: kip-pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: kip_qa
+          POSTGRES_PASSWORD: kip_owned_ci_only
+          POSTGRES_DB: kip_qa_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kip_qa -d kip_qa_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Release checks
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: kip_qa
+          PGPASSWORD: kip_owned_ci_only
+          PGDATABASE: kip_qa_ci
+        run: python scripts/kip-delivery.py ci-checks
