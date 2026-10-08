@@ -120,6 +120,60 @@ test("proposals can be filtered and reviewed", async () => {
   assert.equal((await api(request(`/api/proposals/${id}`, { method: "PATCH", body: { status: "done" } }), env)).status, 400);
 });
 
+test("the operator approves a waiting OpenStreetMap proposal and it is published", async () => {
+  const proposals = new MemoryProposalStore();
+  const id = "10000000-0000-4000-8000-000000000009";
+  const now = new Date().toISOString();
+  proposals.rows.set(id, {
+    id, name: "Cedar Hill Woods", note: "", point: [-123.357, 48.4505], outline: null, context: {}, status: "new", createdAt: now, updatedAt: now,
+    osm: { type: "way", id: 77 }, decision: "unsure", moderation: null, decidedAt: now, publishedParkId: null,
+  });
+  const ring: [number, number][] = [[-123.36, 48.45], [-123.35, 48.45], [-123.35, 48.456], [-123.36, 48.456], [-123.36, 48.45]];
+  const statements: string[][] = [];
+  const sql = {
+    async query(text: string) {
+      if (text.includes("INSERT INTO kip_park_drafts.drafts")) return [{ updated_at: now }];
+      if (text.includes("FROM kip_park_drafts.drafts") || text.startsWith("SELECT 1 FROM public.parks")) return [];
+      throw new Error(`unexpected ${text}`);
+    },
+    async transaction(batch: { text: string; params: unknown[] }[]) {
+      statements.push(batch.map((statement) => statement.text));
+      const accept = batch[batch.length - 1];
+      const row = proposals.rows.get(String(accept.params[0]))!;
+      Object.assign(row, { status: "accepted", publishedParkId: accept.params[1] });
+      return batch.map(() => []);
+    },
+  };
+  const api = createDashboardApi({
+    proposalStore: () => proposals,
+    proposalReviewStore: () => ({
+      state: async (proposalId) => ({ decision: "unsure", publishedParkId: proposals.rows.get(proposalId)?.publishedParkId ?? null }),
+      nearbyParks: async () => [],
+      record: async () => undefined,
+      sql: () => sql,
+    }),
+    osmClient: {
+      search: async () => [],
+      feature: async (ref) => ({ ...ref, name: "Cedar Hill Woods", kind: "leisure=park", tags: { leisure: "park" }, areaM2: 400_000, geometry: { type: "MultiPolygon", coordinates: [[ring]] } }),
+    },
+  });
+  assert.equal((await api(request(`/api/proposals/${id}/publish`, { method: "POST", body: {}, origin: "https://evil.example.test" }), env)).status, 403);
+  assert.equal((await api(request(`/api/proposals/${id}/publish`), env)).status, 405);
+  const published = await api(request(`/api/proposals/${id}/publish`, { method: "POST", body: {} }), env);
+  assert.equal(published.status, 200);
+  const body = await published.json() as { parkId: string; proposal: { status: string; publishedParkId: string } };
+  assert.equal(body.parkId, "osm-way-77");
+  assert.equal(body.proposal.status, "accepted");
+  assert.equal(statements.length, 1);
+  assert.ok(statements[0].some((text) => text.includes("INSERT INTO public.parks")));
+
+  const freeForm = "10000000-0000-4000-8000-000000000010";
+  proposals.rows.set(freeForm, { id: freeForm, name: "Somewhere", note: "", point: [-123.3, 48.4], outline: null, context: {}, status: "new", createdAt: now, updatedAt: now, osm: null });
+  const refused = await api(request(`/api/proposals/${freeForm}/publish`, { method: "POST", body: {} }), env);
+  assert.equal(refused.status, 422);
+  assert.equal((await api(request("/api/proposals/10000000-0000-4000-8000-000000000099/publish", { method: "POST", body: {} }), env)).status, 404);
+});
+
 test("health reports the data environment, and a missing database fails closed", async () => {
   const api = createDashboardApi();
   const health = await api(request("/api/health"), { DASHBOARD_ENVIRONMENT: "production" });

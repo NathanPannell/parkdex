@@ -2,6 +2,8 @@ import { API_POINTERS, createNeonAppConfigStore, FEATURE_FLAGS, parseBuild, pars
 import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDelivery.js";
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
+import { createOsmClient, type OsmClient, type OverpassEnv } from "../../worker/osmParks.js";
+import { createSqlProposalReviewStore, neonSqlRunner, publishProposalByOperator, type ProposalReviewStore } from "../../worker/proposalReview.js";
 import { HttpError, readJsonBody, validateRetryBody, validateStatus } from "../../worker/validation.js";
 import { neon } from "@neondatabase/serverless";
 import type { BadgeEnv } from "./badges.js";
@@ -16,7 +18,7 @@ import { createLegacySource, type LegacyEnv, type LegacySource } from "./legacy.
  * behind Vercel Authentication, which rejects unauthenticated requests before they reach here.
  */
 
-export interface DashboardEnv extends BadgeEnv, LegacyEnv {
+export interface DashboardEnv extends BadgeEnv, LegacyEnv, OverpassEnv {
   DATABASE_URL?: string;
   RESEND_API_KEY?: string;
   EMAIL_MODE?: string;
@@ -31,6 +33,8 @@ export interface DashboardDependencies extends DeliveryDependencies {
   appConfigStore?(env: DashboardEnv): AppConfigStore;
   proposalStore?(env: DashboardEnv): ParkProposalStore;
   draftStore?(env: DashboardEnv): DraftStore;
+  proposalReviewStore?(env: DashboardEnv): ProposalReviewStore;
+  osmClient?: OsmClient;
   liveParkStore?(env: DashboardEnv): LiveParkStore;
   queueCounts?(env: DashboardEnv): Promise<QueueCounts>;
   legacySource?: LegacySource;
@@ -196,12 +200,30 @@ async function routeBuilds(request: Request, path: string, store: () => AppConfi
   return json({ build: await store().upsert(platform, build, input) });
 }
 
-async function routeProposals(request: Request, path: string, store: () => ParkProposalStore): Promise<Response | null> {
+type ProposalPublisher = () => { review: ProposalReviewStore; osm: OsmClient };
+
+async function routeProposals(request: Request, path: string, store: () => ParkProposalStore, publisher: ProposalPublisher): Promise<Response | null> {
   if (path === "/api/proposals") {
     if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
     const value = new URL(request.url).searchParams.get("status");
     const status = !value || value === "all" ? null : parseProposalStatus(value);
     return json({ proposals: await store().list(status), statuses: PROPOSAL_STATUSES });
+  }
+  const publish = /^\/api\/proposals\/([^/]+)\/publish$/.exec(path);
+  if (publish) {
+    // Approving a waiting proposal publishes its OpenStreetMap outline the way the model would.
+    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+    requireSameOrigin(request);
+    const id = publish[1].toLowerCase();
+    const found = UUID.test(id) ? (await store().list(null)).find((item) => item.id === id) : undefined;
+    if (!found) throw new HttpError(404, "not_found", "Proposal not found.");
+    const { review, osm } = publisher();
+    const result = await publishProposalByOperator(
+      { id: found.id, name: found.name, note: found.note, point: found.point, osm: found.osm ?? null, createdAt: found.createdAt },
+      { store: review, osm },
+    );
+    const proposal = (await store().list(null)).find((item) => item.id === id) ?? found;
+    return json({ proposal, parkId: result.parkId });
   }
   const match = /^\/api\/proposals\/([^/]+)$/.exec(path);
   if (!match) return null;
@@ -260,6 +282,7 @@ export function selectDatabase(request: Request, env: DashboardEnv): DashboardEn
 export function createDashboardApi(dependencies: DashboardDependencies = {}) {
   // Kept for the life of the isolate so the large legacy files are fetched at most every few minutes.
   let legacy: LegacySource | null = dependencies.legacySource ?? null;
+  let osm: OsmClient | null = dependencies.osmClient ?? null;
   return async function handle(request: Request, baseEnv: DashboardEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
@@ -284,7 +307,10 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
         await routeFeedback(request, path, () => dependencies.feedbackStore?.(env) ?? createNeonFeedbackStore(databaseUrl(env)), env, dependencies) ??
         // Apps read build config from production only, so it never follows the database toggle.
         await routeBuilds(request, path, () => dependencies.appConfigStore?.(baseEnv) ?? createNeonAppConfigStore(databaseUrl(baseEnv))) ??
-        await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env))) ??
+        await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)), () => ({
+          review: dependencies.proposalReviewStore?.(env) ?? createSqlProposalReviewStore(neonSqlRunner(databaseUrl(env))),
+          osm: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined),
+        })) ??
         await routeParks(request, path, {
           json,
           env,

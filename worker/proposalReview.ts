@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { distanceToMultiPolygon, interiorPoint, pointInMultiPolygon, type MultiPolygon, type OsmClient, type OsmFeature, type OsmRef } from "./osmParks.js";
 import { FALLBACK_REGION, osmParkId, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { HttpError } from "./validation.js";
 
 /**
  * Checks a park proposal with the moderation model and, when the model clearly approves a
@@ -295,4 +296,27 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     await deps.store.record(proposal.id, "approved", record).catch(() => undefined);
     return { decision: "pending" };
   }
+}
+
+/**
+ * The operator approves a waiting proposal from the dashboard: the same outline fetch and
+ * publish transaction, without the model. The model's stored answers stay as they were.
+ */
+export async function publishProposalByOperator(proposal: ReviewInput, deps: Pick<ReviewDependencies, "store" | "osm">): Promise<{ parkId: string; parkName: string }> {
+  const state = await deps.store.state(proposal.id);
+  if (state?.publishedParkId) return { parkId: state.publishedParkId, parkName: proposal.name };
+  if (!proposal.osm) throw new HttpError(422, "no_osm_outline", "This proposal has no OpenStreetMap outline. Create a draft and draw the boundary instead.");
+  const feature = await deps.osm.feature(proposal.osm);
+  if (!feature) throw new HttpError(422, "osm_missing", "That OpenStreetMap outline no longer exists or is not a park.");
+  const nearby = await deps.store.nearbyParks(proposal.point[1], proposal.point[0], NEARBY_KM);
+  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, regionFor(nearby, proposal.point), proposal.point);
+  const published = await publishProposalPark(deps.store.sql(), park, proposal.id).catch((error: unknown) => {
+    // PostgreSQL errors can include connection details; pass on only the guard name.
+    const guard = error instanceof Error ? /park_exists|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;
+    throw new HttpError(422, "publish_failed", `Publishing was rolled back${guard ? ` (${guard})` : ""}. Try again.`);
+  });
+  if (published.status === "blocked") {
+    throw new HttpError(409, published.reason, published.reason === "park_exists" ? "A park with this outline is already in Parkdex." : "A draft for this outline already exists. Open it from Drafts.");
+  }
+  return { parkId: published.parkId, parkName: park.name };
 }
