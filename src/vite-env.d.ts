@@ -11,5 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_FEEDBACK_API_URL?: string;
   readonly VITE_APP_URL?: string;
   readonly VITE_CONFIG_API_URL?: string;
+  /** Build-time fallback for the public PostHog project key; the server's app config wins. */
+  readonly VITE_POSTHOG_PROJECT_KEY?: string;
+  readonly VITE_POSTHOG_HOST?: string;
 }
 declare const __APP_BUILD__: string;

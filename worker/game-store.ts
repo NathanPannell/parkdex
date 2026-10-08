@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 
 export interface PlayerRecord {
   handle: string;
@@ -120,7 +120,7 @@ function uniqueViolation(error: unknown): boolean {
 }
 
 export function createNeonGameStore(databaseUrl: string): GameStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
 
   const playerColumns = "handle, flag_seed, created_at, takeovers_seen_at";

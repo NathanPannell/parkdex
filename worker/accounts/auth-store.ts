@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "../db.js";
 
 export type AccountProvider = "email" | "google";
 export type AuthTransport = "cookie" | "bearer";
@@ -170,7 +170,7 @@ function createdSession(row: Row): { account: AccountSummary; sessionId: string;
 }
 
 export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStore {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   const query = async (text: string, params: unknown[] = []): Promise<Row[]> =>
     await sql.query(text, params) as unknown as Row[];
 

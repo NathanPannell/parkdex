@@ -94,6 +94,8 @@ test("a build with no configuration keeps its built-in defaults", async () => {
     latestBuild: null,
     update: "none",
     source: "none",
+    // Additive: without POSTHOG_PROJECT_KEY the app loads no analytics SDK.
+    analytics: null,
   });
   assert.ok(legacyClientAccepts(body, "android", 42));
 });

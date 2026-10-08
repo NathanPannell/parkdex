@@ -8,6 +8,7 @@ import {
 } from "./nativeIdentity";
 import { hasUrlCredentials, isDevLoopbackHttp, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
 import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
+import { withRequestContext } from "../requestContext";
 
 export type AccountProfile = {
   id: string;
@@ -112,6 +113,7 @@ async function fetchRequest(pathOrInput: string | Request | URL, init: RequestIn
   const headers = new Headers(typeof Request !== "undefined" && pathOrInput instanceof Request ? pathOrInput.headers : undefined);
   new Headers(init.headers).forEach((value, name) => headers.set(name, value));
   if (expectedAccountId) headers.set("X-Kip-Account-ID", expectedAccountId);
+  withRequestContext(headers);
 
   const requestUrl = new URL(typeof Request !== "undefined" && url instanceof Request ? url.url : String(url), apiUrl("/"));
   const accountOrigin = new URL(apiUrl("/")).origin;
