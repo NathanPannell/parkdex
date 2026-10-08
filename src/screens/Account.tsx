@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
+import { GameIdentityCard } from "../components/GameIdentityCard";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
@@ -397,6 +398,8 @@ export function Account({ onBack }: { onBack: () => void }) {
                 </span>
               </div>
             </section>
+
+            <GameIdentityCard />
 
             <section className="account-card card account-section" aria-labelledby="account-backup-title" aria-live="polite">
               <span className="eyebrow" id="account-backup-title">Backup</span>
