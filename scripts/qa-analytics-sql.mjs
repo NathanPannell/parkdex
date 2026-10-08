@@ -5,6 +5,7 @@ import { createNeonInteractionStore } from '../worker/interactions.ts';
 import { createAnalyticsSink } from '../worker/analyticsSink.ts';
 import { database } from '../worker/db.ts';
 import { createRequestContext, emitEvent, runWithRequestContext, setRequestAccount } from '../worker/requestContext.ts';
+import { createFeedbackWorker } from '../worker/index.ts';
 import { applyMigration, dbUrl, pool } from './qa-postgres-adapter.mjs';
 
 const migration = (name) => fileURLToPath(new URL(`../database/migrations/${name}`, import.meta.url));
@@ -108,6 +109,26 @@ try {
   await rejectsWithCheck(`INSERT INTO kip_analytics.events (event_id, event_type, environment, schema_version, route, request_id, occurred_at)
     VALUES ($1, 'something_else', 'staging', 1, 'POST /api', $2, now())`, [randomUUID(), randomUUID()]);
   log('type, shape and label checks reject malformed server events');
+
+  // The real router and app config store, end to end: request labels in, rows out after waitUntil.
+  await applyMigration(migration('app_config_001_init.sql'));
+  await applyMigration(migration('app_config_002_global_rules.sql'));
+  const pending = [];
+  const response = await createFeedbackWorker().fetch(new Request('https://kip.example.test/api/app-config?platform=android&build=7&env=staging', {
+    headers: { 'X-Kip-Installation-Id': installation, 'X-Kip-App-Version': '0.1.0+7', 'X-Kip-Bundle-Id': 'qa-router' },
+  }), { DATABASE_URL: dbUrl, CONTENT_CHANNEL: 'staging' }, { waitUntil: (promise) => pending.push(promise) });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).analytics, null);
+  assert.equal(pending.length, 1);
+  await Promise.all(pending);
+  const routed = await pool.query(`SELECT request_id, event_type, tables, app_version FROM kip_analytics.events
+    WHERE installation_id = $1 AND route = 'GET /api/app-config' ORDER BY occurred_at`, [installation]);
+  assert.deepEqual(routed.rows.map((row) => [row.event_type, row.tables]), [
+    ['db_read', ['kip_app_config.builds']], ['db_read', ['kip_app_config.update_rules']],
+  ]);
+  assert.ok(routed.rows.every((row) => row.app_version === '0.1.0+7'));
+  for (const row of routed.rows) requestIds.add(row.request_id);
+  log('the API router records its app config reads after the response');
 
   // Age every QA row past the 90-day window and confirm the existing purge removes old and new types.
   await pool.query(`UPDATE kip_analytics.events SET received_at = now() - interval '91 days'
