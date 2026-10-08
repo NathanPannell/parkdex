@@ -9,9 +9,10 @@ if (process.argv.length !== 3 || (channel !== "staging" && channel !== "producti
   process.exit(2);
 }
 
-const result = spawnSync("npx", ["cap", "sync", "android"], {
+// A fixed command line: npx is a .cmd shim on Windows and needs a shell.
+const result = spawnSync("npx cap sync android", {
   stdio: "inherit",
-  shell: process.platform === "win32",
+  shell: true,
   env: { ...process.env, PARKDEX_UPDATE_CHANNEL: channel },
 });
 process.exit(result.status ?? 1);

@@ -187,6 +187,26 @@ test("validates every pointer field", () => {
   }
 });
 
+test("a pointer written by the publish script passes the endpoint's checks", async () => {
+  // A plain string keeps the type checker from resolving the untyped script module.
+  const scriptPath = "../scripts/publish-app-bundle.mjs";
+  const publisher = await import(scriptPath) as { makeBundlePointer(input: Record<string, unknown>): unknown };
+  for (const channel of ["staging", "production"] as const) {
+    const written = publisher.makeBundlePointer({
+      channel,
+      generation: 1,
+      zipSha256: STAGING_SHA,
+      byteSize: 2048,
+      minimumNativeBuild: 12,
+      maximumNativeBuild: 12,
+      sourceCommit: "c".repeat(40),
+      publishedAt: "2026-10-07T12:00:00.000Z",
+    });
+    assert.ok(validatePointer(written, channel), channel);
+    assert.equal(validatePointer(written, channel === "staging" ? "production" : "staging"), null);
+  }
+});
+
 test("only local or https origins replace the CDN", () => {
   assert.equal(appBundleOrigin(undefined), APP_BUNDLE_ORIGIN);
   assert.equal(appBundleOrigin("http://localhost:5194"), "http://localhost:5194");
