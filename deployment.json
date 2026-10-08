@@ -33,7 +33,8 @@
     "database/migrations/park_drafts_001_init.sql",
     "database/migrations/app_config_002_global_rules.sql",
     "database/migrations/park_drafts_002_proposals.sql",
-    "database/migrations/game_001_init.sql"
+    "database/migrations/game_001_init.sql",
+    "database/migrations/park_proposals_002_moderation.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -66,6 +67,7 @@
     "previewClockTable": "content_clock"
   },
   "runtimeOptionalKeys": [
+    "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
     "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID",
     "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET",
     "OPERATOR_DASHBOARD_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODERATION_MODEL",

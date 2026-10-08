@@ -7,7 +7,10 @@ import { handleInteractionRequest, handleRetentionRequest, retentionAuthorized, 
 import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
-import { createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
+import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
+import { createProposalModerator } from "./proposalModeration.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
@@ -40,6 +43,11 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   POSTHOG_PROJECT_KEY?: string;
   POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
+  /** Park proposals: the model's approval threshold and the Overpass endpoint. */
+  PARK_PROPOSAL_APPROVE_THRESHOLD?: string;
+  OVERPASS_URLS?: string;
+  OVERPASS_URL?: string;
+  NOMINATIM_URL?: string;
 }
 
 export interface WorkerExecutionContext {
@@ -55,12 +63,19 @@ export interface WorkerDependencies {
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
   analytics?(env: WorkerEnvironment): AnalyticsSink | null;
+  createProposalReviewStore?(env: WorkerEnvironment): ProposalReviewStore;
+  /** Undefined uses the shared moderation module; null turns the model off. */
+  proposalModerator?: ProposalModerator | null;
+  osmClient?: OsmClient;
+  osmSearchAllowed?(subjectHash: string): Promise<boolean>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
   uuid?(): string;
 }
 
 const BASIC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Three questions about one proposal; the proposer waits on a spinner with a 30 second budget.
+const PROPOSAL_MODERATION_TIMEOUT_MS = 8_000;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -332,20 +347,41 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     },
   });
   if (appConfigResponse) return appConfigResponse;
+  const sessionSecret = () => {
+    if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
+      throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
+    }
+    return env.SESSION_SECRET;
+  };
+  const osmResponse = await handleOsmParksRequest(request, {
+    json,
+    allow: async () => {
+      const subject = await keyedHash(sessionSecret(), "osm-ip", getClientAddress(request));
+      if (dependencies.osmSearchAllowed) return dependencies.osmSearchAllowed(subject);
+      if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park search is unavailable.");
+      return createNeonOsmSearchLimiter(env.DATABASE_URL)(subject);
+    },
+    osm: () => dependencies.osmClient!,
+  });
+  if (osmResponse) return osmResponse;
   const proposalResponse = await handleParkProposalRequest(request, {
     json,
-    ipHash: async () => {
-      if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
-        throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
-      }
-      return keyedHash(env.SESSION_SECRET, "proposal-ip", getClientAddress(request));
-    },
+    ipHash: async () => keyedHash(sessionSecret(), "proposal-ip", getClientAddress(request)),
     newId: () => requestUuid(dependencies),
     store: () => {
       if (dependencies.createParkProposalStore) return dependencies.createParkProposalStore(env);
       if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
       return createNeonParkProposalStore(env.DATABASE_URL);
     },
+    review: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (proposal) => reviewProposal(proposal, {
+      store: dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!)),
+      osm: dependencies.osmClient!,
+      moderate: dependencies.proposalModerator === undefined
+        ? createProposalModerator(env, dependencies.fetch, PROPOSAL_MODERATION_TIMEOUT_MS)
+        : dependencies.proposalModerator,
+      threshold: approveThreshold(env.PARK_PROPOSAL_APPROVE_THRESHOLD),
+      now: () => new Date(requestNow(dependencies)),
+    }),
   });
   if (proposalResponse) return proposalResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
@@ -379,6 +415,10 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 }
 
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
+  // One client per instance so its short cache and concurrency cap span requests.
+  let osm = dependencies.osmClient ?? null;
+  const withOsm = (env: WorkerEnvironment): WorkerDependencies =>
+    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined) });
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
       return withRequestAnalytics({
@@ -388,7 +428,7 @@ export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
         env: env as Record<string, string | undefined>,
         sink: () => dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env),
         waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
-      }, () => handleWorkerRequest(request, env, context, dependencies));
+      }, () => handleWorkerRequest(request, env, context, withOsm(env)));
     },
   };
 }

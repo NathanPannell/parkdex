@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./feedbackReport", () => ({ feedbackApiOrigin: () => "https://api.example.test" }));
 
 import type { LngLat } from "./geo";
-import { MAX_OUTLINE_POINTS, simplifyOutline, submitParkProposal } from "./parkProposal";
+import { MAX_OUTLINE_POINTS, searchOsmParks, simplifyOutline, submitParkProposal } from "./parkProposal";
 
 const proposal = {
   submissionId: "11111111-1111-4111-8111-111111111111",
@@ -52,5 +52,44 @@ describe("submitParkProposal", () => {
     await expect(submitParkProposal(proposal, limited as unknown as typeof fetch)).rejects.toThrow(/a lot of parks/);
     const invalid = vi.fn(async () => new Response(JSON.stringify({ message: "Give the park a name." }), { status: 400 }));
     await expect(submitParkProposal(proposal, invalid as unknown as typeof fetch)).rejects.toThrow("Give the park a name.");
+  });
+});
+
+describe("proposal review and OpenStreetMap search", () => {
+  it("sends the OpenStreetMap pick and reports an instant approval", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ id: "x", review: { decision: "approved", parkId: "osm-way-7", parkName: "Pocket Park" } }), { status: 201 }));
+    const review = await submitParkProposal({ ...proposal, osm: { type: "way", id: 7 } }, fetcher as unknown as typeof fetch);
+    expect(review).toEqual({ decision: "approved", parkId: "osm-way-7", parkName: "Pocket Park" });
+    const [, init] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).osm).toEqual({ type: "way", id: 7 });
+  });
+
+  it("treats a missing or unknown review as waiting for the team", async () => {
+    const older = vi.fn(async () => new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+    expect(await submitParkProposal(proposal, older as unknown as typeof fetch)).toEqual({ decision: "pending" });
+    const odd = vi.fn(async () => new Response(JSON.stringify({ id: "x", review: { decision: "approved" } }), { status: 200 }));
+    expect(await submitParkProposal(proposal, odd as unknown as typeof fetch)).toEqual({ decision: "pending" });
+  });
+
+  it("searches near the pin and drops malformed candidates", async () => {
+    const geometry = { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] };
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      parks: [
+        { type: "relation", id: 5, name: " Beacon Hill Park ", kind: "leisure=park", areaM2: 750000, containsPin: true, distanceM: 0, geometry },
+        { type: "node", id: 6, geometry },
+        { type: "way", id: 8, name: null, kind: "leisure=garden", areaM2: 300, containsPin: false, distanceM: 40, geometry: { type: "Polygon", coordinates: [] } },
+      ],
+    }), { status: 200 }));
+    const parks = await searchOsmParks([-123.3636, 48.4126], undefined, fetcher as unknown as typeof fetch);
+    expect(parks).toEqual([{ type: "relation", id: 5, name: "Beacon Hill Park", kind: "leisure=park", areaM2: 750000, containsPin: true, distanceM: 0, geometry }]);
+    const [url] = fetcher.mock.calls[0] as unknown as [string];
+    expect(url).toBe("https://api.example.test/api/osm/parks?lat=48.412600&lng=-123.363600");
+  });
+
+  it("explains search failures", async () => {
+    const limited = vi.fn(async () => new Response("{}", { status: 429 }));
+    await expect(searchOsmParks([0, 0], undefined, limited as unknown as typeof fetch)).rejects.toThrow(/Too many map searches/);
+    const busy = vi.fn(async () => new Response("{}", { status: 503 }));
+    await expect(searchOsmParks([0, 0], undefined, busy as unknown as typeof fetch)).rejects.toThrow(/busy/);
   });
 });

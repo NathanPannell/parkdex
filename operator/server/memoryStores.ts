@@ -314,6 +314,68 @@ function delivery(audience: EmailAudience, status: EmailDeliveryView["status"], 
 const SAMPLE_SHOT = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="640" viewBox="0 0 360 640"><rect width="360" height="640" fill="#fff8ec"/><rect x="24" y="80" width="312" height="300" rx="24" fill="#9fd8ff" stroke="#14231c" stroke-width="4"/><circle cx="180" cy="230" r="26" fill="#ff5a1f" stroke="#14231c" stroke-width="4"/><rect x="24" y="410" width="312" height="70" rx="18" fill="#ffc93c" stroke="#14231c" stroke-width="4"/><text x="180" y="453" font-family="sans-serif" font-size="22" font-weight="700" text-anchor="middle" fill="#14231c">Collect visit</text></svg>`;
 
 /** Fictional sample rows so the dashboard can be explored without a database. */
+const choice = (probabilities: Record<string, number>) => ({ choice: Object.entries(probabilities).sort((a, b) => b[1] - a[1])[0][0], probabilities });
+
+/** Sample model checks so the dashboard shows each decision without a database. */
+function demoModeration(index: number, checkedAt: string): Partial<ParkProposalRecord> {
+  const base = { version: 1 as const, checkedAt, model: "openai/gpt-6-luna-decisions", threshold: 0.8, reasons: [] as string[], nearby: [] as { id: string; name: string; distanceM: number; overlaps: boolean }[] };
+  if (index === 0) {
+    return {
+      osm: { type: "relation", id: 2_093_447 },
+      decision: "unsure",
+      publishedParkId: null,
+      decidedAt: checkedAt,
+      moderation: {
+        ...base,
+        answers: {
+          park: choice({ approve: 0.72, reject: 0.06, unsure: 0.22 }),
+          name: choice({ match: 0.91, mismatch: 0.03, unsure: 0.06 }),
+          duplicate: choice({ new: 0.84, duplicate: 0.1, unsure: 0.06 }),
+        },
+        reasons: ["Not clearly a public park."],
+        osm: { type: "relation", id: 2_093_447, name: "Swan Lake Christmas Hill Nature Sanctuary", kind: "leisure=nature_reserve", areaM2: 437_000, distanceM: 0, containsPin: true },
+        nearby: [{ id: "beacon-hill-park", name: "Beacon Hill Park", distanceM: 5_900, overlaps: false }],
+      },
+    };
+  }
+  if (index === 1) {
+    return { osm: null, decision: "skipped", publishedParkId: null, decidedAt: checkedAt, moderation: { ...base, model: null, threshold: null, answers: null, osm: null, reasons: ["No OpenStreetMap outline was chosen."] } };
+  }
+  if (index === 2) {
+    return {
+      osm: { type: "way", id: 24_420_117 },
+      decision: "rejected",
+      publishedParkId: null,
+      decidedAt: checkedAt,
+      moderation: {
+        ...base,
+        answers: {
+          park: choice({ approve: 0.2, reject: 0.7, unsure: 0.1 }),
+          name: choice({ match: 0.88, mismatch: 0.04, unsure: 0.08 }),
+          duplicate: choice({ new: 0.9, duplicate: 0.05, unsure: 0.05 }),
+        },
+        reasons: ["The model judged this is not a public park."],
+        osm: { type: "way", id: 24_420_117, name: "Playfair Park", kind: "leisure=park", areaM2: 38_000, distanceM: 12, containsPin: false },
+      },
+    };
+  }
+  return {
+    osm: { type: "way", id: 31_337_001 },
+    decision: "approved",
+    publishedParkId: "osm-way-31337001",
+    decidedAt: checkedAt,
+    moderation: {
+      ...base,
+      answers: {
+        park: choice({ approve: 0.95, reject: 0.02, unsure: 0.03 }),
+        name: choice({ match: 0.93, mismatch: 0.02, unsure: 0.05 }),
+        duplicate: choice({ new: 0.91, duplicate: 0.04, unsure: 0.05 }),
+      },
+      osm: { type: "way", id: 31_337_001, name: "Haro Woods", kind: "leisure=park", areaM2: 172_000, distanceM: 0, containsPin: true },
+    },
+  };
+}
+
 export function demoDependencies(): DashboardDependencies {
   const feedback = new MemoryFeedbackStore();
   const samples: Array<[FeedbackStatus, OperatorFeedbackRecord["kind"], string, string | null, number, boolean]> = [
@@ -373,6 +435,7 @@ export function demoDependencies(): DashboardDependencies {
       status,
       createdAt,
       updatedAt: createdAt,
+      ...demoModeration(index, createdAt),
     });
   });
 
