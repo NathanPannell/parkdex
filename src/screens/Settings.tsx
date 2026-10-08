@@ -9,7 +9,7 @@ import { useAuth } from "../lib/accounts/AuthProvider";
 import { settingsAccountSubtitle } from "../lib/accounts/backupPresentation";
 
 /** App settings, separate from the account page. */
-export function Settings() {
+export function Settings({ tabbed = false }: { tabbed?: boolean }) {
   const { state, dispatch } = useStore();
   const auth = useAuth();
   const runtime = useContentRuntime();
@@ -30,17 +30,20 @@ export function Settings() {
 
   return (
     <motion.main
-      className="screen account-screen scroll"
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
+      className={tabbed ? "screen account-screen account-screen--tabbed scroll" : "screen account-screen scroll"}
+      // Tabs swap in place; pages reached from elsewhere slide in.
+      initial={tabbed ? { opacity: 0 } : { x: "100%" }}
+      animate={tabbed ? { opacity: 1 } : { x: 0 }}
+      exit={tabbed ? { opacity: 0 } : { x: "100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 34 }}
       aria-labelledby="settings-title"
     >
       <header className="account-head">
-        <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "map" })} aria-label="Back">
-          <Icon name="back" size={20} />
-        </button>
+        {!tabbed && (
+          <button className="btn btn--paper btn--icon account-back" onClick={() => dispatch({ type: "go", screen: "map" })} aria-label="Back">
+            <Icon name="back" size={20} />
+          </button>
+        )}
         <div className="account-head__title">
           <span className="eyebrow">Parkdex</span>
           <h1 id="settings-title">Settings</h1>

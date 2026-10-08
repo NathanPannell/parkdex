@@ -2,7 +2,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../accounts/AuthProvider";
 import { isNative } from "../native";
-import { fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle, type GameMe, type GamePlayer } from "./client";
+import { fetchFlags, fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle, type GameMe, type GamePlayer, type ParkFlag } from "./client";
 
 /**
  * The signed-in player's game state from `/api/game/me`. V1 is online only, so this lives
@@ -10,6 +10,17 @@ import { fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle
  */
 
 export type GameStatus = "guest" | "loading" | "ready" | "offline" | "error";
+export type FlagsStatus = "loading" | "ready" | "offline" | "error";
+
+/** Flags currently flying, with the server clock they were read against. */
+export type FlagBoard = {
+  byPark: ReadonlyMap<string, ParkFlag>;
+  /** Milliseconds to add to this device's clock to get the server's. */
+  clockOffset: number;
+};
+
+// The map refreshes flags this often while the app is in the foreground.
+const FLAG_POLL_MS = 120_000;
 
 type HandleRequest = { onDone?: (player: GamePlayer) => void };
 
@@ -20,6 +31,11 @@ type GameContextValue = {
   accountId: string | null;
   refresh: () => Promise<GameMe | null>;
   saveHandle: (handle: string) => Promise<GamePlayer>;
+  flags: FlagBoard | null;
+  flagsStatus: FlagsStatus;
+  refreshFlags: () => Promise<void>;
+  /** The server's current time, for flag ages. */
+  serverNow: () => number;
   handleRequest: HandleRequest | null;
   openHandleSheet: (request?: HandleRequest) => void;
   closeHandleSheet: () => void;
@@ -37,6 +53,50 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentAccount = useRef(accountId);
   currentAccount.current = accountId;
   const inFlight = useRef<Promise<GameMe | null> | null>(null);
+  const [flags, setFlags] = useState<FlagBoard | null>(null);
+  const [flagsStatus, setFlagsStatus] = useState<FlagsStatus>("loading");
+  const flagsInFlight = useRef<Promise<void> | null>(null);
+
+  const refreshFlags = useCallback(async () => {
+    if (flagsInFlight.current) return flagsInFlight.current;
+    const work = (async () => {
+      try {
+        const board = await fetchFlags();
+        const serverTime = Date.parse(board.serverTime);
+        setFlags({
+          byPark: new Map(board.flags.map((flag) => [flag.parkId, flag])),
+          clockOffset: Number.isFinite(serverTime) ? serverTime - Date.now() : 0,
+        });
+        setFlagsStatus("ready");
+      } catch (caught) {
+        // Online only: without a fresh answer the map shows parks without flags.
+        setFlags(null);
+        setFlagsStatus(isOfflineError(caught) ? "offline" : "error");
+      } finally {
+        flagsInFlight.current = null;
+      }
+    })();
+    flagsInFlight.current = work;
+    return work;
+  }, []);
+
+  useEffect(() => {
+    void refreshFlags();
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshFlags();
+    }, FLAG_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshFlags();
+    };
+    const onOnline = () => void refreshFlags();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [refreshFlags]);
 
   const refresh = useCallback(async () => {
     const owner = currentAccount.current;
@@ -113,10 +173,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     accountId,
     refresh,
     saveHandle,
+    flags,
+    flagsStatus,
+    refreshFlags,
+    serverNow: () => Date.now() + (flags?.clockOffset ?? 0),
     handleRequest,
     openHandleSheet: (request = {}) => setHandleRequest(request),
     closeHandleSheet: () => setHandleRequest(null),
-  }), [status, me, error, accountId, refresh, saveHandle, handleRequest]);
+  }), [status, me, error, accountId, refresh, saveHandle, flags, flagsStatus, refreshFlags, handleRequest]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
