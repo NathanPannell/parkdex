@@ -193,3 +193,33 @@ test("content sync withholds a snapshot with a non-Google directions link or hal
         assert.equal(res.statusCode, 503);
     }
 });
+
+test("content sync preflights allow the app's analytics labels", async () => {
+    const res = response();
+    await createSnapshotHandler({ repository: repository() })(req({}, "OPTIONS", "https://localhost"), res);
+    assert.equal(res.statusCode, 204);
+    for (const name of ["X-Kip-Installation-Id", "X-Kip-App-Version", "X-Kip-Bundle-Id"]) {
+        assert.match(res.headers.get("access-control-allow-headers") ?? "", new RegExp(name));
+    }
+});
+
+test("content sync records its repository reads under the content route", async () => {
+    const written: Array<{ route: string; installationId: string | null }> = [];
+    const pending: Promise<unknown>[] = [];
+    const { recordDbQuery } = await import("./requestContext.js");
+    const recording = { ...repository(), snapshot: async () => {
+        recordDbQuery({ operation: "read", tables: ["public.parks"], durationMs: 1, result: "ok", startedAt: Date.now() });
+        return snapshot;
+    } };
+    const handler = createSnapshotHandler({
+        repository: recording,
+        analytics: () => ({ async write(context) { written.push(context); } }),
+        waitUntil: (promise) => { pending.push(promise); },
+    });
+    const request = { method: "GET", query: {}, headers: { "x-kip-installation-id": "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b" } };
+    await handler(request, response());
+    await Promise.all(pending);
+    assert.equal(written.length, 1);
+    assert.equal(written[0].route, "GET /api/content/snapshot");
+    assert.equal(written[0].installationId, "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a7633b");
+});
