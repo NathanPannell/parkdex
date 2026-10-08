@@ -629,5 +629,36 @@ class AccountReleaseGates(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
 
 
+class MigrationLockRetry(unittest.TestCase):
+    url = "postgresql://kip:secret@ep-test.us-west-2.aws.neon.tech/parkdex_kip"
+
+    def migrate(self, outcomes):
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(kwargs["env"].get("PGOPTIONS"))
+            outcome = outcomes.pop(0)
+            if outcome:
+                raise delivery.DeliveryError(f"database migration x.sql failed with exit code 3: {outcome}")
+            return ""
+
+        with patch.object(delivery, "run", side_effect=fake_run), \
+             patch.object(delivery, "psql_executable", return_value="psql"):
+            delivery.run_migration(self.url, delivery.ROOT / "x.sql", sleep=lambda seconds: None)
+        return calls
+
+    def test_retries_a_deadlock_then_succeeds_with_a_lock_timeout(self):
+        calls = self.migrate(["ERROR:  deadlock detected", "ERROR:  canceling statement due to lock timeout", None])
+        self.assertEqual(calls, ["-c lock_timeout=5s"] * 3)
+
+    def test_other_errors_fail_immediately(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "syntax error"):
+            self.migrate(["ERROR:  syntax error at or near", None])
+
+    def test_gives_up_after_the_last_attempt(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "deadlock"):
+            self.migrate(["ERROR:  deadlock detected"] * delivery.MIGRATION_ATTEMPTS)
+
+
 if __name__ == "__main__":
     unittest.main()
