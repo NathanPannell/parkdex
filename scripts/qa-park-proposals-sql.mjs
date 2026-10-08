@@ -1,12 +1,22 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { applyMigration, dbUrl, pool } from './qa-postgres-adapter.mjs';
-import { createNeonParkProposalStore } from '../worker/parkProposals.ts';
-import { createSqlProposalReviewStore, neonSqlRunner, reviewProposal } from '../worker/proposalReview.ts';
+import pg from 'pg';
 
 // Park proposal moderation and instant publish against real content triggers: the migration,
 // the proposal store, and the draft publish transaction with the proposal's acceptance.
+// Content triggers check every park, and other SQL QA in the shared database adds parks
+// without boundaries, so this runs in its own throwaway kip_qa_ database.
+const shared = process.env.PGDATABASE;
+assert.ok(shared?.startsWith('kip_qa_') || shared === 'kip_accounts_qa', 'SQL QA requires a dedicated kip_qa_ database');
+const owned = `kip_qa_proposals_${randomBytes(8).toString('hex')}`;
+const admin = new pg.Client({ host: process.env.PGHOST, port: Number(process.env.PGPORT), user: process.env.PGUSER, password: process.env.PGPASSWORD, database: shared });
+await admin.connect();
+await admin.query(`CREATE DATABASE "${owned}"`);
+process.env.PGDATABASE = owned;
+const { applyMigration, dbUrl, pool } = await import('./qa-postgres-adapter.mjs');
+const { createNeonParkProposalStore } = await import('../worker/parkProposals.ts');
+const { createSqlProposalReviewStore, neonSqlRunner, reviewProposal } = await import('../worker/proposalReview.ts');
 const migration = (name) => fileURLToPath(new URL(`../database/${name}`, import.meta.url));
 const log = (name) => process.stdout.write(`${name}: PASS\n`);
 const osmId = 900_000_000 + Math.floor(Math.random() * 99_000_000);
@@ -29,7 +39,6 @@ const APPROVE = {
 };
 const proposals = createNeonParkProposalStore(dbUrl);
 const review = createSqlProposalReviewStore(neonSqlRunner(dbUrl));
-const created = [];
 
 function deps(answers = APPROVE) {
   let calls = 0;
@@ -50,7 +59,6 @@ function deps(answers = APPROVE) {
 
 async function propose(name, osm, point = [-123.1985, 48.9005]) {
   const id = randomUUID();
-  created.push(id);
   const proposal = { submissionId: randomUUID(), name, note: 'QA', point, outline: null, osm, context: {} };
   const result = await proposals.save({ id, payloadHash: 'a'.repeat(64), ipHash: randomUUID().replaceAll('-', '').padEnd(64, '0'), proposal });
   assert.equal(result.status, 'created');
@@ -133,8 +141,7 @@ try {
   assert.equal((await pool.query('SELECT count(*)::int AS count FROM public.parks WHERE id = $1', [`osm-relation-${osmId + 1}`])).rows[0].count, 0);
   log('unsure proposals keep their answers and publish nothing');
 } finally {
-  await pool.query('DELETE FROM public.parks WHERE id = $1', [parkId]).catch(() => undefined);
-  await pool.query('DELETE FROM kip_park_drafts.drafts WHERE id = $1', [parkId]).catch(() => undefined);
-  if (created.length) await pool.query('DELETE FROM kip_proposals.parks WHERE id = ANY($1::uuid[])', [created]).catch(() => undefined);
   await pool.end();
+  await admin.query(`DROP DATABASE IF EXISTS "${owned}"`);
+  await admin.end();
 }
