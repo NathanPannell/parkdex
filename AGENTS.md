@@ -128,3 +128,4 @@ Read the matching file before you change these areas. Format and how to add one:
 | Access surveys and product journeys | `docs/learnings/access-fieldwork-wording.md` |
 | Status answers and planning | `docs/learnings/fetch-before-describing-state.md` |
 | Deploy migrations | `docs/learnings/migration-replay-lock-conflicts.md` |
+| Previews for PRs that add a migration | `docs/learnings/preview-new-migrations.md` |
