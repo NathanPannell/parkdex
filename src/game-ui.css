@@ -1,0 +1,287 @@
+/* Shared look and motion for the flag game screens (UI pass, #98). Kept apart from game.css so
+   the screens, onboarding and the planting scene can change independently. */
+
+/* ---------- Flags that wave at rest ---------- */
+
+@keyframes flag-cloth-wave {
+  0%,
+  100% {
+    transform: skewY(0deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(-3.5deg) scaleX(0.96);
+  }
+}
+
+.flag.is-waving svg {
+  transform-origin: left center;
+  animation: flag-cloth-wave 2.6s ease-in-out infinite;
+}
+
+/* On a pole the pole stays put; only the cloth group sways a little. */
+.flag-pin.is-waving-pin svg {
+  transform-origin: 17% 100%;
+  animation: flag-pin-sway 3.2s ease-in-out infinite;
+}
+
+@keyframes flag-pin-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-2.5deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flag.is-waving svg,
+  .flag-pin.is-waving-pin svg {
+    animation: none;
+  }
+}
+
+/* ---------- Your parks ---------- */
+
+.account-card.game-score {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.game-score__rays {
+  position: absolute;
+  z-index: -1;
+  inset: -60%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.35) 0deg 10deg, transparent 10deg 24deg);
+  animation: game-rays 40s linear infinite;
+}
+
+@keyframes game-rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-score__rays {
+    animation: none;
+  }
+}
+
+.game-row.is-top {
+  background: linear-gradient(90deg, #fff4cf, var(--paper) 70%);
+  border-color: var(--ink);
+}
+
+.game-row__days {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.game-row__days strong {
+  font-family: var(--display);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.game-row__days > span {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* ---------- Leaderboard podium ---------- */
+
+.game-podium {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  align-items: end;
+  gap: 8px;
+  padding: 6px 4px 0;
+}
+
+.game-podium__spot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.game-podium__flag {
+  margin-bottom: 2px;
+}
+
+.game-podium__handle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.game-podium__score {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.game-podium__block {
+  display: grid;
+  place-items: start center;
+  width: 100%;
+  padding-top: 6px;
+  overflow: hidden;
+  border: 2.5px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  box-shadow: inset 0 -6px 0 rgba(20, 35, 28, 0.12);
+}
+
+.game-podium__block--1 {
+  background: var(--sun);
+}
+
+.game-podium__block--2 {
+  background: #dfe6ee;
+}
+
+.game-podium__block--3 {
+  background: #f1c9a0;
+}
+
+.game-podium__spot.is-me .game-podium__handle {
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--ink);
+  color: var(--sun);
+}
+
+/* ---------- Takeover messages ---------- */
+
+.takeover-row__go {
+  flex: none;
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* ---------- Settings ---------- */
+
+.account-card.settings-flag {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  color: var(--ink);
+  background: linear-gradient(120deg, #fff1b8, var(--paper) 65%);
+}
+
+.settings-flag__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-flag__text strong {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.settings-flag__text span {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Map ---------- */
+
+.counter {
+  position: relative;
+}
+
+.score-chip__bump {
+  position: absolute;
+  left: 46px;
+  top: -6px;
+  padding: 2px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--sun);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.flags-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  translate: none;
+}
+
+/* Park sheet holder row: colour says whose park it is at a glance. */
+.park-sheet__holder.is-mine {
+  background: linear-gradient(90deg, #fff1b8, #fff 75%);
+}
+
+.park-sheet__holder.is-other {
+  background: linear-gradient(90deg, #ffe0e7, #fff 75%);
+}
+
+.park-sheet__holder.is-empty {
+  border-style: dashed;
+}
+
+.park-sheet__bounty {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--sun);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Nearby cards for your own parks wear a gold ring. */
+.nearby__card.is-mine {
+  box-shadow: 0 0 0 3px var(--sun), var(--pop);
+}
+
+/* The text block stays a column when a bounty chip follows it. */
+.park-sheet__holder > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.takeover-row > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

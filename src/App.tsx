@@ -7,6 +7,7 @@ import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
 import { GameProvider, useGame } from "./lib/game/GameProvider";
 import { HandleSheet } from "./screens/HandleSheet";
+import "./game-ui.css";
 import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
