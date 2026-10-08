@@ -24,6 +24,9 @@ await esbuild({
   conditions: ["worker", "browser"],
   // Worker modules import the database driver from outside this folder.
   nodePaths: [path.join(root, "node_modules")],
+  // worker/db.ts records queries per request with AsyncLocalStorage, which the Edge runtime
+  // provides as node:async_hooks; leave it to the runtime instead of bundling it.
+  external: ["node:async_hooks"],
   define: { "process.env.NODE_ENV": '"production"' },
   legalComments: "none",
   logLevel: "warning",

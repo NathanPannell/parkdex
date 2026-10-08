@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { database } from "./db.js";
 import { distanceToMultiPolygon, interiorPoint, pointInMultiPolygon, type MultiPolygon, type OsmClient, type OsmFeature, type OsmRef } from "./osmParks.js";
 import { FALLBACK_REGION, osmParkId, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
 import { HttpError } from "./validation.js";
@@ -173,8 +173,9 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
   };
 }
 
-export function neonSqlRunner(databaseUrl: string): SqlRunner {
-  const sql = neon(databaseUrl);
+/** Every query goes through database() so it is recorded like the rest of the API. */
+export function databaseSqlRunner(databaseUrl: string): SqlRunner {
+  const sql = database(databaseUrl);
   return {
     query: (text, params = []) => sql.query(text, params) as Promise<Record<string, unknown>[]>,
     transaction: (statements) => sql.transaction(statements.map(({ text, params }) => sql.query(text, params))) as Promise<Record<string, unknown>[][]>,
@@ -291,7 +292,7 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     return { decision: "approved", parkId: published.parkId, parkName: park.name };
   } catch (error) {
     // Keep database detail out of the stored record; the guard name is enough to act on.
-    const guard = error instanceof Error ? /park_exists|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;
+    const guard = error instanceof Error ? /park_exists|park_incomplete|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;
     record.publishError = guard ? `Publishing was rolled back (${guard}).` : "Publishing failed.";
     await deps.store.record(proposal.id, "approved", record).catch(() => undefined);
     return { decision: "pending" };

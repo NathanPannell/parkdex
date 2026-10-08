@@ -3,7 +3,7 @@ import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDeliv
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
 import { createOsmClient, type OsmClient, type OverpassEnv } from "../../worker/osmParks.js";
-import { createSqlProposalReviewStore, neonSqlRunner, publishProposalByOperator, type ProposalReviewStore } from "../../worker/proposalReview.js";
+import { createSqlProposalReviewStore, databaseSqlRunner, publishProposalByOperator, type ProposalReviewStore } from "../../worker/proposalReview.js";
 import { HttpError, readJsonBody, validateRetryBody, validateStatus } from "../../worker/validation.js";
 import { neon } from "@neondatabase/serverless";
 import type { BadgeEnv } from "./badges.js";
@@ -308,7 +308,7 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
         // Apps read build config from production only, so it never follows the database toggle.
         await routeBuilds(request, path, () => dependencies.appConfigStore?.(baseEnv) ?? createNeonAppConfigStore(databaseUrl(baseEnv))) ??
         await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)), () => ({
-          review: dependencies.proposalReviewStore?.(env) ?? createSqlProposalReviewStore(neonSqlRunner(databaseUrl(env))),
+          review: dependencies.proposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(databaseUrl(env))),
           osm: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined),
         })) ??
         await routeParks(request, path, {

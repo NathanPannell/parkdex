@@ -209,7 +209,7 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
  * per client every 10 minutes keeps Parkdex well inside the Overpass usage policy.
  */
 export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: string) => Promise<boolean> {
-  const sql = neon(databaseUrl);
+  const sql = database(databaseUrl);
   return async (subjectHash) => {
     const rows = await sql`
       INSERT INTO kip_proposals.rate_limits (subject_hash, window_started_at, hit_count)

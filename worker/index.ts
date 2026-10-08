@@ -9,7 +9,7 @@ import { deleteAccountData, handleProgressRequest, type ProgressDependencies, ty
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
-import { approveThreshold, createSqlProposalReviewStore, neonSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
+import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
 import { createProposalModerator } from "./proposalModeration.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
@@ -372,7 +372,7 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       return createNeonParkProposalStore(env.DATABASE_URL);
     },
     review: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (proposal) => reviewProposal(proposal, {
-      store: dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(neonSqlRunner(env.DATABASE_URL!)),
+      store: dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!)),
       osm: dependencies.osmClient!,
       moderate: dependencies.proposalModerator === undefined
         ? createProposalModerator(env, dependencies.fetch, PROPOSAL_MODERATION_TIMEOUT_MS)

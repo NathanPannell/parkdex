@@ -16,7 +16,7 @@ await admin.query(`CREATE DATABASE "${owned}"`);
 process.env.PGDATABASE = owned;
 const { applyMigration, dbUrl, pool } = await import('./qa-postgres-adapter.mjs');
 const { createNeonParkProposalStore } = await import('../worker/parkProposals.ts');
-const { createSqlProposalReviewStore, neonSqlRunner, reviewProposal } = await import('../worker/proposalReview.ts');
+const { createSqlProposalReviewStore, databaseSqlRunner, reviewProposal } = await import('../worker/proposalReview.ts');
 const migration = (name) => fileURLToPath(new URL(`../database/${name}`, import.meta.url));
 const log = (name) => process.stdout.write(`${name}: PASS\n`);
 const osmId = 900_000_000 + Math.floor(Math.random() * 99_000_000);
@@ -38,7 +38,7 @@ const APPROVE = {
   duplicate: { choice: 'new', probabilities: { new: 0.9, duplicate: 0.05, unsure: 0.05 } },
 };
 const proposals = createNeonParkProposalStore(dbUrl);
-const review = createSqlProposalReviewStore(neonSqlRunner(dbUrl));
+const review = createSqlProposalReviewStore(databaseSqlRunner(dbUrl));
 
 function deps(answers = APPROVE) {
   let calls = 0;
