@@ -163,6 +163,45 @@ test("staging and main channel pointers use short cache headers and allow only G
   }
 });
 
+test("app bundle pointers use short cache headers and allow only GET or HEAD", async () => {
+  for (const channel of ["staging", "production"]) {
+    const url = "https://kip-assets.parkdex.app/app-bundles/channels/" + channel + "/current.json";
+    const get = await request(url);
+    assert.equal(get.result.status, 200);
+    assert.equal(get.calls[0].key, "app-bundles/channels/" + channel + "/current.json");
+    assert.equal(get.result.headers.get("Content-Type"), "application/json; charset=utf-8");
+    assert.equal(get.result.headers.get("Cache-Control"), "public, max-age=60, s-maxage=60");
+
+    for (const method of ["PUT", "POST", "DELETE"]) {
+      const denied = await request(url, { method });
+      assert.equal(denied.result.status, 405);
+      assert.equal(denied.calls.length, 0);
+    }
+  }
+});
+
+test("app bundles are immutable SHA-256 keys and nothing else under app-bundles is served", async () => {
+  const sha = "b".repeat(64);
+  const bundle = await request("https://kip-assets.parkdex.app/app-bundles/" + sha + ".zip", {}, harness(makeObject("zip bytes", { "Content-Type": "application/zip" })));
+  assert.equal(bundle.result.status, 200);
+  assert.equal(bundle.calls[0].key, "app-bundles/" + sha + ".zip");
+  assert.equal(bundle.result.headers.get("Content-Type"), "application/zip");
+  assert.equal(bundle.result.headers.get("Cache-Control"), "public, max-age=31536000, immutable");
+
+  for (const path of [
+    "/app-bundles/" + "B".repeat(64) + ".zip",
+    "/app-bundles/" + sha,
+    "/app-bundles/" + sha + ".zip/extra",
+    "/app-bundles/channels/main/current.json",
+    "/app-bundles/channels/staging/other.json",
+    "/app-bundles/" + sha + "%2Ezip",
+  ]) {
+    const invalid = await request("https://kip-assets.parkdex.app" + path);
+    assert.equal(invalid.result.status, 404, path);
+    assert.equal(invalid.calls.length, 0, path);
+  }
+});
+
 test("preview and malformed channel paths are not R2 keys", async () => {
   for (const path of [
     "/channels/preview/current.json",
