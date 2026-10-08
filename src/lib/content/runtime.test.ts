@@ -1847,6 +1847,28 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.assetUrls.get(sceneFile.path)).toBe(`content-store://${sceneFile.sha256}`));
   });
 
+  it("fetches no badge art near the visitor or for claims when the build does not show it", async () => {
+    const release = await makeRelease("f".repeat(64), 1, "municipal-hidden-art-park", "scene-hidden-art");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-hidden-art.webp")!;
+    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const runtime = track(createContentRuntime({
+      store: new MemoryContentStore(),
+      fetch: server.fetcher,
+      apiUrl: "https://parkdex.example.test/api/content/current",
+      environment: "staging",
+      claimedParkIds: () => [release.park.id],
+      connectivity: { connected: true, wifi: true },
+      badgeArt: false,
+    }));
+    await runtime.start();
+    runtime.setLocation([release.park.lng + 0.01, release.park.lat]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(runtime.getStatus().snapshot?.parks.map((park) => park.id)).toEqual([release.park.id]);
+    expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
+    expect(server.calls).not.toContain(sceneFile.url);
+  });
+
   it("saves one park's art on request for a claim", async () => {
     const release = await makeRelease("e".repeat(64), 1, "municipal-claim-art-park", "scene-claim-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-claim-art.webp")!;

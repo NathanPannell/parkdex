@@ -240,6 +240,8 @@ export type ContentRuntimeOptions = {
   now?: () => number;
   /** A map pointer this build uses in place of the server's (see BUILD_MAP_POINTER). */
   mapPointer?: ContentMapPointer;
+  /** False when nothing shows badge art, so no scene file is required or fetched near the visitor. */
+  badgeArt?: boolean;
 };
 
 /**

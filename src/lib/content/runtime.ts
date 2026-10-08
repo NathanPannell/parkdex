@@ -1101,7 +1101,7 @@ class ContentRuntimeController implements ContentRuntime {
     const near = this.currentLocation;
     const wanted = new Set<string>();
     for (const park of state.parks) {
-      if (!park.scene) continue;
+      if (!park.scene || this.options.badgeArt === false) continue;
       if (claimed.has(park.id) || (near && distanceKm(near, [park.lng, park.lat]) <= NEARBY_ART_KM)) {
         wanted.add(`${SCENE_PREFIX}${park.scene}.webp`);
       }
