@@ -7,13 +7,15 @@ import { HttpError } from "./validation.js";
  * Usage policy: https://dev.overpass-api.de/overpass-doc/en/preface/commons.html
  */
 
-export const DEFAULT_OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+/** Tried in order; a busy or slow instance hands the request to the next. */
+export const DEFAULT_OVERPASS_URLS = ["https://overpass.private.coffee/api/interpreter", "https://overpass-api.de/api/interpreter"] as const;
 export const OSM_USER_AGENT = "Parkdex/1.0 (+https://parkdex.app; park proposals)";
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors";
 const SEARCH_RADIUS_M = 250;
 const MAX_CANDIDATES = 6;
 const MAX_BBOX_DIAGONAL_M = 20_000;
-const REQUEST_TIMEOUT_MS = 10_000;
+// Two attempts must fit in the function's time with the database work around them.
+const REQUEST_TIMEOUT_MS = 5_000;
 const CACHE_MS = 10 * 60 * 1000;
 const CACHE_ENTRIES = 200;
 const MAX_CONCURRENT = 2;
@@ -301,8 +303,26 @@ out geom qt;`;
 }
 
 export interface OverpassEnv {
+  /** Comma-separated endpoints, tried in order. */
+  OVERPASS_URLS?: string;
+  /** A single endpoint, kept for older configuration. OVERPASS_URLS wins when both are set. */
   OVERPASS_URL?: string;
 }
+
+/** The configured Overpass endpoints: OVERPASS_URLS, else OVERPASS_URL, else the defaults. Only https URLs count. */
+export function overpassEndpoints(env: OverpassEnv): string[] {
+  const configured = (env.OVERPASS_URLS ?? env.OVERPASS_URL ?? "").split(",").map((value) => value.trim()).filter((value) => {
+    try {
+      return new URL(value).protocol === "https:";
+    } catch {
+      return false;
+    }
+  });
+  return configured.length ? [...new Set(configured)] : [...DEFAULT_OVERPASS_URLS];
+}
+
+/** Worth trying the next endpoint: timeouts, network errors, 429, 5xx, unreadable answers and Overpass runtime errors. */
+class OverpassAttemptError extends Error {}
 
 export interface OsmClient {
   search(lat: number, lng: number): Promise<OsmCandidate[]>;
@@ -321,12 +341,11 @@ function bboxDistanceM(bounds: NonNullable<OverpassElement["bounds"]>, lat: numb
 }
 
 /** Overpass client with a short in-memory cache and at most two requests in flight per instance. */
-export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: { now?: () => number; timeoutMs?: number; retryDelayMs?: number } = {}): OsmClient {
+export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: { now?: () => number; timeoutMs?: number } = {}): OsmClient {
   const now = options.now ?? Date.now;
-  const retryDelayMs = options.retryDelayMs ?? 1_000;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const endpoint = env.OVERPASS_URL?.trim() || DEFAULT_OVERPASS_URL;
-  const cache = new Map<string, { at: number; value: unknown }>();
+  const endpoints = overpassEndpoints(env);
+  const cache = new Map<string, { at: number; value: OverpassElement[] }>();
   let active = 0;
   const waiting: (() => void)[] = [];
 
@@ -341,61 +360,64 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     }
   }
 
-  async function run(query: string): Promise<OverpassElement[]> {
-    const hit = cache.get(query);
-    if (hit && now() - hit.at < CACHE_MS) return hit.value as OverpassElement[];
-    const attempt = () => slot(async () => {
+  function attempt(endpoint: string, query: string): Promise<OverpassElement[]> {
+    return slot(async () => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let response: Response;
       try {
-        response = await fetcher(endpoint, {
-          method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": OSM_USER_AGENT },
-          body: `data=${encodeURIComponent(query)}`,
-          signal: controller.signal,
-        });
-      } catch {
-        throw new HttpError(503, "osm_unavailable", controller.signal.aborted ? "OpenStreetMap took too long to answer. Try again." : "Couldn't reach OpenStreetMap. Try again.");
+        let response: Response;
+        try {
+          response = await fetcher(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": OSM_USER_AGENT },
+            body: `data=${encodeURIComponent(query)}`,
+            signal: controller.signal,
+          });
+        } catch {
+          throw new OverpassAttemptError(controller.signal.aborted ? "timeout" : "network");
+        }
+        if (response.status === 429 || response.status >= 500) throw new OverpassAttemptError(`http ${response.status}`);
+        if (!response.ok) throw new HttpError(503, "osm_unavailable", "OpenStreetMap could not answer that search.");
+        let body: { elements?: unknown; remark?: unknown };
+        try {
+          body = await response.json() as typeof body;
+        } catch {
+          // Also covers a body cut off by the timeout.
+          throw new OverpassAttemptError("unreadable");
+        }
+        // Overpass reports its own timeouts as a remark on an otherwise successful response.
+        if (typeof body.remark === "string" && /runtime error|timed out|out of memory/i.test(body.remark)) throw new OverpassAttemptError("remark");
+        return Array.isArray(body.elements) ? body.elements as OverpassElement[] : [];
       } finally {
         clearTimeout(timer);
       }
-      if (!response.ok) throw new HttpError(503, response.status === 429 || response.status >= 500 ? "osm_busy" : "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
-      let body: { elements?: unknown; remark?: unknown };
-      try {
-        body = await response.json() as typeof body;
-      } catch {
-        throw new HttpError(503, "osm_unavailable", "OpenStreetMap sent an unreadable answer. Try again.");
-      }
-      // Overpass reports its own timeouts as a remark on an otherwise successful response.
-      if (typeof body.remark === "string" && /runtime error|timed out|out of memory/i.test(body.remark)) {
-        throw new HttpError(503, "osm_busy", "OpenStreetMap took too long to answer. Try again.");
-      }
-      return Array.isArray(body.elements) ? body.elements as OverpassElement[] : [];
     });
-    let elements: OverpassElement[];
-    try {
-      elements = await attempt();
-    } catch (error) {
-      // The public instance often turns a request away while busy; one quick retry usually lands.
-      if (!(error instanceof HttpError) || error.code !== "osm_busy") throw error;
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+
+  /** Runs the query on the first endpoint that answers, starting with `first`, and reports which one did. */
+  async function run(query: string, first = endpoints[0]): Promise<{ elements: OverpassElement[]; endpoint: string }> {
+    const hit = cache.get(query);
+    if (hit && now() - hit.at < CACHE_MS) return { elements: hit.value, endpoint: first };
+    const order = [first, ...endpoints.filter((endpoint) => endpoint !== first)];
+    for (const endpoint of order) {
       try {
-        elements = await attempt();
-      } catch (retryError) {
-        throw retryError instanceof HttpError ? new HttpError(503, "osm_unavailable", retryError.message) : retryError;
+        const elements = await attempt(endpoint, query);
+        if (cache.size >= CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+        cache.set(query, { at: now(), value: elements });
+        return { elements, endpoint };
+      } catch (error) {
+        if (!(error instanceof OverpassAttemptError)) throw error;
       }
     }
-    if (cache.size >= CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-    cache.set(query, { at: now(), value: elements });
-    return elements;
+    throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
   }
 
   return {
     async search(lat, lng) {
       // About 10 m of rounding lets nearby retries share the cache.
       const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
-      const summaries = (await run(searchQuery(rlat, rlng)))
+      const found = await run(searchQuery(rlat, rlng));
+      const summaries = found.elements
         .filter((element) => (element.type === "way" || element.type === "relation") && element.bounds && parkKind(element.tags ?? {}) && publicPlace(element.tags ?? {}))
         .filter((element) => bboxDiagonalM(element.bounds!) <= MAX_BBOX_DIAGONAL_M);
       const unique = [...new Map(summaries.map((element) => [`${element.type}/${element.id}`, element])).values()]
@@ -403,8 +425,9 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
         .slice(0, MAX_CANDIDATES);
       if (!unique.length) return [];
       const pin: Position = [lng, lat];
-      const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))));
-      return detailed
+      // The instance that answered the search has the same data, so ask it for the geometry first.
+      const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
+      return detailed.elements
         .map((element) => featureFrom(element, 3))
         .filter((feature): feature is OsmFeature => feature !== null)
         .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
@@ -412,7 +435,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
         .sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
     },
     async feature(ref) {
-      const [element] = (await run(geometryQuery([ref]))).filter((item) => item.type === ref.type && item.id === ref.id);
+      const [element] = (await run(geometryQuery([ref]))).elements.filter((item) => item.type === ref.type && item.id === ref.id);
       // About 1 m keeps the boundary faithful for check-ins while trimming redundant nodes.
       return element ? featureFrom(element, 1) : null;
     },

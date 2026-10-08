@@ -4,6 +4,8 @@ import { createFeedbackWorker } from "./index.ts";
 import {
   assembleRings,
   createOsmClient,
+  DEFAULT_OVERPASS_URLS,
+  overpassEndpoints,
   distanceToMultiPolygon,
   multiPolygonArea,
   OSM_USER_AGENT,
@@ -112,31 +114,63 @@ test("a slow Overpass answer times out cleanly", async () => {
   await assert.rejects(client.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
 });
 
-test("Overpass runtime errors and busy responses become a retryable 503 after one retry", async () => {
-  const calls: Call[] = [];
-  const remark = createOsmClient({}, overpass(() => ({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 10 seconds." }), calls), { retryDelayMs: 0 });
-  await assert.rejects(remark.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
-  assert.equal(calls.length, 2);
-  let busyCalls = 0;
-  const busy = createOsmClient({}, (async () => {
-    busyCalls += 1;
-    return new Response("Too many requests", { status: 429 });
-  }) as typeof fetch, { retryDelayMs: 0 });
-  await assert.rejects(busy.search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
-  assert.equal(busyCalls, 2);
+const FIRST = "https://overpass.first.test/api/interpreter";
+const SECOND = "https://overpass.second.test/api/interpreter";
+const TWO = { OVERPASS_URLS: `${FIRST}, ${SECOND}` };
+
+/** Records which endpoint each request went to; `first` decides how the first endpoint fails. */
+function failover(first: "timeout" | "504" | "429" | "remark" | "ok") {
+  const urls: string[] = [];
+  const good = overpass(parkFixture);
+  const fetcher = ((url: string, init?: RequestInit) => {
+    urls.push(String(url));
+    if (String(url) === FIRST && first !== "ok") {
+      if (first === "timeout") {
+        return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+      }
+      if (first === "remark") return Promise.resolve(new Response(JSON.stringify({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 10 seconds." })));
+      return Promise.resolve(new Response("<html>busy</html>", { status: first === "504" ? 504 : 429 }));
+    }
+    return good(url, init);
+  }) as unknown as typeof fetch;
+  return { urls, fetcher };
+}
+
+for (const failure of ["timeout", "504", "429", "remark"] as const) {
+  test(`a first endpoint that fails with ${failure} hands the search to the next, which also answers the geometry`, async () => {
+    const { urls, fetcher } = failover(failure);
+    const parks = await createOsmClient(TWO, fetcher, { timeoutMs: 30 }).search(48.451, -123.359);
+    assert.equal(parks.length, 2);
+    assert.deepEqual(urls, [FIRST, SECOND, SECOND]);
+  });
+}
+
+test("a healthy first endpoint answers both the search and the geometry", async () => {
+  const { urls, fetcher } = failover("ok");
+  await createOsmClient(TWO, fetcher).search(48.451, -123.359);
+  assert.deepEqual(urls, [FIRST, FIRST]);
 });
 
-test("a busy answer followed by a good one succeeds", async () => {
-  let first = true;
-  const flaky = (async (url: string, init?: RequestInit) => {
-    if (first) {
-      first = false;
-      return new Response("<html>dispatcher timeout</html>", { status: 504 });
-    }
-    return overpass(parkFixture)(url, init);
-  }) as typeof fetch;
-  const parks = await createOsmClient({}, flaky, { retryDelayMs: 0 }).search(48.451, -123.359);
-  assert.equal(parks.length, 2);
+test("when every endpoint fails the search is a clean 503 after one try each", async () => {
+  const urls: string[] = [];
+  const busy = (async (url: string) => {
+    urls.push(String(url));
+    return new Response("Too many requests", { status: 429 });
+  }) as unknown as typeof fetch;
+  await assert.rejects(createOsmClient(TWO, busy).search(48.45, -123.36), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
+  assert.deepEqual(urls, [FIRST, SECOND]);
+  const remarkCalls: Call[] = [];
+  const remark = createOsmClient(TWO, overpass(() => ({ elements: [], remark: "runtime error: out of memory" }), remarkCalls));
+  await assert.rejects(remark.feature({ type: "way", id: 1 }), (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
+  assert.equal(remarkCalls.length, 2);
+});
+
+test("endpoints come from OVERPASS_URLS, then OVERPASS_URL, then the defaults", () => {
+  assert.deepEqual(overpassEndpoints({}), [...DEFAULT_OVERPASS_URLS]);
+  assert.equal(DEFAULT_OVERPASS_URLS[0], "https://overpass.private.coffee/api/interpreter");
+  assert.deepEqual(overpassEndpoints({ OVERPASS_URL: FIRST }), [FIRST]);
+  assert.deepEqual(overpassEndpoints({ OVERPASS_URLS: ` ${SECOND},${FIRST},${SECOND}`, OVERPASS_URL: "https://ignored.test/" }), [SECOND, FIRST]);
+  assert.deepEqual(overpassEndpoints({ OVERPASS_URLS: "http://insecure.test/api, not a url" }), [...DEFAULT_OVERPASS_URLS]);
 });
 
 test("repeat searches near the same spot use the cache", async () => {

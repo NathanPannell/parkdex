@@ -45,6 +45,7 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   ASSETS?: { fetch(request: Request): Promise<Response> };
   /** Park proposals: the model's approval threshold and the Overpass endpoint. */
   PARK_PROPOSAL_APPROVE_THRESHOLD?: string;
+  OVERPASS_URLS?: string;
   OVERPASS_URL?: string;
 }
 
