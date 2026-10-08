@@ -5,6 +5,8 @@ import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
+import { GameProvider, useGame } from "./lib/game/GameProvider";
+import { HandleSheet } from "./screens/HandleSheet";
 import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
@@ -25,6 +27,10 @@ import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
 import { Share } from "./screens/Share";
+import { Leaderboard } from "./screens/Leaderboard";
+import { Plant } from "./screens/Plant";
+import { TakeoverMessages } from "./screens/TakeoverSheet";
+import { YourParks } from "./screens/YourParks";
 import { Splash } from "./screens/Splash";
 
 export function App() {
@@ -32,12 +38,14 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
-        <StoreProvider>
-          <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
-            <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
-          </div>
-          <UpdateGate status={updateStatus} />
-        </StoreProvider>
+        <GameProvider>
+          <StoreProvider>
+            <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
+              <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+            </div>
+            <UpdateGate status={updateStatus} />
+          </StoreProvider>
+        </GameProvider>
       </AuthProvider>
     </MotionConfig>
   );
@@ -50,7 +58,7 @@ function Stage() {
       <div className="stage">
         <aside className="stage-note">
           <h1>Parkdex</h1>
-          <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary, snap a photo, claim the badge, share it.</p>
+          <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary and plant your flag.</p>
           <p>
             Use the <kbd>wand</kbd> on the map for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
           </p>
@@ -113,6 +121,7 @@ function ClaimSnapshotRestorer() {
 function Screens() {
   const { state, dispatch } = useStore();
   const auth = useAuth();
+  const game = useGame();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
 
@@ -125,7 +134,7 @@ function Screens() {
 
   useEffect(() => setMuted(state.muted), [state.muted]);
   useEffect(() => {
-    if (screen !== "claim") clearConfetti();
+    if (screen !== "claim" && screen !== "plant") clearConfetti();
   }, [screen]);
 
   // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
@@ -147,14 +156,17 @@ function Screens() {
   // Android back closes the top layer first, then leaves the app from the map.
   const latest = useRef(state);
   latest.current = state;
+  const latestGame = useRef(game);
+  latestGame.current = game;
   useEffect(
     () =>
       onBackButton(() => {
         const s = latest.current;
-        if (s.feedback) dispatch({ type: "feedback", open: false });
+        if (latestGame.current.handleRequest) latestGame.current.closeHandleSheet();
+        else if (s.feedback) dispatch({ type: "feedback", open: false });
         else if (s.selectedId) dispatch({ type: "select", id: null });
-        else if (s.screen === "claim") dispatch({ type: "go", screen: "map" });
-        else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "collection" : "onboarding" });
+        else if (s.screen === "claim" || s.screen === "plant") dispatch({ type: "go", screen: "map" });
+        else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "map" : "onboarding" });
         else if (s.screen === "downloads") dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
@@ -166,8 +178,9 @@ function Screens() {
   // opening animation plays. Keep the same map instance when the splash leaves.
   const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
   // Settings pages cover the map but keep it mounted, so its camera and tiles survive.
-  const mapCovered = screen === "claim" || screen === "settings" || screen === "downloads";
-  const showNav = showMap && (screen === "map" || screen === "collection");
+  const mapCovered = screen === "claim" || screen === "plant" || screen === "settings" || screen === "downloads";
+  // Your parks, the leaderboard and settings are tabs, so the bar stays on them.
+  const showNav = showMap && (screen === "map" || screen === "parks" || screen === "collection" || screen === "leaderboard" || screen === "settings");
 
   return (
     <>
@@ -185,8 +198,10 @@ function Screens() {
         </div>
       )}
       <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
-      <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "collection" : "onboarding" })} />}</AnimatePresence>
-      <AnimatePresence>{screen === "settings" && <Settings key="settings" />}</AnimatePresence>
+      <AnimatePresence>{screen === "parks" && <YourParks key="parks" />}</AnimatePresence>
+      <AnimatePresence>{screen === "leaderboard" && <Leaderboard key="leaderboard" />}</AnimatePresence>
+      <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}</AnimatePresence>
+      <AnimatePresence>{screen === "settings" && <Settings key="settings" tabbed />}</AnimatePresence>
       <AnimatePresence>{screen === "downloads" && <ManageDownloads key="downloads" />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
       <Presence>
@@ -203,9 +218,12 @@ function Screens() {
       <AnimatePresence>
         {screen === "camera" && <Camera key="camera" />}
         {screen === "claim" && <Claim key="claim" />}
+        {screen === "plant" && <Plant key="plant" />}
         {screen === "share" && <Share key="share" />}
       </AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
+      <TakeoverMessages allowed={state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard")} />
+      <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
     </>

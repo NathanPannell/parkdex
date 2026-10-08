@@ -984,11 +984,26 @@ def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> li
     ]
 
 
-def run_migration(database_url: str, migration: Path) -> None:
+MIGRATION_ATTEMPTS = 4
+MIGRATION_LOCK_CONFLICT = re.compile(r"deadlock detected|canceling statement due to lock timeout", re.IGNORECASE)
+
+
+def run_migration(database_url: str, migration: Path, *, sleep=time.sleep) -> None:
     uri, username, password = parse_database_url(database_url)
-    env = safe_env(extra={"PGPASSWORD": password, "PGSSLMODE": "require"})
-    run([*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-1", "-f", str(migration)],
-        cwd=ROOT, env=env, label=f"database migration {migration.name}")
+    # Migrations replay on every deploy and recreate triggers on live tables. A short lock
+    # timeout fails fast instead of queueing behind traffic, and because each migration is
+    # idempotent and runs in one transaction, a lock conflict can simply be retried.
+    env = safe_env(extra={"PGPASSWORD": password, "PGSSLMODE": "require", "PGOPTIONS": "-c lock_timeout=5s"})
+    args = [*psql_args(uri, username, urllib.parse.unquote(uri.path.lstrip("/"))), "-1", "-f", str(migration)]
+    for attempt in range(1, MIGRATION_ATTEMPTS + 1):
+        try:
+            run(args, cwd=ROOT, env=env, label=f"database migration {migration.name}")
+            return
+        except DeliveryError as exc:
+            if attempt == MIGRATION_ATTEMPTS or not MIGRATION_LOCK_CONFLICT.search(str(exc)):
+                raise
+            print(f"migration-retry={migration.name} attempt={attempt} reason=lock-conflict", flush=True)
+            sleep(2 * attempt)
 
 
 def preview_psql_query(database_url: str, sql: str) -> str:

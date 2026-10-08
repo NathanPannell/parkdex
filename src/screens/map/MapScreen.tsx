@@ -6,13 +6,15 @@ import { ContentGate } from "../../components/ContentGate";
 import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
+import { Flag } from "../../components/Flag";
 import { parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
-import { badgeTotal, isLive, mapParks } from "../../lib/parks";
-import { UNAVAILABLE_ELIGIBILITY, getCollectionRankProgress, getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, type ParkRarityEligibility } from "../../lib/progression";
+import { useGame } from "../../lib/game/GameProvider";
+import { useVisit } from "../../lib/game/useVisit";
+import { flagAgeDays } from "../../lib/game/flag";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { useStore, type Screen } from "../../lib/store";
@@ -73,8 +75,18 @@ export function MapScreen() {
     return last ? { center: last, zoom: USER_ZOOM } : BC_VIEW;
   });
 
-  const { user, claims, selectedId, tripId } = state;
-  const parks = useMemo(() => mapParks(content?.parks ?? [], claims), [content?.parks, claims]);
+  const game = useGame();
+  const visit = useVisit();
+  const { user, selectedId, tripId } = state;
+  // Every park in the catalogue can carry a flag, with or without badge art.
+  const parks = useMemo(() => content?.parks ?? [], [content?.parks]);
+  const flags = game.flags?.byPark ?? null;
+  // Flag ages are counted against the server's clock as of the last flag read.
+  const flagsNow = useMemo(() => game.serverNow(), [game.flags]);
+  const flagDays = useCallback((parkId: string) => {
+    const flag = flags?.get(parkId);
+    return flag ? flagAgeDays(flag.since, flagsNow) : 0;
+  }, [flags, flagsNow]);
   const visibleFc = useMemo(() => {
     if (!bounds) return undefined;
     const ids = new Set(parks.map((park) => park.id));
@@ -82,37 +94,22 @@ export function MapScreen() {
   }, [bounds, parks]);
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
-  const rarityProgress = useMemo(() => getRarityProgress(claims, content?.parkById), [claims, content?.parkById]);
-  const eligibilityFor = useCallback((park: (typeof parks)[number]): ParkRarityEligibility => {
-    if (!state.progressReady) return UNAVAILABLE_ELIGIBILITY;
-    return getParkRarityEligibility(park, rarityProgress, !!claims[park.id]);
-  }, [claims, rarityProgress, state.progressReady]);
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
   const here = useMemo(() => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? state.accuracy ?? 0 : 0), [user, parks, bounds, state.accuracy, hasUsableGpsFix]);
-  const arrivedId = here && !claims[here.id] ? here.id : null;
+  const arrivedId = here ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
-  const claimedCount = Object.keys(claims).length;
-  const rank = state.progressReady && isRankProgressionEnabled() ? getCollectionRankProgress(rarityProgress) : null;
-  const rankLine = !rank?.rank ? "badges collected" : rank.next ? `${rank.rank.name} · ${rank.next.remaining} to rank up` : rank.rank.name;
-  const totalBadges = content ? badgeTotal(content.liveParks, Object.keys(claims)) : 0;
+  const player = game.me?.player ?? null;
 
   // Straight-line distance ranks every park, including ones without a drive estimate.
+  const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id) }), [user, visit.holderOf, flagDays]);
   const nearby = useMemo(
-    () =>
-      parks.filter((p) => !claims[p.id])
-        .map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]), eligibility: eligibilityFor(p) }))
-        .sort((a, b) => Number(b.eligibility.eligible) - Number(a.eligibility.eligible) || a.km - b.km)
-        .slice(0, 8),
-    [parks, user, claims, eligibilityFor],
+    () => parks.map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) })).sort((a, b) => a.km - b.km).slice(0, 8),
+    [parks, user],
   );
-  const nearbyItems = useMemo(() => nearby.map(({ p, km, eligibility }) => ({ park: p, km, eligibility, claimed: false })), [nearby]);
-  // Search covers every pinned park, including ones already in the Dex.
-  const searchItems = useMemo(
-    () => parks.map((p) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), eligibility: eligibilityFor(p), claimed: !!claims[p.id] })),
-    [parks, user, claims, eligibilityFor],
-  );
+  const nearbyItems = useMemo(() => nearby.map(({ p }) => listItem(p)), [nearby, listItem]);
+  const searchItems = useMemo(() => parks.map(listItem), [parks, listItem]);
 
-  // Arrival moment: celebrate once each time the visitor crosses into an unclaimed park.
+  // Arrival moment: celebrate once each time the visitor crosses into a park.
   const lastArrived = useRef<string | null>(null);
   useEffect(() => {
     if (state.screen === "splash") return;
@@ -200,6 +197,8 @@ export function MapScreen() {
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
     if (state.focusId && content) {
+      // A park opened from elsewhere, such as after a visit, does not need the arrival card again.
+      setDismissedArrival(state.focusId);
       select(state.focusId, "collection");
       dispatch({ type: "focus", id: null });
     }
@@ -294,13 +293,12 @@ export function MapScreen() {
     dispatch({ type: "move", user: point, accuracy: null });
   }
 
+  // Checking in inside a boundary is now a flag visit: plant, take or visit. Older claim
+  // screens stay in the app for history, but the check-in no longer routes into them.
   function checkIn(id: string) {
-    const park = content?.parkById.get(id);
-    if (!park || !state.progressReady || claims[id] || !eligibilityFor(park).eligible) return;
-    dispatch({ type: "trip", id });
-    dispatch({ type: "select", id: null });
-    dispatch({ type: "go", screen: "camera" });
+    if (!content?.parkById.get(id)) return;
     sfx.tap();
+    visit.start(id);
   }
 
   function openPressMenu(press: MapLongPress) {
@@ -325,9 +323,8 @@ export function MapScreen() {
       initialView={initialView}
       fc={content ? visibleFc : undefined}
       parks={content ? parks : []}
-      claims={claims}
-      rarityProgress={rarityProgress}
-      progressReady={state.progressReady}
+      flags={flags}
+      flagsNow={flagsNow}
       selectedId={content ? selectedId : null}
       tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
@@ -388,21 +385,31 @@ export function MapScreen() {
       <div className="map-top">
         <motion.button
           className="counter card"
-          onClick={() => dispatch({ type: "go", screen: "collection" })}
+          onClick={() => dispatch({ type: "go", screen: "parks" })}
           initial={{ y: -80 }}
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}
           whileTap={{ scale: 0.95 }}
+          aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your parks` : "Your parks"}
         >
           <span className="counter__kip">
-            <Kip pose="avatar" size={48} />
+            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={44} /></span> : <Kip pose="avatar" size={48} />}
           </span>
           <span className="counter__text">
-            <strong>
-              <RollingNumber value={claimedCount} />
-              <em> / {totalBadges.toLocaleString("en-CA")}</em>
-            </strong>
-            <span>{rankLine}</span>
+            {player && game.me ? (
+              <>
+                <strong>
+                  <RollingNumber value={game.me.score} />
+                  <em> {game.me.score === 1 ? "point" : "points"}</em>
+                </strong>
+                <span>@{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}</span>
+              </>
+            ) : (
+              <>
+                <strong>Plant your flag</strong>
+                <span>{visit.signedIn ? (game.me ? "Pick a handle to start" : "Go to any park") : "Sign in to play"}</span>
+              </>
+            )}
           </span>
         </motion.button>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
@@ -424,6 +431,12 @@ export function MapScreen() {
         </motion.div>
         <ContentSyncStatus />
       </div>
+
+      {(game.flagsStatus === "offline" || game.flagsStatus === "error") && !selected && (
+        <button className="flags-note card" onClick={() => void game.refreshFlags()}>
+          {game.flagsStatus === "offline" ? "Flags need a connection" : "Flags didn't load. Tap to retry"}
+        </button>
+      )}
 
       <AnimatePresence>
         {menuOpen && (
@@ -540,6 +553,8 @@ export function MapScreen() {
           <TripPanel
             key="trip"
             park={trip}
+            holder={visit.holderOf(trip.id)}
+            flagDays={flagDays(trip.id)}
             remaining={here?.id === trip.id ? { mode: "walk", km: 0, minutes: 0 } : remaining!}
             totalKm={tripStart.current?.total ?? remaining!.km}
             simulating={simulating}
@@ -557,10 +572,10 @@ export function MapScreen() {
           <ArrivalCard
             key={here.id}
             park={here}
-            eligibility={eligibilityFor(here)}
-            artComingSoon={!isLive(here)}
+            holder={visit.holderOf(here.id)}
+            flagDays={flagDays(here.id)}
+            visitLabel={visit.labelFor(here.id)}
             onCheckIn={() => checkIn(here.id)}
-            onShowRequirements={() => select(here.id, "map")}
             onDismiss={() => setDismissedArrival(here.id)}
           />
         )}
@@ -575,18 +590,15 @@ export function MapScreen() {
               park={selected}
               entryPoint={selectedEntryPoint}
               user={user}
-              claim={claims[selected.id]}
+              claim={state.claims[selected.id]}
               inside={here?.id === selected.id}
-              eligibility={eligibilityFor(selected)}
-              progressReady={state.progressReady}
+              holder={visit.holderOf(selected.id)}
+              flagDays={flagDays(selected.id)}
+              visitLabel={visit.labelFor(selected.id)}
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}
               onFeedback={() => dispatch({ type: "feedback", open: true, parkId: selected.id })}
-              onViewCase={() => {
-                dispatch({ type: "select", id: null });
-                dispatch({ type: "go", screen: "collection" });
-              }}
             />
           </>
         )}
