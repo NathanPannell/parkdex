@@ -58,9 +58,10 @@ function collection(candidates: OsmParkCandidate[], selected: string | null): Ge
   };
 }
 
-function boundsOf(candidate: OsmParkCandidate): LngLatBounds {
+function boundsOf(candidates: OsmParkCandidate[], pin: LngLat | null): LngLatBounds {
   const bounds = new LngLatBounds();
-  for (const polygon of candidate.geometry.coordinates) for (const position of polygon[0]) bounds.extend(position);
+  if (pin) bounds.extend(pin);
+  for (const candidate of candidates) for (const polygon of candidate.geometry.coordinates) for (const position of polygon[0]) bounds.extend(position);
   return bounds;
 }
 
@@ -91,6 +92,8 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
   const candidatesRef = useRef<OsmParkCandidate[]>([]);
   const autoName = useRef("");
   const nameRef = useRef(name);
+  const topCard = useRef<HTMLDivElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
   candidatesRef.current = search.candidates;
   nameRef.current = name;
   const sent = result !== null;
@@ -112,7 +115,22 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
       setName(candidate.name);
       autoName.current = candidate.name;
     }
-    mapRef.current?.fitBounds(boundsOf(candidate), { padding: { top: 110, bottom: 380, left: 36, right: 36 }, maxZoom: 17, duration: 600 });
+    showOnMap([candidate], null);
+  }
+
+  // Frames outlines in the part of the map that the top card and the sheet leave visible.
+  function showOnMap(candidates: OsmParkCandidate[], withPin: LngLat | null) {
+    const map = mapRef.current;
+    if (!map || !candidates.length) return;
+    const frame = map.getContainer().getBoundingClientRect();
+    const top = (topCard.current?.getBoundingClientRect().bottom ?? frame.top + 100) - frame.top + 16;
+    const bottom = frame.bottom - (sheet.current?.getBoundingClientRect().top ?? frame.bottom - 360) + 16;
+    if (frame.height - top - bottom < 80) return;
+    const bounds = boundsOf(candidates, withPin);
+    const corners = [map.project(bounds.getNorthWest()), map.project(bounds.getSouthEast())];
+    // Leave the map alone when everything is already in view, so moving the pin never jumps it.
+    if (corners.every((point) => point.y >= top && point.y <= frame.height - bottom && point.x >= 0 && point.x <= frame.width)) return;
+    map.fitBounds(bounds, { padding: { top, bottom, left: 32, right: 32 }, maxZoom: 17, duration: 600 });
   }
 
   // Tap the map to place or move the pin, or tap an outline to pick it.
@@ -144,6 +162,8 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
       searchOsmParks(pin, controller.signal)
         .then((candidates) => {
           setSearch({ state: "done", candidates });
+          // Let the sheet grow with the list first, then bring the outlines into view.
+          window.requestAnimationFrame(() => showOnMap(candidates, pin));
           setSelected((current) => current && candidates.some((item) => keyOf(item) === current) ? current : null);
         })
         .catch((caught: unknown) => {
@@ -313,7 +333,9 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
     ? "Trace a rough loop around the park with your finger."
     : !pin
       ? "Tap the map where the park is."
-      : search.candidates.length && !notListed
+      : picked
+        ? "Check the name, then send it."
+        : search.candidates.length && !notListed
         ? "Pick the park's outline, or tap the map to move the pin."
         : "Tap again to move the pin. Drawing an outline is optional.";
 
@@ -333,7 +355,7 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
         />
       )}
 
-      <div className="propose-top card">
+      <div className="propose-top card" ref={topCard}>
         <div>
           <span className="eyebrow">Propose a park</span>
           <p>{result ? result.decision === "approved" ? "Added to the map." : "Sent to the Parkdex team." : instruction}</p>
@@ -343,7 +365,7 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
         </button>
       </div>
 
-      <div className="propose-sheet card">
+      <div className="propose-sheet card" ref={sheet}>
         {result ? (
           <div className="propose-done" role="status">
             <Kip pose="cheer" size={84} />
