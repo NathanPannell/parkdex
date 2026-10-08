@@ -32,6 +32,25 @@ describe("onboarding install identity", () => {
     )).toBe(false);
   });
 
+  it("keeps onboarding when an over-the-air bundle changes the source build", () => {
+    expect(onboardingMatchesInstall(
+      { onboarded: true, buildId: "builtin-source-sha", packageInstallIdentity: packageInstallIdentity(installed) },
+      { buildId: "ota-source-sha", packageInstallIdentity: packageInstallIdentity(installed), native: true, overTheAir: true },
+    )).toBe(true);
+  });
+
+  it("still replays after an over-the-air bundle when the package was updated or reinstalled", () => {
+    const afterUpdate = packageInstallIdentity({ ...installed, lastUpdateTime: installed.lastUpdateTime + 1000, versionCode: 13 });
+    expect(onboardingMatchesInstall(
+      { onboarded: true, buildId: "builtin-source-sha", packageInstallIdentity: packageInstallIdentity(installed) },
+      { buildId: "ota-source-sha", packageInstallIdentity: afterUpdate, native: true, overTheAir: true },
+    )).toBe(false);
+    expect(onboardingMatchesInstall(
+      { onboarded: true, buildId: "builtin-source-sha", packageInstallIdentity: packageInstallIdentity(installed) },
+      { buildId: "ota-source-sha", packageInstallIdentity: null, native: true, overTheAir: true },
+    )).toBe(false);
+  });
+
   it("replays after an Android package update built from the same SHA", () => {
     const beforeUpdate = packageInstallIdentity(installed);
     const afterUpdate = packageInstallIdentity({ ...installed, lastUpdateTime: installed.lastUpdateTime + 1000, versionCode: 13 });

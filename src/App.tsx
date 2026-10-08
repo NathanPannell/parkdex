@@ -17,6 +17,7 @@ import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
+import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
 import { ManageDownloads } from "./screens/ManageDownloads";
 import { Settings } from "./screens/Settings";
@@ -114,6 +115,9 @@ function Screens() {
   const auth = useAuth();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
+
+  // The providers and first screen have rendered, so this bundle works and must not be rolled back.
+  useEffect(() => notifyOverTheAirReady(), []);
 
   useEffect(() => {
     if (state.startupReady && auth.pendingAction) dispatch({ type: "go", screen: "account" });
