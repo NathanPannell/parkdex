@@ -6,8 +6,10 @@ leave the content snapshot, the change feed and the CDN catalogue, and take no
 new flag game visits. See docs/park-visibility.md.
 
   plan   Read the target database and write a hash-pinned plan to hide (or
-         unhide) every park in the given categories. Parks players proposed
-         stay visible. Planning never writes.
+         unhide) the parks in the given categories, optionally only those with
+         a reader floor (--min-reader-floor). Parks players proposed stay
+         visible. Hiding also records a standing rule for parks inserted later.
+         Planning never writes.
   apply  Apply one reviewed plan in one transaction. A replay is a no-op; a
          catalogue that changed since planning needs a new plan.
 """
@@ -101,15 +103,20 @@ def read_state(cursor, categories: list[str]) -> dict[str, Any]:
     return {"revision": revision, "parks": parks, "rules": rules}
 
 
-def targets(action: str, parks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def targets(action: str, parks: list[dict[str, Any]], min_reader_floor: int | None = None) -> list[dict[str, Any]]:
     if action == "hide":
-        return [park for park in parks if park["hiddenBy"] is None and not park["playerProposal"]]
+        # With a floor, only parks served to newer readers only (such as the legacy BC import) are hidden.
+        return [park for park in parks if park["hiddenBy"] is None and not park["playerProposal"]
+                and (min_reader_floor is None or (park["minimumReader"] or 0) >= min_reader_floor)]
     # Unhide only what the category rule hid; parks an operator hid stay hidden.
     return [park for park in parks if park["hiddenBy"] == "category"]
 
 
-def build_plan(action: str, categories: list[str], reason: str | None, identity: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
-    changes = targets(action, state["parks"])
+def build_plan(action: str, categories: list[str], reason: str | None, identity: dict[str, Any], state: dict[str, Any],
+               min_reader_floor: int | None = None) -> dict[str, Any]:
+    if action != "hide" and min_reader_floor is not None:
+        raise VisibilityError("--min-reader-floor applies to hide only")
+    changes = targets(action, state["parks"], min_reader_floor)
     counts: dict[str, dict[str, int]] = {}
     for category in categories:
         in_category = [park for park in state["parks"] if park["category"] == category]
@@ -120,12 +127,17 @@ def build_plan(action: str, categories: list[str], reason: str | None, identity:
             "changeServedToReaders1And2": sum(park["minimumReader"] is None for park in chosen),
             "keptVisibleAsPlayerProposals": sum(park["playerProposal"] for park in in_category) if action == "hide" else 0,
             "alreadyHidden": sum(park["hiddenBy"] is not None for park in in_category) if action == "hide" else 0,
+            "keptVisibleBelowReaderFloor": sum(
+                park["hiddenBy"] is None and not park["playerProposal"] and (park["minimumReader"] or 0) < min_reader_floor
+                for park in in_category
+            ) if action == "hide" and min_reader_floor is not None else 0,
         }
     plan: dict[str, Any] = {
         "schema": SCHEMA,
         "action": action,
         "target": {**identity, "revision": state["revision"]},
         "categories": categories,
+        "minReaderFloor": min_reader_floor,
         "reason": reason,
         "rulesBefore": state["rules"],
         "parkIds": [park["id"] for park in changes],
@@ -162,7 +174,7 @@ def apply_plan(conn, plan: dict[str, Any], host: str, environment: str) -> dict[
                 cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true FOR UPDATE")
                 state = read_state(cursor, categories)
                 planned = set(plan["parkIds"])
-                remaining = {park["id"] for park in targets(action, state["parks"])}
+                remaining = {park["id"] for park in targets(action, state["parks"], plan.get("minReaderFloor"))}
                 rules_done = (set(state["rules"]) == set(categories)) if action == "hide" else not state["rules"]
                 if not remaining and rules_done and all(
                     (park["hiddenBy"] is not None) == (action == "hide") for park in state["parks"] if park["id"] in planned
@@ -207,7 +219,7 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
             cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             state = read_state(cursor, categories)
         conn.rollback()
-    plan = build_plan(args.action, categories, reason, identity, state)
+    plan = build_plan(args.action, categories, reason, identity, state, args.min_reader_floor)
     out = args.out.expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -227,6 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("action", choices=["hide", "unhide"])
     plan.add_argument("--category", action="append", default=[], help="park category; repeat as needed")
     plan.add_argument("--reason", help="why the parks are hidden; required for hide")
+    plan.add_argument("--min-reader-floor", type=int, help="hide only parks with at least this content reader floor (content_004)")
     plan.add_argument("--target-host", required=True)
     plan.add_argument("--target-environment", required=True)
     plan.add_argument("--out", type=Path, required=True)

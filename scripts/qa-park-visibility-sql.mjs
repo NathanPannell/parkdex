@@ -105,6 +105,7 @@ try {
     await addPark(client, 'municipal-qa-local', 'municipal', -123.37, 48.42);
     await addPark(client, 'community-qa-hall', 'community', -123.38, 48.43);
     await addPark(client, 'municipal-qa-cdn', 'municipal', -120.3, 50.7, 3);
+    await addPark(client, 'community-qa-cdn', 'community', -120.4, 50.8, 3);
     await addPark(client, 'osm-way-4242', 'municipal', -123.39, 48.44);
   });
   const before = await serve(createSnapshotHandler, { reader: '2' });
@@ -122,9 +123,31 @@ try {
   const planted = await store.recordVisit(holder, visitId, 'municipal-qa-local', new Date(Date.now() - 36 * 3_600_000).toISOString());
   assert.equal(planted.status, 'recorded');
 
+  // The real scope: hide only the CDN-only parks (reader floor 3), keeping the curated catalogue.
+  const importPlan = plan(['hide', '--category', 'municipal', '--category', 'community', '--min-reader-floor', '3', '--reason', REASON]);
+  assert.equal(importPlan.total, 2);
+  assert.equal(importPlan.counts.municipal.change, 1);
+  assert.equal(importPlan.counts.municipal.keptVisibleBelowReaderFloor, 1);
+  assert.equal(importPlan.counts.community.keptVisibleBelowReaderFloor, 1);
+  const headImport = Number((await pool.query('SELECT revision FROM public.content_clock')).rows[0].revision);
+  assert.equal(apply(importPlan).result, 'applied');
+  assert.equal(apply(importPlan).result, 'already-current');
+  for (const reader of ['1', '2', '3']) {
+    assert.deepEqual(ids(await serve(createSnapshotHandler, { reader })), ['community-qa-hall', 'municipal-qa-local', 'osm-way-4242', 'provincial-qa-keep']);
+  }
+  const importOlder = await serve(createChangesHandler, { after: String(headImport), reader: '2' });
+  assert.deepEqual(importOlder.batches[0].changes.map((change) => change.entity), ['hubs']);
+  const importNewer = await serve(createChangesHandler, { after: String(headImport), reader: '3' });
+  const currentImport = current.applyContentChangeBatch(currentState, current.parseContentChanges(importNewer, headImport).batches[0]);
+  assert.deepEqual(currentImport.parks.map((park) => park.id).sort(), ['community-qa-hall', 'municipal-qa-local', 'osm-way-4242', 'provincial-qa-keep']);
+  assert.equal(Number((await pool.query('SELECT count(*) FROM public.content_hidden_categories')).rows[0].count), 2);
+  log('a reader-floor hide removes only CDN-only parks and leaves the curated catalogue visible');
+
+  // Hiding a whole category, curated parks included, reaches installed builds as tombstones.
   const hidePlan = plan(['hide', '--category', 'municipal', '--category', 'community', '--reason', REASON]);
-  assert.equal(hidePlan.total, 3);
-  assert.equal(hidePlan.counts.municipal.change, 2);
+  assert.equal(hidePlan.total, 2);
+  assert.equal(hidePlan.counts.municipal.change, 1);
+  assert.equal(hidePlan.counts.municipal.alreadyHidden, 1);
   assert.equal(hidePlan.counts.municipal.keptVisibleAsPlayerProposals, 1);
   assert.equal(hidePlan.counts.municipal.changeServedToReaders1And2, 1);
   assert.equal(hidePlan.counts.community.change, 1);
@@ -133,7 +156,7 @@ try {
   assert.equal(applied.result, 'applied');
   assert.equal(applied.revision, headBefore + 1);
   assert.equal(apply(hidePlan).result, 'already-current');
-  assert.equal(Number((await pool.query('SELECT count(*) FROM public.parks')).rows[0].count), 5);
+  assert.equal(Number((await pool.query('SELECT count(*) FROM public.parks')).rows[0].count), 6);
   log('reviewed hide plan applies once as one revision and replays as a no-op, keeping every row');
 
   for (const reader of ['1', '2', '3']) {
@@ -144,9 +167,9 @@ try {
   assert.deepEqual(tombstones, ['boundary:delete:community-qa-hall', 'boundary:delete:municipal-qa-local', 'drive:delete:community-qa-hall', 'drive:delete:municipal-qa-local', 'park:delete:community-qa-hall', 'park:delete:municipal-qa-local']);
   const strictAfter = strict.applyContentChangeBatch(strictState, strict.parseContentChanges(strictChanges, headBefore).batches[0]);
   assert.deepEqual(strictAfter.parks.map((park) => park.id).sort(), ['osm-way-4242', 'provincial-qa-keep']);
+  assert.ok(importNewer.batches[0].changes.some((change) => change.id === 'municipal-qa-cdn' && change.op === 'delete'));
   const currentChanges = await serve(createChangesHandler, { after: String(headBefore), reader: '3' });
-  assert.ok(currentChanges.batches[0].changes.some((change) => change.id === 'municipal-qa-cdn' && change.op === 'delete'));
-  const currentAfter = current.applyContentChangeBatch(currentState, current.parseContentChanges(currentChanges, headBefore).batches[0]);
+  const currentAfter = current.applyContentChangeBatch(currentImport, current.parseContentChanges(currentChanges, headBefore).batches[0]);
   assert.deepEqual(currentAfter.parks.map((park) => park.id).sort(), ['osm-way-4242', 'provincial-qa-keep']);
   log('hidden parks leave every snapshot and reach installed readers as tombstones they apply');
 
@@ -191,7 +214,7 @@ try {
   log('hidden parks take no new visits; stored visits, flags and scores remain');
 
   const unhidePlan = plan(['unhide', '--category', 'municipal', '--category', 'community']);
-  assert.equal(unhidePlan.total, 4);
+  assert.equal(unhidePlan.total, 5);
   const headHidden = Number((await pool.query('SELECT revision FROM public.content_clock')).rows[0].revision);
   assert.equal(apply(unhidePlan).result, 'applied');
   assert.equal(apply(unhidePlan).result, 'already-current');
@@ -202,6 +225,7 @@ try {
   const upserts = back.batches[0].changes.filter((change) => change.op === 'upsert').map((change) => `${change.entity}:${change.id}`).sort();
   assert.ok(['park:municipal-qa-local', 'boundary:municipal-qa-local', 'drive:municipal-qa-local', 'park:community-qa-new'].every((key) => upserts.includes(key)));
   assert.ok(!upserts.includes('park:municipal-qa-cdn'));
+  assert.equal((await serve(createSnapshotHandler, { reader: '3' })).parks.length, 9);
   const strictRestored = strict.applyContentChangeBatch(strictAfter, strict.parseContentChanges(back, headHidden).batches[0]);
   assert.ok(strictRestored.parks.some((park) => park.id === 'municipal-qa-local'));
   assert.notEqual((await store.recordVisit(holder, randomUUID(), 'municipal-qa-local', new Date().toISOString())).status, 'park_not_found');

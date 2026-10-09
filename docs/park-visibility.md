@@ -5,7 +5,7 @@ Parks can be hidden without deleting anything. A hidden park keeps its row in `p
 | Table | What it holds |
 | --- | --- |
 | `public.content_park_hidden` | One row per hidden park: `reason`, `source` (`category` or `operator`) and `hidden_at`. Deleting the park removes the row by cascade. |
-| `public.content_hidden_categories` | A standing rule per category with its reason. A park inserted later in that category (an import, the operator dashboard) is hidden on insert. |
+| `public.content_hidden_categories` | A standing rule per category with its reason. A park inserted later in that category (an import, the operator dashboard) is hidden on insert. The rule never touches parks that already exist, and changing an existing park's category does not hide it. |
 
 Parks players proposed stay visible whatever their category: anything whose id starts with `proposed-` or `osm-`, or whose draft in `kip_park_drafts.drafts` carries a `proposal` in its source (`public.content_park_is_player_proposal`). They are sparse and added on purpose, so the category rule skips them, both when hiding existing parks and when a proposal is approved later.
 
@@ -18,10 +18,10 @@ Parks players proposed stay visible whatever their category: anything whose id s
 
 ## Hide or unhide by category
 
-`scripts/park_visibility.py` plans and applies one reviewed change, like `import_legacy_parks.py`. Planning only reads. The plan lists every park it will change, the player proposals it keeps visible, and counts per category, including how many of the changed parks older builds currently receive. Apply holds the content clock, rechecks that the same parks would change (a new or recategorised park means a new plan), and writes everything in one transaction, which emits one content revision. A replay is a no-op. Unhide reverses only what the category rule hid; parks hidden by an operator stay hidden.
+`scripts/park_visibility.py` plans and applies one reviewed change, like `import_legacy_parks.py`. `--min-reader-floor N` limits a hide to parks whose content reader floor is at least `N`; with `3` that is the legacy BC import (`docs/import-legacy-bc-parks.md`), and the curated catalogue that older builds get stays visible. Planning only reads. The plan lists every park it will change, the player proposals it keeps visible, and counts per category, including how many of the changed parks older builds currently receive. Apply holds the content clock, rechecks that the same parks would change (a new or recategorised park means a new plan), and writes everything in one transaction, which emits one content revision. A replay is a no-op. Unhide reverses only what the category rule hid; parks hidden by an operator stay hidden.
 
 ```powershell
-python scripts/park_visibility.py plan hide --category municipal --category community --reason "<why>" --target-host <host> --target-environment <env> --out <plan.json>
+python scripts/park_visibility.py plan hide --category municipal --category community --min-reader-floor 3 --reason "<why>" --target-host <host> --target-environment <env> --out <plan.json>
 python scripts/park_visibility.py apply --plan <plan.json> --reviewed-plan-sha <planSha256> --expected-target-host <host> --target-environment <env>
 python scripts/park_visibility.py plan unhide --category municipal --category community --target-host <host> --target-environment <env> --out <plan.json>
 ```

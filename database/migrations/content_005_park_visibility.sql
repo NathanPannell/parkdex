@@ -8,9 +8,10 @@
 -- also drops upserts for parks that are hidden now, so an edit to a hidden park
 -- cannot bring it back.
 --
--- content_hidden_categories hides every park of a category, including parks
--- inserted later by an import, but never a park a player proposed.
--- See docs/park-visibility.md.
+-- content_hidden_categories is a standing rule: a park inserted later in that
+-- category (an import, the operator dashboard) is hidden on insert, unless a
+-- player proposed it. The rule never touches parks that already exist; hiding
+-- existing parks is a separate reviewed plan. See docs/park-visibility.md.
 
 CREATE TABLE IF NOT EXISTS public.content_hidden_categories (
     category text PRIMARY KEY CHECK (category IN ('national', 'provincial', 'regional', 'municipal', 'community')),
@@ -135,8 +136,9 @@ BEGIN
     -- Named to sort after content_parks_log, so a park inserted into a hidden
     -- category ends its batch as a tombstone.
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'content_parks_zz_hidden_category' AND tgrelid = 'public.parks'::regclass) THEN
+        -- Insert only: recategorising an existing park never hides it.
         CREATE TRIGGER content_parks_zz_hidden_category
-            AFTER INSERT OR UPDATE OF category ON public.parks
+            AFTER INSERT ON public.parks
             FOR EACH ROW EXECUTE FUNCTION public.content_hide_park_by_category();
     END IF;
 END
