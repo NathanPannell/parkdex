@@ -44,7 +44,8 @@
       "database/migrations/content_001_sync.sql",
       "database/migrations/content_002_authoring.sql",
       "database/migrations/content_003_park_maps_link.sql",
-      "database/migrations/content_004_catalogue_release.sql"
+      "database/migrations/content_004_catalogue_release.sql",
+      "database/migrations/content_005_park_visibility.sql"
     ],
     "apiPaths": [
       "api/content/snapshot.ts",
@@ -62,7 +63,8 @@
       "scripts/test_authoring_queue.py",
       "scripts/test_downshift_park_rarities.py",
       "scripts/test_build_bc_import.py",
-      "scripts/test_content_catalogue.py"
+      "scripts/test_content_catalogue.py",
+      "scripts/test_park_visibility.py"
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",

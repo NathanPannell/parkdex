@@ -53,7 +53,7 @@ function python(args) {
 }
 
 try {
-  for (const name of ['001_cloud_content.sql', 'migrations/content_001_sync.sql', 'migrations/content_002_authoring.sql', 'migrations/content_003_park_maps_link.sql', 'migrations/content_004_catalogue_release.sql', 'migrations/content_004_catalogue_release.sql']) {
+  for (const name of ['001_cloud_content.sql', 'migrations/content_001_sync.sql', 'migrations/content_002_authoring.sql', 'migrations/content_003_park_maps_link.sql', 'migrations/content_004_catalogue_release.sql', 'migrations/content_004_catalogue_release.sql', 'migrations/content_005_park_visibility.sql']) {
     await adapter.applyMigration(join(root, 'database', name));
   }
   const client = await adapter.pool.connect();
