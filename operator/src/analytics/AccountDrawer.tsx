@@ -59,7 +59,7 @@ export function AccountDrawer({ accountId, setup, onClose, onChanged }: { accoun
               <li>Signs the player out on every device.</li>
               <li>Deletes their claims and private photos, through the photo service.</li>
               <li>Deletes their handle, flags, visits and score{current.parksHeld ? `, and drops the ${current.parksHeld} ${current.parksHeld === 1 ? "flag" : "flags"} they hold` : ""}.</li>
-              {current.foundedParks > 0 && <li>Removes them as founder of {current.foundedParks} {current.foundedParks === 1 ? "park" : "parks"} with the cover photos. The parks stay live and can be founded again.</li>}
+              {(current.foundedParks ?? 0) > 0 && <li>Removes them as founder of {current.foundedParks} {current.foundedParks === 1 ? "park" : "parks"} with the cover photos. The parks stay live and can be founded again.</li>}
               <li>Server events keep the account ID for up to 90 days, then age out.</li>
             </ul>
           </>,
@@ -125,7 +125,7 @@ export function AccountDrawer({ accountId, setup, onClose, onChanged }: { accoun
             <div><dt>Visits</dt><dd>{formatCount(current.visits)}</dd></div>
             <div><dt>Flags held</dt><dd>{formatCount(current.parksHeld)}</dd></div>
             <div><dt>Score</dt><dd>{formatCount(current.score)}</dd></div>
-            <div><dt>Founded</dt><dd>{formatCount(current.foundedParks)}</dd></div>
+            <div><dt>Founded</dt><dd>{current.foundedParks === null ? <span className="muted" title="Not in this database yet">n/a</span> : formatCount(current.foundedParks)}</dd></div>
           </dl>
 
           <div className="panel">
@@ -143,7 +143,7 @@ export function AccountDrawer({ accountId, setup, onClose, onChanged }: { accoun
             ) : <p className="muted an-small">No visits yet.</p>}
           </div>
 
-          {current.founded.length > 0 && (
+          {current.founded && current.founded.length > 0 && (
             <div className="panel">
               <h3>Founded parks</h3>
               <ul className="an-mini-list">

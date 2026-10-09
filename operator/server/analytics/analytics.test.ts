@@ -249,3 +249,27 @@ test("the CSV export streams the current filter and neutralises spreadsheet form
   assert.ok(planted.includes(",'=1+1,"));
   assert.ok(planted.endsWith('"{""note"":""a, \\""quoted\\"" value""}"'));
 });
+
+test("a database without kip_founders still serves every page, with founder numbers marked unavailable", async () => {
+  const { api, production } = setup();
+  production.available.founders = false;
+  const target = production.accounts.find((account) => account.handle === "mossy_maddie")!;
+  const { overview } = await body<{ overview: { founded: unknown; photoChecks: unknown; rejectionFlags: unknown[]; series: { foundings: unknown; planted: number[] }; accounts: { total: number }; unavailable: string[] } }>(await api(request("/api/analytics/overview?days=30"), env));
+  assert.equal(overview.founded, null);
+  assert.equal(overview.photoChecks, null);
+  assert.equal(overview.series.foundings, null);
+  assert.deepEqual(overview.rejectionFlags, []);
+  assert.equal(overview.accounts.total, production.accounts.length);
+  assert.equal(overview.series.planted.length, 30);
+  assert.deepEqual(overview.unavailable, ["founders not deployed"]);
+  const accounts = await body<{ accounts: AccountRow[]; unavailable: string[] }>(await api(request("/api/analytics/accounts"), env));
+  assert.ok(accounts.accounts.every((row) => row.foundedParks === null));
+  assert.deepEqual(accounts.unavailable, ["founders not deployed"]);
+  const detail = await body<{ account: { founded: unknown; score: number }; unavailable: string[] }>(await api(request(`/api/analytics/accounts/${target.id}`), env));
+  assert.equal(detail.account.founded, null);
+  assert.deepEqual(detail.unavailable, ["founders not deployed"]);
+  const events = await body<EventsPage & { unavailable: string[] }>(await api(request("/api/analytics/events"), env));
+  assert.deepEqual(events.unavailable, ["founders not deployed"]);
+  production.available.founders = true;
+  assert.deepEqual((await body<{ unavailable: string[] }>(await api(request("/api/analytics/accounts"), env))).unavailable, []);
+});

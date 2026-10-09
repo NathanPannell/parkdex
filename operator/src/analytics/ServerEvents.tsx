@@ -267,6 +267,9 @@ export function ServerEvents() {
         </a>
       </div>
 
+      {page && page.unavailable.length > 0 && (
+        <Notice>Founder events (park_founded, founder_photo_checked) are not in this database yet ({page.unavailable.join(", ")}).</Notice>
+      )}
       {page?.unknownHandle && <Notice>No player has the handle <strong>@{page.unknownHandle}</strong> in this database, so nothing matches.</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 

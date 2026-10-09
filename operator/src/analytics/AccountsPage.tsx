@@ -25,7 +25,7 @@ const COLUMNS: Column<AccountRow>[] = [
   { key: "visits", header: "Visits", cell: (row) => formatCount(row.visits), align: "right", width: "80px" },
   { key: "held", header: "Held", cell: (row) => formatCount(row.parksHeld), align: "right", width: "70px" },
   { key: "score", header: "Score", cell: (row) => formatCount(row.score), align: "right", width: "80px" },
-  { key: "founded", header: "Founded", cell: (row) => formatCount(row.foundedParks), align: "right", width: "84px" },
+  { key: "founded", header: "Founded", cell: (row) => (row.foundedParks === null ? <span className="muted" title="Not in this database yet">n/a</span> : formatCount(row.foundedParks)), align: "right", width: "84px" },
   { key: "state", header: "State", cell: (row) => <span className={`an-pill an-pill--${row.deletionState}`}>{row.deletionState === "deleting" ? "Deleting" : "Active"}</span>, width: "96px" },
 ];
 

@@ -7,13 +7,16 @@ export type Overview = {
   days: number;
   accounts: { total: number; new7: number; new30: number; period: Period; deleting: number; withHandle: number };
   players: { day: Period; week: Period; month: Period };
-  founded: { total: number; new7: number; period: Period };
+  /** Null when the database has no kip_founders schema yet; `unavailable` says why. */
+  founded: { total: number; new7: number; period: Period } | null;
   visits: { planted: Period; took: Period; held: Period };
-  photoChecks: { total: Period; approved: Period; rejected: number; unsure: number; unavailable: number };
+  photoChecks: { total: Period; approved: Period; rejected: number; unsure: number; unavailable: number } | null;
   feedbackOpen: number;
-  series: { days: string[]; newAccounts: number[]; activePlayers: number[]; planted: number[]; took: number[]; held: number[]; foundings: number[] };
+  series: { days: string[]; newAccounts: number[]; activePlayers: number[]; planted: number[]; took: number[]; held: number[]; foundings: number[] | null };
   topParks: { parkId: string; name: string; visits: number; players: number }[];
   rejectionFlags: { flag: string; count: number }[];
+  /** For example ["founders not deployed"] on a database a release behind. */
+  unavailable: string[];
 };
 
 export type DeletionSetup = { available: boolean; missing: string[] };
@@ -27,7 +30,7 @@ export type AccountRow = {
   visits: number;
   parksHeld: number;
   score: number;
-  foundedParks: number;
+  foundedParks: number | null;
   deletionState: "active" | "deleting";
 };
 
@@ -58,7 +61,7 @@ export type AccountDetail = AccountRow & {
   lastSignInAt: string | null;
   recentEvents: EventRow[];
   recentVisits: { parkId: string; parkName: string; visitedAt: string; outcome: string; points: number }[];
-  founded: { parkId: string; parkName: string; foundedAt: string }[];
+  founded: { parkId: string; parkName: string; foundedAt: string }[] | null;
   deletion: { receiptId: string; status: "pending" | "complete"; createdAt: string } | null;
 };
 
@@ -73,7 +76,7 @@ export type DeletionRow = {
   accountState: "active" | "deleting" | "gone";
 };
 
-export type EventsPage = { events: EventRow[]; nextCursor: string | null; filter: { from: string; to: string; types: string[] }; unknownHandle: string | null };
+export type EventsPage = { events: EventRow[]; nextCursor: string | null; filter: { from: string; to: string; types: string[] }; unknownHandle: string | null; unavailable: string[] };
 export type Histogram = { bucket: "hour" | "day"; from: string; to: string; buckets: { at: string; count: number; db: number }[]; dbOmitted: boolean; unknownHandle: string | null };
 
 export type PostHogStatus = { configured: boolean; host: string; missing: string[]; problem: string | null; environment: string };

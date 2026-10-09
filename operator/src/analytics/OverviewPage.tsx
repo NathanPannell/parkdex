@@ -5,6 +5,7 @@ import { useDashboard } from "../shell/DashboardContext";
 import { Card, formatCount, fullDate, Icon, Notice, PageHeader, StatGrid, StatTile, Tabs } from "../ui";
 import { BarList, dayStamps, TimeChart } from "./charts";
 import type { Overview, Period } from "./types";
+import { NotYet } from "./NotYet";
 
 const PERIODS = [7, 30, 90] as const;
 const FLAG_LABELS: Record<string, string> = {
@@ -52,7 +53,8 @@ export function OverviewPage() {
     { label: "Takes", values: o.series.took, color: "--kip" },
     { label: "Holds", values: o.series.held, color: "--sun" },
   ] : []), [o]);
-  const foundingSeries = useMemo(() => (o ? [{ label: "Parks founded", values: o.series.foundings, color: "--grape" }] : []), [o]);
+  const foundingSeries = useMemo(() => (o?.series.foundings ? [{ label: "Parks founded", values: o.series.foundings, color: "--grape" }] : []), [o]);
+  const foundersMissing = Boolean(o && !o.founded);
 
   const visitsNow = o ? o.visits.planted.current + o.visits.took.current + o.visits.held.current : undefined;
   const visitsBefore = o ? o.visits.planted.previous + o.visits.took.previous + o.visits.held.previous : 0;
@@ -71,6 +73,9 @@ export function OverviewPage() {
           <button type="button" className="icon-button" onClick={() => setRevision((value) => value + 1)} aria-label="Refresh" title="Refresh"><Icon name="refresh" size={18} /></button>
         </>}
       />
+      {o && o.unavailable.length > 0 && (
+        <Notice>This database is a release behind ({o.unavailable.join(", ")}), so park founding numbers are not in it yet. Everything else is current.</Notice>
+      )}
       {error && <Notice tone="error" action={<button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button>}>{error}</Notice>}
 
       <StatGrid>
@@ -80,12 +85,12 @@ export function OverviewPage() {
           hint={o && <><span>{formatCount(o.players.day.current)} today, {formatCount(o.players.month.current)} this month</span><Delta period={o.players.week} days={7} /></>} />
         <StatTile label="Players with handles" icon="user" tone="sea" value={o?.accounts.withHandle}
           hint={o && <span>{percent(o.accounts.withHandle, o.accounts.total)} of accounts{o.accounts.deleting ? `, ${o.accounts.deleting} deleting` : ""}</span>} />
-        <StatTile label="Parks founded" icon="park" tone="grape" value={o?.founded.total}
-          hint={o && <><span>+{formatCount(o.founded.new7)} in 7 days</span><Delta period={o.founded.period} days={days} /></>} />
+        <StatTile label="Parks founded" icon="park" tone="grape" value={o ? o.founded?.total ?? null : undefined}
+          hint={o && (o.founded ? <><span>+{formatCount(o.founded.new7)} in 7 days</span><Delta period={o.founded.period} days={days} /></> : <span>Not in this database yet</span>)} />
         <StatTile label={`Visits, ${days} days`} icon="flag" tone="sun" value={visitsNow}
           hint={o && <><span>{formatCount(o.visits.planted.current)} plants, {formatCount(o.visits.took.current)} takes, {formatCount(o.visits.held.current)} holds</span><Delta period={{ current: visitsNow ?? 0, previous: visitsBefore }} days={days} /></>} />
-        <StatTile label="Photo approve rate" icon="image" tone="moss" value={checks ? percent(checks.approved.current, checks.total.current) : undefined}
-          hint={checks && <span>{formatCount(checks.total.current)} checks{topFlag ? `, most often "${FLAG_LABELS[topFlag.flag] ?? topFlag.flag}"` : ""}</span>} />
+        <StatTile label="Photo approve rate" icon="image" tone="moss" value={o ? (checks ? percent(checks.approved.current, checks.total.current) : null) : undefined}
+          hint={foundersMissing ? <span>Not in this database yet</span> : checks && <span>{formatCount(checks.total.current)} checks{topFlag ? `, most often "${FLAG_LABELS[topFlag.flag] ?? topFlag.flag}"` : ""}</span>} />
         <StatTile label="Open feedback" icon="inbox" tone="kip" value={o?.feedbackOpen}
           hint={<a href="/feedback" onClick={linkHandler("/feedback")}>Open the board</a>} />
       </StatGrid>
@@ -101,7 +106,7 @@ export function OverviewPage() {
           {o ? <TimeChart label="Visits per day by outcome" x={x} series={visitSeries} kind="stacked" /> : <ChartLoading />}
         </Card>
         <Card title="Foundings" subtitle="Parks founded per day (current founders)">
-          {o ? <TimeChart label="Parks founded per day" x={x} series={foundingSeries} kind="bars" /> : <ChartLoading />}
+          {!o ? <ChartLoading /> : foundersMissing ? <NotYet notes={o.unavailable} /> : <TimeChart label="Parks founded per day" x={x} series={foundingSeries} kind="bars" />}
         </Card>
         <Card title="Top parks" subtitle={`Most visited in the last ${days} days`}>
           {o ? (
@@ -118,7 +123,7 @@ export function OverviewPage() {
           ) : <ChartLoading />}
         </Card>
         <Card title="Photo checks" subtitle={`Founding photos in the last ${days} days, and why they were turned down`}>
-          {checks ? (
+          {foundersMissing ? <NotYet notes={o!.unavailable} /> : checks ? (
             <>
               <div className="an-check-split" aria-label="Photo check outcomes">
                 {([["Approved", checks.approved.current, "moss"], ["Rejected", checks.rejected, "kip"], ["Unsure", checks.unsure, "sun"], ["Unavailable", checks.unavailable, "faint"]] as const).map(([name, value, tone]) => (

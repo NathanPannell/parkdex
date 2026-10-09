@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import type { SqlRunner } from "../drafts.js";
 import { DB_EVENT_TYPES } from "./filters.js";
+import { probeFeatures, unavailableNotes, type Features } from "./schema.js";
 import type {
   AccountDetail, AccountQuery, AccountRow, AnalyticsStore, DeletionRow, EventCursor, EventFilter, EventRow, HistogramBucket, Overview, Period,
 } from "./types.js";
@@ -14,6 +15,7 @@ import type {
 
 type Row = Record<string, unknown>;
 type Statement = { text: string; params: unknown[] };
+type Keyed = Statement & { key: string };
 
 const TIME_ZONE = "America/Vancouver";
 const READ_TIMEOUT = "15s";
@@ -90,7 +92,7 @@ function accountRow(row: Row): AccountRow {
     visits: num(row.visits),
     parksHeld: num(row.parks_held),
     score: num(row.score),
-    foundedParks: num(row.founded),
+    foundedParks: row.founded === null || row.founded === undefined ? null : num(row.founded),
     deletionState: row.deletion_state === "deleting" ? "deleting" : "active",
   };
 }
@@ -177,11 +179,17 @@ function activeIn(from: string, to: string): string {
       AND e.received_at > $1::timestamptz - interval '${from}' AND e.received_at <= $1::timestamptz - interval '${to}'))::int`;
 }
 
-export function overviewStatements(now: Date, days: number): Statement[] {
+/**
+ * The overview's queries. Founder tiles and charts are left out when the database has no
+ * kip_founders schema yet, so a release that lags behind still gets the rest of the page.
+ */
+export function overviewStatements(now: Date, days: number, features: Features): Keyed[] {
   const at = now.toISOString();
   const span = (n: string) => `make_interval(days => ${n})`;
-  return [
+  const founders = features.founders;
+  const statements: (Keyed | null)[] = [
     {
+      key: "counts",
       text: `SELECT
         (SELECT count(*) FROM kip_account.accounts)::int AS accounts_total,
         (SELECT count(*) FROM kip_account.accounts WHERE deletion_state = 'deleting')::int AS accounts_deleting,
@@ -191,15 +199,17 @@ export function overviewStatements(now: Date, days: number): Statement[] {
         (SELECT count(*) FROM kip_account.accounts WHERE created_at > $1::timestamptz - ${span("2 * $2::int")}
           AND created_at <= $1::timestamptz - ${span("$2::int")})::int AS accounts_previous,
         (SELECT count(*) FROM kip_game.players p JOIN kip_account.accounts a ON a.id = p.account_id AND a.deletion_state = 'active')::int AS with_handle,
+${founders ? `
         (SELECT count(*) FROM kip_founders.parks)::int AS founded_total,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - interval '7 days')::int AS founded_new7,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - ${span("$2::int")})::int AS founded_period,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - ${span("2 * $2::int")}
-          AND founded_at <= $1::timestamptz - ${span("$2::int")})::int AS founded_previous,
+          AND founded_at <= $1::timestamptz - ${span("$2::int")})::int AS founded_previous,` : ""}
         (SELECT count(*) FROM kip_feedback.reports WHERE status IN ('new', 'reviewing', 'planned'))::int AS feedback_open`,
       params: [at, days],
     },
     {
+      key: "players",
       text: `WITH ${candidatesCte("$2")}
       SELECT ${activeIn("1 day", "0 days")} AS day_current, ${activeIn("2 days", "1 day")} AS day_previous,
         ${activeIn("7 days", "0 days")} AS week_current, ${activeIn("14 days", "7 days")} AS week_previous,
@@ -208,6 +218,7 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       params: [at, 60],
     },
     {
+      key: "visits",
       text: `SELECT
         count(*) FILTER (WHERE visited_at > $1::timestamptz - ${span("$2::int")} AND outcome = 'planted')::int AS planted_current,
         count(*) FILTER (WHERE visited_at <= $1::timestamptz - ${span("$2::int")} AND outcome = 'planted')::int AS planted_previous,
@@ -219,7 +230,8 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       WHERE visited_at > $1::timestamptz - ${span("2 * $2::int")} AND visited_at <= $1::timestamptz AND source = 'visit'`,
       params: [at, days],
     },
-    {
+    !founders ? null : {
+      key: "checks",
       text: `SELECT
         count(*) FILTER (WHERE created_at > $1::timestamptz - ${span("$2::int")})::int AS total_current,
         count(*) FILTER (WHERE created_at <= $1::timestamptz - ${span("$2::int")})::int AS total_previous,
@@ -232,7 +244,8 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       WHERE created_at > $1::timestamptz - ${span("2 * $2::int")} AND created_at <= $1::timestamptz`,
       params: [at, days],
     },
-    {
+    !founders ? null : {
+      key: "flags",
       text: `SELECT flag, count(*)::int AS count
       FROM kip_founders.photo_checks, unnest(flags) AS flag
       WHERE created_at > $1::timestamptz - ${span("$2::int")} AND created_at <= $1::timestamptz
@@ -240,6 +253,7 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       params: [at, days],
     },
     {
+      key: "topParks",
       text: `SELECT v.park_id, coalesce(p.name, v.park_id) AS name, count(*)::int AS visits, count(DISTINCT v.account_id)::int AS players
       FROM kip_game.visits v LEFT JOIN public.parks p ON p.id = v.park_id
       WHERE v.visited_at > $1::timestamptz - ${span("$2::int")} AND v.visited_at <= $1::timestamptz AND v.source = 'visit'
@@ -247,6 +261,7 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       params: [at, days],
     },
     {
+      key: "series",
       text: `WITH ${DAYS_CTE},
       accounts AS (
         SELECT kip_game.local_day(a.created_at) AS day, count(*)::int AS n FROM kip_account.accounts a, bounds
@@ -259,8 +274,8 @@ export function overviewStatements(now: Date, days: number): Statement[] {
         FROM kip_game.visits v, bounds
         WHERE v.visited_at >= bounds.starts AND v.visited_at < bounds.ends AND v.source = 'visit' GROUP BY 1
       ), foundings AS (
-        SELECT kip_game.local_day(f.founded_at) AS day, count(*)::int AS n FROM kip_founders.parks f, bounds
-        WHERE f.founded_at >= bounds.starts AND f.founded_at < bounds.ends GROUP BY 1
+        ${founders ? `SELECT kip_game.local_day(f.founded_at) AS day, count(*)::int AS n FROM kip_founders.parks f, bounds
+        WHERE f.founded_at >= bounds.starts AND f.founded_at < bounds.ends GROUP BY 1` : "SELECT NULL::date AS day, 0 AS n WHERE false"}
       ), active AS (
         -- One index-only pass over the signed-in part of (account_id, received_at) for the
         -- window. Retention caps it at 90 days of events, and it costs the same however many
@@ -282,14 +297,16 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       params: [at, days],
     },
   ];
+  return statements.filter((statement): statement is Keyed => statement !== null);
 }
 
-function toOverview(results: Row[][], now: Date, days: number): Overview {
-  const [counts, players, visits, checks, flags, topParks, series] = results;
+function toOverview(byKey: Record<string, Row[]>, now: Date, days: number, features: Features): Overview {
+  const { counts, players, visits, checks, flags, topParks, series } = byKey;
+  const founders = features.founders;
   const c = counts[0] ?? {};
   const p = players[0] ?? {};
   const v = visits[0] ?? {};
-  const k = checks[0] ?? {};
+  const k = checks?.[0] ?? {};
   return {
     generatedAt: now.toISOString(),
     days,
@@ -298,12 +315,12 @@ function toOverview(results: Row[][], now: Date, days: number): Overview {
       period: period(c, "accounts_period", "accounts_previous"), deleting: num(c.accounts_deleting), withHandle: num(c.with_handle),
     },
     players: { day: period(p, "day_current", "day_previous"), week: period(p, "week_current", "week_previous"), month: period(p, "month_current", "month_previous") },
-    founded: { total: num(c.founded_total), new7: num(c.founded_new7), period: period(c, "founded_period", "founded_previous") },
+    founded: founders ? { total: num(c.founded_total), new7: num(c.founded_new7), period: period(c, "founded_period", "founded_previous") } : null,
     visits: { planted: period(v, "planted_current", "planted_previous"), took: period(v, "took_current", "took_previous"), held: period(v, "held_current", "held_previous") },
-    photoChecks: {
+    photoChecks: founders ? {
       total: period(k, "total_current", "total_previous"), approved: period(k, "approved_current", "approved_previous"),
       rejected: num(k.rejected), unsure: num(k.unsure), unavailable: num(k.unavailable),
-    },
+    } : null,
     feedbackOpen: num(c.feedback_open),
     series: {
       days: series.map((row) => day(row.day)),
@@ -312,15 +329,21 @@ function toOverview(results: Row[][], now: Date, days: number): Overview {
       planted: series.map((row) => num(row.planted)),
       took: series.map((row) => num(row.took)),
       held: series.map((row) => num(row.held)),
-      foundings: series.map((row) => num(row.foundings)),
+      foundings: founders ? series.map((row) => num(row.foundings)) : null,
     },
     topParks: topParks.map((row) => ({ parkId: String(row.park_id), name: String(row.name), visits: num(row.visits), players: num(row.players) })),
-    rejectionFlags: flags.map((row) => ({ flag: String(row.flag), count: num(row.count) })),
+    rejectionFlags: (flags ?? []).map((row) => ({ flag: String(row.flag), count: num(row.count) })),
+    unavailable: unavailableNotes(features),
   };
 }
 
-/** Per-account columns for the accounts table. $1 is now. Each one is an index probe on the account. */
-const ACCOUNT_SELECT = `SELECT a.id::text AS id, pl.handle, a.created_at, a.deletion_state,
+/**
+ * Per-account columns for the accounts table. $1 is now. Each one is an index probe on the
+ * account. Without kip_founders the score has no founder bonus, as kip_game.player_scores from
+ * game_001 has none, and the founded count is null.
+ */
+function accountSelect(founders: boolean): string {
+  return `SELECT a.id::text AS id, pl.handle, a.created_at, a.deletion_state,
     (a.password_hash IS NOT NULL) AS has_password,
     EXISTS (SELECT 1 FROM kip_account.google_identities g WHERE g.account_id = a.id) AS has_google,
     (SELECT max(e.received_at) FROM kip_analytics.events e WHERE e.account_id = a.id) AS last_event_at,
@@ -330,14 +353,15 @@ const ACCOUNT_SELECT = `SELECT a.id::text AS id, pl.handle, a.created_at, a.dele
       AND kip_game.flag_up(t.last_visit_at, t.ended_at, $1::timestamptz))::int AS parks_held,
     ((SELECT coalesce(sum(kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $1::timestamptz) + t.bounty_points), 0)
       FROM kip_game.tenures t WHERE t.holder_account_id = a.id AND t.started_at <= $1::timestamptz)
-      + kip_founders.founder_points(a.id, $1::timestamptz))::int AS score,
-    (SELECT count(*) FROM kip_founders.parks f WHERE f.account_id = a.id)::int AS founded
+      ${founders ? "+ kip_founders.founder_points(a.id, $1::timestamptz)" : ""})::int AS score,
+    ${founders ? "(SELECT count(*) FROM kip_founders.parks f WHERE f.account_id = a.id)::int" : "NULL::int"} AS founded
   FROM kip_account.accounts a
   LEFT JOIN kip_game.players pl ON pl.account_id = a.id`;
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function accountListStatement(query: AccountQuery, now: Date): Statement {
+export function accountListStatement(query: AccountQuery, now: Date, features: Features): Statement {
   const params: unknown[] = [now.toISOString()];
   const clauses: string[] = [];
   const add = (clause: (index: number) => string, value: unknown) => {
@@ -355,7 +379,7 @@ export function accountListStatement(query: AccountQuery, now: Date): Statement 
   }
   params.push(query.limit);
   return {
-    text: `${ACCOUNT_SELECT}
+    text: `${accountSelect(features.founders)}
   ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
   ORDER BY a.created_at DESC, a.id DESC
   LIMIT $${params.length}`,
@@ -363,7 +387,12 @@ export function accountListStatement(query: AccountQuery, now: Date): Statement 
   };
 }
 
-export function createSqlAnalyticsStore(db: SqlRunner): AnalyticsStore {
+/**
+ * @param cacheKey identifies the database, so which optional schemas it has is checked once a
+ * minute rather than on every request. Without one, each call checks again.
+ */
+export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null = null): AnalyticsStore {
+  const features = () => probeFeatures(db, cacheKey);
   async function read(statements: Statement[]): Promise<Row[][]> {
     const results = await db.transaction([
       { text: "SET TRANSACTION READ ONLY", params: [] },
@@ -377,19 +406,25 @@ export function createSqlAnalyticsStore(db: SqlRunner): AnalyticsStore {
   }
 
   return {
+    features,
+
     async overview(now, days) {
-      return toOverview(await read(overviewStatements(now, days)), now, days);
+      const available = await features();
+      const statements = overviewStatements(now, days, available);
+      const results = await read(statements);
+      return toOverview(Object.fromEntries(statements.map((statement, index) => [statement.key, results[index]])), now, days, available);
     },
 
     async listAccounts(query, now) {
-      const statement = accountListStatement(query, now);
+      const statement = accountListStatement(query, now, await features());
       return (await readOne(statement.text, statement.params)).map(accountRow);
     },
 
     async getAccount(id, now) {
       const at = now.toISOString();
+      const { founders } = await features();
       const [accounts, extra, events, visits, founded, receipts] = await read([
-        { text: `${ACCOUNT_SELECT} WHERE a.id = $2::uuid`, params: [at, id] },
+        { text: `${accountSelect(founders)} WHERE a.id = $2::uuid`, params: [at, id] },
         {
           text: `SELECT a.normalized_email, (a.email_verified_at IS NOT NULL) AS email_verified,
             (SELECT count(*) FROM kip_account.sessions s WHERE s.account_id = a.id AND s.revoked_at IS NULL AND s.expires_at > $2::timestamptz)::int AS active_sessions
@@ -407,12 +442,12 @@ export function createSqlAnalyticsStore(db: SqlRunner): AnalyticsStore {
           WHERE v.account_id = $1::uuid ORDER BY v.visited_at DESC LIMIT 20`,
           params: [id],
         },
-        {
+        founders ? {
           text: `SELECT f.park_id, coalesce(p.name, f.park_id) AS park_name, f.founded_at
           FROM kip_founders.parks f LEFT JOIN public.parks p ON p.id = f.park_id
           WHERE f.account_id = $1::uuid ORDER BY f.founded_at DESC LIMIT 50`,
           params: [id],
-        },
+        } : { text: "SELECT 1 WHERE false", params: [] },
         {
           text: `SELECT receipt_id::text AS receipt_id, status, created_at FROM kip_account.account_deletion_receipts
           WHERE account_id = $1::uuid ORDER BY (status = 'pending') DESC, created_at DESC LIMIT 1`,
@@ -430,7 +465,7 @@ export function createSqlAnalyticsStore(db: SqlRunner): AnalyticsStore {
         lastSignInAt: isoOrNull(accounts[0].last_session_at),
         recentEvents: events.map(eventRow),
         recentVisits: visits.map((row) => ({ parkId: String(row.park_id), parkName: String(row.park_name), visitedAt: iso(row.visited_at), outcome: String(row.outcome), points: num(row.points_earned) })),
-        founded: founded.map((row) => ({ parkId: String(row.park_id), parkName: String(row.park_name), foundedAt: iso(row.founded_at) })),
+        founded: !founders ? null : founded.map((row) => ({ parkId: String(row.park_id), parkName: String(row.park_name), foundedAt: iso(row.founded_at) })),
         deletion: receipt ? { receiptId: String(receipt.receipt_id), status: receipt.status === "complete" ? "complete" : "pending", createdAt: iso(receipt.created_at) } : null,
       };
     },
@@ -538,5 +573,5 @@ export function neonRunner(databaseUrl: string): SqlRunner {
 }
 
 export function createNeonAnalyticsStore(databaseUrl: string): AnalyticsStore {
-  return createSqlAnalyticsStore(neonRunner(databaseUrl));
+  return createSqlAnalyticsStore(neonRunner(databaseUrl), databaseUrl);
 }

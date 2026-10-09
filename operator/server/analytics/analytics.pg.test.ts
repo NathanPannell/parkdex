@@ -141,14 +141,14 @@ test("the overview reads every tile and chart from the migrated schema", { skip:
   assert.deepEqual(overview.players.day, { current: 1, previous: 0 });
   assert.deepEqual([overview.visits.planted.current, overview.visits.took.current, overview.visits.held.current], [1, 1, 1]);
   assert.deepEqual(overview.founded, { total: 1, new7: 1, period: { current: 1, previous: 0 } });
-  assert.deepEqual([overview.photoChecks.total.current, overview.photoChecks.approved.current, overview.photoChecks.rejected, overview.photoChecks.unsure], [4, 1, 2, 1]);
+  assert.deepEqual([overview.photoChecks!.total.current, overview.photoChecks!.approved.current, overview.photoChecks!.rejected, overview.photoChecks!.unsure], [4, 1, 2, 1]);
   assert.deepEqual(overview.rejectionFlags, [{ flag: "people", count: 2 }, { flag: "lighting", count: 1 }, { flag: "not_park", count: 1 }]);
   assert.deepEqual(overview.topParks, [{ parkId: "regional-thetis-lake", name: "Thetis Lake Regional Park", visits: 3, players: 2 }]);
   assert.equal(overview.feedbackOpen, 1);
   assert.equal(overview.series.days.length, 7);
   assert.equal(overview.series.newAccounts.reduce((sum, value) => sum + value, 0), 3);
   assert.equal(overview.series.planted.reduce((sum, value) => sum + value, 0) + overview.series.took.reduce((sum, value) => sum + value, 0), 2);
-  assert.equal(overview.series.foundings.reduce((sum, value) => sum + value, 0), 1);
+  assert.equal(overview.series.foundings!.reduce((sum, value) => sum + value, 0), 1);
   assert.ok(overview.series.activePlayers.reduce((sum, value) => sum + value, 0) >= 3);
 });
 

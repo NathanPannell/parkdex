@@ -1,6 +1,7 @@
 import type { DashboardEnv } from "../api.js";
 import type { AccountDeleter } from "./deletion.js";
 import { DB_EVENT_TYPES } from "./filters.js";
+import { ALL_FEATURES, unavailableNotes, type Features } from "./schema.js";
 import { maskEmail } from "./store.js";
 import type { PostHogClient, QueryResult, TemplateParams } from "./posthog.js";
 import { buildTemplate, guardCustomQuery, posthogStatus } from "./posthog.js";
@@ -87,6 +88,12 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   receipts: MemoryReceipt[] = [];
   securityEvents: { eventType: string; outcome: string }[] = [];
   feedbackOpen = 0;
+  /** Set founders to false to act like a database a release behind (no kip_founders schema). */
+  available: Features = { ...ALL_FEATURES };
+
+  async features() {
+    return { ...this.available };
+  }
 
   private handleOf(accountId: string | null): string | null {
     return accountId ? this.accounts.find((account) => account.id === accountId)?.handle ?? null : null;
@@ -141,13 +148,13 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
         week: { current: active(7 * DAY, 0), previous: active(14 * DAY, 7 * DAY) },
         month: { current: active(30 * DAY, 0), previous: active(60 * DAY, 30 * DAY) },
       },
-      founded: {
+      founded: !this.available.founders ? null : {
         total: this.founded.length,
         new7: count(this.founded, (f) => within(f.foundedAt, 7 * DAY, 0)),
         period: { current: count(this.founded, (f) => within(f.foundedAt, p, 0)), previous: count(this.founded, (f) => within(f.foundedAt, 2 * p, p)) },
       },
       visits: { planted: outcome("planted"), took: outcome("took"), held: outcome("held") },
-      photoChecks: {
+      photoChecks: !this.available.founders ? null : {
         total: { current: checksNow.length, previous: count(this.photoChecks, (c) => within(c.createdAt, 2 * p, p)) },
         approved: { current: count(checksNow, (c) => c.outcome === "approve"), previous: count(this.photoChecks, (c) => c.outcome === "approve" && within(c.createdAt, 2 * p, p)) },
         rejected: count(checksNow, (c) => c.outcome === "reject"),
@@ -162,12 +169,13 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
         planted: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "planted"),
         took: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "took"),
         held: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "held"),
-        foundings: perDay(this.founded, (f) => f.foundedAt),
+        foundings: this.available.founders ? perDay(this.founded, (f) => f.foundedAt) : null,
       },
       topParks: [...parkVisits.entries()]
         .map(([parkId, entry]) => ({ parkId, name: this.parks.get(parkId) ?? parkId, visits: entry.visits, players: entry.players.size }))
         .sort((a, b) => b.visits - a.visits || a.parkId.localeCompare(b.parkId)).slice(0, 10),
-      rejectionFlags: [...flags.entries()].map(([flag, total]) => ({ flag, count: total })).sort((a, b) => b.count - a.count || a.flag.localeCompare(b.flag)),
+      rejectionFlags: !this.available.founders ? [] : [...flags.entries()].map(([flag, total]) => ({ flag, count: total })).sort((a, b) => b.count - a.count || a.flag.localeCompare(b.flag)),
+      unavailable: unavailableNotes(this.available),
     };
   }
 
@@ -177,7 +185,7 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
     const score = tenures.reduce((sum, tenure) => {
       const end = Math.min(tenure.endedAt ? Date.parse(tenure.endedAt) : Infinity, Date.parse(tenure.lastVisitAt) + FALL_MS, t);
       return sum + wholeDays(Date.parse(tenure.startedAt), end) + tenure.bounty;
-    }, 0) + this.founded.filter((park) => park.accountId === account.id).length * 10;
+    }, 0) + (this.available.founders ? this.founded.filter((park) => park.accountId === account.id).length * 10 : 0);
     const lastEvent = this.events.filter((event) => event.accountId === account.id).map((event) => event.receivedAt).sort().at(-1) ?? null;
     const lastSession = account.sessions.map((session) => session.createdAt).sort().at(-1) ?? null;
     return {
@@ -189,7 +197,7 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
       visits: this.visits.filter((visit) => visit.accountId === account.id && visit.outcome !== "imported").length,
       parksHeld: tenures.filter((tenure) => !tenure.endedAt && Date.parse(tenure.lastVisitAt) + FALL_MS > t).length,
       score,
-      foundedParks: this.founded.filter((park) => park.accountId === account.id).length,
+      foundedParks: this.available.founders ? this.founded.filter((park) => park.accountId === account.id).length : null,
       deletionState: account.deletionState,
     };
   }
@@ -218,7 +226,7 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
       recentEvents: this.events.filter((event) => event.accountId === id).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, 50),
       recentVisits: this.visits.filter((visit) => visit.accountId === id).sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)).slice(0, 20)
         .map((visit) => ({ parkId: visit.parkId, parkName: this.parks.get(visit.parkId) ?? visit.parkId, visitedAt: visit.visitedAt, outcome: visit.outcome, points: visit.points })),
-      founded: this.founded.filter((park) => park.accountId === id).map((park) => ({ parkId: park.parkId, parkName: this.parks.get(park.parkId) ?? park.parkId, foundedAt: park.foundedAt })),
+      founded: !this.available.founders ? null : this.founded.filter((park) => park.accountId === id).map((park) => ({ parkId: park.parkId, parkName: this.parks.get(park.parkId) ?? park.parkId, foundedAt: park.foundedAt })),
       deletion: receipt ? { receiptId: receipt.receiptId, status: receipt.status, createdAt: receipt.createdAt } : null,
     };
   }
@@ -559,6 +567,8 @@ export function demoAnalytics(): AnalyticsDependencies {
     if (!store) {
       store = seedDemoAnalytics(new MemoryAnalyticsStore(), Date.now(), key === "staging" ? 76 : 135);
       if (key === "staging") store.accounts = store.accounts.slice(0, 12);
+      // OPERATOR_DEMO_WITHOUT_FOUNDERS=1 shows production as a release behind, without kip_founders.
+      if (key === "production" && process.env.OPERATOR_DEMO_WITHOUT_FOUNDERS === "1") store.available.founders = false;
       stores.set(key, store);
     }
     return store;

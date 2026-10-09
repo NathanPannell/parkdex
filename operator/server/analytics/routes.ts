@@ -7,6 +7,7 @@ import {
   HISTOGRAM_DB_DAYS, histogramBucket, isUuid, OVERVIEW_DAYS, parseEventQuery,
 } from "./filters.js";
 import { createPostHogClient, type PostHogClient, type PostHogEnv, type TemplateParams } from "./posthog.js";
+import { unavailableNotes } from "./schema.js";
 import { createNeonAnalyticsStore } from "./store.js";
 import type { AnalyticsStore, DeletionState, EventFilter } from "./types.js";
 
@@ -123,7 +124,8 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
     const state = url.searchParams.get("state") || null;
     if (state && state !== "active" && state !== "deleting") throw new HttpError(400, "invalid_query", "State must be active or deleting.");
     const cursorToken = url.searchParams.get("cursor");
-    const rows = await store().listAccounts({
+    const analytics = store();
+    const rows = await analytics.listAccounts({
       search, state: state as DeletionState | null, cursor: cursorToken ? decodeAccountCursor(cursorToken) : null, limit: ACCOUNT_PAGE + 1,
     }, now());
     const page = rows.slice(0, ACCOUNT_PAGE);
@@ -131,6 +133,7 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
       accounts: page,
       nextCursor: rows.length > ACCOUNT_PAGE ? encodeAccountCursor(page[page.length - 1]) : null,
       deletion: deletionSetup(),
+      unavailable: unavailableNotes(await analytics.features()),
     });
   }
 
@@ -160,9 +163,10 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
     const id = accountId(account[1]);
     if (!account[2]) {
       allowMethods(request, "GET");
-      const detail = await store().getAccount(id, now());
+      const analytics = store();
+      const detail = await analytics.getAccount(id, now());
       if (!detail) throw new HttpError(404, "not_found", "That account is not in this database.");
-      return json({ account: detail, deletion: deletionSetup() });
+      return json({ account: detail, deletion: deletionSetup(), unavailable: unavailableNotes(await analytics.features()) });
     }
     allowMethods(request, "POST");
     context.requireSameOrigin();
@@ -222,6 +226,8 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
       nextCursor: rows.length > EVENT_PAGE ? encodeEventCursor(page[page.length - 1]) : null,
       filter: { from: filter.from, to: filter.to, types: filter.types },
       unknownHandle,
+      // Founder event types simply have no rows in a database without founders; say why.
+      unavailable: unavailableNotes(await analytics.features()),
     });
   }
 
