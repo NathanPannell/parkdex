@@ -11,10 +11,10 @@ export function ContentGate({ overMap = false }: { overMap?: boolean }) {
   const message = showError
     ? "Your saved visits are safe. We’ll retry while you’re online."
     : status.phase === "offline"
-      ? "Connect to the internet to download park guides and badge art."
+      ? "Connect to the internet to download the park guides."
       : progress
         ? `Downloading park guides · ${progress}`
-        : "Preparing your park guides and badge art.";
+        : "Preparing the park guides.";
 
   return (
     <div className={`screen map-screen map-loading map-loading--content${overMap ? " map-loading--over-map" : ""}`} role="status" aria-live="polite">

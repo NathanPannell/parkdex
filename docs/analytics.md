@@ -7,7 +7,7 @@ Every API database query and a few named game events are stored in `kip_analytic
 - Every store uses `database(url)` from `worker/db.ts` instead of `neon(url)`. It behaves the same and records one `db_read` or `db_write` per query, and one per transaction. New stores must use it too.
 - Read or write comes from the SQL text: `INSERT`, `UPDATE`, `DELETE`, `MERGE`, DDL and `nextval` are writes, and so are calls to the database functions listed in `WRITE_FUNCTIONS` in `worker/db.ts` (today `kip_game.record_visit`). Add a function there when it changes data. `tables` holds the schema-qualified tables and functions the SQL mentions (`kip_*` and `public`). SQL text and parameters are never stored.
 - The API router and the content sync functions run each request inside a context (`worker/requestContext.ts`). It holds the route, account, installation, app version and bundle ID. After the response, `waitUntil` writes all of the request's events in one insert. Analytics failures never affect the request, and the insert itself is not recorded.
-- Game code calls `emitEvent(type, properties)` from `worker/requestContext.ts`. Types: `flag_planted`, `flag_taken`, `flag_held`, `visit_already_today`, `flag_fell`, `leaderboard_viewed`, `takeover_message_seen` and `handle_set`. Every counted visit emits exactly one of the first four outcomes. A `parkId` property fills `park_id`; other properties are small scalars stored in `properties` with snake_case names.
+- Game code calls `emitEvent(type, properties)` from `worker/requestContext.ts`. Types: `flag_planted`, `flag_taken`, `flag_held`, `visit_already_today`, `flag_fell`, `leaderboard_viewed`, `takeover_message_seen`, `handle_set`, and for founding parks `park_founded` and `founder_photo_checked` (`docs/park-founders.md`). Every counted visit emits exactly one of the first four outcomes. A `parkId` property fills `park_id`; other properties are small scalars stored in `properties` with snake_case names.
 
 ## Request labels
 
@@ -60,7 +60,14 @@ GROUP BY 1, 2 ORDER BY 3 DESC;
 
 - Server: with `POSTHOG_PROJECT_KEY` (and optional `POSTHOG_HOST`, default `https://us.i.posthog.com`), each request's `db_write` and game events go to `POST <host>/batch/`. Reads stay in our table only, to keep under the free plan's 1M events a month. `distinct_id` is the account ID, else the installation ID; anonymous events set `$process_person_profile: false`. Every event carries `environment` (`production`, `staging` or `preview`), `app_version` and `bundle_id`.
 - App: the server returns `analytics: { posthogKey, posthogHost }` in `/api/app-config` when a key is set, so analytics can be switched on without a new build. A build can also bake `VITE_POSTHOG_PROJECT_KEY` and `VITE_POSTHOG_HOST` as a fallback. With a key, `posthog-js` loads on demand with autocapture and `person_profiles: 'identified_only'`, uses the installation ID as its anonymous ID, and identifies by account ID after sign-in. Without a key the SDK is never downloaded.
+- App named events go through `captureProductEvent()` in `src/lib/productAnalytics.ts`, which does nothing until the SDK runs. Properties are labels and counts only, never photos or positions:
+
+  | Event | Properties |
+  | --- | --- |
+  | `found_park_started` | `entry`: `menu` or `sheet` |
+  | `found_park_photo_rejected` | `outcome`: `rejected` or `unsure`; `flags`: the flag codes shown |
+  | `found_park_completed` | `source`: `osm` (new park) or `catalogue`; `visit`: the visit outcome |
 
 ## Schema
 
-`database/migrations/interactions_002_db_events.sql` widens the table additively. Interaction events keep their original required fields and checks. Constraints have versioned names (`events_shape_v2_check`) and are only replaced when missing, so a later change adds a new version name instead of editing the migration.
+`database/migrations/interactions_002_db_events.sql` widens the table additively. Interaction events keep their original required fields and checks. Constraints have versioned names (`events_shape_v2_check`) and `interactions_002` adds them only when missing. Because it replays on every deploy, a new name would be added back next to a wider one, so new event types widen the v2 constraints under the same names instead: `founders_001_init.sql` replaces both, once, when their definition lacks `park_founded`, as `NOT VALID` so no rows are rescanned. A later migration that adds event types must do the same and keep every type in its lists.

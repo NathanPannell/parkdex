@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 import tomllib
 import urllib.error
 import urllib.parse
@@ -103,7 +104,8 @@ def _api(delivery, config: dict, path: str, *, method="GET", body=None, query=No
     return response
 
 
-def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, body: bytes | None = None):
+def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, body: bytes | None = None,
+               sleep=time.sleep):
     account = _account_id(delivery, config)
     token, _ = _api_token(delivery)
     path = f"/accounts/{account}/r2/buckets/{urllib.parse.quote(bucket, safe='')}/objects/{urllib.parse.quote(key, safe='/')}"
@@ -113,17 +115,19 @@ def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, bo
         headers["Content-Type"] = "application/json; charset=utf-8"
     request = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            payload = response.read(16_385 if method == "GET" else 2_000_000)
-            if method == "GET" and len(payload) > 16_384:
-                _error(delivery, "Private-photo ownership marker exceeded its size limit.")
-            return response.status, payload
+        # Shared with api_json so marker reads retry transient failures and writes never do.
+        status, payload = delivery.urlopen_read(
+            request, timeout=60, limit=16_385 if method == "GET" else 2_000_000, sleep=sleep,
+        )
     except urllib.error.HTTPError as exc:
         if exc.code == 404 and method == "GET":
             return 404, b""
         _error(delivery, f"Cloudflare R2 object {method} request failed with HTTP {exc.code}.")
-    except (urllib.error.URLError, TimeoutError):
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
         _error(delivery, f"Cloudflare R2 object {method} request could not complete.")
+    if method == "GET" and len(payload) > 16_384:
+        _error(delivery, "Private-photo ownership marker exceeded its size limit.")
+    return status, payload
 
 
 def _owner_marker(delivery, config: dict, bucket: str) -> dict | None:

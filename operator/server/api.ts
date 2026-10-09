@@ -3,6 +3,7 @@ import { sendEmail, type DeliveryDependencies } from "../../worker/feedbackDeliv
 import { createNeonParkProposalStore, parseProposalStatus, PROPOSAL_STATUSES, type ParkProposalStore } from "../../worker/parkProposals.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../worker/store.js";
 import { createOsmClient, type OsmClient, type OverpassEnv } from "../../worker/osmParks.js";
+import { createSqlOsmParkTable } from "../../worker/osmParkTable.js";
 import { createSqlProposalReviewStore, databaseSqlRunner, publishProposalByOperator, type ProposalReviewStore } from "../../worker/proposalReview.js";
 import { HttpError, readJsonBody, validateRetryBody, validateStatus } from "../../worker/validation.js";
 import { neon } from "@neondatabase/serverless";
@@ -282,7 +283,7 @@ export function selectDatabase(request: Request, env: DashboardEnv): DashboardEn
 export function createDashboardApi(dependencies: DashboardDependencies = {}) {
   // Kept for the life of the isolate so the large legacy files are fetched at most every few minutes.
   let legacy: LegacySource | null = dependencies.legacySource ?? null;
-  let osm: OsmClient | null = dependencies.osmClient ?? null;
+  const osm: OsmClient | null = dependencies.osmClient ?? null;
   return async function handle(request: Request, baseEnv: DashboardEnv): Promise<Response> {
     try {
       const path = new URL(request.url).pathname;
@@ -309,7 +310,8 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}) {
         await routeBuilds(request, path, () => dependencies.appConfigStore?.(baseEnv) ?? createNeonAppConfigStore(databaseUrl(baseEnv))) ??
         await routeProposals(request, path, () => dependencies.proposalStore?.(env) ?? createNeonParkProposalStore(databaseUrl(env)), () => ({
           review: dependencies.proposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(databaseUrl(env))),
-          osm: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined),
+          // A client per request: the outline table follows the database the operator switched to.
+          osm: osm ?? createOsmClient(env, dependencies.fetch as typeof fetch | undefined, { table: createSqlOsmParkTable(databaseSqlRunner(databaseUrl(env))) }),
         })) ??
         await routeParks(request, path, {
           json,

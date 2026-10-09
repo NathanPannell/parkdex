@@ -14,5 +14,8 @@ interface ImportMetaEnv {
   /** Build-time fallback for the public PostHog project key; the server's app config wins. */
   readonly VITE_POSTHOG_PROJECT_KEY?: string;
   readonly VITE_POSTHOG_HOST?: string;
+  readonly VITE_FIELD?: string;
+  /** "1" shows demo tools in a local non-dev build. Hosted builds refuse it (src/lib/demo.ts). */
+  readonly VITE_DEMO_TOOLS?: string;
 }
 declare const __APP_BUILD__: string;

@@ -403,7 +403,7 @@ function createRequestId(): string {
 }
 
 function accountBackupUnavailableError(): Error {
-  const error = new Error("Connect to the internet to back up saved claims and photos.");
+  const error = new Error("Connect to the internet to back up your saved progress.");
   error.name = "AccountBackupUnavailableError";
   return error;
 }

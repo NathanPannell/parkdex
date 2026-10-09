@@ -1,4 +1,5 @@
 import { motion, type PanInfo } from "motion/react";
+import { useState } from "react";
 import { Badge } from "../../components/Badge";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { FlagPin } from "../../components/Flag";
@@ -15,6 +16,9 @@ import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
 import { SHOW_BADGE_ART } from "../../lib/parks";
+import { founderCta, summaryCover, summaryStats, useParkSummary } from "../../lib/parkSummary";
+import { useGame } from "../../lib/game/GameProvider";
+import "../../found-park.css";
 
 type Props = {
   park: Park;
@@ -26,6 +30,12 @@ type Props = {
   flagDays: number;
   /** Plant, take or visit, or sign in first. */
   visitLabel: string;
+  signedIn: boolean;
+  /** Inside this park's boundary, as visits count it; founding needs it. */
+  insideForFounding: boolean;
+  /** Founding is offered in this build. */
+  canFound: boolean;
+  onFound: () => void;
   onClose: () => void;
   onGo: () => void;
   onCheckIn: () => void;
@@ -48,8 +58,15 @@ export function parkLocationUrl(park: Park) {
   return park.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLabel, onClose, onGo, onCheckIn, onFeedback, entryPoint }: Props) {
+export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLabel, signedIn, insideForFounding, canFound, onFound, onClose, onGo, onCheckIn, onFeedback, entryPoint }: Props) {
   const content = useContent();
+  const game = useGame();
+  const summary = useParkSummary(park.id, game.accountId);
+  const cover = summaryCover(summary, game.flags?.founders.get(park.id)?.coverUrl ?? null);
+  const [coverFailed, setCoverFailed] = useState(false);
+  const showCover = !!cover && !coverFailed;
+  const founder = founderCta(summary, insideForFounding, canFound);
+  const stats = summaryStats(summary, signedIn);
   const trip = estimateTrip(user, park, content?.drive);
   const accessUnknown = trip.mode === "unknown";
   const boundary = useBoundaries()?.byId.get(park.id);
@@ -95,24 +112,33 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       dragElastic={{ top: 0.05, bottom: 0.7 }}
       onDragEnd={onDragEnd}
     >
-      <div className="park-sheet__hero" style={{ background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}>
+      <div className={`park-sheet__hero${showCover ? " has-cover" : ""}`} style={{ background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}>
         <div className="sheet__handle" />
         <button className="park-sheet__close" onClick={onClose} aria-label="Close">
           <Icon name="close" size={18} stroke={3} />
         </button>
-        <div className="park-sheet__rays">
-          <Rays color="#FFFFFF" size={460} opacity={0.35} />
-        </div>
-        <motion.div
-          className="park-sheet__badge"
-          layoutId={`badge-${park.id}`}
-          initial={{ scale: 0.3, rotate: -25, y: 60 }}
-          animate={{ scale: 1, rotate: 0, y: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
-        >
-          {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
-          {isNative ? badge : <Tilt>{badge}</Tilt>}
-        </motion.div>
+        {showCover ? (
+          // The founder's approved photo replaces the badge as the park's face.
+          <motion.div className="park-sheet__cover" initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}>
+            <img src={cover} alt={`${park.name}, photographed by its founder`} onError={() => setCoverFailed(true)} />
+          </motion.div>
+        ) : (
+          <>
+            <div className="park-sheet__rays">
+              <Rays color="#FFFFFF" size={460} opacity={0.35} />
+            </div>
+            <motion.div
+              className="park-sheet__badge"
+              layoutId={`badge-${park.id}`}
+              initial={{ scale: 0.3, rotate: -25, y: 60 }}
+              animate={{ scale: 1, rotate: 0, y: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
+            >
+              {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
+              {isNative ? badge : <Tilt>{badge}</Tilt>}
+            </motion.div>
+          </>
+        )}
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
           {holder.kind === "mine" ? "Your flag flies here" : holder.kind === "other" ? `@${holder.flag.handle}'s park` : holder.kind === "empty" ? "No flag yet" : "Flags need a connection"}
         </motion.div>
@@ -150,6 +176,23 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           )}
         </motion.div>
 
+        {founder.kind !== "hidden" && (
+          <motion.button
+            variants={item}
+            className="founder-cta"
+            onClick={onFound}
+            disabled={founder.kind !== "found"}
+            aria-label={founder.kind === "found" ? `Become the founder of ${park.name}, plus ${founder.points} points` : founder.text}
+          >
+            <span className="founder-cta__icon"><Icon name="camera" size={22} /></span>
+            <span className="founder-cta__text">
+              <strong>Become the founder</strong>
+              <em>{founder.kind === "found" ? "Take its first photo. It becomes the park's cover." : founder.text}</em>
+            </span>
+            <span className="founder-cta__points">+{founder.points}</span>
+          </motion.button>
+        )}
+
         <motion.div variants={item} className="stats">
           <div className="stat">
             <Icon name="pin" size={18} />
@@ -172,6 +215,27 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
             {park.blurb}
           </motion.p>
         )}
+
+        <motion.section variants={item} className={`park-summary${stats.pending ? " is-pending" : ""}`} aria-label="Park stats" aria-busy={stats.pending}>
+          <p className="park-summary__founder">
+            <Icon name="flagPlus" size={18} /> {stats.founder}
+          </p>
+          <dl className="park-summary__counts">
+            <div>
+              <dt>Your visits</dt>
+              <dd>{stats.mine}</dd>
+            </div>
+            <div>
+              <dt>All visits</dt>
+              <dd>{stats.total}</dd>
+            </div>
+            <div>
+              <dt>Last 30 days</dt>
+              <dd>{stats.last30Days}</dd>
+            </div>
+          </dl>
+          {stats.note && <p className="park-summary__note">{stats.note}</p>}
+        </motion.section>
 
         <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
           <Icon name="chat" size={16} /> Something wrong with this park? Tell us

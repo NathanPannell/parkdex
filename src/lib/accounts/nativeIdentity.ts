@@ -42,7 +42,7 @@ const recentAuthLinkDigests = new Set<string>();
 
 export class NativeSessionOriginMismatchError extends Error {
   constructor() {
-    super("This saved Parkdex session needs a new sign-in before it can sync with this app environment. Your saved Dex remains on this device. Sign in again here to sync it.");
+    super("This saved Parkdex session needs a new sign-in before it can sync with this app environment. Your saved progress stays on this device. Sign in again here to sync it.");
     this.name = "NativeSessionOriginMismatchError";
   }
 }

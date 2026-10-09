@@ -17,6 +17,10 @@ It must not rename, remove, or retype a field, or change what a field means. A b
 
 The API and every installed build reject a content response over 4 MiB. Parks that would push the snapshot past that get a reader floor (`public.content_park_reader_floor`): readers below the floor never receive them in `snapshot` or `changes`, and a batch with only such parks reaches them as an unchanged hub list. Reader 3 builds load the whole catalogue from an immutable CDN release instead. See `docs/content-catalogue.md`.
 
+## Hiding parks
+
+A hidden park (`docs/park-visibility.md`) reaches every reader as `park`, `boundary` and `drive` delete changes, which all supported builds apply, and is left out of the snapshot. Its row stays in the database.
+
 ## What builds from 2026-10-01 do
 
 - They ignore fields added after they shipped.

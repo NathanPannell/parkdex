@@ -3,6 +3,7 @@
 //
 //   npm run local:api                                   # uses PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE
 //   npm run local:api -- --pgdata <dir> --pg-port 55510 # creates or reuses a throwaway cluster in <dir>
+//   npm run local:api -- --content ...                  # also the content tables, so parks can be founded
 //
 // See docs/local-stack.md. Never point this at a hosted database.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -25,6 +26,9 @@ const apiPort = Number(option('port', process.env.LOCAL_API_PORT ?? '8787'));
 const appOrigin = option('app-origin', process.env.LOCAL_APP_ORIGIN ?? 'http://localhost:5190');
 const pgData = option('pgdata', process.env.LOCAL_PGDATA);
 const pgBin = process.env.PG_BIN ?? 'C:/Program Files/PostgreSQL/18/bin';
+// Founding a park publishes it through the content tables, which check that every park has a
+// boundary and drive rows. --content installs them and seeds parks with their boundaries.
+const withContent = process.argv.includes('--content');
 const exe = (name) => (process.platform === 'win32' ? join(pgBin, `${name}.exe`) : join(pgBin, name));
 
 /** Creates (first run) or starts the throwaway cluster, and points the PG* variables at it. */
@@ -56,9 +60,10 @@ const { createFeedbackWorker } = await import('../worker/index.ts');
 
 async function migrate() {
   const config = JSON.parse(readFileSync(join(ROOT, 'deployment.json'), 'utf8'));
-  // Same order as the release harness, minus content sync: the local stack only needs
+  // Same order as the release harness. Without --content it skips content sync: visits only need
   // public.parks for the catalogue check, not the content publishing tables.
-  const paths = [config.migrationPath, ...config.optionalMigrationPaths, 'database/001_cloud_content.sql', ...config.independentMigrationPaths];
+  const content = withContent ? config.contentSync.migrationPaths : [];
+  const paths = [config.migrationPath, 'database/001_cloud_content.sql', ...config.optionalMigrationPaths, ...content, ...config.independentMigrationPaths];
   for (const path of paths) await applyMigration(join(ROOT, path));
 }
 
@@ -66,21 +71,65 @@ async function migrate() {
 // park_not_found. The bundled list is the offline fallback.
 const CATALOGUE_URL = option('catalogue', process.env.LOCAL_CATALOGUE_URL ?? 'https://staging.web.parkdex.app/api/content/snapshot');
 
-async function catalogueParks() {
+async function catalogueSnapshot() {
   try {
     const response = await fetch(CATALOGUE_URL, { signal: AbortSignal.timeout(20_000) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const parks = (await response.json()).parks;
-    if (!Array.isArray(parks) || parks.length === 0) throw new Error('no parks');
-    return parks;
+    const snapshot = await response.json();
+    if (!Array.isArray(snapshot.parks) || snapshot.parks.length === 0) throw new Error('no parks');
+    return snapshot;
   } catch (error) {
     console.warn(`Catalogue fetch failed (${error.message}); using the bundled parks.`);
-    return JSON.parse(readFileSync(join(ROOT, 'src', 'data', 'parks.json'), 'utf8'));
+    return { parks: JSON.parse(readFileSync(join(ROOT, 'src', 'data', 'parks.json'), 'utf8')) };
+  }
+}
+
+/** Parks with their boundary, drive settings and one drive row per hub, each in its own transaction. */
+async function seedContentParks(snapshot) {
+  const hubs = snapshot.drive?.hubs ?? [{ name: 'Downtown Victoria', lng: -123.3656, lat: 48.4284 }];
+  const boundaries = new Map((snapshot.boundaries?.features ?? []).map((feature) => [feature.properties?.id, feature.geometry]));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const [position, hub] of hubs.entries()) {
+      await client.query('INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING', [position, hub.name, hub.lng, hub.lat]);
+    }
+    await client.query('COMMIT');
+    let seeded = 0;
+    for (const park of snapshot.parks) {
+      const geometry = boundaries.get(park.id);
+      if (!geometry) continue;
+      await client.query('BEGIN');
+      // Badge scenes need registered assets, which the local stack does not have.
+      const inserted = await client.query(`
+        INSERT INTO public.parks (id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULL,$11,$12) ON CONFLICT (id) DO NOTHING RETURNING id`,
+      [park.id, park.name, park.short, park.category, park.region, park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb]);
+      if (inserted.rows.length) {
+        await client.query('INSERT INTO public.boundaries (park_id, feature) VALUES ($1, $2::jsonb)', [park.id, JSON.stringify({ type: 'Feature', properties: { id: park.id, biome: park.biome }, geometry })]);
+        const drive = snapshot.drive?.parks?.[park.id];
+        await client.query('INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES ($1, $2)', [park.id, drive?.walkM ?? 0]);
+        for (const position of hubs.keys()) {
+          const [km, min] = drive?.drive?.[position] ?? [null, null];
+          await client.query('INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) VALUES ($1, $2, $3, $4)', [park.id, position, km, min]);
+        }
+        seeded += 1;
+      }
+      await client.query('COMMIT');
+    }
+    return seeded;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
 async function seedParks() {
-  const parks = await catalogueParks();
+  const snapshot = await catalogueSnapshot();
+  if (withContent) return seedContentParks(snapshot);
+  const parks = snapshot.parks;
   for (const park of parks) {
     await pool.query(`
       INSERT INTO public.parks (id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb)

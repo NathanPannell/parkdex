@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { assertUserDataApiBuildConfiguration } from "./src/lib/userDataDestination";
+import { assertDemoToolsBuild } from "./src/lib/demo";
 import pkg from "./package.json" with { type: "json" };
 import { readdir, readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
@@ -99,6 +100,7 @@ function localApiTarget(value: string | undefined) {
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, process.cwd(), "VITE_");
   assertUserDataApiBuildConfiguration(environment, { mode, vercelUrl: process.env.VERCEL_URL });
+  assertDemoToolsBuild(environment, !!process.env.VERCEL);
   const localApi = mode === "development" ? localApiTarget(process.env.KIP_LOCAL_API) : undefined;
 
   return {

@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -95,6 +96,8 @@ class AccountReleaseGates(unittest.TestCase):
             "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
             "game_001_init.sql",
             "park_proposals_002_moderation.sql",
+            "osm_parks_001_init.sql",
+            "founders_001_init.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
@@ -132,6 +135,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
             "database/migrations/content_004_catalogue_release.sql",
+            "database/migrations/content_005_park_visibility.sql",
         ])
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
@@ -177,6 +181,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
             "database/migrations/content_004_catalogue_release.sql",
+            "database/migrations/content_005_park_visibility.sql",
         ])
 
     def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):
@@ -815,6 +820,157 @@ class MigrationLockRetry(unittest.TestCase):
     def test_gives_up_after_the_last_attempt(self):
         with self.assertRaisesRegex(delivery.DeliveryError, "deadlock"):
             self.migrate(["ERROR:  deadlock detected"] * delivery.MIGRATION_ATTEMPTS)
+
+
+def http_error(code):
+    return urllib.error.HTTPError("https://api.example.test/x", code, "error", {}, io.BytesIO(b""))
+
+
+class FakeResponse(io.BytesIO):
+    status = 200
+
+
+class ScriptedUrlopen:
+    """Replays network outcomes (an exception or a response body) and records each attempt and backoff."""
+
+    @contextlib.contextmanager
+    def scripted(self, outcomes):
+        self.sleeps = []
+        self.calls = 0
+
+        def fake_urlopen(request, timeout):
+            self.calls += 1
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return FakeResponse(outcome)
+
+        with patch.object(delivery.urllib.request, "urlopen", side_effect=fake_urlopen), \
+             contextlib.redirect_stderr(io.StringIO()):
+            yield
+
+
+class ProviderGetRetry(ScriptedUrlopen, unittest.TestCase):
+    """A transient provider read must not abort a first-attempt-only release dispatch."""
+
+    def call(self, outcomes, *, method="GET", not_found_ok=False):
+        with self.scripted(outcomes):
+            return delivery.api_json("https://api.example.test", "/x", token="t", method=method,
+                                     body={} if method != "GET" else None,
+                                     not_found_ok=not_found_ok, sleep=self.sleeps.append)
+
+    def test_get_succeeds_after_a_transient_network_error(self):
+        result = self.call([urllib.error.URLError("reset"), b'{"ok": true}'])
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual((self.calls, self.sleeps), (2, [2]))
+
+    def test_get_gives_up_after_three_attempts_with_the_same_message(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^api\.example\.test API GET request could not complete\.$"):
+            self.call([TimeoutError(), ConnectionResetError(), urllib.error.URLError("down")])
+        self.assertEqual((self.calls, self.sleeps), (3, [2, 5]))
+
+    def test_get_retries_http_503(self):
+        self.assertEqual(self.call([http_error(503), b"{}"]), {})
+        self.assertEqual(self.calls, 2)
+
+    def test_get_does_not_retry_not_found(self):
+        self.assertIsNone(self.call([http_error(404)], not_found_ok=True))
+        self.assertEqual((self.calls, self.sleeps), (1, []))
+
+    def test_get_does_not_retry_other_client_errors(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "HTTP 403"):
+            self.call([http_error(403), b"{}"])
+        self.assertEqual(self.calls, 1)
+
+    def test_writes_are_never_retried(self):
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            with self.subTest(method=method):
+                with self.assertRaisesRegex(delivery.DeliveryError, f"API {method} request could not complete"):
+                    self.call([urllib.error.URLError("reset"), b"{}"], method=method)
+                self.assertEqual((self.calls, self.sleeps), (1, []))
+                with self.assertRaisesRegex(delivery.DeliveryError, "HTTP 503"):
+                    self.call([http_error(503), b"{}"], method=method)
+                self.assertEqual(self.calls, 1)
+
+
+class R2ObjectGetRetry(ScriptedUrlopen, unittest.TestCase):
+    """The ownership marker read during photo Worker dispatch retries like other provider reads."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("kip_private_photos_retry", Path(__file__).with_name("kip_private_photos.py"))
+        self.photos = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.photos)
+        self.config = {"privatePhotos": {"accountId": "6f0eb57971124f41fadc7897ace74dac"}}
+
+    def call(self, outcomes, *, method="GET"):
+        with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "cf-test-token"}), self.scripted(outcomes):
+            return self.photos._r2_object(delivery, self.config, "bucket", "marker.json", method=method,
+                                          body=b"{}" if method == "PUT" else None, sleep=self.sleeps.append)
+
+    def test_get_succeeds_after_a_transient_network_error(self):
+        self.assertEqual(self.call([urllib.error.URLError("reset"), b"{}"]), (200, b"{}"))
+        self.assertEqual((self.calls, self.sleeps), (2, [2]))
+
+    def test_get_gives_up_after_three_attempts_with_the_same_message(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^Cloudflare R2 object GET request could not complete\.$"):
+            self.call([http_error(502), TimeoutError(), urllib.error.URLError("down")])
+        self.assertEqual((self.calls, self.sleeps), (3, [2, 5]))
+
+    def test_get_retries_http_503(self):
+        self.assertEqual(self.call([http_error(503), b"{}"]), (200, b"{}"))
+        self.assertEqual(self.calls, 2)
+
+    def test_missing_marker_is_not_retried(self):
+        self.assertEqual(self.call([http_error(404)]), (404, b""))
+        self.assertEqual((self.calls, self.sleeps), (1, []))
+
+    def test_put_and_delete_are_never_retried(self):
+        for method in ("PUT", "DELETE"):
+            with self.subTest(method=method):
+                with self.assertRaisesRegex(delivery.DeliveryError, f"R2 object {method} request could not complete"):
+                    self.call([urllib.error.URLError("reset"), b"{}"], method=method)
+                self.assertEqual((self.calls, self.sleeps), (1, []))
+
+
+class FailureDetail(unittest.TestCase):
+    """A failed command shows its first error, not only a tail that can be all object dump."""
+
+    def test_long_output_keeps_the_first_error_the_end_and_the_last_progress(self):
+        secret = "pg-password-qa-only-value"
+        delivery.register_secret(secret)
+        stderr = "\n".join([
+            "node:events:486",
+            "      throw er; // Unhandled 'error' event",
+            "      ^",
+            "",
+            f"error: terminating connection due to administrator command postgres://kip_qa:{secret}@127.0.0.1/db",
+            "    at Parser.parseErrorMessage (node_modules/pg-protocol/dist/parser.js:285:98)",
+            *[f"    field_{index}: {'x' * 60}," for index in range(200)],
+            "    _poolUseCount: 44,",
+            "}",
+        ])
+        stdout = "deleting the founder account removes the founder and photo: PASS\nqa-osm-parks: PASS\nlast step: PASS"
+        with patch.object(delivery.subprocess, "run", return_value=delivery.subprocess.CompletedProcess([], 1, stdout, stderr)):
+            with self.assertRaises(delivery.DeliveryError) as raised:
+                delivery.run(["npm", "run", "test:sql"], label="candidate PostgreSQL integration tests")
+        message = str(raised.exception)
+        self.assertIn("failed with exit code 1", message)
+        self.assertIn("first error:", message)
+        self.assertIn("error: terminating connection due to administrator command", message)
+        self.assertIn("end of output:", message)
+        self.assertIn("_poolUseCount: 44", message)
+        self.assertIn("last progress on stdout:\ndeleting the founder account", message)
+        self.assertNotIn(secret, message)
+        self.assertNotIn("kip_qa:", message)
+        self.assertLess(len(message), 3200)
+
+    def test_short_output_is_shown_whole_and_empty_output_adds_nothing(self):
+        self.assertEqual(delivery.failure_detail("", "AssertionError: 1 !== 2"), "AssertionError: 1 !== 2")
+        self.assertEqual(delivery.failure_detail("", ""), "")
+        long_without_marker = "\n".join(f"line {index} {'y' * 40}" for index in range(100))
+        detail = delivery.failure_detail(long_without_marker, "")
+        self.assertTrue(detail.startswith("start of output:\nline 0"))
+        self.assertIn("line 99", detail)
 
 
 if __name__ == "__main__":

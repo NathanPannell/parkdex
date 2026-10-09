@@ -410,22 +410,27 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
                    google_maps_url AS "googleMapsUrl", trailhead_lat AS "trailheadLat", trailhead_lng AS "trailheadLng"
               FROM public.parks AS park
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = park.id)
              ORDER BY id`,
         sql`SELECT park_id, feature FROM public.boundaries AS boundary
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = boundary.park_id AND floor.minimum_reader > ${reader})
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = boundary.park_id)
              ORDER BY park_id`,
         sql`SELECT position, name, lng, lat FROM public.drive_hubs ORDER BY position`,
         sql`SELECT park_id, walk_m FROM public.park_drive_settings AS setting
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = setting.park_id AND floor.minimum_reader > ${reader})
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = setting.park_id)
              ORDER BY park_id`,
         sql`SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive AS route
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = route.park_id AND floor.minimum_reader > ${reader})
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = route.park_id)
              ORDER BY park_id, hub_position`,
         sql`SELECT DISTINCT asset.logical_path AS path, asset.object_key AS key, asset.url, asset.sha256, asset.byte_size, asset.content_type
               FROM public.parks AS park
               JOIN public.r2_objects AS asset ON asset.logical_path = 'art/badges/scenes/' || park.scene || '.webp'
              WHERE park.scene IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
+               AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = park.id)
              ORDER BY asset.logical_path`,
         sql`SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true`,
       ], { isolationLevel: "RepeatableRead", readOnly: true });
@@ -503,6 +508,9 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
                 AND NOT (change.entity IN ('park', 'boundary', 'drive') AND EXISTS (
                   SELECT 1 FROM public.content_park_reader_floor AS floor
                    WHERE floor.park_id = change.entity_id AND floor.minimum_reader > $3))
+                -- A hidden park reaches readers only as the tombstones written when it was hidden.
+                AND NOT (change.entity IN ('park', 'boundary', 'drive') AND change.operation = 'upsert' AND EXISTS (
+                  SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = change.entity_id))
           ORDER BY selected.revision, change.entity, change.entity_id`,
         [after, limit, reader],
       ) as Record<string, unknown>[];

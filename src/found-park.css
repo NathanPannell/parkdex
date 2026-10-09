@@ -1,0 +1,611 @@
+.found {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.found > * {
+  pointer-events: auto;
+}
+
+.found-top {
+  position: absolute;
+  top: var(--safe-top, 14px);
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 20px;
+}
+
+.found-top p {
+  margin: 2px 0 0;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.found-top .btn--icon {
+  flex: none;
+  border-radius: 50%;
+}
+
+.found-sheet {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--safe-bottom, 12px) + 84px);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 22px;
+}
+
+.found-row {
+  display: flex;
+  gap: 8px;
+}
+
+.found-row .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.found-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.found-status > div,
+.found-empty > div {
+  display: grid;
+  gap: 2px;
+}
+
+.found-status strong,
+.found-empty strong {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.found-status span,
+.found-empty span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+.found-status__spinner {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 4px solid color-mix(in srgb, var(--moss) 25%, transparent);
+  border-top-color: var(--moss);
+  animation: found-spin 0.9s linear infinite;
+}
+
+.found-empty {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.found-empty .found-row {
+  grid-column: 1 / -1;
+}
+
+.found-pick {
+  display: grid;
+  gap: 4px;
+}
+
+.found-pick__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.found-pick__name {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.found-pick__detail {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pine);
+}
+
+.found-credit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.found-list {
+  display: grid;
+  gap: 6px;
+  max-height: 184px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.found-option {
+  display: grid;
+  gap: 1px;
+  padding: 8px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.found-option.is-on {
+  background: color-mix(in srgb, var(--kip) 16%, var(--paper));
+  border-color: var(--kip-dark, var(--kip));
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.found-option.is-founded {
+  border-style: dotted;
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.found-option__name {
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.found-option__detail {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* The scan: a radar sweep and two pulse rings around your position. */
+.found-radar {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  pointer-events: none;
+}
+
+.found-radar__sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, color-mix(in srgb, var(--kip) 55%, transparent), transparent 28%, transparent);
+  mask-image: radial-gradient(circle, #000 0%, #000 66%, transparent 70%);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, #000 66%, transparent 70%);
+  animation: found-spin 1.4s linear infinite;
+}
+
+.found-radar__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid var(--kip);
+  opacity: 0;
+  animation: found-pulse 1.8s ease-out infinite;
+}
+
+.found-radar__ring--2 {
+  animation-delay: 0.9s;
+}
+
+.found-radar__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: var(--kip);
+  border: 3px solid var(--paper);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+@keyframes found-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes found-pulse {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .found-radar__sweep,
+  .found-status__spinner {
+    animation-duration: 4s;
+  }
+
+  .found-radar__ring {
+    animation: none;
+    opacity: 0.5;
+    transform: scale(0.6);
+  }
+}
+
+/* Camera */
+.found-camera__picker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.found-camera__polaroid .polaroid__img {
+  max-height: 50vh;
+}
+
+/* Checking and its answers, over the map with the photo. */
+.found-check {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 12px);
+  background: rgba(20, 35, 28, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.found-check__photo {
+  width: min(250px, 66vw);
+  padding-bottom: 42px;
+}
+
+.found-check__photo .polaroid__img {
+  position: relative;
+  max-height: 38vh;
+}
+
+.found-check__photo.is-checking img {
+  filter: saturate(0.7);
+}
+
+.found-check__scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--sun) 55%, transparent) 70%, var(--sun) 100%);
+  animation: found-scanline 1.3s ease-in-out infinite alternate;
+}
+
+@keyframes found-scanline {
+  from {
+    top: -30%;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+.found-check__panel {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 22px;
+}
+
+.found-check__title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.found-check__detail {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.found-flags {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.found-flags li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.found-flags__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: #ffe0e7;
+  color: var(--kip-dark);
+}
+
+/* Founded */
+.found-done__title {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.found-done__camera {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.found-done__cover {
+  width: min(230px, 58vw);
+  padding-bottom: 42px;
+  z-index: 2;
+}
+
+.found-done__cover .polaroid__img {
+  aspect-ratio: 4 / 3;
+}
+
+.found-done__ring {
+  position: absolute;
+  width: 220px;
+  height: 80px;
+  bottom: -20px;
+  border-radius: 50%;
+  border: 5px solid #ffe7a8;
+  box-shadow: 0 0 18px rgba(255, 201, 60, 0.7);
+  pointer-events: none;
+}
+
+.found-done__points {
+  top: 4%;
+  left: auto;
+  right: 0;
+}
+
+.found-done__points strong {
+  font-size: 64px;
+}
+
+.found-done__points span {
+  font-size: 15px;
+}
+
+.found-done__visit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--paper);
+  border-radius: 16px;
+  background: rgba(255, 248, 236, 0.08);
+}
+
+.found-done__visit.is-won {
+  border-color: var(--sun);
+}
+
+.found-done__visit > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.found-done__visit strong {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 17px;
+}
+
+.found-done__visit em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* Park sheet */
+.park-sheet__cover {
+  position: absolute;
+  inset: 12px 12px 12px;
+  z-index: 1;
+  overflow: hidden;
+  border: 2.5px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: 0 4px 0 rgba(20, 35, 28, 0.25);
+  background: var(--paper-2);
+}
+
+.park-sheet__cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.park-sheet__hero.has-cover .park-sheet__earn {
+  top: 24px;
+  left: 24px;
+}
+
+.park-sheet__hero.has-cover .park-sheet__close {
+  top: 22px;
+  right: 22px;
+}
+
+.park-sheet__hero.has-cover .sheet__handle {
+  background: rgba(255, 248, 236, 0.85);
+}
+
+.founder-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  background: linear-gradient(90deg, #fff1b8, var(--paper) 80%);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  box-shadow: var(--pop);
+  cursor: pointer;
+}
+
+.founder-cta:disabled {
+  border-style: dashed;
+  background: var(--paper);
+  box-shadow: none;
+  cursor: default;
+}
+
+.founder-cta__icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--kip);
+  color: var(--paper);
+}
+
+.founder-cta:disabled .founder-cta__icon {
+  background: var(--paper-2);
+  color: var(--ink-soft);
+}
+
+.founder-cta__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.founder-cta__text strong {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.founder-cta__text em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.founder-cta__points {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--sun);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.founder-cta:disabled .founder-cta__points {
+  background: var(--paper-2);
+}
+
+.park-summary {
+  margin: 4px 0 14px;
+  padding: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper-2);
+}
+
+.park-summary__founder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-weight: 800;
+}
+
+.park-summary__founder svg {
+  color: var(--kip);
+}
+
+.park-summary__counts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0;
+}
+
+.park-summary__counts > div {
+  display: grid;
+  gap: 1px;
+}
+
+.park-summary__counts dt {
+  order: 2;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.park-summary__counts dd {
+  order: 1;
+  margin: 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.park-summary.is-pending dd,
+.park-summary.is-pending .park-summary__founder {
+  color: var(--ink-soft);
+}
+
+.park-summary__note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}

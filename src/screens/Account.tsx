@@ -360,7 +360,7 @@ export function Account({ onBack }: { onBack: () => void }) {
         {auth.phase === "starting" && (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Opening your Dex…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
+            <div><strong>Opening your account…</strong><p>Your saved progress stays on this device while Parkdex checks your account.</p></div>
           </section>
         )}
 
@@ -368,8 +368,8 @@ export function Account({ onBack }: { onBack: () => void }) {
           <>
             <section className="account-card card">
               <span className="eyebrow">Offline</span>
-              <h2>Your saved Dex is here</h2>
-              <p>Parkdex couldn't confirm the account while offline. The previous account's saved Dex remains in its private device partition and is not being backed up.</p>
+              <h2>Your saved progress is here</h2>
+              <p>Parkdex couldn't confirm the account while offline. The previous account's saved progress stays on this device and is not being backed up.</p>
               <button className="btn btn--sun btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
               {auth.startupError && <p className="account-help" role="status">{auth.startupError}</p>}
             </section>
@@ -380,7 +380,7 @@ export function Account({ onBack }: { onBack: () => void }) {
           <section className="account-card card" role="alert">
             <span className="eyebrow">Saved progress</span>
             <h2>Storage needs attention</h2>
-            <p>{auth.startupError ?? "Your saved Dex could not be opened. Your previous data was left untouched."}</p>
+            <p>{auth.startupError ?? "Your saved progress could not be opened. Your previous data was left untouched."}</p>
             <button className="btn btn--paper btn--block" onClick={() => void auth.refresh()}><Icon name="refresh" /> Try again</button>
           </section>
         )}
@@ -412,12 +412,12 @@ export function Account({ onBack }: { onBack: () => void }) {
                       ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
                       : backupTimestamp
                         ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
-                        : "Not synced yet"}
+                        : auth.backup.phase === "success" ? "Nothing to back up yet" : "Not synced yet"}
                   </p>
                   {backupStatus && <p className="account-backup-row__status" role="status">{backupStatus}</p>}
                 </div>
               </div>
-              <p className="account-help">Your badges and photos back up to this account so you can restore them on another phone.</p>
+              <p className="account-help">Your @handle, flag and points are saved to your Parkdex account, so they follow you to any phone. Photos and parks you collected before the flag game are kept here too.</p>
             </section>
 
             {(!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
@@ -457,7 +457,7 @@ export function Account({ onBack }: { onBack: () => void }) {
 
             <section className="account-signout">
               <button className="btn btn--paper btn--block" disabled={busy} onClick={() => void run(auth.signOut)}>Sign out on this device</button>
-              <p>Signing out hides this account’s Dex on this phone until you sign in again.</p>
+              <p>Signing out hides this account’s saved progress on this phone until you sign in again. Your flags keep flying.</p>
             </section>
 
             <section className="account-delete">
@@ -474,7 +474,7 @@ export function Account({ onBack }: { onBack: () => void }) {
             {deleteStep === "confirm" ? (
               <>
                 <h2>Delete this Parkdex account?</h2>
-                <p>This permanently deletes your Parkdex account, its saved badges and photos, and its server backup. The account’s saved copy on this device is cleared after Parkdex accepts the request. First verify your account again.</p>
+                <p>This permanently deletes your Parkdex account, its @handle, flag and points, any saved badges and photos, and its server backup. The account’s saved copy on this device is cleared after Parkdex accepts the request. First verify your account again.</p>
                 {canPasswordReauth && (
                   <form className="account-form" onSubmit={(event) => void submitDeleteReauth(event)}>
                     <label className="fb-field"><span className="fb-label">Current password</span><input className="fb-input" type="password" autoComplete="current-password" minLength={12} maxLength={128} required value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} /></label>
@@ -537,9 +537,9 @@ export function Account({ onBack }: { onBack: () => void }) {
               ) : (
                 <>
                   <div className="account-form-card__heading">
-                    <span className="eyebrow">{mode === "sign_up" ? "Start collecting" : "Keep your Dex safe"}</span>
+                    <span className="eyebrow">{mode === "sign_up" ? "Start playing" : "Plant your flag"}</span>
                     <h2>{mode === "sign_up" ? "Create your Parkdex account" : "Sign in to Parkdex"}</h2>
-                    <p>{mode === "sign_up" ? "Badges and photos collected before signing in join the first Parkdex account you sign in to." : "Your badges and photos stay on this device until you sign in."}</p>
+                    <p>{mode === "sign_up" ? "Make an account to pick your @handle and plant your flag in parks. Anything already saved on this device joins it." : "Sign in to plant your flag, keep your points and climb the leaderboard."}</p>
                   </div>
                   {googleAvailable && renderGoogleButton("sign_in", googleResetKey, busy, onGoogleCredential, onGoogleError)}
                   {googleAvailable && emailAvailable && <div className="account-or"><span>or use email</span></div>}
@@ -607,7 +607,7 @@ function formatBackupTimestamp(timestamp: number | null) {
 
 function backupStatusText(phase: BackupPhase, message: string | null) {
   if (phase === "syncing") return "Backing up saved progress.";
-  if (phase === "offline" || phase === "pending") return message ?? "Your saved Dex stays on this device.";
+  if (phase === "offline" || phase === "pending") return message ?? "Your saved progress stays on this device.";
   if (phase === "error") return message ?? "Backup couldn’t finish. Your saved data is still on this device.";
   return null;
 }

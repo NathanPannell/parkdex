@@ -83,6 +83,36 @@ def safe_env(*, gh: bool = False, extra: dict[str, str] | None = None) -> dict[s
     return env
 
 
+FAILURE_MARKER = re.compile(r"(?:\bError\b|Error:|AssertionError|\berror:|Traceback|\bFAIL(?:ED)?\b|✖)")
+FAILURE_EXCERPT_CHARS = 1200
+FAILURE_TAIL_CHARS = 800
+FAILURE_PROGRESS_LINES = 3
+
+
+def failure_detail(stdout: str, stderr: str) -> str:
+    """A bounded, redacted account of a failed command: the lines around the first error, the end
+    of the output, and the last progress lines on stdout. A tail alone can be all object dump."""
+    output = redact((stderr or stdout or "").strip())
+    if not output:
+        return ""
+    if len(output) <= FAILURE_EXCERPT_CHARS + FAILURE_TAIL_CHARS:
+        parts = [output]
+    else:
+        lines = output.splitlines()
+        first = next((index for index, line in enumerate(lines) if FAILURE_MARKER.search(line)), None)
+        parts = []
+        if first is not None:
+            excerpt = "\n".join(lines[max(0, first - 2):first + 12])[:FAILURE_EXCERPT_CHARS]
+            parts.append(f"first error:\n{excerpt}")
+        else:
+            parts.append(f"start of output:\n{output[:FAILURE_EXCERPT_CHARS]}")
+        parts.append(f"end of output:\n{output[-FAILURE_TAIL_CHARS:]}")
+    if stderr.strip() and stdout.strip():
+        progress = redact(stdout.strip()).splitlines()[-FAILURE_PROGRESS_LINES:]
+        parts.append("last progress on stdout:\n" + "\n".join(line[:200] for line in progress))
+    return "\n...\n".join(parts)
+
+
 def run(
     args: list[str],
     *,
@@ -106,7 +136,7 @@ def run(
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise DeliveryError(f"{label or Path(args[0]).name} could not complete.") from exc
     if result.returncode != 0:
-        detail = redact((result.stderr or result.stdout or "").strip())[-1400:]
+        detail = failure_detail(result.stdout or "", result.stderr or "")
         suffix = f": {detail}" if detail else ""
         raise DeliveryError(f"{label or Path(args[0]).name} failed with exit code {result.returncode}{suffix}")
     return result.stdout.strip()
@@ -468,8 +498,35 @@ def candidate_database_url(env: dict[str, str]) -> str:
     return value
 
 
+# Provider reads are idempotent, so one dropped connection or overloaded edge should not abort a
+# release that cannot be re-run. Writes are never retried: the provider may already have applied them.
+GET_RETRY_DELAYS = (2, 5)
+TRANSIENT_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
+TRANSIENT_ERRORS = (urllib.error.URLError, TimeoutError, ConnectionError)
+
+
+def is_transient(exc: Exception) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in TRANSIENT_HTTP_STATUSES
+    return isinstance(exc, TRANSIENT_ERRORS)
+
+
+def urlopen_read(request: urllib.request.Request, *, timeout: float, limit: int | None = None,
+                 sleep=time.sleep) -> tuple[int, bytes]:
+    delays = GET_RETRY_DELAYS if request.get_method() == "GET" else ()
+    for attempt, delay in enumerate((*delays, None), start=1):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.status, response.read(limit)
+        except TRANSIENT_ERRORS as exc:
+            if delay is None or not is_transient(exc):
+                raise
+            print(f"provider-get-retry={request.host} attempt={attempt}", file=sys.stderr, flush=True)
+            sleep(delay)
+
+
 def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
-             query: dict | None = None, not_found_ok: bool = False, timeout: float = 30):
+             query: dict | None = None, not_found_ok: bool = False, timeout: float = 30, sleep=time.sleep):
     url = base + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -486,13 +543,12 @@ def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dic
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = response.read()
+        _, payload = urlopen_read(request, timeout=timeout, sleep=sleep)
     except urllib.error.HTTPError as exc:
         if not_found_ok and exc.code == 404:
             return None
         raise DeliveryError(f"{urllib.parse.urlsplit(url).netloc} API {method} request failed with HTTP {exc.code}.") from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
+    except TRANSIENT_ERRORS as exc:
         raise DeliveryError(f"{urllib.parse.urlsplit(url).netloc} API {method} request could not complete.") from exc
     if not payload:
         return {}

@@ -1,4 +1,5 @@
 import { database } from "./db.js";
+import { isParkHidden } from "./parkVisibility.js";
 
 export interface PlayerRecord {
   handle: string;
@@ -46,6 +47,10 @@ export interface PlayerSummary {
   score: number;
   parks: HeldPark[];
   takeovers: Takeover[];
+  /** Parks this account has already visited on the current America/Vancouver day. */
+  visitedToday: string[];
+  /** When that day ends (the next Victoria midnight), so clients never need time zone rules. */
+  visitedTodayUntil: string;
 }
 
 export interface FlagRecord {
@@ -53,6 +58,13 @@ export interface FlagRecord {
   handle: string;
   flagSeed: string;
   since: string;
+}
+
+/** A founded park, for the map: who founded it and which cover photo it has. */
+export interface FounderRecord {
+  parkId: string;
+  handle: string | null;
+  photoSha256: string;
 }
 
 export interface LeaderboardRow {
@@ -72,6 +84,10 @@ export interface GameStore {
   markTakeoversSeen(accountId: string, at: string): Promise<PlayerRecord | null>;
   flags(now: string): Promise<FlagRecord[]>;
   leaderboard(now: string): Promise<LeaderboardRow[]>;
+  /** Every founded park. Empty where founders_001_init.sql has not run. */
+  founders?(): Promise<FounderRecord[]>;
+  /** The founder bonus included in the account's score. */
+  founderPoints?(accountId: string, now: string): Promise<number>;
 }
 
 export const TAKEOVER_LIMIT = 50;
@@ -115,6 +131,12 @@ export function visitFromJson(value: unknown): VisitRecord {
   };
 }
 
+// Undefined table or function: a database without founders_001_init.sql.
+function missingFounders(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return code === "42P01" || code === "42883" || code === "3F000";
+}
+
 function uniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
 }
@@ -154,6 +176,11 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async recordVisit(accountId, visitId, parkId, visitedAt) {
+      // A hidden park takes no new visits; a replay of a visit stored before it was hidden still answers.
+      if (await isParkHidden(sql, parkId)) {
+        const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
+        if (!stored.length) return { status: "park_not_found" };
+      }
       const result = await rows("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result", [visitId, accountId, parkId, visitedAt]);
       const body = jsonValue(result[0]?.result) as { status: string; visit?: unknown };
       if (body.status === "recorded" || body.status === "replayed" || body.status === "already_today") {
@@ -166,7 +193,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async summary(accountId, now) {
-      const [score, parks, takeovers] = await Promise.all([
+      const [score, parks, takeovers, visitedToday, dayEnd] = await Promise.all([
         rows("SELECT score FROM kip_game.player_scores($2::timestamptz) WHERE account_id = $1::uuid", [accountId, now]),
         rows(`
           SELECT t.park_id, t.started_at, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
@@ -183,6 +210,12 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
             AND t.ended_at <= $2::timestamptz
           ORDER BY t.ended_at DESC, t.park_id ASC
           LIMIT ${TAKEOVER_LIMIT}`, [accountId, now]),
+        rows(`
+          SELECT DISTINCT park_id FROM kip_game.visits
+          WHERE account_id = $1::uuid AND source = 'visit'
+            AND local_day = kip_game.local_day($2::timestamptz) AND visited_at <= $2::timestamptz
+          ORDER BY park_id`, [accountId, now]),
+        rows("SELECT ((kip_game.local_day($1::timestamptz) + 1)::timestamp AT TIME ZONE 'America/Vancouver') AS until", [now]),
       ]);
       return {
         score: Number(score[0]?.score ?? 0),
@@ -190,6 +223,8 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         takeovers: takeovers.map((row) => ({
           parkId: String(row.park_id), byHandle: String(row.handle), byFlagSeed: String(row.flag_seed), at: iso(row.ended_at),
         })),
+        visitedToday: visitedToday.map((row) => String(row.park_id)),
+        visitedTodayUntil: iso(dayEnd[0]?.until),
       };
     },
 
@@ -205,6 +240,34 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     async flags(now) {
       const found = await rows("SELECT park_id, handle, flag_seed, since FROM kip_game.flags_up($1::timestamptz)", [now]);
       return found.map((row) => ({ parkId: String(row.park_id), handle: String(row.handle), flagSeed: String(row.flag_seed), since: iso(row.since) }));
+    },
+
+    async founders() {
+      try {
+        const found = await rows(`
+          SELECT f.park_id, pl.handle, f.photo_sha256
+          FROM kip_founders.parks f
+          LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id
+          ORDER BY f.park_id`, []);
+        return found.map((row) => ({
+          parkId: String(row.park_id),
+          handle: row.handle === null || row.handle === undefined ? null : String(row.handle),
+          photoSha256: String(row.photo_sha256),
+        }));
+      } catch (error) {
+        if (missingFounders(error)) return [];
+        throw error;
+      }
+    },
+
+    async founderPoints(accountId, now) {
+      try {
+        const found = await rows("SELECT kip_founders.founder_points($1::uuid, $2::timestamptz) AS points", [accountId, now]);
+        return Number(found[0]?.points ?? 0);
+      } catch (error) {
+        if (missingFounders(error)) return 0;
+        throw error;
+      }
     },
 
     async leaderboard(now) {

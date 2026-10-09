@@ -217,3 +217,62 @@
 .handle-sheet {
   z-index: 96;
 }
+
+/* Found a park */
+.ob-found {
+  position: relative;
+  width: 320px;
+  height: 340px;
+  display: grid;
+  place-items: center;
+}
+
+.ob-found__ground {
+  position: absolute;
+  left: 55px;
+  bottom: 70px;
+}
+
+.ob-found__photo {
+  position: absolute;
+  left: 82px;
+  top: 64px;
+  z-index: 2;
+  width: 156px;
+  padding: 8px 8px 30px;
+  background: #fffdf8;
+  border: 2.5px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 6px 0 rgba(20, 35, 28, 0.2);
+}
+
+.ob-found__photo svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+}
+
+.ob-found__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 7px;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ob-found__points {
+  position: absolute;
+  right: 22px;
+  top: 34px;
+  z-index: 3;
+  font-family: var(--display);
+  font-size: 46px;
+  font-weight: 800;
+  color: var(--sun);
+  -webkit-text-stroke: 2px var(--ink);
+  text-shadow: 0 4px 0 var(--ink);
+}

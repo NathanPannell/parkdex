@@ -123,7 +123,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   }, [runtime, state.user, state.accuracy, state.locationError]);
 
   useEffect(() => {
-    runtime.setBusy(state.screen === "camera" || state.screen === "claim" || state.screen === "share");
+    runtime.setBusy(state.screen === "camera");
   }, [runtime, state.screen]);
 
   return <ContentContext.Provider value={runtime}>{children}</ContentContext.Provider>;

@@ -10,7 +10,7 @@ The app and the content API both refuse a response over 4 MiB, so one snapshot c
 | Catalogue pointer | `public.content_catalogue` | One row naming the current CDN release: its version, the content revision it was built at, and the index URL, SHA-256 and size. |
 | Release files | `releases/<version>/catalogue/` on `kip-assets.parkdex.app` | `index.json` holds every park, the drive data, scene descriptors, the map pointer and a list of boundary chunks. `boundaries/NNN.json` hold the boundaries, about 512 KiB each, grouped by 2-degree area. The version is the SHA-256 of `index.json`, which names every chunk by hash. |
 
-Neither new table has content triggers, so changing them emits no content revision.
+Neither new table has content triggers, so changing them emits no content revision. Hidden parks (`docs/park-visibility.md`) are left out of every release.
 
 ### What each reader gets
 

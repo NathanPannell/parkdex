@@ -31,7 +31,11 @@ export function packageInstallIdentity(value: unknown): string | null {
 }
 
 export function onboardingMatchesInstall(saved: OnboardingCompletion, current: CurrentInstall): boolean {
-  if (!saved.onboarded || !saved.buildId) return false;
+  if (!saved.onboarded) return false;
+  // The web has no install to tell apart, and every deploy is a new build. Replaying on a new
+  // build sent signed-in web players back through onboarding after each staging deploy.
+  if (!current.native) return true;
+  if (!saved.buildId) return false;
   // An over-the-air bundle changes the source build on every rule tweak; only a new or
   // reinstalled package should replay onboarding there, and that changes the package identity.
   const sameBuild = saved.buildId === current.buildId || (current.native && current.overTheAir === true);

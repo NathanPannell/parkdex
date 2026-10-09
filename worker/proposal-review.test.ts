@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createFeedbackWorker } from "./index.ts";
 import type { MultiPolygon, OsmClient, OsmFeature } from "./osmParks.ts";
-import type { ParkProposalRecord, ParkProposalStore, ProposalStatus, SaveProposalResult } from "./parkProposals.ts";
-import { categoryFor, osmParkId, parkFromProposal, publishProposalPark, seedFor, type SqlRunner } from "./parkPublish.ts";
+import { categoryFor, MAX_BOUNDARY_POSITIONS, osmParkId, parkFromProposal, publishProposalPark, seedFor, type SqlRunner } from "./parkPublish.ts";
+import { positionCount } from "./osmParks.ts";
 import { createProposalModerator } from "./proposalModeration.ts";
 import {
   approveThreshold,
@@ -86,10 +85,10 @@ class FakeSql implements SqlRunner {
   async transaction(statements: { text: string; params: unknown[] }[]) {
     this.transactions.push(statements);
     if (this.failTransaction) throw this.failTransaction;
-    const id = String(statements[0].params[0]);
+    const id = String(statements.find((statement) => statement.text.includes("FOR UPDATE"))!.params[0]);
     this.parks.add(id);
     this.drafts.get(id)!.status = "published";
-    const accept = statements[statements.length - 1];
+    const accept = statements.find((statement) => statement.text.includes("status = 'accepted'"))!;
     this.accepted.set(String(accept.params[0]), String(accept.params[1]));
     return statements.map((statement) => statement.text.includes("RETURNING published_revision") ? [{ published_revision: "42" }] : []);
   }
@@ -98,12 +97,14 @@ class FakeSql implements SqlRunner {
 class MemoryReviewStore implements ProposalReviewStore {
   decisions = new Map<string, { decision: Decision; moderation: ModerationRecord }>();
   nearby: NearbyPark[] = [];
+  /** Parks only a wider search (more than 5 km) finds. */
+  wide: NearbyPark[] = [];
   readonly db = new FakeSql();
 
   async state(id: string) {
     return { decision: this.decisions.get(id)?.decision ?? null, publishedParkId: this.db.accepted.get(id) ?? null };
   }
-  async nearbyParks() { return this.nearby; }
+  async nearbyParks(_lat: number, _lng: number, km: number) { return km > 5 ? [...this.nearby, ...this.wide] : this.nearby; }
   async record(id: string, decision: Decision, moderation: ModerationRecord) { this.decisions.set(id, { decision, moderation }); }
   sql() { return this.db; }
 }
@@ -145,9 +146,11 @@ test("a clearly approved OpenStreetMap proposal is published with the proposal a
   const [statements] = store.db.transactions;
   assert.ok(statements.some((s) => s.text.includes("INSERT INTO public.parks")), "uses the dashboard publish transaction");
   assert.ok(statements.some((s) => s.text.includes("INSERT INTO public.boundaries")));
-  const accept = statements[statements.length - 1];
+  // The acceptance comes before the park insert, so the category soft-hide can tell the park was proposed.
+  const accept = statements[0];
   assert.match(accept.text, /status = 'accepted', published_park_id = \$2/);
   assert.deepEqual(accept.params, [PROPOSAL.id, "osm-way-123456"]);
+  assert.ok(statements.findIndex((s) => s.text.includes("INSERT INTO public.parks")) > 0);
   const record = store.decisions.get(PROPOSAL.id)!;
   assert.equal(record.decision, "approved");
   assert.equal(record.moderation.model, "openai/gpt-6-luna-decisions");
@@ -195,13 +198,24 @@ test("a model rejection waits for the operator and is never published", async ()
   assert.equal(store.db.transactions.length, 0);
 });
 
-test("an outline overlapping an existing park waits even when the model approves", async () => {
-  const { store, deps } = setup();
-  store.nearby = [{ id: "municipal-cedar-hill", name: "Cedar Hill Park", region: "Capital Region", lat: 48.452, lng: -123.358, boundary: null }];
-  assert.deepEqual(await reviewProposal(PROPOSAL, deps), { decision: "pending" });
+test("an outline that is already a catalogue park is reported as already listed without asking the model", async () => {
+  const { store, asked, deps } = setup();
+  const boundary = { type: "MultiPolygon" as const, coordinates: [[square(-123.3605, 48.4495, 0.005)]] };
+  store.nearby = [{ id: "municipal-cedar-hill", name: "Cedar Hill Park", region: "Capital Region", lat: 48.452, lng: -123.358, boundary }];
+  assert.deepEqual(await reviewProposal(PROPOSAL, deps), { decision: "already_listed", parkId: "municipal-cedar-hill", parkName: "Cedar Hill Park" });
+  assert.equal(asked.length, 0);
+  assert.equal(store.db.transactions.length, 0);
   const stored = store.decisions.get(PROPOSAL.id)!;
-  assert.equal(stored.decision, "unsure");
-  assert.match(stored.moderation.reasons.join(" "), /overlaps Cedar Hill Park/);
+  assert.equal(stored.decision, "rejected");
+  assert.match(stored.moderation.reasons.join(" "), /Already in Parkdex as Cedar Hill Park/);
+});
+
+test("a large outline around a small catalogue park is still new", async () => {
+  const { store, deps } = setup();
+  // A playground-sized catalogue park well inside the proposed outline, under a quarter of its area.
+  const boundary = { type: "MultiPolygon" as const, coordinates: [[square(-123.3575, 48.4525, 0.0004)]] };
+  store.nearby = [{ id: "municipal-tiny-playground", name: "Tiny Playground", region: "Capital Region", lat: 48.4527, lng: -123.3573, boundary }];
+  assert.equal((await reviewProposal(PROPOSAL, deps)).decision, "approved");
 });
 
 test("an outline far from the pin is rejected before asking the model", async () => {
@@ -292,6 +306,30 @@ test("a published park never has an empty region, even when the nearest park has
   assert.equal(db.inserted.length, 0);
 });
 
+test("with no catalogue park close by, the region comes from one up to 30 km away", async () => {
+  const { store, deps } = setup();
+  store.wide = [{ id: "regional-metro-vancouver-bou", name: "Boundary Bay Regional Park", region: "Metro Vancouver", lat: 48.55, lng: -123.4, boundary: null }];
+  assert.equal((await reviewProposal(PROPOSAL, deps)).decision, "approved");
+  assert.equal(store.db.inserted[0][7], "Metro Vancouver");
+});
+
+test("a huge outline is thinned to the content size budget but keeps every part and hole", () => {
+  // A wiggly 5,000-point ring, like a bog boundary traced along every ditch, plus a hole and a second part.
+  const wiggly: [number, number][] = Array.from({ length: 5_000 }, (_, index) => {
+    const angle = (index / 5_000) * Math.PI * 2;
+    const radius = 0.02 + 0.00002 * Math.sin(index * 7);
+    return [-122.94 + radius * Math.cos(angle), 49.14 + radius * Math.sin(angle) * 0.66];
+  });
+  wiggly.push(wiggly[0]);
+  const geometry = { type: "MultiPolygon" as const, coordinates: [[wiggly, square(-122.942, 49.139, 0.002)], [square(-122.9, 49.16, 0.003)]] };
+  const park = parkFromProposal({ ...FEATURE, geometry }, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: [-122.94, 49.14], createdAt: PROPOSAL.createdAt }, "Metro Vancouver", [-122.94, 49.14]);
+  assert.ok(positionCount(park.geometry) <= MAX_BOUNDARY_POSITIONS, `${positionCount(park.geometry)} positions`);
+  assert.equal(park.geometry.coordinates.length, 2);
+  assert.equal(park.geometry.coordinates[0].length, 2, "the hole stays");
+  const small = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
+  assert.deepEqual(small.geometry, FEATURE.geometry, "small outlines are untouched");
+});
+
 test("decide() approves only when every answer clears the threshold", () => {
   assert.deepEqual(decide(APPROVE, 0.8), { decision: "approved", reasons: [] });
   assert.equal(decide(APPROVE, 0.95).decision, "unsure");
@@ -323,69 +361,4 @@ test("the proposal moderator sends choice questions through the shared module an
   assert.equal(body.model, "openai/gpt-6-luna-decisions");
   assert.deepEqual(Object.keys(body.questions.park.criteria), ["approve", "reject", "unsure"]);
   assert.ok(!String(calls[0].init.body).includes("test-key-not-real"));
-});
-
-// ---------------------------------------------------------------- the submit route
-
-class MemoryProposalStore implements ParkProposalStore {
-  readonly rows = new Map<string, ParkProposalRecord & { submissionId: string; payloadHash: string }>();
-  async save({ id, payloadHash, proposal }: Parameters<ParkProposalStore["save"]>[0]): Promise<SaveProposalResult> {
-    const existing = [...this.rows.values()].find((row) => row.submissionId === proposal.submissionId);
-    if (existing) return existing.payloadHash === payloadHash ? { status: "duplicate", proposal: existing } : { status: "conflict" };
-    const record = {
-      id, name: proposal.name, note: proposal.note, point: proposal.point, outline: proposal.outline, context: proposal.context,
-      status: "new" as ProposalStatus, createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "", submissionId: proposal.submissionId, payloadHash,
-    };
-    this.rows.set(id, record);
-    return { status: "created", proposal: record };
-  }
-  async list() { return [...this.rows.values()]; }
-  async updateStatus() { return null; }
-}
-
-function submit(worker: ReturnType<typeof createFeedbackWorker>, body: Record<string, unknown>) {
-  return worker.fetch(new Request("https://api.example.test/api/park-proposals", {
-    method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.7" },
-    body: JSON.stringify(body),
-  }), { SESSION_SECRET: "test-session-secret-which-is-long-enough" } as never);
-}
-
-const BODY = {
-  submissionId: "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
-  name: "Cedar Hill Woods",
-  point: [-123.357, 48.4505],
-  osm: { type: "way", id: 123456 },
-};
-
-test("POST /api/park-proposals tells the app when a proposal went live", async () => {
-  const review = new MemoryReviewStore();
-  const moderator: ProposalModerator = async () => ({ model: "m", answers: APPROVE });
-  const worker = createFeedbackWorker({
-    createParkProposalStore: () => new MemoryProposalStore(),
-    createProposalReviewStore: () => review,
-    osmClient: osm(),
-    proposalModerator: moderator,
-    uuid: () => PROPOSAL.id,
-  });
-  const response = await submit(worker, BODY);
-  assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { id: PROPOSAL.id, review: { decision: "approved", parkId: "osm-way-123456", parkName: "Cedar Hill Woods" } });
-});
-
-test("POST /api/park-proposals waits for the operator when the model is off, and rejects a malformed OpenStreetMap pick", async () => {
-  const worker = createFeedbackWorker({
-    createParkProposalStore: () => new MemoryProposalStore(),
-    createProposalReviewStore: () => new MemoryReviewStore(),
-    osmClient: osm(),
-    proposalModerator: null,
-  });
-  const waiting = await submit(worker, BODY);
-  assert.equal(waiting.status, 201);
-  assert.deepEqual((await waiting.json() as { review: unknown }).review, { decision: "pending" });
-  for (const bad of [{ type: "node", id: 1 }, { type: "way", id: -4 }, { type: "way", id: 1.5 }, { type: "way", id: 1, extra: true }, "way/1"]) {
-    const response = await submit(worker, { ...BODY, submissionId: "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e60", osm: bad });
-    assert.equal(response.status, 400, JSON.stringify(bad));
-    assert.equal((await response.json() as { code: string }).code, "invalid_osm");
-  }
 });

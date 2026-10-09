@@ -16,6 +16,10 @@ export type GameMe = {
   takeovers: Takeover[];
   /** The account's flag seed, sent even before a handle exists (additive to the #76 contract). */
   flagSeed: string | null;
+  /** Parks already visited on the current Victoria day (additive). */
+  visitedToday?: string[];
+  /** When that day ends, from the server, so the list expires at midnight in Victoria (additive). */
+  visitedTodayUntil?: string | null;
 };
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
@@ -29,7 +33,9 @@ export type VisitResult = {
 };
 
 export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string };
-export type FlagsResponse = { flags: ParkFlag[]; serverTime: string };
+/** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
+export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
+export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
 export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number };
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
@@ -120,7 +126,13 @@ export function parseMe(body: unknown): GameMe {
       return parkId && byHandle && byFlagSeed && at ? { parkId, byHandle, byFlagSeed, at } : null;
     }),
     flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
+    visitedToday: Array.isArray(row.visitedToday) ? row.visitedToday.filter((id): id is string => typeof id === "string" && id.length > 0) : [],
+    visitedTodayUntil: instant(row.visitedTodayUntil),
   };
+}
+
+function instant(value: unknown): string | null {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
 export function parseVisit(body: unknown): VisitResult {
@@ -150,6 +162,10 @@ export function parseFlags(body: unknown): FlagsResponse {
       const flagSeed = text(flag.flagSeed);
       const since = text(flag.since);
       return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since } : null;
+    }),
+    founders: list(row.founders, (founder) => {
+      const parkId = text(founder.parkId);
+      return parkId ? { parkId, handle: text(founder.handle), coverUrl: text(founder.coverUrl) } : null;
     }),
     serverTime: text(row.serverTime) ?? new Date().toISOString(),
   };
