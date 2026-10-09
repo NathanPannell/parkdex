@@ -13,6 +13,7 @@ import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
+import { DEMO_TOOLS } from "./lib/demo";
 import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
 import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
 import { Camera } from "./screens/Camera";
@@ -60,10 +61,21 @@ function Stage() {
       <div className="stage">
         <aside className="stage-note">
           <h1>Parkdex</h1>
-          <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary and plant your flag.</p>
-          <p>
-            Use the <kbd>wand</kbd> on the map for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
-          </p>
+          {DEMO_TOOLS ? (
+            <>
+              <p>A development build of the core loop: pick a park, go there, check in inside the boundary and plant your flag.</p>
+              <p>
+                Use the <kbd>wand</kbd> in the map menu for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>Plant your flag in real parks. Go to a park and your flag goes up. You earn a point for every day it flies, until someone takes it.</p>
+              <p>
+                Parkdex is made for your phone. <a href="https://parkdex.app/#beta-access" target="_blank" rel="noopener noreferrer">Get the Android app</a> to play where you are.
+              </p>
+            </>
+          )}
         </aside>
         <div className="device">
           <ToastProvider>

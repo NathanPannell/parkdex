@@ -7,7 +7,7 @@ import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import type { ParkHolder } from "../../lib/game/visit";
-import { FIELD } from "../../lib/native";
+import { DEMO_TOOLS } from "../../lib/demo";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
 
@@ -87,7 +87,7 @@ export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulati
         }}>
           <Icon name={accessUnknown ? "pin" : "car"} size={18} /> {accessUnknown ? "View park location" : "Open in Maps"}
         </a>
-        {!FIELD && !accessUnknown && (
+        {DEMO_TOOLS && !accessUnknown && (
           <button className="btn btn--sun btn--sm trip__sim" onClick={onSimulate} disabled={simulating}>
             <Icon name="play" size={14} /> {simulating ? "Travelling…" : "Demo: simulate trip"}
           </button>
