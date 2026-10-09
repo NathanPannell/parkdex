@@ -1,14 +1,15 @@
 import { catalogueMatch, type CataloguePark } from "./catalogueMatch.js";
 import type { OsmParkTable } from "./osmParkTable.js";
 import { HttpError } from "./validation.js";
+import { IMPRECISE_MESSAGE, MAX_ACCURACY_M, MIN_TOLERANCE_M, toleranceFor } from "./parkLocation.js";
 
 /**
- * Park outlines from OpenStreetMap for the "propose a park" flow.
+ * Park outlines from OpenStreetMap for the "found a park" flow: the parks around the player.
  *
  * Our own copy of the outlines (kip_osm.parks, see worker/osmParkTable.ts) is asked first: it
- * finds any mapped park that contains or is near the pin in a few milliseconds, whatever its
- * name, and does not depend on public services. Only when it has nothing near the pin (or is
- * not loaded) does the search fall back to the live services below.
+ * finds any mapped park that contains the position in a few milliseconds, whatever its name,
+ * and does not depend on public services. Only when it has no outline at all near the position
+ * (or is not loaded) does the search fall back to the live services below.
  *
  * Nominatim comes first among those because it answers in under a second while both public Overpass
  * instances have been failing for days. It searches for "park" and "nature reserve" in a box a
@@ -26,14 +27,12 @@ import { HttpError } from "./validation.js";
 
 /** Tried in order; a busy or slow instance hands the request to the next. */
 export const DEFAULT_OVERPASS_URLS = ["https://overpass.private.coffee/api/interpreter", "https://overpass-api.de/api/interpreter"] as const;
-export const OSM_USER_AGENT = "Parkdex/1.0 (+https://parkdex.app; park proposals)";
+export const OSM_USER_AGENT = "Parkdex/1.0 (+https://parkdex.app; park founding)";
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors";
 const SEARCH_RADIUS_M = 250;
 const MAX_CANDIDATES = 8;
-/** Parks whose outline is this close to the pin are offered, as well as any that contain it. */
+/** When the table has any outline this close, it is trusted to know every park around the position. */
 const NEARBY_M = 1_000;
-// Planters and traffic islands tagged as gardens crowd the list in towns; offer them only when the pin is inside.
-const MIN_NEARBY_AREA_M2 = 200;
 const MAX_BBOX_DIAGONAL_M = 20_000;
 // Two attempts must fit in the function's time with the database work around them.
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -75,7 +74,9 @@ export interface OsmFeature extends OsmRef {
 }
 
 export interface OsmCandidate extends OsmFeature {
+  /** Strictly inside the outline. */
   containsPin: boolean;
+  /** Metres outside the outline edge, 0 when inside; never more than the search tolerance. */
   distanceM: number;
 }
 
@@ -417,12 +418,13 @@ function sortByPin(candidates: OsmCandidate[]): OsmCandidate[] {
   return candidates.sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
 }
 
-/** The parks that contain the pin or whose outline is within NEARBY_M of it, best first. */
-function nearPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate[] {
+/** The parks that contain the position, allowing `toleranceM` outside the edge, best first. */
+function containing(features: OsmFeature[], lat: number, lng: number, toleranceM: number): OsmCandidate[] {
   const pin: Position = [lng, lat];
   return sortByPin(features
-    .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
-    .filter((candidate) => candidate.containsPin || (candidate.distanceM <= NEARBY_M && candidate.areaM2 >= MIN_NEARBY_AREA_M2)))
+    .map((feature) => ({ feature, distance: distanceToMultiPolygon(pin, feature.geometry) }))
+    .filter(({ distance }) => distance <= toleranceM)
+    .map(({ feature, distance }) => ({ ...feature, containsPin: distance === 0, distanceM: Math.round(distance) })))
     .slice(0, MAX_CANDIDATES);
 }
 
@@ -430,7 +432,8 @@ function nearPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate
 class OverpassAttemptError extends Error {}
 
 export interface OsmClient {
-  search(lat: number, lng: number): Promise<OsmCandidate[]>;
+  /** Park outlines that contain the position, allowing `toleranceM` metres outside the edge. */
+  search(lat: number, lng: number, toleranceM: number): Promise<OsmCandidate[]>;
   feature(ref: OsmRef): Promise<OsmFeature | null>;
 }
 
@@ -594,7 +597,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     return found;
   }
 
-  async function nominatimSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
+  async function nominatimSearch(lat: number, lng: number, toleranceM: number): Promise<OsmCandidate[]> {
     const unavailable = new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
     if (!nominatim) throw unavailable;
     // About 10 m of rounding lets nearby retries share the cache.
@@ -606,15 +609,15 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     const reserves = await nominatimFind("nature reserve", rlat, rlng, NOMINATIM_BOX_M);
     const byKey = new Map<string, { ref: OsmRef; bboxM: number }>();
     for (const item of [...(near ?? []), ...parks, ...(reserves ?? [])]) byKey.set(`${item.ref.type}/${item.ref.id}`, item);
-    // A park whose bounding box is farther than NEARBY_M cannot be near by geometry, so skip its outline.
-    const refs = [...byKey.values()].filter((item) => item.bboxM <= NEARBY_M).sort((a, b) => a.bboxM - b.bboxM).map((item) => item.ref);
+    // A park whose bounding box is farther than the tolerance cannot contain the position, so skip its outline.
+    const refs = [...byKey.values()].filter((item) => item.bboxM <= toleranceM + 50).sort((a, b) => a.bboxM - b.bboxM).map((item) => item.ref);
     if (!refs.length) return [];
     const features = await nominatimOutlines(refs, 3, NOMINATIM_POLYGON_THRESHOLD);
     if (!features) throw unavailable;
-    return nearPin(features, lat, lng);
+    return containing(features, lat, lng, toleranceM);
   }
 
-  async function overpassSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
+  async function overpassSearch(lat: number, lng: number, toleranceM: number): Promise<OsmCandidate[]> {
       // About 10 m of rounding lets nearby retries share the cache.
       const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
       const found = await run(searchQuery(rlat, rlng));
@@ -627,29 +630,33 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       if (!unique.length) return [];
       // The instance that answered the search has the same data, so ask it for the geometry first.
       const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
-      return nearPin(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng);
+      return containing(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng, toleranceM);
   }
 
-  /** Parks from our own table near the pin; empty when it has none or cannot be read. */
-  async function tableSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
-    if (!table) return [];
+  /**
+   * Parks from our own table that contain the position. Null when the table has no outline at
+   * all near it or cannot be read, so the live services are asked instead.
+   */
+  async function tableSearch(lat: number, lng: number, toleranceM: number): Promise<OsmCandidate[] | null> {
+    if (!table) return null;
     try {
-      return nearPin(await table.near(lat, lng, NEARBY_M), lat, lng);
+      const near = await table.near(lat, lng, NEARBY_M);
+      return near.length ? containing(near, lat, lng, toleranceM) : null;
     } catch {
       // A missing or unloaded table must not stop the search; the live services still answer.
-      return [];
+      return null;
     }
   }
 
   return {
-    async search(lat, lng) {
-      const own = await tableSearch(lat, lng);
-      if (own.length) return own;
+    async search(lat, lng, toleranceM) {
+      const own = await tableSearch(lat, lng, toleranceM);
+      if (own) return own;
       // Overpass starts at the same time; while its endpoints are cooling down it settles at once.
-      const overpass = overpassSearch(lat, lng).then((parks) => ({ parks }), (error: unknown) => ({ error }));
+      const overpass = overpassSearch(lat, lng, toleranceM).then((parks) => ({ parks }), (error: unknown) => ({ error }));
       let primary: OsmCandidate[];
       try {
-        primary = await nominatimSearch(lat, lng);
+        primary = await nominatimSearch(lat, lng, toleranceM);
       } catch (error) {
         if (!(error instanceof HttpError) || error.code !== "osm_unavailable") throw error;
         const fallback = await overpass;
@@ -689,34 +696,63 @@ export interface OsmRouteHandlers {
   /** Resolves false when this client asked too often. */
   allow(): Promise<boolean>;
   osm(): OsmClient;
-  /** Catalogue parks around the pin, to mark candidates that are already on the map. */
+  /** Catalogue parks around the position, to mark candidates that are already on the map. */
   catalogue?(lat: number, lng: number): Promise<CataloguePark[]>;
+  /** Founders of catalogue parks and which of them are hidden. */
+  founders?(parkIds: string[]): Promise<{ founders: Map<string, { handle: string | null }>; hidden: Set<string> }>;
 }
 
 function coordinateParam(value: string | null, min: number, max: number): number {
   const number = value === null || value.trim() === "" ? NaN : Number(value);
-  if (!Number.isFinite(number) || number < min || number > max) throw new HttpError(400, "invalid_location", "Send the pin's lat and lng.");
+  if (!Number.isFinite(number) || number < min || number > max) throw new HttpError(400, "invalid_location", "Send your lat and lng.");
   return Math.round(number * 1e6) / 1e6;
 }
 
-/** `GET /api/osm/parks?lat=&lng=`: park outlines near a pin. Null for other paths. */
+/** Older builds send no accuracy; they get the smallest tolerance. */
+function accuracyParam(value: string | null): number {
+  if (value === null || value.trim() === "") return MIN_TOLERANCE_M;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new HttpError(400, "invalid_location", "Send the accuracy of your location in metres.");
+  if (number > MAX_ACCURACY_M) throw new HttpError(422, "location_imprecise", IMPRECISE_MESSAGE);
+  return number;
+}
+
+/**
+ * `GET /api/osm/parks?lat=&lng=&accuracy=`: the park outlines that contain the position, allowing
+ * the accuracy (10 to 35 m) outside their edge. Parks already in Parkdex are marked with their
+ * founder; hidden ones are left out, and so are unnamed outlines that are not in Parkdex, because
+ * they cannot be founded. Null for other paths.
+ */
 export async function handleOsmParksRequest(request: Request, handlers: OsmRouteHandlers): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== "/api/osm/parks") return null;
   if (request.method !== "GET") throw new HttpError(405, "method_not_allowed", "Use GET.");
   const lat = coordinateParam(url.searchParams.get("lat"), -90, 90);
   const lng = coordinateParam(url.searchParams.get("lng"), -180, 180);
+  const accuracyM = accuracyParam(url.searchParams.get("accuracy"));
   if (!await handlers.allow()) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a few minutes and try again.");
   const [candidates, catalogue] = await Promise.all([
-    handlers.osm().search(lat, lng),
-    // Marking is a convenience: without the catalogue every candidate is offered and the review still checks.
+    handlers.osm().search(lat, lng, toleranceFor(accuracyM)),
+    // Marking is a convenience: without the catalogue every candidate is offered and founding still checks.
     handlers.catalogue ? handlers.catalogue(lat, lng).catch(() => []) : Promise.resolve([]),
   ]);
+  const matched = candidates.map((candidate) => ({ candidate, inCatalogue: catalogueMatch(candidate, catalogue) }));
+  const ids = [...new Set(matched.flatMap(({ inCatalogue }) => (inCatalogue ? [inCatalogue.parkId] : [])))];
+  const known = ids.length && handlers.founders
+    ? await handlers.founders(ids).catch(() => ({ founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() }))
+    : { founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() };
   return handlers.json({
     attribution: OSM_ATTRIBUTION,
-    parks: candidates.map((candidate) => {
-      const { type, id, name, kind, areaM2, containsPin, distanceM, geometry } = candidate;
-      return { type, id, name, kind, areaM2, containsPin, distanceM, geometry, inCatalogue: catalogueMatch(candidate, catalogue) };
-    }),
+    parks: matched
+      .filter(({ candidate, inCatalogue }) => (inCatalogue ? !known.hidden.has(inCatalogue.parkId) : candidate.name !== null))
+      .map(({ candidate, inCatalogue }) => {
+        const { type, id, name, kind, areaM2, containsPin, distanceM, geometry } = candidate;
+        const founder = inCatalogue ? known.founders.get(inCatalogue.parkId) ?? null : null;
+        return {
+          type, id, name, kind, areaM2, containsPin, distanceM, geometry, inCatalogue,
+          founder: founder ? { handle: founder.handle } : null,
+          hasCover: founder !== null,
+        };
+      }),
   });
 }
