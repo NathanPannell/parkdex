@@ -14,7 +14,7 @@ Staging uses `Kip at Parkdex <feedback@mail.parkdex.app>`. The receipt Reply-To 
 
 ## Private review
 
-Reports are reviewed in the separate operator dashboard (`operator/`), which runs only as a preview deployment behind Vercel login. See [operator/README.md](../operator/README.md). The web app no longer serves `/feedback/review` or any `/api/operator/*` route. Operator emails link to the dashboard when `OPERATOR_DASHBOARD_URL` is set. The dashboard shows reports as a board with four columns, New, Reviewing, Planned and Closed, and cards can be dragged between them.
+Reports are reviewed in the separate operator dashboard (`operator/`), which runs only as a preview deployment behind Vercel login. See [operator/README.md](../operator/README.md). The web app no longer serves `/feedback/review` or any `/api/operator/*` route. Operator emails link to the dashboard when `OPERATOR_DASHBOARD_URL` is set. The dashboard shows reports as a board with four columns, New, Reviewing, Planned and Done (stored as `closed`), and cards can be dragged between them. Clear done archives every done report: it leaves the board but stays searchable in the archive, where it can be restored. The daily retention run deletes archived reports, with their screenshots and email rows, 90 days after archiving. Reports that were never archived are kept.
 
 Failed notifications can be retried from the report. Each audience has its own saved payload, delivery status, lease, and Resend idempotency key. Sent messages are skipped. If a provider outcome remains unknown after Resend's 24-hour idempotency window, check Resend and the relevant mailbox before confirming a retry that could duplicate an email. There is no background retry schedule or polling service.
 

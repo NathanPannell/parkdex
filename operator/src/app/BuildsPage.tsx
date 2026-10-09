@@ -95,13 +95,21 @@ function UpdateRulesRow({ rules, onSaved }: { rules: UpdateRules; onSaved(rules:
   );
 }
 
-const SERVER: Record<"production" | "staging" | "builtin", { name: string; detail: string }> = {
-  production: { name: "Production", detail: "web.parkdex.app" },
-  staging: { name: "Staging", detail: "staging.web.parkdex.app" },
-  builtin: { name: "Built-in", detail: "The server it shipped with" },
+const SERVER: Record<"production" | "staging" | "builtin", { name: string; detail: string; legacy: string }> = {
+  production: { name: "Production", detail: "web.parkdex.app", legacy: "main" },
+  staging: { name: "Staging", detail: "staging.web.parkdex.app", legacy: "staging" },
+  builtin: { name: "Built-in", detail: "The server it shipped with", legacy: "its own" },
 };
 
-function BuildCard({ config, onOpen }: { config: BuildConfig; onOpen(): void }) {
+/** Plain-words meaning of each setting, shown above the rows. */
+const GLOSSARY: { term: string; text: string }[] = [
+  { term: "Update rules", text: "Per environment. Builds below \"force update below\" see a blocking screen that sends them to the store; builds below \"latest build\" get a prompt they can dismiss. A build's environment is its API pointer, or the one it was built for." },
+  { term: "API pointer", text: "Which server a build talks to from its next launch: accounts, visits and park content. Built-in keeps the server the build shipped with. Moving a build signs players out on the other server; progress on the phone stays." },
+  { term: "Legacy content channel", text: "Builds 8 and earlier only understand content channels, so they get one derived from the API pointer: production is main, staging is staging. Nothing to set by hand." },
+  { term: "Feature flags", text: "On or off per build; a build row overrides the default row flag by flag. Retired flags stay on old rows because installed builds may still read them, but are no longer offered." },
+];
+
+function BuildCard({ config, retired, onOpen }: { config: BuildConfig; retired: string[]; onOpen(): void }) {
   const server = SERVER[config.apiPointer ?? "builtin"];
   const flags = Object.entries(config.flags);
   return (
@@ -116,7 +124,9 @@ function BuildCard({ config, onOpen }: { config: BuildConfig; onOpen(): void }) 
         {config.notes && <span className="build__notes">{config.notes}</span>}
         <span className="build__flags">
           {flags.length ? flags.map(([flag, on]) => (
-            <span key={flag} className={`flag-pill${on ? " is-on" : ""}`}><span className="flag-pill__state">{on ? "On" : "Off"}</span>{flag}</span>
+            <span key={flag} className={`flag-pill${on ? " is-on" : ""}${retired.includes(flag) ? " flag-pill--retired" : ""}`} title={retired.includes(flag) ? "Retired: only older builds read it" : undefined}>
+              <span className="flag-pill__state">{on ? "On" : "Off"}</span>{flag}{retired.includes(flag) && <span className="flag-pill__retired">retired</span>}
+            </span>
           )) : <span className="muted">No flags set</span>}
         </span>
         <span className="build__time">Updated {timeAgo(config.updatedAt)}</span>
@@ -125,6 +135,7 @@ function BuildCard({ config, onOpen }: { config: BuildConfig; onOpen(): void }) 
         <span className="server__kicker">Talks to</span>
         <span className="server__name">{server.name}</span>
         <span className="server__detail">{server.detail}</span>
+        <span className="server__legacy" title="What builds 8 and earlier receive instead of the API pointer">Legacy channel: {server.legacy}</span>
       </span>
     </button>
   );
@@ -228,11 +239,18 @@ export function BuildsPage() {
         id="builds-title"
         eyebrow="Remote config · production only"
         title="Build configuration"
-        lede="When each environment's builds must or should update, and which server and features each build uses. Installed apps read this from production, so it ignores the database toggle."
+        lede="When each environment's builds must or should update, and which server and features each build uses. Every installed build checks in with production on launch, so this page ignores the database toggle."
         actions={<button type="button" className="button button--primary" onClick={() => open(emptyDraft(knownFlags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>}
       />
 
       {error && <Notice tone="error" action={<button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button>}>{error}</Notice>}
+
+      <details className="glossary">
+        <summary>What these settings mean</summary>
+        <dl>
+          {GLOSSARY.map((item) => <div key={item.term}><dt>{item.term}</dt><dd>{item.text}</dd></div>)}
+        </dl>
+      </details>
 
       <section className="rules-panel" aria-labelledby="rules-title">
         <div className="rules-panel__head">
@@ -258,7 +276,7 @@ export function BuildsPage() {
       {listing && groups.filter((group) => group.rows.length).map((group) => (
         <div key={group.platform} className="build-group">
           <div className="build-group__head"><h2 className="build-group__title">{PLATFORMS[group.platform]} builds</h2><p className="muted">Server and flag changes apply on the next app launch.</p></div>
-          {group.rows.map((config) => <BuildCard key={`${config.platform}:${config.build}`} config={config} onOpen={() => open(draftFrom(config))} />)}
+          {group.rows.map((config) => <BuildCard key={`${config.platform}:${config.build}`} config={config} retired={retiredFlags} onOpen={() => open(draftFrom(config))} />)}
         </div>
       ))}
 

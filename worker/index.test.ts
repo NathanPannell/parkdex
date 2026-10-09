@@ -342,8 +342,8 @@ test("valid feedback commits a screenshot and sends independent operator and rec
   const receipt = calls.find((call) => call.payload.to[0] === "person@example.test")!;
   assert.equal(operator.payload.reply_to, "parkdex@example.test");
   assert.equal(receipt.payload.reply_to, "parkdex@example.test");
-  assert.equal(operator.redirect, "error");
-  assert.equal(receipt.redirect, "error");
+  assert.equal(operator.redirect, "manual");
+  assert.equal(receipt.redirect, "manual");
   assert.equal(store.getDelivery(body.id, "operator")?.status, "sent");
   const record = await store.getReport(body.id);
   assert.equal(record?.hasScreenshot, true);

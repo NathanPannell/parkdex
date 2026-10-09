@@ -15,15 +15,17 @@ import {
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText } from "../api";
-import type { FeedbackPage, FeedbackReport, ReportKind, ReportStatus } from "./types";
-import { Icon, Kip, PageHeader, Spinner, timeAgo, useToast, type IconName } from "../ui";
+import type { ClearDoneResult, FeedbackPage, FeedbackReport, ReportKind, ReportStatus } from "./types";
+import { Icon, Kip, PageHeader, Spinner, timeAgo, useConfirm, useToast, type IconName } from "../ui";
 import { FeedbackDrawer } from "./FeedbackDrawer";
+import { appBuildLabel, ARCHIVE_RETENTION_DAYS } from "./format";
 
 export const COLUMNS: { status: ReportStatus; label: string; hint: string }[] = [
   { status: "new", label: "New", hint: "Fresh from players" },
   { status: "reviewing", label: "Reviewing", hint: "Being looked at" },
   { status: "planned", label: "Planned", hint: "On the roadmap" },
-  { status: "closed", label: "Closed", hint: "Done or won't do" },
+  // Done is the stored "closed" status, so the app and older dashboards need no change.
+  { status: "closed", label: "Done", hint: "Finished reports" },
 ];
 
 export const KINDS: Record<ReportKind, { label: string; icon: IconName }> = {
@@ -67,6 +69,8 @@ function deliveryTrouble(report: FeedbackReport): boolean {
 
 export function FeedbackBoard() {
   const toast = useToast();
+  const confirm = useConfirm();
+  const [clearing, setClearing] = useState(false);
   const [board, setBoard] = useState<Board>(emptyBoard);
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -141,6 +145,54 @@ export function FeedbackBoard() {
     }
   }, [place, toast]);
 
+  const restore = useCallback(async (ids: string[]) => {
+    try {
+      const { restored } = await api<{ restored: string[] }>("/api/feedback/archive/restore", { method: "POST", body: JSON.stringify({ ids }) });
+      toast.show(restored.length === 1 ? "Report is back in Done" : `${restored.length} reports are back in Done`);
+      setRevision((value) => value + 1);
+      return restored;
+    } catch (error) {
+      toast.show(errorText(error, "Could not restore those reports."), { tone: "error" });
+      return [];
+    }
+  }, [toast]);
+
+  // "Clear done" archives instead of deleting, so it is one click with Undo, plus a popup that
+  // says where the reports go and when they are deleted for good.
+  async function clearDone() {
+    const done = boardRef.current.closed;
+    const count = `${done.reports.length}${done.nextCursor ? "+" : ""}`;
+    const ok = await confirm({
+      title: `Archive ${count} done ${done.reports.length === 1 && !done.nextCursor ? "report" : "reports"}?`,
+      body: <>
+        <p>They leave the board and move to the Archive, where you can search and restore them.</p>
+        <p>Archived reports, with their screenshots, are deleted for good {ARCHIVE_RETENTION_DAYS} days after archiving.</p>
+      </>,
+      confirmLabel: "Archive done",
+      icon: "inbox",
+    });
+    if (!ok) return;
+    setClearing(true);
+    try {
+      let result = await api<ClearDoneResult>("/api/feedback/clear-done", { method: "POST" });
+      const ids = [...result.ids];
+      // One click clears the column even when it holds more than the server archives per call.
+      for (let round = 0; result.more && round < 20; round += 1) {
+        result = await api<ClearDoneResult>("/api/feedback/clear-done", { method: "POST" });
+        ids.push(...result.ids);
+      }
+      const gone = new Set(ids);
+      setBoard((current) => ({ ...current, closed: { ...current.closed, reports: current.closed.reports.filter((report) => !gone.has(report.id)), nextCursor: null } }));
+      if (selectedId && gone.has(selectedId)) setSelectedId(null);
+      toast.show(ids.length === 0 ? "Nothing to archive" : `Archived ${ids.length} ${ids.length === 1 ? "report" : "reports"}`, ids.length ? { action: { label: "Undo", run: () => void restore(ids) } } : undefined);
+    } catch (error) {
+      toast.show(errorText(error, "Could not archive the done reports."), { tone: "error" });
+      setRevision((value) => value + 1);
+    } finally {
+      setClearing(false);
+    }
+  }
+
   async function loadMore(status: ReportStatus) {
     const column = boardRef.current[status];
     if (!column.nextCursor || column.loadingMore) return;
@@ -197,7 +249,7 @@ export function FeedbackBoard() {
         title="Feedback board"
         lede={<>
           {board.new.state === "ready" ? (totalNew === 0 ? "Inbox zero. Nice work." : `${totalNew}${board.new.nextCursor ? "+" : ""} new ${totalNew === 1 ? "report needs" : "reports need"} a look.`) : "Loading reports..."}
-          {" "}Drag cards between columns to set their status.
+          {" "}Drag cards between columns to set their status; Clear done moves finished reports to the Archive.
         </>}
         actions={<>
           <label className="search">
@@ -231,6 +283,8 @@ export function FeedbackBoard() {
               onOpen={setSelectedId}
               onRetry={() => setRevision((value) => value + 1)}
               onMore={() => void loadMore(column.status)}
+              onClear={column.status === "closed" ? () => void clearDone() : undefined}
+              clearing={clearing}
             />
           ))}
         </div>
@@ -244,13 +298,14 @@ export function FeedbackBoard() {
         summary={selected}
         onClose={() => setSelectedId(null)}
         onMove={(report, status) => void moveReport(report, status)}
-        onUpdated={place}
+        onUpdated={(report) => { if (!report.archivedAt) place(report); }}
+        onRestore={(report) => restore([report.id])}
       />
     </section>
   );
 }
 
-function BoardColumn({ status, label, hint, data, visible, filtered, saving, activeId, onOpen, onRetry, onMore }: {
+function BoardColumn({ status, label, hint, data, visible, filtered, saving, activeId, onOpen, onRetry, onMore, onClear, clearing }: {
   status: ReportStatus;
   label: string;
   hint: string;
@@ -262,6 +317,9 @@ function BoardColumn({ status, label, hint, data, visible, filtered, saving, act
   onOpen(id: string): void;
   onRetry(): void;
   onMore(): void;
+  /** Only the Done column can be cleared into the archive. */
+  onClear?(): void;
+  clearing?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const count = `${data.reports.length}${data.nextCursor ? "+" : ""}`;
@@ -275,6 +333,13 @@ function BoardColumn({ status, label, hint, data, visible, filtered, saving, act
         </div>
         <span className="column__count">{data.state === "loading" && !data.reports.length ? "..." : count}</span>
       </div>
+      {onClear && data.reports.length > 0 && (
+        <div className="column__tools">
+          <button type="button" className="button button--ghost button--small button--wide" onClick={onClear} disabled={clearing} title="Move every done report to the Archive">
+            {clearing ? <><Spinner small /> Archiving</> : <><Icon name="inbox" size={15} /> Clear done</>}
+          </button>
+        </div>
+      )}
       <div className="column__body">
         {data.state === "loading" && !data.reports.length && [0, 1, 2].map((key) => <div key={key} className="card card--skeleton" aria-hidden="true" />)}
         {data.state === "error" && (
@@ -287,7 +352,7 @@ function BoardColumn({ status, label, hint, data, visible, filtered, saving, act
         {data.state === "ready" && visible.length === 0 && (
           <div className="column__empty">
             {filtered ? <Icon name="search" size={22} /> : <Kip pose={status === "new" ? "celebrate" : "sleep"} size={64} />}
-            <p>{filtered ? "No matches here." : status === "new" ? "All caught up." : "Drop a card here."}</p>
+            <p>{filtered ? "No matches here." : status === "new" ? "All caught up." : status === "closed" ? "Drop finished reports here." : "Drop a card here."}</p>
           </div>
         )}
         {visible.map((report) => (
@@ -325,6 +390,7 @@ function DraggableCard({ report, saving, hidden, onOpen }: { report: FeedbackRep
 
 function CardBody({ report, saving, lifted }: { report: FeedbackReport; saving?: boolean; lifted?: boolean }) {
   const kind = KINDS[report.kind] ?? KINDS.general;
+  const build = appBuildLabel(report.context);
   return (
     <article className={`card card--${report.kind}${lifted ? " is-lifted" : ""}${saving ? " is-saving" : ""}`}>
       <div className="card__top">
@@ -335,6 +401,7 @@ function CardBody({ report, saving, lifted }: { report: FeedbackReport; saving?:
       <div className="card__meta">
         {report.context.parkName && <span className="meta-pill"><Icon name="pin" size={13} /> {report.context.parkName}</span>}
         {report.context.platform && <span className="meta-pill"><Icon name="phone" size={13} /> {report.context.platform}</span>}
+        {build && <span className="meta-pill meta-pill--build" title="App version and build">{build}</span>}
         <span className="card__icons">
           {report.hasScreenshot && <span title="Screenshot attached"><Icon name="image" size={15} /></span>}
           {report.contact && report.email && <span title="Asked for a reply"><Icon name="mail" size={15} /></span>}

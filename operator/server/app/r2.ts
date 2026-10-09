@@ -1,0 +1,223 @@
+import { HttpError } from "../http.js";
+
+/**
+ * A small client for the public content bucket through the Cloudflare REST API
+ * (api.cloudflare.com), using CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. The dashboard only
+ * reads bundles and moves channel pointers; building and uploading bundles stays in
+ * scripts/publish-app-bundle.mjs on the operator's machine.
+ *
+ * The REST object PUT takes no If-Match header, so callers guard writes by reading first and
+ * reading back afterwards (see ota.ts).
+ */
+
+export const DEFAULT_ASSETS_BUCKET = "parkdex-kip-content";
+const API = "https://api.cloudflare.com/client/v4";
+const ACCOUNT_ID = /^[a-f0-9]{32}$/;
+const BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const TIMEOUT_MS = 10_000;
+const MAX_LIST_PAGES = 10;
+/** Pointers are a few hundred bytes; anything bigger is not one. */
+const MAX_OBJECT_BYTES = 64 * 1024;
+
+export interface R2Env {
+  CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  /** The public content bucket behind kip-assets.parkdex.app. */
+  ASSETS_BUCKET?: string;
+}
+
+export interface R2ObjectInfo {
+  key: string;
+  size: number;
+  /** Unquoted, as R2 reports it. */
+  etag: string;
+  uploadedAt: string | null;
+}
+
+export interface R2Client {
+  readonly bucket: string;
+  /** The object's text, or null when it does not exist. Only for small JSON objects. */
+  getText(key: string): Promise<string | null>;
+  putJson(key: string, body: string, cacheControl: string): Promise<void>;
+  list(prefix: string): Promise<R2ObjectInfo[]>;
+  /** One object's size and ETag, or null. */
+  stat(key: string): Promise<R2ObjectInfo | null>;
+}
+
+export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;
+
+export function assetsBucket(env: R2Env): string {
+  const bucket = env.ASSETS_BUCKET?.trim() || DEFAULT_ASSETS_BUCKET;
+  if (!BUCKET.test(bucket)) throw new HttpError(503, "bucket_invalid", "ASSETS_BUCKET is not a valid R2 bucket name.");
+  return bucket;
+}
+
+export function cloudflareConfigured(env: R2Env): boolean {
+  return Boolean(env.CLOUDFLARE_API_TOKEN?.trim() && env.CLOUDFLARE_ACCOUNT_ID?.trim());
+}
+
+/** Strips quotes and a weak prefix so R2 listing ETags and HTTP ETags compare. */
+export function bareEtag(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.trim().replace(/^W\//, "").replace(/^"|"$/g, "") || null;
+}
+
+/** An outbound request that failed before an HTTP answer, with a message safe to show. */
+export class OutboundError extends Error {
+  override name = "OutboundError";
+}
+
+function hostOf(input: string): string {
+  try { return new URL(input).host; } catch { return "the remote host"; }
+}
+
+/**
+ * The error's class and message, fit for the page: URLs shrink to their host and bearer tokens
+ * are dropped, so a failure explains itself without leaking a query string or a credential.
+ */
+export function failureText(error: unknown): string {
+  if (error instanceof OutboundError) return error.message;
+  const name = error instanceof Error ? error.name || "Error" : "Error";
+  const raw = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error && error.cause instanceof Error ? ` (${error.cause.name}: ${error.cause.message})` : "";
+  const message = `${raw}${cause}`
+    .replace(/bearer\s+[^\s"',;]+/gi, "Bearer <redacted>")
+    .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (url) => hostOf(url))
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${name}: ${message || "no message"}`.slice(0, 300);
+}
+
+/** Request headers that ask every cache on the way for a fresh answer. */
+export function noCacheHeaders(headers: Record<string, string> = {}): Record<string, string> {
+  return { "cache-control": "no-cache", pragma: "no-cache", ...headers };
+}
+
+/** Adds a throwaway query parameter so no edge cache can answer for the CDN worker. */
+export function cacheBusted(url: string, now = Date.now()): string {
+  const busted = new URL(url);
+  busted.searchParams.set("fresh", String(now));
+  return busted.toString();
+}
+
+/**
+ * The one way the dashboard calls out. It sets only RequestInit fields the Vercel Edge runtime
+ * accepts: no `cache`, and `redirect: "manual"` (Edge rejects "error"), with any 3xx treated as a
+ * failure here so a redirect is never followed. Failures carry a readable reason.
+ */
+export async function timedFetch(fetcher: Fetcher, input: string, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const host = hostOf(input);
+  let response: Response;
+  try {
+    response = await fetcher(input, { ...init, signal: controller.signal, redirect: "manual" });
+  } catch (error) {
+    if (controller.signal.aborted) throw new OutboundError(`${host} did not answer within ${TIMEOUT_MS / 1000} s.`);
+    throw new OutboundError(`${host} failed: ${failureText(error)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
+    throw new OutboundError(`${host} answered with a redirect (HTTP ${response.status || "3xx"}); redirects are not followed.`);
+  }
+  return response;
+}
+
+function objectPath(key: string): string {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+/** Cloudflare's own error code and message, which name the problem without echoing credentials. */
+async function cloudflareReason(response: Response): Promise<string> {
+  try {
+    const body = await response.json() as { errors?: Array<{ code?: unknown; message?: unknown }> };
+    const first = body.errors?.[0];
+    if (first && (typeof first.message === "string" || typeof first.code === "number")) {
+      return ` Cloudflare says: ${String(first.code ?? "")} ${failureText(new Error(String(first.message ?? ""))).replace(/^Error: /, "")}`.trimEnd();
+    }
+  } catch {
+    // Not JSON; the status says enough.
+  }
+  return "";
+}
+
+async function failure(response: Response, action: string): Promise<HttpError> {
+  const reason = await cloudflareReason(response);
+  if (response.status === 401 || response.status === 403) {
+    return new HttpError(502, "cloudflare_denied", `Cloudflare refused to ${action} (HTTP ${response.status}). The token needs R2 read and write on the content bucket.${reason}`);
+  }
+  return new HttpError(502, "cloudflare_failed", `Cloudflare could not ${action} (HTTP ${response.status}).${reason}`);
+}
+
+export function createCloudflareR2(env: R2Env, fetcher: Fetcher): R2Client | null {
+  if (!cloudflareConfigured(env)) return null;
+  const account = env.CLOUDFLARE_ACCOUNT_ID!.trim();
+  if (!ACCOUNT_ID.test(account)) throw new HttpError(503, "cloudflare_invalid", "CLOUDFLARE_ACCOUNT_ID is not a Cloudflare account id.");
+  const bucket = assetsBucket(env);
+  const base = `${API}/accounts/${account}/r2/buckets/${encodeURIComponent(bucket)}`;
+  const auth = { authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN!.trim()}` };
+
+  async function call(url: string, init: RequestInit, action: string): Promise<Response> {
+    let response: Response;
+    try {
+      response = await timedFetch(fetcher, url, { ...init, headers: { ...auth, ...init.headers as Record<string, string> } });
+    } catch (error) {
+      throw new HttpError(502, "cloudflare_unreachable", `Cloudflare could not be reached to ${action}. ${failureText(error)}`);
+    }
+    return response;
+  }
+
+  async function list(prefix: string): Promise<R2ObjectInfo[]> {
+    const rows: R2ObjectInfo[] = [];
+    let cursor: string | null = null;
+    const seen = new Set<string>();
+    for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
+      const query = new URLSearchParams({ prefix, per_page: "1000" });
+      if (cursor) query.set("cursor", cursor);
+      const response = await call(`${base}/objects?${query}`, { method: "GET" }, "list the bucket");
+      if (!response.ok) throw await failure(response, "list the bucket");
+      const body = await response.json() as { success?: boolean; result?: unknown; result_info?: { cursor?: unknown; is_truncated?: unknown } };
+      if (body.success !== true || !Array.isArray(body.result)) throw new HttpError(502, "cloudflare_failed", "Cloudflare returned an incomplete bucket listing.");
+      for (const item of body.result as Array<Record<string, unknown>>) {
+        if (typeof item.key !== "string") continue;
+        rows.push({
+          key: item.key,
+          size: Number(item.size ?? 0),
+          etag: bareEtag(typeof item.etag === "string" ? item.etag : null) ?? "",
+          uploadedAt: typeof item.last_modified === "string" ? item.last_modified : null,
+        });
+      }
+      const next = body.result_info?.is_truncated === true && typeof body.result_info.cursor === "string" ? body.result_info.cursor : null;
+      if (!next) return rows;
+      if (seen.has(next)) throw new HttpError(502, "cloudflare_failed", "Cloudflare's bucket listing did not advance.");
+      seen.add(next);
+      cursor = next;
+    }
+    throw new HttpError(502, "cloudflare_failed", "The bucket listing is longer than the dashboard reads.");
+  }
+
+  return {
+    bucket,
+    async getText(key) {
+      const response = await call(`${base}/objects/${objectPath(key)}`, { method: "GET" }, "read the pointer");
+      if (response.status === 404) return null;
+      if (!response.ok) throw await failure(response, "read the pointer");
+      const text = await response.text();
+      if (text.length > MAX_OBJECT_BYTES) throw new HttpError(502, "pointer_invalid", "The stored pointer is too large to be a channel pointer.");
+      return text;
+    },
+    async putJson(key, body, cacheControl) {
+      const response = await call(`${base}/objects/${objectPath(key)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", "cache-control": cacheControl },
+        body,
+      }, "write the pointer");
+      if (!response.ok) throw await failure(response, "write the pointer");
+    },
+    list,
+    async stat(key) {
+      return (await list(key)).find((item) => item.key === key) ?? null;
+    },
+  };
+}

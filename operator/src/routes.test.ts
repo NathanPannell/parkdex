@@ -37,7 +37,8 @@ test("every path resolves to its section, and Build config is pinned to producti
   assert.equal(resolveRoute("/analytics/events")?.child?.label, "Events");
   const builds = resolveRoute("/app/builds");
   assert.deepEqual([builds?.section.id, builds?.child?.label, builds?.database], ["app", "Build config", "production"]);
-  for (const path of ["/feedback", "/parks", "/analytics/overview", "/analytics/accounts", "/app/updates"]) {
+  assert.equal(resolveRoute("/app/updates")?.database, "production");
+  for (const path of ["/feedback", "/parks", "/analytics/overview", "/analytics/accounts"]) {
     assert.equal(resolveRoute(path)?.database, "toggle", path);
   }
   assert.equal(resolveRoute("/applications"), null);

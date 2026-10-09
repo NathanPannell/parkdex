@@ -131,7 +131,8 @@ const json = async (response) => response.json();
 try {
   const config = JSON.parse(readFileSync(new URL('deployment.json', root), 'utf8'));
   const inventory = [config.migrationPath, ...config.contentSync.supportingMigrationPaths, ...config.optionalMigrationPaths, ...config.contentSync.migrationPaths, ...config.independentMigrationPaths];
-  assert.equal(inventory.at(-1), 'database/migrations/founders_001_init.sql');
+  // Later migrations may follow founders_001; it only has to be in the replayed inventory.
+  assert.ok(inventory.includes('database/migrations/founders_001_init.sql'));
   for (const path of inventory) await applyMigration(fileURLToPath(new URL(path, root)));
   // Every deploy replays the whole inventory: game_001 and interactions_002 run again before founders_001.
   for (const path of inventory) await applyMigration(fileURLToPath(new URL(path, root)));

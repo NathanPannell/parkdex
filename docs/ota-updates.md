@@ -82,6 +82,8 @@ Apply from a clean checkout at the commit you want to ship. `--apply` refuses un
 
    The script uploads the zip with `If-None-Match: *` and checks it through the CDN. Then it moves the pointer with `If-None-Match: *` (first publication) or `If-Match: <etag>`.
 
+   Add `--record` (with an optional `--note "<why>"`) to write the publish history row the operator dashboard shows (`kip_app_config.ota_publishes`, migration `app_config_003`). It needs `OTA_HISTORY_DATABASE_URL`, the production database, because both channels are recorded there. The row is written after the pointer moves and is unique per move, so a failed history write is reported and the publication stands. Record every publication: the dashboard can only repoint a channel at a bundle whose native build needs it knows.
+
 3. **Verify.** Fetch the pointer from `kip-assets.parkdex.app`. Then post a check to the endpoint:
 
    ```bash
@@ -89,6 +91,15 @@ Apply from a clean checkout at the commit you want to ship. `--apply` refuses un
    ```
 
 **Rollback.** Publish the previous good commit again. The same commit builds the same zip, so the upload is a no-op and only the pointer moves.
+
+## Operator dashboard
+
+`operator.parkdex.app/app/updates` shows both channels, the bundles in R2 and the publish history, and can move a pointer without a build.
+
+- **Publish and roll back.** It points a channel at a zip that is already in R2: a rollback, or staging's bundle promoted to production. Cloudflare's REST object PUT has no conditional header, so the dashboard reads the pointer from R2 and requires the generation (and ETag) the operator saw, re-reads it just before writing `generation + 1`, then reads it back through R2 and through the CDN (a `Range` request, which skips the worker's 60 second cache). It refuses a bundle that is not in R2, a bundle with no publish record, and a minimum native build below the highest minimum the bundle was ever published with. A readback that finds another pointer is a 409 and is recorded as a conflict.
+- **New bundles** still come from this script on the operator's machine; the page shows the commands with the current generation and ETag filled in.
+- **Setup checklist.** A pointer GET answers 404 both when nothing is published and when the CDN worker predates `app-bundles/`. The checklist tells them apart: it HEADs a zip that R2 has, or, with no zip yet, POSTs to the pointer path. A worker that routes the path answers `405` with `Allow: GET, HEAD`; an older one answers `Allow: GET, HEAD, OPTIONS`.
+- The dashboard needs `CLOUDFLARE_API_TOKEN` (R2 read and write on `parkdex-kip-content`) and `CLOUDFLARE_ACCOUNT_ID`; `ASSETS_BUCKET` overrides the bucket.
 
 ## Local QA
 

@@ -45,7 +45,8 @@ export const SECTIONS: readonly SectionRoute[] = [
     id: "app", path: "/app", label: "App and updates", icon: "rocket", description: "Build config and over-the-air updates",
     children: [
       { path: "/app/builds", label: "Build config", icon: "sliders", database: "production" },
-      { path: "/app/updates", label: "Updates", icon: "upload" },
+      // Both update channels and their history live in production, like build config.
+      { path: "/app/updates", label: "Updates", icon: "upload", database: "production" },
     ],
   },
 ];
