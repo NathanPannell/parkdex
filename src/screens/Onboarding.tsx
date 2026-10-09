@@ -298,8 +298,10 @@ function FoundIt() {
       <div className="ob-found__ground"><Mound width={210} /></div>
       <motion.div
         className="ob-found__photo"
-        animate={{ y: [-260, -260, 0, 0, 0], rotate: [-16, -16, -4, -4, -4], opacity: [0, 1, 1, 1, 0] }}
-        transition={{ ...loop, times: [0, 0.2, 0.34, 0.92, 1], ease: "easeIn" }}
+        // The drop starts at the top of this illustration, never above it, so the photo stays on
+        // the card at every screen height and is only seen falling onto the mound or resting there.
+        animate={{ y: [-60, 0, 0, 0], scale: [1.18, 1, 1, 1], rotate: [-14, -4, -4, -4], opacity: [0, 1, 1, 0] }}
+        transition={{ ...loop, times: [0, 0.14, 0.92, 1], ease: "easeIn" }}
       >
         <svg viewBox="0 0 160 120" aria-hidden="true">
           <rect width="160" height="120" fill="#9FD8FF" />
@@ -313,7 +315,7 @@ function FoundIt() {
       <motion.span
         className="ob-found__points"
         animate={{ scale: [0, 0, 1.3, 1, 1, 0], opacity: [0, 0, 1, 1, 1, 0], y: [10, 10, -6, 0, 0, 0] }}
-        transition={{ ...loop, times: [0, 0.36, 0.42, 0.48, 0.92, 1] }}
+        transition={{ ...loop, times: [0, 0.14, 0.2, 0.26, 0.92, 1] }}
       >
         +10
       </motion.span>
