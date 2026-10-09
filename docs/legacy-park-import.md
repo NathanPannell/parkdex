@@ -1,6 +1,6 @@
 # Legacy park import
 
-To add one new park at a time, use the operator dashboard's Import from map page instead ([operator/README.md](../operator/README.md)). It creates a hidden draft and publishes it when you are ready. This script remains the tool for reviewed batch imports and boundary repairs.
+New parks are founded by players in the flag game (`docs/park-founders.md`); the operator dashboard's Import from map page is retired. This script remains the tool for reviewed batch imports and boundary repairs.
 
 `scripts/import_legacy_parks.py` imports reviewed legacy boundary features into the synchronized Parkdex database. Planning reads a local GeoJSON file or an HTTPS URL and reads the target database. Planning does not write to the database. Applying is database only and does not write to R2.
 
