@@ -211,7 +211,9 @@ function TakeOver() {
       </motion.div>
       <motion.div
         className="ob-take__flag"
-        animate={{ y: [-220, -220, -220, 0, 0, 0], opacity: [0, 0, 1, 1, 1, 0] }}
+        // The flag sits 82 px below the top of this illustration, so it drops from just inside that top edge,
+        // never above it: on short screens it stays on the card instead of flashing past the notch.
+        animate={{ y: [-64, -64, -64, 0, 0, 0], scale: [1.1, 1.1, 1.1, 1, 1, 1], opacity: [0, 0, 1, 1, 1, 0] }}
         transition={{ ...loop, times: [0, 0.4, 0.46, 0.56, 0.95, 1], ease: "easeIn" }}
       >
         <span className="ob-take__pole" />
