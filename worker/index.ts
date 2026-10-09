@@ -76,6 +76,8 @@ export interface WorkerDependencies {
 const BASIC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Three questions about one proposal; the proposer waits on a spinner with a 30 second budget.
 const PROPOSAL_MODERATION_TIMEOUT_MS = 8_000;
+// Catalogue parks this close to the pin are checked against search results, to mark them "Already on the map".
+const CATALOGUE_MATCH_KM = 5;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -362,6 +364,8 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       return createNeonOsmSearchLimiter(env.DATABASE_URL)(subject);
     },
     osm: () => dependencies.osmClient!,
+    catalogue: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (lat, lng) =>
+      (dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!))).nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
   });
   if (osmResponse) return osmResponse;
   const proposalResponse = await handleParkProposalRequest(request, {

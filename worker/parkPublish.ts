@@ -1,12 +1,27 @@
 // The operator dashboard owns the draft table and its publish transaction. Instant publishing
 // reuses that exact transaction so a park approved by the model reaches phones the same way.
 import { guessBiome, publishStatements, SHAPE_FOR_CATEGORY, shortName, type SqlRunner } from "../operator/server/drafts.js";
-import type { MultiPolygon, OsmFeature } from "./osmParks.js";
+import { positionCount, simplifyMultiPolygon, type MultiPolygon, type OsmFeature } from "./osmParks.js";
 
 export type { SqlRunner };
 
 export const FALLBACK_REGION = "British Columbia";
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
+
+/**
+ * Every content snapshot must stay under 4 MiB (docs/learnings/content-snapshot-size.md), and a
+ * proposed park reaches every reader, so its boundary is thinned until it has at most this many
+ * positions. Every part and hole stays; only redundant vertices go.
+ */
+export const MAX_BOUNDARY_POSITIONS = 2_000;
+
+export function contentBoundary(geometry: MultiPolygon): MultiPolygon {
+  let thinned = geometry;
+  for (let toleranceM = 2; positionCount(thinned) > MAX_BOUNDARY_POSITIONS && toleranceM <= 128; toleranceM *= 2) {
+    thinned = simplifyMultiPolygon(geometry, toleranceM);
+  }
+  return thinned;
+}
 
 /** A stable, unique park id for an OpenStreetMap feature, valid for content and claim backups. */
 export function osmParkId(feature: { type: string; id: number }): string {
@@ -97,7 +112,7 @@ export function parkFromProposal(feature: OsmFeature, proposal: ProposalProvenan
     rarity: "common",
     seed: seedFor(id),
     blurb: blurbFor(feature),
-    geometry: feature.geometry,
+    geometry: contentBoundary(feature.geometry),
     source: { proposal, osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, tags: feature.tags, areaM2: feature.areaM2 } },
   };
 }
@@ -164,8 +179,10 @@ export async function publishProposalPark(db: SqlRunner, park: PublishablePark, 
       updatedAt = new Date(inserted[0].updated_at as string).toISOString();
     }
     try {
-      const results = await db.transaction([...publishStatements(park.id, updatedAt!, null), acceptStatement(proposalId, park.id)]);
-      const revision = results[results.length - 2]?.[0]?.published_revision;
+      // The acceptance goes first so that, when the park row is inserted, the proposal already
+      // names it: the category soft-hide keeps parks that players proposed on the map.
+      const results = await db.transaction([acceptStatement(proposalId, park.id), ...publishStatements(park.id, updatedAt!, null)]);
+      const revision = results[results.length - 1]?.[0]?.published_revision;
       return { status: "published", parkId: park.id, revision: revision === null || revision === undefined ? null : Number(revision) };
     } catch (error) {
       // A concurrent retry may have published first; the next pass reports that as done.

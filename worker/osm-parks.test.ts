@@ -44,6 +44,8 @@ const WAY = {
 };
 const PRIVATE = { type: "way", id: 3003, tags: { leisure: "garden", access: "private" }, bounds: { minlat: 48.451, minlon: -123.359, maxlat: 48.4512, maxlon: -123.3588 } };
 const HUGE = { type: "relation", id: 4004, tags: { boundary: "protected_area", name: "Big Watershed" }, bounds: { minlat: 48.3, minlon: -123.7, maxlat: 48.6, maxlon: -123.3 } };
+// Nominatim is first by default; these Overpass tests turn it off to see Overpass alone.
+const OVERPASS_ONLY = { NOMINATIM_URL: "off" };
 const summary = (element: Record<string, unknown>) => ({ type: element.type, id: element.id, tags: element.tags, bounds: element.bounds });
 
 type Call = { query: string; headers: Headers };
@@ -64,7 +66,7 @@ function parkFixture(query: string) {
 
 test("search assembles a relation with holes and several parts, and a plain way", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient({}, overpass(parkFixture, calls));
+  const client = createOsmClient(OVERPASS_ONLY, overpass(parkFixture, calls));
   const parks = await client.search(48.451, -123.359);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].headers.get("user-agent"), OSM_USER_AGENT);
@@ -93,7 +95,7 @@ test("search assembles a relation with holes and several parts, and a plain way"
 });
 
 test("a pin in the pond is outside the park but close to it", async () => {
-  const client = createOsmClient({}, overpass(parkFixture));
+  const client = createOsmClient(OVERPASS_ONLY, overpass(parkFixture));
   const [relation] = await client.search(48.453, -123.355);
   assert.equal(relation.id, 1001);
   assert.equal(relation.containsPin, false);
@@ -102,7 +104,7 @@ test("a pin in the pond is outside the park but close to it", async () => {
 
 test("nothing found returns an empty list without a geometry request", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient({}, overpass(() => ({ elements: [] }), calls));
+  const client = createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [] }), calls));
   assert.deepEqual(await client.search(48.5, -123.4), []);
   assert.equal(calls.length, 1);
 });
@@ -175,110 +177,165 @@ test("endpoints come from OVERPASS_URLS, then OVERPASS_URL, then the defaults", 
   assert.deepEqual(overpassEndpoints({ OVERPASS_URLS: "http://insecure.test/api, not a url" }), [...DEFAULT_OVERPASS_URLS]);
 });
 
-// ---------------------------------------------------------------- Nominatim fallback
+// ---------------------------------------------------------------- Nominatim first
 
 const NOMINATIM = "https://nominatim.example.test";
 const WITH_NOMINATIM = { OVERPASS_URLS: `${FIRST}, ${SECOND}`, NOMINATIM_URL: NOMINATIM };
-const TOPAZ_RING: Position[] = [[-123.3652, 48.4456], [-123.3600, 48.4456], [-123.3600, 48.4410], [-123.3652, 48.4410], [-123.3652, 48.4456]];
-const RESERVE_OUTER: Position[] = [[-123.37, 48.44], [-123.364, 48.44], [-123.364, 48.444], [-123.37, 48.444], [-123.37, 48.44]];
-const RESERVE_POND: Position[] = [[-123.368, 48.441], [-123.366, 48.441], [-123.366, 48.443], [-123.368, 48.443], [-123.368, 48.441]];
-const SEARCH_RESULTS = [
-  { osm_type: "way", osm_id: 22988461, category: "leisure", type: "park", name: "Topaz Park", extratags: {} },
-  { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", extratags: { operator: "Saanich" } },
+const PIN: [number, number] = [-123.0630, 49.0105];
+const box = (west: number, south: number, east: number, north: number): Position[] => [[west, south], [east, south], [east, north], [west, north], [west, south]];
+// Like Boundary Bay Regional Park: the pin is inside, but the park's centre is about 2.5 km east.
+const BIG_RING = box(-123.0660, 49.0050, -122.9960, 49.0160);
+// A small park 400 m north of the pin.
+const NEAR_RING = box(-123.0640, 49.0141, -123.0620, 49.0151);
+// A reserve with a pond, 600 m west.
+const RESERVE_OUTER = box(-123.0760, 49.0090, -123.0712, 49.0120);
+const RESERVE_POND = box(-123.0745, 49.0100, -123.0730, 49.0110);
+// Its bounding box is within 1 km, but its outline is 1.3 km away.
+const SLIVER_RING = box(-123.0630, 49.0200, -123.0450, 49.0220);
+const bb = (ring: Position[]) => {
+  const lngs = ring.map((point) => point[0]), lats = ring.map((point) => point[1]);
+  return [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)].map(String);
+};
+const PARK_RESULTS = [
+  { osm_type: "way", osm_id: 24722692, category: "leisure", type: "park", name: "Boundary Bay Regional Park", boundingbox: bb(BIG_RING), extratags: { operator: "Metro Vancouver" } },
+  { osm_type: "way", osm_id: 501, category: "leisure", type: "park", name: "Corner Park", boundingbox: bb(NEAR_RING) },
+  { osm_type: "way", osm_id: 502, category: "leisure", type: "park", name: "Far Park", boundingbox: ["49.04", "49.05", "-123.04", "-123.03"] },
+  { osm_type: "way", osm_id: 503, category: "leisure", type: "park", name: "Sliver Park", boundingbox: ["49.0185", "49.022", "-123.063", "-123.045"] },
   { osm_type: "node", osm_id: 9, category: "leisure", type: "park", name: "A park node" },
   { osm_type: "way", osm_id: 10, category: "amenity", type: "school", name: "Park School" },
   { osm_type: "way", osm_id: 11, category: "leisure", type: "garden", name: "Private Park Garden", extratags: { access: "private" } },
 ];
-const LOOKUP = {
-  type: "FeatureCollection",
-  features: [
-    { type: "Feature", properties: { osm_type: "way", osm_id: 22988461, category: "leisure", type: "park", name: "Topaz Park" }, geometry: { type: "Polygon", coordinates: [TOPAZ_RING] } },
-    { type: "Feature", properties: { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", extratags: { operator: "Saanich" } }, geometry: { type: "MultiPolygon", coordinates: [[RESERVE_OUTER, RESERVE_POND]] } },
-  ],
+const RESERVE_RESULTS = [
+  { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", boundingbox: bb(RESERVE_OUTER), extratags: { operator: "Delta" } },
+];
+const OUTLINES: Record<string, unknown> = {
+  W24722692: { type: "Feature", properties: { osm_type: "way", osm_id: 24722692, category: "leisure", type: "park", name: "Boundary Bay Regional Park" }, geometry: { type: "Polygon", coordinates: [BIG_RING] } },
+  W501: { type: "Feature", properties: { osm_type: "way", osm_id: 501, category: "leisure", type: "park", name: "Corner Park" }, geometry: { type: "Polygon", coordinates: [NEAR_RING] } },
+  W503: { type: "Feature", properties: { osm_type: "way", osm_id: 503, category: "leisure", type: "park", name: "Sliver Park" }, geometry: { type: "Polygon", coordinates: [SLIVER_RING] } },
+  R555: { type: "Feature", properties: { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", extratags: { operator: "Delta" } }, geometry: { type: "MultiPolygon", coordinates: [[RESERVE_OUTER, RESERVE_POND]] } },
 };
 
-/** Overpass always refuses; Nominatim answers search and lookup from the fixtures above. */
-function overpassDownNominatimUp(results: unknown = SEARCH_RESULTS, lookup: unknown = LOOKUP, nominatimStatus = 200) {
-  const calls: { url: string; at: number; agent: string | null }[] = [];
+type NominatimCall = { url: string; at: number; agent: string | null };
+
+/** Nominatim answers from the fixtures; Overpass answers with `overpassBody` or refuses. */
+function nominatimWorld(options: { parks?: unknown[]; reserves?: unknown[]; nominatimStatus?: number; overpassBody?: (query: string) => unknown } = {}) {
+  const calls: NominatimCall[] = [];
+  const good = options.overpassBody ? overpass(options.overpassBody) : null;
   const fetcher = (async (url: string, init?: RequestInit) => {
     calls.push({ url: String(url), at: Date.now(), agent: new Headers(init?.headers).get("user-agent") });
-    if (!String(url).startsWith(NOMINATIM)) return new Response("<html>busy</html>", { status: 504 });
-    if (nominatimStatus !== 200) return new Response("busy", { status: nominatimStatus });
-    return new Response(JSON.stringify(String(url).includes("/lookup") ? lookup : results), { status: 200 });
+    if (!String(url).startsWith(NOMINATIM)) return good ? good(url, init) : new Response("<html>busy</html>", { status: 504 });
+    if (options.nominatimStatus && options.nominatimStatus !== 200) return new Response("busy", { status: options.nominatimStatus });
+    const params = new URL(String(url)).searchParams;
+    if (String(url).includes("/lookup")) {
+      const features = params.get("osm_ids")!.split(",").map((id) => OUTLINES[id]).filter(Boolean);
+      return new Response(JSON.stringify({ type: "FeatureCollection", features }), { status: 200 });
+    }
+    const results = params.get("q") === "nature reserve" ? options.reserves ?? RESERVE_RESULTS : options.parks ?? PARK_RESULTS;
+    return new Response(JSON.stringify(results), { status: 200 });
   }) as unknown as typeof fetch;
-  return { calls, fetcher };
+  const nominatim = () => calls.filter((call) => call.url.startsWith(NOMINATIM));
+  return { calls, nominatim, fetcher };
 }
 
-test("when every Overpass endpoint fails, Nominatim finds park outlines, including a relation with a hole", async () => {
-  const { calls, fetcher } = overpassDownNominatimUp();
-  const parks = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0 }).search(48.4417, -123.3611);
-  assert.deepEqual(calls.map((call) => call.url.split("?")[0]), [FIRST, SECOND, `${NOMINATIM}/search`, `${NOMINATIM}/lookup`]);
-  const search = new URL(calls[2].url);
-  assert.equal(search.searchParams.get("q"), "park");
-  assert.equal(search.searchParams.get("bounded"), "1");
-  const [west, north, east, south] = search.searchParams.get("viewbox")!.split(",").map(Number);
-  assert.ok(west < -123.3611 && east > -123.3611 && south < 48.4417 && north > 48.4417 && east - west < 0.02);
-  // Nodes, non-parks and private places never get an outline request.
-  assert.equal(new URL(calls[3].url).searchParams.get("osm_ids"), "W22988461,R555");
-  assert.equal(new URL(calls[3].url).searchParams.get("polygon_geojson"), "1");
-  assert.ok(calls.every((call) => call.agent === OSM_USER_AGENT));
+test("Nominatim finds the park that contains the pin even when its centre is kilometres away", async () => {
+  const { nominatim, fetcher } = nominatimWorld();
+  const parks = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 0 }).search(PIN[1], PIN[0]);
+  const requests = nominatim().map((call) => new URL(call.url));
+  assert.deepEqual(requests.map((url) => `${url.pathname} ${url.searchParams.get("q") ?? ""}`.trim()), ["/search park", "/search nature reserve", "/lookup"]);
+  const [west, north, east, south] = requests[0].searchParams.get("viewbox")!.split(",").map(Number);
+  assert.ok(east - west > 0.07 && north - south > 0.05, "the search box is several km across");
+  assert.equal(requests[0].searchParams.get("bounded"), "1");
+  // One /lookup for every candidate whose bounding box is near; far parks, nodes, non-parks and private places are skipped.
+  assert.deepEqual(requests[2].searchParams.get("osm_ids")!.split(",").sort(), ["R555", "W24722692", "W501", "W503"]);
+  assert.equal(requests[2].searchParams.get("polygon_geojson"), "1");
+  assert.ok(nominatim().every((call) => call.agent === OSM_USER_AGENT));
 
-  assert.deepEqual(parks.map((park) => [park.type, park.id, park.name, park.kind, park.containsPin]), [
-    ["way", 22988461, "Topaz Park", "leisure=park", true],
-    ["relation", 555, "Pond Reserve", "leisure=nature_reserve", false],
+  // The sliver's outline is 1.3 km away, so it is dropped by real distance.
+  assert.deepEqual(parks.map((park) => [park.type, park.id, park.containsPin]), [
+    ["way", 24722692, true],
+    ["way", 501, false],
+    ["relation", 555, false],
   ]);
-  assert.equal(parks[1].geometry.coordinates[0].length, 2, "the reserve keeps its pond as a hole");
-  assert.equal(parks[1].tags.operator, "Saanich");
-  assert.ok(parks[0].areaM2 > 100_000);
+  assert.equal(parks[0].name, "Boundary Bay Regional Park");
+  assert.equal(parks[2].geometry.coordinates[0].length, 2, "the reserve keeps its pond as a hole");
+  assert.equal(parks[2].kind, "leisure=nature_reserve");
+  assert.ok(parks[1].distanceM > 300 && parks[1].distanceM < 500);
+});
+
+test("a wide search cut off at its limit adds a tighter one for the small parks nearby", async () => {
+  const filler = Array.from({ length: 40 }, (_, index) => ({ osm_type: "way", osm_id: 9000 + index, category: "leisure", type: "park", name: `Park ${index}`, boundingbox: ["49.09", "49.1", "-123.0", "-122.99"] }));
+  const { nominatim, fetcher } = nominatimWorld({ parks: filler });
+  await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 0 }).search(PIN[1], PIN[0]);
+  const searches = nominatim().map((call) => new URL(call.url)).filter((url) => url.pathname === "/search");
+  assert.equal(searches.length, 3);
+  const widths = searches.map((url) => { const [w, , e] = url.searchParams.get("viewbox")!.split(",").map(Number); return e - w; });
+  assert.ok(widths[1] < widths[0] / 3, "the second search is the tight one");
 });
 
 test("Nominatim finding nothing returns an empty list without an outline request", async () => {
-  const { calls, fetcher } = overpassDownNominatimUp([]);
-  assert.deepEqual(await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0 }).search(48.5, -123.4), []);
-  assert.equal(calls.filter((call) => call.url.includes("/lookup")).length, 0);
+  const { nominatim, fetcher } = nominatimWorld({ parks: [], reserves: [] });
+  assert.deepEqual(await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 0 }).search(48.5, -123.4), []);
+  assert.equal(nominatim().filter((call) => call.url.includes("/lookup")).length, 0);
 });
 
-test("when Overpass and Nominatim all fail the search is a 503", async () => {
-  const { fetcher } = overpassDownNominatimUp(SEARCH_RESULTS, LOOKUP, 503);
-  await assert.rejects(createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0 }).search(48.45, -123.36),
+test("when Nominatim fails the search waits for Overpass, and fails only when both do", async () => {
+  const healthy = nominatimWorld({ nominatimStatus: 503, overpassBody: parkFixture });
+  const parks = await createOsmClient(WITH_NOMINATIM, healthy.fetcher, { nominatimSpacingMs: 0 }).search(48.451, -123.359);
+  assert.deepEqual(parks.map((park) => park.id), [1001, 2002]);
+  const down = nominatimWorld({ nominatimStatus: 503 });
+  await assert.rejects(createOsmClient(WITH_NOMINATIM, down.fetcher, { nominatimSpacingMs: 0 }).search(48.45, -123.36),
     (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
 });
 
-test("a failed Overpass endpoint is skipped for a while, so the next search goes straight to Nominatim", async () => {
-  let clock = 1_000_000;
-  const { calls, fetcher } = overpassDownNominatimUp();
-  const client = createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, now: () => clock });
-  await client.search(48.4417, -123.3611);
-  calls.length = 0;
-  await client.search(48.47, -123.38);
-  // The outlines come from the cache; the point is that no Overpass endpoint was asked.
-  assert.deepEqual(calls.map((call) => call.url.split("?")[0]), [`${NOMINATIM}/search`]);
-  clock += 3 * 60 * 1000;
-  calls.length = 0;
-  await client.search(48.48, -123.39);
-  assert.equal(calls[0].url, FIRST, "after the cooldown Overpass is tried again");
+test("Overpass results are merged in when Overpass answers in time", async () => {
+  // Overpass finds an unnamed garden near the pin that a Nominatim name search cannot.
+  const garden = { type: "way", id: 7007, tags: { leisure: "garden" }, bounds: { minlat: 49.0108, minlon: -123.0628, maxlat: 49.0112, maxlon: -123.0622 },
+    geometry: geometry(box(-123.0628, 49.0108, -123.0622, 49.0112)) };
+  const { fetcher } = nominatimWorld({ overpassBody: (query) => (query.includes("out tags bb") ? { elements: [summary(garden)] } : { elements: [garden] }) });
+  const parks = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 1_000 }).search(PIN[1], PIN[0]);
+  assert.deepEqual(parks.map((park) => park.id), [24722692, 7007, 501, 555]);
 });
 
-test("an outline fetch falls back to Nominatim /lookup and keeps holes", async () => {
-  const { calls, fetcher } = overpassDownNominatimUp();
-  const feature = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0 }).feature({ type: "relation", id: 555 });
-  assert.equal(new URL(calls[calls.length - 1].url).searchParams.get("osm_ids"), "R555");
-  assert.equal(feature?.name, "Pond Reserve");
-  assert.equal(feature?.geometry.coordinates[0].length, 2);
+test("a failed Overpass endpoint is skipped for a while", async () => {
+  let clock = 1_000_000;
+  const { calls, fetcher } = nominatimWorld();
+  const client = createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 1_000, now: () => clock });
+  await client.search(PIN[1], PIN[0]);
+  assert.ok(calls.some((call) => call.url === FIRST) && calls.some((call) => call.url === SECOND));
+  calls.length = 0;
+  await client.search(49.02, -123.07);
+  assert.ok(!calls.some((call) => call.url === FIRST || call.url === SECOND), "no Overpass request while it cools down");
+  clock += 3 * 60 * 1000;
+  calls.length = 0;
+  await client.search(49.03, -123.08);
+  assert.ok(calls.some((call) => call.url === FIRST), "after the cooldown Overpass is tried again");
+});
+
+test("an outline fetch asks Nominatim /lookup first, keeps holes, and falls back to Overpass for ids Nominatim lacks", async () => {
+  const { nominatim, calls, fetcher } = nominatimWorld({ overpassBody: () => ({ elements: [RELATION] }) });
+  const client = createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0 });
+  const reserve = await client.feature({ type: "relation", id: 555 });
+  assert.equal(new URL(nominatim()[0].url).searchParams.get("osm_ids"), "R555");
+  assert.equal(reserve?.geometry.coordinates[0].length, 2);
+  assert.ok(!calls.some((call) => call.url === FIRST));
+  const fromOverpass = await client.feature({ type: "relation", id: 1001 });
+  assert.equal(fromOverpass?.name, "Two Part Park");
+  const nowhere = nominatimWorld();
+  assert.equal(await createOsmClient(WITH_NOMINATIM, nowhere.fetcher, { nominatimSpacingMs: 0 }).feature({ type: "way", id: 999 }), null);
 });
 
 test("Nominatim requests are spaced out across clients", async () => {
-  const { calls, fetcher } = overpassDownNominatimUp();
+  const { nominatim, fetcher } = nominatimWorld();
   await Promise.all([
-    createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60 }).search(48.4417, -123.3611),
-    createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60 }).search(48.4517, -123.3711),
+    createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60, overpassGraceMs: 0 }).search(PIN[1], PIN[0]),
+    createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60, overpassGraceMs: 0 }).search(49.05, -123.1),
   ]);
-  const nominatimCalls = calls.filter((call) => call.url.startsWith(NOMINATIM)).map((call) => call.at).sort((a, b) => a - b);
-  assert.equal(nominatimCalls.length, 4);
-  for (let index = 1; index < nominatimCalls.length; index += 1) assert.ok(nominatimCalls[index] - nominatimCalls[index - 1] >= 55, `gap ${nominatimCalls[index] - nominatimCalls[index - 1]}`);
+  const starts = nominatim().map((call) => call.at).sort((a, b) => a - b);
+  assert.ok(starts.length >= 5, `${starts.length} requests`);
+  for (let index = 1; index < starts.length; index += 1) assert.ok(starts[index] - starts[index - 1] >= 55, `gap ${starts[index] - starts[index - 1]}`);
 });
 
-test("NOMINATIM_URL can point elsewhere or turn the fallback off", () => {
+test("NOMINATIM_URL can point elsewhere or turn Nominatim off", () => {
   assert.equal(nominatimBase({}), "https://nominatim.openstreetmap.org");
   assert.equal(nominatimBase({ NOMINATIM_URL: "https://nominatim.example.test/" }), "https://nominatim.example.test");
   assert.equal(nominatimBase({ NOMINATIM_URL: "off" }), null);
@@ -287,7 +344,7 @@ test("NOMINATIM_URL can point elsewhere or turn the fallback off", () => {
 
 test("repeat searches near the same spot use the cache", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient({}, overpass(parkFixture, calls));
+  const client = createOsmClient(OVERPASS_ONLY, overpass(parkFixture, calls));
   await client.search(48.45101, -123.35901);
   await client.search(48.45102, -123.35902);
   assert.equal(calls.length, 2);
@@ -295,11 +352,11 @@ test("repeat searches near the same spot use the cache", async () => {
 
 test("feature() fetches one outline by id with full detail", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient({}, overpass(() => ({ elements: [RELATION] }), calls));
+  const client = createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [RELATION] }), calls));
   const feature = await client.feature({ type: "relation", id: 1001 });
   assert.equal(feature?.geometry.coordinates.length, 2);
   assert.match(calls[0].query, /relation\(id:1001\);/);
-  assert.equal(await createOsmClient({}, overpass(() => ({ elements: [] }))).feature({ type: "way", id: 9 }), null);
+  assert.equal(await createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [] }))).feature({ type: "way", id: 9 }), null);
 });
 
 test("rings are stitched from segments in any direction and open rings are dropped", () => {
@@ -359,7 +416,7 @@ test("GET /api/osm/parks validates the pin, rate limits per client and returns c
   assert.equal(ok.status, 200);
   const body = await ok.json() as { attribution: string; parks: Record<string, unknown>[] };
   assert.match(body.attribution, /OpenStreetMap/);
-  assert.deepEqual(Object.keys(body.parks[0]).sort(), ["areaM2", "containsPin", "distanceM", "geometry", "id", "kind", "name", "type"]);
+  assert.deepEqual(Object.keys(body.parks[0]).sort(), ["areaM2", "containsPin", "distanceM", "geometry", "id", "inCatalogue", "kind", "name", "type"]);
   assert.equal(subjects.length, 1);
   assert.match(subjects[0], /^[0-9a-f]{64}$/);
   assert.ok(!subjects[0].includes("203.0.113.9"));

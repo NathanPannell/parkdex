@@ -138,7 +138,7 @@ test("the operator approves a waiting OpenStreetMap proposal and it is published
     },
     async transaction(batch: { text: string; params: unknown[] }[]) {
       statements.push(batch.map((statement) => statement.text));
-      const accept = batch[batch.length - 1];
+      const accept = batch.find((statement) => statement.text.includes("status = 'accepted'"))!;
       const row = proposals.rows.get(String(accept.params[0]))!;
       Object.assign(row, { status: "accepted", publishedParkId: accept.params[1] });
       return batch.map(() => []);
