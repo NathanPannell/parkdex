@@ -9,6 +9,7 @@ import { deleteAccountData, handleProgressRequest, type ProgressDependencies, ty
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
+import { createSqlOsmParkTable, type OsmParkTable } from "./osmParkTable.js";
 import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
 import { createProposalModerator } from "./proposalModeration.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
@@ -67,6 +68,8 @@ export interface WorkerDependencies {
   /** Undefined uses the shared moderation module; null turns the model off. */
   proposalModerator?: ProposalModerator | null;
   osmClient?: OsmClient;
+  /** Our own copy of OpenStreetMap park outlines; defaults to kip_osm.parks in DATABASE_URL. */
+  osmParkTable?(env: WorkerEnvironment): OsmParkTable | null;
   osmSearchAllowed?(subjectHash: string): Promise<boolean>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
@@ -421,8 +424,11 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
   // One client per instance so its short cache and concurrency cap span requests.
   let osm = dependencies.osmClient ?? null;
+  const table = (env: WorkerEnvironment) => dependencies.osmParkTable
+    ? dependencies.osmParkTable(env)
+    : env.DATABASE_URL ? createSqlOsmParkTable(databaseSqlRunner(env.DATABASE_URL)) : null;
   const withOsm = (env: WorkerEnvironment): WorkerDependencies =>
-    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined) });
+    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined, { table: table(env) }) });
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
       return withRequestAnalytics({
