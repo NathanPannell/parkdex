@@ -97,6 +97,7 @@ class AccountReleaseGates(unittest.TestCase):
             "game_001_init.sql",
             "park_proposals_002_moderation.sql",
             "osm_parks_001_init.sql",
+            "founders_001_init.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
@@ -776,6 +777,47 @@ class R2ObjectGetRetry(ScriptedUrlopen, unittest.TestCase):
                 with self.assertRaisesRegex(delivery.DeliveryError, f"R2 object {method} request could not complete"):
                     self.call([urllib.error.URLError("reset"), b"{}"], method=method)
                 self.assertEqual((self.calls, self.sleeps), (1, []))
+
+
+class FailureDetail(unittest.TestCase):
+    """A failed command shows its first error, not only a tail that can be all object dump."""
+
+    def test_long_output_keeps_the_first_error_the_end_and_the_last_progress(self):
+        secret = "pg-password-qa-only-value"
+        delivery.register_secret(secret)
+        stderr = "\n".join([
+            "node:events:486",
+            "      throw er; // Unhandled 'error' event",
+            "      ^",
+            "",
+            f"error: terminating connection due to administrator command postgres://kip_qa:{secret}@127.0.0.1/db",
+            "    at Parser.parseErrorMessage (node_modules/pg-protocol/dist/parser.js:285:98)",
+            *[f"    field_{index}: {'x' * 60}," for index in range(200)],
+            "    _poolUseCount: 44,",
+            "}",
+        ])
+        stdout = "deleting the founder account removes the founder and photo: PASS\nqa-osm-parks: PASS\nlast step: PASS"
+        with patch.object(delivery.subprocess, "run", return_value=delivery.subprocess.CompletedProcess([], 1, stdout, stderr)):
+            with self.assertRaises(delivery.DeliveryError) as raised:
+                delivery.run(["npm", "run", "test:sql"], label="candidate PostgreSQL integration tests")
+        message = str(raised.exception)
+        self.assertIn("failed with exit code 1", message)
+        self.assertIn("first error:", message)
+        self.assertIn("error: terminating connection due to administrator command", message)
+        self.assertIn("end of output:", message)
+        self.assertIn("_poolUseCount: 44", message)
+        self.assertIn("last progress on stdout:\ndeleting the founder account", message)
+        self.assertNotIn(secret, message)
+        self.assertNotIn("kip_qa:", message)
+        self.assertLess(len(message), 3200)
+
+    def test_short_output_is_shown_whole_and_empty_output_adds_nothing(self):
+        self.assertEqual(delivery.failure_detail("", "AssertionError: 1 !== 2"), "AssertionError: 1 !== 2")
+        self.assertEqual(delivery.failure_detail("", ""), "")
+        long_without_marker = "\n".join(f"line {index} {'y' * 40}" for index in range(100))
+        detail = delivery.failure_detail(long_without_marker, "")
+        self.assertTrue(detail.startswith("start of output:\nline 0"))
+        self.assertIn("line 99", detail)
 
 
 if __name__ == "__main__":

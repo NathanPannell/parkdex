@@ -83,6 +83,36 @@ def safe_env(*, gh: bool = False, extra: dict[str, str] | None = None) -> dict[s
     return env
 
 
+FAILURE_MARKER = re.compile(r"(?:\bError\b|Error:|AssertionError|\berror:|Traceback|\bFAIL(?:ED)?\b|✖)")
+FAILURE_EXCERPT_CHARS = 1200
+FAILURE_TAIL_CHARS = 800
+FAILURE_PROGRESS_LINES = 3
+
+
+def failure_detail(stdout: str, stderr: str) -> str:
+    """A bounded, redacted account of a failed command: the lines around the first error, the end
+    of the output, and the last progress lines on stdout. A tail alone can be all object dump."""
+    output = redact((stderr or stdout or "").strip())
+    if not output:
+        return ""
+    if len(output) <= FAILURE_EXCERPT_CHARS + FAILURE_TAIL_CHARS:
+        parts = [output]
+    else:
+        lines = output.splitlines()
+        first = next((index for index, line in enumerate(lines) if FAILURE_MARKER.search(line)), None)
+        parts = []
+        if first is not None:
+            excerpt = "\n".join(lines[max(0, first - 2):first + 12])[:FAILURE_EXCERPT_CHARS]
+            parts.append(f"first error:\n{excerpt}")
+        else:
+            parts.append(f"start of output:\n{output[:FAILURE_EXCERPT_CHARS]}")
+        parts.append(f"end of output:\n{output[-FAILURE_TAIL_CHARS:]}")
+    if stderr.strip() and stdout.strip():
+        progress = redact(stdout.strip()).splitlines()[-FAILURE_PROGRESS_LINES:]
+        parts.append("last progress on stdout:\n" + "\n".join(line[:200] for line in progress))
+    return "\n...\n".join(parts)
+
+
 def run(
     args: list[str],
     *,
@@ -106,7 +136,7 @@ def run(
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise DeliveryError(f"{label or Path(args[0]).name} could not complete.") from exc
     if result.returncode != 0:
-        detail = redact((result.stderr or result.stdout or "").strip())[-1400:]
+        detail = failure_detail(result.stdout or "", result.stderr or "")
         suffix = f": {detail}" if detail else ""
         raise DeliveryError(f"{label or Path(args[0]).name} failed with exit code {result.returncode}{suffix}")
     return result.stdout.strip()

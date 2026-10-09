@@ -5,7 +5,8 @@ import pg from 'pg';
 
 // The OpenStreetMap outline table against real PostgreSQL: the migration replays, and the
 // API's bounding-box query plus its own geometry test find the parks around a pin with every
-// live service unreachable. Runs in its own throwaway kip_qa_ database.
+// live service unreachable, offering only the parks that contain the position. Runs in its own
+// throwaway kip_qa_ database.
 const shared = process.env.PGDATABASE;
 assert.ok(shared?.startsWith('kip_qa_') || shared === 'kip_accounts_qa', 'SQL QA requires a dedicated kip_qa_ database');
 const owned = `kip_qa_osm_${randomBytes(8).toString('hex')}`;
@@ -53,18 +54,18 @@ try {
   await insert('way', 99, 'Far Park', 'leisure=park', [box(-123.2, 49.3, -123.19, 49.31)]);
   const client = createOsmClient({ NOMINATIM_URL: 'off', OVERPASS_URLS: 'https://overpass.invalid/api/interpreter' }, noNetwork, { table: createSqlOsmParkTable(databaseSqlRunner(dbUrl)) });
 
-  const paterson = await client.search(49.089, -123.0601);
+  const paterson = await client.search(49.089, -123.0601, 35);
   assert.deepEqual(paterson.map((park) => [park.type, park.id, park.containsPin]), [['way', 23938892, true]]);
-  const watershed = await client.search(49.1143, -122.8923);
-  assert.deepEqual(watershed.map((park) => [park.id, park.containsPin]), [[1552698508, true], [24926315, false]]);
+  // Sunbury Park is a few hundred metres away, so it is not offered.
+  const watershed = await client.search(49.1143, -122.8923, 35);
+  assert.deepEqual(watershed.map((park) => [park.id, park.containsPin]), [[1552698508, true]]);
   assert.equal(watershed[0].geometry.coordinates[0].length, 2, 'the hole comes back');
   log('Paterson Park and Watershed Park come from the table with Nominatim off and Overpass unreachable');
 
-  const inPond = await client.search(49.111, -122.897);
-  assert.equal(inPond[0].id, 1552698508);
-  assert.equal(inPond[0].containsPin, false, 'a pin in the hole is not inside the park');
+  // In the pond, more than 35 m from its shore: not in the park, and the table settles it.
+  assert.deepEqual(await client.search(49.111, -122.897, 35), []);
   // Nothing near: the live services are asked, and here they are unreachable.
-  await assert.rejects(client.search(49.5, -124), (error) => error.code === 'osm_unavailable');
+  await assert.rejects(client.search(49.5, -124, 35), (error) => error.code === 'osm_unavailable');
   log('holes are respected and an empty neighbourhood falls through');
 
   const outline = await client.feature({ type: 'relation', id: 1552698508 });
