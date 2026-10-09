@@ -1,4 +1,5 @@
 import { database } from "./db.js";
+import { isParkHidden } from "./parkVisibility.js";
 
 export interface PlayerRecord {
   handle: string;
@@ -154,6 +155,11 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async recordVisit(accountId, visitId, parkId, visitedAt) {
+      // A hidden park takes no new visits; a replay of a visit stored before it was hidden still answers.
+      if (await isParkHidden(sql, parkId)) {
+        const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
+        if (!stored.length) return { status: "park_not_found" };
+      }
       const result = await rows("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result", [visitId, accountId, parkId, visitedAt]);
       const body = jsonValue(result[0]?.result) as { status: string; visit?: unknown };
       if (body.status === "recorded" || body.status === "replayed" || body.status === "already_today") {
