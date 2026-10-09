@@ -34,7 +34,8 @@
     "database/migrations/app_config_002_global_rules.sql",
     "database/migrations/park_drafts_002_proposals.sql",
     "database/migrations/game_001_init.sql",
-    "database/migrations/park_proposals_002_moderation.sql"
+    "database/migrations/park_proposals_002_moderation.sql",
+    "database/migrations/osm_parks_001_init.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -64,7 +65,8 @@
       "scripts/test_downshift_park_rarities.py",
       "scripts/test_build_bc_import.py",
       "scripts/test_content_catalogue.py",
-      "scripts/test_park_visibility.py"
+      "scripts/test_park_visibility.py",
+      "scripts/test_osm_park_index.py"
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",

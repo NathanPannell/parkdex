@@ -94,6 +94,7 @@ class AccountReleaseGates(unittest.TestCase):
             "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
             "game_001_init.sql",
             "park_proposals_002_moderation.sql",
+            "osm_parks_001_init.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):

@@ -1,10 +1,16 @@
 import { catalogueMatch, type CataloguePark } from "./catalogueMatch.js";
+import type { OsmParkTable } from "./osmParkTable.js";
 import { HttpError } from "./validation.js";
 
 /**
  * Park outlines from OpenStreetMap for the "propose a park" flow.
  *
- * Nominatim comes first because it answers in under a second while both public Overpass
+ * Our own copy of the outlines (kip_osm.parks, see worker/osmParkTable.ts) is asked first: it
+ * finds any mapped park that contains or is near the pin in a few milliseconds, whatever its
+ * name, and does not depend on public services. Only when it has nothing near the pin (or is
+ * not loaded) does the search fall back to the live services below.
+ *
+ * Nominatim comes first among those because it answers in under a second while both public Overpass
  * instances have been failing for days. It searches for "park" and "nature reserve" in a box a
  * few kilometres wide (a bounded search only returns features whose centre is in the box, so a
  * small box misses big parks that contain the pin), fetches every candidate's outline in one
@@ -26,6 +32,8 @@ const SEARCH_RADIUS_M = 250;
 const MAX_CANDIDATES = 8;
 /** Parks whose outline is this close to the pin are offered, as well as any that contain it. */
 const NEARBY_M = 1_000;
+// Planters and traffic islands tagged as gardens crowd the list in towns; offer them only when the pin is inside.
+const MIN_NEARBY_AREA_M2 = 200;
 const MAX_BBOX_DIAGONAL_M = 20_000;
 // Two attempts must fit in the function's time with the database work around them.
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -414,7 +422,7 @@ function nearPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate
   const pin: Position = [lng, lat];
   return sortByPin(features
     .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
-    .filter((candidate) => candidate.containsPin || candidate.distanceM <= NEARBY_M))
+    .filter((candidate) => candidate.containsPin || (candidate.distanceM <= NEARBY_M && candidate.areaM2 >= MIN_NEARBY_AREA_M2)))
     .slice(0, MAX_CANDIDATES);
 }
 
@@ -444,6 +452,8 @@ export interface OsmClientOptions {
   nominatimSpacingMs?: number;
   /** How long a search waits for Overpass after Nominatim answers. */
   overpassGraceMs?: number;
+  /** Our own copy of the outlines, asked before any live service. */
+  table?: OsmParkTable | null;
 }
 
 export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: OsmClientOptions = {}): OsmClient {
@@ -453,6 +463,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   const nominatim = nominatimBase(env);
   const nominatimSpacingMs = options.nominatimSpacingMs ?? NOMINATIM_SPACING_MS;
   const overpassGraceMs = options.overpassGraceMs ?? OVERPASS_GRACE_MS;
+  const table = options.table ?? null;
   const coolUntil = new Map<string, number>();
   const cache = new Map<string, { at: number; value: OverpassElement[] }>();
   let active = 0;
@@ -619,8 +630,21 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       return nearPin(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng);
   }
 
+  /** Parks from our own table near the pin; empty when it has none or cannot be read. */
+  async function tableSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
+    if (!table) return [];
+    try {
+      return nearPin(await table.near(lat, lng, NEARBY_M), lat, lng);
+    } catch {
+      // A missing or unloaded table must not stop the search; the live services still answer.
+      return [];
+    }
+  }
+
   return {
     async search(lat, lng) {
+      const own = await tableSearch(lat, lng);
+      if (own.length) return own;
       // Overpass starts at the same time; while its endpoints are cooling down it settles at once.
       const overpass = overpassSearch(lat, lng).then((parks) => ({ parks }), (error: unknown) => ({ error }));
       let primary: OsmCandidate[];
@@ -640,6 +664,8 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       return sortByPin([...merged.values()]).slice(0, MAX_CANDIDATES);
     },
     async feature(ref) {
+      const own = table ? await table.get(ref).catch(() => null) : null;
+      if (own) return own;
       // About 1 m keeps the boundary faithful for check-ins while trimming redundant nodes.
       const features = await nominatimOutlines([ref], 1, null);
       const found = features?.find((feature) => feature.type === ref.type && feature.id === ref.id);
