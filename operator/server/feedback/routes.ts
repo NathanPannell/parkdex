@@ -1,11 +1,11 @@
-import { neon } from "@neondatabase/serverless";
+import { ARCHIVE_SEARCH_MAX, CLEAR_DONE_LIMIT, createNeonFeedbackArchiveStore, type FeedbackArchiveStore } from "../../../worker/feedbackArchive.js";
 import { sendEmail } from "../../../worker/feedbackDelivery.js";
 import { createNeonFeedbackStore, type FeedbackCursor, type FeedbackStore } from "../../../worker/store.js";
 import { readJsonBody, validateRetryBody, validateStatus } from "../../../worker/validation.js";
 import type { DashboardEnv, SectionContext } from "../api.js";
 import { allowMethods, databaseUrl, HttpError, json, plainObject } from "../http.js";
 
-/** Feedback section: the report board, screenshots and email retry under /api/feedback. */
+/** Feedback section: the report board, the archive, screenshots and email retry under /api/feedback. */
 
 export interface FeedbackEnv {
   RESEND_API_KEY?: string;
@@ -14,6 +14,8 @@ export interface FeedbackEnv {
 
 export interface FeedbackDependencies {
   feedbackStore?(env: DashboardEnv): FeedbackStore;
+  /** Board and archive queries (worker/feedbackArchive.ts). */
+  feedbackArchive?(env: DashboardEnv): FeedbackArchiveStore;
   /** Report counts by status, for the note about the database the operator is not looking at. */
   feedbackCounts?(env: DashboardEnv): Promise<Record<string, number>>;
 }
@@ -50,14 +52,28 @@ function reportId(value: string): string {
   return value.toLowerCase();
 }
 
-async function neonFeedbackCounts(env: DashboardEnv): Promise<Record<string, number>> {
-  const rows = await neon(databaseUrl(env)).query("SELECT status, count(*)::int AS count FROM kip_feedback.reports GROUP BY status") as Array<{ status: string; count: number }>;
-  return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
+const ARCHIVE_CURSOR = "archive";
+const MAX_RESTORE = CLEAR_DONE_LIMIT;
+
+function archiveSearch(url: URL): string | null {
+  if (url.searchParams.getAll("q").length > 1) throw new HttpError(400, "invalid_query", "Invalid archive search.");
+  const text = (url.searchParams.get("q") ?? "").trim();
+  if (text.length > ARCHIVE_SEARCH_MAX || /[\u0000-\u001f\u007f]/.test(text)) throw new HttpError(400, "invalid_query", `Search for ${ARCHIVE_SEARCH_MAX} characters or fewer of plain text.`);
+  return text || null;
+}
+
+function restoreIds(value: unknown): string[] {
+  const body = plainObject(value, ["ids"], "Send the reports to restore as { ids: [...] }.");
+  if (!Array.isArray(body.ids) || body.ids.length === 0 || body.ids.length > MAX_RESTORE || body.ids.some((id) => typeof id !== "string" || !UUID.test(id))) {
+    throw new HttpError(400, "invalid_request", `Send 1 to ${MAX_RESTORE} report ids to restore.`);
+  }
+  return [...new Set((body.ids as string[]).map((id) => id.toLowerCase()))];
 }
 
 export async function feedbackRoutes(request: Request, context: SectionContext): Promise<Response | null> {
   const { path, url, dependencies } = context;
   const store = () => dependencies.feedbackStore?.(context.env) ?? createNeonFeedbackStore(databaseUrl(context.env));
+  const archive = (env: DashboardEnv = context.env) => dependencies.feedbackArchive?.(env) ?? createNeonFeedbackArchiveStore(databaseUrl(env));
 
   if (path === "/api/feedback") {
     allowMethods(request, "GET");
@@ -67,7 +83,8 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
     }
     const cursorToken = url.searchParams.get("cursor");
     const cursor = cursorToken ? decodeListCursor(cursorToken, status) : null;
-    const reports = await store().listReports(PAGE_SIZE + 1, status === "all" ? null : validateStatus(status), cursor);
+    // The board never shows archived reports; they live in the archive view.
+    const reports = await archive().listBoard(PAGE_SIZE + 1, status === "all" ? null : validateStatus(status), cursor);
     const page = reports.slice(0, PAGE_SIZE);
     const nextCursor = reports.length > PAGE_SIZE && page.length > 0 ? encodeListCursor(page[page.length - 1], status) : null;
     return json({ reports: page, nextCursor });
@@ -77,8 +94,38 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
     allowMethods(request, "GET");
     const other = context.otherEnv;
     if (!other) return json({ available: false });
-    const counts = await (dependencies.feedbackCounts?.(other) ?? neonFeedbackCounts(other));
+    const counts = await (dependencies.feedbackCounts?.(other) ?? archive(other).liveCounts());
     return json({ available: true, environment: other.DASHBOARD_ENVIRONMENT ?? "production", feedback: counts });
+  }
+
+  // "Clear done": every done report leaves the board for the archive, from where it can be
+  // restored until the retention job deletes it 90 days later.
+  if (path === "/api/feedback/clear-done") {
+    allowMethods(request, "POST");
+    context.requireSameOrigin();
+    const ids = await archive().archiveDone(CLEAR_DONE_LIMIT);
+    return json({ archived: ids.length, ids, more: ids.length >= CLEAR_DONE_LIMIT });
+  }
+
+  if (path === "/api/feedback/archive") {
+    allowMethods(request, "GET");
+    const search = archiveSearch(url);
+    if (url.searchParams.getAll("cursor").length > 1) throw new HttpError(400, "invalid_query", "Invalid archive query.");
+    const cursorToken = url.searchParams.get("cursor");
+    const cursor = cursorToken ? decodeListCursor(cursorToken, ARCHIVE_CURSOR) : null;
+    const archived = archive();
+    const [reports, total] = await Promise.all([archived.listArchive(PAGE_SIZE + 1, search, cursor), cursor ? Promise.resolve(null) : archived.countArchive(search)]);
+    const page = reports.slice(0, PAGE_SIZE);
+    const last = page[page.length - 1];
+    const nextCursor = reports.length > PAGE_SIZE && last?.archivedAt ? encodeListCursor({ id: last.id, createdAt: last.archivedAt }, ARCHIVE_CURSOR) : null;
+    return json({ reports: page, nextCursor, total });
+  }
+
+  if (path === "/api/feedback/archive/restore") {
+    allowMethods(request, "POST");
+    context.requireSameOrigin();
+    const restored = await archive().restore(restoreIds(await readJsonBody(request, 64 * 1024)));
+    return json({ restored });
   }
 
   const match = /^\/api\/feedback\/([^/]+)(\/attachment|\/retry-emails)?$/.exec(path);
@@ -116,14 +163,15 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
     return json({ results });
   }
   if (request.method === "GET") {
-    const report = await store().getReport(id);
+    const report = await archive().getReport(id);
     if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
     return json({ report });
   }
   allowMethods(request, "GET", "PATCH");
   context.requireSameOrigin();
   const body = plainObject(await readJsonBody(request, 4096), ["status"], "Invalid feedback update.");
-  const report = await store().updateStatus(id, validateStatus(body.status));
+  if (!await store().updateStatus(id, validateStatus(body.status))) throw new HttpError(404, "not_found", "Feedback report not found.");
+  const report = await archive().getReport(id);
   if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
   return json({ report });
 }
