@@ -18,7 +18,7 @@ export function UpdateGate({ status }: { status: UpdateStatus }) {
         <div className="update-gate__card">
           <Kip pose="wave" size={96} />
           <h2 id="update-gate-title">Time to update Parkdex</h2>
-          <p>This version is too old to keep exploring. Update from Google Play to carry on. Your badges and photos stay on your phone.</p>
+          <p>This version is too old to keep exploring. Update from Google Play to carry on. Your saved progress stays on your phone, and your flags keep flying.</p>
           <a ref={updateAction} className="btn btn--block update-gate__button" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Update on Google Play</a>
         </div>
       </div>

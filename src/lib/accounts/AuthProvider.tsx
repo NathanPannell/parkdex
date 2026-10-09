@@ -137,14 +137,14 @@ function isUnauthorized(error: unknown) {
 }
 
 function networkMessage(error: unknown) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved Dex stays on this device until you reconnect.";
+  if (typeof navigator !== "undefined" && !navigator.onLine) return "You're offline. Your saved progress stays on this device until you reconnect.";
   if (error instanceof AuthHttpError && error.status >= 500) return "The account service is having trouble. Try again shortly.";
   return "The account service could not be reached. Check your connection and try again.";
 }
 
 class GuestReservationFailedError extends Error {
   constructor() {
-    super("Saved progress could not be prepared for this account. Retry while this device can access its saved Dex.");
+    super("Saved progress could not be prepared for this account. Retry while this device can open its saved progress.");
     this.name = "GuestReservationFailedError";
   }
 }
@@ -296,7 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           syncRerunRequested.current.clear();
           sessionGeneration.current += 1;
           rememberAccount(null);
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved Dex." }));
+          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved progress." }));
           return;
         }
 
@@ -407,7 +407,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     rememberAccount(null);
-    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's Dex remains saved separately on this device." }, progressRevision: current.progressRevision + 1 }));
+    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's saved progress stays separately on this device." }, progressRevision: current.progressRevision + 1 }));
   }, [isNative]);
 
   const sendVerification = useCallback(async () => {
@@ -469,7 +469,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phase: connected ? "pending" : "offline",
             claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
             photosPending: photos.filter((photo) => photo.backupState === "pending").length,
-            message: "Your saved Dex stays on this device.",
+            message: "Your saved progress stays on this device.",
             updatedAt: current.backup.updatedAt,
             lastSyncedAt: current.backup.lastSyncedAt,
           } }
@@ -526,22 +526,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const waitingForConnection = afterSyncConnectivity.connected && !afterSyncConnectivity.allowed && (hasPending || result.issues.length > 0);
         const phase: BackupPhase = offline ? "offline" : result.issues.length ? "error" : hasPending || waitingForConnection ? "pending" : "success";
         const message = offline
-          ? "Your saved Dex stays on this device."
+          ? "Your saved progress stays on this device."
           : waitingForConnection
-            ? "Your saved Dex stays on this device."
+            ? "Your saved progress stays on this device."
             : result.issues.length
               ? result.issues.some((issue) => issue.operation === "photo-upload")
                 ? "Some saved photos remain on this device because they could not be backed up."
                 : "Some saved progress is waiting for backup. It will sync when a usable connection is available."
               : hasPending
-                ? "Your saved Dex stays on this device."
-                : "Your Dex is backed up.";
+                ? "Your saved progress stays on this device."
+                : "Your account is backed up.";
         setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
           ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt }, progressRevision: current.progressRevision + 1 }
           : current);
         return result;
       } catch {
-        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your local Dex is safe." } }));
+        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your saved progress is safe on this device." } }));
         return null;
       } finally {
         if (controller && syncAbortControllers.current.get(flightKey) === controller) syncAbortControllers.current.delete(flightKey);

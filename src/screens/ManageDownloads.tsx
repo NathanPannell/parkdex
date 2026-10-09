@@ -156,7 +156,7 @@ export function ManageDownloads() {
             </li>
             <li>
               <span className="downloads-list__text">
-                <strong>Park guides and badge art</strong>
+                <strong>Park guides</strong>
                 <span>{summary ? formatMegabytes(summary.parkContentBytes) : "…"} · needed to show parks offline</span>
               </span>
             </li>
