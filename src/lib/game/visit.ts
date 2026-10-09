@@ -20,22 +20,16 @@ export function nextVisitStep(signedIn: boolean, me: GameMe | null): VisitStep {
   return "plant";
 }
 
-// Visits count once per park per local day in Victoria, the field test's town.
-const VICTORIA = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "2-digit", day: "2-digit" });
-
-/** The America/Vancouver calendar day of a moment, as YYYY-MM-DD, matching the server's local_day. */
-export function victoriaDay(ms: number): string {
-  const parts = Object.fromEntries(VICTORIA.formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
-
 /**
  * Whether this account already visited the park today, so another visit would only say
- * "already visited". A list read before midnight in Victoria no longer counts after it.
+ * "already visited". Visits count once per park per day in Victoria. The server says when
+ * that day ends, because time zone rules on phones lag: British Columbia stays on UTC-7
+ * from November 2026, and older tz data still falls back to UTC-8.
  */
 export function hasVisitedToday(me: GameMe | null | undefined, parkId: string, now: number): boolean {
-  if (!me?.visitedDay || !me.visitedToday?.length) return false;
-  return me.visitedDay === victoriaDay(now) && me.visitedToday.includes(parkId);
+  const until = me?.visitedTodayUntil ? Date.parse(me.visitedTodayUntil) : Number.NaN;
+  if (!Number.isFinite(until) || now >= until) return false;
+  return !!me?.visitedToday?.includes(parkId);
 }
 
 export const VISITED_TODAY_LABEL = "Visited today, back tomorrow";

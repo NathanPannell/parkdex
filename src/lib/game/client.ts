@@ -1,5 +1,4 @@
 import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
-import { victoriaDay } from "./visit";
 
 /**
  * Client for the flag game routes (`/api/game/*`, contract in issue #76).
@@ -17,10 +16,10 @@ export type GameMe = {
   takeovers: Takeover[];
   /** The account's flag seed, sent even before a handle exists (additive to the #76 contract). */
   flagSeed: string | null;
-  /** Parks already visited on the Victoria day of `visitedDay` (additive). */
+  /** Parks already visited on the current Victoria day (additive). */
   visitedToday?: string[];
-  /** The America/Vancouver day the server answered on, so a list read before midnight expires. */
-  visitedDay?: string | null;
+  /** When that day ends, from the server, so the list expires at midnight in Victoria (additive). */
+  visitedTodayUntil?: string | null;
 };
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
@@ -128,13 +127,12 @@ export function parseMe(body: unknown): GameMe {
     }),
     flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
     visitedToday: Array.isArray(row.visitedToday) ? row.visitedToday.filter((id): id is string => typeof id === "string" && id.length > 0) : [],
-    visitedDay: serverDay(row.serverTime),
+    visitedTodayUntil: instant(row.visitedTodayUntil),
   };
 }
 
-function serverDay(value: unknown): string | null {
-  const ms = typeof value === "string" ? Date.parse(value) : Number.NaN;
-  return Number.isFinite(ms) ? victoriaDay(ms) : null;
+function instant(value: unknown): string | null {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
 export function parseVisit(body: unknown): VisitResult {

@@ -68,7 +68,7 @@ class MemoryGameStore implements GameStore {
     return this.visitResult;
   }
   async summary() {
-    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }], visitedToday: [PARK] };
+    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }], visitedToday: [PARK], visitedTodayUntil: "2026-10-09T07:00:00.000Z" };
   }
   async markTakeoversSeen(_accountId: string, at: string) {
     this.seenAt = at;
@@ -234,11 +234,12 @@ test("me returns the player summary, or a flag seed and empty state before a han
     takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }],
     founderPoints: 10,
     visitedToday: [PARK],
+    visitedTodayUntil: "2026-10-09T07:00:00.000Z",
     serverTime: new Date(NOW).toISOString(),
   });
   store.players.clear();
   const empty = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
-  assert.deepEqual(empty, { player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], founderPoints: 0, serverTime: new Date(NOW).toISOString() });
+  assert.deepEqual(empty, { player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0, serverTime: new Date(NOW).toISOString() });
   assert.match(String(empty.flagSeed), /^[0-9a-f]{16}$/);
 });
 

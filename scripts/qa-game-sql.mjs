@@ -122,6 +122,9 @@ try {
   assert.deepEqual((await store.summary(c, at(14.4 * HOUR))).visitedToday, []);
   assert.deepEqual((await store.summary(c, at(15 * HOUR))).visitedToday, [park('daily')]);
   assert.deepEqual((await store.summary(b, at(15 * HOUR))).visitedToday, [], 'only the reading account counts');
+  // June 1 ends at midnight PDT, 07:00 UTC on June 2, whatever the session time zone.
+  assert.equal((await store.summary(c, at(13 * HOUR))).visitedTodayUntil, '2026-06-02T07:00:00.000Z');
+  assert.equal((await store.summary(c, at(15 * HOUR))).visitedTodayUntil, '2026-06-03T07:00:00.000Z');
   log('me lists the parks already visited today');
 
   await visit(c, park('fall'), 0);

@@ -49,6 +49,8 @@ export interface PlayerSummary {
   takeovers: Takeover[];
   /** Parks this account has already visited on the current America/Vancouver day. */
   visitedToday: string[];
+  /** When that day ends (the next Victoria midnight), so clients never need time zone rules. */
+  visitedTodayUntil: string;
 }
 
 export interface FlagRecord {
@@ -191,7 +193,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async summary(accountId, now) {
-      const [score, parks, takeovers, visitedToday] = await Promise.all([
+      const [score, parks, takeovers, visitedToday, dayEnd] = await Promise.all([
         rows("SELECT score FROM kip_game.player_scores($2::timestamptz) WHERE account_id = $1::uuid", [accountId, now]),
         rows(`
           SELECT t.park_id, t.started_at, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
@@ -213,6 +215,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
           WHERE account_id = $1::uuid AND source = 'visit'
             AND local_day = kip_game.local_day($2::timestamptz) AND visited_at <= $2::timestamptz
           ORDER BY park_id`, [accountId, now]),
+        rows("SELECT ((kip_game.local_day($1::timestamptz) + 1)::timestamp AT TIME ZONE 'America/Vancouver') AS until", [now]),
       ]);
       return {
         score: Number(score[0]?.score ?? 0),
@@ -221,6 +224,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
           parkId: String(row.park_id), byHandle: String(row.handle), byFlagSeed: String(row.flag_seed), at: iso(row.ended_at),
         })),
         visitedToday: visitedToday.map((row) => String(row.park_id)),
+        visitedTodayUntil: iso(dayEnd[0]?.until),
       };
     },
 

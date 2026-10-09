@@ -70,18 +70,19 @@ describe("player state", () => {
       takeovers: [{ parkId: "blueberry", byHandle: "sam", byFlagSeed: "def", at: "2026-10-06T00:00:00Z" }],
       flagSeed: "abc",
       visitedToday: [],
-      visitedDay: null,
+      visitedTodayUntil: null,
     });
     expect(fetchAuthenticated).toHaveBeenCalledWith("/api/game/me", expect.anything(), ACCOUNT);
   });
 
-  it("reads today's visited parks with the Victoria day the server answered on", async () => {
+  it("reads today's visited parks and when the server's day ends", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, {
       player: { handle: "robin", flagSeed: "abc" }, score: 0, parks: [], takeovers: [],
-      // 23:30 in Victoria on October 7 is already October 8 in UTC.
-      visitedToday: ["beacon-hill", 7, ""], serverTime: "2026-10-08T06:30:00.000Z",
+      visitedToday: ["beacon-hill", 7, ""], visitedTodayUntil: "2026-10-09T07:00:00.000Z",
     }));
-    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ visitedToday: ["beacon-hill"], visitedDay: "2026-10-07" });
+    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ visitedToday: ["beacon-hill"], visitedTodayUntil: "2026-10-09T07:00:00.000Z" });
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { player: null, score: 0, parks: [], takeovers: [], visitedTodayUntil: "soon" }));
+    await expect(fetchGameMe(ACCOUNT)).resolves.toMatchObject({ visitedToday: [], visitedTodayUntil: null });
   });
 
   it("treats a missing player as no handle yet, keeping the flag seed if the server sends it", async () => {
