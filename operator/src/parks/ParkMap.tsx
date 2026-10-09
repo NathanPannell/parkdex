@@ -38,12 +38,12 @@ type Props = {
   flyTarget?: { position: Position; zoom?: number; key: string } | null;
 };
 
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+export const STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SATELLITE_TILES = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 // The worker is copied into public/ by scripts/copy-maplibre-worker.mjs.
 let workerReady = false;
-function ensureWorker() {
+export function ensureWorker() {
   if (workerReady) return;
   setWorkerUrl(`${location.origin}/maplibre/maplibre-gl-worker.mjs`);
   workerReady = true;
@@ -58,7 +58,7 @@ function extend(bounds: LngLatBounds | null, position: Position): LngLatBounds {
   return bounds ? bounds.extend(position) : new LngLatBounds(position, position);
 }
 
-function addSatellite(instance: MapLibreMap) {
+export function addSatellite(instance: MapLibreMap) {
   instance.addSource("satellite", {
     type: "raster", tiles: [SATELLITE_TILES], tileSize: 256, maxzoom: 19,
     attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics",
@@ -68,7 +68,7 @@ function addSatellite(instance: MapLibreMap) {
   instance.addLayer({ id: "satellite", type: "raster", source: "satellite", paint: { "raster-fade-duration": 150 } }, firstLabel);
 }
 
-function applyBasemap(instance: MapLibreMap, basemap: Basemap) {
+export function applyBasemap(instance: MapLibreMap, basemap: Basemap) {
   const satellite = basemap === "satellite";
   instance.setLayoutProperty("satellite", "visibility", satellite ? "visible" : "none");
   // Extruded buildings would sit on top of the imagery as grey blocks.

@@ -3,19 +3,19 @@ import { test } from "node:test";
 import { createDashboardApi, type DashboardEnv } from "../api.ts";
 import type { MultiPolygon } from "./geometry.ts";
 import { liveUpdateStatements } from "./liveParks.ts";
-import { MemoryLiveParkStore } from "./memory.ts";
+import { memoryParks } from "./memory.ts";
 
 const ORIGIN = "https://operator.example.test";
 const env: DashboardEnv = { DATABASE_URL: "postgres://unused" };
 const square: MultiPolygon = { type: "MultiPolygon", coordinates: [[[[-123.4, 48.4], [-123.39, 48.4], [-123.39, 48.41], [-123.4, 48.41], [-123.4, 48.4]]]] };
 
 function setup() {
-  const parks = new MemoryLiveParkStore();
+  const { live: parks, dependencies } = memoryParks();
   parks.parks.set("beacon-hill", {
     id: "beacon-hill", name: "Beacon Hill Park", short: "Beacon Hill", category: "municipal", region: "Capital", lat: 48.41, lng: -123.36,
     biome: "forest", shape: "circle", rarity: "common", scene: null, seed: 7, blurb: "", geometry: square,
   });
-  const api = createDashboardApi({ liveParkStore: () => parks });
+  const api = createDashboardApi(dependencies);
   const call = (path: string, init: { method?: string; body?: unknown; origin?: string } = {}) => {
     const headers = new Headers();
     const method = init.method ?? "GET";
