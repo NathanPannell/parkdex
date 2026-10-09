@@ -123,7 +123,8 @@ function mapEmail(row: Record<string, unknown>): EmailDeliveryView {
   };
 }
 
-function mapReport(row: Record<string, unknown>): OperatorFeedbackRecord {
+/** Exported for the operator's feedback archive queries (worker/feedbackArchive.ts). */
+export function mapReport(row: Record<string, unknown>): OperatorFeedbackRecord {
   const emailRows = jsonValue<Record<string, unknown>[]>(row.emails, []);
   const size = row.attachment_size === null || row.attachment_size === undefined ? null : Number(row.attachment_size);
   return {
@@ -142,7 +143,7 @@ function mapReport(row: Record<string, unknown>): OperatorFeedbackRecord {
   };
 }
 
-function feedbackSelect(): string {
+export function feedbackSelect(): string {
   return `
     SELECT r.id, r.submission_id, r.kind, r.message, r.email, r.contact, r.context, r.created_at, r.status,
       a.content_type AS attachment_type, a.size_bytes AS attachment_size,

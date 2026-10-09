@@ -1,6 +1,7 @@
 import { renderOperatorEmail, renderReceiptEmail } from "./emails.js";
 import { getClientAddress, keyedHash, requestOriginAllowed } from "./security.js";
 import { createNeonFeedbackStore } from "./store.js";
+import { feedbackRetentionCutoff, purgeArchivedFeedbackFromDatabase, type FeedbackPurgeResult } from "./feedbackArchive.js";
 import type { FeedbackStore, MailIntent, ResendPayload } from "./store.js";
 import { sendEmail } from "./feedbackDelivery.js";
 import { handleInteractionRequest, handleRetentionRequest, retentionAuthorized, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
@@ -64,6 +65,8 @@ export interface WorkerDependencies {
   interactions?: InteractionDependencies;
   game?: GameDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
+  /** Deletes feedback archived on the operator board more than 90 days before `cutoff`. */
+  purgeArchivedFeedback?(env: WorkerEnvironment, cutoff: string): Promise<FeedbackPurgeResult>;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   analytics?(env: WorkerEnvironment): AnalyticsSink | null;
   /** Catalogue lookups around a point (matching outlines, regions). */
@@ -308,7 +311,19 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     if (!retentionResponse.ok) return retentionResponse;
     const interactionResult = await retentionResponse.json() as { deleted: number; remainingExpired: number };
     const authResult = await purgeAuthRetention(env, dependencies.auth);
-    return json({ ...interactionResult, authDeleted: authResult.deleted, remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired });
+    // Archived feedback rides on the same daily run. Its backlog is reported on its own, because
+    // the photo Worker's cron measures progress by the interaction and auth deletions only.
+    const feedbackCutoff = feedbackRetentionCutoff(requestNow(dependencies));
+    const feedbackResult = dependencies.purgeArchivedFeedback
+      ? await dependencies.purgeArchivedFeedback(env, feedbackCutoff)
+      : env.DATABASE_URL ? await purgeArchivedFeedbackFromDatabase(env.DATABASE_URL, feedbackCutoff) : { deleted: 0, remainingExpired: 0 };
+    return json({
+      ...interactionResult,
+      authDeleted: authResult.deleted,
+      remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired,
+      feedbackDeleted: feedbackResult.deleted,
+      feedbackRemainingExpired: feedbackResult.remainingExpired,
+    });
   }
   const authDependencies: AuthDependencies = {
     ...dependencies.auth,
