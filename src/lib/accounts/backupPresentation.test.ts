@@ -13,8 +13,8 @@ describe("account backup presentation", () => {
   });
 
   it("shows account startup, sign-in, offline, and error states in Settings", () => {
-    expect(settingsAccountSubtitle("starting", "idle", false)).toBe("Opening your Dex…");
-    expect(settingsAccountSubtitle("guest", "idle", false)).toBe("Sign in to back up your Dex");
+    expect(settingsAccountSubtitle("starting", "idle", false)).toBe("Opening your account…");
+    expect(settingsAccountSubtitle("guest", "idle", false)).toBe("Sign in to plant your flag");
     expect(settingsAccountSubtitle("offline-account", "offline", true)).toBe("Offline · not being backed up");
     expect(settingsAccountSubtitle("error", "error", false)).toBe("Storage needs attention");
   });

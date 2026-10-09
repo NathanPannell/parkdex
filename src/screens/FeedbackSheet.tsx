@@ -428,7 +428,7 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                     aria-label={kind.prompt}
                     value={draft.message}
                     onChange={(event) => edit({ message: event.target.value })}
-                    placeholder={draft.kind === "bug" ? "I tapped Claim at Beacon Hill and the camera stayed black…" : "Type here…"}
+                    placeholder={draft.kind === "bug" ? "I held Plant your flag at Beacon Hill and nothing happened…" : "Type here…"}
                     rows={5}
                     maxLength={4000}
                     disabled={isEditingLocked}
