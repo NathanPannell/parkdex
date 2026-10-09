@@ -10,6 +10,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
+import { DEMO_TOOLS } from "../lib/demo";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
@@ -501,13 +502,13 @@ export function Onboarding() {
                 <Kip pose="talk" size={110} />
               </div>
               <h2>Kip needs to know when you're in a park.</h2>
-              <p>Your location is only used to check you in inside a park boundary. It never leaves your phone.</p>
+              <p>Kip uses your location to check you're inside a park. It's never shown to other players.</p>
               <button className="btn btn--block" onClick={() => finish(true)}>
                 <Icon name="locate" /> Allow location
               </button>
               {!FIELD && (
                 <button className="permission__alt" onClick={() => finish(false)}>
-                  Use a demo spot in Victoria
+                  {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
                 </button>
               )}
             </motion.div>
