@@ -22,12 +22,18 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
 | Section | Pages | UI | API |
 | --- | --- | --- | --- |
 | Feedback | `/feedback` (`/feedback/review?id=<report>` is the link in operator emails) | `src/feedback/` | `server/feedback/`, `/api/feedback/*` |
-| Parks | `/parks`, `/parks/<id>` | `src/parks/` | `server/parks/`, `/api/parks/*` |
+| Parks | `/parks`, `/parks/<id>`, `/parks/osm/<type>-<id>` | `src/parks/` | `server/parks/`, `/api/parks/*` |
 | Analytics | `/analytics/overview`, `/analytics/accounts`, `/analytics/events` | `src/analytics/` | `server/analytics/`, `/api/analytics/*` |
 | App and updates | `/app/builds`, `/app/updates` | `src/app/` | `server/app/`, `/api/app/*` |
 
 - **Feedback:** a board with New, Reviewing, Planned and Closed columns. Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel.
-- **Parks:** every live park on a list and a map. Open one to fix its name, description, rarity, pin or boundary. A save is one guarded transaction that reaches phones on their next content sync.
+- **Parks:** a map-first park manager over the catalogue of the toggled database.
+  - The list searches name and id, filters by category, region, live or hidden, founder and source (curated, legacy import with a reader floor, `osm-*`, player proposal), sorts by name or visits, and counts every choice. Tiles at the top compare live, hidden and founded parks with the `kip_osm.parks` outlines and an estimate of those not in Parkdex (no `osm-*` park and no catalogue pin in the outline's box). Keys: `/` searches, arrows move, Enter opens.
+  - The map shows pins coloured by category, outlines of the parks in view, hidden parks, founded parks (cover on hover) and OpenStreetMap outlines. Outlines load from the server for the view only (`/api/parks/outlines`, `/api/parks/osm`, from zoom 10 and 11.5); OpenStreetMap outlines are matched with `worker/catalogueMatch`, and "Only not in Parkdex" keeps the unmatched ones.
+  - A park page edits every field and the outline (one guarded transaction, 409 `park_changed` when someone else saved first), shows visits (total, last 30 days, players), the flag holder, the founder and cover, and the park's `content_changes`.
+  - Hide and unhide are one click (`content_park_hidden`, source `operator`, `docs/park-visibility.md`). Delete asks first, lists what goes with the park and recommends Hide; it deletes the park, its draft and (by cascade) its founder in one content revision, and leaves visits and tenures as history. Parks in the enrichment queue cannot be deleted.
+  - "Remove founder and cover" deletes the founder row (and the founder bonus) so the park can be founded again; "Replace cover" stores a JPEG with its metadata removed.
+  - Create from OSM prefills name, category guess, nearest region and outline for an outline that is not in Parkdex, and publishes it with `publishStatements` as founding does.
 - **Analytics:** placeholder pages for the headline numbers, the accounts table and the event explorer (#135).
 - **App and updates:** Build config edits rows in `kip_app_config.builds` (each build's server, feature flags, and minimum and latest builds). Installed apps read it from production, so it always uses production and ignores the database toggle. The retired `rankProgression` and `parkProposals` flags are no longer offered for new rows; `worker/appConfig.ts` still lists them because installed builds may read them. Updates is a placeholder for the over-the-air updates panel.
 
@@ -58,10 +64,11 @@ npm run typecheck --prefix operator
 npm test --prefix operator
 ```
 
-Two integration tests run against the real content triggers when their variable points at a disposable loopback database named `kip_qa_*` (one database each). They apply the content and drafts migrations themselves.
+Three integration tests run against the real content triggers when their variable points at a disposable loopback database named `kip_qa_*` (one database each). They apply the content and drafts migrations themselves.
 
 - `server/drafts.pg.test.ts` (`OPERATOR_DRAFTS_TEST_DATABASE_URL`): the `publishStatements` transaction park founding uses.
 - `server/parks/liveParks.pg.test.ts` (`OPERATOR_PARKS_TEST_DATABASE_URL`): live park edits.
+- `server/parks/manager.pg.test.ts` (`OPERATOR_PARK_MANAGER_TEST_DATABASE_URL`): the park manager routes over every deploy migration, including hide and unhide, delete, create from OSM, founder moderation and the 409.
 
 ## Build and deploy
 
