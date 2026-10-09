@@ -47,6 +47,8 @@ export interface PlayerSummary {
   score: number;
   parks: HeldPark[];
   takeovers: Takeover[];
+  /** Parks this account has already visited on the current America/Vancouver day. */
+  visitedToday: string[];
 }
 
 export interface FlagRecord {
@@ -189,7 +191,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async summary(accountId, now) {
-      const [score, parks, takeovers] = await Promise.all([
+      const [score, parks, takeovers, visitedToday] = await Promise.all([
         rows("SELECT score FROM kip_game.player_scores($2::timestamptz) WHERE account_id = $1::uuid", [accountId, now]),
         rows(`
           SELECT t.park_id, t.started_at, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
@@ -206,6 +208,11 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
             AND t.ended_at <= $2::timestamptz
           ORDER BY t.ended_at DESC, t.park_id ASC
           LIMIT ${TAKEOVER_LIMIT}`, [accountId, now]),
+        rows(`
+          SELECT DISTINCT park_id FROM kip_game.visits
+          WHERE account_id = $1::uuid AND source = 'visit'
+            AND local_day = kip_game.local_day($2::timestamptz) AND visited_at <= $2::timestamptz
+          ORDER BY park_id`, [accountId, now]),
       ]);
       return {
         score: Number(score[0]?.score ?? 0),
@@ -213,6 +220,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         takeovers: takeovers.map((row) => ({
           parkId: String(row.park_id), byHandle: String(row.handle), byFlagSeed: String(row.flag_seed), at: iso(row.ended_at),
         })),
+        visitedToday: visitedToday.map((row) => String(row.park_id)),
       };
     },
 

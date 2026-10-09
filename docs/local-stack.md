@@ -52,7 +52,7 @@ Login is rate limited to 5 attempts per email per 15 minutes, as in production.
 
 ## Flag game API
 
-The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists) and `serverTime`. `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
+The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists), `serverTime`, and `visitedToday`, the park IDs this account already visited on the current America/Vancouver day. `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
 
 | Error | When |
 | --- | --- |

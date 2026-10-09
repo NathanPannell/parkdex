@@ -194,7 +194,7 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   const store = getStore(env, dependencies);
   const player = await store.getPlayer(accountId);
   const flagSeed = player?.flagSeed ?? await flagSeedFor(accountId);
-  if (!player) return json({ player: null, flagSeed, score: 0, parks: [], takeovers: [], founderPoints: 0, serverTime: new Date(now).toISOString() });
+  if (!player) return json({ player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], founderPoints: 0, serverTime: new Date(now).toISOString() });
   const [summary, founderPoints] = await Promise.all([
     store.summary(accountId, new Date(now).toISOString()),
     store.founderPoints?.(accountId, new Date(now).toISOString()) ?? Promise.resolve(0),
