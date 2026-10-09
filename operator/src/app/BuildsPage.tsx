@@ -1,8 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, errorText, type ApiPointer, type BuildConfig, type Platform, type UpdateRules } from "../api";
-import { Drawer, Icon, Kip, Spinner, timeAgo, useToast } from "../ui";
-
-type Listing = { builds: BuildConfig[]; rules: UpdateRules[]; knownFlags: string[] };
+import { api, errorText } from "../api";
+import { Drawer, EmptyState, Icon, Notice, PageHeader, Spinner, timeAgo, useConfirm, useToast } from "../ui";
+import type { ApiPointer, BuildConfig, BuildListing as Listing, Platform, UpdateRules } from "./types";
 
 type FlagDraft = { name: string; value: boolean };
 
@@ -16,10 +15,8 @@ type Draft = {
   notes: string;
 };
 
-const FLAG_HINTS: Record<string, string> = {
-  rankProgression: "Level up to unlock rarities",
-  parkProposals: "Propose-a-park button on the map",
-};
+/** One-line hints for flags current builds read. Add a flag here when a build starts reading it. */
+const FLAG_HINTS: Record<string, string> = {};
 
 const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [
   { value: "", label: "Built-in", detail: "The server the build was made for" },
@@ -65,7 +62,7 @@ function UpdateRulesRow({ rules, onSaved }: { rules: UpdateRules; onSaved(rules:
     }
     setBusy(true);
     try {
-      const saved = await api<{ rules: UpdateRules }>(`/api/update-rules/${rules.environment}`, {
+      const saved = await api<{ rules: UpdateRules }>(`/api/app/update-rules/${rules.environment}`, {
         method: "PUT",
         body: JSON.stringify({ minimumBuild: minimum ? Number(minimum) : null, latestBuild: latest ? Number(latest) : null }),
       });
@@ -135,6 +132,7 @@ function BuildCard({ config, onOpen }: { config: BuildConfig; onOpen(): void }) 
 
 export function BuildsPage() {
   const toast = useToast();
+  const confirm = useConfirm();
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -146,13 +144,14 @@ export function BuildsPage() {
   useEffect(() => {
     const controller = new AbortController();
     setError("");
-    api<Listing>("/api/builds", { signal: controller.signal })
+    api<Listing>("/api/app/builds", { signal: controller.signal })
       .then(setListing)
       .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorText(reason, "Could not load build configuration.")); });
     return () => controller.abort();
   }, [revision]);
 
   const knownFlags = listing?.knownFlags ?? [];
+  const retiredFlags = listing?.retiredFlags ?? [];
 
   function open(next: Draft) {
     setFormError("");
@@ -177,7 +176,7 @@ export function BuildsPage() {
     setBusy(true);
     setFormError("");
     try {
-      await api(`/api/builds/${draft.platform}/${draft.build}`, {
+      await api(`/api/app/builds/${draft.platform}/${draft.build}`, {
         method: "PUT",
         body: JSON.stringify({
           label: draft.label,
@@ -197,10 +196,16 @@ export function BuildsPage() {
   }
 
   async function remove(config: BuildConfig) {
-    if (!window.confirm(`Remove the row for ${buildTitle(config).toLowerCase()}? It will fall back to the default row.`)) return;
+    const confirmed = await confirm({
+      title: "Remove this build row?",
+      body: <p><strong>{config.label || buildTitle(config)}</strong> ({buildTitle(config)}). {config.build === 0 ? "Builds without their own row will use their built-in server and flags." : "This build will fall back to the default row on its next launch."}</p>,
+      confirmLabel: "Remove row",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     try {
-      await api(`/api/builds/${config.platform}/${config.build}`, { method: "DELETE" });
+      await api(`/api/app/builds/${config.platform}/${config.build}`, { method: "DELETE" });
       toast.show("Row removed");
       setDraft(null);
       setRevision((value) => value + 1);
@@ -219,18 +224,15 @@ export function BuildsPage() {
 
   return (
     <section className="page" aria-labelledby="builds-title">
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">Remote config</p>
-          <h1 id="builds-title">Build configuration</h1>
-          <p className="page-lede">When each environment's builds must or should update, and which server and features each build uses.</p>
-        </div>
-        <div className="toolbar">
-          <button type="button" className="button button--primary" onClick={() => open(emptyDraft(knownFlags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>
-        </div>
-      </header>
+      <PageHeader
+        id="builds-title"
+        eyebrow="Remote config · production only"
+        title="Build configuration"
+        lede="When each environment's builds must or should update, and which server and features each build uses. Installed apps read this from production, so it ignores the database toggle."
+        actions={<button type="button" className="button button--primary" onClick={() => open(emptyDraft(knownFlags))} disabled={!listing}><Icon name="plus" size={16} /> Add a build</button>}
+      />
 
-      {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error} <button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button></div>}
+      {error && <Notice tone="error" action={<button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Try again</button>}>{error}</Notice>}
 
       <section className="rules-panel" aria-labelledby="rules-title">
         <div className="rules-panel__head">
@@ -249,11 +251,9 @@ export function BuildsPage() {
       </section>
 
       {listing && listing.builds.length === 0 && (
-        <div className="empty">
-          <Kip pose="think" size={96} />
-          <h2>No builds configured</h2>
+        <EmptyState title="No builds configured">
           <p className="muted">Every build uses its built-in server and flags until you add a row.</p>
-        </div>
+        </EmptyState>
       )}
       {listing && groups.filter((group) => group.rows.length).map((group) => (
         <div key={group.platform} className="build-group">
@@ -312,7 +312,7 @@ export function BuildsPage() {
                   <div key={flag.name} className="flag">
                     <div>
                       <strong>{flag.name}</strong>
-                      <span className="muted">{FLAG_HINTS[flag.name] ?? (knownFlags.includes(flag.name) ? "" : "Not read by current builds yet")}</span>
+                      <span className="muted">{FLAG_HINTS[flag.name] ?? (retiredFlags.includes(flag.name) ? "Retired. Older builds may still read it; remove it when they are gone." : knownFlags.includes(flag.name) ? "" : "Not read by current builds yet")}</span>
                     </div>
                     <div className="flag__controls">
                       <div className="tri" role="radiogroup" aria-label={flag.name}>

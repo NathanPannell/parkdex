@@ -1,127 +1,92 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType } from "react";
+import { AnalyticsSection } from "./analytics/AnalyticsSection";
 import { api, type Health } from "./api";
-import { BuildsPage } from "./builds/BuildsPage";
-import { FeedbackBoard } from "./feedback/FeedbackBoard";
-import { OtherDatabaseNote } from "./components/OtherDatabaseNote";
-import { DraftEditor } from "./proposals/DraftEditor";
-import { DraftsPage } from "./proposals/DraftsPage";
-import { ImportPage } from "./proposals/ImportPage";
-import { LiveParkEditor } from "./proposals/LiveParkEditor";
-import { LiveParksPage } from "./proposals/LiveParksPage";
-import { ProposalsPage } from "./proposals/ProposalsPage";
-import { linkHandler, usePath } from "./router";
-import { Icon, Kip, ToastProvider, type IconName } from "./ui";
+import { AppSection } from "./app/AppSection";
+import { FeedbackSection } from "./feedback/FeedbackSection";
+import { ParksSection } from "./parks/ParksSection";
+import { linkHandler, navigate, usePath } from "./router";
+import { DEFAULT_PATH, redirectFor, resolveRoute, type SectionId } from "./routes";
+import { DashboardContext } from "./shell/DashboardContext";
+import { Sidebar } from "./shell/Sidebar";
+import { Topbar } from "./shell/Topbar";
+import { ConfirmProvider, EmptyState, Icon, ToastProvider } from "./ui";
 
-type Route = "feedback" | "proposals" | "builds";
-
-const NAV: { route: Route; path: string; label: string; icon: IconName }[] = [
-  { route: "feedback", path: "/feedback", label: "User feedback", icon: "inbox" },
-  { route: "proposals", path: "/proposals", label: "Park proposals", icon: "pin" },
-  { route: "builds", path: "/builds", label: "Build config", icon: "sliders" },
-];
-
-function routeFor(pathname: string): Route {
-  // /feedback/review is the link used in operator emails.
-  if (pathname.startsWith("/proposals")) return "proposals";
-  if (pathname.startsWith("/builds")) return "builds";
-  return "feedback";
-}
+/** Each section's page component. A section owns everything under its own folder. */
+const SECTION_PAGES: Record<SectionId, ComponentType<{ path: string }>> = {
+  feedback: FeedbackSection,
+  parks: ParksSection,
+  analytics: AnalyticsSection,
+  app: AppSection,
+};
 
 export function App() {
   const path = usePath();
-  const route = routeFor(path);
   const [health, setHealth] = useState<Health | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const redirect = redirectFor(path);
+  const route = redirect ? null : resolveRoute(path);
+
+  useEffect(() => {
+    // Keep the query string, so /feedback/review?id=... style links survive a redirect.
+    if (redirect) navigate(`${redirect}${window.location.search}`, { replace: true });
+  }, [redirect]);
 
   useEffect(() => {
     api<Health>("/api/health").then(setHealth).catch(() => setHealth(null));
   }, []);
 
   useEffect(() => {
-    const label = NAV.find((item) => item.route === route)?.label ?? "Operator";
+    const label = route?.child?.label ?? route?.section.label ?? "Operator";
     document.title = `${label} · Parkdex Operator`;
-  }, [route]);
+  }, [route?.child?.label, route?.section.label]);
 
-  // Build config always lives in production, whichever database the boards are showing.
-  const buildsPage = route === "builds";
-  const environment = buildsPage ? "production" : health?.environment ?? "";
-  const live = environment === "production";
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  // Build config always lives in production, whichever database the other pages are showing.
+  const pinned = route?.database === "production";
+  const environment = pinned ? "production" : health?.environment ?? "";
   const staging = environment === "staging";
 
-  // A cookie, not local state, so screenshots and badge images load from the same database.
+  // A cookie, not local state, so screenshots and images load from the same database.
   function switchDatabase(target: string) {
     if (target === environment) return;
     document.cookie = `parkdex_operator_db=${target}; Path=/; Max-Age=31536000; SameSite=Strict; Secure`;
     window.location.reload();
   }
 
+  const Page = route ? SECTION_PAGES[route.section.id] : null;
+
   return (
     <ToastProvider>
-      <div className={`shell${staging ? " shell--staging" : ""}`}>
-        <aside className="sidebar">
-          <div className="brand">
-            <Kip pose="avatar" size={44} className="brand__kip" />
-            <div>
-              <p className="brand__name">parkdex</p>
-              <p className="brand__sub">Operator</p>
+      <ConfirmProvider>
+        <DashboardContext.Provider value={{ health, environment, switchDatabase }}>
+          <div className={`shell${staging ? " shell--staging" : ""}`}>
+            <Sidebar path={path} route={route} health={health} environment={environment} open={menuOpen} onClose={() => setMenuOpen(false)} onSwitch={switchDatabase} />
+            <div className="workspace">
+              <Topbar route={route} environment={environment} menuOpen={menuOpen} onMenu={() => setMenuOpen(true)} />
+              <main className="main" id="main">
+                {staging && (
+                  <div className="staging-banner" role="status">
+                    <Icon name="alert" size={17} />
+                    <span>Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.</span>
+                  </div>
+                )}
+                {Page && <Page path={path} />}
+                {!Page && !redirect && (
+                  <EmptyState title="Nothing lives here" pose="sleep" action={<a className="button" href={DEFAULT_PATH} onClick={linkHandler(DEFAULT_PATH)}>Go to Feedback</a>}>
+                    <p className="muted">The page {path} is not part of the dashboard.</p>
+                  </EmptyState>
+                )}
+              </main>
             </div>
           </div>
-          <nav className="nav" aria-label="Sections">
-            {NAV.map((item) => (
-              <a key={item.route} href={item.path} className={`nav__item${route === item.route ? " is-on" : ""}`} aria-current={route === item.route ? "page" : undefined} onClick={linkHandler(item.path)}>
-                <Icon name={item.icon} size={20} />
-                <span>{item.label}</span>
-              </a>
-            ))}
-          </nav>
-          <div className="sidebar__foot">
-            {buildsPage && health ? (
-              <div className="env env--live" title="Apps read build config from production only">
-                <span className="env__dot" aria-hidden="true" />
-                <span>Production only</span>
-              </div>
-            ) : health?.canSwitch ? (
-              <div className="db-toggle" role="radiogroup" aria-label="Database">
-                {(["production", "staging"] as const).map((target) => (
-                  <button key={target} type="button" role="radio" aria-checked={environment === target} className={`db-toggle__item db-toggle__item--${target}${environment === target ? " is-on" : ""}`} onClick={() => switchDatabase(target)}>
-                    <span className="env__dot" aria-hidden="true" />
-                    {target === "production" ? "Production" : "Staging"}
-                  </button>
-                ))}
-              </div>
-            ) : health && (
-              <div className={`env${live ? " env--live" : ""}`} title="The database this dashboard reads and writes">
-                <span className="env__dot" aria-hidden="true" />
-                <span>{live ? "Production data" : `${environment[0]?.toUpperCase() ?? ""}${environment.slice(1)} data`}</span>
-              </div>
-            )}
-            {health && health.emailMode !== "resend" && <p className="sidebar__note">{health.emailMode === "disabled" ? "Email sending is off here." : "Email retry is not set up yet."}</p>}
-            <p className="sidebar__note"><Icon name="shield" size={14} /> Protected by Vercel login</p>
-          </div>
-        </aside>
-        <main className="main">
-          {staging && (
-            <div className="staging-banner" role="status">
-              <Icon name="alert" size={17} />
-              <span>Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.</span>
-            </div>
-          )}
-          {(route === "feedback" || path === "/proposals") && <OtherDatabaseNote key={`${route}:${environment}`} board={route === "feedback" ? "feedback" : "proposals"} onSwitch={switchDatabase} />}
-          {route === "feedback" && <FeedbackBoard />}
-          {route === "proposals" && <ParksRoute path={path} />}
-          {route === "builds" && <BuildsPage />}
-        </main>
-      </div>
+        </DashboardContext.Provider>
+      </ConfirmProvider>
     </ToastProvider>
   );
-}
-
-function ParksRoute({ path }: { path: string }) {
-  const draft = /^\/proposals\/drafts\/([^/]+)$/.exec(path);
-  if (draft) return <DraftEditor key={draft[1]} id={decodeURIComponent(draft[1])} />;
-  if (path.startsWith("/proposals/drafts")) return <DraftsPage />;
-  const live = /^\/proposals\/live\/([^/]+)$/.exec(path);
-  if (live) return <LiveParkEditor key={live[1]} id={decodeURIComponent(live[1])} />;
-  if (path.startsWith("/proposals/live")) return <LiveParksPage />;
-  if (path.startsWith("/proposals/import")) return <ImportPage />;
-  return <ProposalsPage />;
 }

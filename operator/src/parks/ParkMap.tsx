@@ -2,7 +2,7 @@ import { LngLatBounds, Map as MapLibreMap, NavigationControl, setWorkerUrl, type
 import type { Feature, FeatureCollection } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
-import type { MultiPolygon, Position } from "../api";
+import type { MultiPolygon, Position } from "./types";
 
 /**
  * An embedded map for park work. It draws, in order: park pins, a park boundary, a player's

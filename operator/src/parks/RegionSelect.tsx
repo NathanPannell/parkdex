@@ -12,7 +12,7 @@ function loadRegions(): Promise<string[]> {
   // The database toggle changes the cookie, so cache per cookie value.
   const key = document.cookie;
   if (!cached || cached.key !== key) {
-    const regions = api<{ regions: string[] }>("/api/regions").then((result) => result.regions);
+    const regions = api<{ regions: string[] }>("/api/parks/regions").then((result) => result.regions);
     regions.catch(() => { cached = null; });
     cached = { key, regions };
   }

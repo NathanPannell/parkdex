@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, errorText, type LivePark } from "../api";
-import { ParkMap } from "../components/ParkMap";
+import { api, errorText } from "../api";
 import { navigate } from "../router";
-import { Icon } from "../ui";
-import { ParksTabs } from "./ParksTabs";
+import { Icon, Notice, PageHeader } from "../ui";
+import { ParkMap } from "./ParkMap";
+import type { LivePark } from "./types";
 
-/** Every park players can collect today. Pick one on the list or the map to edit it. */
+/** Every park players can see today. Pick one on the list or the map to edit it. */
 export function LiveParksPage() {
   const [parks, setParks] = useState<LivePark[] | null>(null);
   const [error, setError] = useState("");
@@ -27,20 +27,23 @@ export function LiveParksPage() {
     return (parks ?? []).filter((park) => (!region || park.region === region) && (!text || `${park.name} ${park.short} ${park.id}`.toLowerCase().includes(text)));
   }, [parks, query, region]);
 
-  const open = (id: string) => navigate(`/proposals/live/${encodeURIComponent(id)}`);
+  const open = (id: string) => navigate(`/parks/${encodeURIComponent(id)}`);
 
   return (
     <section className="page page--wide" aria-labelledby="live-title">
-      <ParksTabs current="/proposals/live" />
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">In players' apps</p>
-          <h1 id="live-title">Live parks</h1>
-          <p className="page-lede">Open a park to fix its name, description, rarity, pin, boundary or badge. Saved changes reach phones on their next content sync.</p>
-        </div>
-      </header>
+      <PageHeader
+        id="live-title"
+        eyebrow="In players' apps"
+        title="Parks"
+        lede="Open a park to fix its name, description, rarity, pin or boundary. Saved changes reach phones on their next content sync."
+      />
 
-      {error && <div className="notice notice--error" role="alert"><Icon name="alert" /> {error}</div>}
+      <div className="parks-coming" role="note">
+        <Icon name="clock" size={16} />
+        <span><strong>Coming next:</strong> a map-first park manager with hide and delete, founders, cover photos and visit counts, OpenStreetMap layers and "Create from OSM".</span>
+      </div>
+
+      {error && <Notice tone="error">{error}</Notice>}
 
       <div className="picker">
         <aside className="picker__list">
@@ -56,7 +59,7 @@ export function LiveParksPage() {
           </div>
           <p className="muted result-count">{parks ? `${list.length} of ${parks.length} live parks` : "Loading live parks..."}</p>
           <div className="picker__rows">
-            {!parks && !error && [0, 1, 2, 3].map((key) => <div key={key} className="legacy-row legacy-row--skeleton" aria-hidden="true" />)}
+            {!parks && !error && [0, 1, 2, 3].map((key) => <div key={key} className="picker-row picker-row--skeleton" aria-hidden="true" />)}
             {list.map((park) => (
               <button key={park.id} type="button" className={`picker-row${park.id === hoverId ? " is-on" : ""}`} onClick={() => open(park.id)}
                 onMouseEnter={() => setHoverId(park.id)} onMouseLeave={() => setHoverId(null)}>

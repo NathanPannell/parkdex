@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { api, errorText, uploadImage, type LivePark, type LiveParkDetail, type MultiPolygon, type Position } from "../api";
-import { MapEditor } from "../components/MapEditor";
-import { RegionSelect } from "../components/RegionSelect";
+import { useEffect, useState } from "react";
+import { api, errorText } from "../api";
 import { linkHandler } from "../router";
-import { Icon, Spinner, useToast } from "../ui";
-import { ParksTabs } from "./ParksTabs";
+import { Icon, Notice, PageHeader, Spinner, useConfirm, useToast } from "../ui";
+import { MapEditor } from "./MapEditor";
+import { RegionSelect } from "./RegionSelect";
+import type { LivePark, LiveParkDetail, MultiPolygon, Position } from "./types";
 
 const CATEGORIES = ["national", "provincial", "regional", "municipal", "community"];
 const BIOMES = ["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"];
@@ -29,17 +29,20 @@ function title(value: string): string {
   return value ? value[0].toUpperCase() + value.slice(1) : value;
 }
 
+function BackLink() {
+  return <a className="back-link" href="/parks" onClick={linkHandler("/parks")}><Icon name="chevron" size={14} className="flip" /> All parks</a>;
+}
+
 export function LiveParkEditor({ id }: { id: string }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [park, setPark] = useState<LiveParkDetail | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [pin, setPin] = useState<Position | null>(null);
   const [geometry, setGeometry] = useState<MultiPolygon | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [revision, setRevision] = useState(0);
-  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,8 +53,8 @@ export function LiveParkEditor({ id }: { id: string }) {
     return () => controller.abort();
   }, [id, revision]);
 
-  if (error) return <section className="page"><ParksTabs current="/proposals/live" /><div className="notice notice--error" role="alert"><Icon name="alert" /> {error}</div></section>;
-  if (!park || !form) return <section className="page"><ParksTabs current="/proposals/live" /><div className="drawer__state"><Spinner /> Opening park...</div></section>;
+  if (error) return <section className="page"><BackLink /><Notice tone="error">{error}</Notice></section>;
+  if (!park || !form) return <section className="page"><BackLink /><div className="drawer__state"><Spinner /> Opening park...</div></section>;
 
   const changed = FORM_KEYS.filter((key) => form[key] !== park[key]);
   const pinChanged = Boolean(pin && (pin[0] !== park.lng || pin[1] !== park.lat));
@@ -67,7 +70,13 @@ export function LiveParkEditor({ id }: { id: string }) {
 
   async function save() {
     if (!park || !form || !dirty) return;
-    if (!window.confirm(`Save ${describe()} for ${park.name}? Every player's app picks this up on its next content sync.`)) return;
+    const confirmed = await confirm({
+      title: `Save changes to ${park.name}?`,
+      body: <p>Changing the {describe()}. Every player's app picks this up on its next content sync.</p>,
+      confirmLabel: "Save to Parkdex",
+      icon: "check",
+    });
+    if (!confirmed) return;
     const changes: Record<string, unknown> = Object.fromEntries(changed.map((key) => [key, form[key]]));
     if (pinChanged && pin) Object.assign(changes, { lng: pin[0], lat: pin[1] });
     if (geometry) changes.geometry = geometry;
@@ -95,46 +104,23 @@ export function LiveParkEditor({ id }: { id: string }) {
     setGeometry(null);
   }
 
-  async function uploadBadge(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || !park) return;
-    if (file.size > 4 * 1024 * 1024) return toast.show("That image is larger than 4 MB.", { tone: "error" });
-    if (!window.confirm(`Replace the badge for ${park.name}? Players will see the new badge after their next content sync.`)) return;
-    setUploading(true);
-    try {
-      const { park: saved } = await uploadImage<{ park: LiveParkDetail }>(`/api/parks/${encodeURIComponent(id)}/badge`, file, {
-        "x-parkdex-expected": encodeURIComponent(JSON.stringify(expectedOf(park))),
-      });
-      // Only the badge changed on the server, so unsaved edits stay staged.
-      setPark(saved);
-      toast.show("Badge replaced");
-    } catch (reason) {
-      toast.show(errorText(reason, "The badge upload failed. Nothing was changed."), { tone: "error" });
-    } finally {
-      setUploading(false);
-    }
-  }
-
   const shownPin: Position = pin ?? [park.lng, park.lat];
 
   return (
     <section className="page" aria-labelledby="park-title">
-      <ParksTabs current="/proposals/live" />
-      <a className="back-link" href="/proposals/live" onClick={linkHandler("/proposals/live")}><Icon name="chevron" size={14} className="flip" /> All live parks</a>
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">Live park · {park.id}</p>
-          <h1 id="park-title">{form.name || "Untitled park"}</h1>
-          <p className="page-lede">{dirty ? `Unsaved: ${describe()}.` : "This park is in players' apps. Edits stay here until you save."}</p>
-        </div>
-        <div className="toolbar">
+      <BackLink />
+      <PageHeader
+        id="park-title"
+        eyebrow={`Live park · ${park.id}`}
+        title={form.name || "Untitled park"}
+        lede={dirty ? `Unsaved: ${describe()}.` : "This park is in players' apps. Edits stay here until you save."}
+        actions={<>
           <button type="button" className="button button--ghost" onClick={revert} disabled={!dirty || saving}>Discard changes</button>
           <button type="button" className="button button--primary" onClick={() => void save()} disabled={!dirty || saving}>
             {saving ? <><Spinner small /> Saving</> : <><Icon name="check" size={16} /> Save to Parkdex</>}
           </button>
-        </div>
-      </header>
+        </>}
+      />
 
       <div className="editor">
         <div className="editor__side">
@@ -149,7 +135,7 @@ export function LiveParkEditor({ id }: { id: string }) {
           <p className="muted map-legend">
             <span className="legend-pin" /> Park pin{pinChanged && " (moved, not saved)"} <span className="legend-boundary" /> Boundary{geometry && " (redrawn, not saved)"}
           </p>
-          {!park.geometry && <div className="notice"><Icon name="alert" size={18} /> This park has no boundary in the database.</div>}
+          {!park.geometry && <Notice>This park has no boundary in the database.</Notice>}
         </div>
 
         <div className="editor__main">
@@ -193,17 +179,6 @@ export function LiveParkEditor({ id }: { id: string }) {
               <small className="muted counter">{form.blurb.length} / 800</small>
             </label>
           </fieldset>
-
-          <section className="panel image-slot image-slot--wide">
-            <h3>Badge</h3>
-            <button type="button" className={`dropzone${park.badgeUrl ? " has-image" : ""}`} onClick={() => input.current?.click()} disabled={uploading || !park.badgeUploads}>
-              {uploading ? <Spinner /> : park.badgeUrl ? <img src={park.badgeUrl} alt={`${park.name} badge`} /> : <><Icon name="image" size={26} /><span>Choose a badge</span></>}
-            </button>
-            <input ref={input} type="file" accept="image/webp" hidden onChange={(event) => void uploadBadge(event)} />
-            <p className="muted image-slot__hint">
-              {park.badgeUploads ? `${park.scene ? `Scene ${park.scene}. ` : "No badge yet. "}Choose a square WebP up to 4 MB to replace it. It goes live straight away.` : "Badge uploads are not set up on this deployment."}
-            </p>
-          </section>
 
           <p className="muted reload-row">Someone else editing this park? <button type="button" className="text-button" onClick={() => setRevision((value) => value + 1)}>Reload it</button> (drops unsaved changes).</p>
         </div>

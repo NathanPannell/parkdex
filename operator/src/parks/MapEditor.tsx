@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { MultiPolygon, Position } from "../api";
+import type { MultiPolygon, Position } from "./types";
 import { Icon } from "../ui";
 import { ParkMap, type Basemap } from "./ParkMap";
 

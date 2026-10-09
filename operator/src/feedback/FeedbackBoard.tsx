@@ -14,8 +14,9 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, errorText, type FeedbackPage, type FeedbackReport, type ReportKind, type ReportStatus } from "../api";
-import { Icon, Kip, Spinner, timeAgo, useToast, type IconName } from "../ui";
+import { api, errorText } from "../api";
+import type { FeedbackPage, FeedbackReport, ReportKind, ReportStatus } from "./types";
+import { Icon, Kip, PageHeader, Spinner, timeAgo, useToast, type IconName } from "../ui";
 import { FeedbackDrawer } from "./FeedbackDrawer";
 
 export const COLUMNS: { status: ReportStatus; label: string; hint: string }[] = [
@@ -190,16 +191,15 @@ export function FeedbackBoard() {
 
   return (
     <section className="page page--board" aria-labelledby="feedback-title">
-      <header className="page-head">
-        <div>
-          <p className="eyebrow">Player feedback</p>
-          <h1 id="feedback-title">Feedback board</h1>
-          <p className="page-lede">
-            {board.new.state === "ready" ? (totalNew === 0 ? "Inbox zero. Nice work." : `${totalNew}${board.new.nextCursor ? "+" : ""} new ${totalNew === 1 ? "report needs" : "reports need"} a look.`) : "Loading reports..."}
-            {" "}Drag cards between columns to set their status.
-          </p>
-        </div>
-        <div className="toolbar">
+      <PageHeader
+        id="feedback-title"
+        eyebrow="Player feedback"
+        title="Feedback board"
+        lede={<>
+          {board.new.state === "ready" ? (totalNew === 0 ? "Inbox zero. Nice work." : `${totalNew}${board.new.nextCursor ? "+" : ""} new ${totalNew === 1 ? "report needs" : "reports need"} a look.`) : "Loading reports..."}
+          {" "}Drag cards between columns to set their status.
+        </>}
+        actions={<>
           <label className="search">
             <Icon name="search" size={17} />
             <input type="search" placeholder="Search messages, parks, devices" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search feedback" />
@@ -214,8 +214,8 @@ export function FeedbackBoard() {
           <button type="button" className="icon-button" onClick={() => setRevision((value) => value + 1)} aria-label="Refresh board" title="Refresh">
             <Icon name="refresh" />
           </button>
-        </div>
-      </header>
+        </>}
+      />
 
       <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
         <div className="board">
