@@ -1,8 +1,7 @@
 import { neon } from "@neondatabase/serverless";
-import { HttpError } from "../../worker/validation.js";
-import { CDN_ORIGIN } from "./badges.js";
-import { BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, type BadgeAsset, type SqlRunner } from "./drafts.js";
-import { normalizeGeometry, type MultiPolygon } from "./legacy.js";
+import { HttpError } from "../../../worker/validation.js";
+import { BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, type SqlRunner } from "../drafts.js";
+import { normalizeGeometry, type MultiPolygon } from "./geometry.js";
 
 /**
  * Editing parks that are already in Parkdex. Every save is one transaction that first checks
@@ -29,7 +28,6 @@ export interface LivePark {
 
 export interface LiveParkDetail extends LivePark {
   geometry: MultiPolygon | null;
-  badgeUrl: string | null;
 }
 
 export type LiveParkChanges = Partial<Pick<LivePark, "name" | "short" | "category" | "region" | "lat" | "lng" | "biome" | "rarity" | "blurb">> & { geometry?: MultiPolygon };
@@ -40,7 +38,7 @@ export interface LiveParkStore {
   regions(): Promise<string[]>;
   get(id: string): Promise<LiveParkDetail | null>;
   /** Applies changes only if the park still matches `expected`; returns the new revision. */
-  update(id: string, expected: LivePark, changes: LiveParkChanges, asset: BadgeAsset | null): Promise<number | null>;
+  update(id: string, expected: LivePark, changes: LiveParkChanges): Promise<number | null>;
 }
 
 const COLUMNS = "id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb";
@@ -108,11 +106,10 @@ export function validateExpected(value: unknown): LivePark {
 }
 
 /** The guarded transaction, shared by the Neon store and the PostgreSQL integration test. */
-export function liveUpdateStatements(id: string, expected: LivePark, changes: LiveParkChanges, asset: BadgeAsset | null) {
+export function liveUpdateStatements(id: string, expected: LivePark, changes: LiveParkChanges) {
   const next: LivePark = { ...expected, ...Object.fromEntries(Object.entries(changes).filter(([key]) => key !== "geometry")) } as LivePark;
   // The badge shape follows the category when the category changes.
   if (changes.category && changes.category !== expected.category) next.shape = SHAPE_FOR_CATEGORY[changes.category] ?? expected.shape;
-  if (asset) next.scene = asset.logicalPath.slice("art/badges/scenes/".length, -".webp".length);
   const statements: { text: string; params: unknown[] }[] = [
     { text: "SELECT id FROM public.parks WHERE id = $1 FOR UPDATE", params: [id] },
     {
@@ -121,26 +118,12 @@ export function liveUpdateStatements(id: string, expected: LivePark, changes: Li
         AND region = $5 AND lat = $6 AND lng = $7 AND biome = $8 AND shape = $9 AND rarity = $10 AND scene IS NOT DISTINCT FROM $11::text AND blurb = $12), 'park_changed')`,
       params: [id, expected.name, expected.short, expected.category, expected.region, expected.lat, expected.lng, expected.biome, expected.shape, expected.rarity, expected.scene, expected.blurb],
     },
+    {
+      text: `UPDATE public.parks SET name = $2, short = $3, category = $4, region = $5, lat = $6, lng = $7, biome = $8, shape = $9,
+        rarity = $10, blurb = $11 WHERE id = $1`,
+      params: [id, next.name, next.short, next.category, next.region, next.lat, next.lng, next.biome, next.shape, next.rarity, next.blurb],
+    },
   ];
-  if (asset) {
-    statements.push(
-      {
-        text: `INSERT INTO public.r2_objects (logical_path, object_key, url, sha256, byte_size, content_type)
-          VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (logical_path) DO NOTHING`,
-        params: [asset.logicalPath, asset.objectKey, asset.url, asset.sha256, asset.byteSize, asset.contentType],
-      },
-      {
-        text: `SELECT kip_park_drafts.require(EXISTS (SELECT 1 FROM public.r2_objects WHERE logical_path = $1 AND object_key = $2
-          AND sha256 = $3 AND byte_size = $4), 'scene_taken')`,
-        params: [asset.logicalPath, asset.objectKey, asset.sha256, asset.byteSize],
-      },
-    );
-  }
-  statements.push({
-    text: `UPDATE public.parks SET name = $2, short = $3, category = $4, region = $5, lat = $6, lng = $7, biome = $8, shape = $9,
-      rarity = $10, scene = $11, blurb = $12 WHERE id = $1`,
-    params: [id, next.name, next.short, next.category, next.region, next.lat, next.lng, next.biome, next.shape, next.rarity, next.scene, next.blurb],
-  });
   // The public boundary carries the park's biome, so it changes with the biome or a redrawn shape.
   if (changes.geometry || next.biome !== expected.biome) {
     statements.push({
@@ -153,11 +136,6 @@ export function liveUpdateStatements(id: string, expected: LivePark, changes: Li
   return statements;
 }
 
-const GUARDS: Record<string, [number, string]> = {
-  park_changed: [409, "This park changed since you opened it. Reload it and make your edit again."],
-  scene_taken: [409, "That badge slug is already registered to a different image."],
-};
-
 export function createSqlLiveParkStore(db: SqlRunner): LiveParkStore {
   return {
     async list() {
@@ -169,26 +147,24 @@ export function createSqlLiveParkStore(db: SqlRunner): LiveParkStore {
     },
     async get(id) {
       const rows = await db.query(
-        `SELECT ${COLUMNS.split(", ").map((column) => `p.${column}`).join(", ")}, b.feature->'geometry' AS geometry, a.url AS badge_url
+        `SELECT ${COLUMNS.split(", ").map((column) => `p.${column}`).join(", ")}, b.feature->'geometry' AS geometry
            FROM public.parks p
            LEFT JOIN public.boundaries b ON b.park_id = p.id
-           LEFT JOIN public.r2_objects a ON a.logical_path = 'art/badges/scenes/' || p.scene || '.webp'
           WHERE p.id = $1`,
         [id],
       );
       const row = rows[0];
       if (!row) return null;
-      return { ...toPark(row), geometry: (row.geometry as MultiPolygon | null) ?? null, badgeUrl: (row.badge_url as string | null) ?? null };
+      return { ...toPark(row), geometry: (row.geometry as MultiPolygon | null) ?? null };
     },
-    async update(id, expected, changes, asset) {
+    async update(id, expected, changes) {
       try {
-        const results = await db.transaction(liveUpdateStatements(id, expected, changes, asset));
+        const results = await db.transaction(liveUpdateStatements(id, expected, changes));
         const revision = results[results.length - 1][0]?.revision;
         return revision === undefined || revision === null ? null : Number(revision);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
-        const guard = Object.keys(GUARDS).find((key) => message.includes(key));
-        if (guard) throw new HttpError(GUARDS[guard][0], guard, GUARDS[guard][1]);
+        if (message.includes("park_changed")) throw new HttpError(409, "park_changed", "This park changed since you opened it. Reload it and make your edit again.");
         const code = (error as { code?: unknown })?.code;
         throw new HttpError(422, "save_failed", `The save was rolled back by a content check${typeof code === "string" ? ` (${code})` : ""}.`);
       }
@@ -202,9 +178,4 @@ export function createNeonLiveParkStore(databaseUrl: string): LiveParkStore {
     query: (statement, params = []) => sql.query(statement, params) as Promise<Record<string, unknown>[]>,
     transaction: (statements) => sql.transaction(statements.map(({ text: statement, params }) => sql.query(statement, params))) as Promise<Record<string, unknown>[][]>,
   });
-}
-
-/** Where an existing badge is served, for scene slugs registered before this dashboard. */
-export function badgeFallbackUrl(scene: string | null): string | null {
-  return scene ? `${CDN_ORIGIN}/art/badges/scenes/${scene}.webp` : null;
 }
