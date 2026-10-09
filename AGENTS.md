@@ -19,7 +19,7 @@ A Capacitor 8 Android app (React 19, Vite, TypeScript) for collecting parks on V
 | --- | --- |
 | `src/` | The app. `screens/` are full screens, `components/` shared UI, `lib/` logic with colocated `*.test.ts`, `data/` bundled data. |
 | `api/` | Vercel function entrypoints. `feedback-api.ts` routes into `worker/`; `api/content/*` serves the content sync API. |
-| `worker/` | API logic: feedback, accounts (`worker/accounts/`), progress sync, interactions, app config, park proposals, the flag game (`game.ts`) and shared moderation (`moderation.ts`). Tests sit beside each module. |
+| `worker/` | API logic: feedback, accounts (`worker/accounts/`), progress sync, interactions, app config, park founding (`founders.ts`, `docs/park-founders.md`), the flag game (`game.ts`) and shared moderation (`moderation.ts`). Tests sit beside each module. |
 | `database/` | `001_cloud_content.sql`, ordered migrations in `migrations/`, catalogue, imports and seeds. |
 | `cloudflare/` | Private photo Worker and public asset config. |
 | `operator/` | The operator dashboard, a separate Vite app with its own `package.json`. |
