@@ -138,10 +138,6 @@ export function YourParks() {
             )}
           </>
         )}
-
-        <button className="account-text-button game-old-badges" onClick={() => dispatch({ type: "go", screen: "collection" })}>
-          See your badge collection
-        </button>
       </div>
     </motion.main>
   );

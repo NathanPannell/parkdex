@@ -41,7 +41,6 @@ const readyState: StoreState = {
   currentPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
   selectedId: null,
   tripId: park.id,
-  shareClaimId: null,
   pendingPhoto: "data:image/jpeg;base64,photo",
   focusId: null,
   feedback: null,

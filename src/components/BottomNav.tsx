@@ -19,7 +19,7 @@ const LEFT: Tab[] = ["map", "parks"];
 const RIGHT: Tab[] = ["leaderboard", "settings"];
 
 function tabFor(screen: Screen): Tab {
-  if (screen === "parks" || screen === "collection") return "parks";
+  if (screen === "parks") return "parks";
   if (screen === "leaderboard" || screen === "settings") return screen;
   return "map";
 }
