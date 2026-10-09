@@ -845,12 +845,22 @@
   position: absolute;
   right: 14px;
   bottom: calc(var(--safe-bottom) + 264px);
-  z-index: 10;
+  /* Above the nearby carousel, whose header row used to cover the lower part of the button. */
+  z-index: 11;
   width: 52px;
   height: 52px;
   display: grid;
   place-items: center;
   border-radius: 18px;
+  touch-action: none;
+}
+
+/* A comfortable invisible hit area around the button. */
+.locate::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 24px;
 }
 
 /* Nearby carousel */
@@ -863,11 +873,18 @@
   z-index: 10;
 }
 
+/* The header row spans the screen but only its label and search take taps; the empty part
+   lets taps through to the map and the locate button. */
 .nearby__head {
+  pointer-events: none;
   display: flex;
   padding: 0 18px 8px;
   min-height: 44px;
   align-items: center;
+}
+
+.nearby__head > * {
+  pointer-events: auto;
 }
 
 .nearby__label {
