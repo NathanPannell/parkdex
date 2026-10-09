@@ -93,6 +93,30 @@ export function validateLiveChanges(value: unknown): LiveParkChanges {
   return changes;
 }
 
+export type NewParkFields = Pick<LivePark, "name" | "short" | "category" | "region" | "biome" | "shape" | "rarity" | "blurb">;
+
+/**
+ * The operator's fields for a park created from OpenStreetMap. Region and description must not be
+ * empty: claim backups reject a park without them (worker/parkPublish.ts publishProposalPark).
+ */
+export function validateNewPark(value: unknown): NewParkFields {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new HttpError(400, "invalid_request", "Send the new park's fields.");
+  const input = value as Record<string, unknown>;
+  const keys = ["name", "short", "category", "region", "biome", "rarity", "blurb"];
+  if (Object.keys(input).some((key) => !keys.includes(key)) || keys.some((key) => !(key in input))) throw new HttpError(400, "invalid_request", "Send name, short, category, region, biome, rarity and blurb.");
+  const category = choice(input.category, CATEGORIES, "category");
+  return {
+    name: text(input.name, "Name", 140, false),
+    short: text(input.short, "Short name", 140, false),
+    category,
+    region: text(input.region, "Region", 140, false),
+    biome: choice(input.biome, BIOMES, "biome"),
+    shape: SHAPE_FOR_CATEGORY[category] ?? "circle",
+    rarity: choice(input.rarity, RARITIES, "rarity"),
+    blurb: text(input.blurb, "Description", 800, false),
+  };
+}
+
 export function validateExpected(value: unknown): LivePark {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new HttpError(400, "invalid_request", "Send the park as you opened it.");
   const park = value as Record<string, unknown>;
