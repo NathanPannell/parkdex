@@ -238,7 +238,7 @@ def _json(value: Any) -> Any:
 
 
 def read_full_snapshot(conn) -> dict[str, Any]:
-    """Every park, whatever its reader floor, in the reader 3 snapshot shape."""
+    """Every park that is not hidden, whatever its reader floor, in the reader 3 snapshot shape."""
     with conn.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
@@ -271,7 +271,19 @@ def read_full_snapshot(conn) -> dict[str, Any]:
         assets = [dict(zip(("path", "key", "url", "sha256", "byte_size", "content_type"), row, strict=True)) for row in cursor.fetchall()]
         cursor.execute("SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true")
         map_row = cursor.fetchone()
+        cursor.execute("SELECT to_regclass('public.content_park_hidden') IS NOT NULL")
+        hidden: set[str] = set()
+        if cursor.fetchone()[0]:
+            cursor.execute("SELECT park_id FROM public.content_park_hidden")
+            hidden = {row[0] for row in cursor.fetchall()}
     conn.rollback()
+    # Hidden parks (content_005_park_visibility.sql) stay in the database but leave every release.
+    parks = [park for park in parks if park["id"] not in hidden]
+    features = [feature for feature in features if feature["properties"]["id"] not in hidden]
+    walk = {key: value for key, value in walk.items() if key not in hidden}
+    routes = {key: value for key, value in routes.items() if key not in hidden}
+    scenes = {f"art/badges/scenes/{park['scene']}.webp" for park in parks if park["scene"]}
+    assets = [asset for asset in assets if asset["path"] in scenes]
     ids = [park["id"] for park in parks]
     if set(walk) != set(ids) or set(routes) != set(ids) or any(len(routes[i]) != len(hubs) for i in ids):
         raise CatalogueError("Drive rows are incomplete for the park set")
