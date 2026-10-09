@@ -176,7 +176,7 @@ export function demoFeedback(): FeedbackDependencies {
     ["closed", "bug", "The founder name ran off the edge of the park card.", "Summit Park", 600, true, 3],
     ["closed", "general", "Great update, the leaderboard is fun.", null, 900, false, 12],
     ["closed", "bug", "Photo check said my flag was a screenshot. It was not.", "Moss Rock Park", 1400, false, 40],
-    ["closed", "idea", "Badges for visiting every park in a region.", null, 2000, false, 85],
+    ["closed", "idea", "Badges for visiting every park in a region.", null, 2300, false, 85],
   ];
   samples.forEach(([status, kind, message, parkName, hoursAgo, screenshot, archivedDaysAgo], index) => {
     const id = `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;

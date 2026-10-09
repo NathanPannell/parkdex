@@ -25,7 +25,7 @@ export const COLUMNS: { status: ReportStatus; label: string; hint: string }[] = 
   { status: "reviewing", label: "Reviewing", hint: "Being looked at" },
   { status: "planned", label: "Planned", hint: "On the roadmap" },
   // Done is the stored "closed" status, so the app and older dashboards need no change.
-  { status: "closed", label: "Done", hint: "Fixed, answered or won't fix" },
+  { status: "closed", label: "Done", hint: "Finished reports" },
 ];
 
 export const KINDS: Record<ReportKind, { label: string; icon: IconName }> = {
