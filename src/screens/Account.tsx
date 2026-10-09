@@ -417,7 +417,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                   {backupStatus && <p className="account-backup-row__status" role="status">{backupStatus}</p>}
                 </div>
               </div>
-              <p className="account-help">Your @handle, flag and points live on your Parkdex account. Badges and photos saved before flags back up here too, so you can restore them on another phone.</p>
+              <p className="account-help">Your @handle, flag and points are saved to your Parkdex account, so they follow you to any phone. Photos and parks you collected before the flag game are kept here too.</p>
             </section>
 
             {(!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
