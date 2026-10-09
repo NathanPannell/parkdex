@@ -6,6 +6,7 @@ import { build as esbuild } from "esbuild";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { edgeBuildOptions } from "./edge-bundle.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const output = path.join(root, ".vercel", "output");
@@ -14,23 +15,7 @@ const functionDir = path.join(output, "functions", "api.func");
 await viteBuild({ root, logLevel: "warn" });
 
 await mkdir(functionDir, { recursive: true });
-await esbuild({
-  entryPoints: [path.join(root, "server", "edge.ts")],
-  outfile: path.join(functionDir, "index.js"),
-  bundle: true,
-  format: "esm",
-  platform: "browser",
-  target: "es2022",
-  conditions: ["worker", "browser"],
-  // Worker modules import the database driver from outside this folder.
-  nodePaths: [path.join(root, "node_modules")],
-  // worker/db.ts records queries per request with AsyncLocalStorage, which the Edge runtime
-  // provides as node:async_hooks; leave it to the runtime instead of bundling it.
-  external: ["node:async_hooks"],
-  define: { "process.env.NODE_ENV": '"production"' },
-  legalComments: "none",
-  logLevel: "warning",
-});
+await esbuild(edgeBuildOptions(root, path.join(functionDir, "index.js")));
 await writeFile(path.join(functionDir, ".vc-config.json"), JSON.stringify({ runtime: "edge", entrypoint: "index.js" }, null, 2));
 
 const privateHeaders = [

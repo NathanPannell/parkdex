@@ -123,7 +123,7 @@ export function UpdatesPage() {
           {overview.history.available === false
             ? <p className="card-note"><Icon name="alert" size={16} /> The history table is not in production yet (<code>app_config_003_ota_publishes.sql</code>). Moves still work but are not recorded.</p>
             : overview.history.available === null
-              ? <p className="card-note card-note--error"><Icon name="alert" size={16} /> The production database could not be read, so the history is not shown.</p>
+              ? <p className="card-note card-note--error"><Icon name="alert" size={16} /> The production database could not be read, so the history is not shown. {overview.history.error}</p>
               : <Table caption="Publish history" columns={historyColumns} rows={overview.history.rows} rowKey={(row) => String(row.id)}
                   empty="Nothing published yet. Each publication and rollback will appear here." />}
         </Card>

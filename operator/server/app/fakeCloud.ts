@@ -108,6 +108,33 @@ export class FakeBundleCloud {
   }
 }
 
+/** A RequestInit field the Vercel Edge runtime refused, as the strict fetch saw it. */
+export type EdgeViolation = { url: string; field: string; value: unknown };
+
+/**
+ * Wraps a fetch so it fails the way the Vercel Edge runtime does on RequestInit fields it does
+ * not support: `cache`, `keepalive`, `priority`, and `redirect: "error"`. Every refusal is also
+ * recorded, so a test can assert that no code path tried one, even where a catch hides the throw.
+ */
+export function strictEdgeFetch(inner: Fetcher): Fetcher & { violations: EdgeViolation[] } {
+  const violations: EdgeViolation[] = [];
+  const strict = async (input: string, init: RequestInit = {}) => {
+    const url = String(input);
+    for (const field of ["cache", "keepalive", "priority"] as const) {
+      if (field in init && (init as Record<string, unknown>)[field] !== undefined) {
+        violations.push({ url, field, value: (init as Record<string, unknown>)[field] });
+        throw new TypeError(`The '${field}' field on 'RequestInitializerDict' is not implemented.`);
+      }
+    }
+    if (init.redirect !== undefined && init.redirect !== "follow" && init.redirect !== "manual") {
+      violations.push({ url, field: "redirect", value: init.redirect });
+      throw new TypeError(`Invalid redirect value, must be one of "follow" or "manual" ("${init.redirect}" given).`);
+    }
+    return inner(input, init);
+  };
+  return Object.assign(strict, { violations });
+}
+
 /** In-memory publish history with the same rules as the SQL store. */
 export class MemoryOtaHistory implements OtaHistoryStore {
   readonly rows: OtaPublish[] = [];

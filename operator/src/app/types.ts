@@ -89,7 +89,7 @@ export type UpdatesOverview = {
   probe: { serves: boolean | null; method: string; detail: string };
   channels: ChannelView[];
   bundles: BundleView[] | null;
-  history: { available: boolean | null; rows: OtaPublish[] };
+  history: { available: boolean | null; error?: string | null; rows: OtaPublish[] };
 };
 
 export type SetupItem = { id: string; title: string; status: "done" | "todo" | "error" | "info"; detail: string; next?: string; commands?: string[] };

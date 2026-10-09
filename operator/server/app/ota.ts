@@ -11,7 +11,7 @@ import {
 } from "../../../worker/appUpdates.js";
 import { HttpError } from "../http.js";
 import type { KnownBundle, OtaAction, OtaHistoryStore, OtaOutcome, OtaPublish } from "./history.js";
-import { bareEtag, timedFetch, type Fetcher, type R2Client, type R2ObjectInfo } from "./r2.js";
+import { bareEtag, cacheBusted, failureText, noCacheHeaders, timedFetch, type Fetcher, type R2Client, type R2ObjectInfo } from "./r2.js";
 
 /**
  * Over-the-air updates: what each channel's pointer says, the bundles in R2, and moving a
@@ -101,21 +101,24 @@ export interface CdnPointerRead {
   valid: boolean;
   etag: string | null;
   cache: string | null;
+  /** Why the read failed before an HTTP answer, or which status it got instead of a pointer. */
+  error: string | null;
 }
 
 /**
  * Reads a pointer through the CDN. With fresh = true it sends a Range header, which the content
- * worker answers from R2 without its 60 second cache, so a readback sees the write at once.
+ * worker answers from R2 without its 60 second cache, so a readback sees the write at once. The
+ * query parameter and no-cache headers keep any cache in front of the worker out of the way.
  */
 export async function readCdnPointer(fetcher: Fetcher, channel: AppBundleChannel, fresh = false): Promise<CdnPointerRead> {
   let response: Response;
   try {
-    response = await timedFetch(fetcher, pointerUrlFor(CDN_ORIGIN, channel), { method: "GET", cache: "no-store", headers: fresh ? { range: "bytes=0-" } : {} });
-  } catch {
-    return { status: 0, pointer: null, valid: false, etag: null, cache: null };
+    response = await timedFetch(fetcher, cacheBusted(pointerUrlFor(CDN_ORIGIN, channel)), { method: "GET", headers: noCacheHeaders(fresh ? { range: "bytes=0-" } : {}) });
+  } catch (error) {
+    return { status: 0, pointer: null, valid: false, etag: null, cache: null, error: failureText(error) };
   }
-  const result = { status: response.status, etag: response.headers.get("etag"), cache: response.headers.get("x-content-cache") };
-  if (response.status !== 200 && response.status !== 206) return { ...result, pointer: null, valid: false };
+  const result = { status: response.status, etag: response.headers.get("etag"), cache: response.headers.get("x-content-cache"), error: null };
+  if (response.status !== 200 && response.status !== 206) return { ...result, pointer: null, valid: false, error: response.status === 404 ? null : `The CDN answered HTTP ${response.status}.` };
   let parsed: unknown = null;
   try { parsed = JSON.parse(await response.text()); } catch { /* reported as invalid below */ }
   const pointer = validatePointer(parsed, channel, CDN_ORIGIN);
@@ -150,17 +153,17 @@ export interface WorkerProbe {
 export async function probeCdnWorker(fetcher: Fetcher, knownBundle: string | null): Promise<WorkerProbe> {
   try {
     if (knownBundle) {
-      const head = await timedFetch(fetcher, bundleUrlFor(CDN_ORIGIN, knownBundle), { method: "HEAD", cache: "no-store" });
+      const head = await timedFetch(fetcher, cacheBusted(bundleUrlFor(CDN_ORIGIN, knownBundle)), { method: "HEAD", headers: noCacheHeaders() });
       if (head.status === 200) return { serves: true, method: "bundle", detail: `The CDN serves app-bundles/${knownBundle.slice(0, 12)}...zip.` };
       if (head.status === 404) return { serves: false, method: "bundle", detail: `R2 has app-bundles/${knownBundle.slice(0, 12)}...zip but the CDN answers 404, so the worker does not route app-bundles/ yet.` };
     }
-    const probe = await timedFetch(fetcher, pointerUrlFor(CDN_ORIGIN, "staging"), { method: "POST", cache: "no-store" });
+    const probe = await timedFetch(fetcher, cacheBusted(pointerUrlFor(CDN_ORIGIN, "staging")), { method: "POST", headers: noCacheHeaders() });
     const allow = (probe.headers.get("allow") ?? "").replace(/\s+/g, "").toUpperCase();
     if (probe.status === 405 && allow === "GET,HEAD") return { serves: true, method: "allow-header", detail: "The CDN worker routes app-bundles/ pointer paths." };
     if (probe.status === 405 && allow.includes("OPTIONS")) return { serves: false, method: "allow-header", detail: "The CDN worker treats app-bundles/ as an unknown path, so it predates over-the-air updates." };
     return { serves: null, method: "allow-header", detail: `The CDN answered the probe with HTTP ${probe.status}; it could not be classified.` };
-  } catch {
-    return { serves: null, method: "none", detail: "The CDN did not answer the probe." };
+  } catch (error) {
+    return { serves: null, method: "none", detail: `The CDN probe failed: ${failureText(error)}` };
   }
 }
 
@@ -175,7 +178,7 @@ function bundleObjects(objects: R2ObjectInfo[]): R2ObjectInfo[] {
   return objects.filter((item) => BUNDLE_KEY.test(item.key));
 }
 
-export function describeChannel(view: Omit<ChannelView, "detail">, probe: WorkerProbe): string {
+export function describeChannel(view: Omit<ChannelView, "detail">, probe: WorkerProbe, error: string | null = null): string {
   switch (view.state) {
     case "live": return `Generation ${view.pointer!.generation}: builds ${view.pointer!.minimumNativeBuild} to ${view.pointer!.maximumNativeBuild} are offered ${view.pointer!.version}.`;
     case "none": return probe.serves === false
@@ -183,7 +186,7 @@ export function describeChannel(view: Omit<ChannelView, "detail">, probe: Worker
       : "No bundle has been published on this channel. Installed builds keep their built-in code.";
     case "not_served": return "R2 has a pointer, but the CDN does not serve it, so the update endpoint answers no_bundle_published. Deploy the CDN worker.";
     case "invalid": return "The pointer fails validation, so the update endpoint answers 503 and no device gets an update. Publish a valid pointer with the script.";
-    default: return "The pointer could not be read just now.";
+    default: return `The pointer could not be read through the CDN. ${error ?? "No reason was given."}`;
   }
 }
 
@@ -192,7 +195,7 @@ export async function loadChannelsAndBundles(fetcher: Fetcher, r2: R2Client | nu
   let objects: R2ObjectInfo[] | null = null;
   let bundlesError: string | null = null;
   if (r2) {
-    try { objects = await r2.list("app-bundles/"); } catch (error) { bundlesError = error instanceof HttpError ? error.message : "The bundle listing failed."; }
+    try { objects = await r2.list("app-bundles/"); } catch (error) { bundlesError = error instanceof HttpError ? error.message : `The bundle listing failed. ${failureText(error)}`; }
   }
   const zips = objects ? bundleObjects(objects) : [];
   const probe = await probeCdnWorker(fetcher, zips[0] ? BUNDLE_KEY.exec(zips[0].key)![1] : null);
@@ -200,12 +203,14 @@ export async function loadChannelsAndBundles(fetcher: Fetcher, r2: R2Client | nu
   const channels = await Promise.all(APP_BUNDLE_CHANNELS.map(async (channel): Promise<ChannelView> => {
     const cdn = await readCdnPointer(fetcher, channel);
     let stored: { pointer: AppBundlePointer | null; valid: boolean; etag: string | null } | null = null;
+    let storedError: string | null = null;
     if (r2 && objects) {
       const info = objects.find((item) => item.key === pointerKey(channel)) ?? null;
       try {
         stored = info ? { ...parseStoredPointer(await r2.getText(info.key), channel), etag: info.etag } : { pointer: null, valid: true, etag: null };
-      } catch {
+      } catch (error) {
         stored = null;
+        storedError = error instanceof HttpError ? error.message : failureText(error);
       }
     }
     let state: ChannelState;
@@ -221,7 +226,8 @@ export async function loadChannelsAndBundles(fetcher: Fetcher, r2: R2Client | nu
       etag: cdn.etag,
       r2: stored ? { generation: stored.pointer ? (Number.isSafeInteger(stored.pointer.generation) ? stored.pointer.generation : null) : 0, etag: stored.etag } : null,
     };
-    return { ...base, detail: describeChannel(base, probe) };
+    const detail = describeChannel(base, probe, cdn.error);
+    return { ...base, detail: storedError ? `${detail} Reading the R2 copy failed: ${storedError}` : detail };
   }));
 
   let bundles: BundleView[] | null = null;
@@ -362,24 +368,33 @@ export async function movePointer(input: MoveRequest, deps: { r2: R2Client; fetc
 
   let outcome: OtaOutcome = "confirmed";
   let message: string;
-  const stored = await r2.getText(pointerKey(channel)).catch(() => null);
+  let readbackError = "";
+  const stored = await r2.getText(pointerKey(channel)).catch((error: unknown) => {
+    readbackError = error instanceof HttpError ? error.message : failureText(error);
+    return null;
+  });
   if (stored !== body) {
     outcome = "conflict";
     const seen = parseStoredPointer(stored, channel).pointer;
     message = seen
       ? `Readback mismatch: R2 now holds generation ${seen.generation} (${seen.version}), not the pointer just written. Another publish raced this one.`
-      : "Readback mismatch: R2 did not return the pointer just written.";
+      : `Readback mismatch: R2 did not return the pointer just written.${readbackError ? ` ${readbackError}` : ""}`;
   } else {
     const cdn = await readCdnPointer(deps.fetch, channel, true);
-    const head = await timedFetch(deps.fetch, pointer.bundleUrl, { method: "HEAD", cache: "no-store" }).then((response) => response.status).catch(() => 0);
+    let headError = "";
+    const head = await timedFetch(deps.fetch, cacheBusted(pointer.bundleUrl), { method: "HEAD", headers: noCacheHeaders() })
+      .then((response) => response.status)
+      .catch((error: unknown) => { headError = failureText(error); return 0; });
     if (!cdn.valid || cdn.pointer?.generation !== pointer.generation || cdn.pointer.sha256 !== sha256) {
       outcome = "cdn_pending";
       message = cdn.status === 404
         ? "R2 has the new pointer, but the CDN answers 404 for it. Devices see no bundle until the CDN worker serves app-bundles/."
-        : `R2 has the new pointer, but the CDN returned ${cdn.pointer ? `generation ${cdn.pointer.generation}` : `HTTP ${cdn.status}`}. Check again in a minute.`;
+        : `R2 has the new pointer, but the CDN returned ${cdn.pointer ? `generation ${cdn.pointer.generation}` : cdn.error ?? `HTTP ${cdn.status}`}. Check again in a minute.`;
     } else if (head !== 200) {
       outcome = "cdn_pending";
-      message = `The pointer is live, but the CDN answered HTTP ${head} for the bundle zip, so downloads would fail.`;
+      message = head === 0
+        ? `The pointer is live, but the bundle zip could not be checked through the CDN: ${headError}`
+        : `The pointer is live, but the CDN answered HTTP ${head} for the bundle zip, so downloads would fail.`;
     } else {
       message = `${channel === "production" ? "Production" : "Staging"} now offers ${version} to builds ${pointer.minimumNativeBuild} to ${pointer.maximumNativeBuild} (generation ${pointer.generation}).`;
     }
@@ -419,12 +434,12 @@ export async function checkLiveEndpoint(fetcher: Fetcher, channel: AppBundleChan
   let status = 0;
   let answer: unknown = null;
   try {
-    const response = await timedFetch(fetcher, endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+    const response = await timedFetch(fetcher, endpoint, { method: "POST", headers: noCacheHeaders({ "content-type": "application/json" }), body: JSON.stringify(body) });
     status = response.status;
     const text = await response.text();
     try { answer = JSON.parse(text); } catch { answer = { unreadable: text.slice(0, 200) }; }
-  } catch {
-    answer = { error: "The endpoint did not answer in time." };
+  } catch (error) {
+    answer = { error: failureText(error) };
   }
   const pick = (value: unknown) => {
     const record = (value ?? {}) as Record<string, unknown>;

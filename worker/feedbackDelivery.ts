@@ -95,7 +95,9 @@ export async function sendEmail(
   try {
     const response = await (dependencies.fetch ?? fetch)(RESEND_URL, {
       method: "POST",
-      redirect: "error",
+      // The operator dashboard sends retries from the Vercel Edge runtime, which rejects
+      // redirect: "error". A redirect comes back as a 3xx response and is recorded as a refusal.
+      redirect: "manual",
       headers: {
         authorization: `Bearer ${env.RESEND_API_KEY}`,
         "content-type": "application/json",

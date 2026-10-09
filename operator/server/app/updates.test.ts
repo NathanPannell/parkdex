@@ -64,7 +64,7 @@ test("rolling staging back writes generation + 1, confirms it through R2 and the
   const stored = JSON.parse(new TextDecoder().decode(cloud.objects.get(pointerKey("staging"))!.body));
   assert.deepEqual(stored, result.pointer);
   // The CDN readback must skip the worker's 60 second cache.
-  assert.ok(cloud.requests.some((item) => item.method === "GET" && item.url === `${CDN_ORIGIN}/${pointerKey("staging")}`));
+  assert.ok(cloud.requests.some((item) => item.method === "GET" && item.url.startsWith(`${CDN_ORIGIN}/${pointerKey("staging")}?fresh=`)));
   const row = history.rows.at(-1)!;
   assert.deepEqual([row.channel, row.generation, row.previousGeneration, row.action, row.source, row.outcome, row.previousSha256, row.note], ["staging", 3, 2, "rollback", "dashboard", "confirmed", NEW, "Roll back the founders card"]);
 
@@ -213,4 +213,17 @@ test("the live check posts a sample build to the channel's endpoint and compares
   assert.deepEqual([below.answer.error, below.matches], ["native_build_out_of_range", true]);
   assert.equal((await api(request("/api/app/updates/check?channel=main&build=12"), env)).status, 400);
   assert.equal((await api(request("/api/app/updates/check?channel=staging&build=0"), env)).status, 400);
+});
+
+test("redirects are refused, not followed, and the reason reaches the checklist", async () => {
+  const cloud = new FakeBundleCloud();
+  const redirecting = async (input: string, init?: RequestInit) => {
+    if (new URL(input).origin === CDN_ORIGIN) return new Response(null, { status: 302, headers: { location: "https://elsewhere.example.test/" } });
+    return cloud.fetch(input, init);
+  };
+  const api = createDashboardApi({ otaFetch: redirecting, otaHistoryStore: () => new MemoryOtaHistory() });
+  const items = (await body<{ items: { id: string; detail: string }[] }>(await api(request("/api/app/updates/setup"), env))).items;
+  const worker = items.find((item) => item.id === "cdn-worker")!;
+  assert.match(worker.detail, /redirect \(HTTP 302\)/);
+  assert.ok(!cloud.requests.some((item) => item.url.startsWith("https://elsewhere")), "the redirect was not followed");
 });

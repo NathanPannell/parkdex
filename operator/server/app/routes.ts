@@ -4,7 +4,7 @@ import type { DashboardEnv, SectionContext } from "../api.js";
 import { allowMethods, databaseUrl, HttpError, json } from "../http.js";
 import { createNeonOtaHistoryStore, type KnownBundle, type OtaHistoryStore, type OtaPublish } from "./history.js";
 import { CDN_ORIGIN, checkLiveEndpoint, loadChannelsAndBundles, movePointer, parseChannel, parseNativeBuild, UPDATE_ENDPOINTS, validateMove } from "./ota.js";
-import { assetsBucket, createCloudflareR2, type Fetcher, type R2Client, type R2Env } from "./r2.js";
+import { assetsBucket, createCloudflareR2, failureText, type Fetcher, type R2Client, type R2Env } from "./r2.js";
 import { setupChecklist } from "./setup.js";
 
 /**
@@ -33,6 +33,17 @@ export interface AppDependencies {
 }
 
 const HISTORY_ROWS = 50;
+
+/** Whether the history table is there, with the reason when the database could not be asked. */
+async function historyState(history: () => OtaHistoryStore): Promise<{ store: OtaHistoryStore | null; available: boolean | null; error: string | null }> {
+  let store: OtaHistoryStore;
+  try {
+    store = history();
+    return { store, available: await store.available(), error: null };
+  } catch (error) {
+    return { store: null, available: null, error: error instanceof HttpError ? error.message : failureText(error) };
+  }
+}
 
 async function safely<T>(work: () => Promise<T>, fallback: T): Promise<T> {
   try { return await work(); } catch { return fallback; }
@@ -92,8 +103,9 @@ async function updatesRoutes(request: Request, context: SectionContext): Promise
 
   if (path === "/api/app/updates") {
     allowMethods(request, "GET");
-    const store = await safely(async () => history(), null);
-    const historyAvailable = store ? await safely(() => store.available(), null) : null;
+    const state = await historyState(history);
+    const store = state.store;
+    const historyAvailable = state.available;
     const [rows, known] = historyAvailable
       ? await Promise.all([safely(() => store!.list(HISTORY_ROWS), [] as OtaPublish[]), safely(() => store!.bundles(), [] as KnownBundle[])])
       : [[] as OtaPublish[], [] as KnownBundle[]];
@@ -107,21 +119,21 @@ async function updatesRoutes(request: Request, context: SectionContext): Promise
       probe: loaded.probe,
       channels: loaded.channels,
       bundles: loaded.bundles,
-      history: { available: historyAvailable, rows },
+      history: { available: historyAvailable, error: state.error, rows },
     });
   }
 
   if (path === "/api/app/updates/setup") {
     allowMethods(request, "GET");
-    const store = await safely(async () => history(), null);
-    const historyAvailable = store ? await safely(() => store.available(), null) : null;
+    const state = await historyState(history);
     const client = r2();
     const loaded = await loadChannelsAndBundles(fetcher, client, []);
     const items = await setupChecklist({
       probe: loaded.probe,
       channels: loaded.channels,
       cloudflare: { configured: client !== null, error: loaded.bundlesError, bucket: client?.bucket ?? assetsBucket(env) },
-      historyAvailable,
+      historyAvailable: state.available,
+      historyError: state.error,
       posthog: Boolean(env.POSTHOG_PERSONAL_API_KEY?.trim() && env.POSTHOG_PROJECT_ID?.trim()),
       fetch: fetcher,
     });
@@ -143,8 +155,8 @@ async function updatesRoutes(request: Request, context: SectionContext): Promise
     const input = validateMove(await readJsonBody(request, 4096));
     const client = r2();
     if (!client) throw new HttpError(503, "cloudflare_not_configured", "Publishing from the dashboard needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID on this deployment.");
-    const store = await safely(async () => history(), null);
-    const recorded = store && await safely(() => store.available(), false) ? store : null;
+    const state = await historyState(history);
+    const recorded = state.available ? state.store : null;
     const result = await movePointer(input, { r2: client, fetch: fetcher, history: recorded, now: dependencies.otaNow ?? Date.now });
     if (result.outcome === "conflict") throw new HttpError(409, "readback_mismatch", result.message);
     return json(result);

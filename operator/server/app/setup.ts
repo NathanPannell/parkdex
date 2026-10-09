@@ -1,6 +1,6 @@
 import { APP_BUNDLE_CHANNELS, type AppBundleChannel } from "../../../worker/appUpdates.js";
 import { UPDATE_ENDPOINTS, type ChannelView, type WorkerProbe } from "./ota.js";
-import { timedFetch, type Fetcher } from "./r2.js";
+import { failureText, noCacheHeaders, timedFetch, type Fetcher } from "./r2.js";
 
 /**
  * The over-the-air setup checklist. Each item is done, todo, info or error, with the exact next
@@ -25,6 +25,8 @@ export interface SetupInput {
   channels: ChannelView[];
   cloudflare: { configured: boolean; error: string | null; bucket: string };
   historyAvailable: boolean | null;
+  /** Why the production database could not be asked, when it could not. */
+  historyError?: string | null;
   posthog: boolean;
   fetch: Fetcher;
 }
@@ -47,15 +49,14 @@ async function endpointAnswers(fetcher: Fetcher, channel: AppBundleChannel): Pro
   try {
     const response = await timedFetch(fetcher, UPDATE_ENDPOINTS[channel], {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: noCacheHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ platform: "android", app_id: "app.parkdex", defaultChannel: channel, version_code: "1", version_name: "builtin" }),
-      cache: "no-store",
     });
     const body = await response.json().catch(() => null) as { kind?: unknown; error?: unknown } | null;
     if (typeof body?.kind === "string") return { ok: true, detail: `${new URL(UPDATE_ENDPOINTS[channel]).host} answers ${body.kind}${typeof body.error === "string" ? ` (${body.error})` : ""}.` };
     return { ok: false, detail: `${new URL(UPDATE_ENDPOINTS[channel]).host} answered HTTP ${response.status} without an update answer.` };
-  } catch {
-    return { ok: false, detail: `${new URL(UPDATE_ENDPOINTS[channel]).host} did not answer.` };
+  } catch (error) {
+    return { ok: false, detail: `${new URL(UPDATE_ENDPOINTS[channel]).host} could not be reached: ${failureText(error)}` };
   }
 }
 
@@ -99,7 +100,7 @@ export async function setupChecklist(input: SetupInput): Promise<SetupItem[]> {
 
   items.push(input.historyAvailable === true
     ? { id: "history", title: "Publish history table exists", status: "done", detail: "kip_app_config.ota_publishes is in production." }
-    : { id: "history", title: "Publish history table exists", status: input.historyAvailable === false ? "todo" : "error", detail: input.historyAvailable === false ? "kip_app_config.ota_publishes is missing, so moves are not recorded and older bundles cannot be repointed." : "The production database could not be checked.", next: "Apply database/migrations/app_config_003_ota_publishes.sql to production (it ships in deployment.json)." });
+    : { id: "history", title: "Publish history table exists", status: input.historyAvailable === false ? "todo" : "error", detail: input.historyAvailable === false ? "kip_app_config.ota_publishes is missing, so moves are not recorded and older bundles cannot be repointed." : `The production database could not be checked. ${input.historyError ?? ""}`.trim(), next: "Apply database/migrations/app_config_003_ota_publishes.sql to production (it ships in deployment.json)." });
 
   items.push({
     id: "script-keys",
