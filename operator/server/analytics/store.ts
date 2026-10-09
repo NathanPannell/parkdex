@@ -261,10 +261,15 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       ), foundings AS (
         SELECT kip_game.local_day(f.founded_at) AS day, count(*)::int AS n FROM kip_founders.parks f, bounds
         WHERE f.founded_at >= bounds.starts AND f.founded_at < bounds.ends GROUP BY 1
-      ), ${candidatesCte("$3")}, active AS (
-        SELECT d.day, count(*)::int AS n FROM days d CROSS JOIN candidates c
-        WHERE EXISTS (SELECT 1 FROM kip_analytics.events e WHERE e.account_id = c.account_id AND e.received_at >= d.starts AND e.received_at < d.ends)
-        GROUP BY d.day
+      ), active AS (
+        -- One index-only pass over the signed-in part of (account_id, received_at) for the
+        -- window. Retention caps it at 90 days of events, and it costs the same however many
+        -- accounts are active each day.
+        SELECT x.day, count(*)::int AS n FROM (
+          SELECT DISTINCT kip_game.local_day(e.received_at) AS day, e.account_id
+          FROM kip_analytics.events e, bounds
+          WHERE e.account_id IS NOT NULL AND e.received_at >= bounds.starts AND e.received_at < bounds.ends
+        ) x GROUP BY x.day
       )
       SELECT d.day::text AS day, coalesce(a.n, 0) AS new_accounts, coalesce(act.n, 0) AS active_players,
         coalesce(v.planted, 0) AS planted, coalesce(v.took, 0) AS took, coalesce(v.held, 0) AS held, coalesce(f.n, 0) AS foundings
@@ -274,7 +279,7 @@ export function overviewStatements(now: Date, days: number): Statement[] {
       LEFT JOIN foundings f ON f.day = d.day
       LEFT JOIN active act ON act.day = d.day
       ORDER BY d.day`,
-      params: [at, days, days + 1],
+      params: [at, days],
     },
   ];
 }

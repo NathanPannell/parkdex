@@ -18,6 +18,8 @@ export const RETENTION_DAYS = 90;
 export const OVERVIEW_DAYS = [7, 30, 90] as const;
 export const EXPORT_LIMIT = 50_000;
 export const EXPORT_PAGE = 5_000;
+/** The histogram counts db_read and db_write for ranges up to this many days. */
+export const HISTOGRAM_DB_DAYS = 31;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9][a-z0-9-]{0,159}$/;

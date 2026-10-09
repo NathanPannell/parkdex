@@ -157,3 +157,4 @@
   .analytics .stat-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .analytics .stat__value { font-size: 29px; }
 }
+.an-histogram__note { margin: -6px 0 6px; }

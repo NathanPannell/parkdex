@@ -74,7 +74,7 @@ export type DeletionRow = {
 };
 
 export type EventsPage = { events: EventRow[]; nextCursor: string | null; filter: { from: string; to: string; types: string[] }; unknownHandle: string | null };
-export type Histogram = { bucket: "hour" | "day"; from: string; to: string; buckets: { at: string; count: number; db: number }[]; unknownHandle: string | null };
+export type Histogram = { bucket: "hour" | "day"; from: string; to: string; buckets: { at: string; count: number; db: number }[]; dbOmitted: boolean; unknownHandle: string | null };
 
 export type PostHogStatus = { configured: boolean; host: string; missing: string[]; problem: string | null; environment: string };
 export type QueryResult = { columns: string[]; rows: unknown[][]; hasMore: boolean; nextCursor: string | null };

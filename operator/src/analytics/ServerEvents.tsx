@@ -271,6 +271,7 @@ export function ServerEvents() {
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card padded className="an-histogram" title={chart ? `${formatCount(chart.total)} events` : "Events over time"} subtitle={histogram ? `Per ${histogram.bucket}, ${fullDate(histogram.from)} to ${fullDate(histogram.to)}` : "Loading..."}>
+        {histogram?.dbOmitted && <p className="muted an-small an-histogram__note">db_read and db_write are left out of the chart for ranges over 31 days; the rows below still include them.</p>}
         {chart ? <TimeChart label="Events over time" x={chart.x} series={chart.series} kind="stacked" height={170} bucket={histogram!.bucket} /> : <div className="an-chart an-chart--loading an-chart--short" aria-hidden="true" />}
       </Card>
 

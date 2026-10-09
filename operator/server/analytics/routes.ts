@@ -3,8 +3,8 @@ import type { DashboardEnv, SectionContext } from "../api.js";
 import { allowMethods, databaseUrl, HttpError, json, plainObject } from "../http.js";
 import { createAccountDeleter, photoServiceFor, type AccountDeleter, type AccountDeletionEnv, type DeletionSetup } from "./deletion.js";
 import {
-  csvHeader, csvRow, decodeAccountCursor, decodeEventCursor, encodeAccountCursor, encodeEventCursor, EXPORT_LIMIT, EXPORT_PAGE,
-  histogramBucket, isUuid, OVERVIEW_DAYS, parseEventQuery,
+  csvHeader, csvRow, DB_EVENT_TYPES, decodeAccountCursor, decodeEventCursor, encodeAccountCursor, encodeEventCursor, EXPORT_LIMIT, EXPORT_PAGE,
+  HISTOGRAM_DB_DAYS, histogramBucket, isUuid, OVERVIEW_DAYS, parseEventQuery,
 } from "./filters.js";
 import { createPostHogClient, type PostHogClient, type PostHogEnv, type TemplateParams } from "./posthog.js";
 import { createNeonAnalyticsStore } from "./store.js";
@@ -202,7 +202,13 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
     const { filter, unknownHandle } = await eventFilter(context, analytics, at);
     if (path === "/api/analytics/events/histogram") {
       const bucket = histogramBucket(filter);
-      return json({ bucket, from: filter.from, to: filter.to, buckets: await analytics.histogram(filter, bucket), unknownHandle });
+      // Counting every database query over more than a month takes seconds on a busy table, so
+      // the chart leaves them out there; the rows below it still include them.
+      const long = Date.parse(filter.to) - Date.parse(filter.from) > HISTOGRAM_DB_DAYS * 86_400_000;
+      const types = long ? filter.types.filter((type) => !(DB_EVENT_TYPES as readonly string[]).includes(type)) : filter.types;
+      const dbOmitted = types.length < filter.types.length;
+      const buckets = types.length ? await analytics.histogram({ ...filter, types }, bucket) : [];
+      return json({ bucket, from: filter.from, to: filter.to, buckets, dbOmitted, unknownHandle });
     }
     if (path === "/api/analytics/events/export") {
       const name = `parkdex-events-${posthogEnvironment(context)}-${at.toISOString().slice(0, 16).replace(/[:T]/g, "")}.csv`;

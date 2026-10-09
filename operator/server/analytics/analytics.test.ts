@@ -226,6 +226,10 @@ test("the histogram buckets by hour for short ranges and by day for long ones", 
   assert.equal(long.bucket, "day");
   assert.ok(long.buckets.some((bucket) => bucket.db > 0));
   assert.ok(long.buckets.every((bucket) => bucket.db <= bucket.count));
+  // Beyond a month the chart leaves the database queries out rather than count millions of rows.
+  const months = await body<{ dbOmitted: boolean; buckets: { db: number }[] }>(await api(request(`/api/analytics/events/histogram?from=${new Date(NOW - 60 * 86_400_000).toISOString()}&db=1`), env));
+  assert.equal(months.dbOmitted, true);
+  assert.ok(months.buckets.every((bucket) => bucket.db === 0));
 });
 
 test("the CSV export streams the current filter and neutralises spreadsheet formulas", async () => {
