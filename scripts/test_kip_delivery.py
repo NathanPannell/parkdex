@@ -3,11 +3,13 @@ import importlib.util
 import argparse
 import contextlib
 import hashlib
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -664,6 +666,116 @@ class MigrationLockRetry(unittest.TestCase):
     def test_gives_up_after_the_last_attempt(self):
         with self.assertRaisesRegex(delivery.DeliveryError, "deadlock"):
             self.migrate(["ERROR:  deadlock detected"] * delivery.MIGRATION_ATTEMPTS)
+
+
+def http_error(code):
+    return urllib.error.HTTPError("https://api.example.test/x", code, "error", {}, io.BytesIO(b""))
+
+
+class FakeResponse(io.BytesIO):
+    status = 200
+
+
+class ScriptedUrlopen:
+    """Replays network outcomes (an exception or a response body) and records each attempt and backoff."""
+
+    @contextlib.contextmanager
+    def scripted(self, outcomes):
+        self.sleeps = []
+        self.calls = 0
+
+        def fake_urlopen(request, timeout):
+            self.calls += 1
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return FakeResponse(outcome)
+
+        with patch.object(delivery.urllib.request, "urlopen", side_effect=fake_urlopen), \
+             contextlib.redirect_stderr(io.StringIO()):
+            yield
+
+
+class ProviderGetRetry(ScriptedUrlopen, unittest.TestCase):
+    """A transient provider read must not abort a first-attempt-only release dispatch."""
+
+    def call(self, outcomes, *, method="GET", not_found_ok=False):
+        with self.scripted(outcomes):
+            return delivery.api_json("https://api.example.test", "/x", token="t", method=method,
+                                     body={} if method != "GET" else None,
+                                     not_found_ok=not_found_ok, sleep=self.sleeps.append)
+
+    def test_get_succeeds_after_a_transient_network_error(self):
+        result = self.call([urllib.error.URLError("reset"), b'{"ok": true}'])
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual((self.calls, self.sleeps), (2, [2]))
+
+    def test_get_gives_up_after_three_attempts_with_the_same_message(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^api\.example\.test API GET request could not complete\.$"):
+            self.call([TimeoutError(), ConnectionResetError(), urllib.error.URLError("down")])
+        self.assertEqual((self.calls, self.sleeps), (3, [2, 5]))
+
+    def test_get_retries_http_503(self):
+        self.assertEqual(self.call([http_error(503), b"{}"]), {})
+        self.assertEqual(self.calls, 2)
+
+    def test_get_does_not_retry_not_found(self):
+        self.assertIsNone(self.call([http_error(404)], not_found_ok=True))
+        self.assertEqual((self.calls, self.sleeps), (1, []))
+
+    def test_get_does_not_retry_other_client_errors(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "HTTP 403"):
+            self.call([http_error(403), b"{}"])
+        self.assertEqual(self.calls, 1)
+
+    def test_writes_are_never_retried(self):
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            with self.subTest(method=method):
+                with self.assertRaisesRegex(delivery.DeliveryError, f"API {method} request could not complete"):
+                    self.call([urllib.error.URLError("reset"), b"{}"], method=method)
+                self.assertEqual((self.calls, self.sleeps), (1, []))
+                with self.assertRaisesRegex(delivery.DeliveryError, "HTTP 503"):
+                    self.call([http_error(503), b"{}"], method=method)
+                self.assertEqual(self.calls, 1)
+
+
+class R2ObjectGetRetry(ScriptedUrlopen, unittest.TestCase):
+    """The ownership marker read during photo Worker dispatch retries like other provider reads."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("kip_private_photos_retry", Path(__file__).with_name("kip_private_photos.py"))
+        self.photos = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.photos)
+        self.config = {"privatePhotos": {"accountId": "6f0eb57971124f41fadc7897ace74dac"}}
+
+    def call(self, outcomes, *, method="GET"):
+        with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "cf-test-token"}), self.scripted(outcomes):
+            return self.photos._r2_object(delivery, self.config, "bucket", "marker.json", method=method,
+                                          body=b"{}" if method == "PUT" else None, sleep=self.sleeps.append)
+
+    def test_get_succeeds_after_a_transient_network_error(self):
+        self.assertEqual(self.call([urllib.error.URLError("reset"), b"{}"]), (200, b"{}"))
+        self.assertEqual((self.calls, self.sleeps), (2, [2]))
+
+    def test_get_gives_up_after_three_attempts_with_the_same_message(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^Cloudflare R2 object GET request could not complete\.$"):
+            self.call([http_error(502), TimeoutError(), urllib.error.URLError("down")])
+        self.assertEqual((self.calls, self.sleeps), (3, [2, 5]))
+
+    def test_get_retries_http_503(self):
+        self.assertEqual(self.call([http_error(503), b"{}"]), (200, b"{}"))
+        self.assertEqual(self.calls, 2)
+
+    def test_missing_marker_is_not_retried(self):
+        self.assertEqual(self.call([http_error(404)]), (404, b""))
+        self.assertEqual((self.calls, self.sleeps), (1, []))
+
+    def test_put_and_delete_are_never_retried(self):
+        for method in ("PUT", "DELETE"):
+            with self.subTest(method=method):
+                with self.assertRaisesRegex(delivery.DeliveryError, f"R2 object {method} request could not complete"):
+                    self.call([urllib.error.URLError("reset"), b"{}"], method=method)
+                self.assertEqual((self.calls, self.sleeps), (1, []))
 
 
 if __name__ == "__main__":
