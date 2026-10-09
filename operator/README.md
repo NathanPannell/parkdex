@@ -1,6 +1,6 @@
 # Parkdex operator dashboard
 
-A separate web app for running Parkdex: the feedback board, park proposals and per-build remote configuration. It reads and writes the same Neon tables as the main app (`kip_feedback`, `kip_proposals`, `kip_app_config`) through the shared modules in `../worker`.
+A separate web app for running Parkdex. It reads and writes the same Neon tables as the main app (`kip_feedback`, `kip_app_config`, the content tables) through the shared modules in `../worker`.
 
 It has no sign-in of its own. Vercel Authentication is the only access control.
 
@@ -15,15 +15,31 @@ On the Hobby plan, Vercel Authentication (Standard Protection) covers every prev
 
 Writes also require the request's `Origin` to match the dashboard host.
 
-Drafts live in `kip_park_drafts.drafts` (`database/migrations/park_drafts_001_init.sql`), outside synchronized content. Installed apps see nothing until a draft is published, and publishing only writes fields and values every supported build already reads (see `docs/content-compatibility.md`). A badge is uploaded to `releases/<sha256>/art/badges/scenes/<slug>.webp` on the Kip CDN and verified there before the park row is written, the same layout as `scripts/publish_park_update.py`. Each new image gets a new slug.
+## Sections
 
-## Pages
+The sidebar has four sections. Each owns one folder in the UI and one in the API, so they can change independently.
 
-- **Feedback:** a board with New, Reviewing, Planned and Closed columns. Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel. `/feedback/review?id=<report>` opens a report directly; operator emails use this link.
-- **Proposals:** parks players suggested from the map, with an outline sketch, Google Maps link, GeoJSON download and status.
-- **Import from map:** search the legacy map's 1,656 parks (map.parkdex.app) and create a draft from one. A draft copies the park's complete boundary (every feature, in source order, holes kept) and its full legacy record.
-- **Drafts:** set the category, rarity, name, short name, biome and badge shape, write an optional description, attach a reference photo and upload an optional WebP badge. "Copy AI brief" copies a JSON brief with the record, boundary and photo link for an LLM or image model. Publish copies the draft into `public.parks`, `public.boundaries` and the drive tables in one transaction. Drive and walk access start as unknown (walk 0, no routes), the importer's existing sentinel.
-- **Builds:** rows in `kip_app_config.builds` that choose each build's content database, feature flags, and minimum and latest builds.
+| Section | Pages | UI | API |
+| --- | --- | --- | --- |
+| Feedback | `/feedback` (`/feedback/review?id=<report>` is the link in operator emails) | `src/feedback/` | `server/feedback/`, `/api/feedback/*` |
+| Parks | `/parks`, `/parks/<id>` | `src/parks/` | `server/parks/`, `/api/parks/*` |
+| Analytics | `/analytics/overview`, `/analytics/accounts`, `/analytics/events` | `src/analytics/` | `server/analytics/`, `/api/analytics/*` |
+| App and updates | `/app/builds`, `/app/updates` | `src/app/` | `server/app/`, `/api/app/*` |
+
+- **Feedback:** a board with New, Reviewing, Planned and Closed columns. Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel.
+- **Parks:** every live park on a list and a map. Open one to fix its name, description, rarity, pin or boundary. A save is one guarded transaction that reaches phones on their next content sync.
+- **Analytics:** placeholder pages for the headline numbers, the accounts table and the event explorer (#135).
+- **App and updates:** Build config edits rows in `kip_app_config.builds` (each build's server, feature flags, and minimum and latest builds). Installed apps read it from production, so it always uses production and ignores the database toggle. The retired `rankProgression` and `parkProposals` flags are no longer offered for new rows; `worker/appConfig.ts` still lists them because installed builds may read them. Updates is a placeholder for the over-the-air updates panel.
+
+Old links redirect: `/proposals*` to `/parks` and `/builds` to `/app/builds`. The Proposals queue, Import from map, Drafts pages and badge upload are retired. `server/drafts.ts` stays only for `publishStatements`, which park founding (`worker/founders-store.ts`, `worker/parkPublish.ts`) and `scripts/qa-founders-sql.mjs` import.
+
+## Code layout
+
+- `src/App.tsx` is the shell: sidebar, top bar with the environment badge, the staging banner and one page component per section. `src/routes.ts` holds the section and sub-route table and the redirects.
+- `src/ui/` holds the shared primitives: `PageHeader`, `Card`, `Table`, `StatTile` and `StatGrid`, `EmptyState`, `Notice`, `Tabs`, `Drawer`, `useConfirm` (confirm dialog) and `useToast`. Section-only UI stays in the section folder, with its own CSS file.
+- `src/shell/` holds the sidebar, the top bar, `SectionTabs`, `useDashboard()` (the current environment and `switchDatabase`) and the temporary `Placeholder` page.
+- `server/api.ts` does only the shared work: the same-origin check, database selection, `/api/health` and the error shape, then hands the request to the section whose prefix matches. `server/http.ts` has the helpers every section uses (`json`, `allowMethods`, `databaseUrl`, `HttpError`).
+- Each `server/<section>/routes.ts` exports `<section>Routes(request, context)`, which returns a response or `null` (a 404), plus the section's `Env` and `Dependencies` interfaces. `context.env` is the database the toggle chose (reading it is a 503 when staging is chosen but not configured), `context.baseEnv` is always production, and `context.otherEnv` is the database the operator is not looking at. In-memory stores for tests and the local demo live in `server/<section>/memory.ts` and are combined in `server/demo.ts`.
 
 ## Local development
 
@@ -42,7 +58,10 @@ npm run typecheck --prefix operator
 npm test --prefix operator
 ```
 
-`server/drafts.pg.test.ts` runs the draft store and publish transaction against the real content triggers when `OPERATOR_DRAFTS_TEST_DATABASE_URL` points at a disposable loopback database named `kip_qa_*`. It applies the content and drafts migrations itself.
+Two integration tests run against the real content triggers when their variable points at a disposable loopback database named `kip_qa_*` (one database each). They apply the content and drafts migrations themselves.
+
+- `server/drafts.pg.test.ts` (`OPERATOR_DRAFTS_TEST_DATABASE_URL`): the `publishStatements` transaction park founding uses.
+- `server/parks/liveParks.pg.test.ts` (`OPERATOR_PARKS_TEST_DATABASE_URL`): live park edits.
 
 ## Build and deploy
 
@@ -55,12 +74,8 @@ Runtime environment variables (Preview target only):
 | `DATABASE_URL` | Neon connection string for the data the dashboard should edit (sensitive) |
 | `RESEND_API_KEY` | Needed only to retry failed feedback emails (sensitive) |
 | `EMAIL_MODE` | `resend`, or `disabled` to turn retries into a no-op |
-| `DASHBOARD_ENVIRONMENT` | Label shown in the sidebar, for example `production` |
-| `STAGING_DATABASE_URL` | Optional staging branch connection string (sensitive). When set, a sidebar toggle switches the whole dashboard to staging; the choice is the `parkdex_operator_db` cookie |
-| `CLOUDFLARE_API_TOKEN` | R2 write token, needed only to publish a draft with a badge (sensitive) |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns the content bucket |
-| `ASSETS_BUCKET` | Optional; defaults to `parkdex-kip-content` |
-| `LEGACY_BOUNDARY_URL`, `LEGACY_PLACES_URL` | Optional; default to map.parkdex.app's boundary file and the production places API |
+| `DASHBOARD_ENVIRONMENT` | Label shown in the top bar, for example `production` |
+| `STAGING_DATABASE_URL` | Optional staging branch connection string (sensitive). When set, a sidebar toggle switches every section except Build config to staging; the choice is the `parkdex_operator_db` cookie |
 
 Deploy from the `operator` folder after linking it to the `parkdex-operator` Vercel project (`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, or `vercel link`):
 

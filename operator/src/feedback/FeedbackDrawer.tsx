@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type EmailDelivery, type FeedbackReport, type ReportStatus } from "../api";
+import { api } from "../api";
+import type { EmailDelivery, FeedbackReport, ReportStatus } from "./types";
 import { Drawer, fullDate, Icon, Spinner } from "../ui";
 import { COLUMNS, KINDS } from "./FeedbackBoard";
 

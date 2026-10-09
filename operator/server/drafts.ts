@@ -1,11 +1,11 @@
-import { neon } from "@neondatabase/serverless";
-import { HttpError } from "../../worker/validation.js";
-import type { LegacyPark, MultiPolygon } from "./legacy.js";
-
 /**
- * Park drafts live in kip_park_drafts.drafts, outside synchronized content. Publishing copies a
- * complete draft into public.parks, public.boundaries and the drive tables in one transaction,
- * which is the moment the park reaches phones.
+ * The publish transaction for park drafts. Park founding (worker/founders-store.ts) and the
+ * proposal publisher (worker/parkPublish.ts) write a row to kip_park_drafts.drafts and then run
+ * publishStatements, which copies it into public.parks, public.boundaries and the drive tables
+ * in one transaction: the moment a park reaches phones.
+ *
+ * The dashboard's own Drafts pages are retired; this module stays because those callers and
+ * scripts/qa-founders-sql.mjs import it from this path.
  */
 
 export const CATEGORIES = ["national", "provincial", "regional", "municipal", "community"] as const;
@@ -35,53 +35,12 @@ export function guessBiome(name: string): string {
   if (/\b(heritage|historic|fort|lighthouse)\b/.test(text)) return "heritage";
   return "forest";
 }
-export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
-export interface DraftFields {
-  name: string;
-  short: string;
-  category: string | null;
-  region: string;
-  biome: string;
-  shape: string;
-  rarity: string | null;
-  blurb: string;
+export function shortName(name: string): string {
+  return name.replace(/\s+(Provincial|Regional|National|Community|Municipal)?\s*Park( Reserve)?$/i, "").trim() || name;
 }
 
-/** The map side of a draft, edited by drawing in the dashboard. */
-export interface DraftPlacement {
-  geometry: MultiPolygon | null;
-  lat: number;
-  lng: number;
-}
-
-export interface Draft extends DraftFields, DraftPlacement {
-  id: string;
-  source: Record<string, unknown>;
-  seed: number;
-  scene: string | null;
-  badgeSha256: string | null;
-  badgeBytes: number | null;
-  referencePhotoType: string | null;
-  status: "draft" | "published";
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DraftSummary {
-  id: string;
-  name: string;
-  category: string | null;
-  rarity: string | null;
-  status: "draft" | "published";
-  hasBadge: boolean;
-  hasBlurb: boolean;
-  hasReferencePhoto: boolean;
-  updatedAt: string;
-}
-
-/** The immutable CDN descriptor for an uploaded badge, matching scripts/publish_park_update.py. */
+/** The immutable CDN descriptor for a badge, matching scripts/publish_park_update.py. */
 export interface BadgeAsset {
   logicalPath: string;
   objectKey: string;
@@ -91,107 +50,14 @@ export interface BadgeAsset {
   contentType: "image/webp";
 }
 
-export interface PublishResult {
-  id: string;
-  revision: number | null;
-}
-
-export interface DraftStore {
-  list(): Promise<DraftSummary[]>;
-  get(id: string): Promise<Draft | null>;
-  /** Park ids already in public.parks, so the import list can mark them. */
-  publishedParkIds(): Promise<Set<string>>;
-  create(input: Omit<Draft, "status" | "publishedAt" | "createdAt" | "updatedAt" | "scene" | "badgeSha256" | "badgeBytes" | "referencePhotoType"> & { sourceSha256: string }): Promise<Draft>;
-  update(id: string, fields: Partial<DraftFields & DraftPlacement>): Promise<Draft | null>;
-  setBadge(id: string, bytes: Uint8Array | null, scene: string | null): Promise<Draft | null>;
-  getBadge(id: string): Promise<Uint8Array | null>;
-  setReferencePhoto(id: string, bytes: Uint8Array | null, contentType: string | null): Promise<Draft | null>;
-  getReferencePhoto(id: string): Promise<{ bytes: Uint8Array; contentType: string } | null>;
-  remove(id: string): Promise<boolean>;
-  publish(id: string, expectedUpdatedAt: string, asset: BadgeAsset | null): Promise<PublishResult>;
-}
-
 /**
  * A database that runs one statement, or several in one transaction. Neon's HTTP driver
- * provides both from an Edge Function; the integration test uses a pg client.
+ * provides both from an Edge Function; the integration tests use a pg client.
  */
 export interface SqlRunner {
   query(text: string, params?: unknown[]): Promise<Record<string, unknown>[]>;
   transaction(statements: { text: string; params: unknown[] }[]): Promise<Record<string, unknown>[][]>;
 }
-
-const DRAFT_COLUMNS = `id, source, geometry, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb, scene,
-  encode(sha256(badge_webp), 'hex') AS badge_sha256, octet_length(badge_webp) AS badge_bytes, reference_photo_type,
-  status, published_at, created_at, updated_at`;
-
-function iso(value: unknown): string {
-  return new Date(value as string).toISOString();
-}
-
-function toDraft(row: Record<string, unknown>): Draft {
-  return {
-    id: String(row.id),
-    source: row.source as Record<string, unknown>,
-    geometry: (row.geometry as MultiPolygon | null) ?? null,
-    name: String(row.name),
-    short: String(row.short),
-    category: (row.category as string | null) ?? null,
-    region: String(row.region),
-    lat: Number(row.lat),
-    lng: Number(row.lng),
-    biome: String(row.biome),
-    shape: String(row.shape),
-    rarity: (row.rarity as string | null) ?? null,
-    seed: Number(row.seed),
-    blurb: String(row.blurb),
-    scene: (row.scene as string | null) ?? null,
-    badgeSha256: (row.badge_sha256 as string | null) ?? null,
-    badgeBytes: row.badge_bytes === null || row.badge_bytes === undefined ? null : Number(row.badge_bytes),
-    referencePhotoType: (row.reference_photo_type as string | null) ?? null,
-    status: row.status as Draft["status"],
-    publishedAt: row.published_at ? iso(row.published_at) : null,
-    createdAt: iso(row.created_at),
-    updatedAt: iso(row.updated_at),
-  };
-}
-
-// Images travel as hex text so both drivers agree on bytea encoding.
-function toHex(bytes: Uint8Array | null): string | null {
-  return bytes ? Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("") : null;
-}
-
-function fromHex(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
-  return bytes;
-}
-
-/** What a draft still needs before it can be published. Badge and description are optional. */
-export function publishBlockers(draft: Pick<Draft, "name" | "short" | "category" | "rarity" | "status" | "geometry">): string[] {
-  const missing: string[] = [];
-  if (draft.status !== "draft") missing.push("This draft is already published.");
-  if (!draft.name.trim()) missing.push("Add a name.");
-  if (!draft.short.trim()) missing.push("Add a short name.");
-  if (!draft.category) missing.push("Choose a category.");
-  if (!draft.rarity) missing.push("Choose a rarity.");
-  if (!draft.geometry) missing.push("Draw the park's boundary on the map.");
-  return missing;
-}
-
-/** The public boundary feature carries exactly id and biome, like the legacy importer writes. */
-export function publicFeature(id: string, biome: string, geometry: MultiPolygon) {
-  return { type: "Feature", properties: { id, biome }, geometry };
-}
-
-
-const GUARDS: Record<string, [number, string]> = {
-  draft_missing: [404, "Draft not found."],
-  draft_changed: [409, "This draft changed since you opened it. Reload and try again."],
-  draft_incomplete: [422, "This draft is missing a name, short name, category, rarity or boundary."],
-  badge_changed: [409, "The badge changed while publishing. Try again."],
-  park_exists: [409, "A park with this id is already in Parkdex."],
-  scene_taken: [409, "That badge slug is already registered to a different image."],
-};
 
 /**
  * One transaction with no client round trips between statements. Each guard raises through
@@ -259,151 +125,4 @@ export function publishStatements(id: string, expectedUpdatedAt: string, asset: 
     },
   );
   return statements;
-}
-
-export async function publishWith(db: SqlRunner, id: string, expectedUpdatedAt: string, asset: BadgeAsset | null): Promise<PublishResult> {
-  try {
-    const results = await db.transaction(publishStatements(id, new Date(expectedUpdatedAt).toISOString(), asset));
-    const revision = results[results.length - 1][0]?.published_revision;
-    return { id, revision: revision === null || revision === undefined ? null : Number(revision) };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    const guard = Object.keys(GUARDS).find((key) => message.includes(key));
-    if (guard) throw new HttpError(GUARDS[guard][0], guard, GUARDS[guard][1]);
-    // PostgreSQL errors can include connection details; keep the message safe.
-    const code = (error as { code?: unknown })?.code;
-    throw new HttpError(422, "publish_failed", `Publishing was rolled back by a database check${typeof code === "string" ? ` (${code})` : ""}.`);
-  }
-}
-
-export function createSqlDraftStore(db: SqlRunner): DraftStore {
-  async function one(id: string): Promise<Draft | null> {
-    const rows = await db.query(`SELECT ${DRAFT_COLUMNS} FROM kip_park_drafts.drafts WHERE id = $1`, [id]);
-    return rows[0] ? toDraft(rows[0]) : null;
-  }
-  async function reread(rows: Record<string, unknown>[], id: string): Promise<Draft | null> {
-    return rows.length ? one(id) : null;
-  }
-  return {
-    async list() {
-      const rows = await db.query(`SELECT id, name, category, rarity, status, badge_webp IS NOT NULL AS has_badge,
-        length(btrim(blurb)) > 0 AS has_blurb, reference_photo IS NOT NULL AS has_reference, updated_at
-        FROM kip_park_drafts.drafts ORDER BY status, updated_at DESC LIMIT 500`);
-      return rows.map((row) => ({
-        id: String(row.id), name: String(row.name), category: (row.category as string | null) ?? null, rarity: (row.rarity as string | null) ?? null,
-        status: row.status as DraftSummary["status"], hasBadge: Boolean(row.has_badge), hasBlurb: Boolean(row.has_blurb),
-        hasReferencePhoto: Boolean(row.has_reference), updatedAt: iso(row.updated_at),
-      }));
-    },
-    get: one,
-    async publishedParkIds() {
-      return new Set((await db.query("SELECT id FROM public.parks")).map((row) => String(row.id)));
-    },
-    async create(input) {
-      const inserted = await db.query(
-        `INSERT INTO kip_park_drafts.drafts (id, source, source_sha256, geometry, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb)
-         SELECT $1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
-         WHERE NOT EXISTS (SELECT 1 FROM public.parks WHERE id = $1)
-         ON CONFLICT (id) DO NOTHING RETURNING id`,
-        [input.id, JSON.stringify(input.source), input.sourceSha256, input.geometry ? JSON.stringify(input.geometry) : null, input.name, input.short, input.category,
-          input.region, input.lat, input.lng, input.biome, input.shape, input.rarity, input.seed, input.blurb],
-      );
-      if (!inserted.length) throw new HttpError(409, "already_imported", "This park already has a draft or is already in Parkdex.");
-      return (await one(input.id))!;
-    },
-    async update(id, fields) {
-      const columns = Object.keys(fields) as (keyof (DraftFields & DraftPlacement))[];
-      if (!columns.length) return one(id);
-      // Column names come from the validated field list, never from the request.
-      const sets = columns.map((column, index) => column === "geometry" ? `geometry = $${index + 2}::jsonb` : `${column} = $${index + 2}`).join(", ");
-      return reread(await db.query(
-        `UPDATE kip_park_drafts.drafts SET ${sets}, updated_at = now() WHERE id = $1 AND status = 'draft' RETURNING id`,
-        [id, ...columns.map((column) => column === "geometry" ? (fields.geometry ? JSON.stringify(fields.geometry) : null) : fields[column])],
-      ), id);
-    },
-    async setBadge(id, bytes, scene) {
-      return reread(await db.query(
-        "UPDATE kip_park_drafts.drafts SET badge_webp = decode($2::text, 'hex'), scene = $3, updated_at = now() WHERE id = $1 AND status = 'draft' RETURNING id",
-        [id, toHex(bytes), scene],
-      ), id);
-    },
-    async getBadge(id) {
-      const rows = await db.query("SELECT encode(badge_webp, 'hex') AS hex FROM kip_park_drafts.drafts WHERE id = $1 AND badge_webp IS NOT NULL", [id]);
-      return rows[0] ? fromHex(String(rows[0].hex)) : null;
-    },
-    async setReferencePhoto(id, bytes, contentType) {
-      return reread(await db.query(
-        "UPDATE kip_park_drafts.drafts SET reference_photo = decode($2::text, 'hex'), reference_photo_type = $3, updated_at = now() WHERE id = $1 RETURNING id",
-        [id, toHex(bytes), contentType],
-      ), id);
-    },
-    async getReferencePhoto(id) {
-      const rows = await db.query("SELECT encode(reference_photo, 'hex') AS hex, reference_photo_type FROM kip_park_drafts.drafts WHERE id = $1 AND reference_photo IS NOT NULL", [id]);
-      return rows[0] ? { bytes: fromHex(String(rows[0].hex)), contentType: String(rows[0].reference_photo_type) } : null;
-    },
-    async remove(id) {
-      return (await db.query("DELETE FROM kip_park_drafts.drafts WHERE id = $1 AND status = 'draft' RETURNING id", [id])).length > 0;
-    },
-    publish: (id, expectedUpdatedAt, asset) => publishWith(db, id, expectedUpdatedAt, asset),
-  };
-}
-
-/** Neon's HTTP driver runs single statements and non-interactive transactions from an Edge Function. */
-export function createNeonDraftStore(databaseUrl: string): DraftStore {
-  const sql = neon(databaseUrl);
-  return createSqlDraftStore({
-    query: (text, params = []) => sql.query(text, params) as Promise<Record<string, unknown>[]>,
-    transaction: (statements) => sql.transaction(statements.map(({ text, params }) => sql.query(text, params))) as Promise<Record<string, unknown>[][]>,
-  });
-}
-
-
-export function shortName(name: string): string {
-  return name.replace(/\s+(Provincial|Regional|National|Community|Municipal)?\s*Park( Reserve)?$/i, "").trim() || name;
-}
-
-/** What a player proposal contributes to a draft: kept for reference and the AI brief. */
-export type ProposalSource = { id: string; name: string; note: string; point: [number, number]; outline: [number, number][] | null; createdAt: string };
-
-/** A fresh draft from a legacy park, pre-filled so most parks need only a check. */
-export function draftFromLegacy(park: LegacyPark, seed: number, proposal: ProposalSource | null = null) {
-  const category = (CATEGORIES as readonly string[]).includes(park.category) ? park.category : null;
-  return {
-    id: park.id,
-    source: { record: park.record, boundaryProperties: park.boundaryProperties, ...(proposal ? { proposal } : {}) },
-    geometry: park.geometry,
-    name: park.name,
-    short: shortName(park.name),
-    category,
-    region: park.region,
-    lat: park.lat,
-    lng: park.lng,
-    biome: guessBiome(park.name),
-    shape: SHAPE_FOR_CATEGORY[category ?? ""] ?? "circle",
-    rarity: "common",
-    seed,
-    blurb: "",
-  };
-}
-
-/** A draft built only from a player's proposal, for parks the legacy map does not have. */
-export function draftFromProposal(proposal: ProposalSource, seed: number, suffix: string) {
-  const slug = proposal.name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "park";
-  const ring = proposal.outline && proposal.outline.length >= 3 ? [...proposal.outline, proposal.outline[0]] : null;
-  return {
-    id: `proposed-${slug}-${suffix}`,
-    source: { proposal },
-    geometry: ring ? { type: "MultiPolygon" as const, coordinates: [[ring]] } : null,
-    name: proposal.name,
-    short: shortName(proposal.name),
-    category: null,
-    region: "",
-    lat: proposal.point[1],
-    lng: proposal.point[0],
-    biome: guessBiome(proposal.name),
-    shape: "circle",
-    rarity: "common",
-    seed,
-    blurb: "",
-  };
 }
