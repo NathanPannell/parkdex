@@ -40,6 +40,9 @@ const { createNeonGameStore } = await import('../worker/game-store.ts');
 const { isParkHidden } = await import('../worker/parkVisibility.ts');
 const { database: sqlClient } = await import('../worker/db.ts');
 const current = await import('../src/lib/content/manifest.ts');
+const { publishProposalPark } = await import('../worker/parkPublish.ts');
+const { databaseSqlRunner } = await import('../worker/proposalReview.ts');
+const { createNeonParkProposalStore } = await import('../worker/parkProposals.ts');
 const strict = await import('../src/lib/content/compat/reader-v1.ts');
 const work = await mkdtemp(join(tmpdir(), 'parkdex-visibility-qa-'));
 const pool = adapter.pool;
@@ -96,7 +99,8 @@ try {
   for (const name of ['001_cloud_content.sql', 'migrations/content_001_sync.sql', 'migrations/content_002_authoring.sql', 'migrations/content_003_park_maps_link.sql',
     'migrations/content_004_catalogue_release.sql', 'migrations/content_005_park_visibility.sql', 'migrations/content_005_park_visibility.sql',
     'migrations/accounts_001_init.sql', 'migrations/progress_001_init.sql', 'migrations/game_001_init.sql',
-    'migrations/park_drafts_001_init.sql', 'migrations/park_drafts_002_proposals.sql']) {
+    'migrations/park_drafts_001_init.sql', 'migrations/park_drafts_002_proposals.sql',
+    'migrations/park_proposals_001_init.sql', 'migrations/park_proposals_002_moderation.sql']) {
     await adapter.applyMigration(join(root, 'database', name));
   }
   await inTransaction(async (client) => {
@@ -190,7 +194,25 @@ try {
   const sinceHide = strict.parseContentChanges(await serve(createChangesHandler, { after: String(applied.revision), reader: '1' }), applied.revision);
   const strictNow = sinceHide.batches.reduce((state, batch) => strict.applyContentChangeBatch(state, batch), strictAfter);
   assert.deepEqual(strictNow.parks.map((park) => park.id).sort(), ['municipal-qa-proposed', 'osm-relation-77', 'osm-way-4242', 'provincial-qa-keep']);
+  // A player's proposal published through the real #117 path, with an id that is not osm-:
+  // the rule must see the proposal, not the id, and keep the municipal park visible.
+  const proposalId = randomUUID();
+  const point = [-123.425, 48.485];
+  const saved = await createNeonParkProposalStore(adapter.dbUrl).save({
+    id: proposalId, payloadHash: 'b'.repeat(64), ipHash: randomUUID().replaceAll('-', '').padEnd(64, '0'),
+    proposal: { submissionId: randomUUID(), name: 'Player Park', note: 'QA', point, outline: null, osm: null, context: {} },
+  });
+  assert.equal(saved.status, 'created');
+  const published = await publishProposalPark(databaseSqlRunner(adapter.dbUrl), {
+    id: 'municipal-qa-player', name: 'Player Park', short: 'Player', category: 'municipal', region: 'QA', lat: point[1], lng: point[0],
+    biome: 'forest', shape: 'circle', rarity: 'common', seed: 11, blurb: 'A local park added to Parkdex by a player.',
+    geometry: square(-123.43, 48.48), source: { proposal: { id: proposalId, name: 'Player Park', note: 'QA', point, createdAt: saved.proposal.createdAt } },
+  }, proposalId);
+  assert.equal(published.status, 'published');
+  assert.ok(ids(await serve(createSnapshotHandler, { reader: '2' })).includes('municipal-qa-player'));
   const sql = sqlClient(adapter.dbUrl);
+  assert.equal(await isParkHidden(sql, 'municipal-qa-player'), false);
+  log('a proposal published through the OpenStreetMap publish path stays visible under the rule');
   assert.equal(await isParkHidden(sql, 'community-qa-new'), true);
   assert.equal(await isParkHidden(sql, 'municipal-qa-proposed'), false);
   assert.equal(await isParkHidden(sql, 'provincial-qa-keep'), false);
@@ -199,8 +221,8 @@ try {
   const releaseDir = join(work, 'release');
   const release = python('content_catalogue.py', ['build', '--out', releaseDir, '--target-host', process.env.PGHOST, '--target-environment', 'local-qa']);
   const index = JSON.parse(await readFile(join(releaseDir, 'content', 'catalogue', 'index.json'), 'utf8'));
-  assert.equal(release.parkCount, 4);
-  assert.deepEqual(index.parks.map((park) => park.id).sort(), ['municipal-qa-proposed', 'osm-relation-77', 'osm-way-4242', 'provincial-qa-keep']);
+  assert.equal(release.parkCount, 5);
+  assert.deepEqual(index.parks.map((park) => park.id).sort(), ['municipal-qa-player', 'municipal-qa-proposed', 'osm-relation-77', 'osm-way-4242', 'provincial-qa-keep']);
   log('the CDN catalogue release leaves hidden parks out');
 
   const blocked = await store.recordVisit(holder, randomUUID(), 'municipal-qa-local', new Date().toISOString());
@@ -219,13 +241,13 @@ try {
   assert.equal(apply(unhidePlan).result, 'applied');
   assert.equal(apply(unhidePlan).result, 'already-current');
   const restored = await serve(createSnapshotHandler, { reader: '2' });
-  assert.deepEqual(ids(restored), ['community-qa-hall', 'community-qa-new', 'municipal-qa-local', 'municipal-qa-proposed', 'osm-relation-77', 'osm-way-4242', 'provincial-qa-keep']);
+  assert.deepEqual(ids(restored), ['community-qa-hall', 'community-qa-new', 'municipal-qa-local', 'municipal-qa-player', 'municipal-qa-proposed', 'osm-relation-77', 'osm-way-4242', 'provincial-qa-keep']);
   assert.equal(restored.parks.find((park) => park.id === 'municipal-qa-local').blurb, 'Edited while hidden.');
   const back = await serve(createChangesHandler, { after: String(headHidden), reader: '1' });
   const upserts = back.batches[0].changes.filter((change) => change.op === 'upsert').map((change) => `${change.entity}:${change.id}`).sort();
   assert.ok(['park:municipal-qa-local', 'boundary:municipal-qa-local', 'drive:municipal-qa-local', 'park:community-qa-new'].every((key) => upserts.includes(key)));
   assert.ok(!upserts.includes('park:municipal-qa-cdn'));
-  assert.equal((await serve(createSnapshotHandler, { reader: '3' })).parks.length, 9);
+  assert.equal((await serve(createSnapshotHandler, { reader: '3' })).parks.length, 10);
   const strictRestored = strict.applyContentChangeBatch(strictAfter, strict.parseContentChanges(back, headHidden).batches[0]);
   assert.ok(strictRestored.parks.some((park) => park.id === 'municipal-qa-local'));
   assert.notEqual((await store.recordVisit(holder, randomUUID(), 'municipal-qa-local', new Date().toISOString())).status, 'park_not_found');

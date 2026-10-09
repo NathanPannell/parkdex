@@ -86,7 +86,8 @@ $$;
 
 -- Parks players proposed on purpose stay visible whatever their category: the
 -- operator flow and the OpenStreetMap flow both keep the proposal in the draft
--- source, and their ids start with proposed- or osm-. The drafts schema is an
+-- source, the OpenStreetMap flow also marks the proposal accepted with the park
+-- id, and their ids start with proposed- or osm-. The drafts schema is an
 -- independent migration, so it is looked up only when it exists.
 CREATE OR REPLACE FUNCTION public.content_park_is_player_proposal(p_park_id text)
 RETURNS boolean
@@ -101,6 +102,11 @@ BEGIN
     END IF;
     IF to_regclass('kip_park_drafts.drafts') IS NOT NULL THEN
         EXECUTE 'SELECT EXISTS (SELECT 1 FROM kip_park_drafts.drafts WHERE id = $1 AND source ? ''proposal'')'
+           INTO v_found USING p_park_id;
+    END IF;
+    -- The OpenStreetMap flow accepts the proposal in the same transaction, before the park insert.
+    IF NOT v_found AND to_regclass('kip_proposals.parks') IS NOT NULL THEN
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM kip_proposals.parks WHERE published_park_id = $1)'
            INTO v_found USING p_park_id;
     END IF;
     RETURN v_found;
