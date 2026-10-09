@@ -48,6 +48,7 @@ import {
   resolveGoogleWebClientId,
 } from "./nativeIdentity";
 import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
+import { shouldReopenAccount, SignInGate } from "./signInGate";
 
 const LAST_ACCOUNT_KEY = "kip-account-last-id";
 
@@ -185,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncRef = useRef<(options?: SyncBackupOptions) => Promise<ProgressSyncResult | null>>(async () => null);
   const refreshRef = useRef<(expectedOverride?: string | null) => Promise<void>>(async () => {});
   const resumeInFlight = useRef<Promise<void> | null>(null);
+  const signInGate = useRef(new SignInGate());
   const lastResumeAt = useRef(0);
   const foreground = useRef(typeof document === "undefined" || document.visibilityState !== "hidden");
   const isNative = isNativeAccountRuntime();
@@ -314,7 +316,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // was just confirmed by /me. A later foreground event can retry it.
           }
         }
-        if (current()) await establishAccount(account, operation);
+        if (!current()) return;
+        // Confirming the account that is already open keeps its session, so a resume right
+        // after sign-in does not cancel the backup sync that the sign-in started.
+        if (shouldReopenAccount(stateRef.current.phase, stateRef.current.account?.id, account.id)) await establishAccount(account, operation);
+        else setState((value) => value.account?.id?.toLowerCase() === account.id.toLowerCase() ? { ...value, account } : value);
       } catch (error) {
         if (!current()) return;
         if (error instanceof GuestReservationFailedError) return;
@@ -367,18 +373,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const signUp = useCallback(async (input: { email: string; password: string; displayName: string }) => {
+  // A sign-in the person started runs to the end: background refreshes wait for it (see
+  // SignInGate), and the first backup sync starts as soon as the account is open.
+  const interactiveSignIn = useCallback((authenticate: () => Promise<AccountProfile>) => signInGate.current.run(async () => {
     const operation = ++authOperationGeneration.current;
-    return establishAccount(await registerAccount(input), operation);
-  }, [establishAccount]);
-  const signIn = useCallback(async (input: { email: string; password: string }) => {
-    const operation = ++authOperationGeneration.current;
-    return establishAccount(await loginAccount(input), operation);
-  }, [establishAccount]);
-  const signInGoogle = useCallback(async (idToken: string, nonce: string) => {
-    const operation = ++authOperationGeneration.current;
-    return establishAccount(await completeGoogleSignIn(idToken, nonce, isNative ? "native" : "web"), operation);
-  }, [establishAccount, isNative]);
+    const account = await establishAccount(await authenticate(), operation);
+    void syncRef.current({ retryAfterFlight: true });
+    return account;
+  }), [establishAccount]);
+  const signUp = useCallback((input: { email: string; password: string; displayName: string }) => interactiveSignIn(() => registerAccount(input)), [interactiveSignIn]);
+  const signIn = useCallback((input: { email: string; password: string }) => interactiveSignIn(() => loginAccount(input)), [interactiveSignIn]);
+  const signInGoogle = useCallback((idToken: string, nonce: string) => interactiveSignIn(() => completeGoogleSignIn(idToken, nonce, isNative ? "native" : "web")), [interactiveSignIn, isNative]);
   const linkGoogle = useCallback(async (idToken: string, nonce: string) => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
     if (!accountId) throw new Error("Sign in again before linking Google.");
@@ -620,6 +625,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!retryAfterFlight && now - lastResumeAt.current < 3000) return;
       lastResumeAt.current = now;
       const task = (async () => {
+        // Closing a Google sign-in popup brings the page back; let that sign-in finish first.
+        await signInGate.current.settled();
+        if (!live) return;
         await refreshRef.current();
         if (stateRef.current.phase === "authenticated") await syncRef.current({ retryAfterFlight });
       })();

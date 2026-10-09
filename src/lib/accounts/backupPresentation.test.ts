@@ -9,6 +9,7 @@ describe("account backup presentation", () => {
     expect(backupHeadline("error", true)).toBe("Backup needs attention");
     expect(backupHeadline("success", true)).toBe("Backed up");
     expect(backupHeadline("idle", false)).toBe("Not backed up yet");
+    expect(backupHeadline("success", false)).toBe("Up to date");
   });
 
   it("shows account startup, sign-in, offline, and error states in Settings", () => {
