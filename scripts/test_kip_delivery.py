@@ -638,6 +638,159 @@ class AccountReleaseGates(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
 
 
+class ReleaseUrlPropagation(unittest.TestCase):
+    config = {"releasePath": "/release.json", "healthPath": "/api/health"}
+    url = "https://staging.web.parkdex.app"
+    sha = "a" * 40
+    old = "b" * 40
+
+    def verify(self, responses, *, api_present=True, timeout=90):
+        now = [0.0]
+        sleeps = []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            now[0] += seconds
+
+        def respond(url):
+            outcome = responses.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        with patch.object(delivery, "http_json", side_effect=respond):
+            delivery.verify_release_url(
+                self.config, self.url, self.sha, "staging", api_present=api_present,
+                timeout=timeout, sleep=sleep, clock=lambda: now[0],
+            )
+        return sleeps
+
+    def release(self, sha):
+        return (200, {"sha": sha, "environment": "staging"})
+
+    def health(self, sha):
+        return (200, {"ok": True, "releaseSha": sha})
+
+    def test_passes_immediately_when_the_alias_serves_the_release(self):
+        self.assertEqual(self.verify([self.release(self.sha), self.health(self.sha)]), [])
+
+    def test_waits_for_a_stale_alias_to_serve_the_new_release(self):
+        sleeps = self.verify([
+            self.release(self.old),
+            (404, None),
+            self.release(self.sha), self.health(self.old),
+            self.release(self.sha), self.health(self.sha),
+        ])
+        self.assertEqual(sleeps, [delivery.RELEASE_VERIFY_INTERVAL_SECONDS] * 3)
+
+    def test_retries_when_the_host_is_briefly_unreachable(self):
+        error = delivery.DeliveryError("HTTP check could not reach staging.web.parkdex.app.")
+        self.assertEqual(len(self.verify([error, self.release(self.sha), self.health(self.sha)])), 1)
+
+    def test_keeps_the_release_error_after_the_deadline(self):
+        responses = [self.release(self.old)] * 40
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^The deployed /release\.json does not match the expected SHA and environment\.$"):
+            self.verify(responses, timeout=12)
+        self.assertEqual(len(responses), 40 - 4)
+
+    def test_keeps_the_health_error_after_the_deadline(self):
+        responses = [self.release(self.sha), self.health(self.old)] * 40
+        with self.assertRaisesRegex(delivery.DeliveryError, r"^The API health check did not confirm the expected release SHA\.$"):
+            self.verify(responses, timeout=12)
+
+    def test_skips_health_when_no_api_is_deployed(self):
+        self.assertEqual(self.verify([self.release(self.sha)], api_present=False), [])
+
+    def test_default_wait_is_bounded(self):
+        self.assertLessEqual(delivery.RELEASE_VERIFY_TIMEOUT_SECONDS, 120)
+        self.assertGreater(delivery.RELEASE_VERIFY_TIMEOUT_SECONDS, delivery.RELEASE_VERIFY_INTERVAL_SECONDS)
+
+
+class TeardownStagingSha(unittest.TestCase):
+    config = {"stagingUrl": "https://staging.web.parkdex.app", "releasePath": "/release.json", "healthPath": "/api/health"}
+    merged = "a" * 40
+    later = "c" * 40
+    pr = {"state": "MERGED", "mergedAt": "2026-10-08T20:12:05Z", "mergeCommit": {"oid": "a" * 40}}
+
+    def check(self, deployed, *, ancestors=(), staging_verified="1", state=None):
+        state = {"apiPresent": True, "accountsPresent": True} if state is None else state
+        compared = []
+
+        def is_ancestor(ancestor, descendant):
+            compared.append((ancestor, descendant))
+            return (ancestor, descendant) in ancestors
+
+        with patch.dict(os.environ, {"STAGING_VERIFIED": staging_verified}), \
+             patch.object(delivery, "http_json", return_value=(200, {"sha": deployed, "environment": "staging"})), \
+             patch.object(delivery, "git") as git, \
+             patch.object(delivery, "is_ancestor", side_effect=is_ancestor), \
+             patch.object(delivery, "verify_release_url") as verify, \
+             patch.object(delivery, "photo_provider") as provider, \
+             contextlib.redirect_stdout(io.StringIO()):
+            delivery.verify_teardown_condition(self.config, state, self.pr)
+        return state, verify, provider, git, compared
+
+    def contained(self):
+        return {(self.merged, self.later), (self.later, "refs/remotes/origin/staging")}
+
+    def test_exact_merge_sha_still_verifies_without_git(self):
+        state, verify, provider, git, compared = self.check(self.merged)
+        self.assertEqual(verify.call_args.args[2], self.merged)
+        provider.return_value.verify_staging.assert_called_once()
+        self.assertEqual(provider.return_value.verify_staging.call_args.args[2], self.merged)
+        self.assertEqual(state["stagingVerifiedSha"], self.merged)
+        git.assert_not_called()
+        self.assertEqual(compared, [])
+
+    def test_later_staging_release_containing_the_merge_is_accepted(self):
+        state, verify, provider, git, compared = self.check(self.later, ancestors=self.contained())
+        git.assert_called_once_with("fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging")
+        self.assertEqual(verify.call_args.args[1:4], (self.config["stagingUrl"], self.later, "staging"))
+        self.assertTrue(verify.call_args.kwargs["api_present"])
+        self.assertEqual(provider.return_value.verify_staging.call_args.args[2], self.later)
+        self.assertEqual(state["stagingVerifiedSha"], self.later)
+        self.assertEqual(state["stagingMergeSha"], self.merged)
+
+    def test_staging_release_without_the_merge_falls_back_to_the_exact_sha(self):
+        state, verify, _, _, _ = self.check(self.later, ancestors={(self.later, "refs/remotes/origin/staging")})
+        self.assertEqual(verify.call_args.args[2], self.merged)
+
+    def test_release_outside_staging_history_falls_back_to_the_exact_sha(self):
+        _, verify, _, _, _ = self.check(self.later, ancestors={(self.merged, self.later)})
+        self.assertEqual(verify.call_args.args[2], self.merged)
+
+    def test_unreachable_staging_falls_back_to_the_exact_sha(self):
+        with patch.dict(os.environ, {"STAGING_VERIFIED": "1"}), \
+             patch.object(delivery, "http_json", side_effect=delivery.DeliveryError("HTTP check could not reach staging.")), \
+             patch.object(delivery, "verify_release_url") as verify, \
+             patch.object(delivery, "photo_provider"):
+            delivery.verify_teardown_condition(self.config, {}, self.pr)
+        self.assertEqual(verify.call_args.args[2], self.merged)
+
+    def test_staging_verified_is_still_required(self):
+        with self.assertRaisesRegex(delivery.DeliveryError, "STAGING_VERIFIED=1"):
+            self.check(self.later, ancestors=self.contained(), staging_verified="")
+
+    def test_photo_check_is_skipped_without_accounts(self):
+        _, _, provider, _, _ = self.check(self.later, ancestors=self.contained(), state={"apiPresent": False})
+        provider.assert_not_called()
+
+    def test_is_ancestor_uses_git_merge_base(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+            delivery.run(["git", "-C", directory, "init", "-q"], env=env)
+            delivery.run(["git", "-C", directory, "commit", "-q", "--allow-empty", "-m", "one"], env=env)
+            first = delivery.run(["git", "-C", directory, "rev-parse", "HEAD"], env=env)
+            delivery.run(["git", "-C", directory, "commit", "-q", "--allow-empty", "-m", "two"], env=env)
+            second = delivery.run(["git", "-C", directory, "rev-parse", "HEAD"], env=env)
+            with patch.object(delivery, "ROOT", root), patch.object(delivery, "safe_env", return_value=env):
+                self.assertTrue(delivery.is_ancestor(first, second))
+                self.assertFalse(delivery.is_ancestor(second, first))
+                self.assertFalse(delivery.is_ancestor("d" * 40, second))
+
+
 class MigrationLockRetry(unittest.TestCase):
     url = "postgresql://kip:secret@ep-test.us-west-2.aws.neon.tech/parkdex_kip"
 

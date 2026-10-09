@@ -933,14 +933,46 @@ def http_json(url: str) -> tuple[int, dict | None]:
     return status, value
 
 
-def verify_release_url(config: dict, url: str, sha: str, environment: str, *, api_present: bool) -> None:
-    status, release = http_json(url.rstrip("/") + config["releasePath"])
-    if status != 200 or release != {"sha": sha, "environment": environment}:
-        raise DeliveryError("The deployed /release.json does not match the expected SHA and environment.")
-    if api_present:
-        status, health = http_json(url.rstrip("/") + config["healthPath"])
-        if status != 200 or not isinstance(health, dict) or health.get("ok") is not True or health.get("releaseSha") != sha:
-            raise DeliveryError("The API health check did not confirm the expected release SHA.")
+RELEASE_VERIFY_TIMEOUT_SECONDS = 90
+RELEASE_VERIFY_INTERVAL_SECONDS = 5
+
+
+def release_url_problem(config: dict, url: str, sha: str, environment: str, *, api_present: bool) -> str | None:
+    try:
+        status, release = http_json(url.rstrip("/") + config["releasePath"])
+        if status != 200 or release != {"sha": sha, "environment": environment}:
+            return "The deployed /release.json does not match the expected SHA and environment."
+        if api_present:
+            status, health = http_json(url.rstrip("/") + config["healthPath"])
+            if status != 200 or not isinstance(health, dict) or health.get("ok") is not True or health.get("releaseSha") != sha:
+                return "The API health check did not confirm the expected release SHA."
+    except DeliveryError as exc:
+        return str(exc)
+    return None
+
+
+def verify_release_url(
+    config: dict,
+    url: str,
+    sha: str,
+    environment: str,
+    *,
+    api_present: bool,
+    timeout: float = RELEASE_VERIFY_TIMEOUT_SECONDS,
+    sleep=time.sleep,
+    clock=time.monotonic,
+) -> None:
+    # A freshly assigned alias can serve the previous release for up to a minute,
+    # so keep checking for a bounded time before reporting the mismatch.
+    deadline = clock() + timeout
+    while True:
+        problem = release_url_problem(config, url, sha, environment, api_present=api_present)
+        if problem is None:
+            return
+        remaining = deadline - clock()
+        if remaining <= 0:
+            raise DeliveryError(problem)
+        sleep(min(RELEASE_VERIFY_INTERVAL_SECONDS, remaining))
 
 
 def parse_database_url(value: str, expected_database: str | None = None) -> tuple[urllib.parse.SplitResult, str, str]:
@@ -1891,15 +1923,49 @@ def recover_intended_resources(config: dict, state: dict, path: Path) -> None:
             save_json(path, state)
 
 
+def is_ancestor(ancestor: str, descendant: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", ancestor, descendant],
+            env=safe_env(), capture_output=True, timeout=60, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DeliveryError("git could not compare staging commits.") from exc
+    return result.returncode == 0
+
+
+def staging_contains(merged_sha: str, deployed_sha: str) -> bool:
+    git("fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging")
+    return is_ancestor(merged_sha, deployed_sha) and is_ancestor(deployed_sha, "refs/remotes/origin/staging")
+
+
+def teardown_staging_sha(config: dict, merged_sha: str) -> str:
+    # Staging may already serve a later merge. That release still verifies this PR
+    # when it is a staging commit that contains the PR's merge commit.
+    try:
+        status, release = http_json(config["stagingUrl"].rstrip("/") + config["releasePath"])
+    except DeliveryError:
+        return merged_sha
+    deployed_sha = release.get("sha") if status == 200 and isinstance(release, dict) and release.get("environment") == "staging" else None
+    if not isinstance(deployed_sha, str) or deployed_sha == merged_sha or not SHA_RE.fullmatch(deployed_sha):
+        return merged_sha
+    if not staging_contains(merged_sha, deployed_sha):
+        return merged_sha
+    print(f"staging-sha={deployed_sha} contains-merge-sha={merged_sha}")
+    return deployed_sha
+
+
 def verify_teardown_condition(config: dict, state: dict, pr_info: dict) -> None:
     if pr_info.get("state") == "MERGED" and pr_info.get("mergedAt"):
         if os.environ.get("STAGING_VERIFIED") != "1":
             raise DeliveryError("Set STAGING_VERIFIED=1 after the merged SHA and affected staging journey pass.")
         merged_sha = staging_sha_for_pr(pr_info)
-        verify_release_url(config, config["stagingUrl"], merged_sha, "staging", api_present=bool(state.get("apiPresent")))
+        staging_sha = teardown_staging_sha(config, merged_sha)
+        verify_release_url(config, config["stagingUrl"], staging_sha, "staging", api_present=bool(state.get("apiPresent")))
         if state.get("accountsPresent"):
-            photo_provider().verify_staging(sys.modules[__name__], config, merged_sha)
-        state["stagingVerifiedSha"] = merged_sha
+            photo_provider().verify_staging(sys.modules[__name__], config, staging_sha)
+        state["stagingVerifiedSha"] = staging_sha
+        state["stagingMergeSha"] = merged_sha
         return
     if pr_info.get("state") == "CLOSED" and os.environ.get("PREVIEW_ABANDONED") == "1":
         return

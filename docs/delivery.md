@@ -86,9 +86,11 @@ pwsh -File scripts/teardown-preview-pr.ps1 -PullRequest 123 -Apply
 Remove-Item Env:STAGING_VERIFIED
 ```
 
-Teardown requires the merged commit to be the exact revision currently served by staging. For a closed, unmerged PR set PREVIEW_ABANDONED=1. To remove a failed partial preview while its draft remains open, set PREVIEW_ABORTED=1. After a PR head changes, set PREVIEW_SUPERSEDED=1, tear down the old preview, and create and verify a new one for the updated head before marking the PR ready.
+`verify-staging`, `verify-main` and teardown recheck the stable host for up to 90 seconds, because a freshly assigned alias can briefly serve the previous release. They report the same mismatch error if it never catches up.
 
-Teardown verifies both staging API and private Worker serve the merged SHA before retiring an account preview. It verifies provenance for the exact Vercel deployment, Neon branch, Worker, private bucket, and Durable Object namespace. It attempts independent provider deletions even if one fails, purges only the exact owned bucket, and verifies namespace removal. Three consecutive complete-inventory all-absent observations are required before recording cleanup complete. If an operation fails, keep the journal and rerun the same teardown command after diagnosis. Never infer ownership from a PR number or a loose resource name.
+Teardown requires staging to serve the merged commit, or a later staging commit that contains it (`git merge-base --is-ancestor`). The later release must also be on `origin/staging`, and its API and private Worker are verified at that SHA. For a closed, unmerged PR set PREVIEW_ABANDONED=1. To remove a failed partial preview while its draft remains open, set PREVIEW_ABORTED=1. After a PR head changes, set PREVIEW_SUPERSEDED=1, tear down the old preview, and create and verify a new one for the updated head before marking the PR ready.
+
+Teardown verifies both staging API and private Worker serve that SHA before retiring an account preview. It verifies provenance for the exact Vercel deployment, Neon branch, Worker, private bucket, and Durable Object namespace. It attempts independent provider deletions even if one fails, purges only the exact owned bucket, and verifies namespace removal. Three consecutive complete-inventory all-absent observations are required before recording cleanup complete. If an operation fails, keep the journal and rerun the same teardown command after diagnosis. Never infer ownership from a PR number or a loose resource name.
 
 ## Production release
 
