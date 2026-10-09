@@ -176,6 +176,29 @@
   box-shadow: none;
 }
 
+/* Top left, above the headline: the way back to the map before the flag goes in. */
+.plant__close {
+  position: absolute;
+  top: calc(var(--safe-top) + 8px);
+  left: 14px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 8px 10px;
+  border: 2px solid rgba(255, 248, 236, 0.35);
+  border-radius: 99px;
+  background: rgba(255, 248, 236, 0.1);
+  color: var(--paper);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.plant__close:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+}
+
 .plant__points {
   margin: 0;
   text-align: center;
@@ -354,11 +377,6 @@ button.game-row:active {
   font-family: var(--display);
   font-size: 22px;
   line-height: 1;
-}
-
-.game-old-badges {
-  align-self: center;
-  margin-top: 6px;
 }
 
 /* ---------- Takeover messages ---------- */
