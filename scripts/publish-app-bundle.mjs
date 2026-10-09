@@ -4,8 +4,10 @@
 //
 //   node scripts/publish-app-bundle.mjs --channel staging --min-native-build 12
 //   node scripts/publish-app-bundle.mjs --channel staging --min-native-build 12 --apply \
-//     --expected-generation 0
+//     --expected-generation 0 --record
 //
+// --record also writes the publish history row the operator dashboard shows
+// (kip_app_config.ota_publishes), through OTA_HISTORY_DATABASE_URL.
 // See docs/ota-updates.md for the release steps and the credentials --apply needs.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -207,7 +209,7 @@ async function readCurrentPointer(fetcher, channel, expectedGeneration, expected
   const response = await fetcher(CDN_ORIGIN + "/app-bundles/channels/" + channel + "/current.json", { method: "GET", cache: "no-store" });
   if (response.status === 404) {
     if (expectedGeneration !== 0) throw new Error("no pointer is published, but generation " + expectedGeneration + " was expected");
-    return { type: "if-none-match" };
+    return { condition: { type: "if-none-match" }, previous: null };
   }
   if (!response.ok) throw new Error("the current pointer could not be read (" + response.status + ")");
   const current = await response.json();
@@ -215,7 +217,7 @@ async function readCurrentPointer(fetcher, channel, expectedGeneration, expected
   if (current.generation !== expectedGeneration) throw new Error("the current pointer is generation " + current.generation + ", not " + expectedGeneration);
   const etag = response.headers.get("ETag");
   if (!etag || etag !== expectedEtag) throw new Error("the current pointer ETag changed; pass --expected-etag " + etag);
-  return { type: "if-match", etag };
+  return { condition: { type: "if-match", etag }, previous: current };
 }
 
 async function verifyPublicBytes(fetcher, url, expectedSha256, description) {
@@ -238,7 +240,7 @@ export async function publishAppBundle(prepared, options) {
   if (prepared.pointer.generation !== options.expectedGeneration + 1) throw new Error("generation must be expected generation + 1");
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? new Date();
-  const condition = await readCurrentPointer(fetcher, channel, options.expectedGeneration, options.expectedEtag);
+  const { condition, previous } = await readCurrentPointer(fetcher, channel, options.expectedGeneration, options.expectedEtag);
 
   const zipKey = "app-bundles/" + prepared.zipSha256 + ".zip";
   const zipUrl = r2ObjectUrl(accountId, bucket, zipKey);
@@ -260,11 +262,64 @@ export async function publishAppBundle(prepared, options) {
   const pointerUpload = await fetcher(pointerUrl, { method: "PUT", headers: pointerHeaders, body: prepared.pointerBytes });
   if (pointerUpload.status === 412) throw new Error("the pointer changed during publication; nothing was moved");
   if (!pointerUpload.ok) throw new Error("pointer upload failed (" + pointerUpload.status + ")");
-  return { zipKey, pointerKey, r2Etag: pointerUpload.headers.get("ETag") };
+  return { zipKey, pointerKey, r2Etag: pointerUpload.headers.get("ETag"), previous };
+}
+
+/**
+ * Reads the new pointer back through the CDN. The Range header makes the content worker read R2
+ * directly instead of answering from its 60 second cache.
+ */
+export async function verifyPointerThroughCdn(fetcher, pointer) {
+  try {
+    const response = await fetcher(CDN_ORIGIN + "/app-bundles/channels/" + pointer.channel + "/current.json", { method: "GET", cache: "no-store", headers: { Range: "bytes=0-" } });
+    if (response.status !== 200 && response.status !== 206) return "cdn_pending";
+    const served = await response.json();
+    return served?.generation === pointer.generation && served?.sha256 === pointer.sha256 ? "confirmed" : "cdn_pending";
+  } catch {
+    return "cdn_pending";
+  }
+}
+
+/** The kip_app_config.ota_publishes row for a script publication (app_config_003). */
+export function publicationRow(pointer, previous, { outcome, note = "" }) {
+  if (typeof note !== "string" || note.length > 300) throw new Error("--note must be 300 characters or fewer");
+  return {
+    channel: pointer.channel,
+    generation: pointer.generation,
+    previousGeneration: previous?.generation ?? 0,
+    action: "publish",
+    source: "script",
+    sha256: pointer.sha256,
+    previousSha256: typeof previous?.sha256 === "string" && SHA256.test(previous.sha256) ? previous.sha256 : null,
+    version: pointer.version,
+    byteSize: pointer.byteSize,
+    minimumNativeBuild: pointer.minimumNativeBuild,
+    maximumNativeBuild: pointer.maximumNativeBuild,
+    sourceCommit: pointer.sourceCommit,
+    outcome,
+    note,
+    publishedAt: pointer.publishedAt,
+  };
+}
+
+/**
+ * Writes the publish history row the operator dashboard shows. `query(text, params)` is any
+ * PostgreSQL client; a retried run adds nothing because the row is unique per move.
+ */
+export async function recordPublication(query, row) {
+  const rows = await query(
+    "INSERT INTO kip_app_config.ota_publishes (channel, generation, previous_generation, action, source, sha256, previous_sha256, version, byte_size, " +
+      "minimum_native_build, maximum_native_build, source_commit, outcome, note, published_at) " +
+      "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz) " +
+      "ON CONFLICT (channel, generation, sha256) DO NOTHING RETURNING id",
+    [row.channel, row.generation, row.previousGeneration, row.action, row.source, row.sha256, row.previousSha256, row.version, row.byteSize,
+      row.minimumNativeBuild, row.maximumNativeBuild, row.sourceCommit, row.outcome, row.note, row.publishedAt],
+  );
+  return rows.length > 0;
 }
 
 function parseArgs(argv) {
-  const flags = new Set(["--apply", "--skip-build"]);
+  const flags = new Set(["--apply", "--skip-build", "--record"]);
   const result = {};
   for (let index = 0; index < argv.length; index += 1) {
     const name = argv[index];
@@ -308,6 +363,8 @@ async function main() {
   const distDirectory = resolve(projectRoot, args.dist ?? "dist");
   const outDirectory = resolve(projectRoot, args.out ?? join(".codex", "app-bundles", channel));
 
+  if (args.record && !args.apply) throw new Error("--record writes the publish history after --apply; add --apply");
+  if (args.record && !process.env.OTA_HISTORY_DATABASE_URL) throw new Error("--record needs OTA_HISTORY_DATABASE_URL (the production database)");
   const sourceCommit = process.env.RELEASE_SHA || gitOutput(["rev-parse", "HEAD"]) || "local";
   const dirty = gitOutput(["status", "--porcelain"]);
   if (args.apply && dirty !== "") throw new Error("--apply needs a clean checkout so the bundle matches its commit");
@@ -350,7 +407,21 @@ async function main() {
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
       sessionToken: process.env.R2_SESSION_TOKEN,
     });
-    Object.assign(summary, published);
+    const { previous, ...rest } = published;
+    Object.assign(summary, rest);
+    if (args.record) {
+      // The bundle is already live; a failed history write is reported, not rolled back.
+      try {
+        const outcome = await verifyPointerThroughCdn(fetch, prepared.pointer);
+        const { neon } = await import("@neondatabase/serverless");
+        const sql = neon(process.env.OTA_HISTORY_DATABASE_URL);
+        const inserted = await recordPublication((text, params) => sql.query(text, params), publicationRow(prepared.pointer, previous, { outcome, note: args.note ?? "" }));
+        Object.assign(summary, { recorded: inserted ? "inserted" : "already-recorded", cdn: outcome });
+      } catch (error) {
+        Object.assign(summary, { recorded: "failed" });
+        process.stderr.write("publish-app-bundle: published, but the history row was not written: " + (error instanceof Error ? error.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "<database url>").slice(0, 200) : "unknown error") + "\n");
+      }
+    }
   }
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
 }
