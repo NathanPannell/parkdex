@@ -15,11 +15,11 @@ const FLAG_LABELS: Record<string, string> = {
 /** "+12% vs previous 30 days", coloured by direction. Rises are good for every tile here. */
 function Delta({ period, days }: { period: Period; days: number }) {
   const { current, previous } = period;
-  if (!previous && !current) return <span className="an-delta">No change vs previous {days} days</span>;
+  if (!previous && !current) return <span className="an-delta">No change vs prior {days}d</span>;
   if (!previous) return <span className="an-delta an-delta--up">New this period</span>;
   const change = Math.round(((current - previous) / previous) * 100);
   const tone = change > 0 ? "up" : change < 0 ? "down" : "flat";
-  return <span className={`an-delta an-delta--${tone}`}>{change > 0 ? "+" : ""}{change}% vs previous {days} days</span>;
+  return <span className={`an-delta an-delta--${tone}`}>{change > 0 ? "+" : ""}{change}% vs prior {days}d</span>;
 }
 
 function percent(part: number, whole: number): string {

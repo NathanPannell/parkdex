@@ -152,3 +152,8 @@
 .an-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
 .an-facts dt { color: var(--ink-faint); font-size: 12px; font-weight: 700; }
 .an-facts dd { margin: 1px 0 0; font-weight: 700; overflow-wrap: anywhere; }
+/* Wide screens fit all seven headline tiles on one row. */
+@media (min-width: 1700px) {
+  .analytics .stat-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .analytics .stat__value { font-size: 29px; }
+}
