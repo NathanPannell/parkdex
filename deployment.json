@@ -35,7 +35,8 @@
     "database/migrations/park_drafts_002_proposals.sql",
     "database/migrations/game_001_init.sql",
     "database/migrations/park_proposals_002_moderation.sql",
-    "database/migrations/osm_parks_001_init.sql"
+    "database/migrations/osm_parks_001_init.sql",
+    "database/migrations/founders_001_init.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
