@@ -225,6 +225,17 @@
   color: var(--ink-soft);
 }
 
+.propose-candidate.is-listed {
+  border-style: dotted;
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.propose-candidate.is-listed .propose-candidate__detail {
+  color: var(--pine);
+}
+
 .propose-candidate--none {
   border-style: dashed;
 }

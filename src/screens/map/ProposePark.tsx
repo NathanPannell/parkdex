@@ -47,12 +47,18 @@ function candidateDetail(candidate: OsmParkCandidate): string {
   return `${candidate.containsPin ? "Pin is inside" : `${candidate.distanceM} m from the pin`} · ${size}`;
 }
 
+function listedDetail(candidate: OsmParkCandidate): string {
+  const listed = candidate.inCatalogue!;
+  // Name it only when Parkdex calls it something else, so the player recognises it on the map.
+  return listed.name.trim().toLowerCase() === candidateLabel(candidate).trim().toLowerCase() ? "Already on the map" : `Already on the map as ${listed.name}`;
+}
+
 function collection(candidates: OsmParkCandidate[], selected: string | null): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: candidates.map((candidate) => ({
       type: "Feature",
-      properties: { key: keyOf(candidate), selected: keyOf(candidate) === selected },
+      properties: { key: keyOf(candidate), selected: keyOf(candidate) === selected, listed: candidate.inCatalogue !== null },
       geometry: candidate.geometry,
     })),
   };
@@ -99,6 +105,8 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
   const sent = result !== null;
 
   function choose(candidate: OsmParkCandidate | null) {
+    // A park that is already on the map cannot be proposed again.
+    if (candidate?.inCatalogue) return;
     sfx.tap();
     setError(null);
     if (!candidate) {
@@ -191,14 +199,17 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
         id: OSM_FILL,
         type: "fill",
         source: OSM_SOURCE,
-        paint: { "fill-color": ["case", ["get", "selected"], "#ff5a1f", "#2f9e6b"], "fill-opacity": ["case", ["get", "selected"], 0.28, 0.16] },
+        paint: {
+          "fill-color": ["case", ["get", "selected"], "#ff5a1f", ["get", "listed"], "#7a8a81", "#2f9e6b"],
+          "fill-opacity": ["case", ["get", "selected"], 0.28, ["get", "listed"], 0.1, 0.16],
+        },
       });
       map.addLayer({
         id: OSM_LINE,
         type: "line",
         source: OSM_SOURCE,
         paint: {
-          "line-color": ["case", ["get", "selected"], "#ff5a1f", "#1c5b43"],
+          "line-color": ["case", ["get", "selected"], "#ff5a1f", ["get", "listed"], "#7a8a81", "#1c5b43"],
           "line-width": ["case", ["get", "selected"], 3.5, 2],
           "line-dasharray": [2, 1.5],
         },
@@ -303,6 +314,7 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
   const picked = selected ? search.candidates.find((candidate) => keyOf(candidate) === selected) ?? null : null;
   // With outlines on offer, the player picks one or says the park is not on the map.
   const needsChoice = search.state === "done" && search.candidates.length > 0 && !picked && !notListed;
+  const allListed = search.state === "done" && search.candidates.length > 0 && search.candidates.every((candidate) => candidate.inCatalogue);
   const canDraw = !picked && (notListed || search.state === "error" || (search.state === "done" && !search.candidates.length));
 
   async function submit() {
@@ -335,6 +347,8 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
       ? "Tap the map where the park is."
       : picked
         ? "Check the name, then send it."
+        : allListed && !notListed
+        ? "That park is already on the map. For a different one, pick \u201cIt's not on the map\u201d."
         : search.candidates.length && !notListed
         ? "Pick the park's outline, or tap the map to move the pin."
         : "Tap again to move the pin. Drawing an outline is optional.";
@@ -358,7 +372,7 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
       <div className="propose-top card" ref={topCard}>
         <div>
           <span className="eyebrow">Propose a park</span>
-          <p>{result ? result.decision === "approved" ? "Added to the map." : "Sent to the Parkdex team." : instruction}</p>
+          <p>{result ? result.decision === "approved" ? "Added to the map." : result.decision === "already_listed" ? "Already on the map." : "Sent to the Parkdex team." : instruction}</p>
         </div>
         <button className="btn btn--paper btn--icon" onClick={onClose} aria-label="Close park proposal">
           <Icon name="close" size={18} />
@@ -373,6 +387,11 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
               <>
                 <h2>Approved, it's on the map</h2>
                 <p>{result.parkName} is in Parkdex now. Go plant your flag.</p>
+              </>
+            ) : result.decision === "already_listed" ? (
+              <>
+                <h2>It's already on the map</h2>
+                <p>{result.parkName} is in Parkdex already. Go plant your flag there.</p>
               </>
             ) : (
               <>
@@ -428,11 +447,12 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
                         key={keyOf(candidate)}
                         role="radio"
                         aria-checked={selected === keyOf(candidate)}
-                        className={`propose-candidate${selected === keyOf(candidate) ? " is-on" : ""}`}
+                        disabled={candidate.inCatalogue !== null}
+                        className={`propose-candidate${selected === keyOf(candidate) ? " is-on" : ""}${candidate.inCatalogue ? " is-listed" : ""}`}
                         onClick={() => choose(candidate)}
                       >
                         <span className="propose-candidate__name">{candidateLabel(candidate)}</span>
-                        <span className="propose-candidate__detail">{candidateDetail(candidate)}</span>
+                        <span className="propose-candidate__detail">{candidate.inCatalogue ? listedDetail(candidate) : candidateDetail(candidate)}</span>
                       </button>
                     ))}
                     <button
@@ -458,7 +478,7 @@ export function ProposePark({ mapRef, user, initialPin = null, onClose }: Props)
             </label>
             {error && <p className="propose-error" role="alert">{error}</p>}
             <button className="btn btn--block" onClick={() => void submit()} disabled={!pin || !name.trim() || busy || needsChoice}>
-              {busy ? "Sending…" : !pin ? "Drop a pin to continue" : needsChoice ? "Pick the park above" : "Send proposal"}
+              {busy ? "Sending…" : !pin ? "Drop a pin to continue" : needsChoice ? allListed ? "Already on the map" : "Pick the park above" : "Send proposal"}
             </button>
           </>
         )}

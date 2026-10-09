@@ -16,7 +16,11 @@ export type ParkProposal = {
 };
 
 /** What the server decided straight away. Older servers send no review, which means pending. */
-export type ProposalReview = { decision: "approved"; parkId: string; parkName: string } | { decision: "pending" };
+export type ProposalReview =
+  | { decision: "approved"; parkId: string; parkName: string }
+  /** The outline is a park Parkdex already has. */
+  | { decision: "already_listed"; parkId: string; parkName: string }
+  | { decision: "pending" };
 
 /** A park outline from OpenStreetMap near the pin, as `GET /api/osm/parks` returns it. */
 export type OsmParkCandidate = OsmRef & {
@@ -26,6 +30,8 @@ export type OsmParkCandidate = OsmRef & {
   containsPin: boolean;
   distanceM: number;
   geometry: { type: "MultiPolygon"; coordinates: LngLat[][][] };
+  /** Set when this outline is already a Parkdex park; it cannot be proposed again. */
+  inCatalogue: { parkId: string; name: string } | null;
 };
 
 export const MAX_OUTLINE_POINTS = 200;
@@ -45,6 +51,11 @@ function proposalApiOrigin(): string {
   }
 }
 
+function parseListed(value: unknown): OsmParkCandidate["inCatalogue"] {
+  const listed = value as { parkId?: unknown; name?: unknown } | null | undefined;
+  return listed && typeof listed.parkId === "string" && typeof listed.name === "string" ? { parkId: listed.parkId, name: listed.name } : null;
+}
+
 function parseCandidate(value: unknown): OsmParkCandidate | null {
   const item = value as Partial<OsmParkCandidate> | null;
   if (!item || (item.type !== "way" && item.type !== "relation") || typeof item.id !== "number" || !Number.isSafeInteger(item.id)) return null;
@@ -59,6 +70,7 @@ function parseCandidate(value: unknown): OsmParkCandidate | null {
     containsPin: item.containsPin === true,
     distanceM: typeof item.distanceM === "number" && Number.isFinite(item.distanceM) ? item.distanceM : 0,
     geometry,
+    inCatalogue: parseListed(item.inCatalogue),
   };
 }
 
@@ -81,8 +93,8 @@ export async function searchOsmParks(point: LngLat, signal?: AbortSignal, fetche
 
 function parseReview(body: unknown): ProposalReview {
   const review = (body as { review?: Partial<{ decision: unknown; parkId: unknown; parkName: unknown }> } | null)?.review;
-  if (review?.decision === "approved" && typeof review.parkId === "string" && typeof review.parkName === "string") {
-    return { decision: "approved", parkId: review.parkId, parkName: review.parkName };
+  if ((review?.decision === "approved" || review?.decision === "already_listed") && typeof review.parkId === "string" && typeof review.parkName === "string") {
+    return { decision: review.decision, parkId: review.parkId, parkName: review.parkName };
   }
   return { decision: "pending" };
 }

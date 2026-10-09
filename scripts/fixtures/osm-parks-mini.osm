@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A tiny OSM extract for scripts/test_osm_park_index.py: a park way, a reserve relation with a
+     pond hole, a private garden, a recreation ground, and a building that is not a park. -->
+<osm version="0.6" generator="parkdex-test">
+  <node id="1" lat="49.0880" lon="-123.0620" version="1"/>
+  <node id="2" lat="49.0880" lon="-123.0580" version="1"/>
+  <node id="3" lat="49.0900" lon="-123.0580" version="1"/>
+  <node id="4" lat="49.0900" lon="-123.0620" version="1"/>
+  <way id="100" version="1">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/>
+    <tag k="leisure" v="park"/>
+    <tag k="name" v="Paterson Park"/>
+    <tag k="operator" v="City of Delta"/>
+    <tag k="surface" v="grass"/>
+  </way>
+
+  <node id="11" lat="49.1100" lon="-122.9000" version="1"/>
+  <node id="12" lat="49.1100" lon="-122.8800" version="1"/>
+  <node id="13" lat="49.1180" lon="-122.8800" version="1"/>
+  <node id="14" lat="49.1180" lon="-122.9000" version="1"/>
+  <node id="21" lat="49.1120" lon="-122.8950" version="1"/>
+  <node id="22" lat="49.1120" lon="-122.8900" version="1"/>
+  <node id="23" lat="49.1150" lon="-122.8900" version="1"/>
+  <node id="24" lat="49.1150" lon="-122.8950" version="1"/>
+  <way id="201" version="1"><nd ref="11"/><nd ref="12"/><nd ref="13"/><nd ref="14"/><nd ref="11"/></way>
+  <way id="202" version="1"><nd ref="21"/><nd ref="22"/><nd ref="23"/><nd ref="24"/><nd ref="21"/></way>
+  <relation id="200" version="1">
+    <member type="way" ref="201" role="outer"/>
+    <member type="way" ref="202" role="inner"/>
+    <tag k="type" v="multipolygon"/>
+    <tag k="leisure" v="nature_reserve"/>
+    <tag k="name" v="Watershed Park"/>
+  </relation>
+
+  <node id="31" lat="49.0950" lon="-123.0700" version="1"/>
+  <node id="32" lat="49.0950" lon="-123.0695" version="1"/>
+  <node id="33" lat="49.0954" lon="-123.0695" version="1"/>
+  <way id="300" version="1">
+    <nd ref="31"/><nd ref="32"/><nd ref="33"/><nd ref="31"/>
+    <tag k="leisure" v="garden"/>
+    <tag k="access" v="private"/>
+  </way>
+
+  <node id="41" lat="49.0960" lon="-123.0700" version="1"/>
+  <node id="42" lat="49.0960" lon="-123.0680" version="1"/>
+  <node id="43" lat="49.0970" lon="-123.0680" version="1"/>
+  <way id="400" version="1">
+    <nd ref="41"/><nd ref="42"/><nd ref="43"/><nd ref="41"/>
+    <tag k="landuse" v="recreation_ground"/>
+  </way>
+
+  <node id="51" lat="49.0980" lon="-123.0700" version="1"/>
+  <node id="52" lat="49.0980" lon="-123.0698" version="1"/>
+  <node id="53" lat="49.0982" lon="-123.0698" version="1"/>
+  <way id="500" version="1">
+    <nd ref="51"/><nd ref="52"/><nd ref="53"/><nd ref="51"/>
+    <tag k="building" v="yes"/>
+  </way>
+</osm>

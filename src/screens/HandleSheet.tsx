@@ -151,7 +151,7 @@ export function HandleSheet() {
               </p>
               {error && <p className="handle-sheet__error" role="alert">{error}</p>}
               <motion.button whileTap={press} className="btn btn--sun btn--block" type="submit" disabled={busy || (touched && !!problem)}>
-                {busy ? "Saving…" : existing ? "Save handle" : "Claim this handle"}
+                {busy ? "Saving…" : existing ? "Save handle" : "Use this handle"}
               </motion.button>
             </motion.form>
           )}

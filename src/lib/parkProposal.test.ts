@@ -81,9 +81,26 @@ describe("proposal review and OpenStreetMap search", () => {
       ],
     }), { status: 200 }));
     const parks = await searchOsmParks([-123.3636, 48.4126], undefined, fetcher as unknown as typeof fetch);
-    expect(parks).toEqual([{ type: "relation", id: 5, name: "Beacon Hill Park", kind: "leisure=park", areaM2: 750000, containsPin: true, distanceM: 0, geometry }]);
+    expect(parks).toEqual([{ type: "relation", id: 5, name: "Beacon Hill Park", kind: "leisure=park", areaM2: 750000, containsPin: true, distanceM: 0, geometry, inCatalogue: null }]);
     const [url] = fetcher.mock.calls[0] as unknown as [string];
     expect(url).toBe("https://api.example.test/api/osm/parks?lat=48.412600&lng=-123.363600");
+  });
+
+  it("keeps the catalogue park a candidate already is", async () => {
+    const geometry = { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] };
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      parks: [
+        { type: "way", id: 7, name: "Boundary Bay Regional Park", kind: "leisure=park", areaM2: 1, containsPin: true, distanceM: 0, geometry, inCatalogue: { parkId: "regional-metro-vancouver-bou", name: "Boundary Bay" } },
+        { type: "way", id: 8, name: "Odd", kind: "leisure=park", areaM2: 1, containsPin: false, distanceM: 9, geometry, inCatalogue: { parkId: 3 } },
+      ],
+    }), { status: 200 }));
+    const parks = await searchOsmParks([-123.06, 49.01], undefined, fetcher as unknown as typeof fetch);
+    expect(parks.map((park) => park.inCatalogue)).toEqual([{ parkId: "regional-metro-vancouver-bou", name: "Boundary Bay" }, null]);
+  });
+
+  it("reports a proposal for a park that is already on the map", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ id: "x", review: { decision: "already_listed", parkId: "regional-metro-vancouver-bou", parkName: "Boundary Bay" } }), { status: 201 }));
+    expect(await submitParkProposal(proposal, fetcher as unknown as typeof fetch)).toEqual({ decision: "already_listed", parkId: "regional-metro-vancouver-bou", parkName: "Boundary Bay" });
   });
 
   it("explains search failures", async () => {

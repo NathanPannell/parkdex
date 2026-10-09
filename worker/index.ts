@@ -9,6 +9,7 @@ import { deleteAccountData, handleProgressRequest, type ProgressDependencies, ty
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
 import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
+import { createSqlOsmParkTable, type OsmParkTable } from "./osmParkTable.js";
 import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
 import { createProposalModerator } from "./proposalModeration.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
@@ -67,6 +68,8 @@ export interface WorkerDependencies {
   /** Undefined uses the shared moderation module; null turns the model off. */
   proposalModerator?: ProposalModerator | null;
   osmClient?: OsmClient;
+  /** Our own copy of OpenStreetMap park outlines; defaults to kip_osm.parks in DATABASE_URL. */
+  osmParkTable?(env: WorkerEnvironment): OsmParkTable | null;
   osmSearchAllowed?(subjectHash: string): Promise<boolean>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   now?(): number;
@@ -76,6 +79,8 @@ export interface WorkerDependencies {
 const BASIC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Three questions about one proposal; the proposer waits on a spinner with a 30 second budget.
 const PROPOSAL_MODERATION_TIMEOUT_MS = 8_000;
+// Catalogue parks this close to the pin are checked against search results, to mark them "Already on the map".
+const CATALOGUE_MATCH_KM = 5;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(extraHeaders);
@@ -362,6 +367,8 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       return createNeonOsmSearchLimiter(env.DATABASE_URL)(subject);
     },
     osm: () => dependencies.osmClient!,
+    catalogue: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (lat, lng) =>
+      (dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!))).nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
   });
   if (osmResponse) return osmResponse;
   const proposalResponse = await handleParkProposalRequest(request, {
@@ -417,8 +424,11 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
   // One client per instance so its short cache and concurrency cap span requests.
   let osm = dependencies.osmClient ?? null;
+  const table = (env: WorkerEnvironment) => dependencies.osmParkTable
+    ? dependencies.osmParkTable(env)
+    : env.DATABASE_URL ? createSqlOsmParkTable(databaseSqlRunner(env.DATABASE_URL)) : null;
   const withOsm = (env: WorkerEnvironment): WorkerDependencies =>
-    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined) });
+    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined, { table: table(env) }) });
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
       return withRequestAnalytics({

@@ -76,6 +76,16 @@ try {
   await applyMigration(migration('migrations/park_proposals_002_moderation.sql'));
   await applyMigration(migration('migrations/park_proposals_002_moderation.sql'));
   await pool.query("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (0, 'Victoria', -123.36, 48.43), (1, 'Nanaimo', -123.94, 49.17) ON CONFLICT DO NOTHING");
+  // Stands in for the category soft-hide trigger: records what it can see when a park row is inserted.
+  await pool.query(`CREATE TABLE qa_park_insert_view (park_id text PRIMARY KEY, proposal_accepted boolean NOT NULL, draft_from_proposal boolean NOT NULL)`);
+  await pool.query(`CREATE FUNCTION qa_record_park_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      INSERT INTO qa_park_insert_view VALUES (NEW.id,
+        EXISTS (SELECT 1 FROM kip_proposals.parks WHERE published_park_id = NEW.id),
+        EXISTS (SELECT 1 FROM kip_park_drafts.drafts WHERE id = NEW.id AND source ? 'proposal'));
+      RETURN NEW;
+    END $$`);
+  await pool.query('CREATE TRIGGER qa_record_park_insert AFTER INSERT ON public.parks FOR EACH ROW EXECUTE FUNCTION qa_record_park_insert()');
   await assert.rejects(pool.query(
     "INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, longitude, latitude, osm_type) VALUES ($1, $2, $3, 'x', 0, 0, 'way')",
     [randomUUID(), randomUUID(), 'b'.repeat(64)],
@@ -116,6 +126,10 @@ try {
   assert.equal(draft.source.osm.id, osmId);
   log('an approved proposal publishes the park, its full boundary and drive rows, and is accepted');
 
+  const seen = (await pool.query('SELECT proposal_accepted, draft_from_proposal FROM qa_park_insert_view WHERE park_id = $1', [parkId])).rows[0];
+  assert.deepEqual(seen, { proposal_accepted: true, draft_from_proposal: true });
+  log('a trigger on the park insert can tell the park came from an accepted proposal');
+
   const retry = deps();
   assert.deepEqual(await reviewProposal(first, retry.value), outcome);
   assert.equal(retry.calls(), 0);
@@ -124,16 +138,16 @@ try {
 
   const again = await propose('Same woods again', { type: 'relation', id: osmId });
   const duplicate = deps();
-  assert.deepEqual(await reviewProposal(again, duplicate.value), { decision: 'pending' });
+  assert.deepEqual(await reviewProposal(again, duplicate.value), { decision: 'already_listed', parkId, parkName: 'QA Proposal Woods' });
   assert.equal(duplicate.calls(), 0);
   const againStored = (await proposals.list(null)).find((item) => item.id === again.id);
   assert.equal(againStored.decision, 'rejected');
   assert.equal(againStored.status, 'new');
-  log('a second proposal for a live outline waits for the operator');
+  log('a second proposal for a live outline is reported as already on the map and waits for the operator');
 
   const unsure = await propose('Maybe a park', { type: 'relation', id: osmId + 1 }, [-123.209, 48.901]);
   const unsureDeps = deps({ ...APPROVE, park: { choice: 'approve', probabilities: { approve: 0.6, reject: 0.1, unsure: 0.3 } } });
-  unsureDeps.value.osm.feature = async () => ({ ...FEATURE, id: osmId + 1, geometry: { type: 'MultiPolygon', coordinates: [[square(-123.21, 48.9, 0.002)]] } });
+  unsureDeps.value.osm.feature = async () => ({ ...FEATURE, id: osmId + 1, name: 'Maybe Meadow', geometry: { type: 'MultiPolygon', coordinates: [[square(-123.21, 48.9, 0.002)]] } });
   assert.deepEqual(await reviewProposal(unsure, unsureDeps.value), { decision: 'pending' });
   const unsureStored = (await proposals.list('new')).find((item) => item.id === unsure.id);
   assert.equal(unsureStored.decision, 'unsure');

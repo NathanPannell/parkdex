@@ -94,6 +94,7 @@ class AccountReleaseGates(unittest.TestCase):
             "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
             "game_001_init.sql",
             "park_proposals_002_moderation.sql",
+            "osm_parks_001_init.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
@@ -131,6 +132,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
             "database/migrations/content_004_catalogue_release.sql",
+            "database/migrations/content_005_park_visibility.sql",
         ])
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
@@ -176,6 +178,7 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/content_002_authoring.sql",
             "database/migrations/content_003_park_maps_link.sql",
             "database/migrations/content_004_catalogue_release.sql",
+            "database/migrations/content_005_park_visibility.sql",
         ])
 
     def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):
