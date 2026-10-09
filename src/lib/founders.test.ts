@@ -168,11 +168,25 @@ describe("foundPark", () => {
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "already_founded", founder: "sam", retryable: false });
   });
 
+  it("reads the founder's handle from the server's message", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(409, { error: { code: "already_founded", message: "This park already has a founder: @tester_one." }, code: "already_founded", message: "This park already has a founder: @tester_one." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "already_founded", founder: "tester_one" });
+  });
+
+  it("shows the server's reason for other refusals and limits", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "unnamed_park", message: "This park has no name on OpenStreetMap yet, so it can't be founded." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "refused", retryable: false, message: "This park has no name on OpenStreetMap yet, so it can't be founded." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(429, { code: "rate_limited_founding", message: "You've founded a lot of parks today. Try again tomorrow." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "rate_limited", message: "You've founded a lot of parks today. Try again tomorrow." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(401, { code: "authentication_required", message: "Sign in." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "unauthenticated", message: "Sign in again to found a park." });
+  });
+
   it("asks for a handle, and keeps the server's reason for being outside", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(409, { error: { code: "handle_required", message: "Pick a handle" }, code: "handle_required" }));
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "handle_required" });
-    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "not_inside", message: "You need to be inside Paterson Park." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "not_inside", message: "You need to be inside Paterson Park." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "not_in_park", message: "You need to be in the park to found it." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "not_inside", message: "You need to be in the park to found it." });
   });
 
   it("treats a lost connection as offline and retryable", async () => {

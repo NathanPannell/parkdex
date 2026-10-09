@@ -12,9 +12,13 @@ export type FounderCta = { kind: "hidden" } | { kind: "found"; points: number } 
 
 export const FOUNDER_HINT = "Visit the park to become its founder";
 
-/** The cover photo to show instead of the badge, from the freshest summary known. */
-export function summaryCover(state: SummaryState): string | null {
-  return coverImageUrl(state.summary?.coverUrl ?? null);
+/**
+ * The cover photo to show instead of the badge: the freshest summary's, else the one the flag
+ * board already carries, so a founded park's photo shows before its summary arrives.
+ */
+export function summaryCover(state: SummaryState, knownCover: string | null = null): string | null {
+  if (state.status === "ready") return coverImageUrl(state.summary.coverUrl);
+  return coverImageUrl(state.summary?.coverUrl ?? knownCover);
 }
 
 /**

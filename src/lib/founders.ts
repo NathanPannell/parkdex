@@ -57,6 +57,8 @@ export type FounderErrorCode =
   | "rate_limited"
   | "park_not_found"
   | "invalid_request"
+  /** Any other refusal the server explains itself, such as an unnamed park. */
+  | "refused"
   | "unavailable";
 
 export class FounderError extends Error {
@@ -81,12 +83,14 @@ const MESSAGES: Record<FounderErrorCode, string> = {
   rate_limited: "You've tried a lot of photos. Wait a little and try again.",
   park_not_found: "That park isn't on the map any more.",
   invalid_request: "Parkdex couldn't use that request. Update the app and try again.",
+  refused: "This park can't be founded right now.",
   unavailable: "Try again in a moment.",
 };
 
 // Server codes that map onto ours; anything else falls back on the HTTP status.
 const CODE_ALIASES: Record<string, FounderErrorCode> = {
   unauthenticated: "unauthenticated",
+  authentication_required: "unauthenticated",
   handle_required: "handle_required",
   already_founded: "already_founded",
   not_inside: "not_inside",
@@ -99,6 +103,7 @@ const CODE_ALIASES: Record<string, FounderErrorCode> = {
   rate_limited: "rate_limited",
   rate_limited_osm: "rate_limited",
   rate_limited_founders: "rate_limited",
+  rate_limited_founding: "rate_limited",
   park_not_found: "park_not_found",
   invalid_request: "invalid_request",
   invalid_location: "invalid_request",
@@ -311,10 +316,13 @@ async function errorFrom(response: Response): Promise<FounderError> {
       : status === 429 ? "rate_limited"
         : status === 404 ? "park_not_found"
           : status >= 500 ? "unavailable"
-            : "invalid_request");
-  const founder = handleOf(body.founder) ?? handleOf(nested?.founder) ?? text(body.founderHandle);
+            : status === 409 || status === 413 || status === 422 ? "refused"
+              : "invalid_request");
   // The server writes player-facing messages for refusals; keep ours for sign-in and outages.
   const serverMessage = text(body.message) ?? text(nested?.message);
+  // A taken park names its founder in the message ("...: @robin.") when no field carries it.
+  const founder = handleOf(body.founder) ?? handleOf(nested?.founder) ?? text(body.founderHandle)
+    ?? (code === "already_founded" ? serverMessage?.match(/@([a-z0-9_]{3,20})/)?.[1] ?? null : null);
   const useServer = serverMessage && serverMessage.length <= 200 && status >= 400 && status < 500 && code !== "unauthenticated" && code !== "invalid_request";
   return new FounderError(code, status, useServer ? serverMessage : MESSAGES[code], founder);
 }

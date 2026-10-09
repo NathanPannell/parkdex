@@ -62,7 +62,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const content = useContent();
   const game = useGame();
   const summary = useParkSummary(park.id, game.accountId);
-  const cover = summaryCover(summary);
+  const cover = summaryCover(summary, game.flags?.founders.get(park.id)?.coverUrl ?? null);
   const [coverFailed, setCoverFailed] = useState(false);
   const showCover = !!cover && !coverFailed;
   const founder = founderCta(summary, insideForFounding, canFound);

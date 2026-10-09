@@ -2,7 +2,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../accounts/AuthProvider";
 import { isNative } from "../native";
-import { fetchFlags, fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle, type GameMe, type GamePlayer, type ParkFlag } from "./client";
+import { fetchFlags, fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle, type GameMe, type GamePlayer, type ParkFlag, type ParkFounder } from "./client";
 
 /**
  * The signed-in player's game state from `/api/game/me`. V1 is online only, so this lives
@@ -15,6 +15,8 @@ export type FlagsStatus = "loading" | "ready" | "offline" | "error";
 /** Flags currently flying, with the server clock they were read against. */
 export type FlagBoard = {
   byPark: ReadonlyMap<string, ParkFlag>;
+  /** Founded parks and their cover photos, read with the flags. */
+  founders: ReadonlyMap<string, ParkFounder>;
   /** Milliseconds to add to this device's clock to get the server's. */
   clockOffset: number;
 };
@@ -65,6 +67,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const serverTime = Date.parse(board.serverTime);
         setFlags({
           byPark: new Map(board.flags.map((flag) => [flag.parkId, flag])),
+          founders: new Map(board.founders.map((founder) => [founder.parkId, founder])),
           clockOffset: Number.isFinite(serverTime) ? serverTime - Date.now() : 0,
         });
         setFlagsStatus("ready");

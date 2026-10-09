@@ -45,4 +45,10 @@ describe("summaryCover", () => {
     expect(summaryCover({ status: "loading", summary: founded })).toBe("https://api.example.test/api/parks/p/cover/abc.jpg");
     expect(summaryCover({ status: "ready", summary: open })).toBeNull();
   });
+
+  it("falls back on the flag board's cover until the summary answers", () => {
+    expect(summaryCover({ status: "loading", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
+    expect(summaryCover({ status: "error", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
+    expect(summaryCover({ status: "ready", summary: open }, "/api/parks/p/cover/def.jpg")).toBeNull();
+  });
 });
