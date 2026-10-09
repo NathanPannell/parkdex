@@ -9,7 +9,7 @@ vi.mock("./accounts/authClient", () => ({
 }));
 
 const {
-  FounderError, checkFlags, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
+  FounderError, checkFlags, foundBackAction, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
 } = await import("./founders");
 type ContainingPark = import("./founders").ContainingPark;
 
@@ -242,5 +242,15 @@ describe("helpers", () => {
     expect(isFreshFix({ at: 1_000 }, 31_000)).toBe(true);
     expect(isFreshFix({ at: 1_000 }, 31_001)).toBe(false);
     expect(isFreshFix(null)).toBe(false);
+  });
+});
+
+describe("foundBackAction", () => {
+  it("steps back from the camera and answers to the scan result, and closes from the scan and the celebration", () => {
+    expect(foundBackAction("camera")).toBe("results");
+    expect(foundBackAction("rejected")).toBe("results");
+    expect(foundBackAction("retry")).toBe("results");
+    for (const step of ["locating", "scanning", "results", "problem", "taken", "founded"] as const) expect(foundBackAction(step)).toBe("close");
+    expect(foundBackAction("checking")).toBe("stay");
   });
 });

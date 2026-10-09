@@ -6,10 +6,11 @@ import { Icon, type IconName } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { PhotoCapture } from "../../components/PhotoCapture";
 import { useAuth } from "../../lib/accounts/AuthProvider";
+import { handleBack, useBackHandler } from "../../lib/backStack";
 import { insidePark } from "../../lib/boundaries";
 import { buzz, sfx } from "../../lib/feedback";
 import {
-  canFound, checkFlags, defaultPark, formatHectares, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, scanParks, targetFor,
+  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, scanParks, targetFor,
   type ContainingPark, type DeviceFix, type FoundResult, type FoundTarget, type PhotoFlag,
 } from "../../lib/founders";
 import { createVisitId } from "../../lib/game/client";
@@ -292,6 +293,23 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
     });
     return () => window.cancelAnimationFrame(frame);
   }, [mapRef, choice?.key, step.kind]);
+
+  // Back and Escape walk back through the flow: answers and the camera return to the scan result,
+  // anything else closes it. The photo review steps back to the camera first (PhotoCapture).
+  useBackHandler(() => {
+    const action = foundBackAction(step.kind);
+    if (action === "close") onClose();
+    else if (action === "results") setStep({ kind: "results" });
+  });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || game.handleRequest) return;
+      event.preventDefault();
+      handleBack();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [game.handleRequest]);
 
   async function freshPosition(): Promise<DeviceFix> {
     const known = fixRef.current;

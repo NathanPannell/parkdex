@@ -301,6 +301,26 @@ export function coverImageUrl(coverUrl: string | null | undefined): string | nul
   }
 }
 
+export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "founded";
+
+/**
+ * Where back (the Android button or Escape) goes from each founding step. The photo review
+ * inside the camera steps back to the camera itself, before this applies.
+ */
+export function foundBackAction(step: FoundStepKind): "close" | "results" | "stay" {
+  switch (step) {
+    case "camera":
+    case "rejected":
+    case "retry":
+      return "results";
+    // The photo is with the server; leaving now would hide its answer.
+    case "checking":
+      return "stay";
+    default:
+      return "close";
+  }
+}
+
 // ------------------------------------------------------------------ requests
 
 type Sender = (path: string, init: RequestInit) => Promise<Response>;

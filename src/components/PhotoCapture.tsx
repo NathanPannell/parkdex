@@ -3,6 +3,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { Icon } from "./Icon";
 import { Kip } from "./Kip";
 import { buzz, sfx } from "../lib/feedback";
+import { useBackHandler } from "../lib/backStack";
 import { takeNativePhoto, useLiveCamera, type Facing } from "../lib/camera";
 import { isNative } from "../lib/native";
 import { encodePhoto, encodePhotoBlob, encodePhotoDataUrl, MAX_PHOTO_EDGE, type EncodedPhoto } from "../lib/photoEncode";
@@ -29,6 +30,8 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
+  // Back from the photo review returns to the camera.
+  useBackHandler(() => setPhoto(null), !!photo);
 
   async function prepare(work: () => Promise<EncodedPhoto | null> | EncodedPhoto | null) {
     setBusy(true);
