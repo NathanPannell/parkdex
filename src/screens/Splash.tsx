@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { motion, useIsPresent } from "motion/react";
 import { useEffect } from "react";
 import { Kip } from "../components/Kip";
 import { useStore } from "../lib/store";
@@ -7,6 +7,9 @@ const WORD = "parkdex".split("");
 
 export function Splash() {
   const { state, dispatch } = useStore();
+  // While the splash fades out it still covers the screen underneath; let taps through so
+  // onboarding's Skip and Next work the moment they appear.
+  const present = useIsPresent();
   const next = () => {
     if (!state.startupReady) return;
     dispatch({ type: "go", screen: state.onboarded ? "map" : "onboarding" });
@@ -22,6 +25,7 @@ export function Splash() {
     <motion.div
       className="screen splash"
       onClick={next}
+      style={{ pointerEvents: present ? "auto" : "none" }}
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.08, filter: "blur(6px)" }}
       transition={{ duration: 0.45 }}
