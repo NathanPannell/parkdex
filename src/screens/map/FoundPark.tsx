@@ -1,6 +1,7 @@
 import { LngLatBounds, Marker, type GeoJSONSource, type Map as MLMap, type MapMouseEvent } from "maplibre-gl";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { PhotoCapture } from "../../components/PhotoCapture";
@@ -98,6 +99,11 @@ function candidateDetail(park: ContainingPark): string {
   if (park.founder) return founderLine(park.founder.handle);
   const size = formatHectares(park.areaM2);
   return park.inCatalogue ? `On the map, no founder yet · ${size}` : `New to Parkdex · ${size}`;
+}
+
+/** Full-screen steps sit above the bottom bar, which the map screen does not own. */
+function AboveNav({ children }: { children: ReactNode }) {
+  return createPortal(children, document.querySelector(".device") ?? document.body);
 }
 
 /**
@@ -370,7 +376,11 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   }
 
   if (step.kind === "founded" && photo) {
-    return <FoundCelebration result={step.result} photo={photo.dataUrl} flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null} onClose={onClose} />;
+    return (
+      <AboveNav>
+        <FoundCelebration result={step.result} photo={photo.dataUrl} flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null} onClose={onClose} />
+      </AboveNav>
+    );
   }
 
   const allFounded = !park && step.kind === "results" && parks.length > 0 && !parks.some(canFound);
@@ -485,80 +495,82 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         </motion.div>
       )}
 
-      <AnimatePresence>
-        {step.kind === "camera" && choice && (
-          <PhotoCapture
-            key="camera"
-            place={`Inside ${choice.label}`}
-            hint="Get the park in the shot, with no people in it. This becomes the park's cover photo."
-            caption={`${choice.label} · ${new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`}
-            onClose={() => setStep({ kind: "results" })}
-            onUse={(picture) => {
-              setPhoto(picture);
-              void check(picture, choice.target);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      <AboveNav>
+        <AnimatePresence>
+          {step.kind === "camera" && choice && (
+            <PhotoCapture
+              key="camera"
+              place={`Inside ${choice.label}`}
+              hint="Get the park in the shot, with no people in it. This becomes the park's cover photo."
+              caption={`${choice.label} · ${new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`}
+              onClose={() => setStep({ kind: "results" })}
+              onUse={(picture) => {
+                setPhoto(picture);
+                void check(picture, choice.target);
+              }}
+            />
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {busyStep && photo && (
-          <motion.div key="check" className="found-check" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}`} initial={{ scale: 0.9, rotate: 0 }} animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}>
-              <div className="polaroid__img" style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
-                <img src={photo.dataUrl} alt="Your photo" />
-                {step.kind === "checking" && <span className="found-check__scan" aria-hidden="true" />}
-              </div>
-              <span className="polaroid__caption">{choice?.label ?? ""}</span>
-            </motion.div>
-
-            <div className="found-check__panel card" role={step.kind === "checking" ? "status" : "alert"}>
-              {step.kind === "checking" ? (
-                <div className="found-status">
-                  <span className="found-status__spinner" aria-hidden="true" />
-                  <div>
-                    <strong>Checking your photo</strong>
-                    <span>This takes a few seconds.</span>
-                  </div>
+        <AnimatePresence>
+          {busyStep && photo && (
+            <motion.div key="check" className="found-check" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}`} initial={{ scale: 0.9, rotate: 0 }} animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}>
+                <div className="polaroid__img" style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
+                  <img src={photo.dataUrl} alt="Your photo" />
+                  {step.kind === "checking" && <span className="found-check__scan" aria-hidden="true" />}
                 </div>
-              ) : step.kind === "rejected" ? (
-                <>
-                  <strong className="found-check__title">{step.outcome === "unsure" ? "We couldn't tell" : "This photo can't be the cover"}</strong>
-                  <ul className="found-flags">
-                    {step.flags.map((flag) => (
-                      <li key={flag.code}>
-                        <span className="found-flags__icon"><Icon name={FLAG_ICONS[flag.code] ?? "camera"} size={18} /></span>
-                        <span>{flag.message}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="found-row">
-                    <button className="btn btn--sm" onClick={openCamera}><Icon name="camera" size={16} /> Retake</button>
-                    <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                <span className="polaroid__caption">{choice?.label ?? ""}</span>
+              </motion.div>
+
+              <div className="found-check__panel card" role={step.kind === "checking" ? "status" : "alert"}>
+                {step.kind === "checking" ? (
+                  <div className="found-status">
+                    <span className="found-status__spinner" aria-hidden="true" />
+                    <div>
+                      <strong>Checking your photo</strong>
+                      <span>This takes a few seconds.</span>
+                    </div>
                   </div>
-                </>
-              ) : step.kind === "retry" ? (
-                <>
-                  <strong className="found-check__title">{step.message}</strong>
-                  <span className="found-check__detail">Your photo is kept here. Nothing was saved yet.</span>
-                  <div className="found-row">
-                    <button className="btn btn--sm" onClick={() => choice && void check(photo, choice.target)}><Icon name="refresh" size={16} /> Try again</button>
-                    <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
-                  </div>
-                </>
-              ) : step.kind === "taken" ? (
-                <>
-                  <strong className="found-check__title">{founderLine(step.founder)}</strong>
-                  <span className="found-check__detail">Someone got here first. You can still plant your flag.</span>
-                  <div className="found-row">
-                    <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Back to the map</button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                ) : step.kind === "rejected" ? (
+                  <>
+                    <strong className="found-check__title">{step.outcome === "unsure" ? "We couldn't tell" : "This photo can't be the cover"}</strong>
+                    <ul className="found-flags">
+                      {step.flags.map((flag) => (
+                        <li key={flag.code}>
+                          <span className="found-flags__icon"><Icon name={FLAG_ICONS[flag.code] ?? "camera"} size={18} /></span>
+                          <span>{flag.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="found-row">
+                      <button className="btn btn--sm" onClick={openCamera}><Icon name="camera" size={16} /> Retake</button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                    </div>
+                  </>
+                ) : step.kind === "retry" ? (
+                  <>
+                    <strong className="found-check__title">{step.message}</strong>
+                    <span className="found-check__detail">Your photo is kept here. Nothing was saved yet.</span>
+                    <div className="found-row">
+                      <button className="btn btn--sm" onClick={() => choice && void check(photo, choice.target)}><Icon name="refresh" size={16} /> Try again</button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                    </div>
+                  </>
+                ) : step.kind === "taken" ? (
+                  <>
+                    <strong className="found-check__title">{founderLine(step.founder)}</strong>
+                    <span className="found-check__detail">Someone got here first. You can still plant your flag.</span>
+                    <div className="found-row">
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Back to the map</button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </AboveNav>
     </div>
   );
 }
