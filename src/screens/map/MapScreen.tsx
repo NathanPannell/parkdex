@@ -7,7 +7,7 @@ import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
 import { Flag } from "../../components/Flag";
-import { parkContaining, useBoundaries } from "../../lib/boundaries";
+import { insidePark, parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
 import { estimateTrip } from "../../lib/drive";
@@ -15,14 +15,16 @@ import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, typ
 import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
 import { flagAgeDays } from "../../lib/game/flag";
+import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { useStore, type Screen } from "../../lib/store";
-import { useContent, useContentStatus } from "../../lib/content/provider";
+import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
 import { MapView, type MapLongPress } from "./MapView";
 import { PressMenu } from "./PressMenu";
-import { ProposePark } from "./ProposePark";
+import { FoundPark } from "./FoundPark";
+import { forgetSummaries } from "../../lib/parkSummary";
 import { DownloadMaps } from "./DownloadMaps";
 import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
 import { isFeatureEnabled } from "../../lib/appConfig";
@@ -56,8 +58,8 @@ export function MapScreen() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
-  // Truthy while proposing; holds the long-pressed spot when the proposal started there.
-  const [proposing, setProposing] = useState<{ pin: LngLat | null } | null>(null);
+  // Truthy while founding; holds the park when it started from that park's sheet.
+  const [founding, setFounding] = useState<{ parkId: string | null } | null>(null);
   const [downloadingMaps, setDownloadingMaps] = useState(false);
   const downloadReturn = useRef<Screen | null>(null);
   const downloadCamera = useRef<{
@@ -77,6 +79,7 @@ export function MapScreen() {
 
   const game = useGame();
   const visit = useVisit();
+  const runtime = useContentRuntime();
   const { user, selectedId, tripId } = state;
   // Every park in the catalogue can carry a flag, with or without badge art.
   const parks = useMemo(() => content?.parks ?? [], [content?.parks]);
@@ -180,7 +183,7 @@ export function MapScreen() {
         map.jumpTo({ center: camera.center, zoom: 6.8, bearing: camera.bearing, pitch: camera.pitch, padding: { top: 0, right: 0, bottom: 0, left: 0 } });
       }
       select(null);
-      setProposing(null);
+      setFounding(null);
       setPressMenu(null);
       setDownloadingMaps(true);
     };
@@ -205,6 +208,14 @@ export function MapScreen() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuOpen]);
+
+  const pendingFocus = useRef<string | null>(null);
+  useEffect(() => {
+    const id = pendingFocus.current;
+    if (!id || !content?.parkById.has(id)) return;
+    pendingFocus.current = null;
+    dispatch({ type: "focus", id });
+  }, [content?.parkById]);
 
   // The "focus" request comes from the collection screen or deep links.
   useEffect(() => {
@@ -315,6 +326,32 @@ export function MapScreen() {
     visit.start(id);
   }
 
+  // Founding needs an account and a handle, like planting a flag.
+  function startFounding(parkId: string | null) {
+    setMenuOpen(false);
+    const open = () => {
+      dispatch({ type: "select", id: null });
+      setFounding({ parkId });
+    };
+    const step = nextVisitStep(visit.signedIn, game.me);
+    if (step === "sign-in") {
+      dispatch({ type: "select", id: null });
+      dispatch({ type: "go", screen: "account" });
+    } else if (step === "pick-handle") {
+      game.openHandleSheet({ onDone: open });
+    } else {
+      open();
+    }
+  }
+
+  function finishFounding(showParkId?: string) {
+    setFounding(null);
+    if (!showParkId) return;
+    // A park that was new a moment ago may still be on its way in the content update.
+    if (content?.parkById.has(showParkId)) dispatch({ type: "focus", id: showParkId });
+    else pendingFocus.current = showParkId;
+  }
+
   function openPressMenu(press: MapLongPress) {
     setMenuOpen(false);
     setDemoOpen(false);
@@ -343,8 +380,8 @@ export function MapScreen() {
       tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
       route={content ? route : null}
-      onSelect={content && !proposing && !downloadingMaps ? select : () => {}}
-      onLongPress={content && !proposing && !downloadingMaps && !selected && !simulating ? openPressMenu : undefined}
+      onSelect={content && !founding && !downloadingMaps ? select : () => {}}
+      onLongPress={content && !founding && !downloadingMaps && !selected && !simulating ? openPressMenu : undefined}
       visible={state.screen === "map"}
     />
   );
@@ -383,11 +420,34 @@ export function MapScreen() {
     );
   }
 
-  if (proposing) {
+  if (founding) {
+    const target = founding.parkId ? content.parkById.get(founding.parkId) ?? null : null;
     return (
       <div className="screen map-screen">
         {mapView}
-        <ProposePark mapRef={mapRef} user={user} initialPin={proposing.pin} onClose={() => setProposing(null)} />
+        <FoundPark
+          mapRef={mapRef}
+          park={target}
+          boundary={target ? bounds?.byId.get(target.id) : undefined}
+          user={user}
+          hasFix={hasUsableGpsFix}
+          onLocated={(fix) => {
+            // Builds without live tracking still show the dot where the scan happened.
+            if (!TRACKS_REAL_LOCATION) dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy });
+          }}
+          onSignIn={() => {
+            setFounding(null);
+            dispatch({ type: "go", screen: "account" });
+          }}
+          onFounded={() => {
+            // The new park, its founder and today's flag arrive through the normal refreshes.
+            forgetSummaries();
+            void runtime.retry().catch(() => {});
+            void game.refresh();
+            void game.refreshFlags();
+          }}
+          onClose={finishFounding}
+        />
       </div>
     );
   }
@@ -495,8 +555,8 @@ export function MapScreen() {
               <Icon name="gear" size={20} /> Settings
             </button>
             {isFeatureEnabled("parkProposals") && (
-              <button role="menuitem" onClick={() => { setMenuOpen(false); select(null); setProposing({ pin: null }); }}>
-                <Icon name="pinPlus" size={20} /> Propose a park
+              <button role="menuitem" onClick={() => { select(null); startFounding(null); }}>
+                <Icon name="flagPlus" size={20} /> Found a park
               </button>
             )}
             {!FIELD && (
@@ -514,16 +574,10 @@ export function MapScreen() {
             key={`${pressMenu.point.x},${pressMenu.point.y}`}
             mapRef={mapRef}
             point={pressMenu.point}
-            canPropose={isFeatureEnabled("parkProposals")}
             onClose={() => setPressMenu(null)}
             onFeedback={() => {
               setPressMenu(null);
               dispatch({ type: "feedback", open: true });
-            }}
-            onPropose={() => {
-              setPressMenu(null);
-              select(null);
-              setProposing({ pin: pressMenu.lngLat });
             }}
           />
         )}
@@ -645,6 +699,10 @@ export function MapScreen() {
               holder={visit.holderOf(selected.id)}
               flagDays={flagDays(selected.id)}
               visitLabel={visit.labelFor(selected.id)}
+              signedIn={visit.signedIn}
+              insideForFounding={insidePark(user, bounds?.byId.get(selected.id), hasUsableGpsFix ? state.accuracy ?? 0 : 0)}
+              canFound={isFeatureEnabled("parkProposals")}
+              onFound={() => startFounding(selected.id)}
               onClose={() => select(null)}
               onGo={startTrip}
               onCheckIn={() => checkIn(selected.id)}
