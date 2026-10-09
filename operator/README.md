@@ -34,7 +34,10 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
   - Hide and unhide are one click (`content_park_hidden`, source `operator`, `docs/park-visibility.md`). Delete asks first, lists what goes with the park and recommends Hide; it deletes the park, its draft and (by cascade) its founder in one content revision, and leaves visits and tenures as history. Parks in the enrichment queue cannot be deleted.
   - "Remove founder and cover" deletes the founder row (and the founder bonus) so the park can be founded again; "Replace cover" stores a JPEG with its metadata removed.
   - Create from OSM prefills name, category guess, nearest region and outline for an outline that is not in Parkdex, and publishes it with `publishStatements` as founding does.
-- **Analytics:** placeholder pages for the headline numbers, the accounts table and the event explorer (#135).
+- **Analytics:** follows the database toggle.
+  - *Overview:* headline numbers with period deltas (accounts, signed-in players per day, week and month, handles, parks founded, visits by outcome, photo approve rate, open feedback) and daily charts drawn with uPlot. Signed-in players are accounts with a server event in the window.
+  - *Accounts:* a paged table that never shows emails; the detail panel masks the email and each reveal is recorded in `kip_account.security_events`. **Delete account** marks the account deleting and signs it out, then runs the app's own cleanup (`deleteAccountData`, then `completeDeletion` in `worker/accounts`), so private photos go through the photo service of the same environment. Deletions waiting on the photo service are listed with a Resume button.
+  - *Events:* server events from `kip_analytics.events` with filters, an hourly or daily histogram, expandable rows and a CSV export of up to 50,000 rows (db_read and db_write are hidden unless asked for), and app events from PostHog's query API through fixed HogQL templates plus a guarded SELECT-only box with a forced LIMIT. The PostHog key never reaches the browser; without it the tab shows the setup steps.
 - **App and updates:** Build config edits rows in `kip_app_config.builds` (each build's server, feature flags, and minimum and latest builds), with a short glossary. Installed apps read it from production, so it always uses production and ignores the database toggle. The retired `rankProgression` and `parkProposals` flags are no longer offered for new rows; `worker/appConfig.ts` still lists them because installed builds may read them. Updates (also production only) shows each over-the-air channel's pointer and what installed builds do with it, the bundles in R2, the publish history (`kip_app_config.ota_publishes`, migration `app_config_003`) and a setup checklist. It can point a channel at a bundle already in R2, guarded by generation, ETag and native build checks with readback through R2 and the CDN (`server/app/ota.ts`, `docs/ota-updates.md`). New bundles still come from `scripts/publish-app-bundle.mjs --apply --record`.
 
 Old links redirect: `/proposals*` to `/parks` and `/builds` to `/app/builds`. The Proposals queue, Import from map, Drafts pages and badge upload are retired. `server/drafts.ts` stays only for `publishStatements`, which park founding (`worker/founders-store.ts`, `worker/parkPublish.ts`) and `scripts/qa-founders-sql.mjs` import.
@@ -70,6 +73,7 @@ Three integration tests run against the real content triggers when their variabl
 - `server/parks/liveParks.pg.test.ts` (`OPERATOR_PARKS_TEST_DATABASE_URL`): live park edits.
 - `server/parks/manager.pg.test.ts` (`OPERATOR_PARK_MANAGER_TEST_DATABASE_URL`): the park manager routes over every deploy migration, including hide and unhide, delete, create from OSM, founder moderation and the 409.
 - `server/app/history.pg.test.ts` (`OPERATOR_OTA_TEST_DATABASE_URL`): the over-the-air publish history. It drops and recreates `kip_app_config` in its database.
+- `server/analytics/analytics.pg.test.ts` (`OPERATOR_ANALYTICS_TEST_DATABASE_URL`): the analytics queries and operator account deletion, against every deploy migration. Use a fresh database for each run.
 
 The feedback archive and retention SQL run in the root SQL QA (`scripts/qa-feedback-archive-sql.mjs`, part of `npm run test:sql`).
 
@@ -89,6 +93,11 @@ Runtime environment variables (Preview target only):
 | `CLOUDFLARE_API_TOKEN` | Optional. R2 read and write on the content bucket, for the Updates bundle list and pointer moves (sensitive) |
 | `CLOUDFLARE_ACCOUNT_ID` | Optional. The Cloudflare account that owns the content bucket |
 | `ASSETS_BUCKET` | Optional. The content bucket, default `parkdex-kip-content` |
+| `KIP_PHOTO_SERVICE_URL`, `KIP_PHOTO_SERVICE_TOKEN` | Optional. The production photo service, the same values the app's API uses (token sensitive). Without them, Delete account is off for production |
+| `STAGING_KIP_PHOTO_SERVICE_URL`, `STAGING_KIP_PHOTO_SERVICE_TOKEN` | Optional. The staging photo service, used while the toggle shows staging |
+| `POSTHOG_PERSONAL_API_KEY` | Optional. A PostHog personal API key with the Query Read scope for the Parkdex project (sensitive). Without it, App events shows the setup steps |
+| `POSTHOG_PROJECT_ID` | Optional. The numeric PostHog project ID |
+| `POSTHOG_APP_HOST` | Optional. Defaults to `https://us.posthog.com` |
 
 Deploy from the `operator` folder after linking it to the `parkdex-operator` Vercel project (`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, or `vercel link`):
 
