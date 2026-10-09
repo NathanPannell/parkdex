@@ -32,6 +32,8 @@ export function BottomNav() {
   const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? state.accuracy : 0;
   // Every park in the catalogue can carry a flag, with or without badge art.
   const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
+  const visited = !!here && visit.visitedToday(here.id);
+  const live = !!here && !visited;
   const tab = tabFor(state.screen);
   const over = tab !== "map";
 
@@ -45,14 +47,14 @@ export function BottomNav() {
   const fab = () => {
     sfx.pop();
     buzz(12);
-    if (here) {
+    if (live && here) {
       visit.start(here.id);
       return;
     }
     dispatch({ type: "go", screen: "map" });
-    // Outside a park the button nudges instead of failing: it shows why.
+    // Outside a park, or after today's visit, the button nudges instead of failing: it shows why.
     const hint = document.querySelector(".fab__hint");
-    hint?.setAttribute("data-reason", "outside-flag");
+    hint?.setAttribute("data-reason", visited ? "visited-today" : "outside-flag");
     hint?.classList.remove("is-on");
     void (hint as HTMLElement | null)?.offsetWidth;
     hint?.classList.add("is-on");
@@ -76,12 +78,12 @@ export function BottomNav() {
         ))}
       </div>
       <motion.button
-        className={`fab ${here ? "fab--live" : ""}`}
+        className={`fab ${live ? "fab--live" : ""} ${visited ? "fab--visited" : ""}`}
         onClick={fab}
         whileTap={{ scale: 0.88 }}
         aria-label={here ? `${visit.labelFor(here.id)} at ${here.short}` : "Plant your flag, get inside a park first"}
       >
-        {here && (
+        {live && (
           <>
             <span className="fab__ring" />
             <span className="fab__ring fab__ring--2" />
@@ -91,7 +93,7 @@ export function BottomNav() {
         <AnimatePresence>
           {here && (
             <motion.span className="fab__label" initial={{ scale: 0, y: 6 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 600, damping: 18 }}>
-              {visit.signedIn ? visitShortLabel(visit.holderOf(here.id)) : "Plant!"}
+              {visit.signedIn ? visitShortLabel(visit.holderOf(here.id), visited) : "Plant!"}
             </motion.span>
           )}
         </AnimatePresence>

@@ -97,16 +97,24 @@ export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulati
   );
 }
 
-export function ArrivalCard({ park, holder, flagDays, visitLabel, onCheckIn, onDismiss }: {
+export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = false, onCheckIn, onDismiss }: {
   park: Park;
   holder: ParkHolder;
   flagDays: number;
   visitLabel: string;
+  /** Already visited today: another visit would not count, so there is nothing to press. */
+  visited?: boolean;
   onCheckIn: () => void;
   onDismiss: () => void;
 }) {
   const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
-  const message = holder.kind === "mine"
+  const message = visited
+    ? holder.kind === "mine"
+      ? "Your flag is flying here. You visited today, so come back tomorrow to check in again."
+      : holder.kind === "other"
+        ? `@${holder.flag.handle} holds it now. You visited today, so come back tomorrow to take it.`
+        : "You visited today. Come back tomorrow to plant your flag."
+    : holder.kind === "mine"
     ? flagDays < 1 ? "You planted your flag here today. It is still flying." : `Your flag has flown here for ${flown}. Check in to keep it up.`
     : holder.kind === "other"
       ? flagDays < 1
@@ -126,8 +134,9 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, onCheckIn, onD
       <div className="arrival__rays">
         <Rays color="#FFC93C" size={520} opacity={0.55} speed={18} />
       </div>
-      <motion.div className="arrival__kip" initial={{ scale: 0, y: 40 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", delay: 0.25, stiffness: 400, damping: 14 }}>
-        <Bubble side="to-right" style={{ position: "relative", marginBottom: 26, whiteSpace: "nowrap" }}>
+      {/* Kip grows from his feet on the card's edge, so the bubble never dips over the card on the way in. */}
+      <motion.div className="arrival__kip" style={{ transformOrigin: "100% 100%" }} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.25, stiffness: 400, damping: 14 }}>
+        <Bubble side="to-right" style={{ position: "relative", marginBottom: 36, whiteSpace: "nowrap" }}>
           KLEEP! You made it!
         </Bubble>
         <Kip pose="cheer" size={92} />
@@ -143,12 +152,18 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, onCheckIn, onD
         </h2>
         <p>{message}</p>
         <AnimatePresence>
-          <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-            <Icon name="flag" /> {visitLabel}
-          </motion.button>
+          {visited ? (
+            <motion.p className="arrival__visited" role="status" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="check" size={18} stroke={3} /> {visitLabel}
+            </motion.p>
+          ) : (
+            <motion.button className="btn btn--block btn--glow" onClick={onCheckIn} initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              <Icon name="flag" /> {visitLabel}
+            </motion.button>
+          )}
         </AnimatePresence>
         <button className="arrival__later" onClick={onDismiss}>
-          Look around first
+          {visited ? "Got it" : "Look around first"}
         </button>
       </div>
     </motion.div>

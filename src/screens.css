@@ -1411,6 +1411,22 @@
   margin-bottom: 14px;
 }
 
+/* Today's visit already counted: a quiet note where the call to action would be. */
+.arrival__card .arrival__visited {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 2.5px dashed rgba(20, 35, 28, 0.35);
+  border-radius: 18px;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .arrival__later {
   display: block;
   width: 100%;

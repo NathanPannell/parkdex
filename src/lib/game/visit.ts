@@ -20,15 +20,37 @@ export function nextVisitStep(signedIn: boolean, me: GameMe | null): VisitStep {
   return "plant";
 }
 
-export function visitLabel(signedIn: boolean, holder: ParkHolder): string {
+// Visits count once per park per local day in Victoria, the field test's town.
+const VICTORIA = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** The America/Vancouver calendar day of a moment, as YYYY-MM-DD, matching the server's local_day. */
+export function victoriaDay(ms: number): string {
+  const parts = Object.fromEntries(VICTORIA.formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/**
+ * Whether this account already visited the park today, so another visit would only say
+ * "already visited". A list read before midnight in Victoria no longer counts after it.
+ */
+export function hasVisitedToday(me: GameMe | null | undefined, parkId: string, now: number): boolean {
+  if (!me?.visitedDay || !me.visitedToday?.length) return false;
+  return me.visitedDay === victoriaDay(now) && me.visitedToday.includes(parkId);
+}
+
+export const VISITED_TODAY_LABEL = "Visited today, back tomorrow";
+
+export function visitLabel(signedIn: boolean, holder: ParkHolder, visited = false): string {
   if (!signedIn) return "Sign in to plant your flag";
+  if (visited) return VISITED_TODAY_LABEL;
   if (holder.kind === "mine") return "Visit your flag";
   if (holder.kind === "other") return `Take it from @${holder.flag.handle}`;
   return "Plant your flag";
 }
 
 /** The short label on the bottom bar's button while standing in a park. */
-export function visitShortLabel(holder: ParkHolder): string {
+export function visitShortLabel(holder: ParkHolder, visited = false): string {
+  if (visited) return "Tomorrow";
   return holder.kind === "mine" ? "Visit" : holder.kind === "other" ? "Take!" : "Plant!";
 }
 

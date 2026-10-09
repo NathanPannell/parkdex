@@ -677,6 +677,7 @@ export function MapScreen() {
             holder={visit.holderOf(here.id)}
             flagDays={flagDays(here.id)}
             visitLabel={visit.labelFor(here.id)}
+            visited={visit.visitedToday(here.id)}
             onCheckIn={() => checkIn(here.id)}
             onDismiss={() => setDismissedArrival(here.id)}
           />

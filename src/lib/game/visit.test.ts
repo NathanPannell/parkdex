@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameMe, ParkFlag } from "./client";
-import { latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, visitHeadline, visitLabel, visitShortLabel } from "./visit";
+import { hasVisitedToday, latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, victoriaDay, visitHeadline, visitLabel, visitShortLabel } from "./visit";
 
 const flag = (parkId: string, handle: string): ParkFlag => ({ parkId, handle, flagSeed: `${handle}-seed`, since: "2026-10-01T00:00:00Z" });
 const flags = new Map([["blueberry", flag("blueberry", "sam")], ["beacon", flag("beacon", "robin")]]);
@@ -23,6 +23,32 @@ describe("park holder", () => {
     expect(visitLabel(true, parkHolder("beacon", flags, "robin"))).toBe("Visit your flag");
     expect(visitShortLabel(parkHolder("blueberry", flags, "robin"))).toBe("Take!");
     expect(visitShortLabel({ kind: "empty" })).toBe("Plant!");
+  });
+});
+
+describe("visited today", () => {
+  const visited: GameMe = { ...me({ handle: "robin", flagSeed: "r" }), visitedToday: ["blueberry"], visitedDay: "2026-10-07" };
+
+  it("counts days in Victoria, as the server does", () => {
+    expect(victoriaDay(Date.parse("2026-10-08T06:30:00Z"))).toBe("2026-10-07");
+    expect(victoriaDay(Date.parse("2026-10-08T07:30:00Z"))).toBe("2026-10-08");
+    expect(victoriaDay(Date.parse("2026-12-01T07:30:00Z"))).toBe("2026-11-30");
+  });
+
+  it("knows a park visited earlier today, until midnight in Victoria", () => {
+    expect(hasVisitedToday(visited, "blueberry", Date.parse("2026-10-07T20:00:00Z"))).toBe(true);
+    expect(hasVisitedToday(visited, "beacon", Date.parse("2026-10-07T20:00:00Z"))).toBe(false);
+    expect(hasVisitedToday(visited, "blueberry", Date.parse("2026-10-08T07:01:00Z"))).toBe(false);
+    expect(hasVisitedToday(me(null), "blueberry", Date.parse("2026-10-07T20:00:00Z"))).toBe(false);
+    expect(hasVisitedToday(null, "blueberry", Date.parse("2026-10-07T20:00:00Z"))).toBe(false);
+  });
+
+  it("offers no take or plant once today's visit counted", () => {
+    const other = parkHolder("blueberry", flags, "robin");
+    expect(visitLabel(true, other, true)).toBe("Visited today, back tomorrow");
+    expect(visitLabel(true, { kind: "empty" }, true)).toBe("Visited today, back tomorrow");
+    expect(visitShortLabel(other, true)).toBe("Tomorrow");
+    expect(visitLabel(false, other, true)).toBe("Sign in to plant your flag");
   });
 });
 
