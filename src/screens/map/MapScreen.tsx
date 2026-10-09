@@ -406,8 +406,8 @@ export function MapScreen() {
           whileTap={{ scale: 0.95 }}
           aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your parks` : "Your parks"}
         >
-          <span className="counter__kip">
-            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={44} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}
+          <span className={player ? "counter__kip counter__kip--flag" : "counter__kip"}>
+            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}
           </span>
           <span className="counter__text">
             {player && game.me ? (

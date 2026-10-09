@@ -643,6 +643,15 @@
   translate: -2px 4px;
 }
 
+/* The flag is a 3:2 cloth with its own outline; a round frame would clip its corners. */
+.counter__kip--flag {
+  width: auto;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
 .counter__text {
   display: flex;
   flex-direction: column;
