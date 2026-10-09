@@ -19,7 +19,8 @@
     "@neondatabase/serverless": "1.1.0",
     "maplibre-gl": "6.11.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "@types/geojson": "7946.0.16",

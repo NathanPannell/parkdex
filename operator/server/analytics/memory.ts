@@ -354,6 +354,11 @@ const DEMO_PARKS: [string, string][] = [
   ["regional-sooke-potholes", "Sooke Potholes Regional Park"], ["regional-mount-work", "Mount Work Regional Park"],
   ["regional-island-view-beach", "Island View Beach Regional Park"], ["municipal-mystic-vale", "Mystic Vale"],
   ["osm-way-118204551", "Cadboro-Gyro Park"], ["osm-way-24433920", "Summit Park"],
+  ["municipal-willows-beach", "Willows Beach Park"], ["regional-mill-hill", "Mill Hill Regional Park"],
+  ["provincial-french-beach", "French Beach Provincial Park"], ["municipal-dallas-road", "Dallas Road Waterfront"],
+  ["regional-lone-tree-hill", "Lone Tree Hill Regional Park"], ["municipal-mount-tolmie", "Mount Tolmie Park"],
+  ["regional-matheson-lake", "Matheson Lake Regional Park"], ["municipal-swan-lake", "Swan Lake Nature Sanctuary"],
+  ["provincial-gowlland-tod", "Gowlland Tod Provincial Park"], ["municipal-cedar-hill", "Cedar Hill Park"],
 ];
 
 const HANDLES = [
@@ -395,11 +400,14 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
   const players = store.accounts.filter((account) => account.handle);
   const holders = new Map<string, MemoryTenure>();
   // Visits play forward in time so plants, holds and takes line up with tenures.
-  const visitTimes = Array.from({ length: 380 }, () => now - Math.floor((next() ** 1.4) * 45 * DAY)).sort((a, b) => a - b);
+  const visitTimes = Array.from({ length: 420 }, () => now - Math.floor((next() ** 1.25) * 58 * DAY)).sort((a, b) => a - b);
   for (const time of visitTimes) {
-    const player = pick(players);
-    const parkId = DEMO_PARKS[Math.floor((next() ** 1.8) * DEMO_PARKS.length)][0];
+    // A few keen players do most of the visiting, and they often return to parks they hold.
+    const player = players[Math.floor((next() ** 1.6) * players.length)];
+    const own = [...holders.values()].filter((tenure) => tenure.holder === player.id && !tenure.endedAt);
+    const parkId = own.length && next() < 0.45 ? pick(own).parkId : DEMO_PARKS[Math.floor((next() ** 1.5) * DEMO_PARKS.length)][0];
     if (Date.parse(player.createdAt) > time) continue;
+    if (store.visits.some((visit) => visit.accountId === player.id && visit.parkId === parkId && localDay(visit.visitedAt) === localDay(time))) continue;
     const open = holders.get(parkId);
     let outcome: MemoryVisit["outcome"];
     let points = 0;
@@ -439,13 +447,15 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
 
   const gameTypes = ["flag_planted", "flag_taken", "flag_held", "visit_already_today", "leaderboard_viewed", "takeover_message_seen", "founder_photo_checked", "park_founded", "handle_set", "flag_fell"];
   const installations = store.accounts.map(() => uuid(next));
-  for (let i = 0; i < 2400; i += 1) {
+  for (let i = 0; i < 2600; i += 1) {
     const signedIn = next() < 0.72;
-    const index = Math.floor(next() * store.accounts.length);
-    const account = signedIn ? store.accounts[index] : null;
-    const received = now - Math.floor((next() ** 1.5) * 30 * DAY);
-    if (account && Date.parse(account.createdAt) > received) continue;
+    // Engagement is uneven: most events come from a handful of accounts.
+    const index = Math.floor((next() ** 2.4) * store.accounts.length);
     const db = next() < 0.58;
+    // Players without a handle have not joined the game yet, so only their queries show up.
+    const account = signedIn && (db || store.accounts[index].handle) ? store.accounts[index] : null;
+    const received = now - Math.floor((next() ** 1.2) * 58 * DAY);
+    if (account && Date.parse(account.createdAt) > received) continue;
     const type = db ? (next() < 0.8 ? "db_read" : "db_write") : pick(gameTypes);
     const route = db ? pick(ROUTES) : type.startsWith("flag") || type === "visit_already_today" ? "POST /api/game/visits"
       : type === "leaderboard_viewed" ? "GET /api/game/leaderboard" : type === "handle_set" ? "POST /api/game/handle"
@@ -477,9 +487,10 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
   }
 
   // One deletion stuck on the photo service, to show resume.
-  const stuck = store.accounts.find((account) => !account.handle);
+  const stuck = store.accounts.find((account) => !account.handle && Date.parse(account.createdAt) < now - 5 * DAY);
   if (stuck) {
     stuck.deletionState = "deleting";
+    for (const session of stuck.sessions) session.revokedAt = at(2 * DAY + 3_600_000);
     store.receipts.push({ receiptId: uuid(next), accountId: stuck.id, status: "pending", createdAt: at(2 * DAY + 3_600_000), photoObjects: 3, attempts: 2, lastError: "Private photo cleanup is incomplete." });
   }
   store.feedbackOpen = 7;
