@@ -565,8 +565,19 @@ export function MapScreen() {
 
       <motion.button
         className="locate card"
-        onClick={recenter}
+        // Recenter as soon as a finger lands, so a tap or a press and hold both work; keyboard
+        // activation still arrives as a click with no pointer detail.
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          recenter();
+        }}
+        onClick={(event) => {
+          if (event.detail === 0) recenter();
+        }}
+        onContextMenu={(event) => event.preventDefault()}
         aria-label="Center on me"
+        style={{ pointerEvents: selected || showArrival ? "none" : "auto" }}
         animate={{ y: selected ? 80 : trip ? -250 : showArrival ? 80 : 0, opacity: selected || showArrival ? 0 : 1 }}
         transition={{ type: "spring", stiffness: 300, damping: 28 }}
       >
