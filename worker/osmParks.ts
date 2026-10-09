@@ -1,16 +1,21 @@
+import { catalogueMatch, type CataloguePark } from "./catalogueMatch.js";
 import { HttpError } from "./validation.js";
 
 /**
  * Park outlines from OpenStreetMap for the "propose a park" flow.
  *
- * Overpass comes first: one tag-and-bounding-box query finds every park-like area the pin is
- * inside or near (including unnamed ones and gardens), then a second query fetches the full
- * geometry of the few we keep. Public Overpass instances are often overloaded, so an endpoint
- * that just failed is skipped for a couple of minutes, and Nominatim is the last fallback: a
- * name search for "park" in a small box around the pin plus /lookup for outlines. Nominatim
- * misses unnamed places and gardens that do not match "park", which is why it is not first.
- * Usage policies: https://dev.overpass-api.de/overpass-doc/en/preface/commons.html and
- * https://operations.osmfoundation.org/policies/nominatim/
+ * Nominatim comes first because it answers in under a second while both public Overpass
+ * instances have been failing for days. It searches for "park" and "nature reserve" in a box a
+ * few kilometres wide (a bounded search only returns features whose centre is in the box, so a
+ * small box misses big parks that contain the pin), fetches every candidate's outline in one
+ * /lookup, and keeps the parks that contain the pin or are near it by real geometry distance.
+ *
+ * Overpass runs alongside as an extra source: it also finds unnamed parks and gardens that a
+ * name search misses, and its results are merged in when it answers by the time Nominatim has.
+ * An Overpass endpoint that fails is skipped for a couple of minutes so it costs nothing while
+ * it is down. If Nominatim fails, the search waits for Overpass instead.
+ * Usage policies: https://operations.osmfoundation.org/policies/nominatim/ and
+ * https://dev.overpass-api.de/overpass-doc/en/preface/commons.html
  */
 
 /** Tried in order; a busy or slow instance hands the request to the next. */
@@ -18,7 +23,9 @@ export const DEFAULT_OVERPASS_URLS = ["https://overpass.private.coffee/api/inter
 export const OSM_USER_AGENT = "Parkdex/1.0 (+https://parkdex.app; park proposals)";
 export const OSM_ATTRIBUTION = "© OpenStreetMap contributors";
 const SEARCH_RADIUS_M = 250;
-const MAX_CANDIDATES = 6;
+const MAX_CANDIDATES = 8;
+/** Parks whose outline is this close to the pin are offered, as well as any that contain it. */
+const NEARBY_M = 1_000;
 const MAX_BBOX_DIAGONAL_M = 20_000;
 // Two attempts must fit in the function's time with the database work around them.
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -30,8 +37,17 @@ const ENDPOINT_COOLDOWN_MS = 2 * 60 * 1000;
 export const DEFAULT_NOMINATIM_URL = "https://nominatim.openstreetmap.org";
 // Nominatim allows at most one request per second; requests are serialised and spaced.
 const NOMINATIM_SPACING_MS = 1_100;
-const NOMINATIM_BOX_M = 600;
-const NOMINATIM_OUTLINES = 4;
+// Half the side of the search box. Parks that contain the pin have their centre within a few km.
+const NOMINATIM_BOX_M = 3_000;
+// When the wide "park" search is cut off at its limit, a tighter one finds the small parks nearby.
+const NOMINATIM_NEAR_BOX_M = 800;
+const NOMINATIM_LIMIT = 40;
+// /lookup takes up to 50 ids in one request.
+const NOMINATIM_LOOKUP_IDS = 50;
+// About 1 m: Nominatim thins the outlines before sending them.
+const NOMINATIM_POLYGON_THRESHOLD = 0.00001;
+// How long a search waits for Overpass once Nominatim has answered.
+const OVERPASS_GRACE_MS = 500;
 
 const LEISURE = ["park", "nature_reserve", "garden", "common", "dog_park"] as const;
 const BOUNDARY = ["protected_area", "national_park"] as const;
@@ -389,11 +405,17 @@ function nominatimFeature(value: unknown, toleranceM: number): OsmFeature | null
 }
 
 /** Inside first, then nearest, then the smaller (more specific) place. */
-function withPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate[] {
+function sortByPin(candidates: OsmCandidate[]): OsmCandidate[] {
+  return candidates.sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
+}
+
+/** The parks that contain the pin or whose outline is within NEARBY_M of it, best first. */
+function nearPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate[] {
   const pin: Position = [lng, lat];
-  return features
+  return sortByPin(features
     .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
-    .sort((a, b) => Number(b.containsPin) - Number(a.containsPin) || a.distanceM - b.distanceM || a.areaM2 - b.areaM2);
+    .filter((candidate) => candidate.containsPin || candidate.distanceM <= NEARBY_M))
+    .slice(0, MAX_CANDIDATES);
 }
 
 /** Worth trying the next endpoint: timeouts, network errors, 429, 5xx, unreadable answers and Overpass runtime errors. */
@@ -415,12 +437,13 @@ function bboxDistanceM(bounds: NonNullable<OverpassElement["bounds"]>, lat: numb
   return Math.hypot(dx * mPerDegLng(lat), dy * M_PER_DEG_LAT);
 }
 
-/** Overpass client with a short in-memory cache and at most two requests in flight per instance. */
 export interface OsmClientOptions {
   now?: () => number;
   timeoutMs?: number;
   /** Gap between Nominatim requests; tests set 0. */
   nominatimSpacingMs?: number;
+  /** How long a search waits for Overpass after Nominatim answers. */
+  overpassGraceMs?: number;
 }
 
 export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = fetch, options: OsmClientOptions = {}): OsmClient {
@@ -429,6 +452,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   const endpoints = overpassEndpoints(env);
   const nominatim = nominatimBase(env);
   const nominatimSpacingMs = options.nominatimSpacingMs ?? NOMINATIM_SPACING_MS;
+  const overpassGraceMs = options.overpassGraceMs ?? OVERPASS_GRACE_MS;
   const coolUntil = new Map<string, number>();
   const cache = new Map<string, { at: number; value: OverpassElement[] }>();
   let active = 0;
@@ -527,32 +551,56 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     }
   }
 
-  /** Outlines for up to a few OSM ids through /lookup, as features. */
-  async function nominatimOutlines(refs: OsmRef[], toleranceM: number): Promise<OsmFeature[] | null> {
-    if (!nominatim || !refs.length) return refs.length ? null : [];
-    const ids = refs.map((ref) => `${ref.type === "way" ? "W" : "R"}${ref.id}`).join(",");
-    const body = await nominatimGet(`${nominatim}/lookup?osm_ids=${ids}&format=geojson&polygon_geojson=1&extratags=1`) as { features?: unknown } | null;
+  /** Outlines for up to 50 OSM ids in one /lookup, as features. Null when Nominatim fails. */
+  async function nominatimOutlines(refs: OsmRef[], toleranceM: number, threshold: number | null): Promise<OsmFeature[] | null> {
+    if (!nominatim) return null;
+    if (!refs.length) return [];
+    const ids = refs.slice(0, NOMINATIM_LOOKUP_IDS).map((ref) => `${ref.type === "way" ? "W" : "R"}${ref.id}`).join(",");
+    const thin = threshold === null ? "" : `&polygon_threshold=${threshold}`;
+    const body = await nominatimGet(`${nominatim}/lookup?osm_ids=${ids}&format=geojson&polygon_geojson=1&extratags=1${thin}`) as { features?: unknown } | null;
     if (!body || !Array.isArray(body.features)) return null;
     return body.features.map((item) => nominatimFeature(item, toleranceM)).filter((feature): feature is OsmFeature => feature !== null);
   }
 
-  async function nominatimSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
-    if (!nominatim) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
-    const dLat = NOMINATIM_BOX_M / M_PER_DEG_LAT, dLng = NOMINATIM_BOX_M / mPerDegLng(lat);
+  /** Park-like ways and relations from one bounded /search, with their bounding boxes. Null when it fails. */
+  async function nominatimFind(q: string, lat: number, lng: number, halfSideM: number): Promise<{ ref: OsmRef; bboxM: number }[] | null> {
+    const dLat = halfSideM / M_PER_DEG_LAT, dLng = halfSideM / mPerDegLng(lat);
     const viewbox = [lng - dLng, lat + dLat, lng + dLng, lat - dLat].map((value) => value.toFixed(5)).join(",");
-    const results = await nominatimGet(`${nominatim}/search?q=park&viewbox=${viewbox}&bounded=1&format=jsonv2&limit=10&extratags=1`);
-    if (!Array.isArray(results)) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
-    const refs: OsmRef[] = [];
+    const results = await nominatimGet(`${nominatim}/search?q=${encodeURIComponent(q)}&viewbox=${viewbox}&bounded=1&format=jsonv2&limit=${NOMINATIM_LIMIT}&extratags=1`);
+    if (!Array.isArray(results)) return null;
+    const found: { ref: OsmRef; bboxM: number }[] = [];
     for (const item of results as Record<string, unknown>[]) {
       const tags = { [String(item.category)]: String(item.type), ...(item.extratags && typeof item.extratags === "object" ? item.extratags as Record<string, string> : {}) };
       const id = Number(item.osm_id);
       if ((item.osm_type !== "way" && item.osm_type !== "relation") || !Number.isSafeInteger(id) || id <= 0 || !parkKind(tags) || !publicPlace(tags)) continue;
-      if (!refs.some((ref) => ref.type === item.osm_type && ref.id === id)) refs.push({ type: item.osm_type, id });
+      // jsonv2 bounding boxes are [south, north, west, east] as strings.
+      const box = Array.isArray(item.boundingbox) ? item.boundingbox.map(Number) : [];
+      const bboxM = box.length === 4 && box.every(Number.isFinite)
+        ? bboxDistanceM({ minlat: box[0], maxlat: box[1], minlon: box[2], maxlon: box[3] }, lat, lng)
+        : 0;
+      found.push({ ref: { type: item.osm_type, id }, bboxM });
     }
+    return found;
+  }
+
+  async function nominatimSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
+    const unavailable = new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
+    if (!nominatim) throw unavailable;
+    // About 10 m of rounding lets nearby retries share the cache.
+    const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
+    const parks = await nominatimFind("park", rlat, rlng, NOMINATIM_BOX_M);
+    if (!parks) throw unavailable;
+    const near = parks.length >= NOMINATIM_LIMIT ? await nominatimFind("park", rlat, rlng, NOMINATIM_NEAR_BOX_M) : [];
+    // Gardens, reserves and protected areas rarely match "park"; one more search covers reserves.
+    const reserves = await nominatimFind("nature reserve", rlat, rlng, NOMINATIM_BOX_M);
+    const byKey = new Map<string, { ref: OsmRef; bboxM: number }>();
+    for (const item of [...(near ?? []), ...parks, ...(reserves ?? [])]) byKey.set(`${item.ref.type}/${item.ref.id}`, item);
+    // A park whose bounding box is farther than NEARBY_M cannot be near by geometry, so skip its outline.
+    const refs = [...byKey.values()].filter((item) => item.bboxM <= NEARBY_M).sort((a, b) => a.bboxM - b.bboxM).map((item) => item.ref);
     if (!refs.length) return [];
-    const features = await nominatimOutlines(refs.slice(0, NOMINATIM_OUTLINES), 3);
-    if (!features) throw new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
-    return withPin(features, lat, lng);
+    const features = await nominatimOutlines(refs, 3, NOMINATIM_POLYGON_THRESHOLD);
+    if (!features) throw unavailable;
+    return nearPin(features, lat, lng);
   }
 
   async function overpassSearch(lat: number, lng: number): Promise<OsmCandidate[]> {
@@ -568,28 +616,41 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       if (!unique.length) return [];
       // The instance that answered the search has the same data, so ask it for the geometry first.
       const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
-      return withPin(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng);
+      return nearPin(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng);
   }
 
   return {
     async search(lat, lng) {
+      // Overpass starts at the same time; while its endpoints are cooling down it settles at once.
+      const overpass = overpassSearch(lat, lng).then((parks) => ({ parks }), (error: unknown) => ({ error }));
+      let primary: OsmCandidate[];
       try {
-        return await overpassSearch(lat, lng);
+        primary = await nominatimSearch(lat, lng);
       } catch (error) {
         if (!(error instanceof HttpError) || error.code !== "osm_unavailable") throw error;
-        return nominatimSearch(lat, lng);
+        const fallback = await overpass;
+        if ("parks" in fallback) return fallback.parks;
+        throw error;
       }
+      const extra = await Promise.race([overpass, wait(overpassGraceMs).then(() => null)]);
+      if (!extra || !("parks" in extra) || !extra.parks.length) return primary;
+      // Overpass outlines come with full tags; keep them where both sources found the park.
+      const merged = new Map<string, OsmCandidate>();
+      for (const park of [...primary, ...extra.parks]) merged.set(`${park.type}/${park.id}`, park);
+      return sortByPin([...merged.values()]).slice(0, MAX_CANDIDATES);
     },
     async feature(ref) {
       // About 1 m keeps the boundary faithful for check-ins while trimming redundant nodes.
+      const features = await nominatimOutlines([ref], 1, null);
+      const found = features?.find((feature) => feature.type === ref.type && feature.id === ref.id);
+      if (found) return found;
       try {
         const [element] = (await run(geometryQuery([ref]))).elements.filter((item) => item.type === ref.type && item.id === ref.id);
         return element ? featureFrom(element, 1) : null;
       } catch (error) {
-        if (!(error instanceof HttpError) || error.code !== "osm_unavailable") throw error;
-        const features = await nominatimOutlines([ref], 1);
-        if (!features) throw error;
-        return features.find((feature) => feature.type === ref.type && feature.id === ref.id) ?? null;
+        // Nominatim answered and did not know the id: it is gone or not a park.
+        if (features && error instanceof HttpError && error.code === "osm_unavailable") return null;
+        throw error;
       }
     },
   };
@@ -602,6 +663,8 @@ export interface OsmRouteHandlers {
   /** Resolves false when this client asked too often. */
   allow(): Promise<boolean>;
   osm(): OsmClient;
+  /** Catalogue parks around the pin, to mark candidates that are already on the map. */
+  catalogue?(lat: number, lng: number): Promise<CataloguePark[]>;
 }
 
 function coordinateParam(value: string | null, min: number, max: number): number {
@@ -618,9 +681,16 @@ export async function handleOsmParksRequest(request: Request, handlers: OsmRoute
   const lat = coordinateParam(url.searchParams.get("lat"), -90, 90);
   const lng = coordinateParam(url.searchParams.get("lng"), -180, 180);
   if (!await handlers.allow()) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a few minutes and try again.");
-  const candidates = await handlers.osm().search(lat, lng);
+  const [candidates, catalogue] = await Promise.all([
+    handlers.osm().search(lat, lng),
+    // Marking is a convenience: without the catalogue every candidate is offered and the review still checks.
+    handlers.catalogue ? handlers.catalogue(lat, lng).catch(() => []) : Promise.resolve([]),
+  ]);
   return handlers.json({
     attribution: OSM_ATTRIBUTION,
-    parks: candidates.map(({ type, id, name, kind, areaM2, containsPin, distanceM, geometry }) => ({ type, id, name, kind, areaM2, containsPin, distanceM, geometry })),
+    parks: candidates.map((candidate) => {
+      const { type, id, name, kind, areaM2, containsPin, distanceM, geometry } = candidate;
+      return { type, id, name, kind, areaM2, containsPin, distanceM, geometry, inCatalogue: catalogueMatch(candidate, catalogue) };
+    }),
   });
 }
