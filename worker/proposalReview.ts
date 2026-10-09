@@ -1,7 +1,8 @@
 import { database } from "./db.js";
 import { distanceToMultiPolygon, interiorPoint, pointInMultiPolygon, type MultiPolygon, type OsmClient, type OsmFeature, type OsmRef } from "./osmParks.js";
-import { FALLBACK_REGION, osmParkId, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { FALLBACK_REGION, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
 import { HttpError } from "./validation.js";
+import { catalogueMatch } from "./catalogueMatch.js";
 
 /**
  * Checks a park proposal with the moderation model and, when the model clearly approves a
@@ -10,11 +11,12 @@ import { HttpError } from "./validation.js";
  */
 
 export const DEFAULT_APPROVE_THRESHOLD = 0.8;
-/** The pin must be inside the outline or within this many metres of it. */
-const MAX_PIN_DISTANCE_M = 300;
+/** The pin must be inside the outline or within this many metres of it, as the search offers. */
+const MAX_PIN_DISTANCE_M = 1_000;
 const MIN_AREA_M2 = 100;
 const MAX_AREA_M2 = 50_000_000;
-const NEARBY_KM = 3;
+// Wide enough to catch a big catalogue park whose centre is a few km from the pin.
+const NEARBY_KM = 5;
 const REGION_KM = 30;
 
 export type Decision = "approved" | "rejected" | "unsure" | "skipped";
@@ -152,7 +154,7 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
         `SELECT p.id, p.name, p.region, p.lat, p.lng, b.feature->'geometry' AS geometry
          FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
          WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
-         ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 40`,
+         ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80`,
         [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng],
       );
       return rows.map((row) => {
@@ -202,7 +204,11 @@ export interface ReviewDependencies {
   now(): Date;
 }
 
-export type ReviewOutcome = { decision: "approved"; parkId: string; parkName: string } | { decision: "pending" };
+export type ReviewOutcome =
+  | { decision: "approved"; parkId: string; parkName: string }
+  /** The outline is a park Parkdex already has; nothing new is published. */
+  | { decision: "already_listed"; parkId: string; parkName: string }
+  | { decision: "pending" };
 
 function distanceKm(a: [number, number], b: [number, number]): number {
   const kx = 111.32 * Math.cos((a[1] * Math.PI) / 180);
@@ -254,8 +260,12 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
   record.nearby = nearby.slice(0, 15).map((park) => ({
     id: park.id, name: park.name, distanceM: Math.round(distanceKm(proposal.point, [park.lng, park.lat]) * 1000), overlaps: overlaps(feature!, park),
   }));
-  const parkId = osmParkId(feature);
-  if (nearby.some((park) => park.id === parkId)) return wait("rejected", "This outline is already a Parkdex park.");
+  // The app marks these as "Already on the map"; this stops one sent anyway, without asking the model.
+  const listed = catalogueMatch(feature, nearby);
+  if (listed) {
+    await wait("rejected", `Already in Parkdex as ${listed.name} (${listed.parkId}).`);
+    return { decision: "already_listed", parkId: listed.parkId, parkName: listed.name };
+  }
 
   record.threshold = deps.threshold;
   const result = await deps.moderate({
@@ -277,9 +287,6 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     await deps.store.record(proposal.id, verdict.decision, record);
     return { decision: "pending" };
   }
-  const overlapping = record.nearby.find((park) => park.overlaps);
-  if (overlapping) return wait("unsure", `The outline overlaps ${overlapping.name}, already in Parkdex.`);
-
   const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, regionFor(nearby, proposal.point), proposal.point);
   try {
     const published = await publishProposalPark(deps.store.sql(), park, proposal.id);
