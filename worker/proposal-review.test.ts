@@ -99,12 +99,14 @@ class FakeSql implements SqlRunner {
 class MemoryReviewStore implements ProposalReviewStore {
   decisions = new Map<string, { decision: Decision; moderation: ModerationRecord }>();
   nearby: NearbyPark[] = [];
+  /** Parks only a wider search (more than 5 km) finds. */
+  wide: NearbyPark[] = [];
   readonly db = new FakeSql();
 
   async state(id: string) {
     return { decision: this.decisions.get(id)?.decision ?? null, publishedParkId: this.db.accepted.get(id) ?? null };
   }
-  async nearbyParks() { return this.nearby; }
+  async nearbyParks(_lat: number, _lng: number, km: number) { return km > 5 ? [...this.nearby, ...this.wide] : this.nearby; }
   async record(id: string, decision: Decision, moderation: ModerationRecord) { this.decisions.set(id, { decision, moderation }); }
   sql() { return this.db; }
 }
@@ -304,6 +306,13 @@ test("a published park never has an empty region, even when the nearest park has
   const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
   await assert.rejects(publishProposalPark(db, { ...park, region: " " }, PROPOSAL.id), /park_incomplete/);
   assert.equal(db.inserted.length, 0);
+});
+
+test("with no catalogue park close by, the region comes from one up to 30 km away", async () => {
+  const { store, deps } = setup();
+  store.wide = [{ id: "regional-metro-vancouver-bou", name: "Boundary Bay Regional Park", region: "Metro Vancouver", lat: 48.55, lng: -123.4, boundary: null }];
+  assert.equal((await reviewProposal(PROPOSAL, deps)).decision, "approved");
+  assert.equal(store.db.inserted[0][7], "Metro Vancouver");
 });
 
 test("a huge outline is thinned to the content size budget but keeps every part and hole", () => {
