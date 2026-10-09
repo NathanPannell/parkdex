@@ -110,6 +110,18 @@ export function setProductAnalyticsAccount(accountId: string | null): void {
   }
 }
 
+/**
+ * A named product event, such as `found_park_completed`. Sent only when the SDK is running;
+ * properties must be plain labels and counts, never photos, positions or personal data.
+ */
+export function captureProductEvent(name: string, properties: Record<string, string | number | boolean | string[] | null> = {}): void {
+  try {
+    client?.capture(name, properties);
+  } catch {
+    // Analytics must never affect the app.
+  }
+}
+
 /** Test hook: forget the running instance. */
 export function resetProductAnalyticsForTests(): void {
   client = null;
