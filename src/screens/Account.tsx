@@ -412,7 +412,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                       ? <>Last synced <time dateTime={lastSyncedTimestamp.dateTime}>{lastSyncedTimestamp.label}</time></>
                       : backupTimestamp
                         ? <>Last backed up <time dateTime={backupTimestamp.dateTime}>{backupTimestamp.label}</time></>
-                        : "Not synced yet"}
+                        : auth.backup.phase === "success" ? "Nothing to back up yet" : "Not synced yet"}
                   </p>
                   {backupStatus && <p className="account-backup-row__status" role="status">{backupStatus}</p>}
                 </div>
