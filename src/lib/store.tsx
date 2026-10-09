@@ -9,7 +9,8 @@ import { isOverTheAirBundle } from "./ota";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
-export type Screen = "splash" | "onboarding" | "map" | "collection" | "camera" | "claim" | "share" | "account" | "settings" | "downloads" | "plant" | "parks" | "leaderboard";
+// "claim" is retired; App sends it back to the map. The old camera check-in still names it.
+export type Screen = "splash" | "onboarding" | "map" | "camera" | "claim" | "account" | "settings" | "downloads" | "plant" | "parks" | "leaderboard";
 
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };
@@ -35,13 +36,12 @@ type State = {
   currentPackageIdentity: string | null;
   selectedId: string | null;
   tripId: string | null;
-  shareClaimId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;
   feedback: FeedbackOrigin | null;
 };
 
-type Action =
+export type Action =
   | { type: "go"; screen: Screen }
   | { type: "installReady"; buildId: string; packageInstallIdentity: string | null; native: boolean; overTheAir?: boolean }
   | { type: "onboarded" }
@@ -51,7 +51,6 @@ type Action =
   | { type: "locationError"; error: string | null }
   | { type: "photo"; photo: string | null }
   | { type: "claim"; ownerKey: string; id: string; claimId: string; at: string; photo: string; parkSnapshot: Park; contentReleaseId: string | null }
-  | { type: "shareClaim"; claimId: string | null }
   | { type: "focus"; id: string | null }
   | { type: "mute" }
   | { type: "feedback"; open: boolean; parkId?: string | null }
@@ -84,7 +83,6 @@ const initial: State = {
   currentPackageIdentity: null,
   selectedId: null,
   tripId: null,
-  shareClaimId: null,
   pendingPhoto: null,
   focusId: null,
   feedback: null,
@@ -157,8 +155,6 @@ export function reducer(state: State, action: Action): State {
       return { ...state, selectedId: action.id };
     case "trip":
       return { ...state, tripId: action.id };
-    case "shareClaim":
-      return { ...state, shareClaimId: action.claimId };
     case "move":
       return { ...state, user: action.user, accuracy: action.accuracy === undefined ? state.accuracy : action.accuracy, locationError: null };
     case "locationError":
@@ -174,7 +170,6 @@ export function reducer(state: State, action: Action): State {
         claimRevision,
         claimRevisionByPark: { ...state.claimRevisionByPark, [action.id]: claimRevision },
         tripId: null,
-        shareClaimId: action.claimId,
         pendingPhoto: null,
       };
     }
@@ -199,10 +194,9 @@ export function reducer(state: State, action: Action): State {
         progressError: null,
         selectedId: null,
         tripId: null,
-        shareClaimId: null,
         pendingPhoto: null,
         focusId: null,
-        screen: ["camera", "claim", "share", "plant"].includes(state.screen) ? "map" : state.screen,
+        screen: ["camera", "claim", "plant"].includes(state.screen) ? "map" : state.screen,
       };
     case "progressLoaded":
       if (state.progressOwnerKey !== action.ownerKey) return state;
@@ -349,7 +343,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     progressError: null,
     selectedId: null,
     tripId: null,
-    shareClaimId: null,
     pendingPhoto: null,
   };
 

@@ -10,6 +10,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
+import { DEMO_TOOLS } from "../lib/demo";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
@@ -210,7 +211,9 @@ function TakeOver() {
       </motion.div>
       <motion.div
         className="ob-take__flag"
-        animate={{ y: [-220, -220, -220, 0, 0, 0], opacity: [0, 0, 1, 1, 1, 0] }}
+        // The flag sits 82 px below the top of this illustration, so it drops from just inside that top edge,
+        // never above it: on short screens it stays on the card instead of flashing past the notch.
+        animate={{ y: [-64, -64, -64, 0, 0, 0], scale: [1.1, 1.1, 1.1, 1, 1, 1], opacity: [0, 0, 1, 1, 1, 0] }}
         transition={{ ...loop, times: [0, 0.4, 0.46, 0.56, 0.95, 1], ease: "easeIn" }}
       >
         <span className="ob-take__pole" />
@@ -501,13 +504,13 @@ export function Onboarding() {
                 <Kip pose="talk" size={110} />
               </div>
               <h2>Kip needs to know when you're in a park.</h2>
-              <p>Your location is only used to check you in inside a park boundary. It never leaves your phone.</p>
+              <p>Kip uses your location to check you're inside a park. It's never shown to other players.</p>
               <button className="btn btn--block" onClick={() => finish(true)}>
                 <Icon name="locate" /> Allow location
               </button>
               {!FIELD && (
                 <button className="permission__alt" onClick={() => finish(false)}>
-                  Use a demo spot in Victoria
+                  {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
                 </button>
               )}
             </motion.div>

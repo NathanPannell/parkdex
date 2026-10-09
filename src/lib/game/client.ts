@@ -16,6 +16,10 @@ export type GameMe = {
   takeovers: Takeover[];
   /** The account's flag seed, sent even before a handle exists (additive to the #76 contract). */
   flagSeed: string | null;
+  /** Parks already visited on the current Victoria day (additive). */
+  visitedToday?: string[];
+  /** When that day ends, from the server, so the list expires at midnight in Victoria (additive). */
+  visitedTodayUntil?: string | null;
 };
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
@@ -122,7 +126,13 @@ export function parseMe(body: unknown): GameMe {
       return parkId && byHandle && byFlagSeed && at ? { parkId, byHandle, byFlagSeed, at } : null;
     }),
     flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
+    visitedToday: Array.isArray(row.visitedToday) ? row.visitedToday.filter((id): id is string => typeof id === "string" && id.length > 0) : [],
+    visitedTodayUntil: instant(row.visitedTodayUntil),
   };
+}
+
+function instant(value: unknown): string | null {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
 export function parseVisit(body: unknown): VisitResult {

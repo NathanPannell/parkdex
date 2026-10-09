@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameMe, ParkFlag } from "./client";
-import { latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, visitHeadline, visitLabel, visitShortLabel } from "./visit";
+import { hasVisitedToday, latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, visitHeadline, visitLabel, visitShortLabel } from "./visit";
 
 const flag = (parkId: string, handle: string): ParkFlag => ({ parkId, handle, flagSeed: `${handle}-seed`, since: "2026-10-01T00:00:00Z" });
 const flags = new Map([["blueberry", flag("blueberry", "sam")], ["beacon", flag("beacon", "robin")]]);
@@ -23,6 +23,32 @@ describe("park holder", () => {
     expect(visitLabel(true, parkHolder("beacon", flags, "robin"))).toBe("Visit your flag");
     expect(visitShortLabel(parkHolder("blueberry", flags, "robin"))).toBe("Take!");
     expect(visitShortLabel({ kind: "empty" })).toBe("Plant!");
+  });
+});
+
+describe("visited today", () => {
+  // The server's end of December 1, 2026 in Victoria, which stays on UTC-7 from November 2026.
+  const visited: GameMe = { ...me({ handle: "robin", flagSeed: "r" }), visitedToday: ["blueberry"], visitedTodayUntil: "2026-12-02T07:00:00.000Z" };
+
+  it("knows a park visited earlier today, until the day the server named ends", () => {
+    expect(hasVisitedToday(visited, "blueberry", Date.parse("2026-12-02T06:59:59Z"))).toBe(true);
+    expect(hasVisitedToday(visited, "beacon", Date.parse("2026-12-02T06:00:00Z"))).toBe(false);
+    expect(hasVisitedToday(visited, "blueberry", Date.parse("2026-12-02T07:00:00Z"))).toBe(false);
+    expect(hasVisitedToday(me(null), "blueberry", Date.parse("2026-12-01T20:00:00Z"))).toBe(false);
+    expect(hasVisitedToday(null, "blueberry", Date.parse("2026-12-01T20:00:00Z"))).toBe(false);
+  });
+
+  it("does not trust a list without an end", () => {
+    expect(hasVisitedToday({ ...visited, visitedTodayUntil: null }, "blueberry", Date.parse("2026-12-01T20:00:00Z"))).toBe(false);
+    expect(hasVisitedToday({ ...visited, visitedTodayUntil: undefined }, "blueberry", Date.parse("2026-12-01T20:00:00Z"))).toBe(false);
+  });
+
+  it("offers no take or plant once today's visit counted", () => {
+    const other = parkHolder("blueberry", flags, "robin");
+    expect(visitLabel(true, other, true)).toBe("Visited today, back tomorrow");
+    expect(visitLabel(true, { kind: "empty" }, true)).toBe("Visited today, back tomorrow");
+    expect(visitShortLabel(other, true)).toBe("Tomorrow");
+    expect(visitLabel(false, other, true)).toBe("Sign in to plant your flag");
   });
 });
 

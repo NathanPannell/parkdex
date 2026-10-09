@@ -1411,6 +1411,22 @@
   margin-bottom: 14px;
 }
 
+/* Today's visit already counted: a quiet note where the call to action would be. */
+.arrival__card .arrival__visited {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 2.5px dashed rgba(20, 35, 28, 0.35);
+  border-radius: 18px;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .arrival__later {
   display: block;
   width: 100%;
@@ -1551,22 +1567,6 @@
 
 .fab__hint::before {
   content: "Get inside a park boundary to check in";
-}
-
-.fab__hint[data-reason="soon"]::before {
-  content: "This park's badge is coming soon";
-}
-
-.fab__hint[data-reason="locked"]::before {
-  content: "This rarity is locked. Open the park for requirements";
-}
-
-.fab__hint[data-reason="progress"]::before {
-  content: "Checking your saved rarity progress";
-}
-
-.fab__hint[data-reason="claimed"]::before {
-  content: "You've already claimed this park";
 }
 
 .fab__hint.is-on {
@@ -1866,15 +1866,6 @@
   flex-direction: column;
 }
 
-.claim__spot {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(50% 36% at 50% 42%, color-mix(in srgb, var(--spot) 35%, transparent), transparent);
-  opacity: 0.6;
-  pointer-events: none;
-  transition: opacity 0.6s;
-}
-
 .claim__glow {
   position: absolute;
   left: 50%;
@@ -1919,36 +1910,6 @@
   box-shadow: 0 4px 0 #b8620f, inset 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
-.claim__photo {
-  position: absolute;
-  z-index: 4;
-  top: calc(var(--safe-top) + 108px);
-  left: 18px;
-  width: 92px;
-  padding: 6px 6px 18px;
-  background: #fffdf8;
-  border-radius: 4px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-}
-
-.claim__photo img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-}
-
-.tape {
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  width: 46px;
-  height: 18px;
-  translate: -50% 0;
-  rotate: 4deg;
-  background: rgba(255, 201, 60, 0.75);
-}
-
 .claim__stage {
   position: relative;
   flex: 1;
@@ -1958,41 +1919,10 @@
   container-type: size;
 }
 
-/* The badge art is a fixed size; shrink it on short screens so it never slides under the foot. */
-@container (max-height: 300px) {
-  .claim__badge {
-    scale: 0.82;
-  }
-}
-
-@container (max-height: 240px) {
-  .claim__badge {
-    scale: 0.66;
-  }
-}
-
 .claim__rays {
   position: absolute;
   display: grid;
   place-items: center;
-}
-
-.claim__badge {
-  position: relative;
-  z-index: 2;
-  filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.45));
-}
-
-.claim__badge-art {
-  position: relative;
-}
-
-.claim__badge-dim {
-  position: absolute;
-  inset: 0;
-  filter: grayscale(1) brightness(0.55) contrast(0.9);
-  will-change: opacity;
-  pointer-events: none;
 }
 
 .claim__flash {
@@ -2001,53 +1931,6 @@
   background: radial-gradient(circle, #fff 0%, rgba(255, 255, 255, 0.6) 30%, transparent 60%);
   pointer-events: none;
   z-index: 3;
-}
-
-.shock {
-  position: absolute;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  border: 6px solid var(--sun);
-}
-
-.orbit {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.orbit span {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  margin: -4px;
-  border-radius: 50%;
-  transform: rotate(var(--a)) translateY(-150px);
-  opacity: 0.55;
-  animation: twinkle 1.6s ease-in-out infinite var(--d);
-}
-
-.orbit--pull span {
-  animation: pull 0.55s ease-in infinite var(--d);
-}
-
-@keyframes twinkle {
-  50% {
-    opacity: 1;
-    transform: rotate(var(--a)) translateY(-160px) scale(1.4);
-  }
-}
-
-@keyframes pull {
-  from {
-    transform: rotate(var(--a)) translateY(-190px) scale(1.4);
-    opacity: 1;
-  }
-  to {
-    transform: rotate(calc(var(--a) + 40deg)) translateY(-30px) scale(0.2);
-    opacity: 0;
-  }
 }
 
 .claim__foot {
@@ -2107,22 +1990,6 @@
   gap: 12px;
 }
 
-.claim__rarity {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.claim__count {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 16px;
-  display: flex;
-  align-items: baseline;
-}
-
 .claim__row {
   display: flex;
   gap: 10px;
@@ -2176,433 +2043,6 @@
 
 .roll__strip span {
   height: 1em;
-}
-
-/* ================= Share ================= */
-
-.share {
-  z-index: 70;
-  background: var(--paper);
-  display: flex;
-  flex-direction: column;
-  padding: var(--safe-top) 20px var(--safe-bottom);
-}
-
-.share__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 52px;
-}
-
-.share__top h2 {
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.share__preview {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  padding: 10px 0;
-}
-
-.story {
-  position: relative;
-  height: min(100%, 470px);
-  aspect-ratio: 9 / 16;
-  border: 2.5px solid var(--ink);
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 6px 0 var(--ink), 0 24px 40px rgba(20, 35, 28, 0.2);
-  color: var(--ink);
-}
-
-.story__pattern {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 2px, transparent 2.5px);
-  background-size: 18px 18px;
-  opacity: 0.6;
-}
-
-.story__brand {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 17px;
-  letter-spacing: -0.03em;
-  color: var(--kip-dark);
-}
-
-.story__brand span {
-  color: var(--ink);
-  opacity: 0.6;
-  font-size: 12px;
-  letter-spacing: 0;
-}
-
-.story__photo {
-  position: absolute;
-  background: #fffdf8;
-  padding: 7px 7px 26px;
-  border-radius: 4px;
-  box-shadow: 0 10px 20px rgba(20, 35, 28, 0.25);
-}
-
-.story__photo img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
-}
-
-.story__photo-caption {
-  position: absolute;
-  bottom: 6px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 11px;
-  color: var(--ink-soft);
-}
-
-.story--polaroid .story__photo {
-  top: 52px;
-  left: 14%;
-  width: 72%;
-  rotate: -4deg;
-}
-
-.story--badge .story__photo {
-  top: 58px;
-  right: 16px;
-  width: 30%;
-  rotate: 8deg;
-}
-
-.story__badge {
-  position: absolute;
-  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.25));
-}
-
-.story--polaroid .story__badge {
-  right: 8px;
-  top: 46%;
-  rotate: 10deg;
-}
-
-.story--badge .story__badge {
-  left: 50%;
-  top: 30%;
-  translate: -50% 0;
-}
-
-.story__text {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 22px;
-  display: flex;
-  flex-direction: column;
-}
-
-.story__text span {
-  font-weight: 800;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  opacity: 0.7;
-}
-
-.story__text strong {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 32px;
-  line-height: 0.95;
-  letter-spacing: -0.03em;
-  margin: 4px 0 6px;
-  max-width: 78%;
-}
-
-.story__text em {
-  font-style: normal;
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.story__kip {
-  position: absolute;
-  right: 6px;
-  bottom: 8px;
-}
-
-.seg {
-  display: flex;
-  align-self: center;
-  padding: 4px;
-  gap: 4px;
-  margin: 8px 0 14px;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-}
-
-.seg__opt {
-  position: relative;
-  padding: 8px 14px;
-  font-weight: 800;
-  font-size: 14px;
-  border-radius: 99px;
-}
-
-.seg__opt span:not(.seg__pill) {
-  position: relative;
-}
-
-.seg__opt.is-on {
-  color: var(--paper);
-}
-
-.seg__pill {
-  position: absolute;
-  inset: 0;
-  background: var(--ink);
-  border-radius: 99px;
-}
-
-.share__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.share__row {
-  display: flex;
-  gap: 10px;
-}
-
-.share__row > * {
-  flex: 1;
-}
-
-/* ================= Collection ================= */
-
-.collection {
-  z-index: 15;
-  background: var(--paper);
-  padding: var(--safe-top) 18px 0;
-}
-
-.col-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding-top: 6px;
-  /* Keeps the settings button's drop shadow clear of the rank card or case below. */
-  margin-bottom: 22px;
-}
-
-.col-head h1 {
-  font-size: 64px;
-  font-weight: 800;
-  display: flex;
-  align-items: baseline;
-  letter-spacing: -0.05em;
-}
-
-.col-head h1 small {
-  font-size: 22px;
-  color: var(--ink-soft);
-  letter-spacing: -0.02em;
-  margin-left: 4px;
-}
-
-.case {
-  position: relative;
-  padding: 16px 12px 14px;
-  border-radius: 24px;
-  background: radial-gradient(120% 80% at 50% 0%, #34594a 0%, #22392f 70%),
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 4px);
-  border: 9px solid #8a5530;
-  box-shadow: 0 0 0 2.5px var(--ink), inset 0 0 0 2.5px var(--ink), inset 0 10px 24px rgba(0, 0, 0, 0.4), 0 7px 0 2px var(--ink);
-  overflow: hidden;
-}
-
-.case__glass {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.12) 36%, transparent 44%, transparent 60%, rgba(255, 255, 255, 0.07) 64%, transparent 70%);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.case__empty {
-  display: flex;
-  justify-content: center;
-  padding: 0 0 6px;
-}
-
-.case__empty .bubble {
-  max-width: 260px;
-}
-
-/* An empty Dex is one inviting shelf, not a wall of locked slots. */
-.case__first {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 6px 12px;
-}
-
-.case__first .bubble {
-  max-width: 250px;
-  text-align: center;
-}
-
-.case__first-kip {
-  margin: 4px 0 8px;
-  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.35));
-}
-
-.case__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 8px;
-}
-
-.slot {
-  position: relative;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 2px 6px;
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.14);
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.slot--filled .badge {
-  filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.35));
-}
-
-.slot__plate {
-  max-width: 94%;
-  padding: 2px 7px;
-  font-size: 10.5px;
-  font-weight: 800;
-  color: #4a2e12;
-  background: linear-gradient(180deg, #f3d38a, #c99a3c);
-  border-radius: 4px;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.col-foot {
-  height: calc(var(--safe-bottom) + 120px);
-}
-
-/* Badge detail */
-
-.detail {
-  position: fixed;
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  background: rgba(20, 35, 28, 0.78);
-  backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
-  padding: 20px;
-}
-
-.detail {
-  z-index: 60;
-}
-
-.detail__inner {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  color: var(--paper);
-  text-align: center;
-}
-
-.flip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  perspective: 1000px;
-}
-
-.flip__card {
-  position: relative;
-  width: 260px;
-  height: 330px;
-  transform-style: preserve-3d;
-}
-
-.flip__face {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.flip__face--back {
-  transform: rotateY(180deg);
-}
-
-.polaroid--detail {
-  width: 220px;
-  rotate: 3deg;
-}
-
-.flip__hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  opacity: 0.75;
-}
-
-.detail__text h2 {
-  font-size: 28px;
-  font-weight: 800;
-}
-
-.detail__text p {
-  margin-top: 6px;
-  opacity: 0.75;
-  font-weight: 600;
-}
-
-.detail__text .detail__date {
-  color: var(--sun);
-  opacity: 1;
-}
-
-.detail__actions {
-  display: flex;
-  gap: 10px;
 }
 
 /* ================= Toasts ================= */
@@ -3085,35 +2525,4 @@
   margin-top: 18px;
   font-size: 14px;
   color: var(--ink-soft);
-}
-
-.fb-cta {
-  margin-top: 28px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 12px;
-  padding: 14px 16px;
-}
-
-.fb-cta div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.fb-cta strong {
-  font-family: var(--display);
-  font-size: 18px;
-}
-
-.fb-cta span {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.fb-cta .btn {
-  grid-column: 1 / -1;
-  margin-top: 10px;
 }

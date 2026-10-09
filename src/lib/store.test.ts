@@ -41,7 +41,6 @@ const readyState: StoreState = {
   currentPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
   selectedId: null,
   tripId: park.id,
-  shareClaimId: null,
   pendingPhoto: "data:image/jpeg;base64,photo",
   focusId: null,
   feedback: null,
@@ -125,6 +124,19 @@ describe("claim progress hydration", () => {
     expect(next.claims).toEqual(state.claims);
     expect(next.pendingPhoto).toBe(state.pendingPhoto);
     expect(next.progressOwnerKey).toBe(state.progressOwnerKey);
+  });
+
+  it("keeps a web visitor onboarded when they open a newer deploy", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => JSON.stringify({ onboarded: true, muted: false, onboardingBuildId: "old-source-sha", onboardingPackageIdentity: null }),
+    });
+
+    expect(reducer(load(), {
+      type: "installReady",
+      buildId: "new-source-sha",
+      packageInstallIdentity: null,
+      native: false,
+    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("preserves the legacy claims and other local preferences when saving onboarding identity", () => {

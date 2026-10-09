@@ -13,11 +13,10 @@ import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
+import { DEMO_TOOLS } from "./lib/demo";
 import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
 import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
 import { Camera } from "./screens/Camera";
-import { Claim } from "./screens/Claim";
-import { Collection } from "./screens/Collection";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
@@ -25,12 +24,11 @@ import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
 import { ManageDownloads } from "./screens/ManageDownloads";
 import { Settings } from "./screens/Settings";
-import { Gallery } from "./screens/Gallery";
 import { MapScreen } from "./screens/map/MapScreen";
 import { Onboarding } from "./screens/Onboarding";
-import { Share } from "./screens/Share";
 import { Leaderboard } from "./screens/Leaderboard";
 import { Plant } from "./screens/Plant";
+import { backCanLeavePlant, leavePlant } from "./lib/game/plantExit";
 import { TakeoverMessages } from "./screens/TakeoverSheet";
 import { YourParks } from "./screens/YourParks";
 import { Splash } from "./screens/Splash";
@@ -43,7 +41,7 @@ export function App() {
         <GameProvider>
           <StoreProvider>
             <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
-              <ContentProvider>{location.hash === "#gallery" ? <Gallery /> : <Stage />}</ContentProvider>
+              <ContentProvider><Stage /></ContentProvider>
             </div>
             <UpdateGate status={updateStatus} />
           </StoreProvider>
@@ -60,10 +58,21 @@ function Stage() {
       <div className="stage">
         <aside className="stage-note">
           <h1>Parkdex</h1>
-          <p>A mobile UI mockup of the core loop: pick a park, go there, check in inside the boundary and plant your flag.</p>
-          <p>
-            Use the <kbd>wand</kbd> on the map for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
-          </p>
+          {DEMO_TOOLS ? (
+            <>
+              <p>A development build of the core loop: pick a park, go there, check in inside the boundary and plant your flag.</p>
+              <p>
+                Use the <kbd>wand</kbd> in the map menu for demo controls, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>Plant your flag in real parks. Go to a park and your flag goes up. You earn a point for every day it flies, until someone takes it.</p>
+              <p>
+                Parkdex is made for your phone. <a href="https://parkdex.app/#beta-access" target="_blank" rel="noopener noreferrer">Get the Android app</a> to play where you are.
+              </p>
+            </>
+          )}
         </aside>
         <div className="device">
           <ToastProvider>
@@ -136,8 +145,13 @@ function Screens() {
 
   useEffect(() => setMuted(state.muted), [state.muted]);
   useEffect(() => {
-    if (screen !== "claim" && screen !== "plant") clearConfetti();
+    if (screen !== "plant") clearConfetti();
   }, [screen]);
+
+  // The badge claim screen is retired. The old camera check-in can still ask for it; send it home.
+  useEffect(() => {
+    if (screen === "claim") dispatch({ type: "go", screen: "map" });
+  }, [dispatch, screen]);
 
   // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
   const tracking = state.startupReady && onboarded && (FIELD || isNative);
@@ -168,7 +182,9 @@ function Screens() {
         else if (handleBack()) return;
         else if (s.feedback) dispatch({ type: "feedback", open: false });
         else if (s.selectedId) dispatch({ type: "select", id: null });
-        else if (s.screen === "claim" || s.screen === "plant") dispatch({ type: "go", screen: "map" });
+        else if (s.screen === "plant") {
+          if (backCanLeavePlant()) for (const action of leavePlant(s.tripId)) dispatch(action);
+        }
         else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "map" : "onboarding" });
         else if (s.screen === "downloads") dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
@@ -181,9 +197,9 @@ function Screens() {
   // opening animation plays. Keep the same map instance when the splash leaves.
   const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
   // Settings pages cover the map but keep it mounted, so its camera and tiles survive.
-  const mapCovered = screen === "claim" || screen === "plant" || screen === "settings" || screen === "downloads";
+  const mapCovered = screen === "plant" || screen === "settings" || screen === "downloads";
   // Your parks, the leaderboard and settings are tabs, so the bar stays on them.
-  const showNav = showMap && (screen === "map" || screen === "parks" || screen === "collection" || screen === "leaderboard" || screen === "settings");
+  const showNav = showMap && (screen === "map" || screen === "parks" || screen === "leaderboard" || screen === "settings");
 
   return (
     <>
@@ -200,7 +216,6 @@ function Screens() {
           <MapScreen />
         </div>
       )}
-      <AnimatePresence>{screen === "collection" && <Collection key="collection" />}</AnimatePresence>
       <AnimatePresence>{screen === "parks" && <YourParks key="parks" />}</AnimatePresence>
       <AnimatePresence>{screen === "leaderboard" && <Leaderboard key="leaderboard" />}</AnimatePresence>
       <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}</AnimatePresence>
@@ -220,9 +235,7 @@ function Screens() {
       </Presence>
       <AnimatePresence>
         {screen === "camera" && <Camera key="camera" />}
-        {screen === "claim" && <Claim key="claim" />}
         {screen === "plant" && <Plant key="plant" />}
-        {screen === "share" && <Share key="share" />}
       </AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <TakeoverMessages allowed={state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard")} />

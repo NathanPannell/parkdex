@@ -20,15 +20,31 @@ export function nextVisitStep(signedIn: boolean, me: GameMe | null): VisitStep {
   return "plant";
 }
 
-export function visitLabel(signedIn: boolean, holder: ParkHolder): string {
+/**
+ * Whether this account already visited the park today, so another visit would only say
+ * "already visited". Visits count once per park per day in Victoria. The server says when
+ * that day ends, because time zone rules on phones lag: British Columbia stays on UTC-7
+ * from November 2026, and older tz data still falls back to UTC-8.
+ */
+export function hasVisitedToday(me: GameMe | null | undefined, parkId: string, now: number): boolean {
+  const until = me?.visitedTodayUntil ? Date.parse(me.visitedTodayUntil) : Number.NaN;
+  if (!Number.isFinite(until) || now >= until) return false;
+  return !!me?.visitedToday?.includes(parkId);
+}
+
+export const VISITED_TODAY_LABEL = "Visited today, back tomorrow";
+
+export function visitLabel(signedIn: boolean, holder: ParkHolder, visited = false): string {
   if (!signedIn) return "Sign in to plant your flag";
+  if (visited) return VISITED_TODAY_LABEL;
   if (holder.kind === "mine") return "Visit your flag";
   if (holder.kind === "other") return `Take it from @${holder.flag.handle}`;
   return "Plant your flag";
 }
 
 /** The short label on the bottom bar's button while standing in a park. */
-export function visitShortLabel(holder: ParkHolder): string {
+export function visitShortLabel(holder: ParkHolder, visited = false): string {
+  if (visited) return "Tomorrow";
   return holder.kind === "mine" ? "Visit" : holder.kind === "other" ? "Take!" : "Plant!";
 }
 

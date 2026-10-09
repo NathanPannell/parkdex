@@ -18,6 +18,7 @@ import { flagAgeDays } from "../../lib/game/flag";
 import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
+import { DEMO_TOOLS } from "../../lib/demo";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
@@ -288,7 +289,7 @@ export function MapScreen() {
   }
 
   function simulate() {
-    if (!route || simulating) return;
+    if (!DEMO_TOOLS || !route || simulating) return;
     setSimulating(true);
     const km = tripStart.current?.total ?? 5;
     const duration = Math.min(5200, 2600 + km * 90);
@@ -308,7 +309,7 @@ export function MapScreen() {
   }
 
   function teleportNearest() {
-    if (!bounds) return;
+    if (!DEMO_TOOLS || !bounds) return;
     const target = nearby[0]?.p;
     if (!target) return;
     const point = arrivalPoint(bounds.byId.get(target.id)!, user);
@@ -551,15 +552,12 @@ export function MapScreen() {
             <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
               <Icon name="feedback" size={20} /> Send feedback
             </button>
-            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "go", screen: "settings" }); }}>
-              <Icon name="gear" size={20} /> Settings
-            </button>
             {isFeatureEnabled("parkProposals") && (
               <button role="menuitem" onClick={() => { select(null); startFounding(null); }}>
                 <Icon name="flagPlus" size={20} /> Found a park
               </button>
             )}
-            {!FIELD && (
+            {DEMO_TOOLS && (
               <button role="menuitem" onClick={() => { setMenuOpen(false); setDemoOpen(true); }}>
                 <Icon name="wand" size={20} /> Demo controls
               </button>
@@ -584,7 +582,7 @@ export function MapScreen() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {demoOpen && (
+        {DEMO_TOOLS && demoOpen && (
           <motion.div
             className="demo card"
             initial={{ opacity: 0, scale: 0.6, y: -20 }}
@@ -679,6 +677,7 @@ export function MapScreen() {
             holder={visit.holderOf(here.id)}
             flagDays={flagDays(here.id)}
             visitLabel={visit.labelFor(here.id)}
+            visited={visit.visitedToday(here.id)}
             onCheckIn={() => checkIn(here.id)}
             onDismiss={() => setDismissedArrival(here.id)}
           />
