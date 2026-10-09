@@ -21,12 +21,12 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
 
 | Section | Pages | UI | API |
 | --- | --- | --- | --- |
-| Feedback | `/feedback` (`/feedback/review?id=<report>` is the link in operator emails) | `src/feedback/` | `server/feedback/`, `/api/feedback/*` |
+| Feedback | `/feedback` (`/feedback/review?id=<report>` is the link in operator emails), `/feedback/archive` | `src/feedback/` | `server/feedback/`, `/api/feedback/*` |
 | Parks | `/parks`, `/parks/<id>`, `/parks/osm/<type>-<id>` | `src/parks/` | `server/parks/`, `/api/parks/*` |
 | Analytics | `/analytics/overview`, `/analytics/accounts`, `/analytics/events` | `src/analytics/` | `server/analytics/`, `/api/analytics/*` |
 | App and updates | `/app/builds`, `/app/updates` | `src/app/` | `server/app/`, `/api/app/*` |
 
-- **Feedback:** a board with New, Reviewing, Planned and Closed columns. Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel.
+- **Feedback:** a board with New, Reviewing, Planned and Done columns (Done is the stored `closed` status). Drag a card to change its status (long-press on touch screens), with Undo. Click a card for the full report, app version and build, screenshot, follow-up and email delivery retry. Keyboard users open a card and set its status from the panel. **Clear done** archives every done report (with Undo); the Archive page searches them and restores them to Done. The daily retention run on staging and production (`/api/retention/interactions/purge`, called by the photo Worker's cron) deletes archived reports, their screenshots and email rows 90 days after archiving (`worker/feedbackArchive.ts`, migration `feedback_002_archive`). Feedback carries no account, so cards cannot show a handle yet.
 - **Parks:** a map-first park manager over the catalogue of the toggled database.
   - The list searches name and id, filters by category, region, live or hidden, founder and source (curated, legacy import with a reader floor, `osm-*`, player proposal), sorts by name or visits, and counts every choice. Tiles at the top compare live, hidden and founded parks with the `kip_osm.parks` outlines and an estimate of those not in Parkdex (no `osm-*` park and no catalogue pin in the outline's box). Keys: `/` searches, arrows move, Enter opens.
   - The map shows pins coloured by category, outlines of the parks in view, hidden parks, founded parks (cover on hover) and OpenStreetMap outlines. Outlines load from the server for the view only (`/api/parks/outlines`, `/api/parks/osm`, from zoom 10 and 11.5); OpenStreetMap outlines are matched with `worker/catalogueMatch`, and "Only not in Parkdex" keeps the unmatched ones.
@@ -35,7 +35,7 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
   - "Remove founder and cover" deletes the founder row (and the founder bonus) so the park can be founded again; "Replace cover" stores a JPEG with its metadata removed.
   - Create from OSM prefills name, category guess, nearest region and outline for an outline that is not in Parkdex, and publishes it with `publishStatements` as founding does.
 - **Analytics:** placeholder pages for the headline numbers, the accounts table and the event explorer (#135).
-- **App and updates:** Build config edits rows in `kip_app_config.builds` (each build's server, feature flags, and minimum and latest builds). Installed apps read it from production, so it always uses production and ignores the database toggle. The retired `rankProgression` and `parkProposals` flags are no longer offered for new rows; `worker/appConfig.ts` still lists them because installed builds may read them. Updates is a placeholder for the over-the-air updates panel.
+- **App and updates:** Build config edits rows in `kip_app_config.builds` (each build's server, feature flags, and minimum and latest builds), with a short glossary. Installed apps read it from production, so it always uses production and ignores the database toggle. The retired `rankProgression` and `parkProposals` flags are no longer offered for new rows; `worker/appConfig.ts` still lists them because installed builds may read them. Updates (also production only) shows each over-the-air channel's pointer and what installed builds do with it, the bundles in R2, the publish history (`kip_app_config.ota_publishes`, migration `app_config_003`) and a setup checklist. It can point a channel at a bundle already in R2, guarded by generation, ETag and native build checks with readback through R2 and the CDN (`server/app/ota.ts`, `docs/ota-updates.md`). New bundles still come from `scripts/publish-app-bundle.mjs --apply --record`.
 
 Old links redirect: `/proposals*` to `/parks` and `/builds` to `/app/builds`. The Proposals queue, Import from map, Drafts pages and badge upload are retired. `server/drafts.ts` stays only for `publishStatements`, which park founding (`worker/founders-store.ts`, `worker/parkPublish.ts`) and `scripts/qa-founders-sql.mjs` import.
 
@@ -57,7 +57,7 @@ npm run dev --prefix operator
 
 The dev server loads the shared worker modules directly, so it also needs the root dependencies. The production build does not.
 
-With no `DATABASE_URL`, the dev server serves fictional in-memory data at http://127.0.0.1:5191 and email sending is off. Set `DATABASE_URL` in the shell to point it at a real database. Use a Neon branch you own, not production.
+With no `DATABASE_URL`, the dev server serves fictional in-memory data at http://127.0.0.1:5191 and email sending is off. The Updates page then talks to a fake R2, CDN and update endpoint (`server/app/fakeCloud.ts`); start it with `OPERATOR_DEMO_OTA=empty` to see the state before the first publication. Set `DATABASE_URL` in the shell to point it at a real database. Use a Neon branch you own, not production.
 
 ```
 npm run typecheck --prefix operator
@@ -69,6 +69,9 @@ Three integration tests run against the real content triggers when their variabl
 - `server/drafts.pg.test.ts` (`OPERATOR_DRAFTS_TEST_DATABASE_URL`): the `publishStatements` transaction park founding uses.
 - `server/parks/liveParks.pg.test.ts` (`OPERATOR_PARKS_TEST_DATABASE_URL`): live park edits.
 - `server/parks/manager.pg.test.ts` (`OPERATOR_PARK_MANAGER_TEST_DATABASE_URL`): the park manager routes over every deploy migration, including hide and unhide, delete, create from OSM, founder moderation and the 409.
+- `server/app/history.pg.test.ts` (`OPERATOR_OTA_TEST_DATABASE_URL`): the over-the-air publish history. It drops and recreates `kip_app_config` in its database.
+
+The feedback archive and retention SQL run in the root SQL QA (`scripts/qa-feedback-archive-sql.mjs`, part of `npm run test:sql`).
 
 ## Build and deploy
 
@@ -82,7 +85,10 @@ Runtime environment variables (Preview target only):
 | `RESEND_API_KEY` | Needed only to retry failed feedback emails (sensitive) |
 | `EMAIL_MODE` | `resend`, or `disabled` to turn retries into a no-op |
 | `DASHBOARD_ENVIRONMENT` | Label shown in the top bar, for example `production` |
-| `STAGING_DATABASE_URL` | Optional staging branch connection string (sensitive). When set, a sidebar toggle switches every section except Build config to staging; the choice is the `parkdex_operator_db` cookie |
+| `STAGING_DATABASE_URL` | Optional staging branch connection string (sensitive). When set, a sidebar toggle switches every section except Build config and Updates to staging; the choice is the `parkdex_operator_db` cookie |
+| `CLOUDFLARE_API_TOKEN` | Optional. R2 read and write on the content bucket, for the Updates bundle list and pointer moves (sensitive) |
+| `CLOUDFLARE_ACCOUNT_ID` | Optional. The Cloudflare account that owns the content bucket |
+| `ASSETS_BUCKET` | Optional. The content bucket, default `parkdex-kip-content` |
 
 Deploy from the `operator` folder after linking it to the `parkdex-operator` Vercel project (`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, or `vercel link`):
 
