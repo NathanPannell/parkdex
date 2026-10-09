@@ -1,3 +1,4 @@
+import { demoAnalytics } from "./analytics/memory.js";
 import type { DashboardDependencies } from "./api.js";
 import { demoApp } from "./app/memory.js";
 import { demoFeedback } from "./feedback/memory.js";
@@ -8,5 +9,5 @@ import { demoParks } from "./parks/memory.js";
  * set. Each section supplies its own sample stores.
  */
 export function demoDependencies(): DashboardDependencies {
-  return { ...demoFeedback(), ...demoParks(), ...demoApp() };
+  return { ...demoFeedback(), ...demoParks(), ...demoAnalytics(), ...demoApp() };
 }

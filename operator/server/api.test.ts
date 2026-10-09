@@ -97,12 +97,12 @@ test("health reports the data environment, and a missing database fails closed",
   const staging = await api(request("/api/health", { cookie: "parkdex_operator_db=staging" }), { ...env, STAGING_DATABASE_URL: "postgres://staging" });
   assert.deepEqual(await staging.json(), { ok: true, environment: "staging", canSwitch: true, emailMode: "disabled" });
   assert.equal((await api(request("/api/feedback"), {})).status, 503);
-  assert.equal((await api(request("/api/analytics/overview"), env)).status, 404, "analytics serves nothing yet");
+  assert.equal((await api(request("/api/analytics/overview"), {})).status, 503);
 });
 
 test("the local demo serves every section that has data", async () => {
   const api = createDashboardApi(demoDependencies());
-  for (const path of ["/api/feedback", "/api/feedback/other-database", "/api/parks", "/api/parks/regions", "/api/app/builds"]) {
+  for (const path of ["/api/feedback", "/api/feedback/other-database", "/api/parks", "/api/parks/regions", "/api/app/builds", "/api/analytics/overview", "/api/analytics/accounts", "/api/analytics/events", "/api/analytics/posthog/status"]) {
     assert.equal((await api(request(path), { ...env, STAGING_DATABASE_URL: "demo" })).status, 200, path);
   }
 });

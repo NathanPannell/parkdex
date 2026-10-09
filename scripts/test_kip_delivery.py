@@ -100,6 +100,7 @@ class AccountReleaseGates(unittest.TestCase):
             "founders_001_init.sql",
             "feedback_002_archive.sql",
             "app_config_003_ota_publishes.sql",
+            "operator_analytics_001_indexes.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
