@@ -32,6 +32,8 @@ const SEARCH_RADIUS_M = 250;
 const MAX_CANDIDATES = 8;
 /** Parks whose outline is this close to the pin are offered, as well as any that contain it. */
 const NEARBY_M = 1_000;
+// Planters and traffic islands tagged as gardens crowd the list in towns; offer them only when the pin is inside.
+const MIN_NEARBY_AREA_M2 = 200;
 const MAX_BBOX_DIAGONAL_M = 20_000;
 // Two attempts must fit in the function's time with the database work around them.
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -420,7 +422,7 @@ function nearPin(features: OsmFeature[], lat: number, lng: number): OsmCandidate
   const pin: Position = [lng, lat];
   return sortByPin(features
     .map((feature) => ({ ...feature, containsPin: pointInMultiPolygon(pin, feature.geometry), distanceM: Math.round(distanceToMultiPolygon(pin, feature.geometry)) }))
-    .filter((candidate) => candidate.containsPin || candidate.distanceM <= NEARBY_M))
+    .filter((candidate) => candidate.containsPin || (candidate.distanceM <= NEARBY_M && candidate.areaM2 >= MIN_NEARBY_AREA_M2)))
     .slice(0, MAX_CANDIDATES);
 }
 

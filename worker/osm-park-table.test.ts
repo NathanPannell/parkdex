@@ -70,6 +70,13 @@ test("search answers from the table without touching any live service", async ()
   assert.equal(parks[1].geometry.coordinates[0].length, 2, "the reserve keeps its pond");
 });
 
+test("tiny planters near the pin are left out unless the pin is inside one", async () => {
+  const planter: OsmFeature = { type: "way", id: 88, name: null, kind: "leisure=garden", tags: { leisure: "garden" }, geometry: multi(box(-123.0575, 49.0895, -123.0574, 49.0896)), areaM2: 80 };
+  const around: OsmFeature = { ...planter, id: 89, geometry: multi(box(-123.06015, 49.08895, -123.06005, 49.08905)) };
+  const parks = await createOsmClient({}, noNetwork(), { table: table([PATERSON, planter, around]) }).search(PIN[1], PIN[0]);
+  assert.deepEqual(parks.map((park) => park.id), [89, 23938892]);
+});
+
 test("with nothing in the table near the pin, or the table unreadable, the live services are asked", async () => {
   for (const contents of [[FAR], new Error("relation \"kip_osm.parks\" does not exist")]) {
     const network: string[] = [];

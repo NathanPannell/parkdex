@@ -232,6 +232,7 @@ def extract(pbf: Path, out: Path, source_date: str | None = None) -> dict[str, A
             self.records: list[dict[str, Any]] = []
             self.failed = 0
             self.private = 0
+            self.too_small = 0
 
         def area(self, area: Any) -> None:
             tags = {tag.k: tag.v for tag in area.tags}
@@ -246,16 +247,23 @@ def extract(pbf: Path, out: Path, source_date: str | None = None) -> dict[str, A
             except Exception:
                 self.failed += 1
                 return
-            simple = shapely.simplify(geometry, SIMPLIFY_DEG, preserve_topology=True)
+            simple = shapely.set_precision(shapely.simplify(geometry, SIMPLIFY_DEG, preserve_topology=True), 1e-6)
             if simple.is_empty:
-                simple = geometry
-            self.records.append({
+                simple = shapely.set_precision(geometry, 1e-6)
+            record = {
                 "type": "way" if area.from_way() else "relation",
                 "id": area.orig_id(),
                 "kind": kind,
                 "tags": {key: tags[key] for key in KEEP_TAGS if key in tags},
-                "geometry": json.loads(shapely.to_geojson(shapely.set_precision(simple, 1e-6))),
-            })
+                "geometry": json.loads(shapely.to_geojson(simple)),
+            }
+            # Areas a few centimetres across collapse at 1e-6 degrees; keep only what plan accepts.
+            try:
+                validate_record(record, 0)
+            except OsmIndexError:
+                self.too_small += 1
+                return
+            self.records.append(record)
 
     pbf = pbf.expanduser().resolve()
     if source_date is None:
@@ -287,6 +295,7 @@ def extract(pbf: Path, out: Path, source_date: str | None = None) -> dict[str, A
         "byKind": dict(sorted(by_kind.items())),
         "skippedPrivate": handler.private,
         "failedGeometry": handler.failed,
+        "droppedTooSmall": handler.too_small,
         "simplifyDegrees": SIMPLIFY_DEG,
     }
     manifest_path(out).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
