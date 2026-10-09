@@ -103,6 +103,9 @@
   inset: 0;
   display: grid;
   place-items: center;
+  /* Illustrations are laid out at 340px and scaled down to fit; centre the track too, or on a
+     short screen it starts at the top and the scaled drawing slides down over the copy. */
+  place-content: center;
 }
 
 .onboarding__copy {

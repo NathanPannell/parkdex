@@ -29,7 +29,9 @@ export type VisitResult = {
 };
 
 export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string };
-export type FlagsResponse = { flags: ParkFlag[]; serverTime: string };
+/** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
+export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
+export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
 export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number };
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
@@ -150,6 +152,10 @@ export function parseFlags(body: unknown): FlagsResponse {
       const flagSeed = text(flag.flagSeed);
       const since = text(flag.since);
       return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since } : null;
+    }),
+    founders: list(row.founders, (founder) => {
+      const parkId = text(founder.parkId);
+      return parkId ? { parkId, handle: text(founder.handle), coverUrl: text(founder.coverUrl) } : null;
     }),
     serverTime: text(row.serverTime) ?? new Date().toISOString(),
   };

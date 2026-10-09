@@ -60,6 +60,13 @@ GROUP BY 1, 2 ORDER BY 3 DESC;
 
 - Server: with `POSTHOG_PROJECT_KEY` (and optional `POSTHOG_HOST`, default `https://us.i.posthog.com`), each request's `db_write` and game events go to `POST <host>/batch/`. Reads stay in our table only, to keep under the free plan's 1M events a month. `distinct_id` is the account ID, else the installation ID; anonymous events set `$process_person_profile: false`. Every event carries `environment` (`production`, `staging` or `preview`), `app_version` and `bundle_id`.
 - App: the server returns `analytics: { posthogKey, posthogHost }` in `/api/app-config` when a key is set, so analytics can be switched on without a new build. A build can also bake `VITE_POSTHOG_PROJECT_KEY` and `VITE_POSTHOG_HOST` as a fallback. With a key, `posthog-js` loads on demand with autocapture and `person_profiles: 'identified_only'`, uses the installation ID as its anonymous ID, and identifies by account ID after sign-in. Without a key the SDK is never downloaded.
+- App named events go through `captureProductEvent()` in `src/lib/productAnalytics.ts`, which does nothing until the SDK runs. Properties are labels and counts only, never photos or positions:
+
+  | Event | Properties |
+  | --- | --- |
+  | `found_park_started` | `entry`: `menu` or `sheet` |
+  | `found_park_photo_rejected` | `outcome`: `rejected` or `unsure`; `flags`: the flag codes shown |
+  | `found_park_completed` | `source`: `osm` (new park) or `catalogue`; `visit`: the visit outcome |
 
 ## Schema
 

@@ -146,10 +146,23 @@ describe("public reads", () => {
     }));
     await expect(fetchFlags()).resolves.toEqual({
       flags: [{ parkId: "a", handle: "robin", flagSeed: "s", since: "2026-10-01T00:00:00Z" }],
+      founders: [],
       serverTime: "2026-10-07T00:00:00Z",
     });
     expect(fetchAccountApi).toHaveBeenCalledWith("/api/game/flags", expect.anything());
     expect(fetchAuthenticated).not.toHaveBeenCalled();
+  });
+
+  it("reads founded parks and their covers with the flags", async () => {
+    fetchAccountApi.mockResolvedValueOnce(reply(200, {
+      flags: [],
+      founders: [{ parkId: "a", handle: "robin", coverUrl: "/api/parks/a/cover/x.jpg" }, { parkId: "b", handle: null, coverUrl: null }, { handle: "x" }],
+      serverTime: "2026-10-07T00:00:00Z",
+    }));
+    await expect(fetchFlags()).resolves.toMatchObject({ founders: [
+      { parkId: "a", handle: "robin", coverUrl: "/api/parks/a/cover/x.jpg" },
+      { parkId: "b", handle: null, coverUrl: null },
+    ] });
   });
 
   it("reads the leaderboard", async () => {

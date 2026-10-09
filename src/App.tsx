@@ -5,6 +5,7 @@ import { BottomNav } from "./components/BottomNav";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
+import { handleBack } from "./lib/backStack";
 import { GameProvider, useGame } from "./lib/game/GameProvider";
 import { HandleSheet } from "./screens/HandleSheet";
 import "./game-ui.css";
@@ -164,6 +165,7 @@ function Screens() {
       onBackButton(() => {
         const s = latest.current;
         if (latestGame.current.handleRequest) latestGame.current.closeHandleSheet();
+        else if (handleBack()) return;
         else if (s.feedback) dispatch({ type: "feedback", open: false });
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "claim" || s.screen === "plant") dispatch({ type: "go", screen: "map" });

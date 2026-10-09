@@ -7,17 +7,15 @@ import { pressMenuPosition, type ScreenPoint } from "../../lib/longPress";
 type Props = {
   mapRef: RefObject<MLMap | null>;
   point: ScreenPoint;
-  canPropose: boolean;
   onClose: () => void;
   onFeedback: () => void;
-  onPropose: () => void;
 };
 
 // Clears the map counter and menu button along the top of the screen.
 const TOP_CONTROLS = 76;
 
 /** "Should something be here?" menu opened by pressing and holding an empty part of the map. */
-export function PressMenu({ mapRef, point, canPropose, onClose, onFeedback, onPropose }: Props) {
+export function PressMenu({ mapRef, point, onClose, onFeedback }: Props) {
   const menu = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<{ left: number; top: number; below: boolean } | null>(null);
   const closeRef = useRef(onClose);
@@ -82,11 +80,6 @@ export function PressMenu({ mapRef, point, canPropose, onClose, onFeedback, onPr
         <button role="menuitem" onClick={onFeedback}>
           <Icon name="feedback" size={20} /> Send feedback
         </button>
-        {canPropose && (
-          <button role="menuitem" onClick={onPropose}>
-            <Icon name="pinPlus" size={20} /> Propose a park
-          </button>
-        )}
       </motion.div>
     </>
   );
