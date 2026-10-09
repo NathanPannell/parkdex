@@ -30,6 +30,8 @@ const ORIGIN = 'https://kip.example.test';
 const box = (west, south, east, north) => [[west, south], [east, south], [east, north], [west, north], [west, south]];
 const multi = (...rings) => ({ type: 'MultiPolygon', coordinates: [rings] });
 const osmBase = 900_000_000 + Math.floor(Math.random() * 90_000_000);
+// More racers for a stress run; the adapter pool has 16 connections, so stay below that.
+const RACERS = Math.min(Math.max(Number(process.env.FOUNDERS_QA_RACERS) || 4, 2), 12);
 
 // Paterson Park in Ladner and a second OpenStreetMap park for the race; neither is in the catalogue yet.
 const PATERSON = { type: 'way', id: osmBase, name: 'Paterson Park', kind: 'leisure=park', tags: { name: 'Paterson Park', leisure: 'park' }, geometry: multi(box(-123.062, 49.088, -123.058, 49.0902)), areaM2: 71_000 };
@@ -214,17 +216,17 @@ try {
   assert.equal(await score(d.id), 13, 'the bounty plus the founder bonus');
   log('a founding visit takes a held flag');
 
-  const racers = await Promise.all([account('r1'), account('r2'), account('r3'), account('r4')]);
+  const racers = await Promise.all(Array.from({ length: RACERS }, (_, index) => account(`r${index}`)));
   const raced = await Promise.all(racers.map((racer) => found(racer.token, { osm: { type: 'way', id: RACE.id } }, IN_RACE)));
-  assert.deepEqual(raced.map((r) => r.status).sort(), [200, 409, 409, 409]);
+  assert.deepEqual(raced.map((r) => r.status).sort(), [200, ...Array(RACERS - 1).fill(409)]);
   assert.equal(await count('SELECT count(*) FROM kip_founders.parks WHERE park_id = $1', [`osm-way-${RACE.id}`]), 1);
   assert.equal(await count('SELECT count(*) FROM public.parks WHERE id = $1', [`osm-way-${RACE.id}`]), 1);
   assert.equal(await count('SELECT count(*) FROM kip_proposals.parks WHERE published_park_id = $1', [`osm-way-${RACE.id}`]), 1, 'losers leave no audit row');
   assert.equal(await count("SELECT count(*) FROM kip_game.visits WHERE park_id = $1 AND source = 'visit'", [`osm-way-${RACE.id}`]), 1, 'losers record no visit');
-  const catalogueRacers = await Promise.all([account('s1'), account('s2'), account('s3')]);
+  const catalogueRacers = await Promise.all(Array.from({ length: RACERS - 1 }, (_, index) => account(`s${index}`)));
   await publishPark('municipal-qa-founders-race', 'QA Race Green', box(-123.1, 49.13, -123.095, 49.133));
   const racedExisting = await Promise.all(catalogueRacers.map((racer) => found(racer.token, { parkId: 'municipal-qa-founders-race' }, { lat: 49.1315, lng: -123.0975, accuracyM: 5 })));
-  assert.deepEqual(racedExisting.map((r) => r.status).sort(), [200, 409, 409]);
+  assert.deepEqual(racedExisting.map((r) => r.status).sort(), [200, ...Array(RACERS - 2).fill(409)]);
   log('concurrent founders: exactly one wins, for a new and for a catalogue park');
 
   const hidden = await found(c.token, { parkId: HIDDEN }, IN_HIDDEN);
@@ -282,6 +284,8 @@ try {
   log('deleting the founder account removes the founder and photo; the park stays and can be founded again');
 } finally {
   await Promise.all(pending.splice(0)).catch(() => undefined);
+  // pool.end() resolves before its connections close; the adapter ignores the server ending them
+  // when the database is dropped WITH (FORCE) below.
   await pool.end();
   await admin.query(`DROP DATABASE IF EXISTS "${owned}" WITH (FORCE)`);
   await admin.end();

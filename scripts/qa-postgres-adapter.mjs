@@ -15,6 +15,16 @@ assert.ok(Number.isInteger(config.port) && config.port > 0 && config.port < 6553
 assert.ok(config.database === 'kip_accounts_qa' || config.database?.startsWith('kip_qa_'), 'SQL QA requires a dedicated kip_qa_ database');
 assert.ok(config.user && config.password, 'SQL QA requires PGUSER and PGPASSWORD');
 export const pool = new pg.Pool({ ...config, max: 16 });
+// An idle connection that the server closes makes the pool emit 'error'. Unhandled, that kills the
+// process with a dump of the whole client and no readable message. pool.end() resolves before its
+// connections have closed, so a script that then drops its database WITH (FORCE) can have the
+// server terminate a connection that is still closing (57P01): expected, so ignore it once ending.
+// Any other idle error fails the run with a one-line reason.
+pool.on('error', (error) => {
+  if (pool.ending) return;
+  process.exitCode = 1;
+  console.error(`SQL QA: an idle PostgreSQL connection failed: ${error.code ?? ''} ${error.message}`);
+});
 export const dbUrl = `postgresql://${encodeURIComponent(config.user)}:${encodeURIComponent(config.password)}@${config.host}:${config.port}/${config.database}`;
 const identityTypes = { getTypeParser: () => (value) => value };
 
