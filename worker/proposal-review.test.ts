@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createFeedbackWorker } from "./index.ts";
 import type { MultiPolygon, OsmClient, OsmFeature } from "./osmParks.ts";
-import type { ParkProposalRecord, ParkProposalStore, ProposalStatus, SaveProposalResult } from "./parkProposals.ts";
 import { categoryFor, MAX_BOUNDARY_POSITIONS, osmParkId, parkFromProposal, publishProposalPark, seedFor, type SqlRunner } from "./parkPublish.ts";
 import { positionCount } from "./osmParks.ts";
 import { createProposalModerator } from "./proposalModeration.ts";
@@ -363,69 +361,4 @@ test("the proposal moderator sends choice questions through the shared module an
   assert.equal(body.model, "openai/gpt-6-luna-decisions");
   assert.deepEqual(Object.keys(body.questions.park.criteria), ["approve", "reject", "unsure"]);
   assert.ok(!String(calls[0].init.body).includes("test-key-not-real"));
-});
-
-// ---------------------------------------------------------------- the submit route
-
-class MemoryProposalStore implements ParkProposalStore {
-  readonly rows = new Map<string, ParkProposalRecord & { submissionId: string; payloadHash: string }>();
-  async save({ id, payloadHash, proposal }: Parameters<ParkProposalStore["save"]>[0]): Promise<SaveProposalResult> {
-    const existing = [...this.rows.values()].find((row) => row.submissionId === proposal.submissionId);
-    if (existing) return existing.payloadHash === payloadHash ? { status: "duplicate", proposal: existing } : { status: "conflict" };
-    const record = {
-      id, name: proposal.name, note: proposal.note, point: proposal.point, outline: proposal.outline, context: proposal.context,
-      status: "new" as ProposalStatus, createdAt: "2026-10-07T12:00:00.000Z", updatedAt: "", submissionId: proposal.submissionId, payloadHash,
-    };
-    this.rows.set(id, record);
-    return { status: "created", proposal: record };
-  }
-  async list() { return [...this.rows.values()]; }
-  async updateStatus() { return null; }
-}
-
-function submit(worker: ReturnType<typeof createFeedbackWorker>, body: Record<string, unknown>) {
-  return worker.fetch(new Request("https://api.example.test/api/park-proposals", {
-    method: "POST",
-    headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.7" },
-    body: JSON.stringify(body),
-  }), { SESSION_SECRET: "test-session-secret-which-is-long-enough" } as never);
-}
-
-const BODY = {
-  submissionId: "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
-  name: "Cedar Hill Woods",
-  point: [-123.357, 48.4505],
-  osm: { type: "way", id: 123456 },
-};
-
-test("POST /api/park-proposals tells the app when a proposal went live", async () => {
-  const review = new MemoryReviewStore();
-  const moderator: ProposalModerator = async () => ({ model: "m", answers: APPROVE });
-  const worker = createFeedbackWorker({
-    createParkProposalStore: () => new MemoryProposalStore(),
-    createProposalReviewStore: () => review,
-    osmClient: osm(),
-    proposalModerator: moderator,
-    uuid: () => PROPOSAL.id,
-  });
-  const response = await submit(worker, BODY);
-  assert.equal(response.status, 201);
-  assert.deepEqual(await response.json(), { id: PROPOSAL.id, review: { decision: "approved", parkId: "osm-way-123456", parkName: "Cedar Hill Woods" } });
-});
-
-test("POST /api/park-proposals waits for the operator when the model is off, and rejects a malformed OpenStreetMap pick", async () => {
-  const worker = createFeedbackWorker({
-    createParkProposalStore: () => new MemoryProposalStore(),
-    createProposalReviewStore: () => new MemoryReviewStore(),
-    osmClient: osm(),
-    proposalModerator: null,
-  });
-  const waiting = await submit(worker, BODY);
-  assert.equal(waiting.status, 201);
-  assert.deepEqual((await waiting.json() as { review: unknown }).review, { decision: "pending" });
-  for (const bad of [{ type: "node", id: 1 }, { type: "way", id: -4 }, { type: "way", id: 1.5 }, { type: "way", id: 1, extra: true }, "way/1"]) {
-    const response = await submit(worker, { ...BODY, submissionId: "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e60", osm: bad });
-    assert.equal(response.status, 400, JSON.stringify(bad));
-    assert.equal((await response.json() as { code: string }).code, "invalid_osm");
-  }
 });

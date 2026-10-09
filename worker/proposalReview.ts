@@ -225,7 +225,7 @@ function regionFrom(parks: NearbyPark[], point: [number, number]): string | null
 }
 
 /** The region of the nearest catalogue park that has one, looking up to REGION_KM away, else the fallback. */
-async function regionFor(store: ProposalReviewStore, nearby: NearbyPark[], point: [number, number]): Promise<string> {
+export async function regionFor(store: Pick<ProposalReviewStore, "nearbyParks">, nearby: NearbyPark[], point: [number, number]): Promise<string> {
   return regionFrom(nearby, point) ?? regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point) ?? FALLBACK_REGION;
 }
 

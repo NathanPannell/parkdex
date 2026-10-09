@@ -56,6 +56,13 @@ export interface FlagRecord {
   since: string;
 }
 
+/** A founded park, for the map: who founded it and which cover photo it has. */
+export interface FounderRecord {
+  parkId: string;
+  handle: string | null;
+  photoSha256: string;
+}
+
 export interface LeaderboardRow {
   rank: number;
   handle: string;
@@ -73,6 +80,10 @@ export interface GameStore {
   markTakeoversSeen(accountId: string, at: string): Promise<PlayerRecord | null>;
   flags(now: string): Promise<FlagRecord[]>;
   leaderboard(now: string): Promise<LeaderboardRow[]>;
+  /** Every founded park. Empty where founders_001_init.sql has not run. */
+  founders?(): Promise<FounderRecord[]>;
+  /** The founder bonus included in the account's score. */
+  founderPoints?(accountId: string, now: string): Promise<number>;
 }
 
 export const TAKEOVER_LIMIT = 50;
@@ -114,6 +125,12 @@ export function visitFromJson(value: unknown): VisitRecord {
     visitedAt: iso(visit.visitedAt),
     fell: visit.fell === true,
   };
+}
+
+// Undefined table or function: a database without founders_001_init.sql.
+function missingFounders(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return code === "42P01" || code === "42883" || code === "3F000";
 }
 
 function uniqueViolation(error: unknown): boolean {
@@ -211,6 +228,34 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     async flags(now) {
       const found = await rows("SELECT park_id, handle, flag_seed, since FROM kip_game.flags_up($1::timestamptz)", [now]);
       return found.map((row) => ({ parkId: String(row.park_id), handle: String(row.handle), flagSeed: String(row.flag_seed), since: iso(row.since) }));
+    },
+
+    async founders() {
+      try {
+        const found = await rows(`
+          SELECT f.park_id, pl.handle, f.photo_sha256
+          FROM kip_founders.parks f
+          LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id
+          ORDER BY f.park_id`, []);
+        return found.map((row) => ({
+          parkId: String(row.park_id),
+          handle: row.handle === null || row.handle === undefined ? null : String(row.handle),
+          photoSha256: String(row.photo_sha256),
+        }));
+      } catch (error) {
+        if (missingFounders(error)) return [];
+        throw error;
+      }
+    },
+
+    async founderPoints(accountId, now) {
+      try {
+        const found = await rows("SELECT kip_founders.founder_points($1::uuid, $2::timestamptz) AS points", [accountId, now]);
+        return Number(found[0]?.points ?? 0);
+      } catch (error) {
+        if (missingFounders(error)) return 0;
+        throw error;
+      }
     },
 
     async leaderboard(now) {

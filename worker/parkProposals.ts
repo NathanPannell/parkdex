@@ -1,7 +1,7 @@
 import { database } from "./db.js";
-import { HttpError, readJsonBody } from "./validation.js";
+import { HttpError } from "./validation.js";
 import type { OsmRef } from "./osmParks.js";
-import type { Decision, ModerationRecord, ReviewInput, ReviewOutcome } from "./proposalReview.js";
+import type { Decision, ModerationRecord } from "./proposalReview.js";
 
 /**
  * A park a player proposes from the app: a pin, a name and either an OpenStreetMap outline
@@ -224,44 +224,21 @@ export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: s
   };
 }
 
-export interface ParkProposalHandlers {
-  json(data: unknown, status?: number): Response;
-  ipHash(): Promise<string>;
-  newId(): string;
-  store(): ParkProposalStore;
-  /** Model check and instant publish. Absent where proposals are only saved. */
-  review?(proposal: ReviewInput): Promise<ReviewOutcome>;
-}
-
 export function parseProposalStatus(value: unknown): ProposalStatus {
   if (typeof value === "string" && (PROPOSAL_STATUSES as readonly string[]).includes(value)) return value as ProposalStatus;
   throw new HttpError(400, "invalid_status", "Unknown proposal status.");
 }
 
+export const PROPOSALS_RETIRED_MESSAGE = "Update Parkdex to add parks. You can now found a park while you're standing in it.";
+
 /**
- * Routes the public `/api/park-proposals` submit. Null for other paths.
- * Reviewing proposals belongs to the separately deployed operator dashboard.
+ * The anonymous `/api/park-proposals` submit is retired: parks are founded by signed-in players
+ * standing in them (`POST /api/parks/found`). Installed builds that still propose get 410 with a
+ * message; their client shows any message under 200 characters as the error, and nothing retries
+ * it. Reviewing stored proposals stays in the operator dashboard. Null for other paths.
  */
-export async function handleParkProposalRequest(request: Request, handlers: ParkProposalHandlers): Promise<Response | null> {
+export async function handleParkProposalRequest(request: Request): Promise<Response | null> {
   if (new URL(request.url).pathname !== "/api/park-proposals") return null;
   if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
-  const proposal = validateProposalBody(await readJsonBody(request, 32 * 1024));
-  const result = await handlers.store().save({
-    id: handlers.newId(),
-    payloadHash: await proposalHash(proposal),
-    ipHash: await handlers.ipHash(),
-    proposal,
-  });
-  if (result.status === "conflict") throw new HttpError(409, "submission_id_reused", "This submission ID was already used for a different proposal.");
-  if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before proposing more parks.");
-  let review: ReviewOutcome = { decision: "pending" };
-  if (handlers.review) {
-    const saved = result.proposal;
-    try {
-      review = await handlers.review({ id: saved.id, name: saved.name, note: saved.note, point: saved.point, osm: proposal.osm, createdAt: saved.createdAt });
-    } catch {
-      // The proposal is saved; a failed check leaves it waiting for the operator.
-    }
-  }
-  return handlers.json({ id: result.proposal.id, review }, result.status === "created" ? 201 : 200);
+  throw new HttpError(410, "proposals_retired", PROPOSALS_RETIRED_MESSAGE);
 }

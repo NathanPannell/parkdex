@@ -21,6 +21,9 @@ export const GAME_EVENT_TYPES = [
   "leaderboard_viewed",
   "takeover_message_seen",
   "handle_set",
+  // Found a park (#126). founders_001_init.sql widens the table's checks for these two.
+  "park_founded",
+  "founder_photo_checked",
 ] as const;
 export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 export type DbEventType = "db_read" | "db_write";
@@ -89,7 +92,9 @@ export function validBundleId(value: string | null | undefined): string | null {
  */
 export function normalizeRoute(method: string | undefined, path: string): string {
   const verb = METHODS.has((method ?? "GET").toUpperCase()) ? (method ?? "GET").toUpperCase() : "OTHER";
-  const segments = path.split("/").filter(Boolean).slice(0, 8).map((segment) => {
+  const segments = path.split("/").filter(Boolean).slice(0, 8).map((segment, index, all) => {
+    // Park IDs in /api/parks/:park/... would otherwise make one route per park.
+    if (index === 2 && all[0] === "api" && all[1] === "parks" && segment !== "found") return ":park";
     if (UUID.test(segment)) return ":id";
     if (HEX_ID.test(segment)) return ":hash";
     if (/^\d+$/.test(segment)) return ":n";
