@@ -730,7 +730,7 @@ export async function handleOsmParksRequest(request: Request, handlers: OsmRoute
   const lat = coordinateParam(url.searchParams.get("lat"), -90, 90);
   const lng = coordinateParam(url.searchParams.get("lng"), -180, 180);
   const accuracyM = accuracyParam(url.searchParams.get("accuracy"));
-  if (!await handlers.allow()) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a few minutes and try again.");
+  if (!await handlers.allow()) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a minute and try again.");
   const [candidates, catalogue] = await Promise.all([
     handlers.osm().search(lat, lng, toleranceFor(accuracyM)),
     // Marking is a convenience: without the catalogue every candidate is offered and founding still checks.
