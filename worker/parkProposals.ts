@@ -205,8 +205,9 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
 }
 
 /**
- * Map searches share the proposal rate limit table under their own keyed hashes: 30 searches
- * per client every 10 minutes keeps Parkdex well inside the Overpass usage policy.
+ * Map searches share the proposal rate limit table under their own keyed hashes. Searches in BC
+ * read our own outline table, so the limit is loose while testing: 10 per client per minute.
+ * Pins outside BC still fall back to Nominatim and Overpass, whose own policies are stricter.
  */
 export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: string) => Promise<boolean> {
   const sql = database(databaseUrl);
@@ -215,10 +216,10 @@ export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: s
       INSERT INTO kip_proposals.rate_limits (subject_hash, window_started_at, hit_count)
       VALUES (${subjectHash}, now(), 1)
       ON CONFLICT (subject_hash) DO UPDATE SET
-        window_started_at = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '10 minutes' THEN now() ELSE kip_proposals.rate_limits.window_started_at END,
-        hit_count = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '10 minutes' THEN 1 ELSE kip_proposals.rate_limits.hit_count + 1 END,
+        window_started_at = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '1 minute' THEN now() ELSE kip_proposals.rate_limits.window_started_at END,
+        hit_count = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '1 minute' THEN 1 ELSE kip_proposals.rate_limits.hit_count + 1 END,
         updated_at = now()
-      RETURNING hit_count <= 30 AS allowed
+      RETURNING hit_count <= 10 AS allowed
     ` as Array<{ allowed: boolean }>;
     return rows[0]?.allowed === true;
   };
