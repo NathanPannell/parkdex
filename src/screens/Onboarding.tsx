@@ -10,15 +10,17 @@ import { buzz, sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
 import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
+import { DEMO_TOOLS } from "../lib/demo";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
 import "../onboarding.css";
 
 /**
- * Five short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
- * park, earn a point a day while it flies, take other players' parks for their flag's age, and
- * get your own @handle and flag. How flags eventually fall is left for players to discover.
+ * Six short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
+ * park, earn a point a day while it flies, take other players' parks for their flag's age, get
+ * your own @handle and flag, and found parks nobody has founded yet. How flags eventually fall
+ * is left for players to discover.
  */
 const SLIDES = [
   {
@@ -51,7 +53,15 @@ const SLIDES = [
     body: "Every player gets a one-of-a-kind flag. Everyone sees it, and your handle, on the parks you hold.",
     tint: "#DCEBFF",
   },
+  {
+    eyebrow: "Bonus · Found",
+    title: ["Found a park.", "Make it yours."],
+    body: "Standing in a park nobody has founded? Take its photo and it's yours, +10 points.",
+    tint: "#E6F4C8",
+  },
 ];
+// The handle slide: signing in and picking a handle are offered here.
+const YOU_SLIDE = 4;
 
 const SAMPLE_SEEDS = ["onboard-fern", "onboard-tide", "onboard-moss"];
 const RIVAL_SEED = "onboard-rival";
@@ -201,7 +211,9 @@ function TakeOver() {
       </motion.div>
       <motion.div
         className="ob-take__flag"
-        animate={{ y: [-220, -220, -220, 0, 0, 0], opacity: [0, 0, 1, 1, 1, 0] }}
+        // The flag sits 82 px below the top of this illustration, so it drops from just inside that top edge,
+        // never above it: on short screens it stays on the card instead of flashing past the notch.
+        animate={{ y: [-64, -64, -64, 0, 0, 0], scale: [1.1, 1.1, 1.1, 1, 1, 1], opacity: [0, 0, 1, 1, 1, 0] }}
         transition={{ ...loop, times: [0, 0.4, 0.46, 0.56, 0.95, 1], ease: "easeIn" }}
       >
         <span className="ob-take__pole" />
@@ -280,6 +292,46 @@ function YourFlag() {
   );
 }
 
+/** A park photo drops onto the ground like a planted flag, and the founder bonus pops. */
+function FoundIt() {
+  const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.3 };
+  return (
+    <div className="ob-found">
+      <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
+      <div className="ob-found__ground"><Mound width={210} /></div>
+      <motion.div
+        className="ob-found__photo"
+        // The drop starts at the top of this illustration, never above it, so the photo stays on
+        // the card at every screen height and is only seen falling onto the mound or resting there.
+        animate={{ y: [-60, 0, 0, 0], scale: [1.18, 1, 1, 1], rotate: [-14, -4, -4, -4], opacity: [0, 1, 1, 0] }}
+        transition={{ ...loop, times: [0, 0.14, 0.92, 1], ease: "easeIn" }}
+      >
+        <svg viewBox="0 0 160 120" aria-hidden="true">
+          <rect width="160" height="120" fill="#9FD8FF" />
+          <circle cx="126" cy="26" r="13" fill="#FFC93C" />
+          <path d="M0 86 C 30 62, 62 64, 88 78 C 112 64, 140 62, 160 74 L160 120 L0 120 Z" fill="#5E9A3A" />
+          <path d="M0 100 C 40 88, 110 90, 160 98 L160 120 L0 120 Z" fill="#2F9E6B" />
+          <path d="M34 92 l10 -34 l10 34 Z M60 90 l8 -26 l8 26 Z M112 88 l11 -38 l11 38 Z" fill="#1C5B43" />
+        </svg>
+        <span className="ob-found__caption">Founded by @you</span>
+      </motion.div>
+      <motion.span
+        className="ob-found__points"
+        animate={{ scale: [0, 0, 1.3, 1, 1, 0], opacity: [0, 0, 1, 1, 1, 0], y: [10, 10, -6, 0, 0, 0] }}
+        transition={{ ...loop, times: [0, 0.14, 0.2, 0.26, 0.92, 1] }}
+      >
+        +10
+      </motion.span>
+      <div className="ob-guide ob-guide--left">
+        <Kip pose="camera" size={80} />
+        <Bubble side="to-left" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
+          Say cheese, park!
+        </Bubble>
+      </div>
+    </div>
+  );
+}
+
 export function Onboarding() {
   const { dispatch } = useStore();
   const toast = useToast();
@@ -290,6 +342,7 @@ export function Onboarding() {
   const [asking, setAsking] = useState(false);
   const slide = SLIDES[index];
   const last = index === SLIDES.length - 1;
+  const onYouSlide = index === YOU_SLIDE;
   const canPickHandle = auth.phase === "authenticated" && game.status === "ready" && !game.me?.player;
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
@@ -369,7 +422,7 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <FlagHills /> : index === 1 ? <GoThere /> : index === 2 ? <PointsPerDay /> : index === 3 ? <TakeOver /> : <YourFlag />}
+                {index === 0 ? <FlagHills /> : index === 1 ? <GoThere /> : index === 2 ? <PointsPerDay /> : index === 3 ? <TakeOver /> : index === YOU_SLIDE ? <YourFlag /> : <FoundIt />}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -388,14 +441,14 @@ export function Onboarding() {
                 ))}
               </h1>
               <motion.p className="onboarding__body" variants={rise}>
-                {last && !game.me?.player && auth.phase !== "authenticated" ? `${slide.body} Sign in when you plant your first one.` : slide.body}
+                {onYouSlide && !game.me?.player && auth.phase !== "authenticated" ? `${slide.body} Sign in when you plant your first one.` : slide.body}
               </motion.p>
             </motion.div>
           </AnimatePresence>
         </div>
       </motion.div>
       <AnimatePresence>
-        {last && canPickHandle && (
+        {onYouSlide && canPickHandle && (
           <motion.button
             className="btn btn--paper btn--block ob-handle-btn"
             initial={{ y: 20, opacity: 0 }}
@@ -451,13 +504,13 @@ export function Onboarding() {
                 <Kip pose="talk" size={110} />
               </div>
               <h2>Kip needs to know when you're in a park.</h2>
-              <p>Your location is only used to check you in inside a park boundary. It never leaves your phone.</p>
+              <p>Kip uses your location to check you're inside a park. It's never shown to other players.</p>
               <button className="btn btn--block" onClick={() => finish(true)}>
                 <Icon name="locate" /> Allow location
               </button>
               {!FIELD && (
                 <button className="permission__alt" onClick={() => finish(false)}>
-                  Use a demo spot in Victoria
+                  {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
                 </button>
               )}
             </motion.div>

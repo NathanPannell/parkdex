@@ -20,7 +20,8 @@ import type {
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
 import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
-import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION } from "./contracts";
+import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION, contentTransportPausedError } from "./contracts";
+import { contentGateView } from "../../components/contentGateState";
 import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
 
 const mapMock = vi.hoisted(() => ({
@@ -1562,6 +1563,94 @@ describe("incremental content sync", () => {
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-resume-park"));
     expect(snapshotRequests).toBe(2);
     expect(runtime.getStatus().waitingForWifi).toBe(false);
+  });
+
+  it("shows no error while a permission dialog pauses the first sync and finishes it on resume", async () => {
+    const release = await makeRelease("8".repeat(64), 1, "municipal-dialog-park", "scene-dialog");
+    const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
+    const server = contentSyncServer(snapshot);
+    let transportPaused = true;
+    let snapshotRequests = 0;
+    // The vc14 plugin rejects in-flight and new requests while the Activity is paused.
+    const fetcher: typeof fetch = async (input, init) => {
+      if (new URL(String(input)).pathname.endsWith("/snapshot")) snapshotRequests += 1;
+      if (transportPaused) throw contentTransportPausedError();
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
+      connected: true,
+      wifi: true,
+      contentDownloadAllowed: true,
+    }));
+
+    await runtime.start();
+
+    expect(snapshotRequests).toBe(1);
+    expect(runtime.getStatus().error).toBeNull();
+    expect(runtime.getStatus().phase).toBe("downloading");
+    expect(contentGateView(runtime.getStatus())).toMatchObject({ showError: false, showRetry: false, title: "Getting Parkdex ready…" });
+
+    transportPaused = false;
+    runtime.resumeAfterPause?.();
+    // Resume restarts at once instead of waiting for the one-second fallback retry.
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-dialog-park"), { timeout: 600 });
+    expect(snapshotRequests).toBe(2);
+    expect(runtime.getStatus().error).toBeNull();
+    expect(runtime.getStatus().phase).toBe("ready");
+  });
+
+  it("retries a paused first sync on its own when no resume event arrives", async () => {
+    const release = await makeRelease("7".repeat(64), 1, "municipal-backoff-park", "scene-backoff");
+    const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
+    const server = contentSyncServer(snapshot);
+    let pausedRequests = 1;
+    const fetcher: typeof fetch = async (input, init) => {
+      if (pausedRequests > 0) {
+        pausedRequests -= 1;
+        throw contentTransportPausedError();
+      }
+      return server.fetcher(input, init);
+    };
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
+      connected: true,
+      wifi: true,
+      contentDownloadAllowed: true,
+    }));
+
+    await runtime.start();
+    expect(runtime.getStatus().error).toBeNull();
+
+    await vi.waitFor(() => expect(runtime.getStatus().snapshot?.parks[0]?.id).toBe("municipal-backoff-park"), { timeout: 3000 });
+    expect(runtime.getStatus().error).toBeNull();
+  });
+
+  it("ignores resume when nothing was interrupted", async () => {
+    const release = await makeRelease("6".repeat(64), 1, "municipal-quiet-park", "scene-quiet");
+    const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
+    const server = contentSyncServer(snapshot);
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, {
+      connected: true,
+      wifi: true,
+      contentDownloadAllowed: true,
+    }));
+    await runtime.start();
+    const requests = server.calls.length;
+
+    runtime.resumeAfterPause?.();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(server.calls.length).toBe(requests);
+  });
+
+  it("still reports a real sync failure as an error", async () => {
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), async () => {
+      throw new Error("Content snapshot returned HTTP 500");
+    }, { connected: true, wifi: true, contentDownloadAllowed: true }));
+
+    await runtime.start();
+
+    expect(runtime.getStatus().error).toBe("Content snapshot returned HTTP 500");
+    expect(contentGateView(runtime.getStatus())).toMatchObject({ showError: true, showRetry: true, title: "Park guides couldn’t be loaded." });
   });
 
   it("keeps skeleton parks in the catalogue, skips map traffic for a null pointer, and reuses an unchanged cursor", async () => {

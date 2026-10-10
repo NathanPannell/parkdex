@@ -1,18 +1,21 @@
 import { renderOperatorEmail, renderReceiptEmail } from "./emails.js";
 import { getClientAddress, keyedHash, requestOriginAllowed } from "./security.js";
 import { createNeonFeedbackStore } from "./store.js";
+import { feedbackRetentionCutoff, purgeArchivedFeedbackFromDatabase, type FeedbackPurgeResult } from "./feedbackArchive.js";
 import type { FeedbackStore, MailIntent, ResendPayload } from "./store.js";
 import { sendEmail } from "./feedbackDelivery.js";
 import { handleInteractionRequest, handleRetentionRequest, retentionAuthorized, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
 import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
-import { createNeonOsmSearchLimiter, createNeonParkProposalStore, handleParkProposalRequest, type ParkProposalStore } from "./parkProposals.js";
+import { createNeonOsmSearchLimiter, handleParkProposalRequest } from "./parkProposals.js";
 import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmParks.js";
 import { createSqlOsmParkTable, type OsmParkTable } from "./osmParkTable.js";
-import { approveThreshold, createSqlProposalReviewStore, databaseSqlRunner, reviewProposal, type ProposalModerator, type ProposalReviewStore } from "./proposalReview.js";
-import { createProposalModerator } from "./proposalModeration.js";
+import { createSqlProposalReviewStore, databaseSqlRunner, type ProposalReviewStore } from "./proposalReview.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
+import { handleFoundersRequest } from "./founders.js";
+import { createNeonFoundersStore, type FoundersStore } from "./founders-store.js";
+import { createPhotoChecker, photoApproveThreshold, type PhotoChecker } from "./founderPhoto.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
 import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
@@ -44,8 +47,9 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   POSTHOG_PROJECT_KEY?: string;
   POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
-  /** Park proposals: the model's approval threshold and the Overpass endpoint. */
-  PARK_PROPOSAL_APPROVE_THRESHOLD?: string;
+  /** Founder photos: the verdict probability needed to approve (default 0.8). */
+  FOUNDER_PHOTO_APPROVE_THRESHOLD?: string;
+  /** OpenStreetMap services behind the park outline search. */
   OVERPASS_URLS?: string;
   OVERPASS_URL?: string;
   NOMINATIM_URL?: string;
@@ -61,12 +65,15 @@ export interface WorkerDependencies {
   interactions?: InteractionDependencies;
   game?: GameDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
+  /** Deletes feedback archived on the operator board more than 90 days before `cutoff`. */
+  purgeArchivedFeedback?(env: WorkerEnvironment, cutoff: string): Promise<FeedbackPurgeResult>;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
-  createParkProposalStore?(env: WorkerEnvironment): ParkProposalStore;
   analytics?(env: WorkerEnvironment): AnalyticsSink | null;
+  /** Catalogue lookups around a point (matching outlines, regions). */
   createProposalReviewStore?(env: WorkerEnvironment): ProposalReviewStore;
-  /** Undefined uses the shared moderation module; null turns the model off. */
-  proposalModerator?: ProposalModerator | null;
+  createFoundersStore?(env: WorkerEnvironment): FoundersStore;
+  /** Undefined uses the shared moderation module; null turns the photo model off. */
+  photoChecker?: PhotoChecker | null;
   osmClient?: OsmClient;
   /** Our own copy of OpenStreetMap park outlines; defaults to kip_osm.parks in DATABASE_URL. */
   osmParkTable?(env: WorkerEnvironment): OsmParkTable | null;
@@ -77,9 +84,7 @@ export interface WorkerDependencies {
 }
 
 const BASIC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Three questions about one proposal; the proposer waits on a spinner with a 30 second budget.
-const PROPOSAL_MODERATION_TIMEOUT_MS = 8_000;
-// Catalogue parks this close to the pin are checked against search results, to mark them "Already on the map".
+// Catalogue parks this close to the position are checked against search results, to mark them "Already on the map".
 const CATALOGUE_MATCH_KM = 5;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
@@ -306,7 +311,19 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     if (!retentionResponse.ok) return retentionResponse;
     const interactionResult = await retentionResponse.json() as { deleted: number; remainingExpired: number };
     const authResult = await purgeAuthRetention(env, dependencies.auth);
-    return json({ ...interactionResult, authDeleted: authResult.deleted, remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired });
+    // Archived feedback rides on the same daily run. Its backlog is reported on its own, because
+    // the photo Worker's cron measures progress by the interaction and auth deletions only.
+    const feedbackCutoff = feedbackRetentionCutoff(requestNow(dependencies));
+    const feedbackResult = dependencies.purgeArchivedFeedback
+      ? await dependencies.purgeArchivedFeedback(env, feedbackCutoff)
+      : env.DATABASE_URL ? await purgeArchivedFeedbackFromDatabase(env.DATABASE_URL, feedbackCutoff) : { deleted: 0, remainingExpired: 0 };
+    return json({
+      ...interactionResult,
+      authDeleted: authResult.deleted,
+      remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired,
+      feedbackDeleted: feedbackResult.deleted,
+      feedbackRemainingExpired: feedbackResult.remainingExpired,
+    });
   }
   const authDependencies: AuthDependencies = {
     ...dependencies.auth,
@@ -328,8 +345,42 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const gameResponse = await handleGameRequest(request, env, {
     account: () => requireAccount(request, env, authDependencies),
     mutation: () => requireAccountMutation(request, env, authDependencies),
-  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, ...dependencies.game });
+  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, publicOrigin: appUrl(env, request), ...dependencies.game });
   if (gameResponse) return gameResponse;
+  const reviewStore = () => {
+    if (dependencies.createProposalReviewStore) return dependencies.createProposalReviewStore(env);
+    if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Parks are unavailable.");
+    return createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL));
+  };
+  const foundersStore = () => {
+    if (dependencies.createFoundersStore) return dependencies.createFoundersStore(env);
+    if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Founding parks is unavailable.");
+    return createNeonFoundersStore(env.DATABASE_URL);
+  };
+  const foundersResponse = await handleFoundersRequest(request, {
+    store: foundersStore,
+    osm: () => dependencies.osmClient!,
+    photoChecker: () => dependencies.photoChecker === undefined
+      ? (env.OPENROUTER_API_KEY?.trim() ? createPhotoChecker(env, dependencies.fetch) : null)
+      : dependencies.photoChecker,
+    threshold: photoApproveThreshold(env.FOUNDER_PHOTO_APPROVE_THRESHOLD),
+    mutation: () => requireAccountMutation(request, env, authDependencies),
+    optionalAccount: async () => {
+      try {
+        return await requireAccount(request, env, authDependencies);
+      } catch (error) {
+        // The summary is public; a missing or expired session just leaves out "your visits".
+        if (error instanceof HttpError && [401, 403, 503].includes(error.status)) return null;
+        throw error;
+      }
+    },
+    nearbyParks: (lat, lng, km) => reviewStore().nearbyParks(lat, lng, km),
+    publicOrigin: appUrl(env, request),
+    now: () => requestNow(dependencies),
+    uuid: () => requestUuid(dependencies),
+    emit: (type, properties) => emitEvent(type, properties),
+  });
+  if (foundersResponse) return foundersResponse;
   // Manual recovery for a partially failed account deletion. Uses the retention machine secret.
   const deletionResume = /^\/api\/recovery\/account-deletions\/([0-9a-f-]{36})\/resume$/i.exec(path);
   if (deletionResume && request.method === "POST") {
@@ -354,7 +405,7 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   if (appConfigResponse) return appConfigResponse;
   const sessionSecret = () => {
     if (!env.SESSION_SECRET || new TextEncoder().encode(env.SESSION_SECRET).length < 32) {
-      throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
+      throw new HttpError(503, "service_unavailable", "Park search is unavailable.");
     }
     return env.SESSION_SECRET;
   };
@@ -368,28 +419,15 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     },
     osm: () => dependencies.osmClient!,
     catalogue: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (lat, lng) =>
-      (dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!))).nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
+      reviewStore().nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
+    founders: !dependencies.createFoundersStore && !env.DATABASE_URL ? undefined : async (parkIds) => {
+      const store = foundersStore();
+      const [founders, hidden] = await Promise.all([store.founders(parkIds), store.hidden(parkIds)]);
+      return { founders, hidden };
+    },
   });
   if (osmResponse) return osmResponse;
-  const proposalResponse = await handleParkProposalRequest(request, {
-    json,
-    ipHash: async () => keyedHash(sessionSecret(), "proposal-ip", getClientAddress(request)),
-    newId: () => requestUuid(dependencies),
-    store: () => {
-      if (dependencies.createParkProposalStore) return dependencies.createParkProposalStore(env);
-      if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Park proposals are unavailable.");
-      return createNeonParkProposalStore(env.DATABASE_URL);
-    },
-    review: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (proposal) => reviewProposal(proposal, {
-      store: dependencies.createProposalReviewStore?.(env) ?? createSqlProposalReviewStore(databaseSqlRunner(env.DATABASE_URL!)),
-      osm: dependencies.osmClient!,
-      moderate: dependencies.proposalModerator === undefined
-        ? createProposalModerator(env, dependencies.fetch, PROPOSAL_MODERATION_TIMEOUT_MS)
-        : dependencies.proposalModerator,
-      threshold: approveThreshold(env.PARK_PROPOSAL_APPROVE_THRESHOLD),
-      now: () => new Date(requestNow(dependencies)),
-    }),
-  });
+  const proposalResponse = await handleParkProposalRequest(request);
   if (proposalResponse) return proposalResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
 

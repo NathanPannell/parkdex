@@ -170,6 +170,11 @@ export function fetchAuthenticated(input: RequestInfo | URL, init?: RequestInit,
   return fetchRequest(input, init, true, expectedAccountId);
 }
 
+/** An absolute URL on the account API origin, for resources such as park cover photos. */
+export function accountApiUrl(path: string): string {
+  return apiUrl(path);
+}
+
 /** Public reads from the same account API origin, for guests and signed-in players alike. */
 export function fetchAccountApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   return fetchRequest(input, init, false);

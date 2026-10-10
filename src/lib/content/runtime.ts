@@ -2,6 +2,7 @@ import {
   canDownloadContent,
   CONTENT_BOUNDS,
   CONTENT_READER_VERSION,
+  isContentTransportPaused,
   isWaitingForContentWifi,
   VICTORIA,
   type Connectivity,
@@ -241,9 +242,15 @@ class ContentRuntimeController implements ContentRuntime {
   private pendingActivationId: string | null = null;
   private waitingForUpdateWifi = false;
   private waitingForBulkWifi = false;
+  // Set when the platform stopped a request during a pause that had no stop, so resume restarts it.
+  private pausedWorkPending = false;
 
   constructor(private readonly options: ContentRuntimeOptions) {
-    this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) => fetcher(input, init).catch((error: unknown) => {
+      if (isContentTransportPaused(error)) this.pausedWorkPending = true;
+      throw error;
+    })) as typeof fetch;
     this.environment = options.environment;
     this.scheduler = new ContentDownloadScheduler(this.currentPolicy());
   }
@@ -331,6 +338,25 @@ class ContentRuntimeController implements ContentRuntime {
         else this.startBulkMap(this.status.snapshot.releaseId);
         this.scheduleNearbyPrefetch(true);
       }
+    }
+  }
+
+  resumeAfterPause(): void {
+    if (this.stopped || !this.pausedWorkPending) return;
+    this.pausedWorkPending = false;
+    // A real background stop restarts work through setForeground instead.
+    if (!this.foreground) return;
+    this.clearSyncRetry(true);
+    if (this.syncPromise) this.syncRetryRequested = true;
+    if (this.mapSyncPromise) this.mapRetryRequested = true;
+    if (!this.initialized) return;
+    if (this.hasSyncApi() && this.canDownloadContent()) void this.syncContent(true, false);
+    else void this.checkCurrentRelease(true);
+    if (this.status.snapshot) {
+      if (this.hasSyncApi()) this.startMapSync();
+      else this.startBulkMap(this.status.snapshot.releaseId);
+      this.scheduleNearbyPrefetch(true);
+      this.scheduleNearbyArt();
     }
   }
 
@@ -920,7 +946,10 @@ class ContentRuntimeController implements ContentRuntime {
     try {
       await work;
     } catch (error) {
-      if (!this.stopped && (error as Error)?.name !== "AbortError") {
+      if (!this.stopped && isContentTransportPaused(error)) {
+        // Resume restarts the sync at once; this backoff covers a resume that arrives too early.
+        this.scheduleSyncRetry();
+      } else if (!this.stopped && (error as Error)?.name !== "AbortError") {
         const waitingForWifi = (error as Error)?.name === "WifiUnavailableError";
         this.setStatus({
           phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : "error",

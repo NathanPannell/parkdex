@@ -20,7 +20,7 @@ On start it:
 2. loads the staging catalogue's parks (the same IDs the dev app reads) into `public.parks`, or the bundled `src/data/parks.json` when staging is unreachable. `--catalogue <url>` points at another content snapshot
 3. seeds the test-only accounts in `scripts/local-stack.seed.json` (`tester1@example.test` to `tester3@example.test`, all `@example.test`). The first two already have handles; `tester3` has none, for the handle setup screen. The shared test password is in that file.
 
-Options: `--port` (default 8787), `--app-origin` (default `http://localhost:5190`), `--pgdata`, `--pg-port` (default 55510). `PG_BIN` overrides the PostgreSQL binaries folder (default `C:/Program Files/PostgreSQL/18/bin`). `OPENROUTER_API_KEY` and `OPENROUTER_MODERATION_MODEL` pass through when set; without a key, handles use the blocklist only.
+Options: `--port` (default 8787), `--app-origin` (default `http://localhost:5190`), `--pgdata`, `--pg-port` (default 55510), and `--content`, which also installs the content sync migrations and seeds the catalogue parks with their boundaries and drive rows (badge scenes left out), so `POST /api/parks/found` can publish parks. Founding also needs OpenStreetMap outlines: load them with `scripts/osm_park_index.py plan` and `apply` against the local database (`docs/osm-park-index.md`). Use a fresh database with `--content`. `PG_BIN` overrides the PostgreSQL binaries folder (default `C:/Program Files/PostgreSQL/18/bin`). `OPENROUTER_API_KEY` and `OPENROUTER_MODERATION_MODEL` pass through when set; without a key, handles use the blocklist only.
 
 Email is disabled, so register, verification and password reset emails are not sent. Sign in with the seeded accounts. Private photos are not available locally.
 
@@ -52,7 +52,7 @@ Login is rate limited to 5 attempts per email per 15 minutes, as in production.
 
 ## Flag game API
 
-The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists) and `serverTime`. `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
+The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists), `serverTime`, and `visitedToday`, the park IDs this account already visited on the current America/Vancouver day, with `visitedTodayUntil`, the instant that day ends (null before a handle exists). `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
 
 | Error | When |
 | --- | --- |

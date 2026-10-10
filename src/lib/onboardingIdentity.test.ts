@@ -82,6 +82,21 @@ describe("onboarding install identity", () => {
     )).toBe(false);
   });
 
+  it("keeps web onboarding across deploys, which change the build on every release", () => {
+    expect(onboardingMatchesInstall(
+      { onboarded: true, buildId: "old-source-sha", packageInstallIdentity: null },
+      { buildId: "new-source-sha", packageInstallIdentity: null, native: false },
+    )).toBe(true);
+    expect(onboardingMatchesInstall(
+      { onboarded: true, buildId: null, packageInstallIdentity: null },
+      { buildId: "new-source-sha", packageInstallIdentity: null, native: false },
+    )).toBe(true);
+    expect(onboardingMatchesInstall(
+      { onboarded: false, buildId: "source-sha", packageInstallIdentity: null },
+      { buildId: "source-sha", packageInstallIdentity: null, native: false },
+    )).toBe(false);
+  });
+
   it("allows web onboarding completion to persist without a native package identity", () => {
     expect(onboardingMatchesInstall(
       { onboarded: true, buildId: "source-sha", packageInstallIdentity: null },

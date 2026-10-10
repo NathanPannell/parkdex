@@ -9,7 +9,7 @@
     "dev": "vite --port 5191 --strictPort",
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
-    "test": "tsx --test server/*.test.ts",
+    "test": "tsx --test server/*.test.ts server/*/*.test.ts src/*.test.ts",
     "prebuild": "node scripts/copy-maplibre-worker.mjs"
   },
   "dependencies": {
@@ -19,7 +19,8 @@
     "@neondatabase/serverless": "1.1.0",
     "maplibre-gl": "6.11.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "@types/geojson": "7946.0.16",

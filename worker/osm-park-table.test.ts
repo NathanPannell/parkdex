@@ -62,27 +62,33 @@ test("the table narrows by bounding box and returns outlines as features", async
 test("search answers from the table without touching any live service", async () => {
   const network: string[] = [];
   const client = createOsmClient({}, noNetwork(network), { table: table([RESERVE, PATERSON, NEARBY, FAR]), nominatimSpacingMs: 0 });
-  const parks = await client.search(PIN[1], PIN[0]);
+  const parks = await client.search(PIN[1], PIN[0], 35);
   assert.deepEqual(network, []);
-  // Both containing outlines first (smaller first), then the garden 730 m away; the far park is dropped by real distance.
-  assert.deepEqual(parks.map((park) => [park.id, park.containsPin]), [[23938892, true], [77, true], [55, false]]);
-  assert.ok(parks[2].distanceM > 650 && parks[2].distanceM < 800);
+  // Only the outlines that contain the position, smaller first; the garden 730 m away and the far park are not offered.
+  assert.deepEqual(parks.map((park) => [park.id, park.containsPin]), [[23938892, true], [77, true]]);
   assert.equal(parks[1].geometry.coordinates[0].length, 2, "the reserve keeps its pond");
 });
 
-test("tiny planters near the pin are left out unless the pin is inside one", async () => {
+test("a tiny planter is offered only when the position is inside it", async () => {
   const planter: OsmFeature = { type: "way", id: 88, name: null, kind: "leisure=garden", tags: { leisure: "garden" }, geometry: multi(box(-123.0575, 49.0895, -123.0574, 49.0896)), areaM2: 80 };
   const around: OsmFeature = { ...planter, id: 89, geometry: multi(box(-123.06015, 49.08895, -123.06005, 49.08905)) };
-  const parks = await createOsmClient({}, noNetwork(), { table: table([PATERSON, planter, around]) }).search(PIN[1], PIN[0]);
+  const parks = await createOsmClient({}, noNetwork(), { table: table([PATERSON, planter, around]) }).search(PIN[1], PIN[0], 35);
   assert.deepEqual(parks.map((park) => park.id), [89, 23938892]);
 });
 
-test("with nothing in the table near the pin, or the table unreadable, the live services are asked", async () => {
-  for (const contents of [[FAR], new Error("relation \"kip_osm.parks\" does not exist")]) {
+test("an outline in the table near the position settles the search, even when none contains it", async () => {
+  const network: string[] = [];
+  const client = createOsmClient({ NOMINATIM_URL: "https://nominatim.example.test" }, noNetwork(network), { table: table([NEARBY]), nominatimSpacingMs: 0 });
+  assert.deepEqual(await client.search(PIN[1], PIN[0], 35), []);
+  assert.deepEqual(network, []);
+});
+
+test("with nothing in the table near the position, or the table unreadable, the live services are asked", async () => {
+  for (const contents of [[], new Error("relation \"kip_osm.parks\" does not exist")]) {
     const network: string[] = [];
     const client = createOsmClient({ NOMINATIM_URL: "https://nominatim.example.test", OVERPASS_URLS: "https://overpass.example.test/api/interpreter" },
       noNetwork(network), { table: table(contents), nominatimSpacingMs: 0, overpassGraceMs: 0 });
-    await assert.rejects(client.search(PIN[1], PIN[0]));
+    await assert.rejects(client.search(PIN[1], PIN[0], 35));
     assert.ok(network.some((url) => url.startsWith("https://nominatim.example.test/search")), "Nominatim was asked");
   }
 });
@@ -96,7 +102,7 @@ test("the outline fetch at submit uses the table first", async () => {
   assert.deepEqual(calls, ["get way/23938892"]);
 });
 
-test("GET /api/osm/parks uses the table the worker builds, and still marks parks already on the map", async () => {
+test("GET /api/osm/parks uses the table the worker builds, offers only the parks around the position, and marks parks already on the map", async () => {
   const catalogue = [{ id: "municipal-delta-paterson", name: "Paterson Park", region: "South Coast", lat: 49.089, lng: -123.06, boundary: PATERSON.geometry }];
   const worker = createFeedbackWorker({
     fetch: noNetwork(),
@@ -106,9 +112,8 @@ test("GET /api/osm/parks uses the table the worker builds, and still marks parks
   });
   const response = await worker.fetch(new Request(`https://api.example.test/api/osm/parks?lat=${PIN[1]}&lng=${PIN[0]}`), { SESSION_SECRET: "test-session-secret-which-is-long-enough" } as never);
   assert.equal(response.status, 200);
-  const body = await response.json() as { parks: { id: number; inCatalogue: unknown }[] };
-  assert.deepEqual(body.parks.map((park) => [park.id, park.inCatalogue]), [
-    [23938892, { parkId: "municipal-delta-paterson", name: "Paterson Park" }],
-    [55, null],
+  const body = await response.json() as { parks: { id: number; inCatalogue: unknown; founder: unknown; hasCover: boolean }[] };
+  assert.deepEqual(body.parks.map((park) => [park.id, park.inCatalogue, park.founder, park.hasCover]), [
+    [23938892, { parkId: "municipal-delta-paterson", name: "Paterson Park" }, null, false],
   ]);
 });

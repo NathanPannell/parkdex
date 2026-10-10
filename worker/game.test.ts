@@ -68,7 +68,7 @@ class MemoryGameStore implements GameStore {
     return this.visitResult;
   }
   async summary() {
-    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }] };
+    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }], visitedToday: [PARK], visitedTodayUntil: "2026-10-09T07:00:00.000Z" };
   }
   async markTakeoversSeen(_accountId: string, at: string) {
     this.seenAt = at;
@@ -76,6 +76,8 @@ class MemoryGameStore implements GameStore {
   }
   async flags() { return [{ parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z" }]; }
   async leaderboard() { return [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1 }]; }
+  async founders() { return [{ parkId: PARK, handle: "sam", photoSha256: "a".repeat(64) }]; }
+  async founderPoints() { return 10; }
 }
 
 function setup(options: { fetch?: typeof fetch; envOverride?: Partial<WorkerEnvironment> } = {}) {
@@ -230,11 +232,14 @@ test("me returns the player summary, or a flag seed and empty state before a han
     player: { handle: "sam", flagSeed: player.flagSeed }, flagSeed: player.flagSeed, score: 12,
     parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }],
     takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }],
+    founderPoints: 10,
+    visitedToday: [PARK],
+    visitedTodayUntil: "2026-10-09T07:00:00.000Z",
     serverTime: new Date(NOW).toISOString(),
   });
   store.players.clear();
   const empty = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
-  assert.deepEqual(empty, { player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], serverTime: new Date(NOW).toISOString() });
+  assert.deepEqual(empty, { player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0, serverTime: new Date(NOW).toISOString() });
   assert.match(String(empty.flagSeed), /^[0-9a-f]{16}$/);
 });
 
@@ -252,7 +257,12 @@ test("takeovers seen clamps the marker to server time and validates the body", a
 test("public flags and leaderboard return the contract shape without account IDs", async () => {
   const { call, events } = setup();
   const flags = await (await call("GET", "/api/game/flags", undefined, "none")).json() as Record<string, unknown>;
-  assert.deepEqual(flags, { flags: [{ parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z" }], serverTime: new Date(NOW).toISOString() });
+  assert.deepEqual(flags, {
+    flags: [{ parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z" }],
+    // Founded parks carry an absolute cover URL, so native builds can load it cross-origin.
+    founders: [{ parkId: PARK, handle: "sam", coverUrl: `${origin}/api/parks/${PARK}/cover/${"a".repeat(64)}.jpg` }],
+    serverTime: new Date(NOW).toISOString(),
+  });
   const board = await (await call("GET", "/api/game/leaderboard", undefined, "none")).json() as Record<string, unknown>;
   assert.deepEqual(board, { players: [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1 }], serverTime: new Date(NOW).toISOString() });
   assert.doesNotMatch(JSON.stringify([flags, board]), new RegExp(ACCOUNT));

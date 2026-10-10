@@ -172,6 +172,22 @@ export function isWaitingForContentWifi(connectivity: Connectivity): boolean {
   return connectivity.connected && !connectivity.wifi;
 }
 
+const TRANSPORT_PAUSED = "contentTransportPaused";
+
+/**
+ * A request the platform stopped while the Activity was paused but still visible, for example
+ * under a permission dialog. It is a cancellation, not a failure: work restarts on resume.
+ */
+export function contentTransportPausedError(): DOMException {
+  const error = new DOMException("Content requests wait while Parkdex is paused", "AbortError");
+  Object.defineProperty(error, TRANSPORT_PAUSED, { value: true });
+  return error;
+}
+
+export function isContentTransportPaused(error: unknown): boolean {
+  return Boolean(error) && typeof error === "object" && (error as Record<string, unknown>)[TRANSPORT_PAUSED] === true;
+}
+
 /** Request options understood by the content transport. */
 export type ContentRequestInit = RequestInit & {
   /** Allow a detailed map chunk on any connection, for nearby and streamed detail. */
@@ -199,6 +215,8 @@ export interface ContentRuntime {
   start(): Promise<void>;
   retry(): Promise<void>;
   setForeground(foreground: boolean): void;
+  /** Restart work the platform stopped while the app was paused but not stopped. */
+  resumeAfterPause?(): void;
   setConnectivity(connectivity: Connectivity): void;
   setLocation(point: MapPoint | null): void;
   refreshClaimedParks(): void;

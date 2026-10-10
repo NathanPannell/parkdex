@@ -13,6 +13,7 @@ import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
 import { parkHolder, visitHeadline } from "../lib/game/visit";
+import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { useStore } from "../lib/store";
 import "../game.css";
 
@@ -27,7 +28,6 @@ const CARRY_TILT = -12;
 const ZOOM = 0.1;
 const DIM = 0.72;
 
-type Phase = "charge" | "sending" | "playing" | "done" | "failed";
 type Failure = { message: string; action: "retry" | "sign-in" | "handle" };
 type Score = { value: number; target: number; kind: "count" | "rate" };
 
@@ -76,7 +76,7 @@ export function Plant() {
   const rivalDays = rival ? flagAgeDays(rival.since, game.serverNow()) : 0;
   const mineFirst = startsPlanted(holder);
   const ownDays = holder.kind === "mine" ? flagAgeDays(holder.flag.since, game.serverNow()) : 0;
-  const [phase, setPhase] = useState<Phase>("charge");
+  const [phase, setPhase] = useState<PlantPhase>("charge");
   const [holding, setHolding] = useState(false);
   const [result, setResult] = useState<VisitResult | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -120,6 +120,22 @@ export function Plant() {
   useEffect(() => {
     if (!parkId || !accountId) dispatch({ type: "go", screen: "map" });
   }, [accountId, dispatch, parkId]);
+
+  // Android back is handled in App, which asks for the phase; a hold in progress must not
+  // finish and send a visit after the screen has gone.
+  useEffect(() => reportPlantPhase(phase), [phase]);
+  useEffect(() => () => {
+    reportPlantPhase(null);
+    anim.current?.stop();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && canLeavePlant(phase)) leave("map");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
 
   // While charging, the world dims and leans in, and the flag rises trembling in your hands.
   useAnimationFrame((t) => {
@@ -319,11 +335,9 @@ export function Plant() {
     void send();
   };
 
-  const leave = (screen: "map" | "parks") => {
-    dispatch({ type: "trip", id: null });
-    if (screen === "map" && park) dispatch({ type: "focus", id: park.id });
-    dispatch({ type: "go", screen });
-  };
+  function leave(screen: "map" | "parks") {
+    for (const action of leavePlant(park ? park.id : null, screen)) dispatch(action);
+  }
 
   const won = !!result && (result.outcome === "planted" || result.outcome === "took");
   const headline = result ? visitHeadline(result, parkName) : null;
@@ -335,6 +349,22 @@ export function Plant() {
     <motion.div className="screen claim plant" exit={{ opacity: 0, transition: { duration: 0.3 } }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <motion.div className="claim__glow" style={{ opacity: won && phase === "done" ? 1 : 0.45, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }} />
       <motion.div className="plant-vignette" style={{ opacity: dim }} aria-hidden="true" />
+
+      <AnimatePresence>
+        {(phase === "charge" || phase === "failed") && (
+          <motion.button
+            key="close"
+            className="plant__close"
+            onClick={() => leave("map")}
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -12 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          >
+            <Icon name="close" size={16} stroke={3} /> Not now
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <div className="claim__head">
         <AnimatePresence mode="wait">

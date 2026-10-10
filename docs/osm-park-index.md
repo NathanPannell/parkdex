@@ -1,6 +1,6 @@
 # OpenStreetMap park outlines
 
-"Propose a park" finds the park around a pin in our own copy of OpenStreetMap park outlines, `kip_osm.parks`, before it asks any live service. The table holds every public park-like area in the British Columbia extract, so a pin inside or near any mapped park is found in milliseconds, whatever the park is called, even while Overpass and Nominatim are down.
+"Found a park" finds the parks around the player in our own copy of OpenStreetMap park outlines, `kip_osm.parks`, before it asks any live service. The table holds every public park-like area in the British Columbia extract, so a position inside any mapped park is found in milliseconds, whatever the park is called, even while Overpass and Nominatim are down.
 
 ## What is in the table
 
@@ -12,7 +12,7 @@ The migration is `database/migrations/osm_parks_001_init.sql`. It needs no PostG
 
 ## How the search uses it
 
-`GET /api/osm/parks` asks the table for outlines whose box comes within 1 km of the pin, keeps those that contain the pin or whose outline is within 1 km, marks parks already in Parkdex, and returns up to 8. Only when the table has nothing near the pin, or cannot be read, does it fall back to Nominatim and then Overpass. The outline fetch when a proposal is sent reads the table first too. The operator dashboard's "Approve and publish" reads the table of the database it is switched to.
+`GET /api/osm/parks` asks the table for outlines whose box comes within 1 km of the position, keeps those that contain it within the location accuracy (10 to 35 m), marks parks already in Parkdex with their founder, and returns up to 8. Only when the table has no outline at all within 1 km, or cannot be read, does it fall back to Nominatim and then Overpass. The outline fetch when a park is founded (`POST /api/parks/found`, `docs/park-founders.md`) reads the table first too. The operator dashboard's "Approve and publish" reads the table of the database it is switched to.
 
 ## Refresh the table
 

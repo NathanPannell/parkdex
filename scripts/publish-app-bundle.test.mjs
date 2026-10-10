@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import zlib from "node:zlib";
 import { CDN_ORIGIN } from "./publish-content-channel.mjs";
-import { bundleVersion, collectBundleFiles, createZip, makeBundlePointer, prepareAppBundle, publishAppBundle } from "./publish-app-bundle.mjs";
+import { bundleVersion, collectBundleFiles, createZip, makeBundlePointer, prepareAppBundle, publicationRow, publishAppBundle, recordPublication, verifyPointerThroughCdn } from "./publish-app-bundle.mjs";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
@@ -188,4 +188,38 @@ test("apply needs every R2 credential and never uploads without them", async (t)
   const r2 = fakeR2();
   await assert.rejects(publishAppBundle(bundle, { expectedGeneration: 0, fetcher: r2.fetcher }), /R2_ACCOUNT_ID/);
   assert.equal(r2.calls.length, 0);
+});
+
+test("apply returns the pointer it replaced, for the publish history", async (t) => {
+  const bundle = await prepared(t, 2);
+  const current = { schema: "parkdex.app-bundle-channel/v1", channel: "staging", generation: 1, sha256: "d".repeat(64) };
+  const result = await publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: fakeR2({ pointer: current }).fetcher });
+  assert.equal(result.previous.generation, 1);
+  const first = await publishAppBundle(await prepared(t), { ...credentials, expectedGeneration: 0, fetcher: fakeR2().fetcher });
+  assert.equal(first.previous, null);
+});
+
+test("--record writes one idempotent history row with the CDN readback outcome", async (t) => {
+  const bundle = await prepared(t, 2);
+  const row = publicationRow(bundle.pointer, { generation: 1, sha256: "d".repeat(64) }, { outcome: "confirmed", note: "Map fix" });
+  assert.deepEqual([row.channel, row.generation, row.previousGeneration, row.action, row.source, row.previousSha256, row.minimumNativeBuild, row.note],
+    ["staging", 2, 1, "publish", "script", "d".repeat(64), 12, "Map fix"]);
+  assert.equal(publicationRow(bundle.pointer, null, { outcome: "confirmed" }).previousGeneration, 0);
+  assert.throws(() => publicationRow(bundle.pointer, null, { outcome: "confirmed", note: "x".repeat(301) }), /--note/);
+
+  const calls = [];
+  const query = async (text, params) => { calls.push({ text, params }); return calls.length === 1 ? [{ id: 1 }] : []; };
+  assert.equal(await recordPublication(query, row), true);
+  assert.equal(await recordPublication(query, row), false, "a retried --record adds nothing");
+  assert.match(calls[0].text, /INSERT INTO kip_app_config\.ota_publishes/);
+  assert.match(calls[0].text, /ON CONFLICT \(channel, generation, sha256\) DO NOTHING/);
+  assert.equal(calls[0].params.length, 15);
+
+  const seen = [];
+  const cdn = (served, status = 206) => async (url, init) => { seen.push({ url, range: init.headers.Range }); return new Response(JSON.stringify(served), { status }); };
+  assert.equal(await verifyPointerThroughCdn(cdn(bundle.pointer), bundle.pointer), "confirmed");
+  assert.equal(seen[0].url, CDN_ORIGIN + "/app-bundles/channels/staging/current.json");
+  assert.equal(seen[0].range, "bytes=0-", "the readback skips the CDN cache");
+  assert.equal(await verifyPointerThroughCdn(cdn({ ...bundle.pointer, generation: 1 }), bundle.pointer), "cdn_pending");
+  assert.equal(await verifyPointerThroughCdn(cdn(null, 404), bundle.pointer), "cdn_pending");
 });

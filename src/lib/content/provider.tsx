@@ -89,17 +89,20 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     if (stopTimer.current !== undefined) window.clearTimeout(stopTimer.current);
     let live = true;
     const stopConnectivity = subscribeContentConnectivity((connectivity) => runtime.setConnectivity(connectivity));
-    let appListener: { remove: () => Promise<void> } | undefined;
+    const appListeners: { remove: () => Promise<void> }[] = [];
     const setForeground = (foreground: boolean) => runtime.setForeground(foreground);
     const onVisibility = () => setForeground(document.visibilityState !== "hidden");
 
     onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
     if (Capacitor.isNativePlatform()) {
-      void CapacitorApp.addListener("appStateChange", ({ isActive }) => setForeground(isActive)).then((listener) => {
-        if (live) appListener = listener;
+      const keep = (listener: { remove: () => Promise<void> }) => {
+        if (live) appListeners.push(listener);
         else void listener.remove();
-      }).catch(() => {});
+      };
+      void CapacitorApp.addListener("appStateChange", ({ isActive }) => setForeground(isActive)).then(keep).catch(() => {});
+      // A permission dialog pauses the Activity without stopping it, so no appStateChange follows.
+      void CapacitorApp.addListener("resume", () => runtime.resumeAfterPause?.()).then(keep).catch(() => {});
     }
 
     // Runtime owns storage initialization and shutdown, including URL revocation.
@@ -108,7 +111,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       live = false;
       document.removeEventListener("visibilitychange", onVisibility);
       stopConnectivity();
-      void appListener?.remove();
+      for (const listener of appListeners.splice(0)) void listener.remove();
       runtime.setForeground(false);
       // React StrictMode replays effects during development. Give the next setup
       // a turn to reclaim this runtime before releasing its storage.
@@ -123,7 +126,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   }, [runtime, state.user, state.accuracy, state.locationError]);
 
   useEffect(() => {
-    runtime.setBusy(state.screen === "camera" || state.screen === "claim" || state.screen === "share");
+    runtime.setBusy(state.screen === "camera");
   }, [runtime, state.screen]);
 
   return <ContentContext.Provider value={runtime}>{children}</ContentContext.Provider>;

@@ -218,6 +218,29 @@ async function migrateLocalSchema(connection: SQLiteDBConnection): Promise<void>
   }
 }
 
+// One registry for the page: the plugin's JavaScript side only knows connections made through it.
+let sharedSqlite: SQLiteConnection | null = null;
+
+function sqliteConnection(): SQLiteConnection {
+  sharedSqlite ??= new SQLiteConnection(CapacitorSQLite);
+  return sharedSqlite;
+}
+
+async function acquireConnection(sqlite: SQLiteConnection): Promise<{ connection: SQLiteDBConnection; reused: boolean }> {
+  if ((await sqlite.isConnection(DATABASE, false))?.result === true) {
+    return { connection: await sqlite.retrieveConnection(DATABASE, false), reused: true };
+  }
+  try {
+    return { connection: await sqlite.createConnection(DATABASE, false, "no-encryption", 1, false), reused: false };
+  } catch (error) {
+    if (!errorMessage(error).includes("already exists")) throw error;
+    // An in-process WebView reload keeps the native connection but loses the registry that made
+    // it. Nothing on this page can own it, so close it (rolling back any half-done write) and reopen.
+    await sqlite.closeConnection(DATABASE, false);
+    return { connection: await sqlite.createConnection(DATABASE, false, "no-encryption", 1, false), reused: false };
+  }
+}
+
 export class NativeContentStore implements ContentStore {
   private sqlite: SQLiteConnection | null = null;
   private connection: SQLiteDBConnection | null = null;
@@ -690,12 +713,12 @@ export class NativeContentStore implements ContentStore {
   }
 
   private async initializeInner() {
-    const sqlite = new SQLiteConnection(CapacitorSQLite);
-    const connection = await sqlite.createConnection(DATABASE, false, "no-encryption", 1, false);
+    const sqlite = sqliteConnection();
+    const { connection, reused } = await acquireConnection(sqlite);
     this.sqlite = sqlite;
     this.connection = connection;
     try {
-      await connection.open();
+      if (!reused || (await connection.isDBOpen())?.result !== true) await connection.open();
       await connection.execute(`
         CREATE TABLE IF NOT EXISTS content_releases (
           id TEXT PRIMARY KEY NOT NULL,

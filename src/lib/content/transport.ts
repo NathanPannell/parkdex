@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { canDownloadContent, CONTENT_CDN_ORIGIN, requiresContentWifi, type Connectivity, type ContentRequestInit } from "./contracts";
+import { canDownloadContent, CONTENT_CDN_ORIGIN, contentTransportPausedError, requiresContentWifi, type Connectivity, type ContentRequestInit } from "./contracts";
 import { contentChannelOverride } from "../contentChannel";
 import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 import { withRequestContext } from "../requestContext";
@@ -53,6 +53,18 @@ type NativeContentTransport = {
 
 const NativeTransport = registerPlugin<NativeContentTransport>("WifiContentTransport");
 let nextRequestId = 0;
+
+// Native builds up to vc14 stop content requests on Activity pause, which a permission dialog
+// causes while Parkdex stays visible. The web layer only sees a stop as backgrounding.
+const NATIVE_FOREGROUND_REJECTIONS = new Set([
+  "Content requests stop when Parkdex leaves the foreground",
+  "Content requests require Parkdex to be in the foreground",
+]);
+
+function isNativeForegroundRejection(error: unknown): boolean {
+  const message = error && typeof error === "object" ? (error as { message?: unknown }).message : error;
+  return typeof message === "string" && NATIVE_FOREGROUND_REJECTIONS.has(message.trim());
+}
 
 /** Account backup shares the Wi-Fi plugin registration but keeps its own strict native request method. */
 export function nativeAccountBackupRequest(options: NativeAccountBackupRequestOptions): Promise<NativeContentResponse> {
@@ -326,6 +338,7 @@ async function nativeFetch(request: Request, url: URL, apiOrigin: string, anyNet
     return response;
   } catch (error) {
     if (signal?.aborted) throw abortReason(signal);
+    if (isNativeForegroundRejection(error)) throw contentTransportPausedError();
     throw error;
   } finally {
     if (abortHandler) signal?.removeEventListener("abort", abortHandler);

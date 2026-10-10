@@ -33,11 +33,12 @@ export async function getNativePackageInstallInfo(): Promise<NativePackageInstal
 // Field builds are for real park visits: no demo location, teleports or simulated trips.
 export const FIELD = import.meta.env.VITE_FIELD === "1";
 
-export type Fix = { point: LngLat; accuracy: number };
+export type Fix = { point: LngLat; accuracy: number; at: number };
 
 const toFix = (p: Position | GeolocationPosition): Fix => ({
   point: [p.coords.longitude, p.coords.latitude],
   accuracy: p.coords.accuracy ?? 50,
+  at: Date.now(),
 });
 
 // Continuous high-accuracy tracking so arrival fires as the visitor walks in.
@@ -71,6 +72,27 @@ export async function watchLocation(onFix: (fix: Fix) => void, onError: (message
     options,
   );
   return () => navigator.geolocation.clearWatch(id);
+}
+
+/**
+ * One fresh high-accuracy fix, for actions the server checks against the player's position
+ * (founding a park). Rejects with "denied" when location permission is refused.
+ */
+export async function currentFix(timeoutMs = 20_000): Promise<Fix> {
+  const options = { enableHighAccuracy: true, maximumAge: 5000, timeout: timeoutMs };
+  if (isNative) {
+    const status = await Geolocation.requestPermissions({ permissions: ["location"] });
+    if (status.location === "denied") throw new Error("denied");
+    return toFix(await Geolocation.getCurrentPosition(options));
+  }
+  if (!navigator.geolocation) throw new Error("unavailable");
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(toFix(pos)),
+      (err) => reject(new Error(err.code === err.PERMISSION_DENIED ? "denied" : err.code === err.TIMEOUT ? "timeout" : "unavailable")),
+      options,
+    );
+  });
 }
 
 export function haptic(pattern: number | number[]) {

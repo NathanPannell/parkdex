@@ -20,6 +20,13 @@ export function useBoundaries() {
 // as inside when the boundary is within their reported accuracy.
 export const MAX_TOLERANCE_M = 35;
 
+/** Whether the point is in this one park, with the same GPS tolerance as visits. */
+export function insidePark(point: LngLat, boundary: Boundary | undefined, toleranceM = 0) {
+  if (!boundary) return false;
+  if (insideBoundary(point, boundary)) return true;
+  return toleranceM > 0 && distanceToBoundaryM(point, boundary) <= Math.min(toleranceM, MAX_TOLERANCE_M);
+}
+
 export function parkContaining(point: LngLat, parks: readonly Park[], byId?: Map<string, Boundary>, toleranceM = 0) {
   if (!byId) return null;
   const inside = parks.find((park) => insideBoundary(point, byId.get(park.id)));

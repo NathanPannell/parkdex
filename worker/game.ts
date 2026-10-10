@@ -48,6 +48,8 @@ export interface GameDependencies {
   /** Called after a successful route result. Errors are ignored so analytics cannot break play. */
   onEvent?(event: GameEvent): void | Promise<void>;
   checkHandle?(handle: string, env: GameEnv): Promise<HandleVerdict>;
+  /** Origin of this API, for absolute cover photo URLs. Relative URLs without it. */
+  publicOrigin?: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -106,7 +108,8 @@ function apiPlayer(player: PlayerRecord) {
   return { handle: player.handle, flagSeed: player.flagSeed };
 }
 
-function apiVisit(visit: VisitRecord) {
+/** The visit as `POST /api/game/visits` returns it. */
+export function apiVisit(visit: VisitRecord) {
   return {
     visitId: visit.visitId,
     parkId: visit.parkId,
@@ -191,9 +194,13 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   const store = getStore(env, dependencies);
   const player = await store.getPlayer(accountId);
   const flagSeed = player?.flagSeed ?? await flagSeedFor(accountId);
-  if (!player) return json({ player: null, flagSeed, score: 0, parks: [], takeovers: [], serverTime: new Date(now).toISOString() });
-  const summary = await store.summary(accountId, new Date(now).toISOString());
-  return json({ player: apiPlayer(player), flagSeed, ...summary, serverTime: new Date(now).toISOString() });
+  if (!player) return json({ player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0, serverTime: new Date(now).toISOString() });
+  const [summary, founderPoints] = await Promise.all([
+    store.summary(accountId, new Date(now).toISOString()),
+    store.founderPoints?.(accountId, new Date(now).toISOString()) ?? Promise.resolve(0),
+  ]);
+  // founderPoints is already part of score; the app can show it separately.
+  return json({ player: apiPlayer(player), flagSeed, ...summary, founderPoints, serverTime: new Date(now).toISOString() });
 }
 
 async function postTakeoversSeen(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
@@ -207,7 +214,19 @@ async function postTakeoversSeen(request: Request, env: GameEnv, auth: GameAuth,
 
 async function getFlags(env: GameEnv, dependencies: GameDependencies, now: number): Promise<Response> {
   const serverTime = new Date(now).toISOString();
-  return json({ flags: await getStore(env, dependencies).flags(serverTime), serverTime });
+  const store = getStore(env, dependencies);
+  const [flags, founders] = await Promise.all([store.flags(serverTime), store.founders?.() ?? Promise.resolve([])]);
+  const origin = dependencies.publicOrigin ?? "";
+  return json({
+    flags,
+    // Founded parks with their cover photo, so the map can show covers without a request per park.
+    founders: founders.map((founder) => ({
+      parkId: founder.parkId,
+      handle: founder.handle,
+      coverUrl: `${origin}/api/parks/${founder.parkId}/cover/${founder.photoSha256}.jpg`,
+    })),
+    serverTime,
+  });
 }
 
 async function getLeaderboard(env: GameEnv, dependencies: GameDependencies, now: number): Promise<Response> {

@@ -176,6 +176,29 @@
   box-shadow: none;
 }
 
+/* Top left, above the headline: the way back to the map before the flag goes in. */
+.plant__close {
+  position: absolute;
+  top: calc(var(--safe-top) + 8px);
+  left: 14px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 8px 10px;
+  border: 2px solid rgba(255, 248, 236, 0.35);
+  border-radius: 99px;
+  background: rgba(255, 248, 236, 0.1);
+  color: var(--paper);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.plant__close:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+}
+
 .plant__points {
   margin: 0;
   text-align: center;
@@ -356,11 +379,6 @@ button.game-row:active {
   line-height: 1;
 }
 
-.game-old-badges {
-  align-self: center;
-  margin-top: 6px;
-}
-
 /* ---------- Takeover messages ---------- */
 
 .takeover-scrim {
@@ -499,6 +517,16 @@ button.game-row:active {
 
 .fab__hint[data-reason="outside-flag"]::before {
   content: "Get inside a park boundary to plant your flag";
+}
+
+.fab__hint[data-reason="visited-today"]::before {
+  content: "You visited this park today. Back tomorrow";
+}
+
+/* Inside a park already visited today: no pulse, and the tag reads as a note, not a call. */
+.fab--visited .fab__label {
+  background: var(--paper);
+  rotate: 0deg;
 }
 
 /* ---------- Park sheet: who holds the park ---------- */
