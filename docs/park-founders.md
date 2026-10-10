@@ -20,7 +20,7 @@ Errors use the shared shape `{ "error": { "code", "message" }, "code", "message"
 
 ### `GET /api/osm/parks?lat=&lng=&accuracy=`
 
-Public, rate limited per address (30 per 10 minutes). `accuracy` is metres; without it the tolerance is 10 m. Returns only outlines that contain the position within the tolerance, best first (inside, then nearest, then smallest).
+Public, rate limited per address (10 per minute). `accuracy` is metres; without it the tolerance is 10 m. Returns only outlines that contain the position within the tolerance, best first (inside, then nearest, then smallest).
 
 ```json
 {
