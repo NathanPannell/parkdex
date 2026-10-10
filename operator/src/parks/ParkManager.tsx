@@ -3,6 +3,7 @@ import { api, errorText } from "../api";
 import { navigate } from "../router";
 import { useDashboard } from "../shell/DashboardContext";
 import { EmptyState, formatCount, Icon, Notice, PageHeader } from "../ui";
+import { ParksTabs } from "./ReviewPage";
 import { ManagerMap, OSM_ZOOM, OUTLINE_ZOOM, type Layers, type OsmState, type View } from "./ManagerMap";
 import type { Basemap } from "./ParkMap";
 import { CATEGORIES, osmKey, SOURCE_LABELS, title, type OsmOutline, type ParkRow, type ParkSource, type ParkStats } from "./types";
@@ -233,6 +234,7 @@ export function ParkManager() {
         eyebrow={environment ? `${title(environment)} catalogue` : "Catalogue"}
         title="Parks"
         lede="Open a park to edit or moderate it. Switch on OpenStreetMap to find parks that are missing."
+        actions={<ParksTabs current="/parks" />}
       />
 
       {error && <Notice tone="error">{error}</Notice>}

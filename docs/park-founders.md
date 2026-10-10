@@ -2,7 +2,7 @@
 
 A signed-in player with a handle, standing in a park, takes a photo. When the photo check approves it straight away, the player becomes the park's founder, the photo becomes the park's public cover, today's visit is recorded (planting or taking the flag) and the player earns a one-time 10 point founder bonus. Everything is online. Design: issue #126.
 
-`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place the 10 lives) and the two analytics event types. Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
+`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place the 10 lives) and the two analytics event types. `founders_002_reviews.sql` adds manual review ([below](#manual-review)): `kip_founders.check_photos` (the photo and position of a rejected or unsure check, kept for 24 hours) and `kip_founders.review_requests`. Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founding.ts` (the founding transaction, shared with review approvals), `worker/founding-reviews.ts` (the operator's review store and retention), `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
 
 ## Rules
 
@@ -10,7 +10,7 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 - **Outline.** A catalogue park uses its boundary. An OpenStreetMap park uses `kip_osm.parks`, then Nominatim and Overpass. An outline that is already a Parkdex park (`catalogueMatch`) is founded as that park, never published again. Unnamed OpenStreetMap outlines cannot be founded. Hidden parks are refused.
 - **Photo.** JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
 - **Check.** One Decisions API call: `verdict` (approve, reject, unsure) and six yes/no flags. Approved only when `verdict` is `approve` with at least 0.8 (`FOUNDER_PHOTO_APPROVE_THRESHOLD`) and no flag is above 0.5. Any flag rejects the photo with those flags; anything else is unsure. No answer within 8 s, or no `OPENROUTER_API_KEY`, is a retryable 503.
-- **Founding.** One transaction under an advisory lock on the park: the founder guard, for an OpenStreetMap park the proposal audit row (with `founder_account_id`), the draft and the operator dashboard's publish statements, then the founder row with the photo, then `kip_game.record_visit`. The park's marker is a point inside the part of the outline the founder is in, never their position. A second founder gets 409.
+- **Founding.** One transaction under an advisory lock on the park (`worker/founding.ts`): the founder guard, for an OpenStreetMap park the proposal audit row (with `founder_account_id`), the draft and the operator dashboard's publish statements, then the founder row with the photo, then closing pending review requests for the park as `superseded`, then `kip_game.record_visit`. The park's marker is a point inside the part of the outline the founder is in, never their position. A second founder gets 409.
 - **Limits.** 20 photo checks an hour and 5 foundings a day per account.
 - **Account deletion** removes the founder row, the photo and the bonus. The park stays and can be founded again.
 
@@ -230,5 +230,7 @@ Parks → Review (`/parks/review`) lists requests oldest first, with a pending c
 ## Testing
 
 - `worker/jpeg.test.ts`, `worker/park-location.test.ts`, `worker/founder-photo.test.ts`, `worker/founders.test.ts`.
+- `worker/founding.test.ts` (the shared transaction), `operator/server/parks/reviews.test.ts` (the dashboard's review routes).
+- `scripts/qa-founders-review-sql.mjs` (`npm run test:sql`, own throwaway database): keeping a rejected photo, asking for a review, approval through the dashboard routes (publish, founder, cover, bonus, no visit or flag), rejection, the supersede race, the daily limit, decisions in `/api/game/me`, retention and account deletion.
 - `scripts/qa-founders-sql.mjs` (`npm run test:sql`, own throwaway database): the full migration inventory replayed twice, then the real routes and stores for a new and a catalogue park, concurrent founders, the bonus, one visit per day, hidden parks, covers, summaries, analytics rows and account deletion.
 - Locally: `npm run local:api -- --content` installs the content tables so parks can be founded; load OpenStreetMap outlines with `scripts/osm_park_index.py` (`docs/osm-park-index.md`).

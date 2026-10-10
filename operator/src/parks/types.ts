@@ -102,3 +102,55 @@ export function title(value: string): string {
 export function osmKey(outline: { type: string; id: number }): string {
   return `${outline.type}-${outline.id}`;
 }
+
+// ---------------------------------------------------------------- founding reviews (#153)
+
+export type ReviewStatus = "pending" | "approved" | "rejected" | "superseded";
+export type ReviewReasonCode = "people" | "lighting" | "not_park" | "inappropriate" | "other";
+
+/** The rejection presets and the sentence the player reads; the same as worker/founding-reviews.ts. */
+export const REVIEW_REASONS: Array<{ code: ReviewReasonCode; label: string; text: string }> = [
+  { code: "people", label: "People", text: "There are people in the photo." },
+  { code: "lighting", label: "Too dark or blurry", text: "The photo is too dark or blurry." },
+  { code: "not_park", label: "Not the park", text: "The photo doesn't show the park." },
+  { code: "inappropriate", label: "Inappropriate", text: "This photo can't be used as a park cover." },
+  { code: "other", label: "Other", text: "" },
+];
+
+/** The check's flags, in the words the player saw. */
+export const FLAG_LABELS: Record<string, string> = {
+  people: "People", lighting: "Too dark or blurry", not_park: "Not the park", inappropriate: "Inappropriate", not_photo: "Screen or edited", personal_info: "Personal details",
+};
+
+/** One row of GET /api/parks/review */
+export type ReviewItem = {
+  id: string;
+  status: ReviewStatus;
+  parkId: string;
+  parkName: string;
+  osm: { type: string; id: number } | null;
+  handle: string | null;
+  outcome: "reject" | "unsure";
+  flags: string[];
+  createdAt: string;
+  checkedAt: string;
+  decidedAt: string | null;
+  reasonCode: ReviewReasonCode | null;
+  reason: string | null;
+  foundedParkId: string | null;
+  photoSha256: string;
+  hasPhoto: boolean;
+};
+
+/** GET /api/parks/review/<id> `request` */
+export type ReviewDetail = ReviewItem & {
+  position: { lat: number; lng: number; accuracyM: number };
+  photo: { sha256: string; width: number; height: number; bytes: number | null; purgedAt: string | null };
+  moderation: { model: string | null; threshold: number | null; answers: Record<string, { choice: string; probabilities: Record<string, number> }> } | null;
+  geometry: MultiPolygon | null;
+  park: { inParkdex: boolean; hidden: boolean; founder: { handle: string | null; foundedAt: string } | null };
+  otherPending: number;
+  seenAt: string | null;
+};
+
+export type ReviewList = { available: boolean; counts: Record<ReviewStatus, number>; requests: ReviewItem[] };
