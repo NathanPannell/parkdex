@@ -90,7 +90,8 @@ export interface FoundingReviewStore {
   /** Oldest first. Null when the database has no founders_002_reviews.sql yet. */
   list(status: ReviewStatus | null, limit: number): Promise<ReviewList | null>;
   get(id: string): Promise<ReviewDetail | null>;
-  photo(id: string): Promise<{ bytes: Uint8Array; sha256: string } | null>;
+  /** The request's photo; the in-memory demo serves other image types. */
+  photo(id: string): Promise<{ bytes: Uint8Array; sha256: string; contentType?: string } | null>;
   approve(id: string, input: { at: string; environment: AnalyticsEnvironment }): Promise<ApproveResult>;
   reject(id: string, input: { at: string; environment: AnalyticsEnvironment; reasonCode: ReviewReasonCode; reason: string }): Promise<void>;
 }
