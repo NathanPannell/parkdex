@@ -19,8 +19,11 @@ export type DecisionMessage = {
   kip: "cheer" | "think" | "point";
 };
 
-function withoutFinalStop(reason: string): string {
-  return reason.trim().replace(/[.!\s]+$/, "");
+/** The operator's reason as a clause after a colon: no final stop, and "The photo" reads "the photo". */
+function reasonClause(reason: string): string {
+  const clause = reason.trim().replace(/[.!\s]+$/, "");
+  // Keep capitals that matter, such as "OK" or a name, by lowering only an ordinary first word.
+  return /^[A-Z][a-z]/.test(clause) ? clause[0].toLowerCase() + clause.slice(1) : clause;
 }
 
 export function decisionMessage(decision: FoundingDecision): DecisionMessage {
@@ -31,7 +34,7 @@ export function decisionMessage(decision: FoundingDecision): DecisionMessage {
     case "superseded":
       return { eyebrow: "Photo review", title: decision.founderHandle ? `@${decision.founderHandle} got there first` : "Someone got there first", text: `Someone else founded ${park} first.`, kip: "point" };
     case "rejected": {
-      const reason = decision.reason ? withoutFinalStop(decision.reason) : "";
+      const reason = decision.reason ? reasonClause(decision.reason) : "";
       return {
         eyebrow: "Photo review",
         title: "Not approved this time",

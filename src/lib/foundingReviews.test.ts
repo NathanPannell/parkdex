@@ -26,7 +26,11 @@ describe("decisionMessage", () => {
 
   it("gives the operator's reason for a rejection, without doubling its full stop", () => {
     expect(decisionMessage(decision({ requestId: "b", status: "rejected", parkName: "Beacon Hill", reason: "Too dark or blurry." })).text)
-      .toBe("Your photo for Beacon Hill wasn't approved: Too dark or blurry. You can try again next time you're there.");
+      .toBe("Your photo for Beacon Hill wasn't approved: too dark or blurry. You can try again next time you're there.");
+    expect(decisionMessage(decision({ requestId: "b2", status: "rejected", parkName: "Beacon Hill", reason: "The photo is too dark or blurry." })).text)
+      .toBe("Your photo for Beacon Hill wasn't approved: the photo is too dark or blurry. You can try again next time you're there.");
+    expect(decisionMessage(decision({ requestId: "b3", status: "rejected", parkName: "Beacon Hill", reason: "OK sign visible!" })).text)
+      .toContain("wasn't approved: OK sign visible. You can");
     expect(decisionMessage(decision({ requestId: "c", status: "rejected", parkName: "Beacon Hill", reason: null })).text)
       .toBe("Your photo for Beacon Hill wasn't approved. You can try again next time you're there.");
   });
