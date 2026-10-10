@@ -25,6 +25,12 @@ export interface AuthEnvironment {
   AUTH_EMAIL_FROM?: string;
   EMAIL_MODE?: string;
   GOOGLE_WEB_CLIENT_ID?: string;
+  /**
+   * Client ID handed to the Android app as its Credential Manager server client. Google keeps each
+   * package and signing fingerprint pair in a single Cloud project, so production can name a client
+   * from the project that owns those fingerprints. ID tokens for either client are accepted.
+   */
+  GOOGLE_NATIVE_CLIENT_ID?: string;
   PUBLIC_APP_URL?: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -57,7 +63,7 @@ export interface AuthDependencies {
   uuid?(): string;
   hashPassword?(password: string): Promise<string>;
   verifyPassword?(passwordHash: string, password: string): Promise<boolean>;
-  verifyGoogleIdToken?(idToken: string, audience: string): Promise<GoogleIdentityClaims>;
+  verifyGoogleIdToken?(idToken: string, audiences: readonly string[]): Promise<GoogleIdentityClaims>;
   sendEmail?(message: { to: string; subject: string; html: string; text: string }, env: AuthEnvironment): Promise<void>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   waitUntil?(promise: Promise<unknown>): void;
@@ -82,6 +88,8 @@ const ACCOUNT_ID_HEADER = "x-kip-account-id";
 export const ACCOUNT_CSRF_HEADER = "X-CSRF-Token";
 export const ACCOUNT_CSRF_COOKIE = CSRF_COOKIE;
 const TRANSPORT_HEADER = "x-kip-auth-transport";
+// Origins of the Capacitor WebView (Android uses https://localhost, iOS capacitor://localhost).
+const NATIVE_APP_ORIGINS = new Set(["https://localhost", "capacitor://localhost"]);
 const RESET_LIFETIME_MS = 60 * 60 * 1000;
 const VERIFICATION_LIFETIME_MS = 60 * 60 * 1000;
 const GOOGLE_CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
@@ -169,6 +177,28 @@ function authAvailable(env: AuthEnvironment): boolean {
 
 function validGoogleClientId(value: string | undefined): value is string {
   return Boolean(value && value.length <= 255 && GOOGLE_CLIENT_ID_PATTERN.test(value));
+}
+
+function nativeGoogleClientId(env: AuthEnvironment): string | null {
+  return validGoogleClientId(env.GOOGLE_NATIVE_CLIENT_ID) ? env.GOOGLE_NATIVE_CLIENT_ID : null;
+}
+
+/** Every client ID whose ID tokens this deployment accepts. Google sign-in requires the web client. */
+function googleAudiences(env: AuthEnvironment): string[] {
+  if (!validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID)) return [];
+  const native = nativeGoogleClientId(env);
+  return native && native !== env.GOOGLE_WEB_CLIENT_ID ? [env.GOOGLE_WEB_CLIENT_ID, native] : [env.GOOGLE_WEB_CLIENT_ID];
+}
+
+/**
+ * The installed app sends unauthenticated account requests from the WebView origin with the native
+ * transport header. Both are required. This only picks which public client ID the config names;
+ * the completion routes still verify the token audience against the configured clients.
+ */
+function nativeAppRequest(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  const transport = request.headers.get(TRANSPORT_HEADER)?.toLowerCase();
+  return transport === "native" && origin !== null && NATIVE_APP_ORIGINS.has(origin);
 }
 
 function emailLinkBase(env: AuthEnvironment): URL | null {
@@ -587,7 +617,7 @@ async function requireFreshSession(lookup: SessionLookup, now: number): Promise<
 
 async function googleClaims(
   idToken: string,
-  audience: string,
+  audiences: readonly string[],
   expectedNonce: string,
   now: number,
   dependencies: AuthDependencies,
@@ -595,9 +625,9 @@ async function googleClaims(
   let claims: GoogleIdentityClaims;
   try {
     if (dependencies.verifyGoogleIdToken) {
-      claims = await dependencies.verifyGoogleIdToken(idToken, audience);
+      claims = await dependencies.verifyGoogleIdToken(idToken, audiences);
     } else {
-      const ticket = await new OAuth2Client(audience).verifyIdToken({ idToken, audience, maxExpiry: 3_600 });
+      const ticket = await new OAuth2Client().verifyIdToken({ idToken, audience: [...audiences], maxExpiry: 3_600 });
       const payload = ticket.getPayload();
       if (!payload) throw new Error("missing payload");
       claims = payload as GoogleIdentityClaims;
@@ -608,7 +638,9 @@ async function googleClaims(
   if (!record(claims)) throw new HttpError(401, "invalid_google_token", "Google sign-in could not be verified.");
   const expMillis = claims.exp * 1000;
   const iatMillis = claims.iat * 1000;
-  const audienceMatches = claims.aud === audience;
+  // Android Credential Manager tokens carry the server client as aud and the Android client as azp,
+  // so only aud is checked. Identities are keyed by sub, which is the same for every client and project.
+  const audienceMatches = typeof claims.aud === "string" && audiences.includes(claims.aud);
   const issuerMatches = claims.iss === "https://accounts.google.com" || claims.iss === "accounts.google.com";
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
   if (!claims || typeof claims.sub !== "string" || claims.sub.length < 1 || claims.sub.length > 255 ||
@@ -673,7 +705,9 @@ async function routeAuth(
   if (path === "/api/auth/config") {
     const enabled = authAvailable(env);
     const originAllowed = !origin || requestOriginAllowed(request, env);
-    const clientId = enabled && originAllowed && validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID) ? env.GOOGLE_WEB_CLIENT_ID : null;
+    const webClientId = enabled && originAllowed && validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID) ? env.GOOGLE_WEB_CLIENT_ID : null;
+    // Installed Android builds read googleWebClientId as their Credential Manager server client ID.
+    const clientId = webClientId && nativeAppRequest(request) ? nativeGoogleClientId(env) ?? webClientId : webClientId;
     const googleNativeEnabled = Boolean(clientId);
     const googleWebEnabled = Boolean(clientId && originAllowed);
     const emailEnabled = enabled;
@@ -912,7 +946,8 @@ async function routeAuth(
 
   if (path === "/api/auth/google" || path === "/api/auth/google/native") {
     const routeTransport: StoredTransport = path.endsWith("/native") ? "native" : "web";
-    if (!validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID)) throw new HttpError(503, "service_unavailable", "Google sign-in is unavailable.");
+    const audiences = googleAudiences(env);
+    if (!audiences.length) throw new HttpError(503, "service_unavailable", "Google sign-in is unavailable.");
     if (routeTransport === "web") assertTrustedOrigin(request, env, true);
     const body = await readJson(request, 16 * 1024);
     exactKeys(body, GOOGLE_TOKEN_FIELDS, ["idToken", "nonce"]);
@@ -926,7 +961,7 @@ async function routeAuth(
       await store.recordSecurityEvent("google_callback", await eventScope(env, "google_callback", nonceScope), "invalid_challenge").catch(() => undefined);
       throw new HttpError(401, "invalid_google_challenge", "Google sign-in could not be verified.");
     }
-    const claims = await googleClaims(idToken, env.GOOGLE_WEB_CLIENT_ID, nonce, now, dependencies);
+    const claims = await googleClaims(idToken, audiences, nonce, now, dependencies);
     const scopeHash = await eventScope(env, "google_subject", claims.sub);
 
     if (challenge.purpose === "sign_in") {
