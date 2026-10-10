@@ -189,6 +189,8 @@ a { color: inherit; }
 .nav__child.is-on { opacity: 1; background: var(--kip); color: #14231c; }
 .nav__tag { padding: 0 6px; border-radius: 6px; background: rgba(255, 248, 236, .14); font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .nav__child.is-on .nav__tag { background: rgba(20, 35, 28, .18); }
+.nav__count { min-width: 22px; margin-left: auto; padding: 1px 7px; border-radius: 999px; background: var(--kip); color: #14231c; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
+.nav__child.is-on .nav__count { background: #14231c; color: var(--kip); }
 
 .sidebar__foot { margin-top: auto; display: grid; gap: 10px; padding: 0 6px; }
 .sidebar__label { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; opacity: .5; }

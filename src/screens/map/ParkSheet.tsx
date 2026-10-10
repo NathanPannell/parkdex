@@ -18,6 +18,7 @@ import { recordDirectionsOpened } from "../../lib/interactions";
 import { SHOW_BADGE_ART } from "../../lib/parks";
 import { founderCta, summaryCover, summaryStats, useParkSummary } from "../../lib/parkSummary";
 import { useGame } from "../../lib/game/GameProvider";
+import { hasPendingReview } from "../../lib/foundingReviews";
 import "../../found-park.css";
 
 type Props = {
@@ -65,7 +66,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const cover = summaryCover(summary, game.flags?.founders.get(park.id)?.coverUrl ?? null);
   const [coverFailed, setCoverFailed] = useState(false);
   const showCover = !!cover && !coverFailed;
-  const founder = founderCta(summary, insideForFounding, canFound);
+  const founder = founderCta(summary, insideForFounding, canFound, hasPendingReview(game.me, park.id));
   const stats = summaryStats(summary, signedIn);
   const trip = estimateTrip(user, park, content?.drive);
   const accessUnknown = trip.mode === "unknown";
@@ -176,7 +177,17 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           )}
         </motion.div>
 
-        {founder.kind !== "hidden" && (
+        {founder.kind === "pending" && (
+          <motion.div variants={item} className="founder-review" role="status">
+            <span className="founder-review__icon"><Icon name="image" size={18} /></span>
+            <span className="founder-review__text">
+              <strong>{founder.text}</strong>
+              <em>We'll let you know when it's checked.</em>
+            </span>
+          </motion.div>
+        )}
+
+        {(founder.kind === "found" || founder.kind === "hint") && (
           <motion.button
             variants={item}
             className="founder-cta"

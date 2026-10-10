@@ -38,7 +38,12 @@ export type FoundRequest = { attemptId: string; position: { lat: number; lng: nu
 export type PhotoFlag = { code: string; message: string };
 export type FoundResult =
   | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number }
-  | { outcome: "rejected" | "unsure"; flags: PhotoFlag[] };
+  | {
+    outcome: "rejected" | "unsure";
+    flags: PhotoFlag[];
+    /** Until when a manual review can use this attempt; null when the photo is not kept or the server has no reviews. */
+    reviewableUntil: string | null;
+  };
 
 export type ParkSummary = {
   parkId: string;
@@ -57,6 +62,12 @@ export type FounderErrorCode =
   | "rate_limited"
   | "park_not_found"
   | "invalid_request"
+  /** A manual review of this park's photo is already waiting. */
+  | "review_pending"
+  /** The daily limit on manual reviews. */
+  | "review_rate_limited"
+  /** The photo is no longer kept, or this attempt cannot be reviewed. */
+  | "review_unavailable"
   /** Any other refusal the server explains itself, such as an unnamed park. */
   | "refused"
   | "unavailable";
@@ -83,6 +94,9 @@ const MESSAGES: Record<FounderErrorCode, string> = {
   rate_limited: "You've tried a lot of photos. Wait a little and try again.",
   park_not_found: "That park isn't on the map any more.",
   invalid_request: "Parkdex couldn't use that request. Update the app and try again.",
+  review_pending: "Your photo for this park is already waiting for review.",
+  review_rate_limited: "You've asked for 3 reviews today. Try again tomorrow.",
+  review_unavailable: "This photo can't be sent for review any more. Retake it to try again.",
   refused: "This park can't be founded right now.",
   unavailable: "Try again in a moment.",
 };
@@ -112,6 +126,12 @@ const CODE_ALIASES: Record<string, FounderErrorCode> = {
   photo_check_unavailable: "unavailable",
   service_unavailable: "unavailable",
   osm_unavailable: "unavailable",
+  review_pending: "review_pending",
+  rate_limited_review: "review_rate_limited",
+  review_unavailable: "review_unavailable",
+  photo_expired: "review_unavailable",
+  not_reviewable: "review_unavailable",
+  attempt_not_found: "review_unavailable",
 };
 
 const OUTCOMES = new Set(["founded", "rejected", "unsure"]);
@@ -119,6 +139,7 @@ const SCAN_TIMEOUT_MS = 20_000;
 // The photo check can take several seconds before the park is published.
 const FOUND_TIMEOUT_MS = 45_000;
 const SUMMARY_TIMEOUT_MS = 10_000;
+const REVIEW_TIMEOUT_MS = 15_000;
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -190,7 +211,10 @@ export function parseFoundResult(body: unknown): FoundResult {
   if (!row || typeof outcome !== "string" || !OUTCOMES.has(outcome)) {
     throw new FounderError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
   }
-  if (outcome === "rejected" || outcome === "unsure") return { outcome, flags: parseFlags(row.flags) };
+  if (outcome === "rejected" || outcome === "unsure") {
+    const until = typeof row.reviewableUntil === "string" && Number.isFinite(Date.parse(row.reviewableUntil)) ? row.reviewableUntil : null;
+    return { outcome, flags: parseFlags(row.flags), reviewableUntil: until };
+  }
   const park = record(row.park);
   const id = text(park?.id) ?? text(park?.parkId);
   if (!id) throw new FounderError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
@@ -301,13 +325,15 @@ export function coverImageUrl(coverUrl: string | null | undefined): string | nul
   }
 }
 
-export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "founded";
+export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "review_sent" | "founded";
 
 /**
  * Where back (the Android button or Escape) goes from each founding step. The photo review
- * inside the camera steps back to the camera itself, before this applies.
+ * inside the camera steps back to the camera itself, before this applies. While a manual
+ * review request is on its way, back waits for its answer like the photo check does.
  */
-export function foundBackAction(step: FoundStepKind): "close" | "results" | "stay" {
+export function foundBackAction(step: FoundStepKind, sendingReview = false): "close" | "results" | "stay" {
+  if (sendingReview) return "stay";
   switch (step) {
     case "camera":
     case "rejected":
@@ -320,6 +346,45 @@ export function foundBackAction(step: FoundStepKind): "close" | "results" | "sta
       return "close";
   }
 }
+
+// ------------------------------------------------------------------ manual review
+
+/** Asking for a manual review from the rejected or unsure screen. */
+export type ReviewState =
+  | { kind: "idle" }
+  | { kind: "sending" }
+  | { kind: "failed"; message: string; canRetry: boolean };
+
+/** Why a review request failed, and whether pressing the button again could help. */
+export function reviewProblem(error: unknown): { message: string; canRetry: boolean } {
+  if (!(error instanceof FounderError)) return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
+  switch (error.code) {
+    case "offline": return { message: "You need a connection to ask for a review.", canRetry: true };
+    case "unavailable": return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
+    case "already_founded": return { message: error.founder ? `@${error.founder} founded this park first.` : "Someone else founded this park first.", canRetry: false };
+    case "review_pending": return { message: MESSAGES.review_pending, canRetry: false };
+    case "review_rate_limited":
+    case "rate_limited": return { message: MESSAGES.review_rate_limited, canRetry: false };
+    case "review_unavailable": return { message: MESSAGES.review_unavailable, canRetry: false };
+    case "park_not_found": return { message: MESSAGES.park_not_found, canRetry: false };
+    case "unauthenticated": return { message: "Sign in again to ask for a review.", canRetry: false };
+    case "handle_required": return { message: "Pick a handle before you ask for a review.", canRetry: false };
+    default: return { message: "This photo can't be sent for review. Retake it to try again.", canRetry: false };
+  }
+}
+
+/**
+ * The "Ask for a manual review" button: offered only while the server keeps the photo for a
+ * review, and hidden once a failure is final.
+ */
+export function reviewButton(review: ReviewState, reviewable = true): { visible: boolean; disabled: boolean; label: string } {
+  if (!reviewable || (review.kind === "failed" && !review.canRetry)) return { visible: false, disabled: true, label: REVIEW_LABEL };
+  if (review.kind === "sending") return { visible: true, disabled: true, label: "Sending…" };
+  return { visible: true, disabled: false, label: REVIEW_LABEL };
+}
+
+export const REVIEW_LABEL = "Ask for a manual review";
+export const REVIEW_HINT = "We'll look at your photo and let you know. You can still retake it.";
 
 // ------------------------------------------------------------------ requests
 
@@ -404,4 +469,37 @@ export async function fetchParkSummary(parkId: string, accountId: string | null,
   if (accountId && (response.status === 401 || response.status === 403)) response = await send(anyone, path, {}, SUMMARY_TIMEOUT_MS, signal);
   if (!response.ok) throw await errorFrom(response);
   return parseSummary(await response.json().catch(() => null), parkId);
+}
+
+export type ReviewStatus = "pending" | "approved" | "rejected" | "superseded";
+const REVIEW_STATUSES = new Set<ReviewStatus>(["pending", "approved", "rejected", "superseded"]);
+
+/**
+ * `POST /api/parks/found/review`: ask for a person to look at a rejected or unsure photo. The
+ * server reuses the photo it kept for that attempt, so nothing is uploaded again. Sending the
+ * same attempt again answers with the same request and its current status.
+ */
+export async function requestFoundingReview(accountId: string, attemptId: string): Promise<{ status: ReviewStatus; requestId: string }> {
+  const response = await send(asAccount(accountId), "/api/parks/found/review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ attemptId }),
+  }, REVIEW_TIMEOUT_MS);
+  if (!response.ok) throw await errorFrom(response);
+  const body = record(await response.json().catch(() => null));
+  const requestId = text(body?.requestId);
+  if (!requestId) throw new FounderError("unavailable", response.status, "Parkdex sent an answer this version cannot read.");
+  const status = REVIEW_STATUSES.has(body?.status as ReviewStatus) ? body?.status as ReviewStatus : "pending";
+  return { status, requestId };
+}
+
+/** `POST /api/parks/found/review/seen`: these review decisions were shown to the player. */
+export async function markFoundingReviewsSeen(accountId: string, requestIds: readonly string[]): Promise<void> {
+  if (!requestIds.length) return;
+  const response = await send(asAccount(accountId), "/api/parks/found/review/seen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestIds }),
+  }, SUMMARY_TIMEOUT_MS);
+  if (!response.ok) throw await errorFrom(response);
 }

@@ -6,9 +6,10 @@ import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.ts";
 import { EXIF_GPS_JPEG } from "./fixtures/exif-gps-jpeg.ts";
 import type { PhotoAnswers, PhotoChecker } from "./founderPhoto.ts";
 import { PHOTO_FLAGS } from "./founderPhoto.ts";
-import { CHECKS_PER_HOUR, FOUNDED_PER_DAY, founderVisitId } from "./founders.ts";
+import { CHECKS_PER_HOUR, FOUNDED_PER_DAY, founderVisitId, REVIEW_KEEP_MS, REVIEWS_PER_DAY } from "./founders.ts";
 import type {
-  CatalogueParkRecord, CheckRecord, FoundedRecord, FounderInfo, FoundersStore, FoundExistingInput, FoundOsmInput, FoundResult, ParkSummaryRecord,
+  CatalogueParkRecord, CheckRecord, FoundedRecord, FounderInfo, FoundersStore, FoundExistingInput, FoundOsmInput, FoundResult, KeptAttempt, ParkSummaryRecord,
+  RequestReviewResult, ReviewStatus,
 } from "./founders-store.ts";
 import type { MultiPolygon, OsmClient, OsmFeature, Position } from "./osmParks.ts";
 import { pointInMultiPolygon } from "./osmParks.ts";
@@ -75,7 +76,10 @@ class MemoryFoundersStore implements FoundersStore {
   hiddenIds = new Set<string>();
   handles = new Map<string, string>([[ACCOUNT, "sam"], [OTHER, "bee"]]);
   founded = new Map<string, { accountId: string; attemptId: string; sha256: string; bytes: Uint8Array; foundedAt: string; parkName: string; visit: FoundedRecord["visit"] }>();
-  checks: Array<{ accountId: string; attemptId: string; parkId: string; outcome: CheckRecord["outcome"]; flags: string[]; photoSha256: string; at: string; moderation: unknown }> = [];
+  checks: Array<{ accountId: string; attemptId: string; parkId: string; osm: { type: string; id: number } | null; outcome: CheckRecord["outcome"]; flags: string[]; photoSha256: string; at: string; moderation: unknown }> = [];
+  /** Photos of rejected and unsure checks, kept for a review, by attempt. */
+  kept = new Map<string, { accountId: string; at: string; keep: KeptAttempt }>();
+  requests: Array<{ id: string; accountId: string; attemptId: string; parkId: string; status: ReviewStatus; createdAt: string; seenAt: string | null }> = [];
   osmFoundings: FoundOsmInput[] = [];
   existingFoundings: FoundExistingInput[] = [];
   visits: Array<{ accountId: string; parkId: string; at: string }> = [];
@@ -105,13 +109,15 @@ class MemoryFoundersStore implements FoundersStore {
   async attempt(accountId: string, attemptId: string) {
     const entry = [...this.founded.entries()].find(([, row]) => row.accountId === accountId && row.attemptId === attemptId);
     const check = this.checks.filter((row) => row.accountId === accountId && row.attemptId === attemptId && row.outcome !== "unavailable").at(-1);
+    const kept = this.kept.get(attemptId);
     return {
       founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 10, visit: entry[1].visit } : null,
-      check: check ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256 } : null,
+      check: check ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256, keptAt: kept?.accountId === accountId ? kept.at : null } : null,
     };
   }
   async recordCheck(input: Parameters<FoundersStore["recordCheck"]>[0]) {
-    this.checks.push({ accountId: input.accountId, attemptId: input.attemptId, parkId: input.parkId, outcome: input.outcome, flags: input.flags, photoSha256: input.photoSha256, at: input.at, moderation: input.moderation });
+    this.checks.push({ accountId: input.accountId, attemptId: input.attemptId, parkId: input.parkId, osm: input.osm, outcome: input.outcome, flags: input.flags, photoSha256: input.photoSha256, at: input.at, moderation: input.moderation });
+    if (input.keep) this.kept.set(input.attemptId, { accountId: input.accountId, at: input.at, keep: input.keep });
   }
   private found(parkId: string, parkName: string, input: FoundOsmInput | FoundExistingInput): FoundResult {
     this.beforeFound?.();
@@ -122,6 +128,7 @@ class MemoryFoundersStore implements FoundersStore {
       previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false,
     };
     this.visits.push({ accountId: input.accountId, parkId, at: input.at });
+    for (const request of this.requests) if (request.parkId === parkId && request.status === "pending") request.status = "superseded";
     this.founded.set(parkId, {
       accountId: input.accountId, attemptId: input.attemptId, sha256: input.photo.sha256, bytes: new Uint8Array(Buffer.from(input.photo.base64, "base64")),
       foundedAt: input.at, parkName, visit,
@@ -150,6 +157,30 @@ class MemoryFoundersStore implements FoundersStore {
     const visits = this.visits.filter((visit) => visit.parkId === parkId);
     const founder = (await this.founders([parkId])).get(parkId) ?? null;
     return { founder, total: visits.length + 2, last30Days: visits.length + 1, mine: accountId ? visits.filter((visit) => visit.accountId === accountId).length : null };
+  }
+  async reviewAttempt(accountId: string, attemptId: string) {
+    const request = this.requests.find((row) => row.accountId === accountId && row.attemptId === attemptId);
+    const check = this.checks.filter((row) => row.accountId === accountId && row.attemptId === attemptId).at(-1);
+    return {
+      request: request ? { id: request.id, status: request.status } : null,
+      check: check ? { outcome: check.outcome, flags: check.flags, parkId: check.parkId, osm: check.osm, kept: this.kept.get(attemptId)?.accountId === accountId } : null,
+    };
+  }
+  async requestReview(input: Parameters<FoundersStore["requestReview"]>[0]): Promise<RequestReviewResult> {
+    const day = (at: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver" }).format(new Date(at));
+    if (this.requests.some((row) => row.attemptId === input.attemptId)) return "exists";
+    if (this.kept.get(input.attemptId)?.accountId !== input.accountId) return "expired";
+    if (this.founded.has(input.parkId)) return "already_founded";
+    if (this.requests.some((row) => row.accountId === input.accountId && row.parkId === input.parkId && row.status === "pending")) return "pending";
+    if (this.requests.filter((row) => row.accountId === input.accountId && day(row.createdAt) === day(input.at)).length >= input.perDay) return "limited";
+    this.requests.push({ id: input.id, accountId: input.accountId, attemptId: input.attemptId, parkId: input.parkId, status: "pending", createdAt: input.at, seenAt: null });
+    this.kept.delete(input.attemptId);
+    return "created";
+  }
+  async markReviewsSeen(accountId: string, requestIds: string[], at: string) {
+    const changed = this.requests.filter((row) => row.accountId === accountId && requestIds.includes(row.id) && row.status !== "pending" && !row.seenAt);
+    for (const row of changed) row.seenAt = at;
+    return changed.map((row) => row.id).sort();
   }
   runner(): never { throw new Error("not used"); }
 }
@@ -331,13 +362,14 @@ test("a rejected photo names each flag in plain words, an unsure one asks for an
       { code: "lighting", message: "It's too dark or blurry. Take one in good light and hold the phone steady." },
     ],
     message: "We spotted people. Take one without anyone in it.",
+    reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString(),
   });
   assert.equal(rejected.store.founded.size, 0);
   assert.deepEqual(rejected.store.checks.map((check) => [check.outcome, check.flags]), [["reject", ["people", "lighting"]]]);
   assert.deepEqual(rejected.written[0].events.map((event) => [event.type, event.properties]), [["founder_photo_checked", { outcome: "reject", flags: "people,lighting", source: "osm_new" }]]);
 
   const unsure = setup({ answers: verdict(0.6) });
-  assert.deepEqual(await body(await unsure.found()), { outcome: "unsure", flags: [], message: "We couldn't tell. Try another angle." });
+  assert.deepEqual(await body(await unsure.found()), { outcome: "unsure", flags: [], message: "We couldn't tell. Try another angle.", reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString() });
   assert.equal(unsure.store.founded.size, 0);
 
   // A retry of a rejected attempt answers the same without a second check.
@@ -462,4 +494,175 @@ test("the park summary has public counts, the founder and the cover, plus your o
   assert.equal(normalizeRoute("GET", "/api/parks/osm-way-23938892/summary"), "GET /api/parks/:park/summary");
   assert.equal(normalizeRoute("GET", "/api/parks/osm-way-23938892/cover/" + "a".repeat(64) + ".jpg"), "GET /api/parks/:park/cover/:x");
   assert.equal(normalizeRoute("POST", "/api/parks/found"), "POST /api/parks/found");
+});
+
+// ---------------------------------------------------------------- manual review (#153)
+
+const people = () => verdict(0.03, { people: 0.97 });
+
+test("a rejected or unsure photo is kept for a day with its position and target; approved and unanswered ones are not", async () => {
+  const rejected = setup({ answers: people() });
+  const attemptId = randomUUID();
+  const first = await body(await rejected.found({ attemptId }));
+  assert.equal(first.reviewableUntil, new Date(NOW + REVIEW_KEEP_MS).toISOString());
+  const kept = rejected.store.kept.get(attemptId)!;
+  assert.equal(kept.at, new Date(NOW).toISOString());
+  assert.deepEqual(kept.keep.position, INSIDE);
+  assert.equal(kept.keep.parkName, "Paterson Park");
+  assert.deepEqual(kept.keep.osmFeature?.geometry, PATERSON_OUTLINE, "the outline checked, so an approval publishes what the player stood in");
+  const photo = Buffer.from(kept.keep.photo.base64, "base64");
+  assert.ok(!photo.toString("latin1").includes("GPSLatitude") && !photo.toString("latin1").includes("QA Camera Maker"), "kept without metadata");
+  assert.equal(kept.keep.photo.sha256, createHash("sha256").update(photo).digest("hex"));
+  // A retry answers the same, including how long the photo is kept.
+  assert.deepEqual(await body(await rejected.found({ attemptId })), first);
+
+  const unsure = setup({ answers: verdict(0.6) });
+  const catalogue = await body(await unsure.found({ target: { parkId: BEACON }, position: IN_BEACON }));
+  assert.equal(catalogue.outcome, "unsure");
+  assert.equal([...unsure.store.kept.values()][0].keep.osmFeature, null, "a catalogue park keeps no outline; its boundary is in the catalogue");
+
+  const approved = setup();
+  await approved.found();
+  assert.equal(approved.store.kept.size, 0);
+  const unavailable = setup({ answers: null });
+  await unavailable.found();
+  assert.equal(unavailable.store.kept.size, 0);
+});
+
+test("asking for a review reuses the stored attempt, answers pending, and the same attempt answers the same request", async () => {
+  const { store, found, call, written } = setup({ answers: people() });
+  const attemptId = randomUUID();
+  await found({ attemptId });
+  const response = await call("POST", "/api/parks/found/review", { attemptId: attemptId.toUpperCase() });
+  assert.equal(response.status, 200);
+  const result = await body(response);
+  assert.deepEqual(Object.keys(result).sort(), ["requestId", "status"]);
+  assert.equal(result.status, "pending");
+  assert.deepEqual(store.requests.map((row) => [row.id, row.attemptId, row.parkId, row.status]), [[result.requestId, attemptId, "osm-way-23938892", "pending"]]);
+  assert.equal(store.kept.size, 0, "the request holds the photo now");
+  const event = written.find((context) => context.route === "POST /api/parks/found/review")!.events;
+  assert.deepEqual(event.map((item) => [item.type, item.parkId, item.properties]), [["founding_review_requested", "osm-way-23938892", { outcome: "reject", source: "osm_new" }]]);
+
+  const again = await call("POST", "/api/parks/found/review", { attemptId });
+  assert.deepEqual(await body(again), { status: "pending", requestId: result.requestId });
+  store.requests[0].status = "rejected";
+  assert.deepEqual(await body(await call("POST", "/api/parks/found/review", { attemptId })), { status: "rejected", requestId: result.requestId });
+  assert.equal(store.requests.length, 1);
+  assert.equal(normalizeRoute("POST", "/api/parks/found/review/seen"), "POST /api/parks/found/review/seen");
+});
+
+test("a review needs sign-in, a handle, a strict body and the caller's own rejected or unsure attempt with its photo", async () => {
+  const { store, found, call } = setup({ answers: people() });
+  const attemptId = randomUUID();
+  await found({ attemptId });
+  const review = (body: unknown, auth: "bearer" | "other" | "none" = "bearer") => call("POST", "/api/parks/found/review", body, auth);
+  assert.equal((await review({ attemptId }, "none")).status, 401);
+  for (const bad of [{}, { attemptId: "nope" }, { attemptId, note: "please" }, [attemptId]]) {
+    const response = await review(bad);
+    assert.equal(response.status, 400, JSON.stringify(bad));
+    assert.equal((await body(response)).code, "invalid_request");
+  }
+  assert.equal((await call("GET", "/api/parks/found/review")).status, 405);
+  const other = await review({ attemptId }, "other");
+  assert.equal(other.status, 404, "another player's attempt is not found");
+  assert.equal((await body(other)).code, "attempt_not_found");
+  assert.equal((await body(await review({ attemptId: randomUUID() }))).code, "attempt_not_found");
+  store.handles.delete(ACCOUNT);
+  assert.equal((await body(await review({ attemptId }))).code, "handle_required");
+  store.handles.set(ACCOUNT, "sam");
+
+  // The photo is gone after a day.
+  store.kept.delete(attemptId);
+  const expired = await review({ attemptId });
+  assert.equal(expired.status, 410);
+  assert.equal((await body(expired)).code, "photo_expired");
+
+  // Approved and unanswered checks cannot be appealed.
+  const approved = setup();
+  const approvedAttempt = randomUUID();
+  await approved.found({ attemptId: approvedAttempt, target: { parkId: BEACON }, position: IN_BEACON });
+  const notReviewable = await approved.call("POST", "/api/parks/found/review", { attemptId: approvedAttempt });
+  assert.equal(notReviewable.status, 409);
+  assert.equal((await body(notReviewable)).code, "not_reviewable");
+  const unavailable = setup({ answers: null });
+  const unavailableAttempt = randomUUID();
+  await unavailable.found({ attemptId: unavailableAttempt });
+  assert.equal((await body(await unavailable.call("POST", "/api/parks/found/review", { attemptId: unavailableAttempt }))).code, "not_reviewable");
+  assert.equal(store.requests.length + approved.store.requests.length + unavailable.store.requests.length, 0);
+});
+
+test("a review is refused for a founded or hidden park and a second pending request; 3 a Victoria day", async () => {
+  const { store, found, call } = setup({ answers: people() });
+  const attempt = async (overrides: Record<string, unknown> = {}) => {
+    const attemptId = randomUUID();
+    await found({ attemptId, ...overrides });
+    return attemptId;
+  };
+  const review = (attemptId: string) => call("POST", "/api/parks/found/review", { attemptId });
+
+  const first = await attempt();
+  assert.equal((await review(first)).status, 200);
+  const second = await review(await attempt());
+  assert.equal(second.status, 409);
+  assert.equal((await body(second)).code, "review_pending");
+
+  // Decided requests free the park again, but the day's limit still counts them.
+  store.requests[0].status = "rejected";
+  assert.equal((await review(await attempt())).status, 200);
+  store.requests[1].status = "rejected";
+  assert.equal((await review(await attempt())).status, 200);
+  store.requests[2].status = "rejected";
+  assert.equal(store.requests.length, REVIEWS_PER_DAY);
+  const limited = await review(await attempt());
+  assert.equal(limited.status, 429);
+  assert.equal((await body(limited)).code, "rate_limited_review");
+  // Yesterday's requests in Victoria do not count: 06:59 UTC is still the day before there.
+  for (const row of store.requests) row.createdAt = "2026-10-08T06:59:00.000Z";
+  assert.equal((await review(await attempt())).status, 200);
+
+  const hidden = await attempt({ target: { parkId: BEACON }, position: IN_BEACON });
+  store.hiddenIds.add(BEACON);
+  const hiddenResponse = await review(hidden);
+  assert.equal(hiddenResponse.status, 404);
+  assert.equal((await body(hiddenResponse)).code, "park_not_found");
+  store.hiddenIds.delete(BEACON);
+
+  store.founded.set(BEACON, { accountId: OTHER, attemptId: randomUUID(), sha256: "f".repeat(64), bytes: new Uint8Array(), foundedAt: new Date(NOW).toISOString(), parkName: "Beacon Hill Park", visit: null });
+  const founded = await review(hidden);
+  assert.equal(founded.status, 409);
+  assert.deepEqual(await body(founded), { error: { code: "already_founded", message: "This park already has a founder: @bee." }, code: "already_founded", message: "This park already has a founder: @bee." });
+});
+
+test("an instant founding closes pending reviews of that park as superseded", async () => {
+  const rejected = setup({ answers: people() });
+  const attemptId = randomUUID();
+  await rejected.found({ attemptId, target: { parkId: BEACON }, position: IN_BEACON });
+  await rejected.call("POST", "/api/parks/found/review", { attemptId });
+  // Another player founds it instantly; the memory store mirrors the shared transaction's supersede.
+  rejected.store.founded.clear();
+  const store = rejected.store;
+  const result = await store.foundExisting({
+    accountId: OTHER, attemptId: randomUUID(), visitId: randomUUID(), parkId: BEACON, at: new Date(NOW).toISOString(),
+    photo: { sha256: "a".repeat(64), base64: "", width: 1, height: 1 }, moderation: {},
+  });
+  assert.equal(result.status, "founded");
+  assert.equal(store.requests[0].status, "superseded");
+});
+
+test("decisions are marked seen with a strict body; pending and other players' requests are left alone", async () => {
+  const { store, call } = setup();
+  const mine = randomUUID(), pending = randomUUID(), theirs = randomUUID();
+  store.requests.push(
+    { id: mine, accountId: ACCOUNT, attemptId: randomUUID(), parkId: BEACON, status: "approved", createdAt: new Date(NOW).toISOString(), seenAt: null },
+    { id: pending, accountId: ACCOUNT, attemptId: randomUUID(), parkId: "osm-way-1", status: "pending", createdAt: new Date(NOW).toISOString(), seenAt: null },
+    { id: theirs, accountId: OTHER, attemptId: randomUUID(), parkId: BEACON, status: "rejected", createdAt: new Date(NOW).toISOString(), seenAt: null },
+  );
+  const seen = (requestIds: unknown, auth: "bearer" | "none" = "bearer") => call("POST", "/api/parks/found/review/seen", { requestIds }, auth);
+  assert.equal((await seen([mine], "none")).status, 401);
+  for (const bad of [[], ["nope"], Array.from({ length: 51 }, () => randomUUID()), mine]) assert.equal((await seen(bad)).status, 400);
+  const response = await seen([mine.toUpperCase(), pending, theirs]);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await body(response), { seen: [mine] });
+  assert.deepEqual(store.requests.map((row) => row.seenAt), [new Date(NOW).toISOString(), null, null]);
+  assert.deepEqual(await body(await seen([mine])), { seen: [] }, "seen once");
 });

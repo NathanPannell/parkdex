@@ -1,4 +1,4 @@
-/* Parks section: the park manager, one park's page, create from OSM and the map editor. */
+/* Parks section: the park manager, one park's page, create from OSM, the map editor and founding reviews. */
 
 /* Maps */
 .park-map { width: 100%; height: 100%; min-height: 240px; background: #e8eef0; }
@@ -191,6 +191,83 @@
 .pp-facts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .dialog__recommend { display: flex; align-items: flex-start; gap: 7px; margin-top: 10px !important; padding: 9px 11px; border-radius: 11px; background: color-mix(in srgb, var(--moss) 16%, var(--card)); color: var(--ink); font-weight: 700; }
 .dialog__recommend svg { flex: none; margin-top: 2px; color: var(--moss); }
+
+/* Founding reviews (/parks/review) */
+.rv.page--wide { max-width: 1500px; }
+.rv .page-head { margin-bottom: 14px; }
+.rv-body { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.rv-queue { position: sticky; top: 76px; display: flex; flex-direction: column; max-height: calc(100vh - 110px); border: 2px solid var(--edge); border-radius: var(--r-md); background: var(--card); box-shadow: var(--pop); overflow: hidden; }
+.rv-queue__filter { padding: 8px; border-bottom: 2px solid var(--edge); }
+.rv-queue__filter .tabs { box-shadow: none; border-width: 1.5px; }
+.rv-queue__filter .tab { padding: 5px 9px; font-size: 13px; }
+.rv-queue__list { flex: 1; min-height: 120px; overflow-y: auto; padding: 4px 0; }
+.rv-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 7px 12px; border: 0; border-left: 3px solid transparent; background: none; text-align: left; }
+.rv-row:hover { background: color-mix(in srgb, var(--kip) 7%, transparent); }
+.rv-row.is-active { border-left-color: var(--kip); background: color-mix(in srgb, var(--kip) 12%, transparent); }
+.rv-thumb { display: grid; place-items: center; width: 64px; height: 48px; object-fit: cover; border: 1.5px solid var(--edge); border-radius: 8px; background: #e8eef0; color: var(--ink-faint); }
+.rv-row__main { display: grid; min-width: 0; }
+.rv-row__main strong { overflow: hidden; font-size: 13.5px; white-space: nowrap; text-overflow: ellipsis; }
+.rv-row__main span { overflow: hidden; color: var(--ink-faint); font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.rv-chip { display: inline-flex; align-items: center; max-width: 130px; height: 22px; padding: 0 8px; overflow: hidden; border: 1.5px solid var(--edge); border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; color: #14231c; background: #e8e2d6; }
+.rv-chip--reject { background: #ffc9b5; }
+.rv-chip--unsure { background: #ffe7a3; }
+.rv-chip--approved { background: #b8ecc9; }
+.rv-chip--rejected { background: #dfe3e0; }
+.rv-chip--superseded { background: #d9e6ff; }
+
+.rv-detail { display: grid; gap: 14px; min-width: 0; padding: 18px; border: 2px solid var(--edge); border-radius: var(--r-md); background: var(--card); box-shadow: var(--pop); }
+.rv-detail--loading, .rv-detail--empty { place-items: center; min-height: 320px; color: var(--ink-soft); font-weight: 700; }
+.rv-detail--loading { display: flex; justify-content: center; align-items: center; gap: 10px; }
+.rv-detail__head h2 { margin: 0; font: 800 26px/1.15 var(--display); letter-spacing: -.5px; }
+.rv-detail__head .eyebrow { margin: 0 0 4px; }
+.rv-detail__meta { margin: 4px 0 0; font-size: 13px; }
+.rv-status { display: inline-flex; vertical-align: middle; margin-left: 6px; padding: 3px 10px; border: 2px solid var(--edge); border-radius: 999px; background: #ffe7a3; color: #14231c; font: 800 12px/1.2 var(--body); letter-spacing: .04em; text-transform: uppercase; }
+.rv-status--approved { background: #4be38f; }
+.rv-status--rejected { background: #dfe3e0; }
+.rv-status--superseded { background: #d9e6ff; }
+.rv-detail__grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+.rv-photo { margin: 0; display: grid; gap: 6px; }
+.rv-photo a { display: block; overflow: hidden; border: 2px solid var(--edge); border-radius: 12px; background: #e8eef0; }
+.rv-photo img { display: block; width: 100%; height: auto; max-height: 520px; object-fit: contain; background: #14231c; }
+.rv-photo figcaption { color: var(--ink-faint); font-size: 12px; font-weight: 700; }
+.rv-photo__gone { display: grid; place-items: center; gap: 8px; min-height: 220px; padding: 20px; border: 2px dashed var(--line); border-radius: 12px; color: var(--ink-soft); font-weight: 700; text-align: center; }
+.rv-side { display: grid; gap: 12px; }
+.rv-facts { display: grid; gap: 6px; margin: 0; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); }
+.rv-facts div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; font-size: 13px; }
+.rv-facts dt { color: var(--ink-faint); font-weight: 800; }
+.rv-facts dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rv-check h3 { margin: 0 0 6px; font: 800 15px/1.2 var(--display); }
+.rv-check__verdict { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+.rv-bars { display: grid; gap: 4px; }
+.rv-bar { display: grid; grid-template-columns: 118px minmax(0, 1fr) 40px; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.rv-bar strong { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.rv-bar__track { height: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.rv-bar__track span { display: block; height: 100%; border-radius: inherit; background: #8a978f; }
+.rv-bar--verdict .rv-bar__track span { background: var(--moss); }
+.rv-bar.is-flagged { color: var(--ink); }
+.rv-bar.is-flagged .rv-bar__track span { background: var(--kip); }
+.rv-check__model { margin: 8px 0 0; font-size: 12px; }
+.rv-map { height: 300px; }
+.rv-decide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; }
+.rv-decide__card { display: grid; gap: 8px; align-content: start; justify-items: start; padding: 12px 14px; border: 2px solid var(--edge); border-radius: 14px; background: var(--paper); }
+.rv-decide__card h3 { margin: 0; font: 800 16px/1.2 var(--display); }
+.rv-decide__card p { margin: 0; font-size: 13px; }
+.rv-decide__card .field { width: 100%; }
+.rv-decide__card textarea { width: 100%; resize: vertical; }
+.rv-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+/* The map's chip toggles are dark when on; here the choice must stand out on a dark card too. */
+.rv-reasons .chip-toggle.is-on { background: var(--kip); color: #14231c; }
+.rv-decided { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--paper-deep); font-size: 13.5px; }
+.rv-decided p { margin: 0; }
+.rv-decided svg { flex: none; margin-top: 1px; }
+.rv-decided--approved { background: color-mix(in srgb, var(--moss) 18%, var(--card)); }
+.rv-decided--approved svg { color: var(--moss); }
+
+@media (max-width: 1100px) {
+  .rv-body { grid-template-columns: 1fr; }
+  .rv-queue { position: static; max-height: 420px; }
+  .rv-detail__grid, .rv-decide { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 1100px) {
   .editor { grid-template-columns: 1fr; }

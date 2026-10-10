@@ -10,8 +10,9 @@ import { handleBack, useBackHandler } from "../../lib/backStack";
 import { insidePark } from "../../lib/boundaries";
 import { buzz, sfx } from "../../lib/feedback";
 import {
-  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, scanParks, targetFor,
-  type ContainingPark, type DeviceFix, type FoundResult, type FoundTarget, type PhotoFlag,
+  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, requestFoundingReview,
+  REVIEW_HINT, reviewButton, reviewProblem, scanParks, targetFor,
+  type ContainingPark, type DeviceFix, type FoundResult, type FoundTarget, type PhotoFlag, type ReviewState,
 } from "../../lib/founders";
 import { createVisitId } from "../../lib/game/client";
 import { useGame } from "../../lib/game/GameProvider";
@@ -49,7 +50,8 @@ type Step =
   | { kind: "problem"; message: string; detail?: string; action: "scan" | "close" }
   | { kind: "camera" }
   | { kind: "checking" }
-  | { kind: "rejected"; outcome: "rejected" | "unsure"; flags: PhotoFlag[] }
+  | { kind: "rejected"; outcome: "rejected" | "unsure"; flags: PhotoFlag[]; reviewable: boolean; review: ReviewState }
+  | { kind: "review_sent" }
   | { kind: "retry"; message: string }
   | { kind: "taken"; founder: string | null }
   | { kind: "founded"; result: Extract<FoundResult, { outcome: "founded" }> };
@@ -297,7 +299,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   // Back and Escape walk back through the flow: answers and the camera return to the scan result,
   // anything else closes it. The photo review steps back to the camera first (PhotoCapture).
   useBackHandler(() => {
-    const action = foundBackAction(step.kind);
+    const action = foundBackAction(step.kind, step.kind === "rejected" && step.review.kind === "sending");
     if (action === "close") onClose();
     else if (action === "results") setStep({ kind: "results" });
   });
@@ -355,7 +357,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       const flags = checkFlags(result);
       buzz([30, 40, 30]);
       captureProductEvent("found_park_photo_rejected", { outcome: result.outcome, flags: flags.map((flag) => flag.code) });
-      setStep({ kind: "rejected", outcome: result.outcome, flags });
+      setStep({ kind: "rejected", outcome: result.outcome, flags, reviewable: !!result.reviewableUntil, review: { kind: "idle" } });
     } catch (error) {
       if (!live.current) return;
       if (!(error instanceof FounderError)) {
@@ -374,6 +376,29 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       } else {
         setStep({ kind: "problem", message: error.message, action: "close" });
       }
+    }
+  }
+
+  // A person looks at the photo the server kept for this attempt; nothing is uploaded again.
+  async function askForReview(outcome: "rejected" | "unsure", flags: PhotoFlag[]) {
+    if (!accountId) {
+      onSignIn();
+      return;
+    }
+    sfx.tap();
+    const attempt = attemptId.current;
+    const update = (review: ReviewState) => setStep((current) => (current.kind === "rejected" ? { ...current, review } : current));
+    update({ kind: "sending" });
+    try {
+      await requestFoundingReview(accountId, attempt);
+      if (!live.current) return;
+      captureProductEvent("found_park_review_requested", { outcome, flags: flags.map((flag) => flag.code) });
+      setStep((current) => (current.kind === "rejected" ? { kind: "review_sent" } : current));
+      // The park's sheet shows the pending review once the player's state refreshes.
+      void game.refresh();
+    } catch (error) {
+      if (!live.current) return;
+      update({ kind: "failed", ...reviewProblem(error) });
     }
   }
 
@@ -408,7 +433,9 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
     : step.kind === "scanning" ? (park ? `Checking you're inside ${park.name}…` : "Looking for mapped parks around you…")
       : step.kind === "results" && choice ? "Take a photo of the park to found it."
         : "Stand inside a park to found it.";
-  const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken";
+  const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken" || step.kind === "review_sent";
+  const review = step.kind === "rejected" ? reviewButton(step.review, step.reviewable) : null;
+  const sendingReview = step.kind === "rejected" && step.review.kind === "sending";
 
   return (
     <div className="found" aria-label="Found a park">
@@ -541,7 +568,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 <span className="polaroid__caption">{choice?.label ?? ""}</span>
               </motion.div>
 
-              <div className="found-check__panel card" role={step.kind === "checking" ? "status" : "alert"}>
+              <div className="found-check__panel card" role={step.kind === "checking" || step.kind === "review_sent" ? "status" : "alert"}>
                 {step.kind === "checking" ? (
                   <div className="found-status">
                     <span className="found-status__spinner" aria-hidden="true" />
@@ -562,10 +589,31 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                       ))}
                     </ul>
                     <div className="found-row">
-                      <button className="btn btn--sm" onClick={openCamera}><Icon name="camera" size={16} /> Retake</button>
-                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                      <button className="btn btn--sm" onClick={openCamera} disabled={sendingReview}><Icon name="camera" size={16} /> Retake</button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()} disabled={sendingReview}>Close</button>
                     </div>
+                    {step.reviewable && (
+                      <div className="found-review">
+                        {review?.visible && (
+                          <button className="btn btn--sm btn--paper btn--block" onClick={() => void askForReview(step.outcome, step.flags)} disabled={review.disabled}>
+                            <Icon name="search" size={16} /> {review.label}
+                          </button>
+                        )}
+                        {step.review.kind === "failed" ? (
+                          <p className="found-review__problem">{step.review.message}</p>
+                        ) : (
+                          <p className="found-review__hint">{REVIEW_HINT}</p>
+                        )}
+                      </div>
+                    )}
                   </>
+                ) : step.kind === "review_sent" ? (
+                  <div className="found-sent">
+                    <span className="found-flags__icon found-sent__icon"><Icon name="check" size={18} /></span>
+                    <strong className="found-check__title">Sent for review</strong>
+                    <span className="found-check__detail">We'll look at your photo and let you know in Parkdex.</span>
+                    <button className="btn btn--sm btn--paper btn--block" onClick={() => onClose()}>Close</button>
+                  </div>
                 ) : step.kind === "retry" ? (
                   <>
                     <strong className="found-check__title">{step.message}</strong>

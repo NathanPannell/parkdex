@@ -39,7 +39,8 @@
     "database/migrations/founders_001_init.sql",
     "database/migrations/feedback_002_archive.sql",
     "database/migrations/app_config_003_ota_publishes.sql",
-    "database/migrations/operator_analytics_001_indexes.sql"
+    "database/migrations/operator_analytics_001_indexes.sql",
+    "database/migrations/founders_002_reviews.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [

@@ -15,6 +15,8 @@ import { createSqlProposalReviewStore, databaseSqlRunner, type ProposalReviewSto
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
 import { handleFoundersRequest } from "./founders.js";
 import { createNeonFoundersStore, type FoundersStore } from "./founders-store.js";
+import { purgeFoundingPhotos, type FoundingPurgeResult } from "./founding-reviews.js";
+import { database } from "./db.js";
 import { createPhotoChecker, photoApproveThreshold, type PhotoChecker } from "./founderPhoto.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
@@ -67,6 +69,8 @@ export interface WorkerDependencies {
   createStore?(env: WorkerEnvironment): FeedbackStore;
   /** Deletes feedback archived on the operator board more than 90 days before `cutoff`. */
   purgeArchivedFeedback?(env: WorkerEnvironment, cutoff: string): Promise<FeedbackPurgeResult>;
+  /** Deletes founding photos kept for a manual review once they expire (worker/founding-reviews.ts). */
+  purgeFoundingPhotos?(env: WorkerEnvironment, now: number): Promise<FoundingPurgeResult>;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   analytics?(env: WorkerEnvironment): AnalyticsSink | null;
   /** Catalogue lookups around a point (matching outlines, regions). */
@@ -113,6 +117,11 @@ function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): Fee
   if (dependencies.createStore) return dependencies.createStore(env);
   if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Feedback service is unavailable.");
   return createNeonFeedbackStore(env.DATABASE_URL);
+}
+
+function purgeFoundingPhotosFromDatabase(databaseUrl: string, now: number): Promise<FoundingPurgeResult> {
+  const sql = database(databaseUrl);
+  return purgeFoundingPhotos((text, params) => sql.query(text, params) as Promise<Record<string, unknown>[]>, now);
 }
 
 function requestUuid(dependencies: WorkerDependencies): string {
@@ -317,12 +326,18 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     const feedbackResult = dependencies.purgeArchivedFeedback
       ? await dependencies.purgeArchivedFeedback(env, feedbackCutoff)
       : env.DATABASE_URL ? await purgeArchivedFeedbackFromDatabase(env.DATABASE_URL, feedbackCutoff) : { deleted: 0, remainingExpired: 0 };
+    // Founding photos kept for a manual review (#153): unrequested ones after a day, decided ones after 90 days.
+    const foundingResult = dependencies.purgeFoundingPhotos
+      ? await dependencies.purgeFoundingPhotos(env, requestNow(dependencies))
+      : env.DATABASE_URL ? await purgeFoundingPhotosFromDatabase(env.DATABASE_URL, requestNow(dependencies)) : { deleted: 0, remainingExpired: 0 };
     return json({
       ...interactionResult,
       authDeleted: authResult.deleted,
       remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired,
       feedbackDeleted: feedbackResult.deleted,
       feedbackRemainingExpired: feedbackResult.remainingExpired,
+      foundingPhotosDeleted: foundingResult.deleted,
+      foundingPhotosRemainingExpired: foundingResult.remainingExpired,
     });
   }
   const authDependencies: AuthDependencies = {

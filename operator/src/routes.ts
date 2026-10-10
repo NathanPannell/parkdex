@@ -5,7 +5,7 @@
 
 export type SectionId = "feedback" | "parks" | "analytics" | "app";
 /** Icons the sidebar uses; each is a name in ui/Icon.tsx. */
-export type SectionIcon = "inbox" | "park" | "chart" | "rocket" | "activity" | "users" | "sliders" | "upload";
+export type SectionIcon = "inbox" | "park" | "chart" | "rocket" | "activity" | "users" | "sliders" | "upload" | "check";
 
 /**
  * Which database a page reads. "toggle" follows the sidebar's Production/Staging switch.
@@ -32,7 +32,14 @@ export interface SectionRoute {
 
 export const SECTIONS: readonly SectionRoute[] = [
   { id: "feedback", path: "/feedback", label: "Feedback", icon: "inbox", description: "Player reports, from new to done" },
-  { id: "parks", path: "/parks", label: "Parks", icon: "park", description: "The live park catalogue" },
+  {
+    id: "parks", path: "/parks", label: "Parks", icon: "park", description: "The live park catalogue and founding reviews",
+    children: [
+      // The catalogue owns /parks and every park page under it; the more specific Review wins below.
+      { path: "/parks", label: "Catalogue", icon: "park" },
+      { path: "/parks/review", label: "Review", icon: "check" },
+    ],
+  },
   {
     id: "analytics", path: "/analytics", label: "Analytics", icon: "chart", description: "Players, accounts and events",
     children: [
@@ -81,10 +88,15 @@ export interface ResolvedRoute {
   database: DatabaseScope;
 }
 
+/** The most specific sub-route that owns a path: /parks/review is Review, /parks/<id> is Catalogue. */
+export function childFor(section: SectionRoute, pathname: string): SubRoute | null {
+  return (section.children ?? []).filter((item) => within(pathname, item.path)).sort((a, b) => b.path.length - a.path.length)[0] ?? null;
+}
+
 /** The section and sub-route a path belongs to, or null for a path no section owns. */
 export function resolveRoute(pathname: string): ResolvedRoute | null {
   const section = SECTIONS.find((item) => within(pathname, item.path));
   if (!section) return null;
-  const child = section.children?.find((item) => within(pathname, item.path)) ?? null;
+  const child = childFor(section, pathname);
   return { section, child, database: child?.database ?? "toggle" };
 }

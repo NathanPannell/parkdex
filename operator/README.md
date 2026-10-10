@@ -22,7 +22,7 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
 | Section | Pages | UI | API |
 | --- | --- | --- | --- |
 | Feedback | `/feedback` (`/feedback/review?id=<report>` is the link in operator emails), `/feedback/archive` | `src/feedback/` | `server/feedback/`, `/api/feedback/*` |
-| Parks | `/parks`, `/parks/<id>`, `/parks/osm/<type>-<id>` | `src/parks/` | `server/parks/`, `/api/parks/*` |
+| Parks | `/parks`, `/parks/<id>`, `/parks/osm/<type>-<id>`, `/parks/review` | `src/parks/` | `server/parks/`, `/api/parks/*` |
 | Analytics | `/analytics/overview`, `/analytics/accounts`, `/analytics/events` | `src/analytics/` | `server/analytics/`, `/api/analytics/*` |
 | App and updates | `/app/builds`, `/app/updates` | `src/app/` | `server/app/`, `/api/app/*` |
 
@@ -34,6 +34,7 @@ The sidebar has four sections. Each owns one folder in the UI and one in the API
   - Hide and unhide are one click (`content_park_hidden`, source `operator`, `docs/park-visibility.md`). Delete asks first, lists what goes with the park and recommends Hide; it deletes the park, its draft and (by cascade) its founder in one content revision, and leaves visits and tenures as history. Parks in the enrichment queue cannot be deleted.
   - "Remove founder and cover" deletes the founder row (and the founder bonus) so the park can be founded again; "Replace cover" stores a JPEG with its metadata removed.
   - Create from OSM prefills name, category guess, nearest region and outline for an outline that is not in Parkdex, and publishes it with `publishStatements` as founding does.
+  - **Review** (`/parks/review`, the sidebar shows the pending count): players' requests for a manual review of a founding photo the check turned down (`docs/park-founders.md`, #153). A queue, oldest first, filtered by status, and one request with the full photo, the check's flags and probabilities, the handle, when it was taken, and a map with the outline checked and where the player stood. Approve asks first, then runs the shared founding transaction (`worker/founding.ts`) without a visit, so the player gets the cover and the 10 points but no flag. Reject takes a preset reason or the operator's words, which the player reads. Both write `founding_review_decided` to `kip_analytics.events` in the same transaction. Routes are in `server/parks/reviews.ts`, the SQL in `worker/founding-reviews.ts`, demo data in `server/parks/reviewMemory.ts`. A database without `founders_002` shows the tab as not deployed.
 - **Analytics:** follows the database toggle.
   - *Overview:* headline numbers with period deltas (accounts, signed-in players per day, week and month, handles, parks founded, visits by outcome, photo approve rate, open feedback) and daily charts drawn with uPlot. Signed-in players are accounts with a server event in the window.
   - *Accounts:* a paged table that never shows emails; the detail panel masks the email and each reveal is recorded in `kip_account.security_events`. **Delete account** marks the account deleting and signs it out, then runs the app's own cleanup (`deleteAccountData`, then `completeDeletion` in `worker/accounts`), so private photos go through the photo service of the same environment. Deletions waiting on the photo service are listed with a Resume button.
