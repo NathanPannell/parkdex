@@ -9,6 +9,23 @@ import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
 export type GamePlayer = { handle: string; flagSeed: string };
 export type HeldPark = { parkId: string; since: string; days: number };
 export type Takeover = { parkId: string; byHandle: string; byFlagSeed: string; at: string };
+/** A founding photo the player sent for manual review, still waiting (#153). */
+export type PendingFoundingReview = { requestId: string; parkId: string | null; parkName: string; createdAt: string };
+export type FoundingDecisionStatus = "approved" | "rejected" | "superseded";
+/** A manual review decision the player has not seen yet (#153). */
+export type FoundingDecision = {
+  requestId: string;
+  status: FoundingDecisionStatus;
+  parkId: string | null;
+  parkName: string;
+  reason: string | null;
+  coverUrl: string | null;
+  /** The park's current founder: the player after an approval, someone else after a superseded request. */
+  founderHandle: string | null;
+  decidedAt: string;
+};
+export type FoundingReviews = { pending: PendingFoundingReview[]; decided: FoundingDecision[] };
+
 export type GameMe = {
   player: GamePlayer | null;
   score: number;
@@ -20,6 +37,8 @@ export type GameMe = {
   visitedToday?: string[];
   /** When that day ends, from the server, so the list expires at midnight in Victoria (additive). */
   visitedTodayUntil?: string | null;
+  /** Manual reviews of founding photos: those waiting, and unseen decisions (additive, #153). */
+  foundingReviews?: FoundingReviews;
 };
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
@@ -43,6 +62,7 @@ export type GameErrorCode = "handle_taken" | "handle_rejected" | "handle_require
 
 const KNOWN_CODES = new Set<GameErrorCode>(["handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request", "unauthenticated", "unavailable", "offline"]);
 const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "already_today"]);
+const DECISIONS = new Set<FoundingDecisionStatus>(["approved", "rejected", "superseded"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export class GameError extends Error {
@@ -128,6 +148,34 @@ export function parseMe(body: unknown): GameMe {
     flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
     visitedToday: Array.isArray(row.visitedToday) ? row.visitedToday.filter((id): id is string => typeof id === "string" && id.length > 0) : [],
     visitedTodayUntil: instant(row.visitedTodayUntil),
+    foundingReviews: parseFoundingReviews(row.foundingReviews),
+  };
+}
+
+export function parseFoundingReviews(value: unknown): FoundingReviews {
+  const row = record(value) ?? {};
+  return {
+    pending: list(row.pending, (item) => {
+      const requestId = text(item.requestId);
+      const createdAt = instant(item.createdAt);
+      return requestId && createdAt ? { requestId, parkId: text(item.parkId), parkName: text(item.parkName) ?? "this park", createdAt } : null;
+    }),
+    decided: list(row.decided, (item) => {
+      const requestId = text(item.requestId);
+      const status = item.status;
+      const decidedAt = instant(item.decidedAt);
+      if (!requestId || !decidedAt || typeof status !== "string" || !DECISIONS.has(status as FoundingDecisionStatus)) return null;
+      return {
+        requestId,
+        status: status as FoundingDecisionStatus,
+        parkId: text(item.parkId),
+        parkName: text(item.parkName) ?? "this park",
+        reason: typeof item.reason === "string" && item.reason.trim() ? item.reason.trim().slice(0, 200) : null,
+        coverUrl: text(item.coverUrl),
+        founderHandle: text(item.founderHandle),
+        decidedAt,
+      };
+    }),
   };
 }
 

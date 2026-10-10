@@ -609,3 +609,102 @@
   font-weight: 600;
   color: var(--ink-soft);
 }
+
+/* A founding photo waiting for manual review replaces "Become the founder". */
+.founder-review {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 2px dashed var(--ink);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.founder-review__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sun);
+  color: var(--ink);
+}
+
+.founder-review__text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.founder-review__text strong {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.founder-review__text em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* Manual review on the rejected and unsure screens. */
+.found-review {
+  display: grid;
+  gap: 6px;
+}
+
+.found-review__hint,
+.found-review__problem {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.found-review__problem {
+  color: var(--kip-dark);
+}
+
+.found-sent {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* Review decisions, in the takeover sheet's style. */
+.decision-sheet__body {
+  display: grid;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+.decision-sheet__text {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.decision-sheet__cover {
+  justify-self: center;
+  width: min(220px, 60vw);
+  padding: 10px 10px 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+  transform: rotate(-2deg);
+}
+
+.decision-sheet__cover .polaroid__img {
+  aspect-ratio: 4 / 3;
+}
+
+.found-sent__icon {
+  background: #d6f5e3;
+  color: var(--ink);
+}
