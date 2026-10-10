@@ -67,6 +67,23 @@ export interface FounderRecord {
   photoSha256: string;
 }
 
+/** A manual review request (#153) the player should see: pending, or decided and not yet shown. */
+export interface FoundingReviewRecord {
+  requestId: string;
+  status: "pending" | "approved" | "rejected" | "superseded";
+  /** The park an approval founded, else the requested park. */
+  parkId: string;
+  osm: { type: string; id: number } | null;
+  parkName: string;
+  reason: string | null;
+  /** The park's current founder and cover, if any. */
+  founderHandle: string | null;
+  founderIsPlayer: boolean;
+  coverSha256: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
 export interface LeaderboardRow {
   rank: number;
   handle: string;
@@ -88,6 +105,8 @@ export interface GameStore {
   founders?(): Promise<FounderRecord[]>;
   /** The founder bonus included in the account's score. */
   founderPoints?(accountId: string, now: string): Promise<number>;
+  /** Pending review requests and unseen decisions. Empty where founders_002_reviews.sql has not run. */
+  foundingReviews?(accountId: string): Promise<FoundingReviewRecord[]>;
 }
 
 export const TAKEOVER_LIMIT = 50;
@@ -266,6 +285,38 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         return Number(found[0]?.points ?? 0);
       } catch (error) {
         if (missingFounders(error)) return 0;
+        throw error;
+      }
+    },
+
+    async foundingReviews(accountId) {
+      try {
+        const found = await rows(`
+          SELECT r.id, r.status, coalesce(r.founded_park_id, r.park_id) AS park_id, r.osm_type, r.osm_id,
+            coalesce(p.name, r.park_name) AS park_name, r.decision_reason, r.created_at, r.decided_at,
+            f.photo_sha256, (f.account_id = r.account_id) AS founder_is_player, pl.handle AS founder_handle
+          FROM kip_founders.review_requests r
+          LEFT JOIN public.parks p ON p.id = coalesce(r.founded_park_id, r.park_id)
+          LEFT JOIN kip_founders.parks f ON f.park_id = coalesce(r.founded_park_id, r.park_id)
+          LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id
+          WHERE r.account_id = $1::uuid AND (r.status = 'pending' OR r.seen_at IS NULL)
+          ORDER BY coalesce(r.decided_at, r.created_at), r.created_at, r.id
+          LIMIT 100`, [accountId]);
+        return found.map((row) => ({
+          requestId: String(row.id),
+          status: String(row.status) as FoundingReviewRecord["status"],
+          parkId: String(row.park_id),
+          osm: row.osm_type ? { type: String(row.osm_type), id: Number(row.osm_id) } : null,
+          parkName: String(row.park_name),
+          reason: row.decision_reason === null || row.decision_reason === undefined ? null : String(row.decision_reason),
+          founderHandle: row.founder_handle === null || row.founder_handle === undefined ? null : String(row.founder_handle),
+          founderIsPlayer: row.founder_is_player === true,
+          coverSha256: row.photo_sha256 === null || row.photo_sha256 === undefined ? null : String(row.photo_sha256),
+          createdAt: iso(row.created_at),
+          decidedAt: nullableIso(row.decided_at),
+        }));
+      } catch (error) {
+        if (missingFounders(error)) return [];
         throw error;
       }
     },

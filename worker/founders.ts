@@ -3,7 +3,7 @@ import {
   decidePhoto, FLAG_MESSAGES, UNAVAILABLE_MESSAGE, UNSURE_MESSAGE,
   type PhotoAnswers, type PhotoChecker, type PhotoFlag,
 } from "./founderPhoto.js";
-import type { FoundedRecord, FoundersStore, FoundResult } from "./founders-store.js";
+import type { FoundedRecord, FoundersStore, FoundResult, KeptAttempt } from "./founders-store.js";
 import { apiVisit, visitEvents } from "./game.js";
 import { JpegError, stripJpegMetadata } from "./jpeg.js";
 import type { OsmClient, OsmFeature, OsmRef, MultiPolygon } from "./osmParks.js";
@@ -17,6 +17,8 @@ import { HttpError, readJsonBody } from "./validation.js";
  * A signed-in player with a handle, standing in the park, sends one photo. When the model
  * approves it, one transaction publishes the OpenStreetMap park (or confirms the catalogue
  * park), stores the photo as the cover, records today's visit and awards the founder bonus.
+ * A rejected or unsure photo is kept for a day, so the player can ask the operator for a manual
+ * review of it (#153, `POST /api/parks/found/review`).
  */
 
 export const MAX_PHOTO_BYTES = 1_572_864;
@@ -25,6 +27,10 @@ export const MAX_PHOTO_DIMENSION = 2_048;
 const MAX_FOUND_BODY_BYTES = Math.ceil(MAX_PHOTO_BYTES / 3) * 4 + 16 * 1024;
 export const CHECKS_PER_HOUR = 20;
 export const FOUNDED_PER_DAY = 5;
+/** Manual review (#153): requests per account per Victoria day, and how long a failed check's photo is kept for one. */
+export const REVIEWS_PER_DAY = 3;
+export const REVIEW_KEEP_MS = 24 * 3_600_000;
+const MAX_SEEN_IDS = 50;
 // Wide enough to catch a big catalogue park whose centre is a few km away.
 const CATALOGUE_KM = 5;
 
@@ -34,7 +40,8 @@ const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$
 const COVER_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/cover\/([0-9a-f]{64})\.jpg$/;
 const SUMMARY_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/summary$/;
 
-export type FounderEventName = "park_founded" | "founder_photo_checked" | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell";
+export type FounderEventName = "park_founded" | "founder_photo_checked" | "founding_review_requested"
+  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell";
 
 export interface FoundersHandlers {
   store(): FoundersStore;
@@ -150,12 +157,14 @@ function flagList(flags: readonly string[]) {
   return flags.filter((flag): flag is PhotoFlag => flag in FLAG_MESSAGES).map((code) => ({ code, message: FLAG_MESSAGES[code] }));
 }
 
-function checkResponse(outcome: "reject" | "unsure", flags: readonly string[]): Response {
+/** `reviewableUntil` is when the kept photo goes, or null once it is gone. */
+function checkResponse(outcome: "reject" | "unsure", flags: readonly string[], keptAt: string | null): Response {
   const list = outcome === "reject" ? flagList(flags) : [];
   return json({
     outcome: outcome === "reject" ? "rejected" : "unsure",
     flags: list,
     message: outcome === "reject" ? list[0]?.message ?? FLAG_MESSAGES.not_park : UNSURE_MESSAGE,
+    reviewableUntil: keptAt ? new Date(Date.parse(keptAt) + REVIEW_KEEP_MS).toISOString() : null,
   });
 }
 
@@ -225,7 +234,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   }
   if (earlier.check) {
     if (earlier.check.photoSha256 !== photoSha256) throw new HttpError(409, "attempt_id_reused", "This attempt ID was already used for another photo.");
-    if (earlier.check.outcome === "reject" || earlier.check.outcome === "unsure") return checkResponse(earlier.check.outcome, earlier.check.flags);
+    if (earlier.check.outcome === "reject" || earlier.check.outcome === "unsure") return checkResponse(earlier.check.outcome, earlier.check.flags, earlier.check.keptAt);
   }
 
   const usage = await store.usage(accountId, at);
@@ -249,15 +258,23 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   const decision = answers ? decidePhoto(answers, handlers.threshold) : null;
   const outcome = decision?.outcome ?? "unavailable";
   const flags: string[] = decision?.flags ?? [];
+  const photo = { sha256: photoSha256, base64: Buffer.from(input.photo.bytes).toString("base64"), width: input.photo.width, height: input.photo.height };
+  // A photo the player can appeal (#153) is kept for a day, with the position and the target.
+  const keep: KeptAttempt | null = decision && decision.outcome !== "approve" ? {
+    parkName: resolved.kind === "osm" ? resolved.feature.name ?? "Unnamed park" : resolved.name,
+    osmFeature: resolved.kind === "osm" ? resolved.feature : null,
+    position: { lat: input.position.lat, lng: input.position.lng, accuracyM: input.position.accuracyM },
+    photo,
+  } : null;
   await store.recordCheck({
     id: handlers.uuid(), accountId, attemptId: input.attemptId, parkId: resolved.parkId, osm, at, outcome, flags, photoSha256,
     moderation: answers ? moderationRecord(answers, handlers.threshold, at, flags) : null,
+    keep,
   });
   handlers.emit("founder_photo_checked", { parkId: resolved.parkId, outcome, flags: flags.join(","), source: resolved.kind === "osm" ? "osm_new" : "existing" });
   if (!decision) throw new HttpError(503, "photo_check_unavailable", UNAVAILABLE_MESSAGE);
-  if (decision.outcome !== "approve") return checkResponse(decision.outcome, decision.flags);
+  if (decision.outcome !== "approve") return checkResponse(decision.outcome, decision.flags, at);
 
-  const photo = { sha256: photoSha256, base64: Buffer.from(input.photo.bytes).toString("base64"), width: input.photo.width, height: input.photo.height };
   const common = { accountId, attemptId: input.attemptId, visitId, at, photo, moderation: moderationRecord(answers, handlers.threshold, at, []) };
   let result: FoundResult;
   let source: "osm_new" | "existing" = resolved.kind === "osm" ? "osm_new" : "existing";
@@ -289,7 +306,8 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
       result = await store.foundExisting({ ...common, parkId: park.id });
     }
   } else {
-    result = await store.foundExisting({ ...common, parkId: resolved.parkId });
+    // The outline the player chose, when it is this catalogue park, so its pending reviews close too.
+    result = await store.foundExisting({ ...common, parkId: resolved.parkId, osm: "osm" in input.target ? input.target.osm : null });
   }
 
   if (result.status !== "founded") {
@@ -297,7 +315,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
       const founder = (await store.founders([resolved.parkId])).get(resolved.parkId);
       throw alreadyFounded(founder?.handle ?? null);
     }
-    if (result.status === "park_missing") throw new HttpError(404, "park_not_found", "That park is not in Parkdex.");
+    if (result.status === "park_missing" || result.status === "park_hidden") throw new HttpError(404, "park_not_found", "That park is not in Parkdex.");
     if (result.status === "attempt_reused") throw new HttpError(409, "attempt_id_reused", "This attempt ID was already used for another park.");
     if (result.status === "blocked") throw new HttpError(409, "founding_blocked", "This park can't be founded right now.");
     throw new HttpError(503, "service_unavailable", "Founding didn't finish. Try again in a moment.");
@@ -310,6 +328,60 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
     }
   }
   return foundedResponse(handlers.publicOrigin, result.record);
+}
+
+/** `POST /api/parks/found/review`: asks the operator to look at a rejected or unsure photo (#153). */
+async function postReview(request: Request, handlers: FoundersHandlers): Promise<Response> {
+  const { accountId } = await handlers.mutation();
+  const body = exactKeys(await readJsonBody(request, 1024), ["attemptId"]);
+  if (typeof body.attemptId !== "string" || !UUID.test(body.attemptId)) throw new HttpError(400, "invalid_request", "Invalid attempt ID.");
+  const attemptId = body.attemptId.toLowerCase();
+  const store = handlers.store();
+  if (!await store.hasHandle(accountId)) throw new HttpError(409, "handle_required", "Choose a handle before asking for a review.");
+
+  // Asking again for the same attempt answers with the request it already made.
+  const found = await store.reviewAttempt(accountId, attemptId);
+  if (found.request) return json({ status: found.request.status, requestId: found.request.id });
+  const { check } = found;
+  if (!check) throw new HttpError(404, "attempt_not_found", "We couldn't find that photo. Take a new one and try again.");
+  if (check.outcome !== "reject" && check.outcome !== "unsure") throw new HttpError(409, "not_reviewable", "Only photos the check turned down can be reviewed.");
+  if (!check.kept) throw new HttpError(410, "photo_expired", "That photo is no longer kept. Take a new one and try again.");
+  const [hidden, founders] = await Promise.all([store.hidden([check.parkId]), store.founders([check.parkId])]);
+  if (hidden.has(check.parkId)) throw new HttpError(404, "park_not_found", "That park is not in Parkdex.");
+  const founder = founders.get(check.parkId);
+  if (founder) throw alreadyFounded(founder.handle);
+
+  const requestId = handlers.uuid();
+  const at = new Date(handlers.now()).toISOString();
+  const result = await store.requestReview({ id: requestId, accountId, attemptId, parkId: check.parkId, at, perDay: REVIEWS_PER_DAY });
+  if (result === "exists") {
+    // A concurrent request for the same attempt won; answer with it.
+    const again = await store.reviewAttempt(accountId, attemptId);
+    if (again.request) return json({ status: again.request.status, requestId: again.request.id });
+    throw new HttpError(503, "service_unavailable", "Your request didn't go through. Try again in a moment.");
+  }
+  if (result === "pending") throw new HttpError(409, "review_pending", "You already asked for a review of this park. We'll let you know.");
+  if (result === "limited") throw new HttpError(429, "rate_limited_review", "You can ask for 3 reviews a day. Try again tomorrow.");
+  if (result === "expired") throw new HttpError(410, "photo_expired", "That photo is no longer kept. Take a new one and try again.");
+  if (result === "already_founded") {
+    const current = (await store.founders([check.parkId])).get(check.parkId);
+    throw alreadyFounded(current?.handle ?? null);
+  }
+  handlers.emit("founding_review_requested", { parkId: check.parkId, outcome: check.outcome, source: check.osm ? "osm_new" : "existing" });
+  return json({ status: "pending", requestId });
+}
+
+/** `POST /api/parks/found/review/seen`: the app showed these decisions. */
+async function postReviewSeen(request: Request, handlers: FoundersHandlers): Promise<Response> {
+  const { accountId } = await handlers.mutation();
+  const body = exactKeys(await readJsonBody(request, 4 * 1024), ["requestIds"]);
+  const ids = body.requestIds;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_SEEN_IDS || !ids.every((id) => typeof id === "string" && UUID.test(id))) {
+    throw new HttpError(400, "invalid_request", `Send 1 to ${MAX_SEEN_IDS} request IDs.`);
+  }
+  const at = new Date(handlers.now()).toISOString();
+  const seen = await handlers.store().markReviewsSeen(accountId, (ids as string[]).map((id) => id.toLowerCase()), at);
+  return json({ seen });
 }
 
 async function getCover(request: Request, handlers: FoundersHandlers, parkId: string, sha256: string): Promise<Response> {
@@ -346,12 +418,23 @@ async function getSummary(handlers: FoundersHandlers, parkId: string): Promise<R
   return json(body, 200, account ? "private, no-store" : "public, max-age=60", { vary: "Authorization, Cookie" });
 }
 
-/** Routes `/api/parks/found`, `/api/parks/:id/cover/:sha256.jpg` and `/api/parks/:id/summary`. Null for other paths. */
+/**
+ * Routes `/api/parks/found`, `/api/parks/found/review`, `/api/parks/found/review/seen`,
+ * `/api/parks/:id/cover/:sha256.jpg` and `/api/parks/:id/summary`. Null for other paths.
+ */
 export async function handleFoundersRequest(request: Request, handlers: FoundersHandlers): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (path === "/api/parks/found") {
     if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
     return postFound(request, handlers);
+  }
+  if (path === "/api/parks/found/review") {
+    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+    return postReview(request, handlers);
+  }
+  if (path === "/api/parks/found/review/seen") {
+    if (request.method !== "POST") throw new HttpError(405, "method_not_allowed", "Use POST.");
+    return postReviewSeen(request, handlers);
   }
   const cover = COVER_PATH.exec(path);
   if (cover) {
