@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const nativeMocks = vi.hoisted(() => ({
   db: {
     open: vi.fn(),
+    isDBOpen: vi.fn(),
     execute: vi.fn(),
     query: vi.fn(),
     run: vi.fn(),
@@ -10,6 +11,8 @@ const nativeMocks = vi.hoisted(() => ({
   },
   createConnection: vi.fn(),
   closeConnection: vi.fn(),
+  isConnection: vi.fn(),
+  retrieveConnection: vi.fn(),
   mkdir: vi.fn(),
   readdir: vi.fn(),
   stat: vi.fn(),
@@ -25,6 +28,12 @@ const nativeMocks = vi.hoisted(() => ({
 vi.mock("@capacitor-community/sqlite", () => ({
   CapacitorSQLite: {},
   SQLiteConnection: class {
+    isConnection(...args: unknown[]) {
+      return nativeMocks.isConnection(...args);
+    }
+    retrieveConnection(...args: unknown[]) {
+      return nativeMocks.retrieveConnection(...args);
+    }
     createConnection(...args: unknown[]) {
       return nativeMocks.createConnection(...args);
     }
@@ -128,7 +137,10 @@ describe("NativeContentStore deletion guard", () => {
     nativeMocks.tableColumns.set("content_sync_rows", ["environment", "entity", "row_id", "position", "value_json"]);
     nativeMocks.tableColumns.set("content_sync_cursors", ["environment", "revision", "source_id"]);
     nativeMocks.createConnection.mockResolvedValue(nativeMocks.db);
+    nativeMocks.isConnection.mockResolvedValue({ result: false });
+    nativeMocks.retrieveConnection.mockResolvedValue(nativeMocks.db);
     nativeMocks.db.open.mockResolvedValue(undefined);
+    nativeMocks.db.isDBOpen.mockResolvedValue({ result: true });
     nativeMocks.db.execute.mockResolvedValue({});
     nativeMocks.db.run.mockImplementation(async (statement: string, values?: unknown[]) => {
       if (statement.includes("INSERT OR REPLACE INTO content_archived_scenes")) {
@@ -167,6 +179,53 @@ describe("NativeContentStore deletion guard", () => {
     nativeMocks.writeFile.mockResolvedValue({});
     nativeMocks.deleteFile.mockResolvedValue(undefined);
     nativeMocks.rename.mockResolvedValue(undefined);
+  });
+
+  it("reuses a connection this page already registered instead of creating a duplicate", async () => {
+    nativeMocks.isConnection.mockResolvedValue({ result: true });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(nativeMocks.isConnection).toHaveBeenCalledWith("parkdex_content", false);
+    expect(nativeMocks.retrieveConnection).toHaveBeenCalledWith("parkdex_content", false);
+    expect(nativeMocks.createConnection).not.toHaveBeenCalled();
+    expect(nativeMocks.db.open).not.toHaveBeenCalled();
+    await store.close();
+  });
+
+  it("opens a registered connection whose database is closed", async () => {
+    nativeMocks.isConnection.mockResolvedValue({ result: true });
+    nativeMocks.db.isDBOpen.mockResolvedValue({ result: false });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(nativeMocks.createConnection).not.toHaveBeenCalled();
+    expect(nativeMocks.db.open).toHaveBeenCalledOnce();
+    await store.close();
+  });
+
+  it("replaces a native connection left behind by a WebView reload", async () => {
+    nativeMocks.createConnection
+      .mockRejectedValueOnce(new Error("CreateConnection: Connection parkdex_content already exists"))
+      .mockResolvedValueOnce(nativeMocks.db);
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    expect(nativeMocks.closeConnection).toHaveBeenCalledWith("parkdex_content", false);
+    expect(nativeMocks.createConnection).toHaveBeenCalledTimes(2);
+    expect(nativeMocks.closeConnection.mock.invocationCallOrder[0]).toBeLessThan(nativeMocks.createConnection.mock.invocationCallOrder[1]!);
+    expect(nativeMocks.db.open).toHaveBeenCalledOnce();
+    await expect(store.getActiveId()).resolves.toBe("release");
+    await store.close();
+  });
+
+  it("does not hide other connection failures", async () => {
+    nativeMocks.createConnection.mockRejectedValue(new Error("CreateConnection: disk I/O error"));
+    const store = new NativeContentStore();
+
+    await expect(store.initialize()).rejects.toThrow("disk I/O error");
+    expect(nativeMocks.closeConnection).not.toHaveBeenCalled();
+    expect(nativeMocks.createConnection).toHaveBeenCalledOnce();
   });
 
   it("refuses to delete a blob used by the active release", async () => {
