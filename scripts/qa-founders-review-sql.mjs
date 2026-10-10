@@ -200,6 +200,7 @@ try {
   log('a rejected photo is kept for a day and a review request moves it, with the position, target and answers');
 
   // A rival request for the same park, and the per-account rules.
+  clock += 60_000;
   const rival = await rejectedRequest(b, { osm: { type: 'way', id: MEADOW.id } }, IN_MEADOW);
   const second = await json(await found(a.token, { osm: { type: 'way', id: MEADOW.id } }, IN_MEADOW));
   assert.equal(second.outcome, 'rejected');
