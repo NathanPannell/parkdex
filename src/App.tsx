@@ -29,6 +29,7 @@ import { Onboarding } from "./screens/Onboarding";
 import { Leaderboard } from "./screens/Leaderboard";
 import { Plant } from "./screens/Plant";
 import { backCanLeavePlant, leavePlant } from "./lib/game/plantExit";
+import { FoundingDecisionSheet, useFoundingDecisions } from "./screens/FoundingDecisionSheet";
 import { TakeoverMessages } from "./screens/TakeoverSheet";
 import { YourParks } from "./screens/YourParks";
 import { Splash } from "./screens/Splash";
@@ -201,6 +202,10 @@ function Screens() {
   // Your parks, the leaderboard and settings are tabs, so the bar stays on them.
   const showNav = showMap && (screen === "map" || screen === "parks" || screen === "leaderboard" || screen === "settings");
 
+  // Messages on open: review decisions first, then parks taken while away.
+  const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
+  const decisions = useFoundingDecisions(messagesAllowed);
+
   return (
     <>
       {showMap && (
@@ -238,7 +243,8 @@ function Screens() {
         {screen === "plant" && <Plant key="plant" />}
       </AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
-      <TakeoverMessages allowed={state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard")} />
+      <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
+      <TakeoverMessages allowed={messagesAllowed && !decisions.current} />
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
