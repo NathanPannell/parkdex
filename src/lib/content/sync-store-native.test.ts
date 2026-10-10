@@ -22,6 +22,10 @@ const nativeHarness = vi.hoisted(() => ({
 vi.mock("@capacitor-community/sqlite", () => ({
   CapacitorSQLite: {},
   SQLiteConnection: class {
+    // Every test opens a fresh in-memory database, so none reuses a registered connection.
+    isConnection() {
+      return Promise.resolve({ result: false });
+    }
     createConnection() {
       return nativeHarness.connection;
     }

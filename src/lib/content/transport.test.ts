@@ -35,6 +35,7 @@ vi.mock("@capacitor/core", () => ({
 vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
 import { setContentChannelOverride } from "../contentChannel";
+import { isContentTransportPaused } from "./contracts";
 import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDownloadAvailable, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
 
 const API_URL = "https://staging.web.parkdex.app/api/content/current";
@@ -357,6 +358,40 @@ describe("content transport", () => {
 
     await expect(contentFetch(CDN_URL)).rejects.toThrow("Wi-Fi connection lost");
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Content requests stop when Parkdex leaves the foreground",
+    "Content requests require Parkdex to be in the foreground",
+  ])("treats the vc14 plugin's pause rejection %j as a cancellation, not a failure", async (message) => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    // Capacitor rejects a plugin call with an Error that carries the native message.
+    mocks.native.request.mockRejectedValue(new Error(message));
+
+    const error = await contentFetch(CDN_URL).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(DOMException);
+    expect((error as DOMException).name).toBe("AbortError");
+    expect(isContentTransportPaused(error)).toBe(true);
+  });
+
+  it("keeps other native failures and caller aborts as they are", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("android");
+    mocks.native.request.mockRejectedValueOnce(new Error("Account backup requests require Parkdex to be in the foreground"));
+    const other = await contentFetch(CDN_URL).catch((caught: unknown) => caught);
+    expect(isContentTransportPaused(other)).toBe(false);
+    expect((other as Error).message).toBe("Account backup requests require Parkdex to be in the foreground");
+
+    const controller = new AbortController();
+    mocks.native.request.mockImplementationOnce(async () => {
+      controller.abort(new DOMException("Content sync paused in the background", "AbortError"));
+      throw new Error("Content requests stop when Parkdex leaves the foreground");
+    });
+    const aborted = await contentFetch(CDN_URL, { signal: controller.signal }).catch((caught: unknown) => caught);
+    expect((aborted as DOMException).message).toBe("Content sync paused in the background");
+    expect(isContentTransportPaused(aborted)).toBe(false);
   });
 
   it("does not report Wi-Fi on unsupported native platforms", async () => {

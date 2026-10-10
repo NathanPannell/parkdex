@@ -2,6 +2,7 @@ package app.parkdex.content;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 
@@ -19,6 +20,42 @@ import java.net.URL;
 
 public class WifiContentTransportPluginTest {
     private static final String CDN_ORIGIN = "https://kip-assets.parkdex.app";
+
+    @Test
+    public void keepsRequestsRunningWhileAPermissionDialogPausesTheActivity() {
+        WifiContentTransportPlugin plugin = new WifiContentTransportPlugin();
+        assertTrue(plugin.acceptsRequests());
+
+        plugin.handleOnPause();
+        assertTrue(plugin.acceptsRequests());
+        plugin.handleOnResume();
+        assertTrue(plugin.acceptsRequests());
+    }
+
+    @Test
+    public void stopsRequestsWhenTheActivityStopsAndAllowsThemAgainOnStart() {
+        WifiContentTransportPlugin plugin = new WifiContentTransportPlugin();
+
+        plugin.handleOnPause();
+        plugin.handleOnStop();
+        assertFalse(plugin.acceptsRequests());
+        plugin.handleOnStart();
+        assertTrue(plugin.acceptsRequests());
+
+        plugin.handleOnStop();
+        plugin.handleOnResume();
+        assertTrue(plugin.acceptsRequests());
+    }
+
+    @Test
+    public void neverAllowsRequestsAfterDestroy() {
+        WifiContentTransportPlugin plugin = new WifiContentTransportPlugin();
+
+        plugin.handleOnDestroy();
+        plugin.handleOnStart();
+        plugin.handleOnResume();
+        assertFalse(plugin.acceptsRequests());
+    }
 
     @Test
     public void permitsPinnedContentOriginsAndExactConfiguredPreviewHost() throws Exception {
