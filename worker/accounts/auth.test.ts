@@ -19,6 +19,8 @@ import type {
 
 const API_ORIGIN = "https://kip.example.test";
 const GOOGLE_CLIENT_ID = "123456789-test.apps.googleusercontent.com";
+const GOOGLE_NATIVE_CLIENT_ID = "987654321-native.apps.googleusercontent.com";
+const NATIVE_APP_ORIGIN = "https://localhost";
 const NOW = Date.parse("2026-09-27T12:00:00.000Z");
 const AUTH_SECRET = "consumer-session-secret-long-enough-for-tests";
 
@@ -315,12 +317,14 @@ interface TestRig {
   dependencies: AuthDependencies;
   emails: Array<{ to: string; subject: string; html: string; text: string }>;
   googleTokens: Map<string, GoogleIdentityClaims>;
+  googleAudiences: Array<readonly string[]>;
 }
 
 function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
   const store = new MemoryAuthStore();
   const emails: TestRig["emails"] = [];
   const googleTokens = new Map<string, GoogleIdentityClaims>();
+  const googleAudiences: Array<readonly string[]> = [];
   const env: AuthEnvironment = {
     DATABASE_URL: "memory://auth-test",
     AUTH_SESSION_SECRET: AUTH_SECRET,
@@ -335,8 +339,9 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
     now: () => NOW,
     hashPassword: async (password) => `test-hash:${password}`,
     verifyPassword: async (hash, password) => hash === `test-hash:${password}`,
-    verifyGoogleIdToken: async (token, audience) => {
-      if (audience !== GOOGLE_CLIENT_ID) throw new Error("unexpected audience");
+    verifyGoogleIdToken: async (token, audiences) => {
+      googleAudiences.push(audiences);
+      if (!audiences.includes(GOOGLE_CLIENT_ID)) throw new Error("unexpected audience");
       const claims = googleTokens.get(token);
       if (!claims) throw new Error("unknown test token");
       return claims;
@@ -344,7 +349,7 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
     sendEmail: async (message) => { emails.push(message); },
     waitUntil: (promise) => { void promise; },
   };
-  return { store, env, dependencies, emails, googleTokens };
+  return { store, env, dependencies, emails, googleTokens, googleAudiences };
 }
 
 function request(path: string, body?: unknown, options: {
@@ -642,6 +647,107 @@ test("Google sign-in does not auto-link by email, and a linked subject cannot mo
   assert.deepEqual(targetAccount?.providers, ["email"]);
   assert.equal(r.store.googleSubjects.get("already-linked"), (await r.store.findAccountByEmail("google-owner@example.test"))?.id);
   assert.ok(owner.account);
+});
+
+async function configFor(r: TestRig, options: Parameters<typeof request>[2]): Promise<Record<string, any>> {
+  const response = await call(r, "/api/auth/config", undefined, options);
+  assert.equal(response.status, 200);
+  return responseJson(response);
+}
+
+const NATIVE_APP_REQUEST = { native: true, origin: NATIVE_APP_ORIGIN } as const;
+
+test("auth config hands installed apps the native Google client and web pages the web client", async () => {
+  const withoutKey = rig();
+  for (const options of [{}, NATIVE_APP_REQUEST]) {
+    const config = await configFor(withoutKey, options);
+    assert.equal(config.googleWebClientId, GOOGLE_CLIENT_ID);
+    assert.equal(config.googleNativeEnabled, true);
+    assert.equal(config.googleWebEnabled, true);
+  }
+
+  const withKey = rig({ GOOGLE_NATIVE_CLIENT_ID });
+  const web = await configFor(withKey, {});
+  assert.equal(web.googleWebClientId, GOOGLE_CLIENT_ID);
+  const native = await configFor(withKey, NATIVE_APP_REQUEST);
+  assert.equal(native.googleWebClientId, GOOGLE_NATIVE_CLIENT_ID);
+  assert.equal(native.googleNativeEnabled, true);
+  assert.equal(native.googleEnabled, true);
+  assert.equal(native.capabilities.native.google, true);
+  const iosShell = await configFor(withKey, { native: true, origin: "capacitor://localhost" });
+  assert.equal(iosShell.googleWebClientId, GOOGLE_NATIVE_CLIENT_ID);
+
+  // The transport header alone, or the WebView origin alone, is not a native app request.
+  assert.equal((await configFor(withKey, { native: true })).googleWebClientId, GOOGLE_CLIENT_ID);
+  assert.equal((await configFor(withKey, { native: true, origin: null })).googleWebClientId, GOOGLE_CLIENT_ID);
+  assert.equal((await configFor(withKey, { origin: NATIVE_APP_ORIGIN })).googleWebClientId, GOOGLE_CLIENT_ID);
+
+  const invalidKey = rig({ GOOGLE_NATIVE_CLIENT_ID: "not-a-client-id" });
+  assert.equal((await configFor(invalidKey, NATIVE_APP_REQUEST)).googleWebClientId, GOOGLE_CLIENT_ID);
+
+  // Without the web client, Google stays off for everyone, as before.
+  const noWeb = rig({ GOOGLE_WEB_CLIENT_ID: undefined, GOOGLE_NATIVE_CLIENT_ID });
+  const disabled = await configFor(noWeb, NATIVE_APP_REQUEST);
+  assert.equal(disabled.googleWebClientId, null);
+  assert.equal(disabled.googleNativeEnabled, false);
+});
+
+async function googleSignInVia(
+  r: TestRig,
+  route: "/api/auth/google" | "/api/auth/google/native",
+  claims: Pick<GoogleIdentityClaims, "sub" | "email" | "aud">,
+): Promise<Response> {
+  const options = route === "/api/auth/google/native" ? NATIVE_APP_REQUEST : {};
+  const challengeResponse = await call(r, "/api/auth/google/challenge", { purpose: "sign_in" }, options);
+  assert.equal(challengeResponse.status, 200);
+  const { nonce } = await responseJson(challengeResponse);
+  const token = `google-test-${randomUUID()}`;
+  r.googleTokens.set(token, {
+    ...claims, email_verified: true, iss: "https://accounts.google.com",
+    exp: Math.floor(NOW / 1000) + 3_000, iat: Math.floor(NOW / 1000), nonce,
+  });
+  return call(r, route, { idToken: token, nonce }, options);
+}
+
+test("Google tokens for either configured client sign in to the same account by subject", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", GOOGLE_NATIVE_CLIENT_ID });
+  const web = await googleSignInVia(r, "/api/auth/google", { sub: "same-person", email: "same@example.test", aud: GOOGLE_CLIENT_ID });
+  assert.equal(web.status, 200);
+  assert.deepEqual(r.googleAudiences.at(-1), [GOOGLE_CLIENT_ID, GOOGLE_NATIVE_CLIENT_ID]);
+  const webAccount = (await responseJson(web)).account as AccountSummary;
+
+  const native = await googleSignInVia(r, "/api/auth/google/native", { sub: "same-person", email: "same@example.test", aud: GOOGLE_NATIVE_CLIENT_ID });
+  assert.equal(native.status, 200);
+  const nativeBody = await responseJson(native);
+  assert.equal(nativeBody.account.id, webAccount.id);
+  assert.equal(typeof nativeBody.sessionToken, "string");
+
+  const nativeWithWebAudience = await googleSignInVia(r, "/api/auth/google/native", { sub: "same-person", email: "same@example.test", aud: GOOGLE_CLIENT_ID });
+  assert.equal(nativeWithWebAudience.status, 200);
+  const webWithNativeAudience = await googleSignInVia(r, "/api/auth/google", { sub: "same-person", email: "same@example.test", aud: GOOGLE_NATIVE_CLIENT_ID });
+  assert.equal(webWithNativeAudience.status, 200);
+  assert.equal(r.store.accounts.size, 1);
+  assert.equal(r.store.googleSubjects.get("same-person"), webAccount.id);
+
+  for (const route of ["/api/auth/google", "/api/auth/google/native"] as const) {
+    const third = await googleSignInVia(r, route, { sub: "same-person", email: "same@example.test", aud: "555555-other.apps.googleusercontent.com" });
+    assert.equal(third.status, 401);
+    assert.equal((await responseJson(third)).code, "invalid_google_token");
+  }
+});
+
+test("without the native client key only the web client audience is accepted", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const native = await googleSignInVia(r, "/api/auth/google/native", { sub: "native-only", email: "native-only@example.test", aud: GOOGLE_NATIVE_CLIENT_ID });
+  assert.equal(native.status, 401);
+  assert.deepEqual(r.googleAudiences.at(-1), [GOOGLE_CLIENT_ID]);
+  const web = await googleSignInVia(r, "/api/auth/google/native", { sub: "native-only", email: "native-only@example.test", aud: GOOGLE_CLIENT_ID });
+  assert.equal(web.status, 200);
+
+  const invalidKey = rig({ EMAIL_MODE: "disabled", GOOGLE_NATIVE_CLIENT_ID: "not-a-client-id" });
+  const rejected = await googleSignInVia(invalidKey, "/api/auth/google", { sub: "x", email: "x@example.test", aud: "not-a-client-id" });
+  assert.equal(rejected.status, 401);
+  assert.deepEqual(invalidKey.googleAudiences.at(-1), [GOOGLE_CLIENT_ID]);
 });
 
 test("concurrent renewal rotates a native bearer once and logout revokes the replacement", async () => {

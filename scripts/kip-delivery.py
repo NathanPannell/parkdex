@@ -33,6 +33,7 @@ VERCEL_API = "https://api.vercel.com"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ID_RE = re.compile(r"^[0-9]+$")
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+GOOGLE_CLIENT_ID_PATTERN = re.compile(r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com")
 SECRET_VALUES: list[str] = []
 JOURNAL_LOCK = threading.RLock()
 
@@ -1468,8 +1469,10 @@ def require_account_runtime(config: dict, bundle: dict, candidate_root: Path, *,
     expected_host = config["privatePhotos"][f"{environment}WorkerName"] + "."
     if url.scheme != "https" or not url.hostname or not url.hostname.startswith(expected_host) or not url.hostname.endswith(".workers.dev") or url.path not in ("", "/") or url.query or url.fragment or url.username or url.port:
         raise DeliveryError(f"KIP_PHOTO_SERVICE_URL must be the dedicated HTTPS {environment} Worker origin.")
-    if not re.fullmatch(r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com", bundle.get("GOOGLE_WEB_CLIENT_ID", "")):
+    if not GOOGLE_CLIENT_ID_PATTERN.fullmatch(bundle.get("GOOGLE_WEB_CLIENT_ID", "")):
         raise DeliveryError(f"{environment.capitalize()} accounts require a configured Google Web OAuth client.")
+    if "GOOGLE_NATIVE_CLIENT_ID" in bundle and not GOOGLE_CLIENT_ID_PATTERN.fullmatch(bundle["GOOGLE_NATIVE_CLIENT_ID"]):
+        raise DeliveryError("GOOGLE_NATIVE_CLIENT_ID must be a Google OAuth client ID.")
     if not bundle.get("AUTH_EMAIL_FROM") and not bundle.get("EMAIL_FROM"):
         raise DeliveryError(f"{environment.capitalize()} accounts require an authentication email sender.")
 
