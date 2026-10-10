@@ -118,12 +118,114 @@ Public; signed-in callers also get their own count. `Cache-Control` is `public, 
 ### Additions to existing routes
 
 - `GET /api/game/flags` adds `founders: [{ parkId, handle, coverUrl }]` for every founded park.
-- `GET /api/game/me` adds `founderPoints`, the bonus already included in `score`.
+- `GET /api/game/me` adds `founderPoints`, the bonus already included in `score`, and `foundingReviews` (see [Manual review](#manual-review)).
+- `POST /api/parks/found` adds `reviewableUntil` to `rejected` and `unsure` answers (see [Manual review](#manual-review)).
 - `POST /api/park-proposals` answers 410 `proposals_retired` with "Update Parkdex to add parks. You can now found a park while you're standing in it." Installed builds show messages up to 200 characters as the error and never retry, so 410 is safe; reviewing stored proposals stays in the operator dashboard.
+
+## Manual review
+
+When the photo check rejects a founding photo or can't decide (`rejected` or `unsure`), the player can ask the operator to look at it (#153). Design decided with the operator on 2026-10-10.
+
+### Rules
+
+- **Photo outcomes only.** `rejected` and `unsure` can be appealed. Not being in the park, hidden and unnamed parks, "already founded" and `photo_check_unavailable` stay hard failures.
+- **Photo only.** The request reuses the stored attempt: the photo with its metadata already removed, the position, the target, the flags and the model's answers. The player sends only the `attemptId`, never the photo again, and no note.
+- **Kept for a day.** The photo and position of a `rejected` or `unsure` check are kept for 24 hours (`kip_founders.check_photos`), then deleted by the daily retention run. A request keeps its own copy (`kip_founders.review_requests`) until 90 days after the decision. An approved photo lives on as the park's cover.
+- **Limits.** 3 requests per account per Victoria day (America/Vancouver), and one pending request per account and park.
+- **Approval** makes the player the founder, with that photo as the cover and the 10 point founder bonus, through the same founding transaction as an instant approval (`worker/founding.ts`), with **no visit and no flag**: flags still need a real visit that day. An OpenStreetMap target is published at approval time; one that has become a Parkdex park meanwhile is founded as that park.
+- **Competition.** Other players can still found the park instantly while a request is pending. The first founding wins. Any founding, by either path, closes every pending request for that park as `superseded` in the same transaction.
+- **Rejection** carries a short reason the player sees: a preset (people, too dark or blurry, not the park, inappropriate) or the operator's own words.
+- **Feedback.** `GET /api/game/me` lists pending requests and each decision until the app marks it seen.
+
+### `POST /api/parks/found` (addition)
+
+`rejected` and `unsure` answers add `reviewableUntil`, the time until which `POST /api/parks/found/review` can use this attempt (24 hours after the check). It is `null` when the photo is no longer kept. A retry with the same `attemptId` answers the same.
+
+```json
+{ "outcome": "unsure", "flags": [], "message": "We couldn't tell. Try another angle.", "reviewableUntil": "2026-10-11T17:00:00.000Z" }
+```
+
+### `POST /api/parks/found/review`
+
+Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys.
+
+```json
+{ "attemptId": "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e5f" }
+```
+
+200:
+
+```json
+{ "status": "pending", "requestId": "0b7e9a52-4c1d-4f7e-9a51-2d8c6b3f1e07" }
+```
+
+Sending the same `attemptId` again answers 200 with the same `requestId` and the request's current `status` (`pending`, `approved`, `rejected` or `superseded`), so a lost response can be retried safely.
+
+| Status and code | When |
+| --- | --- |
+| 400 `invalid_request` | malformed body or attempt ID |
+| 401 `authentication_required` | not signed in |
+| 404 `attempt_not_found` | no photo check with this attempt ID for this account |
+| 404 `park_not_found` | the park was hidden or removed since the check |
+| 409 `handle_required` | no handle yet |
+| 409 `not_reviewable` | the check approved the photo, or never answered (`photo_check_unavailable`) |
+| 409 `already_founded` | the park has a founder; the message names `@handle` |
+| 409 `review_pending` | this account already has a pending request for this park |
+| 410 `photo_expired` | the photo is no longer kept (more than 24 hours after the check) |
+| 429 `rate_limited_review` | 3 requests today already |
+| 503 `service_unavailable` | retry later |
+
+### `POST /api/parks/found/review/seen`
+
+Signed in (Bearer, or cookie with `X-CSRF-Token`). Marks decisions as shown, so `GET /api/game/me` stops listing them. 1 to 50 IDs. Pending, unknown, already seen and other accounts' IDs are ignored.
+
+```json
+{ "requestIds": ["0b7e9a52-4c1d-4f7e-9a51-2d8c6b3f1e07"] }
+```
+
+200, the IDs this call marked:
+
+```json
+{ "seen": ["0b7e9a52-4c1d-4f7e-9a51-2d8c6b3f1e07"] }
+```
+
+Errors: 400 `invalid_request`, 401 `authentication_required`.
+
+### `GET /api/game/me` (addition)
+
+`foundingReviews` is always present; both lists are empty without a handle. `pending` is oldest first. `decided` holds decisions not yet marked seen, oldest decision first, at most 20.
+
+```json
+{
+  "foundingReviews": {
+    "pending": [
+      { "requestId": "0b7e9a52-…", "parkId": "osm-way-23938892", "osm": { "type": "way", "id": 23938892 }, "parkName": "Paterson Park", "createdAt": "2026-10-10T18:02:11.000Z" }
+    ],
+    "decided": [
+      { "requestId": "5d0c…", "status": "approved", "parkId": "osm-way-23938892", "parkName": "Paterson Park", "reason": null,
+        "coverUrl": "https://web.parkdex.app/api/parks/osm-way-23938892/cover/<sha256>.jpg", "founderHandle": "tester_one", "decidedAt": "2026-10-10T20:15:00.000Z" },
+      { "requestId": "9a41…", "status": "rejected", "parkId": "municipal-beacon-hill-park", "parkName": "Beacon Hill Park", "reason": "There are people in the photo.",
+        "coverUrl": null, "founderHandle": null, "decidedAt": "2026-10-10T20:16:00.000Z" },
+      { "requestId": "c3e2…", "status": "superseded", "parkId": "community-qa-green", "parkName": "QA Green", "reason": null,
+        "coverUrl": null, "founderHandle": "someone_else", "decidedAt": "2026-10-10T19:40:00.000Z" }
+    ]
+  }
+}
+```
+
+- `pending[].parkId` is the catalogue park, or the ID an OpenStreetMap park gets when published (`osm-<type>-<id>`); `osm` is the outline for an OpenStreetMap target and `null` otherwise. Use either to show the pending badge on that park's sheet.
+- `decided[].status` is `approved` ("You founded X"), `rejected` ("Not approved: reason") or `superseded` (someone else founded it first; `founderHandle` names them).
+- `parkId` of an approved request is the park it founded, which can differ from the pending `parkId` when the outline turned out to be a Parkdex park. `coverUrl` is the current cover, or `null` once the cover is gone. `founderHandle` is the park's current founder, or `null`.
+
+### Operator dashboard
+
+Parks → Review (`/parks/review`) lists requests oldest first, with a pending count in the sidebar. Each request shows the full photo, the check's flags and probabilities, the player's handle, when the photo was taken, and the target outline or park on a map with the player's position and accuracy. Approve asks first and runs the founding transaction; Reject takes a preset or typed reason. Both write a `founding_review_decided` analytics event in the same transaction; an approval also writes `park_founded` (`via`: review). Routes are under `/api/parks/review` in `operator/server/parks/reviews.ts`, with the SQL in `worker/founding-reviews.ts`. A database without `founders_002` shows the tab as not deployed yet.
 
 ## Analytics
 
 `founder_photo_checked` (`outcome`: approve, reject, unsure or unavailable; `flags`: comma-separated; `source`: osm_new or existing) for every check, and `park_founded` (`source`) for every founding, plus the usual visit outcome event. Routes group park IDs as `/api/parks/:park/...`.
+
+`founding_review_requested` (`outcome`: reject or unsure; `source`: osm_new or existing) when a player asks for a review, and `founding_review_decided` (`decision`: approved or rejected; `reason_code`; `waited_minutes`) when the operator decides, with route `POST /operator/parks/review/:id/approve` or `/reject` and the player's account.
 
 ## Testing
 
