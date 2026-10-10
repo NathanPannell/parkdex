@@ -459,6 +459,29 @@ class AccountReleaseGates(unittest.TestCase):
             delivery.migration_release(args, "production")
         bootstrap.assert_not_called()
 
+    def test_extra_runtime_bundle_carries_a_validated_native_google_client(self):
+        bundle = {
+            "DATABASE_URL": "postgresql://kip:secret@ep-staging.us-west-2.aws.neon.tech/parkdex_kip",
+            "RESEND_API_KEY": "resend-secret",
+            "EMAIL_FROM": "Parkdex <hello@example.test>",
+            "EMAIL_REPLY_TO": "support@example.test",
+            "OPERATOR_EMAIL": "ops@example.test",
+            "OPERATOR_PASSWORD_HASH": "ab" * 16 + ":" + "cd" * 32,
+        } | self.runtime()
+        native = "654321-android.apps.googleusercontent.com"
+        with patch.dict(os.environ, {"KIP_STAGING_RUNTIME_JSON": json.dumps(bundle), "KIP_STAGING_EXTRA_RUNTIME_JSON": json.dumps({"GOOGLE_NATIVE_CLIENT_ID": native})}, clear=True):
+            merged = delivery.read_runtime_bundle(self.config, environment="staging")
+        self.assertEqual(merged["GOOGLE_NATIVE_CLIENT_ID"], native)
+        runtime = delivery.staging_runtime_env(self.config, merged, "a" * 40, api_present=True)
+        self.assertEqual(runtime["GOOGLE_NATIVE_CLIENT_ID"], native)
+        self.assertEqual(runtime["GOOGLE_WEB_CLIENT_ID"], bundle["GOOGLE_WEB_CLIENT_ID"])
+        self.assertNotIn("GOOGLE_NATIVE_CLIENT_ID", delivery.staging_runtime_env(self.config, bundle, "a" * 40, api_present=True))
+
+        self.account_files()
+        for invalid in ("", "android-client", "654321-android.apps.googleusercontent.com.evil.test"):
+            with self.subTest(value=invalid), self.assertRaisesRegex(delivery.DeliveryError, "GOOGLE_NATIVE_CLIENT_ID"):
+                delivery.require_account_runtime(self.config, bundle | {"GOOGLE_NATIVE_CLIENT_ID": invalid}, self.root)
+
     def test_production_runtime_bundle_is_separate_and_uses_production_photo_worker(self):
         bundle = {
             "DATABASE_URL": "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip",
