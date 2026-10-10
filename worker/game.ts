@@ -1,7 +1,7 @@
 import { HttpError, readJsonBody } from "./validation.js";
 import { checkHandle, HANDLE_PATTERN, normalizeHandle, type HandleVerdict } from "./handles.js";
 import type { ModerationEnv, ModerationFetch } from "./moderation.js";
-import { createNeonGameStore, type GameStore, type PlayerRecord, type RecordVisitResult, type VisitRecord } from "./game-store.js";
+import { createNeonGameStore, type FoundingReviewRecord, type GameStore, type PlayerRecord, type RecordVisitResult, type VisitRecord } from "./game-store.js";
 
 /**
  * Flag game API (V1): handles, visits, flags, scores, leaderboard and takeover messages.
@@ -55,6 +55,8 @@ export interface GameDependencies {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_BODY_BYTES = 4 * 1024;
+/** Decided review requests listed until the app marks them seen. */
+export const FOUNDING_DECISIONS_LIMIT = 20;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -189,18 +191,49 @@ async function postVisit(request: Request, env: GameEnv, auth: GameAuth, depende
   return json({ visit: apiVisit(result.visit) });
 }
 
+/** Pending requests and unseen decisions, as `GET /api/game/me` lists them (docs/park-founders.md). */
+export function apiFoundingReviews(records: FoundingReviewRecord[], origin: string) {
+  return {
+    pending: records.filter((record) => record.status === "pending").map((record) => ({
+      requestId: record.requestId, parkId: record.parkId, osm: record.osm, parkName: record.parkName, createdAt: record.createdAt,
+    })),
+    decided: records.filter((record) => record.status !== "pending").slice(0, FOUNDING_DECISIONS_LIMIT).map((record) => ({
+      requestId: record.requestId,
+      status: record.status,
+      parkId: record.parkId,
+      parkName: record.parkName,
+      reason: record.status === "rejected" ? record.reason : null,
+      // The cover only while this player is still the founder, so a later operator change shows nothing stale.
+      coverUrl: record.status === "approved" && record.founderIsPlayer && record.coverSha256
+        ? `${origin}/api/parks/${record.parkId}/cover/${record.coverSha256}.jpg` : null,
+      founderHandle: record.status === "rejected" ? null : record.founderHandle,
+      decidedAt: record.decidedAt,
+    })),
+  };
+}
+
 async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
   const { accountId } = await auth.account();
   const store = getStore(env, dependencies);
   const player = await store.getPlayer(accountId);
   const flagSeed = player?.flagSeed ?? await flagSeedFor(accountId);
-  if (!player) return json({ player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0, serverTime: new Date(now).toISOString() });
-  const [summary, founderPoints] = await Promise.all([
+  if (!player) {
+    return json({
+      player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0,
+      foundingReviews: { pending: [], decided: [] }, serverTime: new Date(now).toISOString(),
+    });
+  }
+  const [summary, founderPoints, reviews] = await Promise.all([
     store.summary(accountId, new Date(now).toISOString()),
     store.founderPoints?.(accountId, new Date(now).toISOString()) ?? Promise.resolve(0),
+    store.foundingReviews?.(accountId) ?? Promise.resolve([]),
   ]);
   // founderPoints is already part of score; the app can show it separately.
-  return json({ player: apiPlayer(player), flagSeed, ...summary, founderPoints, serverTime: new Date(now).toISOString() });
+  return json({
+    player: apiPlayer(player), flagSeed, ...summary, founderPoints,
+    foundingReviews: apiFoundingReviews(reviews, dependencies.publicOrigin ?? ""),
+    serverTime: new Date(now).toISOString(),
+  });
 }
 
 async function postTakeoversSeen(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {

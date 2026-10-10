@@ -1,13 +1,14 @@
 import { database, type SqlClient } from "./db.js";
-import { visitFromJson, type VisitRecord } from "./game-store.js";
-import { publishStatements } from "../operator/server/drafts.js";
-import type { MultiPolygon } from "./osmParks.js";
-import type { PublishablePark } from "./parkPublish.js";
+import { visitFromJson } from "./game-store.js";
+import { runFounding, type FoundedRecord, type FoundExistingInput, type FoundOsmInput, type FoundResult } from "./founding.js";
+import type { MultiPolygon, OsmFeature } from "./osmParks.js";
 import { hiddenParks } from "./parkVisibility.js";
 import { databaseSqlRunner } from "./proposalReview.js";
 import type { SqlRunner } from "./parkPublish.js";
 
-/** Park founders storage (database/migrations/founders_001_init.sql). Every query goes through database(). */
+export type { FoundCommon, FoundedRecord, FoundExistingInput, FoundOsmInput, FoundResult, PhotoInput } from "./founding.js";
+
+/** Park founders storage (database/migrations/founders_001_init.sql, founders_002_reviews.sql). Every query goes through database(). */
 
 export interface CatalogueParkRecord {
   id: string;
@@ -26,49 +27,29 @@ export interface CheckRecord {
   outcome: "approve" | "reject" | "unsure" | "unavailable";
   flags: string[];
   photoSha256: string;
+  /** When the photo of a rejected or unsure check was kept for a review; null once it is gone. */
+  keptAt: string | null;
 }
 
-export interface FoundedRecord {
-  parkId: string;
+/** What a rejected or unsure check keeps for a day, so the player can ask for a review (#153). */
+export interface KeptAttempt {
   parkName: string;
-  photoSha256: string;
-  visit: VisitRecord | null;
-  founderPoints: number;
+  /** The outline checked against, for an OpenStreetMap park not in Parkdex yet. */
+  osmFeature: OsmFeature | null;
+  position: { lat: number; lng: number; accuracyM: number };
+  photo: { sha256: string; base64: string; width: number; height: number };
 }
 
-export interface PhotoInput {
-  sha256: string;
-  base64: string;
-  width: number;
-  height: number;
+export type ReviewStatus = "pending" | "approved" | "rejected" | "superseded";
+
+export interface ReviewAttempt {
+  /** The request already made for this attempt. */
+  request: { id: string; status: ReviewStatus } | null;
+  /** The newest check of this attempt. */
+  check: { outcome: CheckRecord["outcome"]; flags: string[]; parkId: string; osm: { type: string; id: number } | null; kept: boolean } | null;
 }
 
-export interface FoundCommon {
-  accountId: string;
-  attemptId: string;
-  visitId: string;
-  /** Server time of the founding and of the visit it records. */
-  at: string;
-  photo: PhotoInput;
-  /** The model's answers, stored with the founder; never the image. */
-  moderation: Record<string, unknown>;
-}
-
-export interface FoundOsmInput extends FoundCommon {
-  park: PublishablePark;
-  osm: { type: string; id: number };
-  /** The proposal row that records this founding for the operator. */
-  proposal: { id: string; moderation: Record<string, unknown> };
-}
-
-export interface FoundExistingInput extends FoundCommon {
-  parkId: string;
-}
-
-export type FoundResult =
-  | { status: "founded"; record: FoundedRecord }
-  /** park_exists: the OpenStreetMap park was published another way meanwhile; found it as an existing park. */
-  | { status: "already_founded" | "park_exists" | "park_missing" | "blocked" | "attempt_reused" | "visit_failed" };
+export type RequestReviewResult = "created" | "exists" | "pending" | "limited" | "already_founded" | "expired";
 
 export interface ParkSummaryRecord {
   founder: FounderInfo | null;
@@ -96,11 +77,22 @@ export interface FoundersStore {
     flags: string[];
     photoSha256: string;
     moderation: Record<string, unknown> | null;
+    /** Rejected and unsure checks keep the photo and position for a day. */
+    keep: KeptAttempt | null;
   }): Promise<void>;
   foundOsm(input: FoundOsmInput): Promise<FoundResult>;
   foundExisting(input: FoundExistingInput): Promise<FoundResult>;
   cover(parkId: string, sha256: string): Promise<Uint8Array | null>;
   summary(parkId: string, accountId: string | null, now: string): Promise<ParkSummaryRecord | null>;
+  /** The review request and the check behind an attempt, for `POST /api/parks/found/review`. */
+  reviewAttempt(accountId: string, attemptId: string): Promise<ReviewAttempt>;
+  /**
+   * Moves the kept photo of an attempt into a new pending request, under a per-account lock that
+   * also enforces the daily limit and one pending request per park.
+   */
+  requestReview(input: { id: string; accountId: string; attemptId: string; parkId: string; at: string; perDay: number }): Promise<RequestReviewResult>;
+  /** Marks decided requests as seen by the player; returns the IDs it changed. */
+  markReviewsSeen(accountId: string, requestIds: string[], at: string): Promise<string[]>;
   /** The database runner, for the shared catalogue lookups. */
   runner(): SqlRunner;
 }
@@ -124,71 +116,8 @@ function missingRelation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "42P01";
 }
 
-function failure(error: unknown): string {
-  const message = error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? "");
-  const constraint = String((error as { constraint?: unknown })?.constraint ?? "");
-  return `${message} ${constraint}`;
-}
-
-const lockStatement = (parkId: string) => ({
-  // Serialises founders of one park; record_visit takes its own park lock after this one.
-  text: "SELECT pg_advisory_xact_lock(hashtextextended('kip_founders.park:' || $1, 0))",
-  params: [parkId],
-});
-
-const notFoundedStatement = (parkId: string) => ({
-  text: "SELECT kip_park_drafts.require(NOT EXISTS (SELECT 1 FROM kip_founders.parks WHERE park_id = $1), 'already_founded')",
-  params: [parkId],
-});
-
-function founderStatement(input: FoundCommon, parkId: string, source: "osm_new" | "existing") {
-  return {
-    text: `INSERT INTO kip_founders.parks
-        (park_id, account_id, attempt_id, founded_at, source, photo_sha256, photo_bytes, photo_width, photo_height, moderation)
-      VALUES ($1, $2::uuid, $3::uuid, $4::timestamptz, $5, $6, decode($7, 'base64'), $8, $9, $10::jsonb)
-      RETURNING kip_founders.bonus_points() AS founder_points`,
-    params: [parkId, input.accountId, input.attemptId, input.at, source, input.photo.sha256, input.photo.base64,
-      input.photo.width, input.photo.height, JSON.stringify(input.moderation)],
-  };
-}
-
-function visitStatement(input: FoundCommon, parkId: string) {
-  return {
-    // Founding counts as today's visit. Anything but a recorded (or same-day) visit rolls it all back.
-    text: `SELECT kip_park_drafts.require((v.r->>'status') IN ('recorded', 'already_today', 'replayed'), 'visit_' || coalesce(v.r->>'status', 'failed')) AS ok,
-        v.r AS result
-      FROM (SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS r) v`,
-    params: [input.visitId, input.accountId, parkId, input.at],
-  };
-}
-
 export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersStore {
   const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
-
-  async function run(statements: { text: string; params: unknown[] }[], parkId: string, parkName: string, photoSha256: string): Promise<FoundResult> {
-    let results: Record<string, unknown>[][];
-    try {
-      results = await db.transaction(statements);
-    } catch (error) {
-      const reason = failure(error);
-      if (/already_founded/.test(reason)) return { status: "already_founded" };
-      if (/attempt_id/.test(reason)) return { status: "attempt_reused" };
-      // The primary key on kip_founders.parks backs up the guard.
-      if (/23505|duplicate key|parks_pkey/.test(reason)) return { status: "already_founded" };
-      if (/park_exists/.test(reason)) return { status: "park_exists" };
-      if (/park_missing/.test(reason)) return { status: "park_missing" };
-      if (/draft_changed|draft_missing|draft_incomplete|badge_changed/.test(reason)) return { status: "blocked" };
-      if (/visit_/.test(reason)) return { status: "visit_failed" };
-      throw error;
-    }
-    const founderPoints = Number(results.find((result) => result[0] && "founder_points" in result[0])?.[0]?.founder_points ?? 0);
-    const visitRow = results[results.length - 1]?.[0];
-    const body = jsonValue(visitRow?.result) as { visit?: unknown } | null;
-    return {
-      status: "founded",
-      record: { parkId, parkName, photoSha256, founderPoints, visit: body?.visit ? visitFromJson(body.visit) : null },
-    };
-  }
 
   async function founders(parkIds: string[]): Promise<Map<string, FounderInfo>> {
     if (!parkIds.length) return new Map();
@@ -267,9 +196,10 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
           [accountId, attemptId, visitId],
         ),
         rows(
-          `SELECT outcome, flags, photo_sha256 FROM kip_founders.photo_checks
-           WHERE account_id = $1::uuid AND attempt_id = $2::uuid AND outcome <> 'unavailable'
-           ORDER BY created_at DESC LIMIT 1`,
+          `SELECT c.outcome, c.flags, c.photo_sha256, k.created_at AS kept_at
+           FROM kip_founders.photo_checks c LEFT JOIN kip_founders.check_photos k ON k.check_id = c.id
+           WHERE c.account_id = $1::uuid AND c.attempt_id = $2::uuid AND c.outcome <> 'unavailable'
+           ORDER BY c.created_at DESC LIMIT 1`,
           [accountId, attemptId],
         ),
       ]);
@@ -284,63 +214,40 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
           outcome: String(checks[0].outcome) as CheckRecord["outcome"],
           flags: textArray(checks[0].flags),
           photoSha256: String(checks[0].photo_sha256),
+          keptAt: checks[0].kept_at === null || checks[0].kept_at === undefined ? null : iso(checks[0].kept_at),
         } : null,
       };
     },
 
     async recordCheck(input) {
-      await rows(
-        `INSERT INTO kip_founders.photo_checks (id, account_id, attempt_id, park_id, osm_type, osm_id, created_at, outcome, flags, photo_sha256, moderation)
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::timestamptz, $8, $9::text[], $10, $11::jsonb)`,
-        [input.id, input.accountId, input.attemptId, input.parkId, input.osm?.type ?? null, input.osm?.id ?? null, input.at,
+      const check = {
+        text: `INSERT INTO kip_founders.photo_checks (id, account_id, attempt_id, park_id, osm_type, osm_id, created_at, outcome, flags, photo_sha256, moderation)
+          VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::timestamptz, $8, $9::text[], $10, $11::jsonb)`,
+        params: [input.id, input.accountId, input.attemptId, input.parkId, input.osm?.type ?? null, input.osm?.id ?? null, input.at,
           input.outcome, input.flags, input.photoSha256, input.moderation ? JSON.stringify(input.moderation) : null],
-      );
+      };
+      if (!input.keep) {
+        await rows(check.text, check.params);
+        return;
+      }
+      const { keep } = input;
+      await db.transaction([check, {
+        text: `INSERT INTO kip_founders.check_photos (check_id, account_id, attempt_id, created_at, park_name, osm_feature, latitude, longitude, accuracy_m,
+            photo_sha256, photo_bytes, photo_width, photo_height)
+          VALUES ($1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5, $6::jsonb, $7, $8, $9, $10, decode($11, 'base64'), $12, $13)`,
+        params: [input.id, input.accountId, input.attemptId, input.at, keep.parkName.slice(0, 200), keep.osmFeature ? JSON.stringify(keep.osmFeature) : null,
+          keep.position.lat, keep.position.lng, keep.position.accuracyM, keep.photo.sha256, keep.photo.base64, keep.photo.width, keep.photo.height],
+      }]);
     },
 
     async foundOsm(input) {
-      const { park } = input;
-      const sourceSha256 = await sha256Hex(JSON.stringify(park.source));
-      const statements = [
-        lockStatement(park.id),
-        notFoundedStatement(park.id),
-        {
-          text: `INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, note, longitude, latitude, context, status,
-              osm_type, osm_id, decision, moderation, decided_at, published_park_id, founder_account_id)
-            VALUES ($1::uuid, $2::uuid, $3, $4, '', $5, $6, $7::jsonb, 'accepted', $8, $9, 'approved', $10::jsonb, $11::timestamptz, $12, $13::uuid)`,
-          params: [input.proposal.id, input.attemptId, input.photo.sha256, park.name.slice(0, 120), park.lng, park.lat,
-            JSON.stringify({ source: "founder" }), input.osm.type, input.osm.id, JSON.stringify(input.proposal.moderation), input.at, park.id, input.accountId],
-        },
-        {
-          // The draft is written inside the founding transaction, so a failed founding leaves no
-          // draft behind to block the next player. A draft left by an earlier proposal is reused.
-          text: `INSERT INTO kip_park_drafts.drafts (id, source, source_sha256, geometry, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb, updated_at)
-            VALUES ($1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::timestamptz)
-            ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, source_sha256 = EXCLUDED.source_sha256, geometry = EXCLUDED.geometry,
-              name = EXCLUDED.name, short = EXCLUDED.short, category = EXCLUDED.category, region = EXCLUDED.region, lat = EXCLUDED.lat,
-              lng = EXCLUDED.lng, biome = EXCLUDED.biome, shape = EXCLUDED.shape, rarity = EXCLUDED.rarity, seed = EXCLUDED.seed,
-              blurb = EXCLUDED.blurb, updated_at = EXCLUDED.updated_at
-            WHERE kip_park_drafts.drafts.status = 'draft' AND kip_park_drafts.drafts.source ? 'proposal'`,
-          params: [park.id, JSON.stringify(park.source), sourceSha256, JSON.stringify(park.geometry), park.name, park.short, park.category,
-            park.region, park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb, input.at],
-        },
-        ...publishStatements(park.id, input.at, null),
-        founderStatement(input, park.id, "osm_new"),
-        visitStatement(input, park.id),
-      ];
-      return run(statements, park.id, park.name, input.photo.sha256);
+      return runFounding(db, { kind: "osm", ...input }, input.park.name, { visit: true, reviewRequestId: null });
     },
 
     async foundExisting(input) {
       const parks = await rows("SELECT name FROM public.parks WHERE id = $1", [input.parkId]);
       if (!parks[0]) return { status: "park_missing" };
-      const statements = [
-        lockStatement(input.parkId),
-        notFoundedStatement(input.parkId),
-        { text: "SELECT kip_park_drafts.require(EXISTS (SELECT 1 FROM public.parks WHERE id = $1), 'park_missing')", params: [input.parkId] },
-        founderStatement(input, input.parkId, "existing"),
-        visitStatement(input, input.parkId),
-      ];
-      return run(statements, input.parkId, String(parks[0].name), input.photo.sha256);
+      return runFounding(db, { kind: "existing", ...input }, String(parks[0].name), { visit: true, reviewRequestId: null });
     },
 
     async cover(parkId, sha256) {
@@ -377,13 +284,84 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
       };
     },
 
+    async reviewAttempt(accountId, attemptId) {
+      const [requests, checks] = await Promise.all([
+        rows("SELECT id, status FROM kip_founders.review_requests WHERE account_id = $1::uuid AND attempt_id = $2::uuid", [accountId, attemptId]),
+        rows(
+          `SELECT c.outcome, c.flags, c.park_id, c.osm_type, c.osm_id, (k.check_id IS NOT NULL) AS kept
+           FROM kip_founders.photo_checks c LEFT JOIN kip_founders.check_photos k ON k.check_id = c.id
+           WHERE c.account_id = $1::uuid AND c.attempt_id = $2::uuid
+           ORDER BY c.created_at DESC, (c.outcome <> 'unavailable') DESC LIMIT 1`,
+          [accountId, attemptId],
+        ),
+      ]);
+      const check = checks[0];
+      return {
+        request: requests[0] ? { id: String(requests[0].id), status: String(requests[0].status) as ReviewStatus } : null,
+        check: check ? {
+          outcome: String(check.outcome) as CheckRecord["outcome"],
+          flags: textArray(check.flags),
+          parkId: String(check.park_id),
+          osm: check.osm_type ? { type: String(check.osm_type), id: Number(check.osm_id) } : null,
+          kept: check.kept === true,
+        } : null,
+      };
+    },
+
+    async requestReview(input) {
+      const guard = (condition: string, reason: string, params: unknown[]) => ({ text: `SELECT kip_park_drafts.require(${condition}, '${reason}')`, params });
+      try {
+        await db.transaction([
+          // One account's requests are counted and checked one at a time.
+          { text: "SELECT pg_advisory_xact_lock(hashtextextended('kip_founders.review:' || $1, 0))", params: [input.accountId] },
+          guard("NOT EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE attempt_id = $1::uuid)", "review_exists", [input.attemptId]),
+          guard("EXISTS (SELECT 1 FROM kip_founders.check_photos WHERE account_id = $1::uuid AND attempt_id = $2::uuid)", "review_expired", [input.accountId, input.attemptId]),
+          guard("NOT EXISTS (SELECT 1 FROM kip_founders.parks WHERE park_id = $1)", "already_founded", [input.parkId]),
+          guard("NOT EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE account_id = $1::uuid AND park_id = $2 AND status = 'pending')", "review_pending", [input.accountId, input.parkId]),
+          // Requests since the start of today in Victoria.
+          guard(`(SELECT count(*) FROM kip_founders.review_requests WHERE account_id = $1::uuid
+              AND created_at >= (kip_game.local_day($2::timestamptz)::timestamp AT TIME ZONE 'America/Vancouver')) < $3`, "review_limit",
+          [input.accountId, input.at, input.perDay]),
+          {
+            text: `INSERT INTO kip_founders.review_requests (id, account_id, attempt_id, check_id, park_id, osm_type, osm_id, park_name, osm_feature,
+                latitude, longitude, accuracy_m, photo_bytes, photo_sha256, photo_width, photo_height, outcome, flags, moderation, checked_at, created_at)
+              SELECT $1::uuid, k.account_id, k.attempt_id, c.id, c.park_id, c.osm_type, c.osm_id, k.park_name, k.osm_feature,
+                k.latitude, k.longitude, k.accuracy_m, k.photo_bytes, k.photo_sha256, k.photo_width, k.photo_height, c.outcome, c.flags, c.moderation,
+                c.created_at, $4::timestamptz
+              FROM kip_founders.check_photos k JOIN kip_founders.photo_checks c ON c.id = k.check_id
+              WHERE k.account_id = $2::uuid AND k.attempt_id = $3::uuid AND c.outcome IN ('reject', 'unsure')
+              ORDER BY k.created_at DESC LIMIT 1`,
+            params: [input.id, input.accountId, input.attemptId, input.at],
+          },
+          guard("EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE id = $1::uuid)", "review_expired", [input.id]),
+          // The request holds its own copy now; the day-long copy goes.
+          { text: "DELETE FROM kip_founders.check_photos WHERE account_id = $1::uuid AND attempt_id = $2::uuid", params: [input.accountId, input.attemptId] },
+        ]);
+        return "created";
+      } catch (error) {
+        const reason = `${error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? "")} ${String((error as { constraint?: unknown })?.constraint ?? "")}`;
+        if (/review_exists|review_requests_attempt_id_key/.test(reason)) return "exists";
+        if (/review_pending|review_requests_one_pending_idx/.test(reason)) return "pending";
+        if (/review_limit/.test(reason)) return "limited";
+        if (/already_founded/.test(reason)) return "already_founded";
+        if (/review_expired/.test(reason)) return "expired";
+        throw error;
+      }
+    },
+
+    async markReviewsSeen(accountId, requestIds, at) {
+      if (!requestIds.length) return [];
+      const updated = await rows(
+        `UPDATE kip_founders.review_requests SET seen_at = $3::timestamptz
+         WHERE account_id = $1::uuid AND id = ANY($2::uuid[]) AND status <> 'pending' AND seen_at IS NULL
+         RETURNING id`,
+        [accountId, [...new Set(requestIds)], at],
+      );
+      return updated.map((row) => String(row.id)).sort();
+    },
+
     runner: () => db,
   };
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 export function createNeonFoundersStore(databaseUrl: string): FoundersStore {

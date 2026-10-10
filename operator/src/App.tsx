@@ -4,6 +4,7 @@ import { api, type Health } from "./api";
 import { AppSection } from "./app/AppSection";
 import { FeedbackSection } from "./feedback/FeedbackSection";
 import { ParksSection } from "./parks/ParksSection";
+import { useReviewCount } from "./parks/reviewCount";
 import { linkHandler, navigate, usePath } from "./router";
 import { DEFAULT_PATH, redirectFor, resolveRoute, type SectionId } from "./routes";
 import { DashboardContext } from "./shell/DashboardContext";
@@ -25,6 +26,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const redirect = redirectFor(path);
   const route = redirect ? null : resolveRoute(path);
+  const pendingReviews = useReviewCount();
 
   useEffect(() => {
     // Keep the query string, so /feedback/review?id=... style links survive a redirect.
@@ -66,7 +68,7 @@ export function App() {
       <ConfirmProvider>
         <DashboardContext.Provider value={{ health, environment, switchDatabase }}>
           <div className={`shell${staging ? " shell--staging" : ""}`}>
-            <Sidebar path={path} route={route} health={health} environment={environment} open={menuOpen} onClose={() => setMenuOpen(false)} onSwitch={switchDatabase} />
+            <Sidebar route={route} health={health} environment={environment} open={menuOpen} onClose={() => setMenuOpen(false)} onSwitch={switchDatabase} counts={{ "/parks/review": pendingReviews }} />
             <div className="workspace">
               <Topbar route={route} environment={environment} menuOpen={menuOpen} onMenu={() => setMenuOpen(true)} />
               <main className="main" id="main">

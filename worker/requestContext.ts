@@ -24,6 +24,10 @@ export const GAME_EVENT_TYPES = [
   // Found a park (#126). founders_001_init.sql widens the table's checks for these two.
   "park_founded",
   "founder_photo_checked",
+  // Manual review of founding photos (#153); founders_002_reviews.sql widens the checks again.
+  // The operator dashboard writes founding_review_decided itself, in the decision's transaction.
+  "founding_review_requested",
+  "founding_review_decided",
 ] as const;
 export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 export type DbEventType = "db_read" | "db_write";

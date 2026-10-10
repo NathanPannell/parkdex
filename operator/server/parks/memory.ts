@@ -6,6 +6,7 @@ import type { MultiPolygon } from "./geometry.js";
 import type { LivePark, LiveParkChanges, LiveParkDetail, LiveParkStore } from "./liveParks.js";
 import { grow, HISTORY_LIMIT, OUTLINE_LIMIT, sourceOf, type Bbox, type ChangeRow, type CoverInput, type CoverPhoto, type HiddenState, type ParkActivity, type ParkManagerStore, type ParkRow, type ParkStats } from "./manager.js";
 import type { CatalogueNeighbour, OsmStore } from "./osm.js";
+import { MemoryFoundingReviewStore, seedDemoReviews } from "./reviewMemory.js";
 import type { ParksDependencies } from "./routes.js";
 
 /** In-memory park stores for tests and the local demo server. Never used by a deployment. */
@@ -264,8 +265,9 @@ export function memoryParks() {
   const live = new MemoryLiveParkStore();
   const manager = new MemoryParkManagerStore(live);
   const osm = new MemoryOsmStore(live, manager);
-  const dependencies: ParksDependencies = { liveParkStore: () => live, parkManagerStore: () => manager, osmStore: () => osm };
-  return { live, manager, osm, dependencies };
+  const reviews = new MemoryFoundingReviewStore(live, manager, osm);
+  const dependencies: ParksDependencies = { liveParkStore: () => live, parkManagerStore: () => manager, osmStore: () => osm, foundingReviewStore: () => reviews };
+  return { live, manager, osm, reviews, dependencies };
 }
 
 // ---------------------------------------------------------------- demo data
@@ -327,7 +329,7 @@ const DEMO_PARKS: DemoPark[] = [
 
 /** Fictional live parks, visits, founders and OSM outlines so the section can be explored without a database. */
 export function demoParks(): ParksDependencies {
-  const { live, manager, osm, dependencies } = memoryParks();
+  const { live, manager, osm, reviews, dependencies } = memoryParks();
   const now = Date.now();
   const ago = (days: number, hours = 0) => new Date(now - days * 86_400_000 - hours * 3_600_000).toISOString();
   DEMO_PARKS.forEach(([id, name, category, region, lng, lat, biome, rarity, radiusM], index) => {
@@ -414,5 +416,9 @@ export function demoParks(): ParksDependencies {
   manager.osmOutlines = 13_856;
   manager.osmNotInParkdex = 12_131;
   manager.osmSourceDate = "2026-10-05T20:21:03.000Z";
+
+  // Players' requests for a manual review of a founding photo (#153).
+  seedDemoReviews(reviews, now);
+  reviews.available = process.env.OPERATOR_DEMO_WITHOUT_FOUNDERS !== "1";
   return dependencies;
 }

@@ -6,11 +6,14 @@ import { createNeonLiveParkStore, validateExpected, validateLiveChanges, validat
 import { createNeonParkManagerStore, neonRunner, type Bbox, type ParkManagerStore } from "./manager.js";
 import { catalogueBox, createSqlOsmStore, matchOutlines, neighbourhood, OSM_LIMIT, osmDraft, parseOsmRef, type OsmStore } from "./osm.js";
 import { catalogueMatch } from "../../../worker/catalogueMatch.js";
+import type { FoundingReviewStore } from "../../../worker/founding-reviews.js";
+import { reviewRoutes } from "./reviews.js";
 
 /**
  * Parks section under /api/parks: the map-first park manager. It reads and edits the live
  * catalogue of the database the toggle chose, hides, unhides and deletes parks, moderates
- * founders and covers, and creates parks from OpenStreetMap outlines.
+ * founders and covers, creates parks from OpenStreetMap outlines, and decides players' requests
+ * for a manual review of a founding photo (/api/parks/review, reviews.ts).
  */
 
 /** Settings this section reads from the deployment. */
@@ -20,6 +23,8 @@ export interface ParksDependencies {
   liveParkStore?(env: DashboardEnv): LiveParkStore;
   parkManagerStore?(env: DashboardEnv): ParkManagerStore;
   osmStore?(env: DashboardEnv): OsmStore;
+  /** Manual review requests for founding photos (#153). */
+  foundingReviewStore?(env: DashboardEnv): FoundingReviewStore;
   /** The clock, so tests can pin "last 30 days" and flag falls. */
   now?(): number;
 }
@@ -117,6 +122,8 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
     const [features, catalogue] = await Promise.all([store.inBox(view, OSM_LIMIT), store.catalogue(catalogueBox(view))]);
     return json({ outlines: matchOutlines(features, catalogue, view), truncated: features.length >= OSM_LIMIT });
   }
+
+  if (path === "/api/parks/review" || path.startsWith("/api/parks/review/")) return reviewRoutes(request, context, now);
 
   const osmMatch = /^\/api\/parks\/osm\/([^/]+)$/.exec(path);
   if (osmMatch) return osmRoute(request, context, osm(), osmMatch[1], now);

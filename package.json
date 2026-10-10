@@ -24,7 +24,7 @@
     "test": "vitest run && node --test cloudflare/*.test.mjs scripts/*.test.mjs && tsx --test worker/*.test.ts worker/accounts/*.test.ts && tsx scripts/preview-feedback-emails.ts",
     "email:preview": "tsx scripts/preview-feedback-emails.ts",
     "local:api": "tsx scripts/local-stack.mjs",
-    "test:sql": "tsx scripts/qa-account-sql.mjs && tsx scripts/qa-progress-sql.mjs && tsx scripts/qa-interactions-sql.mjs && tsx scripts/qa-game-sql.mjs && tsx scripts/qa-analytics-sql.mjs && tsx scripts/qa-park-proposals-sql.mjs && tsx scripts/qa-content-catalogue-sql.mjs && tsx scripts/qa-park-visibility-sql.mjs && tsx scripts/qa-osm-parks-sql.mjs && tsx scripts/qa-founders-sql.mjs && tsx scripts/qa-feedback-archive-sql.mjs && node scripts/qa-postgres-adapter-end.mjs",
+    "test:sql": "tsx scripts/qa-account-sql.mjs && tsx scripts/qa-progress-sql.mjs && tsx scripts/qa-interactions-sql.mjs && tsx scripts/qa-game-sql.mjs && tsx scripts/qa-analytics-sql.mjs && tsx scripts/qa-park-proposals-sql.mjs && tsx scripts/qa-content-catalogue-sql.mjs && tsx scripts/qa-park-visibility-sql.mjs && tsx scripts/qa-osm-parks-sql.mjs && tsx scripts/qa-founders-sql.mjs && tsx scripts/qa-founders-review-sql.mjs && tsx scripts/qa-feedback-archive-sql.mjs && node scripts/qa-postgres-adapter-end.mjs",
     "postbuild": "node scripts/check-content-package.mjs",
     "postbuild:field": "node scripts/check-content-package.mjs"
   },

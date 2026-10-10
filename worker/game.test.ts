@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { createFeedbackWorker, type WorkerEnvironment } from "./index.js";
 import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.js";
-import type { GameStore, PlayerRecord, RecordVisitResult, VisitRecord } from "./game-store.js";
-import { flagSeedFor, visitEvents, type GameEvent } from "./game.js";
+import type { FoundingReviewRecord, GameStore, PlayerRecord, RecordVisitResult, VisitRecord } from "./game-store.js";
+import { FOUNDING_DECISIONS_LIMIT, flagSeedFor, visitEvents, type GameEvent } from "./game.js";
 
 const origin = "https://kip.example.test";
 const env: WorkerEnvironment = {
@@ -78,6 +78,8 @@ class MemoryGameStore implements GameStore {
   async leaderboard() { return [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1 }]; }
   async founders() { return [{ parkId: PARK, handle: "sam", photoSha256: "a".repeat(64) }]; }
   async founderPoints() { return 10; }
+  reviews: FoundingReviewRecord[] = [];
+  async foundingReviews() { return this.reviews; }
 }
 
 function setup(options: { fetch?: typeof fetch; envOverride?: Partial<WorkerEnvironment> } = {}) {
@@ -233,14 +235,44 @@ test("me returns the player summary, or a flag seed and empty state before a han
     parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }],
     takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }],
     founderPoints: 10,
+    foundingReviews: { pending: [], decided: [] },
     visitedToday: [PARK],
     visitedTodayUntil: "2026-10-09T07:00:00.000Z",
     serverTime: new Date(NOW).toISOString(),
   });
   store.players.clear();
   const empty = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
-  assert.deepEqual(empty, { player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0, serverTime: new Date(NOW).toISOString() });
+  assert.deepEqual(empty, {
+    player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0,
+    foundingReviews: { pending: [], decided: [] }, serverTime: new Date(NOW).toISOString(),
+  });
   assert.match(String(empty.flagSeed), /^[0-9a-f]{16}$/);
+});
+
+test("me lists pending founding reviews and unseen decisions in the documented shape (#153)", async () => {
+  const { call, store } = setup();
+  const base = { osm: null, reason: null, founderHandle: null, founderIsPlayer: false, coverSha256: null, decidedAt: null, createdAt: "2026-10-08T10:00:00.000Z" };
+  store.reviews = [
+    { ...base, requestId: "r-pending", status: "pending", parkId: "osm-way-5", osm: { type: "way", id: 5 }, parkName: "Paterson Park" },
+    { ...base, requestId: "r-approved", status: "approved", parkId: PARK, parkName: "Beacon Hill Park", founderHandle: "sam", founderIsPlayer: true, coverSha256: "b".repeat(64), decidedAt: "2026-10-08T12:00:00.000Z" },
+    { ...base, requestId: "r-rejected", status: "rejected", parkId: "regional-x", parkName: "X Park", reason: "There are people in the photo.", decidedAt: "2026-10-08T13:00:00.000Z" },
+    { ...base, requestId: "r-superseded", status: "superseded", parkId: "regional-y", parkName: "Y Park", founderHandle: "bee", coverSha256: "c".repeat(64), decidedAt: "2026-10-08T14:00:00.000Z" },
+    // Approved, but the operator has since removed this player as founder: no stale cover.
+    { ...base, requestId: "r-cleared", status: "approved", parkId: "regional-z", parkName: "Z Park", decidedAt: "2026-10-08T15:00:00.000Z" },
+  ];
+  const { foundingReviews } = await (await call("GET", "/api/game/me")).json() as { foundingReviews: Record<string, unknown> };
+  assert.deepEqual(foundingReviews, {
+    pending: [{ requestId: "r-pending", parkId: "osm-way-5", osm: { type: "way", id: 5 }, parkName: "Paterson Park", createdAt: "2026-10-08T10:00:00.000Z" }],
+    decided: [
+      { requestId: "r-approved", status: "approved", parkId: PARK, parkName: "Beacon Hill Park", reason: null, coverUrl: `${origin}/api/parks/${PARK}/cover/${"b".repeat(64)}.jpg`, founderHandle: "sam", decidedAt: "2026-10-08T12:00:00.000Z" },
+      { requestId: "r-rejected", status: "rejected", parkId: "regional-x", parkName: "X Park", reason: "There are people in the photo.", coverUrl: null, founderHandle: null, decidedAt: "2026-10-08T13:00:00.000Z" },
+      { requestId: "r-superseded", status: "superseded", parkId: "regional-y", parkName: "Y Park", reason: null, coverUrl: null, founderHandle: "bee", decidedAt: "2026-10-08T14:00:00.000Z" },
+      { requestId: "r-cleared", status: "approved", parkId: "regional-z", parkName: "Z Park", reason: null, coverUrl: null, founderHandle: null, decidedAt: "2026-10-08T15:00:00.000Z" },
+    ],
+  });
+  store.reviews = Array.from({ length: FOUNDING_DECISIONS_LIMIT + 5 }, (_, index) => ({ ...base, requestId: `r${index}`, status: "rejected" as const, parkId: PARK, parkName: "B", reason: "No.", decidedAt: base.createdAt }));
+  const limited = await (await call("GET", "/api/game/me")).json() as { foundingReviews: { decided: unknown[] } };
+  assert.equal(limited.foundingReviews.decided.length, FOUNDING_DECISIONS_LIMIT);
 });
 
 test("takeovers seen clamps the marker to server time and validates the body", async () => {

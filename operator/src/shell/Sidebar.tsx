@@ -3,19 +3,16 @@ import { linkHandler } from "../router";
 import { SECTIONS, type ResolvedRoute } from "../routes";
 import { Icon, Kip } from "../ui";
 
-function within(path: string, prefix: string) {
-  return path === prefix || path.startsWith(`${prefix}/`);
-}
-
 /** The left navigation: brand, the four sections with their pages, and the database controls. */
-export function Sidebar({ path, route, health, environment, open, onClose, onSwitch }: {
-  path: string;
+export function Sidebar({ route, health, environment, open, onClose, onSwitch, counts = {} }: {
   route: ResolvedRoute | null;
   health: Health | null;
   environment: string;
   open: boolean;
   onClose(): void;
   onSwitch(target: string): void;
+  /** Counts shown beside sub-routes, by path, such as pending founding reviews. */
+  counts?: Record<string, number>;
 }) {
   const pinned = route?.database === "production";
   return (
@@ -44,11 +41,13 @@ export function Sidebar({ path, route, health, environment, open, onClose, onSwi
                 {section.children && (
                   <div className="nav__children">
                     {section.children.map((child) => {
-                      const current = within(path, child.path);
+                      const current = route?.child?.path === child.path;
+                      const count = counts[child.path] ?? 0;
                       return (
                         <a key={child.path} href={child.path} className={`nav__child${current ? " is-on" : ""}`} aria-current={current ? "page" : undefined} onClick={(event) => { linkHandler(child.path)(event); onClose(); }}>
                           {child.label}
                           {child.database === "production" && <span className="nav__tag" title="Always reads production">Prod</span>}
+                          {count > 0 && <span className="nav__count" aria-label={`${count} waiting`}>{count}</span>}
                         </a>
                       );
                     })}

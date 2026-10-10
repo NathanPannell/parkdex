@@ -34,6 +34,12 @@ test("every path resolves to its section, and Build config is pinned to producti
   assert.deepEqual(SECTIONS.map((section) => section.path), ["/feedback", "/parks", "/analytics", "/app"]);
   assert.equal(resolveRoute("/feedback/review")?.section.id, "feedback");
   assert.equal(resolveRoute("/parks/beacon-hill-park")?.section.id, "parks");
+  // The most specific page wins: Review owns /parks/review, the catalogue every other park path.
+  assert.equal(resolveRoute("/parks/review")?.child?.label, "Review");
+  assert.equal(resolveRoute("/parks/beacon-hill-park")?.child?.label, "Catalogue");
+  assert.equal(resolveRoute("/parks/osm/way-1")?.child?.label, "Catalogue");
+  assert.equal(resolveRoute("/parks")?.child?.label, "Catalogue");
+  assert.equal(redirectFor("/parks/review"), null);
   assert.equal(resolveRoute("/analytics/events")?.child?.label, "Events");
   const builds = resolveRoute("/app/builds");
   assert.deepEqual([builds?.section.id, builds?.child?.label, builds?.database], ["app", "Build config", "production"]);
