@@ -29,7 +29,7 @@ export function decisionMessage(decision: FoundingDecision): DecisionMessage {
     case "approved":
       return { eyebrow: "Photo review", title: `You founded ${park}!`, text: `Your photo was approved. You founded ${park}! +${FOUNDER_POINTS}`, kip: "cheer" };
     case "superseded":
-      return { eyebrow: "Photo review", title: "Someone got there first", text: `Someone else founded ${park} first.`, kip: "point" };
+      return { eyebrow: "Photo review", title: decision.founderHandle ? `@${decision.founderHandle} got there first` : "Someone got there first", text: `Someone else founded ${park} first.`, kip: "point" };
     case "rejected": {
       const reason = decision.reason ? withoutFinalStop(decision.reason) : "";
       return {

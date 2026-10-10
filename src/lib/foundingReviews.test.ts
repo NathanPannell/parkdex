@@ -11,7 +11,7 @@ type FoundingDecision = import("./game/client").FoundingDecision;
 type GameMe = import("./game/client").GameMe;
 
 function decision(overrides: Partial<FoundingDecision> & { requestId: string }): FoundingDecision {
-  return { status: "approved", parkId: "p", parkName: "Paterson Park", reason: null, coverUrl: null, decidedAt: "2026-10-10T03:00:00Z", ...overrides };
+  return { status: "approved", parkId: "p", parkName: "Paterson Park", reason: null, coverUrl: null, founderHandle: null, decidedAt: "2026-10-10T03:00:00Z", ...overrides };
 }
 
 const me = (pending: { parkId: string | null }[]): GameMe => ({
@@ -32,7 +32,8 @@ describe("decisionMessage", () => {
   });
 
   it("says when someone else founded the park first", () => {
-    expect(decisionMessage(decision({ requestId: "d", status: "superseded" })).text).toBe("Someone else founded Paterson Park first.");
+    expect(decisionMessage(decision({ requestId: "d", status: "superseded" }))).toMatchObject({ title: "Someone got there first", text: "Someone else founded Paterson Park first." });
+    expect(decisionMessage(decision({ requestId: "e", status: "superseded", founderHandle: "sam" })).title).toBe("@sam got there first");
   });
 });
 

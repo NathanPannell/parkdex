@@ -20,6 +20,8 @@ export type FoundingDecision = {
   parkName: string;
   reason: string | null;
   coverUrl: string | null;
+  /** The park's current founder: the player after an approval, someone else after a superseded request. */
+  founderHandle: string | null;
   decidedAt: string;
 };
 export type FoundingReviews = { pending: PendingFoundingReview[]; decided: FoundingDecision[] };
@@ -170,6 +172,7 @@ export function parseFoundingReviews(value: unknown): FoundingReviews {
         parkName: text(item.parkName) ?? "this park",
         reason: typeof item.reason === "string" && item.reason.trim() ? item.reason.trim().slice(0, 200) : null,
         coverUrl: text(item.coverUrl),
+        founderHandle: text(item.founderHandle),
         decidedAt,
       };
     }),

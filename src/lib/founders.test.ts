@@ -150,11 +150,18 @@ describe("foundPark", () => {
     expect(rejected).toEqual({ outcome: "rejected", flags: [
       { code: "people", message: "We spotted people. Take one without anyone in it." },
       { code: "lighting", message: expect.stringMatching(/dark/) },
-    ] });
+    ], reviewableUntil: null });
     fetchAuthenticated.mockResolvedValueOnce(reply(422, { outcome: "unsure", flags: [] }));
     const unsure = await foundPark(ACCOUNT, request);
-    expect(unsure).toEqual({ outcome: "unsure", flags: [] });
+    expect(unsure).toEqual({ outcome: "unsure", flags: [], reviewableUntil: null });
     if (unsure.outcome === "unsure") expect(checkFlags(unsure)).toEqual([{ code: "unsure", message: "We couldn't tell. Try another angle." }]);
+  });
+
+  it("reads until when a rejected or unsure photo can be reviewed", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { outcome: "unsure", flags: [], reviewableUntil: "2026-10-11T17:00:00.000Z" }));
+    await expect(foundPark(ACCOUNT, request)).resolves.toMatchObject({ outcome: "unsure", reviewableUntil: "2026-10-11T17:00:00.000Z" });
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { outcome: "rejected", flags: [], reviewableUntil: "later" }));
+    await expect(foundPark(ACCOUNT, request)).resolves.toMatchObject({ reviewableUntil: null });
   });
 
   it("marks an unavailable check as retryable", async () => {
@@ -268,7 +275,11 @@ describe("requestFoundingReview", () => {
   it("posts only the attempt ID as the signed-in account and reads the pending request", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "pending", requestId: "req-1" }));
     await expect(requestFoundingReview(ACCOUNT, attemptId)).resolves.toEqual({ status: "pending", requestId: "req-1" });
+    // A retry of the same attempt answers with the request's current status.
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "approved", requestId: "req-1" }));
+    await expect(requestFoundingReview(ACCOUNT, attemptId)).resolves.toEqual({ status: "approved", requestId: "req-1" });
     const [path, init, account] = fetchAuthenticated.mock.calls[0];
+    expect(fetchAuthenticated).toHaveBeenCalledTimes(2);
     expect(path).toBe("/api/parks/found/review");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ attemptId });
@@ -279,7 +290,12 @@ describe("requestFoundingReview", () => {
     [409, "already_founded", "already_founded"],
     [409, "review_pending", "review_pending"],
     [429, "rate_limited_review", "review_rate_limited"],
-    [422, "review_unavailable", "review_unavailable"],
+    [410, "photo_expired", "review_unavailable"],
+    [409, "not_reviewable", "review_unavailable"],
+    [404, "attempt_not_found", "review_unavailable"],
+    [404, "park_not_found", "park_not_found"],
+    [409, "handle_required", "handle_required"],
+    [401, "authentication_required", "unauthenticated"],
     [503, "service_unavailable", "unavailable"],
   ])("maps %i %s onto %s", async (status, code, expected) => {
     fetchAuthenticated.mockResolvedValueOnce(reply(status, { error: { code, message: "Server words." }, code, message: "Server words." }));
@@ -324,6 +340,10 @@ describe("review button and problems", () => {
     expect(reviewButton({ kind: "failed", message: "x", canRetry: false })).toMatchObject({ visible: false });
   });
 
+  it("hides the button when the server does not keep the photo for a review", () => {
+    expect(reviewButton({ kind: "idle" }, false)).toMatchObject({ visible: false });
+  });
+
   it("explains each error code plainly", () => {
     const problem = (code: ConstructorParameters<typeof FounderError>[0], founder: string | null = null) => reviewProblem(new FounderError(code, 400, "server", founder));
     expect(problem("already_founded", "robin")).toEqual({ message: "@robin founded this park first.", canRetry: false });
@@ -332,6 +352,7 @@ describe("review button and problems", () => {
     expect(problem("review_rate_limited")).toEqual({ message: "You've asked for 3 reviews today. Try again tomorrow.", canRetry: false });
     expect(problem("rate_limited").canRetry).toBe(false);
     expect(problem("review_unavailable")).toEqual({ message: "This photo can't be sent for review any more. Retake it to try again.", canRetry: false });
+    expect(problem("park_not_found")).toEqual({ message: "That park isn't on the map any more.", canRetry: false });
     expect(problem("offline")).toEqual({ message: "You need a connection to ask for a review.", canRetry: true });
     expect(problem("unavailable").canRetry).toBe(true);
     expect(problem("unauthenticated")).toEqual({ message: "Sign in again to ask for a review.", canRetry: false });

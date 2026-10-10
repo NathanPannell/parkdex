@@ -50,7 +50,7 @@ type Step =
   | { kind: "problem"; message: string; detail?: string; action: "scan" | "close" }
   | { kind: "camera" }
   | { kind: "checking" }
-  | { kind: "rejected"; outcome: "rejected" | "unsure"; flags: PhotoFlag[]; review: ReviewState }
+  | { kind: "rejected"; outcome: "rejected" | "unsure"; flags: PhotoFlag[]; reviewable: boolean; review: ReviewState }
   | { kind: "review_sent" }
   | { kind: "retry"; message: string }
   | { kind: "taken"; founder: string | null }
@@ -357,7 +357,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       const flags = checkFlags(result);
       buzz([30, 40, 30]);
       captureProductEvent("found_park_photo_rejected", { outcome: result.outcome, flags: flags.map((flag) => flag.code) });
-      setStep({ kind: "rejected", outcome: result.outcome, flags, review: { kind: "idle" } });
+      setStep({ kind: "rejected", outcome: result.outcome, flags, reviewable: !!result.reviewableUntil, review: { kind: "idle" } });
     } catch (error) {
       if (!live.current) return;
       if (!(error instanceof FounderError)) {
@@ -434,7 +434,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       : step.kind === "results" && choice ? "Take a photo of the park to found it."
         : "Stand inside a park to found it.";
   const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken" || step.kind === "review_sent";
-  const review = step.kind === "rejected" ? reviewButton(step.review) : null;
+  const review = step.kind === "rejected" ? reviewButton(step.review, step.reviewable) : null;
   const sendingReview = step.kind === "rejected" && step.review.kind === "sending";
 
   return (
@@ -592,18 +592,20 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                       <button className="btn btn--sm" onClick={openCamera} disabled={sendingReview}><Icon name="camera" size={16} /> Retake</button>
                       <button className="btn btn--sm btn--paper" onClick={() => onClose()} disabled={sendingReview}>Close</button>
                     </div>
-                    <div className="found-review">
-                      {review?.visible && (
-                        <button className="btn btn--sm btn--paper btn--block" onClick={() => void askForReview(step.outcome, step.flags)} disabled={review.disabled}>
-                          <Icon name="search" size={16} /> {review.label}
-                        </button>
-                      )}
-                      {step.review.kind === "failed" ? (
-                        <p className="found-review__problem">{step.review.message}</p>
-                      ) : (
-                        <p className="found-review__hint">{REVIEW_HINT}</p>
-                      )}
-                    </div>
+                    {step.reviewable && (
+                      <div className="found-review">
+                        {review?.visible && (
+                          <button className="btn btn--sm btn--paper btn--block" onClick={() => void askForReview(step.outcome, step.flags)} disabled={review.disabled}>
+                            <Icon name="search" size={16} /> {review.label}
+                          </button>
+                        )}
+                        {step.review.kind === "failed" ? (
+                          <p className="found-review__problem">{step.review.message}</p>
+                        ) : (
+                          <p className="found-review__hint">{REVIEW_HINT}</p>
+                        )}
+                      </div>
+                    )}
                   </>
                 ) : step.kind === "review_sent" ? (
                   <div className="found-sent">

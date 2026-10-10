@@ -86,9 +86,9 @@ describe("player state", () => {
           { requestId: "r3", parkId: "x", parkName: "X", createdAt: "not a time" },
         ],
         decided: [
-          { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", decidedAt: "2026-10-10T03:00:00Z" },
-          { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "  Too dark or blurry  ", coverUrl: null, decidedAt: "2026-10-10T04:00:00Z" },
-          { requestId: "d3", status: "superseded", parkId: "beacon-hill", decidedAt: "2026-10-10T05:00:00Z" },
+          { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", founderHandle: "tester_one", decidedAt: "2026-10-10T03:00:00Z" },
+          { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "  Too dark or blurry  ", coverUrl: null, founderHandle: null, decidedAt: "2026-10-10T04:00:00Z" },
+          { requestId: "d3", status: "superseded", parkId: "beacon-hill", founderHandle: "sam", decidedAt: "2026-10-10T05:00:00Z" },
           { requestId: "d4", status: "maybe", parkId: "p", parkName: "P", decidedAt: "2026-10-10T05:00:00Z" },
         ],
       },
@@ -100,9 +100,9 @@ describe("player state", () => {
         { requestId: "r2", parkId: null, parkName: "Paterson Park", createdAt: "2026-10-10T02:00:00Z" },
       ],
       decided: [
-        { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", decidedAt: "2026-10-10T03:00:00Z" },
-        { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "Too dark or blurry", coverUrl: null, decidedAt: "2026-10-10T04:00:00Z" },
-        { requestId: "d3", status: "superseded", parkId: "beacon-hill", parkName: "this park", reason: null, coverUrl: null, decidedAt: "2026-10-10T05:00:00Z" },
+        { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", founderHandle: "tester_one", decidedAt: "2026-10-10T03:00:00Z" },
+        { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "Too dark or blurry", coverUrl: null, founderHandle: null, decidedAt: "2026-10-10T04:00:00Z" },
+        { requestId: "d3", status: "superseded", parkId: "beacon-hill", parkName: "this park", reason: null, coverUrl: null, founderHandle: "sam", decidedAt: "2026-10-10T05:00:00Z" },
       ],
     });
   });
