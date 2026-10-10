@@ -62,33 +62,44 @@ public class WifiContentTransportPlugin extends Plugin {
 
     private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
     private final Object lifecycleLock = new Object();
-    private volatile boolean paused;
+    // Requests run only while the Activity is started, so never in the background. A pause alone,
+    // such as a permission dialog over Parkdex, keeps them running: the web layer's appStateChange
+    // also treats only a stop as leaving the foreground.
+    private volatile boolean stopped;
     private volatile boolean destroyed;
 
     private static final String APPROVED_CDN_ORIGIN = "https://kip-assets.parkdex.app";
 
     @Override
-    protected void handleOnPause() {
+    protected void handleOnStart() {
         synchronized (lifecycleLock) {
-            paused = true;
+            if (!destroyed) stopped = false;
         }
-        failActiveRequests("Content requests stop when Parkdex leaves the foreground");
-        super.handleOnPause();
+        super.handleOnStart();
     }
 
     @Override
     protected void handleOnResume() {
         synchronized (lifecycleLock) {
-            if (!destroyed) paused = false;
+            if (!destroyed) stopped = false;
         }
         super.handleOnResume();
+    }
+
+    @Override
+    protected void handleOnStop() {
+        synchronized (lifecycleLock) {
+            stopped = true;
+        }
+        failActiveRequests("Content requests stop when Parkdex leaves the foreground");
+        super.handleOnStop();
     }
 
     @Override
     protected void handleOnDestroy() {
         synchronized (lifecycleLock) {
             destroyed = true;
-            paused = true;
+            stopped = true;
         }
         failActiveRequests("Content requests stop when Parkdex closes");
         super.handleOnDestroy();
@@ -164,7 +175,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
         ActiveRequest state;
         synchronized (lifecycleLock) {
-            if (paused || destroyed) {
+            if (!acceptsRequests()) {
                 call.reject("Content requests require Parkdex to be in the foreground");
                 return;
             }
@@ -242,7 +253,7 @@ public class WifiContentTransportPlugin extends Plugin {
 
         ActiveRequest state;
         synchronized (lifecycleLock) {
-            if (paused || destroyed) {
+            if (!acceptsRequests()) {
                 call.reject("Account backup requests require Parkdex to be in the foreground");
                 return;
             }
@@ -689,6 +700,12 @@ public class WifiContentTransportPlugin extends Plugin {
 
     private ConnectivityManager connectivityManager() {
         return (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+    }
+
+    boolean acceptsRequests() {
+        synchronized (lifecycleLock) {
+            return !stopped && !destroyed;
+        }
     }
 
     private void failActiveRequests(String message) {
