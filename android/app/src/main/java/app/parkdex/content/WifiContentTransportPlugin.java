@@ -87,6 +87,12 @@ public class WifiContentTransportPlugin extends Plugin {
     }
 
     @Override
+    protected void handleOnPause() {
+        // Still visible, for example under a permission dialog, so requests keep running.
+        super.handleOnPause();
+    }
+
+    @Override
     protected void handleOnStop() {
         synchronized (lifecycleLock) {
             stopped = true;
