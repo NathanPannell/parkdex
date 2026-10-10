@@ -71,8 +71,40 @@ describe("player state", () => {
       flagSeed: "abc",
       visitedToday: [],
       visitedTodayUntil: null,
+      foundingReviews: { pending: [], decided: [] },
     });
     expect(fetchAuthenticated).toHaveBeenCalledWith("/api/game/me", expect.anything(), ACCOUNT);
+  });
+
+  it("reads pending founding reviews and unseen decisions, dropping malformed ones", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
+      player: null, score: 0, parks: [], takeovers: [],
+      foundingReviews: {
+        pending: [
+          { requestId: "r1", parkId: "beacon-hill", parkName: "Beacon Hill", createdAt: "2026-10-10T01:00:00Z" },
+          { requestId: "r2", parkId: null, parkName: "Paterson Park", createdAt: "2026-10-10T02:00:00Z" },
+          { requestId: "r3", parkId: "x", parkName: "X", createdAt: "not a time" },
+        ],
+        decided: [
+          { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", decidedAt: "2026-10-10T03:00:00Z" },
+          { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "  Too dark or blurry  ", coverUrl: null, decidedAt: "2026-10-10T04:00:00Z" },
+          { requestId: "d3", status: "superseded", parkId: "beacon-hill", decidedAt: "2026-10-10T05:00:00Z" },
+          { requestId: "d4", status: "maybe", parkId: "p", parkName: "P", decidedAt: "2026-10-10T05:00:00Z" },
+        ],
+      },
+    }));
+    const me = await fetchGameMe(ACCOUNT);
+    expect(me.foundingReviews).toEqual({
+      pending: [
+        { requestId: "r1", parkId: "beacon-hill", parkName: "Beacon Hill", createdAt: "2026-10-10T01:00:00Z" },
+        { requestId: "r2", parkId: null, parkName: "Paterson Park", createdAt: "2026-10-10T02:00:00Z" },
+      ],
+      decided: [
+        { requestId: "d1", status: "approved", parkId: "osm-way-1", parkName: "Paterson Park", reason: null, coverUrl: "/api/parks/osm-way-1/cover/a.jpg", decidedAt: "2026-10-10T03:00:00Z" },
+        { requestId: "d2", status: "rejected", parkId: "beacon-hill", parkName: "Beacon Hill", reason: "Too dark or blurry", coverUrl: null, decidedAt: "2026-10-10T04:00:00Z" },
+        { requestId: "d3", status: "superseded", parkId: "beacon-hill", parkName: "this park", reason: null, coverUrl: null, decidedAt: "2026-10-10T05:00:00Z" },
+      ],
+    });
   });
 
   it("reads today's visited parks and when the server's day ends", async () => {

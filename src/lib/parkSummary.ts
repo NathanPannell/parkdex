@@ -8,9 +8,14 @@ export type SummaryState =
   | { status: "error"; summary: ParkSummary | null };
 
 /** What the sheet offers for founding: nothing, the button, or a hint to go there first. */
-export type FounderCta = { kind: "hidden" } | { kind: "found"; points: number } | { kind: "hint"; text: string; points: number };
+export type FounderCta =
+  | { kind: "hidden" }
+  | { kind: "found"; points: number }
+  | { kind: "hint"; text: string; points: number }
+  | { kind: "pending"; text: string };
 
 export const FOUNDER_HINT = "Visit the park to become its founder";
+export const REVIEW_PENDING_TEXT = "Your photo is waiting for review";
 
 /**
  * The cover photo to show instead of the badge: the freshest summary's, else the one the flag
@@ -23,10 +28,16 @@ export function summaryCover(state: SummaryState, knownCover: string | null = nu
 
 /**
  * Parks without a founder or cover photo offer "Become the founder", enabled only inside the
- * park. Until the server answers, and when it cannot, nothing is offered.
+ * park. Until the server answers, and when it cannot, nothing is offered. A photo of the park
+ * the player sent for manual review replaces the offer, unless the park has a founder by now.
  */
-export function founderCta(state: SummaryState, inside: boolean, enabled = true): FounderCta {
-  if (!enabled || state.status !== "ready") return { kind: "hidden" };
+export function founderCta(state: SummaryState, inside: boolean, enabled = true, reviewPending = false): FounderCta {
+  if (!enabled) return { kind: "hidden" };
+  if (reviewPending) {
+    const founded = !!state.summary && (!!state.summary.founder || !!state.summary.coverUrl);
+    return founded ? { kind: "hidden" } : { kind: "pending", text: REVIEW_PENDING_TEXT };
+  }
+  if (state.status !== "ready") return { kind: "hidden" };
   if (state.summary.founder || state.summary.coverUrl) return { kind: "hidden" };
   return inside ? { kind: "found", points: FOUNDER_POINTS } : { kind: "hint", text: FOUNDER_HINT, points: FOUNDER_POINTS };
 }

@@ -6,7 +6,7 @@ vi.mock("./accounts/authClient", () => ({
   accountApiUrl: (path: string) => new URL(path, "https://api.example.test/").href,
 }));
 
-const { FOUNDER_HINT, founderCta, summaryCover, summaryStats } = await import("./parkSummary");
+const { FOUNDER_HINT, REVIEW_PENDING_TEXT, founderCta, summaryCover, summaryStats } = await import("./parkSummary");
 type ParkSummary = import("./founders").ParkSummary;
 
 const open: ParkSummary = { parkId: "p", founder: null, coverUrl: null, visits: { total: 4, last30Days: 2, mine: 1 } };
@@ -24,6 +24,21 @@ describe("founderCta", () => {
     expect(founderCta({ status: "loading", summary: null }, true).kind).toBe("hidden");
     expect(founderCta({ status: "error", summary: open }, true).kind).toBe("hidden");
     expect(founderCta({ status: "ready", summary: open }, true, false).kind).toBe("hidden");
+  });
+
+  it("shows a pending review instead of the offer, inside or outside, even before the summary loads", () => {
+    const pending = { kind: "pending", text: REVIEW_PENDING_TEXT };
+    expect(REVIEW_PENDING_TEXT).toBe("Your photo is waiting for review");
+    expect(founderCta({ status: "ready", summary: open }, true, true, true)).toEqual(pending);
+    expect(founderCta({ status: "ready", summary: open }, false, true, true)).toEqual(pending);
+    expect(founderCta({ status: "loading", summary: null }, true, true, true)).toEqual(pending);
+    expect(founderCta({ status: "error", summary: null }, true, true, true)).toEqual(pending);
+  });
+
+  it("drops the pending row once the park has a founder, or when founding is off", () => {
+    expect(founderCta({ status: "ready", summary: founded }, true, true, true).kind).toBe("hidden");
+    expect(founderCta({ status: "loading", summary: founded }, true, true, true).kind).toBe("hidden");
+    expect(founderCta({ status: "ready", summary: open }, true, false, true).kind).toBe("hidden");
   });
 });
 
