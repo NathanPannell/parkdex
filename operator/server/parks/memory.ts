@@ -6,6 +6,7 @@ import type { MultiPolygon } from "./geometry.js";
 import type { LivePark, LiveParkChanges, LiveParkDetail, LiveParkStore } from "./liveParks.js";
 import { grow, HISTORY_LIMIT, OUTLINE_LIMIT, sourceOf, type Bbox, type ChangeRow, type CoverInput, type CoverPhoto, type HiddenState, type ParkActivity, type ParkManagerStore, type ParkRow, type ParkStats } from "./manager.js";
 import type { CatalogueNeighbour, OsmStore } from "./osm.js";
+import { outlineFor, REMOVED_REASON, type ParkRemovalStore, type RemovalOutline, type RemovalPlan, type RemovalResult } from "./removal.js";
 import { MemoryFoundingReviewStore, seedDemoReviews } from "./reviewMemory.js";
 import type { ParksDependencies } from "./routes.js";
 
@@ -260,14 +261,67 @@ export class MemoryOsmStore implements OsmStore {
   }
 }
 
+/** Remove from map over the memory stores, with the same rules as createSqlParkRemovalStore. */
+export class MemoryParkRemovalStore implements ParkRemovalStore {
+  constructor(readonly live: MemoryLiveParkStore, readonly manager: MemoryParkManagerStore, readonly osm: MemoryOsmStore, readonly reviews: MemoryFoundingReviewStore) {}
+
+  private pending(id: string, outline: RemovalOutline | null) {
+    if (!this.reviews.available) return [];
+    return this.reviews.requests.filter((row) => row.status === "pending"
+      && (row.parkId === id || (outline !== null && row.feature?.type === outline.type && row.feature.id === outline.id)));
+  }
+
+  async plan(id: string): Promise<RemovalPlan | null> {
+    const park = this.live.parks.get(id);
+    if (!park) return null;
+    const found = await outlineFor(park, this.osm);
+    const founder = this.manager.founders.get(id);
+    return {
+      parkId: id, name: park.name, source: sourceOf(id, this.manager.legacy.has(id), this.manager.proposals.has(id)), hidden: this.manager.hidden.has(id),
+      founder: founder ? { handle: founder.handle, foundedAt: founder.foundedAt, source: founder.source } : null,
+      pendingReviews: this.pending(id, found.outline).length,
+      outline: found.outline,
+      blocked: this.manager.enrichment.has(id)
+        ? { code: "park_in_enrichment", message: "This park is in the art enrichment queue, so it can't be removed from the map. Hide it instead." }
+        : found.blocked,
+      audited: true,
+    };
+  }
+
+  async remove(id: string, input: { at: string }): Promise<RemovalResult> {
+    const plan = await this.plan(id);
+    if (!plan) throw new HttpError(404, "not_found", "That park is not in Parkdex.");
+    if (plan.blocked || !plan.outline) throw new HttpError(409, plan.blocked?.code ?? "no_outline", plan.blocked?.message ?? "This park has no OpenStreetMap outline.");
+    const founder = this.manager.founders.get(id) ?? null;
+    const closed = this.pending(id, plan.outline);
+    this.reviews.events.push({
+      type: "park_removed", parkId: id,
+      properties: { source: plan.source, had_founder: founder !== null, founder_source: founder?.source ?? null, reviews_closed: closed.length, outline: `${plan.outline.type}/${plan.outline.id}` },
+    });
+    for (const row of closed) {
+      Object.assign(row, { status: "rejected", decidedAt: input.at, reasonCode: "other", reason: REMOVED_REASON });
+      this.reviews.events.push({ type: "founding_review_decided", parkId: row.parkId, properties: { decision: "rejected", reason_code: "park_removed" } });
+    }
+    // Delete drops the founder with the park; visits and tenures stay as history.
+    const revision = await this.manager.remove(id);
+    this.manager.proposals.delete(id);
+    return {
+      parkId: id, name: plan.name, revision, founder: founder ? { handle: founder.handle } : null, reviewsClosed: closed.length, outline: plan.outline, audited: true,
+    };
+  }
+}
+
 /** One set of memory stores that share their parks. */
 export function memoryParks() {
   const live = new MemoryLiveParkStore();
   const manager = new MemoryParkManagerStore(live);
   const osm = new MemoryOsmStore(live, manager);
   const reviews = new MemoryFoundingReviewStore(live, manager, osm);
-  const dependencies: ParksDependencies = { liveParkStore: () => live, parkManagerStore: () => manager, osmStore: () => osm, foundingReviewStore: () => reviews };
-  return { live, manager, osm, reviews, dependencies };
+  const removal = new MemoryParkRemovalStore(live, manager, osm, reviews);
+  const dependencies: ParksDependencies = {
+    liveParkStore: () => live, parkManagerStore: () => manager, osmStore: () => osm, foundingReviewStore: () => reviews, parkRemovalStore: () => removal,
+  };
+  return { live, manager, osm, reviews, removal, dependencies };
 }
 
 // ---------------------------------------------------------------- demo data
