@@ -200,11 +200,22 @@ export function unhideStatements(id: string) {
  * so the same OpenStreetMap park can be founded or created again later.
  */
 export function deleteStatements(id: string) {
+  return [...deleteGuards(id), ...deleteRows(id)];
+}
+
+/** The row lock and the checks a delete makes first; Remove from map (removal.ts) shares them. */
+export function deleteGuards(id: string) {
   return [
     lock(id),
     exists(id),
     // The 100-park enrichment queue restricts deletes; such a park is part of an operator run.
     { text: "SELECT kip_park_drafts.require(NOT EXISTS (SELECT 1 FROM public.park_enrichment_jobs WHERE park_id = $1), 'park_in_enrichment')", params: [id] },
+  ];
+}
+
+/** The draft, the park (cascading to its content rows and founder) and the revision it produced. */
+export function deleteRows(id: string) {
+  return [
     { text: "DELETE FROM kip_park_drafts.drafts WHERE id = $1", params: [id] },
     { text: "DELETE FROM public.parks WHERE id = $1", params: [id] },
     clock,
