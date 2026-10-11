@@ -614,11 +614,11 @@ test("password reset responses are identical for password, Google-only and unkno
     await call(r, "/api/auth/password-reset/request", { email: "google@example.test" }),
     await call(r, "/api/auth/password-reset/request", { email: "nobody@example.test" }),
   ];
-  const shapes = await Promise.all(responses.map(async (response) => ({
-    status: response.status,
-    headers: [...response.headers.entries()],
-    body: await response.text(),
-  })));
+  const shapes = await Promise.all(responses.map(async (response) => {
+    const headers: string[][] = [];
+    response.headers.forEach((value, name) => { headers.push([name, value]); });
+    return { status: response.status, headers, body: await response.text() };
+  }));
   assert.equal(shapes[0].status, 202);
   assert.equal(shapes[0].body, JSON.stringify({ accepted: true }));
   assert.deepEqual(shapes[1], shapes[0]);
