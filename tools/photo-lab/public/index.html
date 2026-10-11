@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photo check lab</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%232f6b4f%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Photo check lab</h1>
+      <p class="subtle" id="model">Loading…</p>
+    </div>
+    <div class="runbar">
+      <label>Run <select id="run"></select></label>
+      <label>Compare with <select id="compare"></select></label>
+      <div class="rerun">
+        <button type="button" id="rerun-all">Rerun all</button>
+        <button type="button" id="rerun-filtered">Rerun filtered</button>
+        <button type="button" id="rerun-selected" disabled>Rerun selected</button>
+      </div>
+      <div class="progress" id="progress" hidden>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <span id="progress-text"></span>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="controls" aria-label="Thresholds">
+      <section>
+        <h2>Overall decision</h2>
+        <div class="control" data-key="approve">
+          <div class="control-head"><label for="t-approve">Approve at or above</label><input type="number" id="n-approve" min="0" max="1" step="0.01"></div>
+          <input type="range" id="t-approve" min="0" max="1" step="0.01">
+          <p class="hint">The verdict's approve probability needed, and approve must be its top answer. Production: 0.8.</p>
+        </div>
+        <div class="control">
+          <label for="unsure-mode">Not approved, no flag</label>
+          <select id="unsure-mode">
+            <option value="production">Unsure (production)</option>
+            <option value="reject_verdict">Reject when the verdict says reject</option>
+          </select>
+          <div class="control-sub" id="reject-verdict-wrap" hidden>
+            <div class="control-head"><label for="t-reject-verdict">Reject verdict at or above</label><input type="number" id="n-reject-verdict" min="0" max="1" step="0.01"></div>
+            <input type="range" id="t-reject-verdict" min="0" max="1" step="0.01">
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>Flags <span class="subtle">count when yes is above</span></h2>
+        <div class="control all-flags">
+          <div class="control-head"><label for="t-all">All flags</label><input type="number" id="n-all" min="0" max="1" step="0.01"></div>
+          <input type="range" id="t-all" min="0" max="1" step="0.01">
+        </div>
+        <div id="flag-controls"></div>
+      </section>
+      <section class="actions">
+        <button type="button" id="reset">Production thresholds</button>
+        <button type="button" id="export" class="primary">Export</button>
+      </section>
+    </aside>
+
+    <main>
+      <section class="summary" aria-label="Summary">
+        <div class="tiles" id="tiles"></div>
+        <div class="summary-row">
+          <div class="panel">
+            <h2>Expected against decided</h2>
+            <table class="confusion" id="confusion"></table>
+            <p class="hint">Click a cell to show those photos.</p>
+          </div>
+          <div class="panel">
+            <h2>Flags</h2>
+            <table class="flag-table" id="flag-table"></table>
+            <p class="hint">Positives are photos labelled with the flag. Negatives are good and borderline photos. A bad photo is labelled with its main defect only, so its other flags, and any optional flag, are not scored.</p>
+          </div>
+          <div class="panel lists">
+            <h2>False approvals <span class="subtle">bad photos approved</span></h2>
+            <div class="chips" id="false-approvals"></div>
+            <h2>False rejections <span class="subtle">good photos not approved</span></h2>
+            <div class="chips" id="false-rejections"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="filters" aria-label="Filters">
+        <label>Category <select id="f-category"></select></label>
+        <label>Agreement
+          <select id="f-agreement">
+            <option value="all">All</option>
+            <option value="agree">Agree</option>
+            <option value="disagree">Disagree</option>
+            <option value="safe">Bad photo called unsure</option>
+            <option value="false-approval">False approvals</option>
+            <option value="false-rejection">False rejections</option>
+            <option value="changed">Changed from comparison</option>
+            <option value="error">No answer</option>
+          </select>
+        </label>
+        <span class="cell-filter" id="cell-filter" hidden></span>
+        <span class="spacer"></span>
+        <span class="subtle" id="shown"></span>
+        <button type="button" id="select-shown">Select shown</button>
+        <button type="button" id="select-none">Clear selection</button>
+      </section>
+
+      <section class="grid" id="grid" aria-label="Photos"></section>
+    </main>
+  </div>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h2>Export thresholds</h2>
+      <h3>JSON</h3>
+      <pre id="export-json"></pre>
+      <button type="button" data-copy="export-json">Copy JSON</button>
+      <h3>Code change</h3>
+      <pre id="export-code"></pre>
+      <button type="button" data-copy="export-code">Copy code</button>
+      <div class="dialog-actions"><button value="close" class="primary">Close</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
